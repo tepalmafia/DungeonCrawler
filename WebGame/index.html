@@ -13,6 +13,7 @@
     --gold: #ffcf4a;
     --teal: #3bd0a0;
     --violet: #8b6fd6;
+    --boss: #d84a6a;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -99,6 +100,46 @@
   .tag.gold { background: rgba(255,207,74,0.12); color: var(--gold); border: 1px solid rgba(255,207,74,0.3); }
   .tag.depth { background: rgba(139,111,214,0.14); color: var(--violet); border: 1px solid rgba(139,111,214,0.34); }
 
+  #minimap {
+    display: block;
+    margin-top: 8px;
+    margin-left: auto;
+    width: 138px; height: 102px;
+    background: rgba(5,4,9,0.82);
+    border: 1px solid #241f2e;
+    border-radius: 5px;
+    image-rendering: pixelated;
+  }
+
+  /* Boss bar */
+  #bossHud {
+    position: absolute;
+    top: 14px; left: 50%; transform: translateX(-50%);
+    width: min(400px, 46%);
+    pointer-events: none;
+    text-align: center;
+  }
+  #bossHud.hidden { display: none; }
+  #bossHud .bname {
+    font-size: 12px; letter-spacing: 3px; font-weight: 700;
+    color: #ff8fa5; text-shadow: 0 0 12px rgba(216,74,106,0.7), 0 1px 3px #000;
+    margin-bottom: 5px;
+  }
+  #bossHud .bbar {
+    height: 12px;
+    background: #2a1016;
+    border: 1px solid #55202c;
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: 0 0 18px -4px rgba(216,74,106,0.6);
+  }
+  #bossHud .bbar i {
+    display: block; height: 100%;
+    transform-origin: left;
+    background: linear-gradient(90deg, #d84a6a, #ff8fa5);
+    transition: transform .15s ease;
+  }
+
   #log {
     position: absolute;
     left: 14px; bottom: 12px;
@@ -126,7 +167,7 @@
     text-align: center;
     background: radial-gradient(80% 80% at 50% 40%, rgba(20,16,28,0.86), rgba(4,3,6,0.96));
     backdrop-filter: blur(2px);
-    gap: 18px; padding: 24px;
+    gap: 16px; padding: 24px;
   }
   .screen.hidden { display: none; }
   .title {
@@ -143,10 +184,10 @@
     font-size: 13px; font-weight: 500; letter-spacing: 6px;
     color: var(--muted); text-shadow: none;
   }
-  .lede { max-width: 440px; color: #cdbfa5; font-size: 14px; line-height: 1.6; }
+  .lede { max-width: 460px; color: #cdbfa5; font-size: 14px; line-height: 1.6; }
   .keys {
     display: grid; grid-template-columns: repeat(2, auto);
-    gap: 8px 26px; font-size: 13px; color: var(--muted);
+    gap: 7px 26px; font-size: 13px; color: var(--muted);
   }
   .keys b { color: var(--ink); }
   kbd {
@@ -196,7 +237,11 @@
     box-shadow: 0 6px 18px rgba(0,0,0,0.5);
   }
   @media (hover: none) and (pointer: coarse) { #touch { display: block; } }
-  @media (max-width: 560px) { #log { max-width: 46%; font-size: 11px; } .bar { width: 128px; } }
+  @media (max-width: 560px) {
+    #log { max-width: 46%; font-size: 11px; }
+    .bar { width: 128px; }
+    #minimap { width: 92px; height: 68px; }
+  }
 </style>
 
 <div id="wrap">
@@ -215,14 +260,20 @@
         </div>
       </div>
       <div class="hud-block">
-        <div class="row" style="gap:8px;">
+        <div class="row" style="gap:8px; justify-content:flex-end;">
           <span class="tag depth">⌁ 지하 <b id="depthTag" style="color:var(--violet)">1</b>층</span>
           <span class="tag gold">◈ <b id="goldTag" style="color:var(--gold)">0</b></span>
         </div>
         <div style="margin-top:7px; font-size:10px; color:var(--muted); letter-spacing:.5px; text-align:right;">
-          남은 적 <b id="foesTag" style="color:var(--ink)">0</b> · 계단을 찾아라
+          남은 적 <b id="foesTag" style="color:var(--ink)">0</b> · <kbd style="font-size:9px;padding:0 4px;">M</kbd> 소리
         </div>
+        <canvas id="minimap" width="138" height="102"></canvas>
       </div>
+    </div>
+
+    <div id="bossHud" class="hidden">
+      <div class="bname" id="bossName">던전 로드</div>
+      <div class="bbar"><i id="bossFill"></i></div>
     </div>
 
     <div id="log"></div>
@@ -235,12 +286,12 @@
     <!-- Start screen -->
     <div class="screen" id="startScreen">
       <h1 class="title">TORCHLIGHT<small>DUNGEON&nbsp;&nbsp;CRAWLER</small></h1>
-      <p class="lede">토치 불빛에 의지해 무너진 던전을 탐험하라. 도사린 괴물을 베고, 보물을 챙기고, 더 깊은 어둠으로 내려가라. 얼마나 깊이 내려갈 수 있는가?</p>
+      <p class="lede">토치 불빛에 의지해 무너진 던전을 탐험하라. 함정을 피하고, 상자를 열고, 무기의 힘을 깨워라. 3층마다 <b style="color:#ff8fa5">던전 로드</b>가 길을 막는다.</p>
       <div class="keys">
         <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</span><b>이동</b>
         <span><kbd>Space</kbd> / 클릭</span><b>공격</b>
-        <span>물약 <span style="color:var(--teal)">●</span></span><b>체력 회복</b>
-        <span>무기 <span style="color:var(--amber-glow)">⚔</span></span><b>공격력 강화</b>
+        <span><kbd>M</kbd></span><b>소리 켜기/끄기</b>
+        <span>상자 <span style="color:var(--gold)">▣</span> · 함정 <span style="color:#a8adb8">▲</span></span><b>열기 · 조심!</b>
       </div>
       <button class="btn" id="startBtn">던전 입장 ▸</button>
     </div>
@@ -265,6 +316,8 @@
 
 const cv = document.getElementById("game");
 const ctx = cv.getContext("2d");
+const mm = document.getElementById("minimap");
+const mctx = mm.getContext("2d");
 
 const TILE = 40;               // world pixels per tile
 const MAP_W = 46, MAP_H = 34;  // dungeon grid size
@@ -279,8 +332,87 @@ const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 
 // ---- Game state ----
-let map, rooms, player, enemies, items, particles, depth, kills, running, screenShake, torchFlicker;
+let map, rooms, player, enemies, items, chests, traps, projectiles, particles, explored;
+let depth, kills, running, screenShake, torchFlicker, time = 0;
 const keys = {};
+
+// ============ Audio (WebAudio, fully procedural — no external files) ============
+let AC = null, master = null, muted = false, musicTimer = null;
+function initAudio() {
+  if (AC) { if (AC.state === "suspended") AC.resume(); return; }
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  master = AC.createGain();
+  master.gain.value = muted ? 0 : 0.5;
+  master.connect(AC.destination);
+  startMusic();
+}
+function tone(freq, dur, type = "square", vol = 0.15, slideTo = null, delay = 0) {
+  if (!AC) return;
+  const t0 = AC.currentTime + delay;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(slideTo, 1), t0 + dur);
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  o.connect(g); g.connect(master);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noiseBurst(dur = 0.1, vol = 0.2, freq = 2000, delay = 0) {
+  if (!AC) return;
+  const t0 = AC.currentTime + delay;
+  const len = Math.max(1, Math.floor(AC.sampleRate * dur));
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 0.8;
+  const g = AC.createGain(); g.gain.value = vol;
+  src.connect(f); f.connect(g); g.connect(master);
+  src.start(t0);
+}
+const sfx = {
+  swing:  () => noiseBurst(0.09, 0.22, 2600),
+  hit:    () => { tone(220, 0.08, "square", 0.16, 90); noiseBurst(0.05, 0.13, 1200); },
+  crit:   () => { tone(520, 0.11, "square", 0.2, 160); noiseBurst(0.08, 0.18, 1900); },
+  hurt:   () => tone(150, 0.25, "sawtooth", 0.2, 55),
+  pickup: () => { tone(660, 0.07, "sine", 0.14); tone(990, 0.09, "sine", 0.14, null, 0.07); },
+  weapon: () => [440, 554, 659].forEach((f, i) => tone(f, 0.12, "triangle", 0.15, null, i * 0.08)),
+  level:  () => [392, 494, 587, 784].forEach((f, i) => tone(f, 0.14, "triangle", 0.17, null, i * 0.09)),
+  stairs: () => { tone(220, 0.2, "sine", 0.15, 110); tone(165, 0.3, "sine", 0.15, 82, 0.18); },
+  chest:  () => { tone(90, 0.18, "sawtooth", 0.13, 140); [784, 1046].forEach((f, i) => tone(f, 0.12, "sine", 0.13, null, 0.16 + i * 0.08)); },
+  trap:   () => { noiseBurst(0.06, 0.22, 900); tone(110, 0.1, "square", 0.14, 60); },
+  shoot:  () => tone(320, 0.12, "sine", 0.11, 140),
+  roar:   () => { tone(70, 0.7, "sawtooth", 0.24, 45); tone(74, 0.7, "sawtooth", 0.18, 48); noiseBurst(0.4, 0.1, 300); },
+  bossdie:() => { tone(200, 0.8, "sawtooth", 0.22, 40); [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", 0.15, null, 0.3 + i * 0.1)); },
+  die:    () => tone(240, 1.0, "sawtooth", 0.24, 30),
+};
+function startMusic() {
+  // low cavern drone
+  const mkDrone = (f, vol) => {
+    const o = AC.createOscillator(), g = AC.createGain(), fl = AC.createBiquadFilter();
+    o.type = "sawtooth"; o.frequency.value = f;
+    fl.type = "lowpass"; fl.frequency.value = 260;
+    g.gain.value = vol;
+    o.connect(fl); fl.connect(g); g.connect(master);
+    o.start();
+  };
+  mkDrone(55, 0.045); mkDrone(82.4, 0.03);
+  // sparse minor melody drifting over the drone
+  const scale = [220, 246.9, 261.6, 293.7, 329.6, 392];
+  musicTimer = setInterval(() => {
+    if (!AC || muted) return;
+    if (Math.random() < 0.75) {
+      const f = scale[rand(scale.length)] / (Math.random() < 0.3 ? 2 : 1);
+      tone(f, 1.6, "sine", 0.04);
+    }
+  }, 1400);
+}
+function toggleMute() {
+  muted = !muted;
+  if (master) master.gain.value = muted ? 0 : 0.5;
+  log(muted ? "소리 꺼짐" : "소리 켜짐", "hot");
+}
 
 // ============ Dungeon generation (rooms + corridors) ============
 function genDungeon() {
@@ -293,7 +425,6 @@ function genDungeon() {
     const w = 4 + rand(6), h = 4 + rand(5);
     const x = 1 + rand(MAP_W - w - 2), y = 1 + rand(MAP_H - h - 2);
     const r = { x, y, w, h, cx: Math.floor(x + w / 2), cy: Math.floor(y + h / 2) };
-    // no overlap (with 1-tile buffer)
     if (rooms.some(o => x < o.x + o.w + 1 && x + w + 1 > o.x && y < o.y + o.h + 1 && y + h + 1 > o.y)) continue;
     carveRoom(r);
     if (rooms.length) connect(rooms[rooms.length - 1], r);
@@ -312,9 +443,16 @@ function connect(a, b) {
   const stepY = () => { while (y !== b.cy) { y += y < b.cy ? 1 : -1; if (map[y][x] === WALL) map[y][x] = FLOOR; } };
   if (hFirst) { stepX(); stepY(); } else { stepY(); stepX(); }
 }
-
 function tileFree(tx, ty) {
   return tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && map[ty][tx] !== WALL;
+}
+function farRoom() {
+  let far = rooms[1] || rooms[0], best = -1;
+  for (const r of rooms.slice(1)) {
+    const d = dist(r.cx, r.cy, rooms[0].cx, rooms[0].cy);
+    if (d > best) { best = d; far = r; }
+  }
+  return far;
 }
 
 // ============ Entities ============
@@ -324,23 +462,24 @@ function makePlayer() {
     x: (start.cx + 0.5) * TILE, y: (start.cy + 0.5) * TILE,
     r: 13, speed: 3.0, dir: { x: 0, y: 1 },
     hp: 20, maxhp: 20, atk: 4, gold: 0, level: 1, xp: 0, xpNext: 8,
-    weapon: "맨손", wpnReach: 44,
+    weapon: "맨손", wpnReach: 44, wpnTier: 0,
     swing: 0, hurt: 0, iframe: 0,
   };
 }
 
 const ENEMY_KINDS = [
-  { key: "slime",  name: "슬라임",   col: "#6fce7a", r: 12, hp: 6,  atk: 2, speed: 1.1, xp: 3, gold: 2 },
-  { key: "bat",    name: "박쥐",     col: "#b18bd8", r: 10, hp: 4,  atk: 2, speed: 2.1, xp: 3, gold: 1, erratic: true },
-  { key: "goblin", name: "고블린",   col: "#c98b4a", r: 12, hp: 10, atk: 3, speed: 1.7, xp: 5, gold: 5 },
-  { key: "wraith", name: "망령",     col: "#8fb7d6", r: 13, hp: 14, atk: 4, speed: 1.4, xp: 8, gold: 8 },
+  { key: "slime",  name: "슬라임", col: "#6fce7a", r: 12, hp: 6,  atk: 2, speed: 1.1, xp: 3, gold: 2 },
+  { key: "bat",    name: "박쥐",   col: "#b18bd8", r: 10, hp: 4,  atk: 2, speed: 2.1, xp: 3, gold: 1, erratic: true },
+  { key: "goblin", name: "고블린", col: "#c98b4a", r: 12, hp: 10, atk: 3, speed: 1.7, xp: 5, gold: 5 },
+  { key: "wraith", name: "망령",   col: "#8fb7d6", r: 13, hp: 14, atk: 4, speed: 1.4, xp: 8, gold: 8 },
 ];
+
+function isBossFloor() { return depth % 3 === 0; }
 
 function spawnEnemies() {
   enemies = [];
-  const count = 4 + depth * 2;
+  const count = 4 + depth * 2 - (isBossFloor() ? 3 : 0);
   for (let i = 0; i < count; i++) {
-    // pick a room other than the first, weighted toward tougher kinds as depth grows
     const room = rooms[1 + rand(rooms.length - 1)];
     const maxKind = clamp(1 + Math.floor(depth / 1.5), 1, ENEMY_KINDS.length);
     const base = ENEMY_KINDS[rand(maxKind)];
@@ -354,25 +493,41 @@ function spawnEnemies() {
       hp: Math.round(base.hp * hpScale),
       atk: Math.max(1, Math.round(base.atk * atkScale)),
       cd: 0, hurt: 0, wob: Math.random() * 6.28, awake: false,
-      vx: 0, vy: 0,
+      vx: 0, vy: 0, trapCd: 0,
+    });
+  }
+  if (isBossFloor()) {
+    const room = farRoom();
+    enemies.push({
+      boss: true, key: "boss", name: "던전 로드", col: "#d84a6a",
+      r: 26, speed: 1.5,
+      maxhp: 60 + depth * 22, hp: 60 + depth * 22,
+      atk: 4 + depth, xp: 30 + depth * 6, gold: 40 + depth * 10,
+      x: (room.cx + 0.5) * TILE, y: (room.cy + 0.5) * TILE,
+      cd: 0, hurt: 0, wob: Math.random() * 6.28, awake: false,
+      vx: 0, vy: 0, trapCd: 0,
+      state: "chase", st: 0, cycle: 0, cvx: 0, cvy: 0,
     });
   }
 }
 
+/* Weapons — each tier past the fists carries a special power */
+const WEAPONS = [
+  { name: "맨손",     atk: 4,  reach: 44, col: "#cdbfa5", special: null,    desc: "" },
+  { name: "단검",     atk: 7,  reach: 46, col: "#d9dde2", special: "crit",  desc: "빠른 공격 · 30% 치명타 ×2" },
+  { name: "철검",     atk: 11, reach: 54, col: "#c7ccd6", special: "wide",  desc: "넓은 베기 (180°)" },
+  { name: "전투도끼", atk: 16, reach: 58, col: "#e08a4a", special: "smash", desc: "회전 강타 (360°) · 강한 넉백" },
+  { name: "룬블레이드", atk: 23, reach: 64, col: "#8fd0ff", special: "wave", desc: "베기마다 검기 발사" },
+];
+
 function spawnItems() {
   items = [];
-  // stairs down — in the room furthest from start
-  let far = rooms[1], best = -1;
-  for (const r of rooms.slice(1)) {
-    const d = dist(r.cx, r.cy, rooms[0].cx, rooms[0].cy);
-    if (d > best) { best = d; far = r; }
-  }
+  const far = farRoom();
   map[far.cy][far.cx] = STAIRS;
 
-  // potions & weapons scattered in rooms
   const potions = 2 + rand(2);
   for (let i = 0; i < potions; i++) dropItem("potion", randRoomTile());
-  if (Math.random() < 0.85) {
+  if (Math.random() < 0.7 && !isBossFloor()) {
     const tier = clamp(1 + Math.floor(depth / 2) + rand(2), 1, WEAPONS.length - 1);
     dropItem("weapon", randRoomTile(), tier);
   }
@@ -380,13 +535,31 @@ function spawnItems() {
   for (let i = 0; i < coins; i++) dropItem("gold", randRoomTile());
 }
 
-const WEAPONS = [
-  { name: "맨손",   atk: 4,  reach: 44,  col: "#cdbfa5" },
-  { name: "단검",   atk: 7,  reach: 46,  col: "#d9dde2" },
-  { name: "철검",   atk: 11, reach: 54,  col: "#c7ccd6" },
-  { name: "전투도끼", atk: 16, reach: 58,  col: "#e08a4a" },
-  { name: "룬블레이드", atk: 23, reach: 64, col: "#8fd0ff" },
-];
+function spawnChests() {
+  chests = [];
+  const n = 1 + rand(2);
+  let guard = 0;
+  while (chests.length < n && guard++ < 120) {
+    const t = randRoomTile();
+    if (map[t.ty][t.tx] !== FLOOR) continue;
+    if (traps.some(o => o.tx === t.tx && o.ty === t.ty)) continue;
+    chests.push({ x: (t.tx + 0.5) * TILE, y: (t.ty + 0.5) * TILE, opened: false });
+  }
+}
+
+function spawnTraps() {
+  traps = [];
+  const n = 4 + depth;
+  const r0 = rooms[0];
+  let guard = 0;
+  while (traps.length < n && guard++ < 240) {
+    const t = randRoomTile();
+    if (map[t.ty][t.tx] !== FLOOR) continue;
+    if (t.tx >= r0.x - 1 && t.tx < r0.x + r0.w + 1 && t.ty >= r0.y - 1 && t.ty < r0.y + r0.h + 1) continue;
+    if (traps.some(o => o.tx === t.tx && o.ty === t.ty)) continue;
+    traps.push({ tx: t.tx, ty: t.ty, off: rand(150), up: false });
+  }
+}
 
 function randRoomTile() {
   const r = rooms[1 + rand(rooms.length - 1)];
@@ -395,7 +568,8 @@ function randRoomTile() {
 function dropItem(kind, t, tier = 0) {
   items.push({
     kind, tier,
-    x: (t.tx + 0.5) * TILE, y: (t.ty + 0.5) * TILE,
+    x: (t.tx + 0.5) * TILE + randRange(-8, 8),
+    y: (t.ty + 0.5) * TILE + randRange(-8, 8),
     bob: Math.random() * 6.28,
   });
 }
@@ -411,15 +585,21 @@ function enterDepth(d) {
   }
   spawnEnemies();
   spawnItems();
+  spawnTraps();
+  spawnChests();
+  projectiles = [];
   particles = [];
+  explored = Array.from({ length: MAP_H }, () => new Array(MAP_W).fill(false));
   screenShake = 0;
   updateHUD();
   if (d === 1) log("어둠 속으로 발을 들였다…", "hot");
+  else if (isBossFloor()) log(`지하 ${d}층 — 거대한 존재의 기척이 느껴진다…`, "hurt");
   else log(`지하 ${d}층 — 공기가 더 차가워졌다.`, "hot");
 }
 
 function newGame() {
-  player = null; enemies = []; items = []; particles = [];
+  initAudio();
+  player = null; enemies = []; items = []; chests = []; traps = []; projectiles = []; particles = [];
   kills = 0; depth = 0; running = true;
   document.getElementById("log").innerHTML = "";
   enterDepth(1);
@@ -433,6 +613,7 @@ addEventListener("keydown", (e) => {
   keys[k] = true;
   if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
   if (k === " ") attack();
+  if (k === "m") toggleMute();
 });
 addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 cv.addEventListener("mousedown", attack);
@@ -460,22 +641,39 @@ document.getElementById("atkBtn").addEventListener("touchstart", (e) => { attack
 // ============ Combat ============
 function attack() {
   if (!running || !player || player.swing > 0) return;
+  const w = WEAPONS[player.wpnTier];
   player.swing = 1;
+  sfx.swing();
   const reach = player.wpnReach;
-  const arcCos = 0.35; // ~110° cone
+  let arcCos = 0.35;                       // ~110° cone
+  if (w.special === "wide") arcCos = -0.05; // ~185°
+  if (w.special === "smash") arcCos = -1;   // full spin
+  const kb = w.special === "smash" ? 9 : 4;
   let hitAny = false;
   for (const en of enemies) {
     const dx = en.x - player.x, dy = en.y - player.y;
-    const d = Math.hypot(dx, dy);
+    const d = Math.hypot(dx, dy) || 1;
     if (d > reach + en.r) continue;
     const dot = (dx / d) * player.dir.x + (dy / d) * player.dir.y;
     if (dot < arcCos) continue;
-    damageEnemy(en, player.atk + rand(3));
-    en.vx += player.dir.x * 4; en.vy += player.dir.y * 4; // knockback
+    let dmg = player.atk + rand(3);
+    let crit = false;
+    if (w.special === "crit" && Math.random() < 0.3) { dmg *= 2; crit = true; sfx.crit(); }
+    damageEnemy(en, dmg, crit);
+    const mass = en.boss ? 0.25 : 1; // the boss barely budges
+    en.vx += dx / d * kb * mass; en.vy += dy / d * kb * mass;
     hitAny = true;
   }
-  if (hitAny) screenShake = Math.max(screenShake, 4);
-  // swing particles
+  if (w.special === "wave") {
+    projectiles.push({
+      x: player.x + player.dir.x * 20, y: player.y + player.dir.y * 20,
+      vx: player.dir.x * 6, vy: player.dir.y * 6,
+      life: 42, r: 10, dmg: Math.round(player.atk * 0.8),
+      hostile: false, pierce: 3, hitSet: new Set(), col: "#8fd0ff",
+    });
+    sfx.shoot();
+  }
+  if (hitAny) { screenShake = Math.max(screenShake, 4); sfx.hit(); }
   for (let i = 0; i < 6; i++) {
     const a = Math.atan2(player.dir.y, player.dir.x) + randRange(-0.5, 0.5);
     particles.push({ x: player.x + player.dir.x * 22, y: player.y + player.dir.y * 22,
@@ -483,22 +681,31 @@ function attack() {
   }
 }
 
-function damageEnemy(en, dmg) {
+function damageEnemy(en, dmg, crit = false) {
   en.hp -= dmg; en.hurt = 8; en.awake = true;
-  spawnHit(en.x, en.y, dmg, "#ffd9a0");
+  spawnHit(en.x, en.y, dmg, crit ? "#ffef7a" : "#ffd9a0", crit);
   for (let i = 0; i < 7; i++)
     particles.push({ x: en.x, y: en.y, vx: randRange(-3, 3), vy: randRange(-3, 3), life: 16, col: en.col, r: 3 });
-  if (en.hp <= 0) killEnemy(en);
+  if (en.hp <= 0 && !en.dead) killEnemy(en);
 }
 function killEnemy(en) {
   en.dead = true; kills++;
   player.xp += en.xp;
   player.gold += en.gold;
-  for (let i = 0; i < 14; i++)
+  for (let i = 0; i < (en.boss ? 40 : 14); i++)
     particles.push({ x: en.x, y: en.y, vx: randRange(-4, 4), vy: randRange(-4, 4), life: 24, col: en.col, r: randRange(2, 4) });
-  if (Math.random() < 0.22) dropItem("potion", { tx: Math.floor(en.x / TILE), ty: Math.floor(en.y / TILE) });
+  const t = { tx: Math.floor(en.x / TILE), ty: Math.floor(en.y / TILE) };
+  if (en.boss) {
+    screenShake = 12;
+    sfx.bossdie();
+    log(`던전 로드를 쓰러뜨렸다! (+${en.gold}◈)`, "hot");
+    dropItem("weapon", t, clamp(1 + Math.floor(depth / 2), 1, WEAPONS.length - 1));
+    dropItem("potion", t); dropItem("potion", t);
+  } else {
+    if (Math.random() < 0.22) dropItem("potion", t);
+    log(`${en.name} 처치 (+${en.gold}◈)`, "good");
+  }
   if (player.xp >= player.xpNext) levelUp();
-  log(`${en.name} 처치 (+${en.gold}◈)`, "good");
 }
 function levelUp() {
   player.xp -= player.xpNext;
@@ -507,6 +714,7 @@ function levelUp() {
   player.maxhp += 4; player.hp = player.maxhp;
   player.atk += 2;
   screenShake = 6;
+  sfx.level();
   for (let i = 0; i < 26; i++) {
     const a = randRange(0, 6.28);
     particles.push({ x: player.x, y: player.y, vx: Math.cos(a) * 4, vy: Math.sin(a) * 4, life: 30, col: "#ffcb6b", r: 3 });
@@ -517,13 +725,55 @@ function damagePlayer(dmg) {
   if (player.iframe > 0) return;
   player.hp -= dmg; player.hurt = 10; player.iframe = 26;
   screenShake = Math.max(screenShake, 6);
+  sfx.hurt();
   spawnHit(player.x, player.y - 6, dmg, "#ff7a68");
   if (player.hp <= 0) { player.hp = 0; gameOver(); }
 }
 
-// floating damage numbers reuse particle list with text
-function spawnHit(x, y, val, col) {
-  particles.push({ x, y, vx: 0, vy: -0.9, life: 34, text: String(val), col, r: 0 });
+function spawnHit(x, y, val, col, big = false) {
+  particles.push({ x, y, vx: 0, vy: -0.9, life: 34, text: String(val), col, r: 0, big });
+}
+
+// ============ Boss AI ============
+function bossAI(en, d) {
+  en.st++;
+  if (en.state === "chase") {
+    const dx = player.x - en.x, dy = player.y - en.y;
+    const dd = Math.hypot(dx, dy) || 1;
+    en.vx += dx / dd * en.speed * 0.5;
+    en.vy += dy / dd * en.speed * 0.5;
+    if (en.st > 130) {
+      en.cycle++; en.st = 0;
+      if (en.cycle % 2 === 1 && d < 420) en.state = "tele";
+      else fireRing(en);
+    }
+  } else if (en.state === "tele") {
+    en.vx *= 0.5; en.vy *= 0.5;
+    if (en.st > 34) {
+      en.st = 0; en.state = "charge";
+      const dx = player.x - en.x, dy = player.y - en.y, dd = Math.hypot(dx, dy) || 1;
+      en.cvx = dx / dd * 8; en.cvy = dy / dd * 8;
+      screenShake = Math.max(screenShake, 5);
+      sfx.swing();
+    }
+  } else if (en.state === "charge") {
+    en.vx = en.cvx; en.vy = en.cvy;
+    if (en.st > 26) { en.st = 0; en.state = "chase"; }
+  }
+}
+function fireRing(en) {
+  const n = 10 + Math.floor(depth / 3) * 2;
+  const base = Math.atan2(player.y - en.y, player.x - en.x);
+  for (let i = 0; i < n; i++) {
+    const a = base + (i / n) * 6.283;
+    projectiles.push({
+      x: en.x, y: en.y,
+      vx: Math.cos(a) * 2.6, vy: Math.sin(a) * 2.6,
+      life: 160, r: 6, dmg: 2 + Math.floor(depth / 2),
+      hostile: true, col: "#ff6a8a",
+    });
+  }
+  sfx.shoot();
 }
 
 // ============ Pickups ============
@@ -533,18 +783,19 @@ function tryPickup() {
     if (dist(it.x, it.y, player.x, player.y) < player.r + 14) {
       if (it.kind === "potion") {
         const heal = 8; player.hp = Math.min(player.maxhp, player.hp + heal);
-        log(`체력 물약 (+${heal} HP)`, "good");
+        log(`체력 물약 (+${heal} HP)`, "good"); sfx.pickup();
       } else if (it.kind === "gold") {
         const g = 3 + rand(6); player.gold += g;
-        log(`골드 획득 (+${g}◈)`, "good");
+        log(`골드 획득 (+${g}◈)`, "good"); sfx.pickup();
       } else if (it.kind === "weapon") {
         const w = WEAPONS[it.tier];
-        if (w.atk > player.atk || player.weapon === "맨손") {
+        if (it.tier > player.wpnTier) {
+          player.wpnTier = it.tier;
           player.atk = w.atk + (player.level - 1) * 2;
           player.wpnReach = w.reach; player.weapon = w.name;
-          log(`${w.name} 장착! 공격력 ${player.atk}`, "hot");
+          log(`${w.name} 장착! — ${w.desc}`, "hot"); sfx.weapon();
         } else {
-          player.gold += 10; log(`${w.name} — 이미 더 강한 무기가 있다 (+10◈)`, "good");
+          player.gold += 10; log(`${w.name} — 이미 더 강한 무기가 있다 (+10◈)`, "good"); sfx.pickup();
         }
       }
       it.taken = true;
@@ -554,17 +805,39 @@ function tryPickup() {
     }
   }
   items = items.filter(i => !i.taken);
+
+  // chests pop open on touch and scatter loot
+  for (const ch of chests) {
+    if (ch.opened) continue;
+    if (dist(ch.x, ch.y, player.x, player.y) < player.r + 20) {
+      ch.opened = true;
+      sfx.chest();
+      log("낡은 상자를 열었다!", "hot");
+      const t = { tx: Math.floor(ch.x / TILE), ty: Math.floor(ch.y / TILE) };
+      const coins = 2 + rand(3);
+      for (let i = 0; i < coins; i++) dropItem("gold", t);
+      if (Math.random() < 0.6) dropItem("potion", t);
+      if (Math.random() < 0.3) dropItem("weapon", t, clamp(1 + Math.floor(depth / 2) + rand(2), 1, WEAPONS.length - 1));
+      for (let i = 0; i < 14; i++)
+        particles.push({ x: ch.x, y: ch.y, vx: randRange(-3, 3), vy: randRange(-4, -0.5), life: 24, col: "#ffcf4a", r: 3 });
+    }
+  }
+
   // stairs
   const tx = Math.floor(player.x / TILE), ty = Math.floor(player.y / TILE);
   if (map[ty] && map[ty][tx] === STAIRS) {
-    if (enemies.length === 0) { log("계단을 내려간다…", "hot"); enterDepth(depth + 1); }
-    else if (!player._stairsWarned) { player._stairsWarned = true; log("계단이 봉인됐다 — 모든 적을 처치하라!", "hurt"); }
+    if (enemies.length === 0) { log("계단을 내려간다…", "hot"); sfx.stairs(); enterDepth(depth + 1); }
+    else if (!player._stairsWarned) {
+      player._stairsWarned = true;
+      log(isBossFloor() ? "던전 로드가 길을 막고 있다!" : "계단이 봉인됐다 — 모든 적을 처치하라!", "hurt");
+    }
   }
 }
 
 // ============ Update ============
 function update() {
   if (!running) return;
+  time++;
 
   // movement input
   let mx = 0, my = 0;
@@ -576,40 +849,99 @@ function update() {
   const m = Math.hypot(mx, my);
   if (m > 0.15) {
     mx /= (m || 1); my /= (m || 1);
-    if (m > 1) { mx *= 1; my *= 1; }
     player.dir = { x: mx, y: my };
     moveEntity(player, mx * player.speed, my * player.speed);
   }
 
-  if (player.swing > 0) player.swing = Math.max(0, player.swing - 0.12);
+  const wpn = WEAPONS[player.wpnTier];
+  if (player.swing > 0) player.swing = Math.max(0, player.swing - (wpn.special === "crit" ? 0.2 : 0.12));
   if (player.hurt > 0) player.hurt--;
   if (player.iframe > 0) player.iframe--;
   player._stairsWarned = enemies.length ? player._stairsWarned : false;
+
+  // fog-of-war reveal around the torch
+  const ptx = Math.floor(player.x / TILE), pty = Math.floor(player.y / TILE);
+  for (let dy = -6; dy <= 6; dy++)
+    for (let dx = -6; dx <= 6; dx++) {
+      if (dx * dx + dy * dy > 40) continue;
+      const tx = ptx + dx, ty = pty + dy;
+      if (tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H) explored[ty][tx] = true;
+    }
+
+  // traps: cycle down→warning→spikes up
+  const upTraps = new Set();
+  for (const tr of traps) {
+    const cyc = (time + tr.off) % 150;
+    tr.up = cyc > 105;
+    tr.warn = cyc > 92 && !tr.up;
+    if (tr.up) upTraps.add(tr.tx + "," + tr.ty);
+  }
+  if (player.iframe === 0 && upTraps.has(ptx + "," + pty)) {
+    sfx.trap();
+    damagePlayer(2 + Math.floor(depth / 2));
+  }
 
   // enemies
   for (const en of enemies) {
     if (en.dead) continue;
     const d = dist(en.x, en.y, player.x, player.y);
-    if (!en.awake && d < 240) { en.awake = true; }
+    if (!en.awake && d < (en.boss ? 320 : 240)) {
+      en.awake = true;
+      if (en.boss) { log("던전 로드가 깨어났다!", "hurt"); sfx.roar(); screenShake = 8; }
+    }
     en.wob += 0.15;
     if (en.awake) {
-      let dx = player.x - en.x, dy = player.y - en.y;
-      const dd = Math.hypot(dx, dy) || 1; dx /= dd; dy /= dd;
-      if (en.erratic) { dx += Math.cos(en.wob) * 0.6; dy += Math.sin(en.wob * 1.3) * 0.6; }
-      const sp = en.speed * (0.9 + depth * 0.03);
-      en.vx += dx * sp * 0.5; en.vy += dy * sp * 0.5;
+      if (en.boss) {
+        bossAI(en, d);
+      } else {
+        let dx = player.x - en.x, dy = player.y - en.y;
+        const dd = Math.hypot(dx, dy) || 1; dx /= dd; dy /= dd;
+        if (en.erratic) { dx += Math.cos(en.wob) * 0.6; dy += Math.sin(en.wob * 1.3) * 0.6; }
+        const sp = en.speed * (0.9 + depth * 0.03);
+        en.vx += dx * sp * 0.5; en.vy += dy * sp * 0.5;
+      }
     }
     en.vx *= 0.8; en.vy *= 0.8;
     moveEntity(en, en.vx, en.vy);
     if (en.hurt > 0) en.hurt--;
     if (en.cd > 0) en.cd--;
+    if (en.trapCd > 0) en.trapCd--;
+    // spikes hurt monsters too
+    if (en.trapCd === 0 && upTraps.has(Math.floor(en.x / TILE) + "," + Math.floor(en.y / TILE))) {
+      en.trapCd = 60;
+      damageEnemy(en, 3);
+    }
     // touch attack
-    if (d < en.r + player.r + 2 && en.cd === 0) {
+    if (!en.dead && d < en.r + player.r + 2 && en.cd === 0) {
       damagePlayer(en.atk); en.cd = 42;
       en.vx += (en.x - player.x) / (d || 1) * 3; en.vy += (en.y - player.y) / (d || 1) * 3;
     }
   }
   enemies = enemies.filter(e => !e.dead);
+
+  // projectiles
+  for (const pr of projectiles) {
+    pr.x += pr.vx; pr.y += pr.vy; pr.life--;
+    if (!tileFree(Math.floor(pr.x / TILE), Math.floor(pr.y / TILE))) {
+      pr.life = 0;
+      for (let i = 0; i < 4; i++)
+        particles.push({ x: pr.x, y: pr.y, vx: randRange(-2, 2), vy: randRange(-2, 2), life: 12, col: pr.col, r: 2 });
+      continue;
+    }
+    if (pr.hostile) {
+      if (dist(pr.x, pr.y, player.x, player.y) < pr.r + player.r) { damagePlayer(pr.dmg); pr.life = 0; }
+    } else {
+      for (const en of enemies) {
+        if (en.dead || pr.hitSet.has(en)) continue;
+        if (dist(pr.x, pr.y, en.x, en.y) < pr.r + en.r) {
+          pr.hitSet.add(en);
+          damageEnemy(en, pr.dmg);
+          if (--pr.pierce <= 0) { pr.life = 0; break; }
+        }
+      }
+    }
+  }
+  projectiles = projectiles.filter(p => p.life > 0);
 
   tryPickup();
 
@@ -628,7 +960,6 @@ function update() {
 }
 
 function moveEntity(e, dx, dy) {
-  // axis-separated collision against walls, treating entity as a circle
   const nx = e.x + dx;
   if (!hitsWall(nx, e.y, e.r)) e.x = nx;
   const ny = e.y + dy;
@@ -639,7 +970,6 @@ function hitsWall(x, y, r) {
     for (let ox = -1; ox <= 1; ox++) {
       const tx = Math.floor(x / TILE) + ox, ty = Math.floor(y / TILE) + oy;
       if (tileFree(tx, ty)) continue;
-      // nearest point on the wall tile to the circle center
       const cx = clamp(x, tx * TILE, tx * TILE + TILE);
       const cy = clamp(y, ty * TILE, ty * TILE + TILE);
       if (dist(x, y, cx, cy) < r) return true;
@@ -653,7 +983,6 @@ function render() {
   ctx.fillStyle = "#050409";
   ctx.fillRect(0, 0, W, H);
 
-  // camera centered on player, clamped to map
   let camX = player.x - W / 2, camY = player.y - H / 2;
   camX = clamp(camX, 0, MAP_W * TILE - W);
   camY = clamp(camY, 0, MAP_H * TILE - H);
@@ -662,7 +991,6 @@ function render() {
   ctx.save();
   ctx.translate(-camX, -camY);
 
-  // visible tile range
   const x0 = Math.max(0, Math.floor(camX / TILE) - 1), x1 = Math.min(MAP_W, Math.ceil((camX + W) / TILE) + 1);
   const y0 = Math.max(0, Math.floor(camY / TILE) - 1), y1 = Math.min(MAP_H, Math.ceil((camY + H) / TILE) + 1);
 
@@ -671,14 +999,12 @@ function render() {
       const t = map[y][x];
       const px = x * TILE, py = y * TILE;
       if (t === WALL) {
-        // draw wall only if adjacent to a floor (saves fill + looks like carved rock)
         const nearFloor = (map[y-1]&&map[y-1][x]!==WALL)||(map[y+1]&&map[y+1][x]!==WALL)||
                           (map[y][x-1]!==WALL)||(map[y][x+1]!==WALL);
         ctx.fillStyle = nearFloor ? "#241f2e" : "#100d18";
         ctx.fillRect(px, py, TILE, TILE);
         if (nearFloor) { ctx.fillStyle = "#2f2839"; ctx.fillRect(px, py, TILE, 4); }
       } else {
-        // floor
         const shade = ((x * 7 + y * 13) % 5) < 2 ? "#171320" : "#141019";
         ctx.fillStyle = shade;
         ctx.fillRect(px, py, TILE, TILE);
@@ -689,26 +1015,30 @@ function render() {
     }
   }
 
-  // items
+  for (const tr of traps) drawTrap(tr);
+  for (const ch of chests) drawChest(ch);
+
   for (const it of items) {
     it.bob += 0.08;
     const by = Math.sin(it.bob) * 3;
     drawItem(it, it.x, it.y + by);
   }
 
-  // enemies
   for (const en of enemies) drawEnemy(en);
-
-  // player
   drawPlayer();
 
-  // particles (world space)
+  for (const pr of projectiles) {
+    glow(pr.x, pr.y, pr.r * 2.4, pr.hostile ? "rgba(255,106,138,0.45)" : "rgba(143,208,255,0.45)");
+    ctx.fillStyle = pr.hostile ? "#ff9ab0" : "#c8e8ff";
+    ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 0.7, 0, 6.28); ctx.fill();
+  }
+
   for (const p of particles) {
     const a = clamp(p.life / 24, 0, 1);
     if (p.text !== undefined) {
       ctx.globalAlpha = a;
       ctx.fillStyle = p.col;
-      ctx.font = "bold 15px ui-monospace, monospace";
+      ctx.font = (p.big ? "bold 20px" : "bold 15px") + " ui-monospace, monospace";
       ctx.textAlign = "center";
       ctx.fillText(p.text, p.x, p.y);
       ctx.globalAlpha = 1;
@@ -722,8 +1052,8 @@ function render() {
 
   ctx.restore();
 
-  // torch-light vignette centered on player
   drawTorchLight(W, H, player.x - camX, player.y - camY);
+  renderMinimap();
 }
 
 function drawTorchLight(W, H, sx, sy) {
@@ -734,12 +1064,39 @@ function drawTorchLight(W, H, sx, sy) {
   g.addColorStop(1, "rgba(2,1,5,0.93)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
-  // warm bloom
   const wg = ctx.createRadialGradient(sx, sy, 10, sx, sy, R * 0.8);
   wg.addColorStop(0, "rgba(255,180,80,0.10)");
   wg.addColorStop(1, "rgba(255,180,80,0)");
   ctx.fillStyle = wg;
   ctx.fillRect(0, 0, W, H);
+}
+
+function renderMinimap() {
+  mctx.clearRect(0, 0, mm.width, mm.height);
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (!explored[y][x]) continue;
+      const t = map[y][x];
+      if (t === WALL) continue;
+      mctx.fillStyle = t === STAIRS ? "#8b6fd6" : "#2c2638";
+      mctx.fillRect(x * 3, y * 3, 3, 3);
+    }
+  }
+  for (const ch of chests) {
+    if (ch.opened) continue;
+    const tx = Math.floor(ch.x / TILE), ty = Math.floor(ch.y / TILE);
+    if (!explored[ty][tx]) continue;
+    mctx.fillStyle = "#ffcf4a";
+    mctx.fillRect(tx * 3, ty * 3, 3, 3);
+  }
+  for (const en of enemies) {
+    if (!en.awake) continue;
+    const s = en.boss ? 5 : 3;
+    mctx.fillStyle = en.boss ? "#ff6a8a" : "#e0453a";
+    mctx.fillRect(en.x / TILE * 3 - s / 2, en.y / TILE * 3 - s / 2, s, s);
+  }
+  mctx.fillStyle = "#ffcb6b";
+  mctx.fillRect(player.x / TILE * 3 - 2, player.y / TILE * 3 - 2, 4, 4);
 }
 
 function drawStairs(px, py) {
@@ -753,6 +1110,50 @@ function drawStairs(px, py) {
   ctx.strokeStyle = `rgba(139,111,214,${gl})`;
   ctx.lineWidth = 2;
   ctx.strokeRect(px + 4.5, py + 4.5, TILE - 9, TILE - 9);
+}
+
+function drawTrap(tr) {
+  const px = tr.tx * TILE, py = tr.ty * TILE;
+  ctx.fillStyle = "#0d0a14";
+  ctx.fillRect(px + 6, py + 6, TILE - 12, TILE - 12);
+  ctx.fillStyle = "#050409";
+  for (const [ox, oy] of [[13, 13], [27, 13], [13, 27], [27, 27]])
+    ctx.fillRect(px + ox - 2, py + oy - 2, 4, 4);
+  const h = tr.up ? 13 : tr.warn ? 4 : 0;
+  if (h > 0) {
+    ctx.fillStyle = tr.up ? "#b9bfca" : "#6a707c";
+    for (const [ox, oy] of [[13, 13], [27, 13], [13, 27], [27, 27]]) {
+      ctx.beginPath();
+      ctx.moveTo(px + ox - 4, py + oy + 3);
+      ctx.lineTo(px + ox + 4, py + oy + 3);
+      ctx.lineTo(px + ox, py + oy + 3 - h);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+function drawChest(ch) {
+  ctx.save();
+  ctx.translate(ch.x, ch.y);
+  if (!ch.opened) glow(0, 0, 20, "rgba(255,207,74,0.25)");
+  // body
+  ctx.fillStyle = "#5a3a1e";
+  ctx.fillRect(-13, -6, 26, 15);
+  // lid
+  ctx.fillStyle = "#6e4826";
+  if (ch.opened) {
+    ctx.fillRect(-13, -17, 26, 6);
+    ctx.fillStyle = "#241505";
+    ctx.fillRect(-11, -6, 22, 6);
+  } else {
+    ctx.fillRect(-13, -12, 26, 7);
+  }
+  // gold trim + latch
+  ctx.fillStyle = "#ffcf4a";
+  ctx.fillRect(-13, -6, 26, 2);
+  if (!ch.opened) ctx.fillRect(-2, -8, 4, 6);
+  ctx.restore();
 }
 
 function drawItem(it, x, y) {
@@ -786,37 +1187,53 @@ function drawEnemy(en) {
   ctx.save();
   ctx.translate(en.x, en.y);
   const bob = Math.sin(en.wob) * 2;
-  // shadow
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.beginPath(); ctx.ellipse(0, en.r - 1, en.r * 0.8, en.r * 0.35, 0, 0, 6.28); ctx.fill();
-  const flash = en.hurt > 0 ? "#ffffff" : en.col;
   ctx.translate(0, bob);
-  // body per kind
-  ctx.fillStyle = flash;
-  if (en.key === "bat") {
-    ctx.beginPath(); ctx.arc(0, 0, en.r * 0.6, 0, 6.28); ctx.fill();
-    const wf = Math.sin(en.wob * 3) * 5;
-    ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(-en.r - 4, -wf); ctx.lineTo(-en.r - 2, 4); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(en.r + 4, -wf); ctx.lineTo(en.r + 2, 4); ctx.closePath(); ctx.fill();
-  } else if (en.key === "slime") {
-    ctx.beginPath();
-    ctx.ellipse(0, 2, en.r, en.r * (0.8 + Math.sin(en.wob) * 0.08), 0, 0, 6.28); ctx.fill();
-  } else {
-    ctx.beginPath(); ctx.arc(0, 0, en.r, 0, 6.28); ctx.fill();
-    // little horns/ears
-    ctx.fillRect(-en.r * 0.7, -en.r, 3, 5);
-    ctx.fillRect(en.r * 0.7 - 3, -en.r, 3, 5);
-  }
-  // eyes
-  if (en.hurt === 0) {
-    ctx.fillStyle = "#1a0d0d";
-    ctx.fillRect(-en.r * 0.4, -2, 3, 3);
-    ctx.fillRect(en.r * 0.4 - 3, -2, 3, 3);
-  }
-  ctx.restore();
 
-  // hp bar when damaged
-  if (en.hp < en.maxhp) {
+  if (en.boss) {
+    const flash = en.hurt > 0 || (en.state === "tele" && Math.floor(en.wob * 8) % 2 === 0);
+    glow(0, 0, en.r + 18, "rgba(216,74,106,0.28)");
+    ctx.fillStyle = flash ? "#ffffff" : en.col;
+    ctx.beginPath(); ctx.arc(0, 0, en.r, 0, 6.28); ctx.fill();
+    // horns
+    ctx.beginPath();
+    ctx.moveTo(-en.r * 0.8, -en.r * 0.4); ctx.lineTo(-en.r * 1.25, -en.r * 1.25); ctx.lineTo(-en.r * 0.35, -en.r * 0.85);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(en.r * 0.8, -en.r * 0.4); ctx.lineTo(en.r * 1.25, -en.r * 1.25); ctx.lineTo(en.r * 0.35, -en.r * 0.85);
+    ctx.closePath(); ctx.fill();
+    // burning eyes
+    ctx.fillStyle = "#ffd94a";
+    ctx.fillRect(-9, -5, 6, 6);
+    ctx.fillRect(3, -5, 6, 6);
+    ctx.restore();
+  } else {
+    const flash = en.hurt > 0 ? "#ffffff" : en.col;
+    ctx.fillStyle = flash;
+    if (en.key === "bat") {
+      ctx.beginPath(); ctx.arc(0, 0, en.r * 0.6, 0, 6.28); ctx.fill();
+      const wf = Math.sin(en.wob * 3) * 5;
+      ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(-en.r - 4, -wf); ctx.lineTo(-en.r - 2, 4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(en.r + 4, -wf); ctx.lineTo(en.r + 2, 4); ctx.closePath(); ctx.fill();
+    } else if (en.key === "slime") {
+      ctx.beginPath();
+      ctx.ellipse(0, 2, en.r, en.r * (0.8 + Math.sin(en.wob) * 0.08), 0, 0, 6.28); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(0, 0, en.r, 0, 6.28); ctx.fill();
+      ctx.fillRect(-en.r * 0.7, -en.r, 3, 5);
+      ctx.fillRect(en.r * 0.7 - 3, -en.r, 3, 5);
+    }
+    if (en.hurt === 0) {
+      ctx.fillStyle = "#1a0d0d";
+      ctx.fillRect(-en.r * 0.4, -2, 3, 3);
+      ctx.fillRect(en.r * 0.4 - 3, -2, 3, 3);
+    }
+    ctx.restore();
+  }
+
+  // hp bar (small foes only — boss uses the big top bar)
+  if (!en.boss && en.hp < en.maxhp) {
     const w = en.r * 2, x = en.x - en.r, y = en.y - en.r - 8;
     ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x, y, w, 4);
     ctx.fillStyle = "#e0453a"; ctx.fillRect(x, y, w * (en.hp / en.maxhp), 4);
@@ -827,31 +1244,31 @@ function drawPlayer() {
   const p = player;
   ctx.save();
   ctx.translate(p.x, p.y);
-  // shadow
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath(); ctx.ellipse(0, p.r, p.r * 0.85, p.r * 0.35, 0, 0, 6.28); ctx.fill();
 
-  // swing arc
   if (p.swing > 0) {
+    const w = WEAPONS[p.wpnTier];
     const ang = Math.atan2(p.dir.y, p.dir.x);
     const t = 1 - p.swing;
+    const full = w.special === "smash";
     ctx.save();
     ctx.rotate(ang);
-    ctx.strokeStyle = `rgba(255,240,200,${p.swing})`;
+    ctx.strokeStyle = w.special === "wave"
+      ? `rgba(143,208,255,${p.swing})`
+      : `rgba(255,240,200,${p.swing})`;
     ctx.lineWidth = 5; ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.arc(0, 0, p.wpnReach * 0.82, -0.9 + t * 1.8, 0.9 + t * 1.8);
+    if (full) ctx.arc(0, 0, p.wpnReach * 0.82, t * 6.28, t * 6.28 + 4.2);
+    else ctx.arc(0, 0, p.wpnReach * 0.82, -0.9 + t * 1.8, 0.9 + t * 1.8);
     ctx.stroke();
     ctx.restore();
   }
 
-  // body
   ctx.fillStyle = p.hurt > 0 ? "#ffffff" : "#e8dcc0";
   ctx.beginPath(); ctx.arc(0, 0, p.r, 0, 6.28); ctx.fill();
-  // cloak accent
   ctx.fillStyle = p.hurt > 0 ? "#ffffff" : "#c0392b";
   ctx.beginPath(); ctx.arc(0, 3, p.r * 0.7, 0, 3.14); ctx.fill();
-  // face direction marker
   ctx.fillStyle = "#2a1e10";
   ctx.fillRect(p.dir.x * 5 - 2, p.dir.y * 5 - 6, 4, 4);
   ctx.restore();
@@ -867,9 +1284,18 @@ function updateHUD() {
   document.getElementById("goldTag").textContent = player.gold;
   document.getElementById("depthTag").textContent = depth;
   document.getElementById("foesTag").textContent = enemies.length;
+
+  const boss = enemies.find(e => e.boss);
+  const bh = document.getElementById("bossHud");
+  if (boss && boss.awake) {
+    bh.classList.remove("hidden");
+    document.getElementById("bossName").textContent = `던전 로드 — 지하 ${depth}층의 주인`;
+    document.getElementById("bossFill").style.transform = `scaleX(${clamp(boss.hp / boss.maxhp, 0, 1)})`;
+  } else {
+    bh.classList.add("hidden");
+  }
 }
 
-let logTimer = 0;
 function log(msg, cls = "") {
   const box = document.getElementById("log");
   const line = document.createElement("div");
@@ -877,12 +1303,12 @@ function log(msg, cls = "") {
   line.textContent = msg;
   box.appendChild(line);
   while (box.children.length > 4) box.removeChild(box.firstChild);
-  clearTimeout(logTimer);
 }
 
 // ============ End states ============
 function gameOver() {
   running = false;
+  sfx.die();
   const es = document.getElementById("endScreen");
   document.getElementById("endTitle").textContent = "그대는 쓰러졌다";
   document.getElementById("endTitle").className = "end-title dead";
@@ -898,7 +1324,7 @@ function gameOver() {
 function resize() {
   const rc = document.getElementById("stage").getBoundingClientRect();
   const dpr = Math.min(devicePixelRatio || 1, 2);
-  cv.width = Math.floor(rc.width * dpr / 1.4);   // slightly low-res for crisp pixel look + perf
+  cv.width = Math.floor(rc.width * dpr / 1.4);
   cv.height = Math.floor(rc.height * dpr / 1.4);
 }
 addEventListener("resize", resize);
@@ -909,8 +1335,10 @@ function frame() {
   if (player) render();
   requestAnimationFrame(frame);
 }
-// idle backdrop before start: create a throwaway dungeon so the canvas isn't empty
-depth = 1; genDungeon(); player = makePlayer(); enemies = []; items = []; particles = []; torchFlicker = 1; running = false;
-kills = 0;
+// idle backdrop before start
+depth = 1; genDungeon(); player = makePlayer();
+enemies = []; items = []; chests = []; traps = []; projectiles = []; particles = [];
+explored = Array.from({ length: MAP_H }, () => new Array(MAP_W).fill(false));
+torchFlicker = 1; running = false; kills = 0;
 frame();
 </script>
