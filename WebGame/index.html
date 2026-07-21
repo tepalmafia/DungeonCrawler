@@ -289,7 +289,7 @@
       <p class="lede">토치 불빛에 의지해 무너진 던전을 탐험하라. 함정을 피하고, 상자를 열고, 무기의 힘을 깨워라. 3층마다 <b style="color:#ff8fa5">던전 로드</b>가 길을 막는다.</p>
       <div class="keys">
         <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</span><b>이동</b>
-        <span><kbd>Space</kbd> / 클릭</span><b>공격</b>
+        <span><kbd>Space</kbd> / 클릭</span><b>공격 — 가까운 적 자동 조준</b>
         <span><kbd>M</kbd></span><b>소리 켜기/끄기</b>
         <span>상자 <span style="color:var(--gold)">▣</span> · 함정 <span style="color:#a8adb8">▲</span></span><b>열기 · 조심!</b>
       </div>
@@ -334,7 +334,142 @@ const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 // ---- Game state ----
 let map, rooms, player, enemies, items, chests, traps, projectiles, particles, explored;
 let depth, kills, running, screenShake, torchFlicker, time = 0;
+let target = null; // auto-aim lock-on
 const keys = {};
+
+// ============ Pixel sprites — medieval set, painted in code ============
+function makeSprite(rows, pal) {
+  const h = rows.length, w = rows[0].length;
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const ch = rows[y][x];
+      if (ch === ".") continue;
+      g.fillStyle = pal[ch];
+      g.fillRect(x, y, 1, 1);
+    }
+  // white silhouette for hurt-flash frames
+  const wc = document.createElement("canvas"); wc.width = w; wc.height = h;
+  const wg = wc.getContext("2d");
+  wg.drawImage(c, 0, 0);
+  wg.globalCompositeOperation = "source-in";
+  wg.fillStyle = "#ffffff";
+  wg.fillRect(0, 0, w, h);
+  return { img: c, white: wc, w, h };
+}
+function drawSprite(sp, x, y, scale, flip, white) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(white ? sp.white : sp.img, -sp.w * scale / 2, -sp.h * scale / 2, sp.w * scale, sp.h * scale);
+  ctx.restore();
+}
+
+const SPRITES = {
+  // plumed knight in steel plate over a crimson tunic
+  knight: makeSprite([
+    ".......rr.......",
+    "......rrr.......",
+    ".....sssss......",
+    "....sssssss.....",
+    "....sSkkkSs.....",
+    "....sssssss.....",
+    ".....SSSSS......",
+    "...gSSrrrSSg....",
+    "...sSrrrrrSs....",
+    "...sSrrrrrSs....",
+    "...dSRrrrRSd....",
+    "....SRRRRRS.....",
+    ".....bbbbb......",
+    ".....SS.SS......",
+    ".....SS.SS......",
+    "....dd...dd.....",
+  ].map(r => r.slice(0, 16)), {
+    s: "#d7dce4", S: "#a8b0bd", d: "#6d7484",
+    r: "#c0392b", R: "#8a2a20", g: "#ffcf4a",
+    b: "#5a3a1e", k: "#1a1410",
+  }),
+  slime: makeSprite([
+    "....GGGG....",
+    "..GGGGGGGG..",
+    ".GGwGGGGGG..",
+    ".GGGGGGGGGg.",
+    "GGkGGGGkGGgg",
+    "GGGGGGGGGGgg",
+    "GGGGGGGGGggg",
+    ".GGGGGGGGgg.",
+    "..gggggggg..",
+  ], { G: "#6fce7a", g: "#48a458", k: "#143a1e", w: "#d8ffe0" }),
+  bat: makeSprite([
+    ".p..........p.",
+    ".pp...PP...pp.",
+    ".ppp.PPPP.ppp.",
+    ".pppPyPPyPppp.",
+    "..ppPPPPPPpp..",
+    "...pPPwPPp....",
+    "....pPPPPp....",
+    ".....p..p.....",
+  ], { P: "#b18bd8", p: "#7e5aa8", y: "#ffd94a", w: "#e8dcc0" }),
+  // hooded goblin footpad with a rusty dagger
+  goblin: makeSprite([
+    "...bbbbb....",
+    "..bbbbbbb...",
+    "..bGGGGGb...",
+    "..GGyGyGG...",
+    "..GGGGGGG...",
+    "...GtttG....",
+    "..gGGGGGg...",
+    ".dgGBBBGgd..",
+    "..gGBBBGg...",
+    "...gg.gg....",
+    "...g...g....",
+    "..BB...BB...",
+  ], {
+    G: "#6fa848", g: "#4c7a30", b: "#5a3a1e", B: "#3c2712",
+    y: "#ffd94a", t: "#e8dcc0", d: "#c7ccd6",
+  }),
+  // hooded wraith, tattered hem
+  wraith: makeSprite([
+    "....wwww....",
+    "...wwwwww...",
+    "..wwDDDDww..",
+    "..wDyDDyDw..",
+    "..wDDDDDDw..",
+    "..wwwwwwww..",
+    "..wwwwwwww..",
+    "...wwwwwww..",
+    "..wwwwwwww..",
+    "...wwwwww...",
+    "..ww.www.w..",
+    "..w...ww....",
+    ".....w......",
+  ], { w: "#8fb7d6", D: "#1c2733", y: "#9fe8ff" }),
+  // horned demon lord in black-crimson plate
+  boss: makeSprite([
+    ".hh............hh.",
+    ".hhh..........hhh.",
+    "..hh...KKKK...hh..",
+    "..hh..KKKKKK..hh..",
+    "...h.KKKKKKKK.h...",
+    "....KKyyKKyyKK....",
+    "....KKKKKKKKKK....",
+    "...gKKKrrrrKKKg...",
+    "..rKKKrrrrrrKKKr..",
+    "..rKKrrRRRRrrKKr..",
+    "..RKKrrRRRRrrKKR..",
+    "...KKKrrrrrrKKK...",
+    "....KKRRRRRRKK....",
+    ".....KKKKKKKK.....",
+    "....KKK....KKK....",
+    "....KK......KK....",
+    "...kkk......kkk...",
+  ], {
+    K: "#3a2430", k: "#241520", r: "#d84a6a", R: "#8a2440",
+    y: "#ffd94a", h: "#e8dcc0", g: "#ffcf4a",
+  }),
+};
 
 // ============ Audio (WebAudio, fully procedural — no external files) ============
 let AC = null, master = null, muted = false, musicTimer = null;
@@ -589,6 +724,7 @@ function enterDepth(d) {
   spawnChests();
   projectiles = [];
   particles = [];
+  target = null;
   explored = Array.from({ length: MAP_H }, () => new Array(MAP_W).fill(false));
   screenShake = 0;
   updateHUD();
@@ -642,6 +778,11 @@ document.getElementById("atkBtn").addEventListener("touchstart", (e) => { attack
 function attack() {
   if (!running || !player || player.swing > 0) return;
   const w = WEAPONS[player.wpnTier];
+  // auto-aim: snap facing toward the locked-on nearest enemy
+  if (target && !target.dead) {
+    const dd = dist(target.x, target.y, player.x, player.y) || 1;
+    player.dir = { x: (target.x - player.x) / dd, y: (target.y - player.y) / dd };
+  }
   player.swing = 1;
   sfx.swing();
   const reach = player.wpnReach;
@@ -847,7 +988,8 @@ function update() {
   if (keys["d"] || keys["arrowright"]) mx += 1;
   mx += stickVec.x; my += stickVec.y;
   const m = Math.hypot(mx, my);
-  if (m > 0.15) {
+  player.moving = m > 0.15;
+  if (player.moving) {
     mx /= (m || 1); my /= (m || 1);
     player.dir = { x: mx, y: my };
     moveEntity(player, mx * player.speed, my * player.speed);
@@ -918,6 +1060,17 @@ function update() {
     }
   }
   enemies = enemies.filter(e => !e.dead);
+
+  // lock onto the nearest enemy for auto-aim
+  target = null;
+  {
+    const lockR = Math.max(player.wpnReach + 30, 190);
+    let nd = lockR;
+    for (const en of enemies) {
+      const d = dist(en.x, en.y, player.x, player.y);
+      if (d < nd) { nd = d; target = en; }
+    }
+  }
 
   // projectiles
   for (const pr of projectiles) {
@@ -1022,6 +1175,19 @@ function render() {
     it.bob += 0.08;
     const by = Math.sin(it.bob) * 3;
     drawItem(it, it.x, it.y + by);
+  }
+
+  // lock-on reticle around the auto-aim target
+  if (target && !target.dead) {
+    const tr = target.r + 9 + Math.sin(time * 0.3) * 2;
+    ctx.strokeStyle = "rgba(255,203,107,0.85)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+      const a = i * 1.5708 + time * 0.05;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, tr, a, a + 0.6);
+      ctx.stroke();
+    }
   }
 
   for (const en of enemies) drawEnemy(en);
@@ -1189,48 +1355,28 @@ function drawEnemy(en) {
   const bob = Math.sin(en.wob) * 2;
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.beginPath(); ctx.ellipse(0, en.r - 1, en.r * 0.8, en.r * 0.35, 0, 0, 6.28); ctx.fill();
-  ctx.translate(0, bob);
+  const flip = player.x < en.x; // face the hero
 
   if (en.boss) {
     const flash = en.hurt > 0 || (en.state === "tele" && Math.floor(en.wob * 8) % 2 === 0);
-    glow(0, 0, en.r + 18, "rgba(216,74,106,0.28)");
-    ctx.fillStyle = flash ? "#ffffff" : en.col;
-    ctx.beginPath(); ctx.arc(0, 0, en.r, 0, 6.28); ctx.fill();
-    // horns
-    ctx.beginPath();
-    ctx.moveTo(-en.r * 0.8, -en.r * 0.4); ctx.lineTo(-en.r * 1.25, -en.r * 1.25); ctx.lineTo(-en.r * 0.35, -en.r * 0.85);
-    ctx.closePath(); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(en.r * 0.8, -en.r * 0.4); ctx.lineTo(en.r * 1.25, -en.r * 1.25); ctx.lineTo(en.r * 0.35, -en.r * 0.85);
-    ctx.closePath(); ctx.fill();
-    // burning eyes
-    ctx.fillStyle = "#ffd94a";
-    ctx.fillRect(-9, -5, 6, 6);
-    ctx.fillRect(3, -5, 6, 6);
-    ctx.restore();
+    glow(0, bob, en.r + 18, "rgba(216,74,106,0.28)");
+    drawSprite(SPRITES.boss, 0, bob - 4, 3.4, flip, flash);
   } else {
-    const flash = en.hurt > 0 ? "#ffffff" : en.col;
-    ctx.fillStyle = flash;
-    if (en.key === "bat") {
-      ctx.beginPath(); ctx.arc(0, 0, en.r * 0.6, 0, 6.28); ctx.fill();
-      const wf = Math.sin(en.wob * 3) * 5;
-      ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(-en.r - 4, -wf); ctx.lineTo(-en.r - 2, 4); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(en.r + 4, -wf); ctx.lineTo(en.r + 2, 4); ctx.closePath(); ctx.fill();
-    } else if (en.key === "slime") {
-      ctx.beginPath();
-      ctx.ellipse(0, 2, en.r, en.r * (0.8 + Math.sin(en.wob) * 0.08), 0, 0, 6.28); ctx.fill();
+    const sp = SPRITES[en.key] || SPRITES.goblin;
+    const scale = en.key === "bat" ? 1.5 : en.key === "slime" ? 2.0 : en.key === "wraith" ? 2.3 : 2.2;
+    if (en.key === "wraith") ctx.globalAlpha = 0.85; // spectral
+    if (en.key === "slime") {
+      const squish = Math.sin(en.wob) * 0.12;
+      ctx.save();
+      ctx.translate(0, bob);
+      ctx.scale(1 + squish, 1 - squish);
+      drawSprite(sp, 0, -2, scale, flip, en.hurt > 0);
+      ctx.restore();
     } else {
-      ctx.beginPath(); ctx.arc(0, 0, en.r, 0, 6.28); ctx.fill();
-      ctx.fillRect(-en.r * 0.7, -en.r, 3, 5);
-      ctx.fillRect(en.r * 0.7 - 3, -en.r, 3, 5);
+      drawSprite(sp, 0, bob - 2, scale, flip, en.hurt > 0);
     }
-    if (en.hurt === 0) {
-      ctx.fillStyle = "#1a0d0d";
-      ctx.fillRect(-en.r * 0.4, -2, 3, 3);
-      ctx.fillRect(en.r * 0.4 - 3, -2, 3, 3);
-    }
-    ctx.restore();
   }
+  ctx.restore();
 
   // hp bar (small foes only — boss uses the big top bar)
   if (!en.boss && en.hp < en.maxhp) {
@@ -1265,12 +1411,8 @@ function drawPlayer() {
     ctx.restore();
   }
 
-  ctx.fillStyle = p.hurt > 0 ? "#ffffff" : "#e8dcc0";
-  ctx.beginPath(); ctx.arc(0, 0, p.r, 0, 6.28); ctx.fill();
-  ctx.fillStyle = p.hurt > 0 ? "#ffffff" : "#c0392b";
-  ctx.beginPath(); ctx.arc(0, 3, p.r * 0.7, 0, 3.14); ctx.fill();
-  ctx.fillStyle = "#2a1e10";
-  ctx.fillRect(p.dir.x * 5 - 2, p.dir.y * 5 - 6, 4, 4);
+  const bob = p.moving ? Math.sin(time * 0.4) * 1.5 : 0;
+  drawSprite(SPRITES.knight, 0, bob - 3, 2.1, p.dir.x < 0, p.hurt > 0);
   ctx.restore();
 }
 
