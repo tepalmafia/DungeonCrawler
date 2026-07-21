@@ -236,6 +236,15 @@
     pointer-events: auto;
     box-shadow: 0 6px 18px rgba(0,0,0,0.5);
   }
+  #grdBtn {
+    position: absolute; right: 128px; bottom: 26px;
+    width: 72px; height: 72px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #d7dce4, #6d7484);
+    border: none; color: #1a1d24; font-weight: 800; font-size: 12px; letter-spacing: 1px;
+    font-family: inherit;
+    pointer-events: auto;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  }
   @media (hover: none) and (pointer: coarse) { #touch { display: block; } }
   @media (max-width: 560px) {
     #log { max-width: 46%; font-size: 11px; }
@@ -280,6 +289,7 @@
 
     <div id="touch">
       <div id="stick"><i></i></div>
+      <button id="grdBtn">방어</button>
       <button id="atkBtn">공격</button>
     </div>
 
@@ -290,6 +300,7 @@
       <div class="keys">
         <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</span><b>이동</b>
         <span><kbd>Space</kbd> / 클릭</span><b>공격 — 가까운 적 자동 조준</b>
+        <span><kbd>Shift</kbd> / 우클릭</span><b>방패 방어 — 피해 75% 감소</b>
         <span><kbd>M</kbd></span><b>소리 켜기/끄기</b>
         <span>상자 <span style="color:var(--gold)">▣</span> · 함정 <span style="color:#a8adb8">▲</span></span><b>열기 · 조심!</b>
       </div>
@@ -471,6 +482,193 @@ const SPRITES = {
   }),
 };
 
+/* Action poses — attack (_atk) thrusts toward facing side, guard (_grd) raises a shield */
+const KNIGHT_PAL = {
+  s: "#d7dce4", S: "#a8b0bd", d: "#6d7484",
+  r: "#c0392b", R: "#8a2a20", g: "#ffcf4a",
+  b: "#5a3a1e", k: "#1a1410",
+};
+SPRITES.knight_atk = makeSprite([
+  ".......rr...........",
+  "......rrr...........",
+  ".....sssss..........",
+  "....sssssss.........",
+  "....sSkkkSs.........",
+  "....sssssss.........",
+  ".....SSSSS..........",
+  "...gSSrrrSSg........",
+  "...sSrrrrrSSssssssd.",
+  "...sSrrrrrSs........",
+  "...dSRrrrRSd........",
+  "....SRRRRRS.........",
+  ".....bbbbb..........",
+  ".....SS.SS..........",
+  ".....SS.SS..........",
+  "....dd...dd.........",
+], KNIGHT_PAL);
+SPRITES.knight_grd = makeSprite([
+  ".......rr.......",
+  "......rrr.......",
+  ".....sssss......",
+  "....sssssss.....",
+  "....sSkkkSs.....",
+  "....sssssgg.....",
+  "....SSSSgrrg....",
+  "...gSSrrgrrrg...",
+  "...sSrrrgrrrg...",
+  "...sSrrrgrrrg...",
+  "...dSRrrgrrrg...",
+  "....SRRRgrrg....",
+  ".....bbbbgg.....",
+  ".....SS.SS......",
+  ".....SS.SS......",
+  "....dd...dd.....",
+], KNIGHT_PAL);
+const GOBLIN_PAL = {
+  G: "#6fa848", g: "#4c7a30", b: "#5a3a1e", B: "#3c2712",
+  y: "#ffd94a", t: "#e8dcc0", d: "#c7ccd6",
+};
+SPRITES.goblin_atk = makeSprite([
+  "...bbbbb........",
+  "..bbbbbbb.......",
+  "..bGGGGGb.......",
+  "..GGyGyGG.......",
+  "..GGGGGGG.......",
+  "...GtttG........",
+  "..gGGGGGg.......",
+  ".dgGBBBGgdddd...",
+  "..gGBBBGg.......",
+  "...gg.gg........",
+  "...g...g........",
+  "..BB...BB.......",
+], GOBLIN_PAL);
+SPRITES.goblin_grd = makeSprite([
+  "...bbbbb....",
+  "..bbbbbbb...",
+  "..bGGGGGb...",
+  "..GGyGyGG...",
+  "..GGGGGGG...",
+  "...GtttGbb..",
+  "..gGGGGGgB..",
+  "..gGBBBGgBB.",
+  "..gGBBBGgB..",
+  "...gg.gg....",
+  "...g...g....",
+  "..BB...BB...",
+], GOBLIN_PAL);
+const SLIME_PAL = { G: "#6fce7a", g: "#48a458", k: "#143a1e", w: "#d8ffe0" };
+SPRITES.slime_atk = makeSprite([
+  "..GGGGGGGGGG..",
+  ".GGGGGGGGGGGG.",
+  "GGkGGGGGGkGGgg",
+  "GGGkkkkkkGGGgg",
+  "GGGGGGGGGGGggg",
+  ".GGGGGGGGGGgg.",
+  "..gggggggggg..",
+], SLIME_PAL);
+SPRITES.slime_grd = makeSprite([
+  "...gggggg...",
+  ".gggGGGGgggg",
+  "ggGGkGGkGGgg",
+  "ggGGGGGGGGgg",
+  "gggggggggggg",
+  "gggggggggggg",
+], SLIME_PAL);
+const BAT_PAL = { P: "#b18bd8", p: "#7e5aa8", y: "#ffd94a", w: "#e8dcc0" };
+SPRITES.bat_atk = makeSprite([
+  "..pp......pp..",
+  "...pp.PP.pp...",
+  "...ppPPPPpp...",
+  "...pPyPPyPp...",
+  "....PPPPPP....",
+  "....PwPPwP....",
+  ".....PPPP.....",
+  "......pp......",
+], BAT_PAL);
+SPRITES.bat_grd = makeSprite([
+  "...pppp...",
+  "..pppppp..",
+  ".ppPPPPpp.",
+  ".ppPyyPpp.",
+  ".ppPPPPpp.",
+  "..pppppp..",
+  "...pppp...",
+  "....pp....",
+], BAT_PAL);
+const WRAITH_PAL = { w: "#8fb7d6", D: "#1c2733", y: "#9fe8ff" };
+SPRITES.wraith_atk = makeSprite([
+  ".....wwww.....",
+  "....wwwwww....",
+  "...wwDDDDww...",
+  "w..wDyDDyDw..w",
+  "ww.wDDDDDDw.ww",
+  ".wwwwwwwwwwww.",
+  "..wwwwwwwwww..",
+  "...wwwwwwww...",
+  "..wwwwwwwwww..",
+  "...wwwwwww....",
+  "..ww.www.w....",
+  "..w...ww......",
+  ".....w........",
+], WRAITH_PAL);
+SPRITES.wraith_grd = makeSprite([
+  "....wwww....",
+  "...wwwwww...",
+  "..wwDDDDww..",
+  "..wDDDDDDw..",
+  "..wwwwwwww..",
+  "..wwwwwwww..",
+  "..wwwwwwww..",
+  "...wwwwwww..",
+  "..wwwwwwww..",
+  "...wwwwww...",
+  "..ww.www.w..",
+  "..w...ww....",
+  ".....w......",
+], WRAITH_PAL);
+const BOSS_PAL = {
+  K: "#3a2430", k: "#241520", r: "#d84a6a", R: "#8a2440",
+  y: "#ffd94a", h: "#e8dcc0", g: "#ffcf4a", s: "#c7ccd6", b: "#5a3a1e",
+};
+SPRITES.boss_atk = makeSprite([
+  ".hh............hh...s.",
+  ".hhh..........hhh...s.",
+  "..hh...KKKK...hh....s.",
+  "..hh..KKKKKK..hh....s.",
+  "...h.KKKKKKKK.h.....s.",
+  "....KKyyKKyyKK......s.",
+  "....KKKKKKKKKK......s.",
+  "...gKKKrrrrKKKg....gg.",
+  "..rKKKrrrrrrKKKr....b.",
+  "..rKKrrRRRRrrKKr......",
+  "..RKKrrRRRRrrKKR......",
+  "...KKKrrrrrrKKK.......",
+  "....KKRRRRRRKK........",
+  ".....KKKKKKKK.........",
+  "....KKK....KKK........",
+  "....KK......KK........",
+  "...kkk......kkk.......",
+], BOSS_PAL);
+SPRITES.boss_grd = makeSprite([
+  ".hh............hh.",
+  ".hhh..........hhh.",
+  "..hh...KKKK...hh..",
+  "..hh..KKKKKK..hh..",
+  "...h.KKKKKKKK.h...",
+  "....KKyyKKyyKK....",
+  "....KKKKKKKKKK.KK.",
+  "...gKKKrrrrKKKgKK.",
+  "..rKKKrrrrrrKKKrK.",
+  "..rKKrrRRRRrrKKrK.",
+  "..RKKrrRRRRrrKKRK.",
+  "...KKKrrrrrrKKK...",
+  "....KKRRRRRRKK....",
+  ".....KKKKKKKK.....",
+  "....KKK....KKK....",
+  "....KK......KK....",
+  "...kkk......kkk...",
+], BOSS_PAL);
+
 // ============ Audio (WebAudio, fully procedural — no external files) ============
 let AC = null, master = null, muted = false, musicTimer = null;
 function initAudio() {
@@ -521,6 +719,7 @@ const sfx = {
   roar:   () => { tone(70, 0.7, "sawtooth", 0.24, 45); tone(74, 0.7, "sawtooth", 0.18, 48); noiseBurst(0.4, 0.1, 300); },
   bossdie:() => { tone(200, 0.8, "sawtooth", 0.22, 40); [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, "triangle", 0.15, null, 0.3 + i * 0.1)); },
   die:    () => tone(240, 1.0, "sawtooth", 0.24, 30),
+  clang:  () => { tone(1200, 0.08, "square", 0.12, 500); noiseBurst(0.05, 0.14, 3500); tone(600, 0.15, "triangle", 0.1, 300, 0.02); },
 };
 function startMusic() {
   // low cavern drone
@@ -595,18 +794,18 @@ function makePlayer() {
   const start = rooms[0];
   return {
     x: (start.cx + 0.5) * TILE, y: (start.cy + 0.5) * TILE,
-    r: 13, speed: 3.0, dir: { x: 0, y: 1 },
-    hp: 20, maxhp: 20, atk: 4, gold: 0, level: 1, xp: 0, xpNext: 8,
+    r: 13, speed: 2.4, dir: { x: 0, y: 1 },
+    hp: 32, maxhp: 32, atk: 4, gold: 0, level: 1, xp: 0, xpNext: 8,
     weapon: "맨손", wpnReach: 44, wpnTier: 0,
-    swing: 0, hurt: 0, iframe: 0,
+    swing: 0, hurt: 0, iframe: 0, guarding: false, moving: false,
   };
 }
 
 const ENEMY_KINDS = [
-  { key: "slime",  name: "슬라임", col: "#6fce7a", r: 12, hp: 6,  atk: 2, speed: 1.1, xp: 3, gold: 2 },
-  { key: "bat",    name: "박쥐",   col: "#b18bd8", r: 10, hp: 4,  atk: 2, speed: 2.1, xp: 3, gold: 1, erratic: true },
-  { key: "goblin", name: "고블린", col: "#c98b4a", r: 12, hp: 10, atk: 3, speed: 1.7, xp: 5, gold: 5 },
-  { key: "wraith", name: "망령",   col: "#8fb7d6", r: 13, hp: 14, atk: 4, speed: 1.4, xp: 8, gold: 8 },
+  { key: "slime",  name: "슬라임", col: "#6fce7a", r: 12, hp: 6,  atk: 2, speed: 0.9,  xp: 3, gold: 2 },
+  { key: "bat",    name: "박쥐",   col: "#b18bd8", r: 10, hp: 4,  atk: 2, speed: 1.7,  xp: 3, gold: 1, erratic: true },
+  { key: "goblin", name: "고블린", col: "#c98b4a", r: 12, hp: 10, atk: 3, speed: 1.4,  xp: 5, gold: 5 },
+  { key: "wraith", name: "망령",   col: "#8fb7d6", r: 13, hp: 14, atk: 4, speed: 1.15, xp: 8, gold: 8 },
 ];
 
 function isBossFloor() { return depth % 3 === 0; }
@@ -628,19 +827,19 @@ function spawnEnemies() {
       hp: Math.round(base.hp * hpScale),
       atk: Math.max(1, Math.round(base.atk * atkScale)),
       cd: 0, hurt: 0, wob: Math.random() * 6.28, awake: false,
-      vx: 0, vy: 0, trapCd: 0,
+      vx: 0, vy: 0, trapCd: 0, atkAnim: 0, blockAnim: 0, blockCd: 0,
     });
   }
   if (isBossFloor()) {
     const room = farRoom();
     enemies.push({
       boss: true, key: "boss", name: "던전 로드", col: "#d84a6a",
-      r: 26, speed: 1.5,
+      r: 26, speed: 1.3,
       maxhp: 60 + depth * 22, hp: 60 + depth * 22,
       atk: 4 + depth, xp: 30 + depth * 6, gold: 40 + depth * 10,
       x: (room.cx + 0.5) * TILE, y: (room.cy + 0.5) * TILE,
       cd: 0, hurt: 0, wob: Math.random() * 6.28, awake: false,
-      vx: 0, vy: 0, trapCd: 0,
+      vx: 0, vy: 0, trapCd: 0, atkAnim: 0, blockAnim: 0, blockCd: 0,
       state: "chase", st: 0, cycle: 0, cvx: 0, cvy: 0,
     });
   }
@@ -752,7 +951,10 @@ addEventListener("keydown", (e) => {
   if (k === "m") toggleMute();
 });
 addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
-cv.addEventListener("mousedown", attack);
+let mouseGuard = false, touchGuard = false;
+cv.addEventListener("contextmenu", (e) => e.preventDefault());
+cv.addEventListener("mousedown", (e) => { if (e.button === 2) mouseGuard = true; else attack(); });
+addEventListener("mouseup", (e) => { if (e.button === 2) mouseGuard = false; });
 
 document.getElementById("startBtn").onclick = newGame;
 document.getElementById("againBtn").onclick = newGame;
@@ -773,6 +975,10 @@ stick.addEventListener("touchstart", (e) => { stickId = e.changedTouches[0].iden
 stick.addEventListener("touchmove", (e) => { stickMove(e); e.preventDefault(); }, { passive: false });
 stick.addEventListener("touchend", () => { stickId = null; stickVec = { x: 0, y: 0 }; knob.style.transform = ""; });
 document.getElementById("atkBtn").addEventListener("touchstart", (e) => { attack(); e.preventDefault(); }, { passive: false });
+const grdBtn = document.getElementById("grdBtn");
+grdBtn.addEventListener("touchstart", (e) => { touchGuard = true; e.preventDefault(); }, { passive: false });
+grdBtn.addEventListener("touchend", () => { touchGuard = false; });
+grdBtn.addEventListener("touchcancel", () => { touchGuard = false; });
 
 // ============ Combat ============
 function attack() {
@@ -823,6 +1029,14 @@ function attack() {
 }
 
 function damageEnemy(en, dmg, crit = false) {
+  // monsters can raise their own guard — crits smash through
+  if (!crit && en.blockCd <= 0 && Math.random() < 0.2) {
+    en.blockCd = 110; en.blockAnim = 18;
+    dmg = Math.max(1, Math.round(dmg * 0.3));
+    sfx.clang();
+    for (let i = 0; i < 6; i++)
+      particles.push({ x: en.x, y: en.y - 4, vx: randRange(-2.5, 2.5), vy: randRange(-2.5, 0), life: 14, col: "#d7dce4", r: 2 });
+  }
   en.hp -= dmg; en.hurt = 8; en.awake = true;
   spawnHit(en.x, en.y, dmg, crit ? "#ffef7a" : "#ffd9a0", crit);
   for (let i = 0; i < 7; i++)
@@ -852,7 +1066,7 @@ function levelUp() {
   player.xp -= player.xpNext;
   player.xpNext = Math.round(player.xpNext * 1.55);
   player.level++;
-  player.maxhp += 4; player.hp = player.maxhp;
+  player.maxhp += 6; player.hp = player.maxhp;
   player.atk += 2;
   screenShake = 6;
   sfx.level();
@@ -864,6 +1078,19 @@ function levelUp() {
 }
 function damagePlayer(dmg) {
   if (player.iframe > 0) return;
+  if (player.guarding) {
+    // shield soaks most of the blow
+    dmg = Math.max(1, Math.round(dmg * 0.25));
+    player.hp -= dmg; player.hurt = 4; player.iframe = 14;
+    screenShake = Math.max(screenShake, 3);
+    sfx.clang();
+    for (let i = 0; i < 7; i++)
+      particles.push({ x: player.x + player.dir.x * 14, y: player.y - 4 + player.dir.y * 14,
+        vx: randRange(-2.5, 2.5), vy: randRange(-2.5, 0), life: 14, col: "#ffcf4a", r: 2 });
+    spawnHit(player.x, player.y - 6, dmg, "#9fb6c9");
+    if (player.hp <= 0) { player.hp = 0; gameOver(); }
+    return;
+  }
   player.hp -= dmg; player.hurt = 10; player.iframe = 26;
   screenShake = Math.max(screenShake, 6);
   sfx.hurt();
@@ -923,7 +1150,7 @@ function tryPickup() {
     if (it.taken) continue;
     if (dist(it.x, it.y, player.x, player.y) < player.r + 14) {
       if (it.kind === "potion") {
-        const heal = 8; player.hp = Math.min(player.maxhp, player.hp + heal);
+        const heal = 12; player.hp = Math.min(player.maxhp, player.hp + heal);
         log(`체력 물약 (+${heal} HP)`, "good"); sfx.pickup();
       } else if (it.kind === "gold") {
         const g = 3 + rand(6); player.gold += g;
@@ -988,11 +1215,13 @@ function update() {
   if (keys["d"] || keys["arrowright"]) mx += 1;
   mx += stickVec.x; my += stickVec.y;
   const m = Math.hypot(mx, my);
+  player.guarding = !!(keys["shift"] || mouseGuard || touchGuard) && player.swing === 0;
   player.moving = m > 0.15;
   if (player.moving) {
     mx /= (m || 1); my /= (m || 1);
     player.dir = { x: mx, y: my };
-    moveEntity(player, mx * player.speed, my * player.speed);
+    const sp = player.speed * (player.guarding ? 0.45 : 1); // shield up, feet slow
+    moveEntity(player, mx * sp, my * sp);
   }
 
   const wpn = WEAPONS[player.wpnTier];
@@ -1048,6 +1277,9 @@ function update() {
     if (en.hurt > 0) en.hurt--;
     if (en.cd > 0) en.cd--;
     if (en.trapCd > 0) en.trapCd--;
+    if (en.atkAnim > 0) en.atkAnim--;
+    if (en.blockAnim > 0) en.blockAnim--;
+    if (en.blockCd > 0) en.blockCd--;
     // spikes hurt monsters too
     if (en.trapCd === 0 && upTraps.has(Math.floor(en.x / TILE) + "," + Math.floor(en.y / TILE))) {
       en.trapCd = 60;
@@ -1055,6 +1287,7 @@ function update() {
     }
     // touch attack
     if (!en.dead && d < en.r + player.r + 2 && en.cd === 0) {
+      en.atkAnim = 14;
       damagePlayer(en.atk); en.cd = 42;
       en.vx += (en.x - player.x) / (d || 1) * 3; en.vy += (en.y - player.y) / (d || 1) * 3;
     }
@@ -1357,23 +1590,27 @@ function drawEnemy(en) {
   ctx.beginPath(); ctx.ellipse(0, en.r - 1, en.r * 0.8, en.r * 0.35, 0, 0, 6.28); ctx.fill();
   const flip = player.x < en.x; // face the hero
 
+  // pose: guard > attack > idle
+  const pose = en.blockAnim > 0 ? "_grd" : (en.atkAnim > 0 || (en.boss && (en.state === "tele" || en.state === "charge"))) ? "_atk" : "";
   if (en.boss) {
     const flash = en.hurt > 0 || (en.state === "tele" && Math.floor(en.wob * 8) % 2 === 0);
     glow(0, bob, en.r + 18, "rgba(216,74,106,0.28)");
-    drawSprite(SPRITES.boss, 0, bob - 4, 3.4, flip, flash);
+    drawSprite(SPRITES["boss" + pose] || SPRITES.boss, 0, bob - 4, 3.4, flip, flash);
   } else {
-    const sp = SPRITES[en.key] || SPRITES.goblin;
+    const sp = SPRITES[en.key + pose] || SPRITES[en.key] || SPRITES.goblin;
     const scale = en.key === "bat" ? 1.5 : en.key === "slime" ? 2.0 : en.key === "wraith" ? 2.3 : 2.2;
-    if (en.key === "wraith") ctx.globalAlpha = 0.85; // spectral
+    if (en.key === "wraith") ctx.globalAlpha = pose === "_grd" ? 0.55 : 0.85; // spectral, fades deeper when warding
     if (en.key === "slime") {
-      const squish = Math.sin(en.wob) * 0.12;
+      const squish = pose === "_grd" ? 0.25 : Math.sin(en.wob) * 0.12;
       ctx.save();
       ctx.translate(0, bob);
       ctx.scale(1 + squish, 1 - squish);
       drawSprite(sp, 0, -2, scale, flip, en.hurt > 0);
       ctx.restore();
     } else {
-      drawSprite(sp, 0, bob - 2, scale, flip, en.hurt > 0);
+      // lunge forward a touch while striking
+      const lunge = pose === "_atk" ? (flip ? -4 : 4) : 0;
+      drawSprite(sp, lunge, bob - 2, scale, flip, en.hurt > 0);
     }
   }
   ctx.restore();
@@ -1412,7 +1649,10 @@ function drawPlayer() {
   }
 
   const bob = p.moving ? Math.sin(time * 0.4) * 1.5 : 0;
-  drawSprite(SPRITES.knight, 0, bob - 3, 2.1, p.dir.x < 0, p.hurt > 0);
+  let sp = SPRITES.knight, ox = 0;
+  if (p.guarding) sp = SPRITES.knight_grd;
+  else if (p.swing > 0.35) { sp = SPRITES.knight_atk; ox = p.dir.x < 0 ? -3 : 3; }
+  drawSprite(sp, ox, bob - 3, 2.1, p.dir.x < 0, p.hurt > 0);
   ctx.restore();
 }
 
