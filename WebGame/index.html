@@ -1,0 +1,916 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Torchlight — 던전 크롤러</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #14141d;
+    --ink: #e8dcc0;
+    --muted: #7a7264;
+    --amber: #f2a63b;
+    --amber-glow: #ffcb6b;
+    --blood: #c0392b;
+    --gold: #ffcf4a;
+    --teal: #3bd0a0;
+    --violet: #8b6fd6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #050507;
+    color: var(--ink);
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(120% 120% at 50% 0%, #12101a 0%, #060608 60%, #030304 100%);
+  }
+  #stage {
+    position: relative;
+    width: min(100vw, 177vh);
+    height: min(100vh, 56.25vw);
+    max-width: 1100px;
+    max-height: 620px;
+    box-shadow: 0 0 0 2px #1e1a26, 0 30px 80px -20px #000, 0 0 120px -30px var(--amber);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #05040a;
+  }
+  canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 12px 14px;
+    pointer-events: none;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .hud-block {
+    background: rgba(10,10,15,0.72);
+    border: 1px solid #241f2e;
+    border-radius: 8px;
+    padding: 8px 11px;
+    backdrop-filter: blur(3px);
+  }
+  .bar {
+    position: relative;
+    width: 168px; height: 15px;
+    background: #241016;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #3a1a20;
+  }
+  .bar > i {
+    position: absolute; inset: 0;
+    display: block;
+    transform-origin: left;
+    background: linear-gradient(90deg, #e0453a, #ff6a58);
+    transition: transform .18s ease;
+  }
+  .bar > span {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    font-size: 11px; letter-spacing: .5px;
+    color: #ffe3d8; text-shadow: 0 1px 2px #000;
+  }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .stat { display: flex; gap: 6px; align-items: baseline; }
+  .stat b { color: var(--amber-glow); font-size: 15px; }
+  .stat small { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; letter-spacing: .5px;
+  }
+  .tag.gold { background: rgba(255,207,74,0.12); color: var(--gold); border: 1px solid rgba(255,207,74,0.3); }
+  .tag.depth { background: rgba(139,111,214,0.14); color: var(--violet); border: 1px solid rgba(139,111,214,0.34); }
+
+  #log {
+    position: absolute;
+    left: 14px; bottom: 12px;
+    max-width: 60%;
+    display: flex; flex-direction: column; gap: 3px;
+    pointer-events: none;
+    font-size: 12px;
+  }
+  #log .line {
+    color: var(--muted);
+    text-shadow: 0 1px 2px #000;
+    opacity: 0;
+    animation: fadein .25s forwards;
+  }
+  #log .line.hot { color: var(--amber-glow); }
+  #log .line.hurt { color: #ff7a68; }
+  #log .line.good { color: var(--teal); }
+  @keyframes fadein { to { opacity: 1; } }
+
+  /* Overlays */
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    background: radial-gradient(80% 80% at 50% 40%, rgba(20,16,28,0.86), rgba(4,3,6,0.96));
+    backdrop-filter: blur(2px);
+    gap: 18px; padding: 24px;
+  }
+  .screen.hidden { display: none; }
+  .title {
+    font-size: clamp(34px, 7vw, 64px);
+    font-weight: 800;
+    letter-spacing: 2px;
+    line-height: .95;
+    color: var(--amber);
+    text-shadow: 0 0 24px rgba(242,166,59,0.5), 0 4px 0 #6b3e10;
+    text-wrap: balance;
+  }
+  .title small {
+    display: block; margin-top: 10px;
+    font-size: 13px; font-weight: 500; letter-spacing: 6px;
+    color: var(--muted); text-shadow: none;
+  }
+  .lede { max-width: 440px; color: #cdbfa5; font-size: 14px; line-height: 1.6; }
+  .keys {
+    display: grid; grid-template-columns: repeat(2, auto);
+    gap: 8px 26px; font-size: 13px; color: var(--muted);
+  }
+  .keys b { color: var(--ink); }
+  kbd {
+    display: inline-block; min-width: 20px; padding: 2px 7px;
+    background: #201b29; border: 1px solid #362d44; border-bottom-width: 2px;
+    border-radius: 5px; color: var(--amber-glow); font-size: 12px;
+    font-family: inherit;
+  }
+  .btn {
+    pointer-events: auto; cursor: pointer;
+    padding: 13px 34px; border: none; border-radius: 8px;
+    background: linear-gradient(180deg, var(--amber-glow), var(--amber));
+    color: #2a1705; font-weight: 800; font-size: 15px; letter-spacing: 1px;
+    font-family: inherit;
+    box-shadow: 0 6px 0 #8a5410, 0 10px 24px -6px rgba(242,166,59,0.6);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #8a5410; }
+  .end-title { font-size: clamp(30px, 6vw, 52px); font-weight: 800; letter-spacing: 1px; }
+  .end-title.dead { color: var(--blood); text-shadow: 0 0 30px rgba(192,57,43,0.5); }
+  .end-stats { display: flex; gap: 28px; }
+  .end-stats .s { display: flex; flex-direction: column; gap: 2px; }
+  .end-stats .s b { font-size: 26px; color: var(--amber-glow); }
+  .end-stats .s small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* mobile controls */
+  #touch { position: absolute; inset: 0; pointer-events: none; display: none; }
+  #stick {
+    position: absolute; left: 20px; bottom: 20px;
+    width: 128px; height: 128px; border-radius: 50%;
+    background: rgba(20,18,28,0.5); border: 1px solid #2a2436;
+    pointer-events: auto;
+  }
+  #stick i {
+    position: absolute; left: 50%; top: 50%;
+    width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, var(--amber-glow), var(--amber));
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  #atkBtn {
+    position: absolute; right: 26px; bottom: 40px;
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #ff6a58, var(--blood));
+    border: none; color: #fff; font-weight: 800; font-size: 13px; letter-spacing: 1px;
+    font-family: inherit;
+    pointer-events: auto;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  }
+  @media (hover: none) and (pointer: coarse) { #touch { display: block; } }
+  @media (max-width: 560px) { #log { max-width: 46%; font-size: 11px; } .bar { width: 128px; } }
+</style>
+
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <div id="hud">
+      <div class="hud-block">
+        <div class="row">
+          <div class="bar"><i id="hpFill"></i><span id="hpText">20 / 20</span></div>
+        </div>
+        <div class="row" style="margin-top:8px; gap:14px;">
+          <div class="stat"><b id="atkStat">4</b><small>공격</small></div>
+          <div class="stat"><b id="lvlStat">1</b><small>레벨</small></div>
+          <div class="stat"><small id="wpnStat" style="color:var(--amber-glow)">맨손</small></div>
+        </div>
+      </div>
+      <div class="hud-block">
+        <div class="row" style="gap:8px;">
+          <span class="tag depth">⌁ 지하 <b id="depthTag" style="color:var(--violet)">1</b>층</span>
+          <span class="tag gold">◈ <b id="goldTag" style="color:var(--gold)">0</b></span>
+        </div>
+        <div style="margin-top:7px; font-size:10px; color:var(--muted); letter-spacing:.5px; text-align:right;">
+          남은 적 <b id="foesTag" style="color:var(--ink)">0</b> · 계단을 찾아라
+        </div>
+      </div>
+    </div>
+
+    <div id="log"></div>
+
+    <div id="touch">
+      <div id="stick"><i></i></div>
+      <button id="atkBtn">공격</button>
+    </div>
+
+    <!-- Start screen -->
+    <div class="screen" id="startScreen">
+      <h1 class="title">TORCHLIGHT<small>DUNGEON&nbsp;&nbsp;CRAWLER</small></h1>
+      <p class="lede">토치 불빛에 의지해 무너진 던전을 탐험하라. 도사린 괴물을 베고, 보물을 챙기고, 더 깊은 어둠으로 내려가라. 얼마나 깊이 내려갈 수 있는가?</p>
+      <div class="keys">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 방향키</span><b>이동</b>
+        <span><kbd>Space</kbd> / 클릭</span><b>공격</b>
+        <span>물약 <span style="color:var(--teal)">●</span></span><b>체력 회복</b>
+        <span>무기 <span style="color:var(--amber-glow)">⚔</span></span><b>공격력 강화</b>
+      </div>
+      <button class="btn" id="startBtn">던전 입장 ▸</button>
+    </div>
+
+    <!-- End screen -->
+    <div class="screen hidden" id="endScreen">
+      <h2 class="end-title" id="endTitle">그대는 쓰러졌다</h2>
+      <p class="lede" id="endLede"></p>
+      <div class="end-stats">
+        <div class="s"><b id="endDepth">1</b><small>도달 깊이</small></div>
+        <div class="s"><b id="endKills">0</b><small>처치</small></div>
+        <div class="s"><b id="endGold">0</b><small>골드</small></div>
+      </div>
+      <button class="btn" id="againBtn">다시 도전 ▸</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ===================== Torchlight — a compact roguelike dungeon crawler ===================== */
+
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+
+const TILE = 40;               // world pixels per tile
+const MAP_W = 46, MAP_H = 34;  // dungeon grid size
+
+// Tile codes
+const WALL = 0, FLOOR = 1, DOOR = 2, STAIRS = 3;
+
+// ---- Small utilities ----
+const rand = (n) => Math.floor(Math.random() * n);
+const randRange = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+
+// ---- Game state ----
+let map, rooms, player, enemies, items, particles, depth, kills, running, screenShake, torchFlicker;
+const keys = {};
+
+// ============ Dungeon generation (rooms + corridors) ============
+function genDungeon() {
+  map = Array.from({ length: MAP_H }, () => new Array(MAP_W).fill(WALL));
+  rooms = [];
+  const target = 7 + Math.min(depth, 5);
+  let tries = 0;
+  while (rooms.length < target && tries < 260) {
+    tries++;
+    const w = 4 + rand(6), h = 4 + rand(5);
+    const x = 1 + rand(MAP_W - w - 2), y = 1 + rand(MAP_H - h - 2);
+    const r = { x, y, w, h, cx: Math.floor(x + w / 2), cy: Math.floor(y + h / 2) };
+    // no overlap (with 1-tile buffer)
+    if (rooms.some(o => x < o.x + o.w + 1 && x + w + 1 > o.x && y < o.y + o.h + 1 && y + h + 1 > o.y)) continue;
+    carveRoom(r);
+    if (rooms.length) connect(rooms[rooms.length - 1], r);
+    rooms.push(r);
+  }
+  return rooms;
+}
+function carveRoom(r) {
+  for (let y = r.y; y < r.y + r.h; y++)
+    for (let x = r.x; x < r.x + r.w; x++) map[y][x] = FLOOR;
+}
+function connect(a, b) {
+  let x = a.cx, y = a.cy;
+  const hFirst = Math.random() < 0.5;
+  const stepX = () => { while (x !== b.cx) { x += x < b.cx ? 1 : -1; if (map[y][x] === WALL) map[y][x] = FLOOR; } };
+  const stepY = () => { while (y !== b.cy) { y += y < b.cy ? 1 : -1; if (map[y][x] === WALL) map[y][x] = FLOOR; } };
+  if (hFirst) { stepX(); stepY(); } else { stepY(); stepX(); }
+}
+
+function tileFree(tx, ty) {
+  return tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H && map[ty][tx] !== WALL;
+}
+
+// ============ Entities ============
+function makePlayer() {
+  const start = rooms[0];
+  return {
+    x: (start.cx + 0.5) * TILE, y: (start.cy + 0.5) * TILE,
+    r: 13, speed: 3.0, dir: { x: 0, y: 1 },
+    hp: 20, maxhp: 20, atk: 4, gold: 0, level: 1, xp: 0, xpNext: 8,
+    weapon: "맨손", wpnReach: 44,
+    swing: 0, hurt: 0, iframe: 0,
+  };
+}
+
+const ENEMY_KINDS = [
+  { key: "slime",  name: "슬라임",   col: "#6fce7a", r: 12, hp: 6,  atk: 2, speed: 1.1, xp: 3, gold: 2 },
+  { key: "bat",    name: "박쥐",     col: "#b18bd8", r: 10, hp: 4,  atk: 2, speed: 2.1, xp: 3, gold: 1, erratic: true },
+  { key: "goblin", name: "고블린",   col: "#c98b4a", r: 12, hp: 10, atk: 3, speed: 1.7, xp: 5, gold: 5 },
+  { key: "wraith", name: "망령",     col: "#8fb7d6", r: 13, hp: 14, atk: 4, speed: 1.4, xp: 8, gold: 8 },
+];
+
+function spawnEnemies() {
+  enemies = [];
+  const count = 4 + depth * 2;
+  for (let i = 0; i < count; i++) {
+    // pick a room other than the first, weighted toward tougher kinds as depth grows
+    const room = rooms[1 + rand(rooms.length - 1)];
+    const maxKind = clamp(1 + Math.floor(depth / 1.5), 1, ENEMY_KINDS.length);
+    const base = ENEMY_KINDS[rand(maxKind)];
+    const hpScale = 1 + (depth - 1) * 0.28;
+    const atkScale = 1 + (depth - 1) * 0.22;
+    enemies.push({
+      ...base,
+      x: (room.x + 0.5 + rand(room.w)) * TILE,
+      y: (room.y + 0.5 + rand(room.h)) * TILE,
+      maxhp: Math.round(base.hp * hpScale),
+      hp: Math.round(base.hp * hpScale),
+      atk: Math.max(1, Math.round(base.atk * atkScale)),
+      cd: 0, hurt: 0, wob: Math.random() * 6.28, awake: false,
+      vx: 0, vy: 0,
+    });
+  }
+}
+
+function spawnItems() {
+  items = [];
+  // stairs down — in the room furthest from start
+  let far = rooms[1], best = -1;
+  for (const r of rooms.slice(1)) {
+    const d = dist(r.cx, r.cy, rooms[0].cx, rooms[0].cy);
+    if (d > best) { best = d; far = r; }
+  }
+  map[far.cy][far.cx] = STAIRS;
+
+  // potions & weapons scattered in rooms
+  const potions = 2 + rand(2);
+  for (let i = 0; i < potions; i++) dropItem("potion", randRoomTile());
+  if (Math.random() < 0.85) {
+    const tier = clamp(1 + Math.floor(depth / 2) + rand(2), 1, WEAPONS.length - 1);
+    dropItem("weapon", randRoomTile(), tier);
+  }
+  const coins = 3 + rand(4);
+  for (let i = 0; i < coins; i++) dropItem("gold", randRoomTile());
+}
+
+const WEAPONS = [
+  { name: "맨손",   atk: 4,  reach: 44,  col: "#cdbfa5" },
+  { name: "단검",   atk: 7,  reach: 46,  col: "#d9dde2" },
+  { name: "철검",   atk: 11, reach: 54,  col: "#c7ccd6" },
+  { name: "전투도끼", atk: 16, reach: 58,  col: "#e08a4a" },
+  { name: "룬블레이드", atk: 23, reach: 64, col: "#8fd0ff" },
+];
+
+function randRoomTile() {
+  const r = rooms[1 + rand(rooms.length - 1)];
+  return { tx: r.x + rand(r.w), ty: r.y + rand(r.h) };
+}
+function dropItem(kind, t, tier = 0) {
+  items.push({
+    kind, tier,
+    x: (t.tx + 0.5) * TILE, y: (t.ty + 0.5) * TILE,
+    bob: Math.random() * 6.28,
+  });
+}
+
+// ============ Level flow ============
+function enterDepth(d) {
+  depth = d;
+  genDungeon();
+  if (!player) player = makePlayer();
+  else {
+    const s = rooms[0];
+    player.x = (s.cx + 0.5) * TILE; player.y = (s.cy + 0.5) * TILE;
+  }
+  spawnEnemies();
+  spawnItems();
+  particles = [];
+  screenShake = 0;
+  updateHUD();
+  if (d === 1) log("어둠 속으로 발을 들였다…", "hot");
+  else log(`지하 ${d}층 — 공기가 더 차가워졌다.`, "hot");
+}
+
+function newGame() {
+  player = null; enemies = []; items = []; particles = [];
+  kills = 0; depth = 0; running = true;
+  document.getElementById("log").innerHTML = "";
+  enterDepth(1);
+  document.getElementById("startScreen").classList.add("hidden");
+  document.getElementById("endScreen").classList.add("hidden");
+}
+
+// ============ Input ============
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+  if (k === " ") attack();
+});
+addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+cv.addEventListener("mousedown", attack);
+
+document.getElementById("startBtn").onclick = newGame;
+document.getElementById("againBtn").onclick = newGame;
+
+// touch stick
+let stickVec = { x: 0, y: 0 }, stickId = null;
+const stick = document.getElementById("stick"), knob = stick.querySelector("i");
+function stickMove(e) {
+  const t = [...e.touches].find(t => t.identifier === stickId); if (!t) return;
+  const rc = stick.getBoundingClientRect();
+  let dx = t.clientX - (rc.left + rc.width / 2), dy = t.clientY - (rc.top + rc.height / 2);
+  const m = Math.hypot(dx, dy), max = 44;
+  if (m > max) { dx = dx / m * max; dy = dy / m * max; }
+  knob.style.transform = `translate(${dx}px,${dy}px)`;
+  stickVec = { x: dx / max, y: dy / max };
+}
+stick.addEventListener("touchstart", (e) => { stickId = e.changedTouches[0].identifier; stickMove(e); e.preventDefault(); }, { passive: false });
+stick.addEventListener("touchmove", (e) => { stickMove(e); e.preventDefault(); }, { passive: false });
+stick.addEventListener("touchend", () => { stickId = null; stickVec = { x: 0, y: 0 }; knob.style.transform = ""; });
+document.getElementById("atkBtn").addEventListener("touchstart", (e) => { attack(); e.preventDefault(); }, { passive: false });
+
+// ============ Combat ============
+function attack() {
+  if (!running || !player || player.swing > 0) return;
+  player.swing = 1;
+  const reach = player.wpnReach;
+  const arcCos = 0.35; // ~110° cone
+  let hitAny = false;
+  for (const en of enemies) {
+    const dx = en.x - player.x, dy = en.y - player.y;
+    const d = Math.hypot(dx, dy);
+    if (d > reach + en.r) continue;
+    const dot = (dx / d) * player.dir.x + (dy / d) * player.dir.y;
+    if (dot < arcCos) continue;
+    damageEnemy(en, player.atk + rand(3));
+    en.vx += player.dir.x * 4; en.vy += player.dir.y * 4; // knockback
+    hitAny = true;
+  }
+  if (hitAny) screenShake = Math.max(screenShake, 4);
+  // swing particles
+  for (let i = 0; i < 6; i++) {
+    const a = Math.atan2(player.dir.y, player.dir.x) + randRange(-0.5, 0.5);
+    particles.push({ x: player.x + player.dir.x * 22, y: player.y + player.dir.y * 22,
+      vx: Math.cos(a) * 2, vy: Math.sin(a) * 2, life: 10, col: "#fff2cf", r: 3 });
+  }
+}
+
+function damageEnemy(en, dmg) {
+  en.hp -= dmg; en.hurt = 8; en.awake = true;
+  spawnHit(en.x, en.y, dmg, "#ffd9a0");
+  for (let i = 0; i < 7; i++)
+    particles.push({ x: en.x, y: en.y, vx: randRange(-3, 3), vy: randRange(-3, 3), life: 16, col: en.col, r: 3 });
+  if (en.hp <= 0) killEnemy(en);
+}
+function killEnemy(en) {
+  en.dead = true; kills++;
+  player.xp += en.xp;
+  player.gold += en.gold;
+  for (let i = 0; i < 14; i++)
+    particles.push({ x: en.x, y: en.y, vx: randRange(-4, 4), vy: randRange(-4, 4), life: 24, col: en.col, r: randRange(2, 4) });
+  if (Math.random() < 0.22) dropItem("potion", { tx: Math.floor(en.x / TILE), ty: Math.floor(en.y / TILE) });
+  if (player.xp >= player.xpNext) levelUp();
+  log(`${en.name} 처치 (+${en.gold}◈)`, "good");
+}
+function levelUp() {
+  player.xp -= player.xpNext;
+  player.xpNext = Math.round(player.xpNext * 1.55);
+  player.level++;
+  player.maxhp += 4; player.hp = player.maxhp;
+  player.atk += 2;
+  screenShake = 6;
+  for (let i = 0; i < 26; i++) {
+    const a = randRange(0, 6.28);
+    particles.push({ x: player.x, y: player.y, vx: Math.cos(a) * 4, vy: Math.sin(a) * 4, life: 30, col: "#ffcb6b", r: 3 });
+  }
+  log(`레벨 업! LV.${player.level} — 최대 체력·공격 상승`, "hot");
+}
+function damagePlayer(dmg) {
+  if (player.iframe > 0) return;
+  player.hp -= dmg; player.hurt = 10; player.iframe = 26;
+  screenShake = Math.max(screenShake, 6);
+  spawnHit(player.x, player.y - 6, dmg, "#ff7a68");
+  if (player.hp <= 0) { player.hp = 0; gameOver(); }
+}
+
+// floating damage numbers reuse particle list with text
+function spawnHit(x, y, val, col) {
+  particles.push({ x, y, vx: 0, vy: -0.9, life: 34, text: String(val), col, r: 0 });
+}
+
+// ============ Pickups ============
+function tryPickup() {
+  for (const it of items) {
+    if (it.taken) continue;
+    if (dist(it.x, it.y, player.x, player.y) < player.r + 14) {
+      if (it.kind === "potion") {
+        const heal = 8; player.hp = Math.min(player.maxhp, player.hp + heal);
+        log(`체력 물약 (+${heal} HP)`, "good");
+      } else if (it.kind === "gold") {
+        const g = 3 + rand(6); player.gold += g;
+        log(`골드 획득 (+${g}◈)`, "good");
+      } else if (it.kind === "weapon") {
+        const w = WEAPONS[it.tier];
+        if (w.atk > player.atk || player.weapon === "맨손") {
+          player.atk = w.atk + (player.level - 1) * 2;
+          player.wpnReach = w.reach; player.weapon = w.name;
+          log(`${w.name} 장착! 공격력 ${player.atk}`, "hot");
+        } else {
+          player.gold += 10; log(`${w.name} — 이미 더 강한 무기가 있다 (+10◈)`, "good");
+        }
+      }
+      it.taken = true;
+      for (let i = 0; i < 8; i++)
+        particles.push({ x: it.x, y: it.y, vx: randRange(-2, 2), vy: randRange(-3, 0), life: 20,
+          col: it.kind === "gold" ? "#ffcf4a" : it.kind === "potion" ? "#3bd0a0" : "#8fd0ff", r: 3 });
+    }
+  }
+  items = items.filter(i => !i.taken);
+  // stairs
+  const tx = Math.floor(player.x / TILE), ty = Math.floor(player.y / TILE);
+  if (map[ty] && map[ty][tx] === STAIRS) {
+    if (enemies.length === 0) { log("계단을 내려간다…", "hot"); enterDepth(depth + 1); }
+    else if (!player._stairsWarned) { player._stairsWarned = true; log("계단이 봉인됐다 — 모든 적을 처치하라!", "hurt"); }
+  }
+}
+
+// ============ Update ============
+function update() {
+  if (!running) return;
+
+  // movement input
+  let mx = 0, my = 0;
+  if (keys["w"] || keys["arrowup"]) my -= 1;
+  if (keys["s"] || keys["arrowdown"]) my += 1;
+  if (keys["a"] || keys["arrowleft"]) mx -= 1;
+  if (keys["d"] || keys["arrowright"]) mx += 1;
+  mx += stickVec.x; my += stickVec.y;
+  const m = Math.hypot(mx, my);
+  if (m > 0.15) {
+    mx /= (m || 1); my /= (m || 1);
+    if (m > 1) { mx *= 1; my *= 1; }
+    player.dir = { x: mx, y: my };
+    moveEntity(player, mx * player.speed, my * player.speed);
+  }
+
+  if (player.swing > 0) player.swing = Math.max(0, player.swing - 0.12);
+  if (player.hurt > 0) player.hurt--;
+  if (player.iframe > 0) player.iframe--;
+  player._stairsWarned = enemies.length ? player._stairsWarned : false;
+
+  // enemies
+  for (const en of enemies) {
+    if (en.dead) continue;
+    const d = dist(en.x, en.y, player.x, player.y);
+    if (!en.awake && d < 240) { en.awake = true; }
+    en.wob += 0.15;
+    if (en.awake) {
+      let dx = player.x - en.x, dy = player.y - en.y;
+      const dd = Math.hypot(dx, dy) || 1; dx /= dd; dy /= dd;
+      if (en.erratic) { dx += Math.cos(en.wob) * 0.6; dy += Math.sin(en.wob * 1.3) * 0.6; }
+      const sp = en.speed * (0.9 + depth * 0.03);
+      en.vx += dx * sp * 0.5; en.vy += dy * sp * 0.5;
+    }
+    en.vx *= 0.8; en.vy *= 0.8;
+    moveEntity(en, en.vx, en.vy);
+    if (en.hurt > 0) en.hurt--;
+    if (en.cd > 0) en.cd--;
+    // touch attack
+    if (d < en.r + player.r + 2 && en.cd === 0) {
+      damagePlayer(en.atk); en.cd = 42;
+      en.vx += (en.x - player.x) / (d || 1) * 3; en.vy += (en.y - player.y) / (d || 1) * 3;
+    }
+  }
+  enemies = enemies.filter(e => !e.dead);
+
+  tryPickup();
+
+  // particles
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+    if (p.text === undefined) { p.vx *= 0.92; p.vy *= 0.92; }
+    p.life--;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  if (screenShake > 0) screenShake *= 0.86;
+  torchFlicker = 0.85 + Math.sin(performance.now() / 90) * 0.05 + Math.random() * 0.05;
+
+  updateHUD();
+}
+
+function moveEntity(e, dx, dy) {
+  // axis-separated collision against walls, treating entity as a circle
+  const nx = e.x + dx;
+  if (!hitsWall(nx, e.y, e.r)) e.x = nx;
+  const ny = e.y + dy;
+  if (!hitsWall(e.x, ny, e.r)) e.y = ny;
+}
+function hitsWall(x, y, r) {
+  for (let oy = -1; oy <= 1; oy++)
+    for (let ox = -1; ox <= 1; ox++) {
+      const tx = Math.floor(x / TILE) + ox, ty = Math.floor(y / TILE) + oy;
+      if (tileFree(tx, ty)) continue;
+      // nearest point on the wall tile to the circle center
+      const cx = clamp(x, tx * TILE, tx * TILE + TILE);
+      const cy = clamp(y, ty * TILE, ty * TILE + TILE);
+      if (dist(x, y, cx, cy) < r) return true;
+    }
+  return false;
+}
+
+// ============ Render ============
+function render() {
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = "#050409";
+  ctx.fillRect(0, 0, W, H);
+
+  // camera centered on player, clamped to map
+  let camX = player.x - W / 2, camY = player.y - H / 2;
+  camX = clamp(camX, 0, MAP_W * TILE - W);
+  camY = clamp(camY, 0, MAP_H * TILE - H);
+  if (screenShake > 0.3) { camX += randRange(-screenShake, screenShake); camY += randRange(-screenShake, screenShake); }
+
+  ctx.save();
+  ctx.translate(-camX, -camY);
+
+  // visible tile range
+  const x0 = Math.max(0, Math.floor(camX / TILE) - 1), x1 = Math.min(MAP_W, Math.ceil((camX + W) / TILE) + 1);
+  const y0 = Math.max(0, Math.floor(camY / TILE) - 1), y1 = Math.min(MAP_H, Math.ceil((camY + H) / TILE) + 1);
+
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const t = map[y][x];
+      const px = x * TILE, py = y * TILE;
+      if (t === WALL) {
+        // draw wall only if adjacent to a floor (saves fill + looks like carved rock)
+        const nearFloor = (map[y-1]&&map[y-1][x]!==WALL)||(map[y+1]&&map[y+1][x]!==WALL)||
+                          (map[y][x-1]!==WALL)||(map[y][x+1]!==WALL);
+        ctx.fillStyle = nearFloor ? "#241f2e" : "#100d18";
+        ctx.fillRect(px, py, TILE, TILE);
+        if (nearFloor) { ctx.fillStyle = "#2f2839"; ctx.fillRect(px, py, TILE, 4); }
+      } else {
+        // floor
+        const shade = ((x * 7 + y * 13) % 5) < 2 ? "#171320" : "#141019";
+        ctx.fillStyle = shade;
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.strokeStyle = "rgba(0,0,0,0.25)";
+        ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+        if (t === STAIRS) drawStairs(px, py);
+      }
+    }
+  }
+
+  // items
+  for (const it of items) {
+    it.bob += 0.08;
+    const by = Math.sin(it.bob) * 3;
+    drawItem(it, it.x, it.y + by);
+  }
+
+  // enemies
+  for (const en of enemies) drawEnemy(en);
+
+  // player
+  drawPlayer();
+
+  // particles (world space)
+  for (const p of particles) {
+    const a = clamp(p.life / 24, 0, 1);
+    if (p.text !== undefined) {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.col;
+      ctx.font = "bold 15px ui-monospace, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(p.text, p.x, p.y);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.col;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.28); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  ctx.restore();
+
+  // torch-light vignette centered on player
+  drawTorchLight(W, H, player.x - camX, player.y - camY);
+}
+
+function drawTorchLight(W, H, sx, sy) {
+  const R = 210 * torchFlicker + 40;
+  const g = ctx.createRadialGradient(sx, sy, 20, sx, sy, R);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(0.55, "rgba(3,2,7,0.28)");
+  g.addColorStop(1, "rgba(2,1,5,0.93)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  // warm bloom
+  const wg = ctx.createRadialGradient(sx, sy, 10, sx, sy, R * 0.8);
+  wg.addColorStop(0, "rgba(255,180,80,0.10)");
+  wg.addColorStop(1, "rgba(255,180,80,0)");
+  ctx.fillStyle = wg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawStairs(px, py) {
+  ctx.fillStyle = "#0b0812";
+  ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = `rgba(139,111,214,${0.25 + i * 0.16})`;
+    ctx.fillRect(px + 6, py + 8 + i * 7, TILE - 12, 5);
+  }
+  const gl = 0.5 + Math.sin(performance.now() / 300) * 0.3;
+  ctx.strokeStyle = `rgba(139,111,214,${gl})`;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px + 4.5, py + 4.5, TILE - 9, TILE - 9);
+}
+
+function drawItem(it, x, y) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (it.kind === "potion") {
+    glow(0, 0, 14, "rgba(59,208,160,0.5)");
+    ctx.fillStyle = "#1a3d33"; ctx.fillRect(-4, -3, 8, 10);
+    ctx.fillStyle = "#3bd0a0"; ctx.fillRect(-4, 1, 8, 6);
+    ctx.fillStyle = "#cdbfa5"; ctx.fillRect(-2, -8, 4, 5);
+  } else if (it.kind === "gold") {
+    glow(0, 0, 12, "rgba(255,207,74,0.5)");
+    ctx.fillStyle = "#ffcf4a"; ctx.beginPath(); ctx.arc(0, 0, 6, 0, 6.28); ctx.fill();
+    ctx.fillStyle = "#b98f1e"; ctx.beginPath(); ctx.arc(0, 0, 3, 0, 6.28); ctx.fill();
+  } else if (it.kind === "weapon") {
+    const w = WEAPONS[it.tier];
+    glow(0, 0, 16, "rgba(143,208,255,0.45)");
+    ctx.strokeStyle = w.col; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-6, 8); ctx.lineTo(6, -8); ctx.stroke();
+    ctx.strokeStyle = "#7a5a2e"; ctx.beginPath(); ctx.moveTo(-8, 4); ctx.lineTo(-2, 10); ctx.stroke();
+  }
+  ctx.restore();
+}
+function glow(x, y, r, col) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.28); ctx.fill();
+}
+
+function drawEnemy(en) {
+  ctx.save();
+  ctx.translate(en.x, en.y);
+  const bob = Math.sin(en.wob) * 2;
+  // shadow
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.beginPath(); ctx.ellipse(0, en.r - 1, en.r * 0.8, en.r * 0.35, 0, 0, 6.28); ctx.fill();
+  const flash = en.hurt > 0 ? "#ffffff" : en.col;
+  ctx.translate(0, bob);
+  // body per kind
+  ctx.fillStyle = flash;
+  if (en.key === "bat") {
+    ctx.beginPath(); ctx.arc(0, 0, en.r * 0.6, 0, 6.28); ctx.fill();
+    const wf = Math.sin(en.wob * 3) * 5;
+    ctx.beginPath(); ctx.moveTo(-2, 0); ctx.lineTo(-en.r - 4, -wf); ctx.lineTo(-en.r - 2, 4); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(en.r + 4, -wf); ctx.lineTo(en.r + 2, 4); ctx.closePath(); ctx.fill();
+  } else if (en.key === "slime") {
+    ctx.beginPath();
+    ctx.ellipse(0, 2, en.r, en.r * (0.8 + Math.sin(en.wob) * 0.08), 0, 0, 6.28); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(0, 0, en.r, 0, 6.28); ctx.fill();
+    // little horns/ears
+    ctx.fillRect(-en.r * 0.7, -en.r, 3, 5);
+    ctx.fillRect(en.r * 0.7 - 3, -en.r, 3, 5);
+  }
+  // eyes
+  if (en.hurt === 0) {
+    ctx.fillStyle = "#1a0d0d";
+    ctx.fillRect(-en.r * 0.4, -2, 3, 3);
+    ctx.fillRect(en.r * 0.4 - 3, -2, 3, 3);
+  }
+  ctx.restore();
+
+  // hp bar when damaged
+  if (en.hp < en.maxhp) {
+    const w = en.r * 2, x = en.x - en.r, y = en.y - en.r - 8;
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x, y, w, 4);
+    ctx.fillStyle = "#e0453a"; ctx.fillRect(x, y, w * (en.hp / en.maxhp), 4);
+  }
+}
+
+function drawPlayer() {
+  const p = player;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  // shadow
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.beginPath(); ctx.ellipse(0, p.r, p.r * 0.85, p.r * 0.35, 0, 0, 6.28); ctx.fill();
+
+  // swing arc
+  if (p.swing > 0) {
+    const ang = Math.atan2(p.dir.y, p.dir.x);
+    const t = 1 - p.swing;
+    ctx.save();
+    ctx.rotate(ang);
+    ctx.strokeStyle = `rgba(255,240,200,${p.swing})`;
+    ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(0, 0, p.wpnReach * 0.82, -0.9 + t * 1.8, 0.9 + t * 1.8);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // body
+  ctx.fillStyle = p.hurt > 0 ? "#ffffff" : "#e8dcc0";
+  ctx.beginPath(); ctx.arc(0, 0, p.r, 0, 6.28); ctx.fill();
+  // cloak accent
+  ctx.fillStyle = p.hurt > 0 ? "#ffffff" : "#c0392b";
+  ctx.beginPath(); ctx.arc(0, 3, p.r * 0.7, 0, 3.14); ctx.fill();
+  // face direction marker
+  ctx.fillStyle = "#2a1e10";
+  ctx.fillRect(p.dir.x * 5 - 2, p.dir.y * 5 - 6, 4, 4);
+  ctx.restore();
+}
+
+// ============ HUD ============
+function updateHUD() {
+  document.getElementById("hpFill").style.transform = `scaleX(${clamp(player.hp / player.maxhp, 0, 1)})`;
+  document.getElementById("hpText").textContent = `${player.hp} / ${player.maxhp}`;
+  document.getElementById("atkStat").textContent = player.atk;
+  document.getElementById("lvlStat").textContent = player.level;
+  document.getElementById("wpnStat").textContent = player.weapon;
+  document.getElementById("goldTag").textContent = player.gold;
+  document.getElementById("depthTag").textContent = depth;
+  document.getElementById("foesTag").textContent = enemies.length;
+}
+
+let logTimer = 0;
+function log(msg, cls = "") {
+  const box = document.getElementById("log");
+  const line = document.createElement("div");
+  line.className = "line " + cls;
+  line.textContent = msg;
+  box.appendChild(line);
+  while (box.children.length > 4) box.removeChild(box.firstChild);
+  clearTimeout(logTimer);
+}
+
+// ============ End states ============
+function gameOver() {
+  running = false;
+  const es = document.getElementById("endScreen");
+  document.getElementById("endTitle").textContent = "그대는 쓰러졌다";
+  document.getElementById("endTitle").className = "end-title dead";
+  document.getElementById("endLede").textContent =
+    `지하 ${depth}층의 어둠이 그대를 삼켰다. 토치는 꺼졌지만, 이야기는 다시 시작된다.`;
+  document.getElementById("endDepth").textContent = depth;
+  document.getElementById("endKills").textContent = kills;
+  document.getElementById("endGold").textContent = player.gold;
+  es.classList.remove("hidden");
+}
+
+// ============ Loop & resize ============
+function resize() {
+  const rc = document.getElementById("stage").getBoundingClientRect();
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = Math.floor(rc.width * dpr / 1.4);   // slightly low-res for crisp pixel look + perf
+  cv.height = Math.floor(rc.height * dpr / 1.4);
+}
+addEventListener("resize", resize);
+resize();
+
+function frame() {
+  update();
+  if (player) render();
+  requestAnimationFrame(frame);
+}
+// idle backdrop before start: create a throwaway dungeon so the canvas isn't empty
+depth = 1; genDungeon(); player = makePlayer(); enemies = []; items = []; particles = []; torchFlicker = 1; running = false;
+kills = 0;
+frame();
+</script>
