@@ -626,3 +626,13 @@ Unity 프로토타입(§8)은 v0.1 규칙 기준이며, 웹 프로토타입(`Web
 - **`faceAttack(e, targetX)`**: 공격 순간 대상 쪽으로 `flipX`를 맞추고 `faceLockT`(0.35초) 동안 이동에 의한 뒤집힘을 막는다.
 - **`faceTrack`**가 `faceLockT>0`이면 이동 방향 뒤집기를 건너뛰어 응시가 유지되게 수정.
 - 적용: 헌터 평타·강공격, 멧돼지 조준·돌진, 사슴 발차기·반격, 화염 곰 후려치기·화염 폭발 등 모든 공격 지점. 순수 연출(밸런스 불변), 실측 공격 순간 100% 대상 응시.
+
+### 9.16 아트 교체 — game-icons.net 실루엣 + 코드 음영 (v0.8)
+
+"이미지가 허접하다"는 피드백 → 손으로 코딩한 납작한 도형 SVG를 **실제 게임 아이콘 에셋**으로 교체.
+
+- **소스**: [game-icons.net](https://game-icons.net) (CC BY 3.0). 오프라인·CSP 제약(외부 호스트 불가, 이미지 생성 도구 없음) 하에서 npm `@iconify-json/game-icons`로 512그리드 단색 실루엣 경로를 확보 → 인라인 임베드(외부 파일 0).
+- **입체화 파이프라인**(`iconSprite`/`iconDecal`): 실루엣 경로에 ① 세로 그라디언트(top/mid/bottom)로 볼륨, ② `paint-order:stroke` 외곽선으로 정의, ③ `feDropShadow`로 접지 그림자, ④ 상단 흰색 하이라이트 오버레이로 광택을 SVG에 베이킹. 크리처별 색상표로 톤 통일(멧돼지 갈색·사슴 황갈·헌터 강청·곰 흑갈).
+- **매핑**: 헌터=archer, 멧돼지=boar, 사슴=deer, 화염 곰=polar-bear, 속박 덫=mantrap, 마비 룬=lightning-arc, 가시 지대=spikes-full, 미끼=meat. 멧돼지만 기본 좌향이라 SVG에 좌우 반전 베이킹(우향 정규화).
+- 기존 렌더 파이프라인(glow·flip·피격 플래시·데미지 넘버·겹침 방지·응시) 전부 그대로 동작. 크리처 크기(`mUnits`) 소폭 조정. 밸런스 불변.
+- **크레딧**: 페이지 하단 + `WebPrototype/CREDITS.md`에 CC BY 3.0 표기.
