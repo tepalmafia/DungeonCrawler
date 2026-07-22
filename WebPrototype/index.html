@@ -66,6 +66,14 @@
   @media (max-width: 860px) { .prep-grid { grid-template-columns: 1fr; } }
   .prep-top { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; }
   .prep-top .gold { margin-left: auto; font-size: 1.15rem; color: var(--amber); font-weight: 700; }
+  .weapon-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .weapon-pick button { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; }
+  .weapon-pick button.sel { border-color: var(--amber); background: #2c2413; }
+  .weapon-pick .w-top { display: flex; gap: 6px; align-items: baseline; }
+  .weapon-pick .w-name { font-weight: 700; flex: 1; }
+  .weapon-pick .w-price { color: var(--amber); font-size: 0.82rem; }
+  .weapon-pick .w-el { font-size: 0.7rem; padding: 0 5px; border-radius: 3px; }
+  .weapon-pick .w-tip { font-size: 0.74rem; color: var(--muted); line-height: 1.3; }
   .shop-list { display: flex; flex-direction: column; gap: 8px; }
   .shop-list button { display: flex; gap: 10px; align-items: baseline; }
   .shop-list .s-name { flex: 1; }
@@ -172,6 +180,8 @@
       <div>
         <h2 style="font-size:0.92rem">상점 <span style="color:var(--muted);font-weight:400">— 클릭 구매 / 우측 [환불]로 되돌리기</span></h2>
         <button class="primary" id="btn-recset" style="width:100%;padding:11px;margin-bottom:10px">✦ 이 몬스터 추천 세트 자동 구매</button>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:6px">무기 <span style="color:var(--muted)">— 하나만 장착. 속성·사거리·특성이 다르다</span></div>
+        <div class="weapon-pick" id="weapon-pick"></div>
         <div class="shop-list" id="shop-list"></div>
         <div class="prep-msg" id="prep-msg"></div>
         <div class="desc-box" id="prep-desc"></div>
@@ -232,6 +242,7 @@
         <div style="flex:1">
           <div class="m-label"><span id="h-hname">헌터</span><span id="h-hinfo"></span></div>
           <div class="bar"><i id="h-hbar" style="background:#8c2f26;width:100%"></i></div>
+          <div class="bar" style="height:7px;margin-top:3px" title="기력 — 강공격·회피에 소모"><i id="h-stam" style="background:linear-gradient(90deg,#2f6f8c,#5fc8dc);width:100%"></i></div>
         </div>
       </div>
       <div class="cards" id="cards"></div>
@@ -253,20 +264,23 @@
 // ============================== 데이터 (기획서 Docs/GameDesign.md 기준) ==============================
 const DB = {
   monsters: [
-    { id:'boar', name:'멧돼지 왕', maxHp:380, prepGold:800, baseReward:100,
+    { id:'boar', name:'멧돼지 왕', maxHp:380, prepGold:960, baseReward:100,
       fleeAtSeconds:1e9, fleeAtHpPct:-1,
-      recSet: { weaponLv:1, snare:1, shock:1, potions:3 },
-      recTip:'무기 강화 + 마비 룬·속박 덫으로 돌진을 함정에 꽂아 경직에 폭딜',
-      desc:'튜토리얼. 가죽이 단단해 평상시엔 피해가 30%만 들어간다.\n2초 조준 후 직선 돌진 — 함정 뒤에서 유인해 돌진을 함정에 꽂아라.\n돌진 뒤 3초 경직과 함정 걸림이 유효타 시간. HP 30% 이하 격노(조준 1초).' },
-    { id:'deer', name:'질풍 사슴', maxHp:520, prepGold:1000, baseReward:180,
+      resist: { physical:1, fire:1, shock:1.4 },
+      recSet: { weapon:'spear', hone:true, snare:1, shock:1, potions:3 },
+      recTip:'사냥창(관통)으로 장갑을 절반 무시, 마비 룬(전격 약점)으로 경직에 폭딜',
+      desc:'튜토리얼. 가죽이 단단해 평상시엔 피해가 40%만 들어간다 (관통 무기·전격 함정은 예외).\n2초 조준 후 직선 돌진 — 함정 뒤에서 유인해 돌진을 함정에 꽂아라.\n돌진 뒤 3초 경직과 함정 걸림이 유효타 시간. HP 30% 이하 격노(조준 1초).\n돌진은 「위협」 예비동작 — 회피로 흘릴 수 있다.' },
+    { id:'deer', name:'질풍 사슴', maxHp:520, prepGold:1100, baseReward:180,
       fleeAtSeconds:90, fleeAtHpPct:0.4,
-      recSet: { weaponLv:1, snare:2, spike:1, lures:2 },
-      recTip:'양쪽 탈출구 길목에 속박 덫, 중앙에 가시 지대 — 몰아서 도주를 저지',
+      resist: { physical:1, fire:1, shock:1.15 },
+      recSet: { weapon:'longbow', hone:true, snare:2, spike:1, lures:2 },
+      recTip:'장궁(초장거리·치명타)으로 카이팅, 탈출구 길목 속박 덫으로 도주 저지',
       desc:'도주형. 헌터보다 빠르고, 눈에 보이는 함정은 피해 다닌다.\n1:30 경과 또는 HP 40% 이하 시 탈출구로 도주 — 도주 중엔 함정을 못 본다.\n몰아붙여 도주를 강제하고, 탈출구 길목의 속박 덫으로 저지하라. 저지된 사슴은 25초간 탈진해 잡을 수 있다.' },
-    { id:'bear', name:'화염 곰', maxHp:720, prepGold:1400, baseReward:260,
+    { id:'bear', name:'화염 곰', maxHp:720, prepGold:1250, baseReward:260,
       fleeAtSeconds:1e9, fleeAtHpPct:-1,
-      recSet: { weaponLv:2, armorLv:1, shock:2, potions:6 },
-      recTip:'방어구로 격노를 버티고, 마비 룬으로 과열을 끊어 「과열 빈틈」에 강공격 폭딜',
+      resist: { physical:1, fire:0.35, shock:1.4 },
+      recSet: { weapon:'crossbow', hone:true, armorLv:1, shock:2, potions:6 },
+      recTip:'화염 저항! 물리 무기(석궁)+방어 태세로 격노를 버티고, 마비 룬(전격 약점)으로 격노를 끊어 폭딜',
       desc:'격노형 탱커. 도망치지 않고 정면으로 달려든다.\n시간이 흐르면 열기가 차오르고, 가득 차면 격노 — 빨라지고 화염 폭발(범위)로 큰 피해를 준다.\n격노가 끝나면 과열 탈진 — 이때만 받는 피해 1.4배가 들어간다.\n방어구·물약으로 격노를 버티고, 마비 룬으로 격노를 끊어 「과열 빈틈」에 강공격을 몰아라.' },
   ],
   trapName: { snare:'속박 덫', shock:'마비 룬', spike:'가시 지대' },
@@ -276,11 +290,23 @@ const DB = {
     { name:'집중 사격', desc:'5초간 공격속도 2배' },
     { name:'긴급 미끼', desc:'맵을 클릭해 몬스터를 그 지점으로 강제 이동 (4초)' },
   ],
-  conds: ['always','myhp50','mhp50','trapped','window','fleesoon'],
-  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림', window:'빈틈(경직·탈진)', fleesoon:'도주 임박' },
-  acts: ['basic','strong','potion','lure','kite'],
-  actName: { basic:'평타 지속', strong:'강공격', potion:'회복 물약', lure:'미끼 투척', kite:'함정 유인' },
+  conds: ['always','myhp50','mhp50','trapped','window','fleesoon','threat'],
+  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림', window:'빈틈(경직·탈진)', fleesoon:'도주 임박', threat:'위협(예비동작)' },
+  acts: ['basic','strong','potion','lure','kite','dodge','guard'],
+  actName: { basic:'평타 지속', strong:'강공격', potion:'회복 물약', lure:'미끼 투척', kite:'함정 유인', dodge:'회피', guard:'방어 태세' },
 };
+// ---------- 무기 아키타입 ----------
+const WEAPONS = {
+  crossbow: { name:'석궁',      price:0,   element:'physical', melee:false, range:6,   rate:0.85, dmg:7,  strong:60, strongCd:8, special:null,
+              tip:'기본 무기 — 균형 잡힌 원거리 견제.' },
+  spear:    { name:'사냥창',    price:260, element:'physical', melee:true,  range:1.7, rate:0.7,  dmg:12, strong:82, strongCd:8, special:'pierce',
+              tip:'근접 관통 — 멧돼지 장갑 경감을 절반으로 뚫는다. 붙어야 해서 위험.' },
+  longbow:  { name:'장궁',      price:280, element:'physical', melee:false, range:8.5, rate:1.25, dmg:7,  strong:72, strongCd:8, special:'crit',
+              tip:'초장거리 저격 — 빈틈엔 치명타 ×2. 카이팅에 최적.' },
+  axe:      { name:'화염 도끼', price:300, element:'fire',     melee:true,  range:2.0, rate:1.05, dmg:15, strong:92, strongCd:7, special:'cleave',
+              tip:'화염 근접 강타 — 큰 히트박스로 빗맞음이 적다. 화염 저항 상대엔 약하다.' },
+};
+const ELEM_NAME = { physical:'물리', fire:'화염', shock:'전격' };
 // 감빗 조건 순환 목록 — 「도주 임박」은 해금 시에만 노출
 function activeConds() { return DB.conds.filter(c => c !== 'fleesoon' || unlocks.fleesoon); }
 const ARENA_X = 9, ARENA_Y = 5.2;
@@ -374,8 +400,8 @@ function nextRank(pt) { for (const x of RANKS) if (pt < x.min) return x; return 
 
 // 해금 상점 목록
 const META = [
-  { id: 'slot5', name: '감빗 5번째 규칙 슬롯', cost: 250,
-    desc: '전술 규칙을 하나 더 — 우선순위 판단의 폭이 넓어진다.' },
+  { id: 'slot5', name: '감빗 6번째 규칙 슬롯', cost: 250,
+    desc: '전술 규칙을 하나 더 — 회피·방어·강공격을 상황별로 더 세밀하게.' },
   { id: 'fleesoon', name: '신규 감빗 조건 「도주 임박」', cost: 200,
     desc: '도주형이 곧 튈 시점을 조건으로 잡아 미리 길목으로 몰이한다.' },
   { id: 'prepgold', name: '준비 예산 +150G (영구)', cost: 400,
@@ -470,30 +496,35 @@ let hunt = null;
 function prepBudget(mdef) { return mdef.prepGold + (unlocks.prepgold ? 150 : 0); }
 function newRun(mdef) {
   const gambits = [
+    { cond:'threat', act:'dodge', on:true },
     { cond:'trapped', act:'strong', on:true },
-    { cond:'window', act:'basic', on:true },
+    { cond:'window', act:'strong', on:true },
     { cond:'myhp50', act:'potion', on:true },
     { cond:'always', act:'kite', on:true },
   ];
-  if (unlocks.slot5) gambits.push({ cond:'mhp50', act:'strong', on:false });
+  if (unlocks.slot5) gambits.push({ cond:'mhp50', act:'basic', on:false });
   return {
     quest: mdef, gold: prepBudget(mdef),
-    weaponLv: 0, armorLv: 0, potions: 0, lures: 0,
+    weapon: null, hone: false, armorLv: 0, potions: 0, lures: 0,
     stock: { snare:0, shock:0, spike:0 },
     gambits: gambits,
     cardUsed: [false, false, false],
   };
 }
-const dmgMult = () => run.weaponLv === 2 ? 1.5 : run.weaponLv === 1 ? 1.25 : 1;
+// 현재 무기 정의 (미구매 시 맨손 석궁 기본값)
+function curWeapon() { return WEAPONS[run.weapon] || WEAPONS.crossbow; }
+const dmgMult = () => run.hone ? 1.25 : 1;      // 무기 연마 배율
 const takenMult = () => run.armorLv >= 1 ? 0.8 : 1;
+// 몬스터 속성 상성 배율
+function elemMult(m, element) {
+  const r = m.def.resist;
+  return r && r[element] != null ? r[element] : 1;
+}
 
 const SHOP = [
-  { name:'무기 강화 Lv1 (피해 +25%)', price:200,
-    status:()=> run.weaponLv>=1?'장착됨':'', can:()=> run.weaponLv<1, buy:()=> run.weaponLv=1,
-    owned:()=> run.weaponLv===1, refund:()=> run.weaponLv=0 },
-  { name:'무기 강화 Lv2 (피해 +50%)', price:400,
-    status:()=> run.weaponLv>=2?'장착됨':run.weaponLv<1?'Lv1 필요':'', can:()=> run.weaponLv===1, buy:()=> run.weaponLv=2,
-    owned:()=> run.weaponLv>=2, refund:()=> run.weaponLv=1 },
+  { name:'무기 연마 (피해 +25%)', price:200,
+    status:()=> run.hone?'적용됨':'', can:()=> !run.hone, buy:()=> run.hone=true,
+    owned:()=> run.hone, refund:()=> run.hone=false },
   { name:'방어구 (받는 피해 -20%)', price:200,
     status:()=> run.armorLv>=1?'장착됨':'', can:()=> run.armorLv<1, buy:()=> run.armorLv=1,
     owned:()=> run.armorLv>=1, refund:()=> run.armorLv=0 },
@@ -518,10 +549,11 @@ const SHOP = [
 function applyRecSet() {
   const rs = run.quest.recSet;
   run.gold = prepBudget(run.quest);
-  run.weaponLv = 0; run.armorLv = 0; run.potions = 0; run.lures = 0;
+  run.weapon = null; run.hone = false; run.armorLv = 0; run.potions = 0; run.lures = 0;
   run.stock = { snare:0, shock:0, spike:0 };
   let cost = 0;
-  if (rs.weaponLv) { run.weaponLv = rs.weaponLv; cost += 200 + (rs.weaponLv >= 2 ? 400 : 0); }
+  if (rs.weapon) { run.weapon = rs.weapon === 'crossbow' ? null : rs.weapon; cost += WEAPONS[rs.weapon].price; }
+  if (rs.hone) { run.hone = true; cost += 200; }
   if (rs.armorLv) { run.armorLv = rs.armorLv; cost += 200; }
   if (rs.snare) { run.stock.snare = rs.snare; cost += rs.snare * 200; }
   if (rs.shock) { run.stock.shock = rs.shock; cost += rs.shock * 150; }
@@ -607,11 +639,41 @@ function renderQuest() {
 
 // ============================== 준비 ==============================
 let prepMsg = '';
+const ELEM_COLOR = { physical:'#9aa0aa', fire:'#e0761f', shock:'#6fa3d9' };
+function renderWeaponPick() {
+  const box = $('weapon-pick');
+  box.innerHTML = '';
+  const selId = run.weapon || 'crossbow';
+  for (const id of Object.keys(WEAPONS)) {
+    const w = WEAPONS[id];
+    const sel = selId === id;
+    const b = document.createElement('button');
+    if (sel) b.className = 'sel';
+    const resHint = run.quest.resist && run.quest.resist[w.element] != null && run.quest.resist[w.element] !== 1
+      ? (run.quest.resist[w.element] > 1 ? ' ▲약점' : ' ▼저항') : '';
+    b.innerHTML = '<span class="w-top"><span class="w-name">' + w.name + '</span>' +
+      '<span class="w-el" style="background:' + ELEM_COLOR[w.element] + '33;color:' + ELEM_COLOR[w.element] + '">' + ELEM_NAME[w.element] + resHint + '</span>' +
+      '<span class="w-price mono">' + (w.price ? w.price + 'G' : '기본') + '</span></span>' +
+      '<span class="w-tip">' + w.tip + '</span>';
+    b.onclick = () => {
+      if ((run.weapon || 'crossbow') === id) return;
+      const cur = run.weapon ? WEAPONS[run.weapon].price : 0;
+      const net = w.price - cur;
+      if (run.gold < net) { prepMsg = '골드 부족! (' + net + 'G 필요, 보유 ' + run.gold + 'G)'; renderPrep(); return; }
+      run.gold += cur; run.gold -= w.price;
+      run.weapon = (id === 'crossbow') ? null : id;
+      prepMsg = ''; renderPrep();
+    };
+    box.appendChild(b);
+  }
+}
 function renderPrep() {
   $('prep-title').textContent = '준비 — ' + run.quest.name;
   $('prep-gold').textContent = '골드 ' + run.gold + 'G';
   $('prep-desc').textContent = run.quest.desc;
   $('prep-msg').textContent = prepMsg;
+
+  renderWeaponPick();
 
   const list = $('shop-list');
   list.innerHTML = '';
@@ -729,7 +791,7 @@ let lastSetup = null;
 function snapshotSetup() {
   lastSetup = {
     quest: run.quest, gold: run.gold,
-    weaponLv: run.weaponLv, armorLv: run.armorLv, potions: run.potions, lures: run.lures,
+    weapon: run.weapon, hone: run.hone, armorLv: run.armorLv, potions: run.potions, lures: run.lures,
     stock: { ...run.stock },
     gambits: run.gambits.map(g => ({ ...g })),
     traps: placedTraps.map(t => ({ type: t.type, x: t.x, y: t.y })),
@@ -740,7 +802,7 @@ function retrySameSetup() {
   const s = lastSetup;
   run = {
     quest: s.quest, gold: s.gold,
-    weaponLv: s.weaponLv, armorLv: s.armorLv, potions: s.potions, lures: s.lures,
+    weapon: s.weapon, hone: s.hone, armorLv: s.armorLv, potions: s.potions, lures: s.lures,
     stock: { ...s.stock },
     gambits: s.gambits.map(g => ({ ...g })),
     cardUsed: [false, false, false],
@@ -773,6 +835,7 @@ function startHunt() {
     hunter: {
       hp: 100, maxHp: 100, x: -6.5, y: 0, ko: false, koT: 0,
       basicCd: 0, strongCd: 0, potionCd: 0, lureCd: 0, focusT: 0, lastLog: -9,
+      stam: 100, maxStam: 100, invuln: 0, guardT: 0, dodgeCd: 0, dodgeT: 0, dodgeDx: 0, dodgeDy: 0,
       face: 0, animT: 0, moving: false,
     },
   };
@@ -793,8 +856,9 @@ function addLog(s) {
 function fx(x, y, color, r = 0.45, life = 0.25) { hunt.fx.push({ x, y, color, r, t: 0, life }); }
 
 // 석궁 볼트: 몬스터를 향해 유도 비행, 명중 시 hunterHit 적용
-function fireBolt(h, m, slot, base) {
-  hunt.bolts.push({ x: h.x, y: h.y, sx: h.x, sy: h.y, tx: m.x, ty: m.y, base: base, slot: slot, t: 0 });
+function fireBolt(h, m, slot, base, element, special) {
+  hunt.bolts.push({ x: h.x, y: h.y, sx: h.x, sy: h.y, tx: m.x, ty: m.y, base: base, slot: slot, t: 0,
+                    element: element || 'physical', special: special });
   SFX.bolt();
 }
 function updateBolts(dt) {
@@ -806,9 +870,9 @@ function updateBolts(dt) {
     const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy) || 1;
     b.x += dx / d * 11 * dt; b.y += dy / d * 11 * dt;
     if (alive && d < 0.5) {
-      const dmg = hunterHit(b.base);
+      const dmg = hunterHit(b.base, b.element, { special: b.special });
       m.hp = Math.max(0, m.hp - dmg);
-      fx(m.x, m.y, '#ffffff', 0.3);
+      fx(m.x, m.y, b.element === 'fire' ? '#ff7a2e' : b.element === 'shock' ? '#9fd0f5' : '#ffffff', 0.3);
       SFX.hitMonster(); shakeScreen(2);
       if (m.state === 'wander') m.state = 'combat';
       b.dead = true;
@@ -1099,7 +1163,7 @@ function updateTraps(dt) {
   for (const t of hunt.traps) {
     const d = Math.hypot(t.x - m.x, t.y - m.y);
     if (t.type === 'spike') {
-      if (d < 1.15) { m.slowT = 0.3; m.hp = Math.max(0, m.hp - 10 * dt); if (m.state === 'wander') m.state = 'combat'; }
+      if (d < 1.15) { m.slowT = 0.3; m.hp = Math.max(0, m.hp - 10 * dt * elemMult(m, 'physical')); if (m.state === 'wander') m.state = 'combat'; }
       continue;
     }
     // 함정 내성은 교전 중 연쇄 스턴만 막는다 — 도주 저지는 언제나 가능
@@ -1110,7 +1174,7 @@ function updateTraps(dt) {
       fx(t.x, t.y, '#ffd84d', 0.9);
       shakeScreen(5);
       if (t.type === 'snare') { applyTrap(m, 4, 0); addLog('속박 덫 발동! (4초 속박)'); SFX.snare(); flashScreen('rgba(255,216,77,0.5)', 0.16); }
-      else { applyTrap(m, 2, 30); addLog('마비 룬 발동! (2초 기절 + 피해)'); SFX.shock(); flashScreen('rgba(120,180,255,0.5)', 0.18); }
+      else { applyTrap(m, 2, Math.round(30 * elemMult(m, 'shock'))); addLog('마비 룬 발동! (2초 기절 + 전격 피해)'); SFX.shock(); flashScreen('rgba(120,180,255,0.5)', 0.18); }
     }
   }
 }
@@ -1119,8 +1183,11 @@ function updateTraps(dt) {
 function hitHunter(dmg) {
   const h = hunt.hunter, mm = hunt.monster;
   if (h.ko) return;
+  if (h.invuln > 0) { fx(h.x, h.y, '#cfe8ff', 0.55); return; }  // 회피 무적
   if (mm.def.mut) dmg *= mm.def.mut.dmgDealtMult;
-  h.hp = Math.max(0, h.hp - dmg * takenMult());
+  let taken = dmg * takenMult();
+  if (h.guardT > 0) { taken *= 0.4; fx(h.x, h.y, '#8fbcff', 0.5); }  // 방어 태세
+  h.hp = Math.max(0, h.hp - taken);
   fx(h.x, h.y, '#ff6a5e');
   SFX.hurt(); shakeScreen(4); flashScreen('rgba(200,40,30,0.42)', 0.16);
   if (h.hp <= 0) {
@@ -1138,6 +1205,7 @@ function condTrue(c) {
   if (c === 'myhp50') return h.hp / h.maxHp < 0.5;
   if (c === 'mhp50') return m.hp / m.def.maxHp < 0.5;
   if (c === 'window') return vulnWindow();
+  if (c === 'threat') return monsterThreat();
   if (c === 'fleesoon') {
     if (m.def.fleeAtSeconds >= 1e8) return false;
     if (m.state === 'flee' || m.state === 'trapped') return false;
@@ -1146,6 +1214,15 @@ function condTrue(c) {
     return soonTime || soonHp;
   }
   return m.state === 'trapped';
+}
+// 위협: 몬스터의 큰 예비동작·집행 중 (회피/방어 태세의 트리거)
+function monsterThreat() {
+  const m = hunt.monster;
+  if (m.state !== 'combat') return false;
+  if (m.def.id === 'boar') return m.bphase === 'aim' || m.bphase === 'charge';
+  if (m.def.id === 'bear') return m.hphase === 'enraged';
+  if (m.def.id === 'deer') return m.counterT > 0;
+  return false;
 }
 // 유효타 창: 멧돼지 경직(recover), 사슴 탈진(도주 저지 후)
 function vulnWindow() {
@@ -1157,31 +1234,40 @@ function vulnWindow() {
 }
 // 헌터 공격의 최종 피해 (함정 걸림 1.5배, 멧돼지는 빈틈 외 30%)
 // 몸부림: 함정에 걸린 몬스터는 맞을 때마다 걸림 시간이 0.4초씩 줄어든다 — 폭딜일수록 창이 짧아진다
-function hunterHit(base) {
+function hunterHit(base, element, opt) {
   const m = hunt.monster;
-  const mt = m.def.mut ? m.def.mut.dmgTakenMult : 1;  // 변종 강철 가죽 등
+  opt = opt || {};
+  element = element || 'physical';
+  let dmg = base * dmgMult();
+  if (opt.special === 'crit' && vulnWindow()) dmg *= 2;   // 장궁 치명타 — 빈틈에 2배
+  dmg *= elemMult(m, element);                            // 속성 상성 (약점 ▲ / 저항 ▼)
+  const mt = m.def.mut ? m.def.mut.dmgTakenMult : 1;      // 변종 강철 가죽 등
   if (m.state === 'trapped') {
     m.trapT = Math.max(0.2, m.trapT - 0.4);
-    return base * dmgMult() * 1.5 * mt;
+    return dmg * 1.5 * mt;
   }
-  if (m.def.id === 'bear' && m.hphase === 'overheat') return base * dmgMult() * 1.4 * mt;
+  if (m.def.id === 'bear' && m.hphase === 'overheat') return dmg * 1.4 * mt;
   if (m.def.id === 'boar' && !vulnWindow()) {
-    if (!hunt.armorHint) { hunt.armorHint = true; addLog('가죽이 단단하다! 경직·함정 때만 유효타가 들어간다'); }
-    return base * dmgMult() * 0.3 * mt;
+    if (!hunt.armorHint) { hunt.armorHint = true; addLog('가죽이 단단하다! 경직·함정 때만 유효타가 들어간다 (관통 무기·전격은 예외)'); }
+    const armor = opt.special === 'pierce' ? 0.7 : 0.4;   // 관통은 장갑 경감을 절반만 받음
+    return dmg * armor * mt;
   }
-  return base * dmgMult() * mt;
+  return dmg * mt;
 }
 function canRun(a) {
   const h = hunt.hunter;
   if (a === 'basic') return true;
-  if (a === 'strong') return h.strongCd <= 0;
+  if (a === 'strong') return h.strongCd <= 0 && h.stam >= 35;
   if (a === 'potion') return h.potionCd <= 0 && run.potions > 0 && h.hp < h.maxHp * 0.95;
+  if (a === 'dodge') return monsterThreat() && h.dodgeCd <= 0 && h.stam >= 30;
+  if (a === 'guard') return h.stam >= 12;
   if (a === 'kite') {
     // 교전 중에만 — 경계 상태면 아래 줄로 넘어가 접근해서 어그로부터 끈다
     const m = hunt.monster;
     return m.state === 'combat' && hunt.traps.some(t => t.armed || t.type === 'spike');
   }
-  return h.lureCd <= 0 && run.lures > 0 && !hunt.lure && hunt.traps.some(t => t.armed || t.type === 'spike');
+  if (a === 'lure') return h.lureCd <= 0 && run.lures > 0 && !hunt.lure && hunt.traps.some(t => t.armed || t.type === 'spike');
+  return false;
 }
 function logRule(i, msg) {
   const g = run.gambits[i];
@@ -1191,16 +1277,21 @@ function logRule(i, msg) {
 function updateHunter(dt) {
   const h = hunt.hunter, m = hunt.monster;
   if (m.state === 'dead' || m.state === 'escaped') return;
-  for (const k of ['basicCd','strongCd','potionCd','lureCd','focusT']) if (h[k] > 0) h[k] -= dt;
+  for (const k of ['basicCd','strongCd','potionCd','lureCd','focusT','invuln','dodgeCd']) if (h[k] > 0) h[k] -= dt;
+  if (h.guardT > 0) h.guardT -= dt;
+  h.stam = Math.min(h.maxStam, h.stam + 16 * dt);   // 기력 회복
   h.lastLog += dt;
 
   h.kiteTarget = null;
 
   if (h.ko) {
     h.koT -= dt;
-    if (h.koT <= 0) { h.ko = false; h.hp = h.maxHp * 0.5; addLog('헌터가 일어났다! (HP 50%)'); }
+    if (h.koT <= 0) { h.ko = false; h.hp = h.maxHp * 0.5; h.stam = h.maxStam; addLog('헌터가 일어났다! (HP 50%)'); }
     return;
   }
+
+  // 회피 롤 (무적 이동) — 감빗 평가보다 우선
+  if (h.dodgeT > 0) { h.dodgeT -= dt; moveDir(h, h.dodgeDx, h.dodgeDy, 9, dt); return; }
 
   for (let i = 0; i < run.gambits.length; i++) {
     const g = run.gambits[i];
@@ -1213,16 +1304,34 @@ function updateHunter(dt) {
 
 function runAction(a, slot, dt) {
   const h = hunt.hunter, m = hunt.monster;
+  const w = curWeapon();
   if (a === 'basic') { chaseBasic(slot, dt); return; }
   if (a === 'strong') {
-    if (dist(h, m) > 1.4) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
-    const dmg = hunterHit(60);
+    if (dist(h, m) > w.range) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
+    h.stam -= 35;
+    const dmg = hunterHit(w.strong, w.element, { special: w.special });
     m.hp = Math.max(0, m.hp - dmg);
-    h.strongCd = 8;
-    fx(m.x, m.y, '#ffe14d', 0.7);
+    h.strongCd = w.strongCd;
+    fx(m.x, m.y, w.element === 'fire' ? '#ff9a3a' : '#ffe14d', 0.7);
     SFX.strong(); shakeScreen(4);
     logRule(slot, '강공격! (' + Math.round(dmg) + ' 피해)');
     if (m.state === 'wander') m.state = 'combat';
+    return;
+  }
+  if (a === 'dodge') {
+    const ix = h.x - m.x, iy = h.y - m.y, id = Math.hypot(ix, iy) || 1;
+    let px = -iy / id, py = ix / id;
+    if (Math.random() < 0.5) { px = -px; py = -py; }
+    if (Math.abs(h.x + px * 2.5) > ARENA_X || Math.abs(h.y + py * 2.5) > ARENA_Y) { px = -px; py = -py; }
+    h.dodgeDx = px; h.dodgeDy = py;
+    h.dodgeT = 0.28; h.invuln = 0.5; h.dodgeCd = 1.4; h.stam -= 30;
+    fx(h.x, h.y, '#bfe4ff', 0.6);
+    logRule(slot, '회피! (무적 회피 롤)');
+    return;
+  }
+  if (a === 'guard') {
+    h.guardT = 0.15; h.stam = Math.max(0, h.stam - 22 * dt);
+    if (h.lastLog > 3) { h.lastLog = 0; logRule(slot, '방어 태세 — 받는 피해 60% 감소'); }
     return;
   }
   if (a === 'potion') {
@@ -1292,8 +1401,9 @@ function kiteMove(slot, dt) {
   ty = Math.max(-ARENA_Y, Math.min(ARENA_Y, ty));
   h.kiteTarget = { x: tx, y: ty, trap: t };
   if (Math.hypot(h.x - tx, h.y - ty) > 0.25) moveTowards(h, tx, ty, 3.5, dt);
-  // 몰이하면서도 사거리 안이면 견제 사격
-  if (dist(h, m) <= BOLT_RANGE && h.basicCd <= 0) { h.basicCd = h.focusT > 0 ? 0.35 : 0.85; fireBolt(h, m, -1, 7); }
+  // 몰이하면서도 사거리 안이면 견제 공격
+  const w = curWeapon();
+  if (dist(h, m) <= w.range + (w.melee ? 0.2 : 0.6) && h.basicCd <= 0) doBasicAttack(h, m, -1);
   if (h.lastLog > 4) {
     h.lastLog = 0;
     logRule(slot, m.def.id === 'boar' ? '함정 뒤에서 돌진 유도 중' : '함정 쪽으로 몰이 중');
@@ -1301,16 +1411,29 @@ function kiteMove(slot, dt) {
 }
 
 const BOLT_RANGE = 6;
+// 무기 기본 공격 — 근접은 즉시 타격, 원거리는 볼트 발사
+function doBasicAttack(h, m, slot) {
+  const w = curWeapon();
+  h.basicCd = (h.focusT > 0 ? w.rate * 0.5 : w.rate);
+  if (w.melee) {
+    const dmg = hunterHit(w.dmg, w.element, { special: w.special });
+    m.hp = Math.max(0, m.hp - dmg);
+    fx(m.x, m.y, w.element === 'fire' ? '#ff7a2e' : '#ffffff', w.special === 'cleave' ? 0.6 : 0.4);
+    SFX.hitMonster(); shakeScreen(w.special === 'cleave' ? 3 : 2);
+  } else {
+    fireBolt(h, m, slot, w.dmg, w.element, w.special);
+  }
+  if (m.state === 'wander') m.state = 'combat';
+}
 function chaseBasic(slot, dt) {
   const h = hunt.hunter, m = hunt.monster;
+  const w = curWeapon();
   const d = dist(h, m);
-  // 석궁: 사거리 밖이면 접근하며 쏜다 (도망가는 상대에게도 딜이 들어간다)
-  if (d > BOLT_RANGE) moveTowards(h, m.x, m.y, 3.5, dt);
-  if (d <= BOLT_RANGE + 0.6 && h.basicCd <= 0) {
-    h.basicCd = h.focusT > 0 ? 0.35 : 0.85;
-    fireBolt(h, m, slot, 7);
-    if (m.state === 'wander') m.state = 'combat';
-    if (slot >= 0 && h.lastLog > 2.5) { h.lastLog = 0; logRule(slot, '석궁 사격 중'); }
+  // 사거리 밖이면 접근하며 공격 (근접 무기는 붙어야 해서 위험 노출)
+  if (d > w.range) moveTowards(h, m.x, m.y, 3.5, dt);
+  if (d <= w.range + (w.melee ? 0.2 : 0.6) && h.basicCd <= 0) {
+    doBasicAttack(h, m, slot);
+    if (slot >= 0 && h.lastLog > 2.5) { h.lastLog = 0; logRule(slot, w.name + ' 공격 중'); }
   }
 }
 
@@ -1480,9 +1603,13 @@ function renderHUD() {
   if (m.def.id === 'bear' && m.state === 'combat' && m.hphase === 'overheat') stateLabel = '과열 — 빈틈!';
   $('h-mstate').textContent = stateLabel + '  ' + Math.round(m.hp) + '/' + m.def.maxHp;
   $('h-mbar').style.width = (m.hp / m.def.maxHp * 100) + '%';
+  const w = curWeapon();
+  $('h-hname').textContent = '헌터 · ' + w.name + ' (' + ELEM_NAME[w.element] + ')' +
+    (h.guardT > 0 ? ' 🛡' : '') + (h.invuln > 0 ? ' ✦회피' : '');
   $('h-hinfo').textContent = h.ko ? '기절! 부활까지 ' + h.koT.toFixed(1) + '초'
-    : 'HP ' + Math.round(h.hp) + '/' + h.maxHp + ' · 물약 ' + run.potions;
+    : 'HP ' + Math.round(h.hp) + '/' + h.maxHp + ' · 기력 ' + Math.round(h.stam) + ' · 물약 ' + run.potions;
   $('h-hbar').style.width = (h.hp / h.maxHp * 100) + '%';
+  $('h-stam').style.width = (h.stam / h.maxStam * 100) + '%';
   $('h-orb').style.height = (h.hp / h.maxHp * 100) + '%';
   $('lure-hint').textContent = hunt.awaitingLure ? '맵을 클릭해 유인 지점을 지정하라!' : '';
 
@@ -1941,9 +2068,17 @@ function drawArena(ctx, huntState) {
     if (!h.ko) drawShadow(ctx, h.x, h.y, 0.55 * PPU);
     const wob = h.moving ? Math.sin(h.animT * 12) * 0.05 : 0;
     const bob = h.moving ? Math.abs(Math.sin(h.animT * 12)) * 3 : 0;
-    const glow = h.focusT > 0 ? 'rgba(201,164,74,0.95)' : null;
+    let glow = h.focusT > 0 ? 'rgba(201,164,74,0.95)' : null;
+    if (h.guardT > 0) glow = 'rgba(120,170,255,0.9)';
+    if (h.invuln > 0) glow = 'rgba(190,230,255,0.98)';
     drawSprite(ctx, SPR.hunter, h.x, h.y, 1.7,
-      { flip: h.flipX, rock: h.ko ? 1.35 : wob, bob: -bob, alpha: h.ko ? 0.5 : 1, glow: glow, fallback: '#3b5f96' });
+      { flip: h.flipX, rock: h.ko ? 1.35 : (h.invuln > 0 ? 0.5 : wob), bob: -bob, alpha: h.ko ? 0.5 : (h.invuln > 0 ? 0.7 : 1), glow: glow, fallback: '#3b5f96' });
+    // 방어 태세 방패 호
+    if (h.guardT > 0 && !h.ko) {
+      const hx = PX(h.x, h.y), hy = PY(h.x, h.y) - 20;
+      ctx.save(); ctx.strokeStyle = 'rgba(150,190,255,0.85)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(hx, hy, 26, -0.9, 0.9); ctx.stroke(); ctx.restore();
+    }
     if (h.ko) {
       ctx.fillStyle = 'rgba(217,207,182,0.9)'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('💫 ' + h.koT.toFixed(0), PX(h.x, h.y), PY(h.x, h.y) - 58);
