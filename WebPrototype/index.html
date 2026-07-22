@@ -1034,13 +1034,15 @@ function boarTick(m, h, dt, spd) {
   const d = dist(m, h);
   if (m.bphase === 'approach') {
     moveTowards(m, h.x, h.y, 2.2 * spd, dt);
-    if (d <= 5) { m.bphase = 'aim'; m.pt = m.enraged ? 1 : 2; }
+    if (d <= 5) { m.bphase = 'aim'; m.pt = m.enraged ? 1 : 2; faceAttack(m, h.x); }
   } else if (m.bphase === 'aim') {
     m.pt -= dt;
+    faceAttack(m, h.x);   // 조준 중 헌터를 계속 응시
     if (m.pt <= 0) {
       const dx = h.x - m.x, dy = h.y - m.y, dd = Math.hypot(dx, dy) || 1;
       m.cdx = dx / dd; m.cdy = dy / dd;
       m.bphase = 'charge'; m.cdist = 0; m.chit = false;
+      faceAttack(m, m.x + m.cdx);   // 돌진 방향 고정
     }
   } else if (m.bphase === 'charge') {
     const bx = m.x, by = m.y;
@@ -1076,10 +1078,11 @@ function bearTick(m, h, dt, spd) {
     m.enrageT -= dt;
     moveTowards(m, h.x, h.y, 3.5 * spd, dt);
     // 근접 후려치기
-    if (d < 1.5 && m.swipeCd <= 0) { hitHunter(13); m.swipeCd = 1.3; fx(h.x, h.y, '#ff7a2e', 0.6); }
+    if (d < 1.5 && m.swipeCd <= 0) { faceAttack(m, h.x); hitHunter(13); m.swipeCd = 1.3; fx(h.x, h.y, '#ff7a2e', 0.6); }
     // 화염 폭발 (범위 강타)
     if (m.novaCd <= 0) {
       m.novaCd = 3;
+      faceAttack(m, h.x);
       fx(m.x, m.y, '#ff5a1e', 2.4, 0.45);
       SFX.shock();
       if (d < 2.5) { hitHunter(11); addLog('화염 폭발! 범위 피해'); }
@@ -1091,7 +1094,7 @@ function bearTick(m, h, dt, spd) {
   // build: 접근하며 열기 축적. 가까이 붙어 싸울수록 빨리 달아오른다.
   moveTowards(m, h.x, h.y, 2.4 * spd, dt);
   m.heat += dt * (8.5 + (d < 2.5 ? 5 : 0));
-  if (d < 1.4 && m.swipeCd <= 0) { hitHunter(10); m.swipeCd = 1.5; fx(h.x, h.y, '#c98a3a', 0.5); }
+  if (d < 1.4 && m.swipeCd <= 0) { faceAttack(m, h.x); hitHunter(10); m.swipeCd = 1.5; fx(h.x, h.y, '#c98a3a', 0.5); }
   if (m.heat >= 100) { m.hphase = 'enraged'; m.enrageT = 6; m.enraged = true; addLog('화염 곰이 격노했다! 불길이 치솟는다'); SFX.strong(); shakeScreen(6); flashScreen('rgba(255,90,30,0.4)', 0.25); }
 }
 
@@ -1100,7 +1103,7 @@ function deerTick(m, h, dt, spd) {
   // 도주 저지 직후 25초간 탈진 — 헌터가 따라잡을 수 있는 유일한 시간
   if (m.fleeBlock > 0) spd *= 0.72;
   const d = dist(m, h);
-  if (d < 1.35 && m.kickCd <= 0) { hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
+  if (d < 1.35 && m.kickCd <= 0) { faceAttack(m, h.x); hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
 
   // 방심(off-guard): 주기적으로 멈춰 숨을 고른다 — 유효타 창이자 접근 기회
   if (m.offguard > 0) { m.offguard -= dt; m.moving = false; return; }
@@ -1117,7 +1120,7 @@ function deerTick(m, h, dt, spd) {
     m.counterT -= dt;
     const cx = h.x - m.x, cy = h.y - m.y, cd = Math.hypot(cx, cy) || 1;
     moveSlide(m, cx / cd, cy / cd, 9 * spd, dt);
-    if (d < 1.1 && m.kickCd <= 0) { hitHunter(12); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0', 0.55); }
+    if (d < 1.1 && m.kickCd <= 0) { faceAttack(m, h.x); hitHunter(12); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0', 0.55); }
     return;
   }
   m.counterCd = (m.counterCd == null ? 9 : m.counterCd) - dt;
@@ -1354,6 +1357,7 @@ function runAction(a, slot, dt) {
   if (a === 'basic') { chaseBasic(slot, dt); return; }
   if (a === 'strong') {
     if (dist(h, m) > w.range) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
+    faceAttack(h, m.x);
     h.stam -= 35;
     const crit = w.special === 'crit' && vulnWindow();
     const dmg = hunterHit(w.strong, w.element, { special: w.special });
@@ -1463,6 +1467,7 @@ const BOLT_RANGE = 6;
 // 무기 기본 공격 — 근접은 즉시 타격, 원거리는 볼트 발사
 function doBasicAttack(h, m, slot) {
   const w = curWeapon();
+  faceAttack(h, m.x);
   h.basicCd = (h.focusT > 0 ? w.rate * 0.5 : w.rate);
   if (w.melee) {
     const crit = w.special === 'crit' && vulnWindow();
@@ -1717,11 +1722,16 @@ let animClock = 0;
 
 function faceTrack(e, prev, dt) {
   const dx = e.x - prev.x, dy = e.y - prev.y;
-  if (Math.hypot(dx, dy) > 1e-4) {
-    if (Math.abs(dx) > 0.003) e.flipX = dx < 0;
-    e.animT = (e.animT || 0) + dt;
-    e.moving = true;
-  } else e.moving = false;
+  const moved = Math.hypot(dx, dy) > 1e-4;
+  // 공격 방향 고정(faceLockT) 중에는 이동 방향으로 뒤집지 않는다
+  if (e.faceLockT > 0) e.faceLockT -= dt;
+  else if (moved && Math.abs(dx) > 0.003) e.flipX = dx < 0;
+  if (moved) { e.animT = (e.animT || 0) + dt; e.moving = true; } else e.moving = false;
+}
+// 공격 시 대상 방향을 바라보게 하고 잠시 그 방향으로 고정
+function faceAttack(e, targetX) {
+  if (Math.abs(targetX - e.x) > 0.02) e.flipX = targetX < e.x;
+  e.faceLockT = 0.35;
 }
 
 // ---------- SVG 스프라이트 (¾ 측면 뷰, 오른쪽을 향함 / 함정·미끼는 바닥 데칼) ----------
