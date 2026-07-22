@@ -130,6 +130,8 @@
   #p-result .r-title.no { color: var(--danger); }
   #p-result .r-body { white-space: pre-line; font-size: 0.95rem; color: var(--muted); margin-bottom: 24px; }
   #p-result .r-body b { color: var(--amber); }
+  #p-result .r-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  #p-result .r-actions button { padding: 12px 26px; }
 </style>
 
 <div id="app">
@@ -203,6 +205,7 @@
         </div>
       </div>
       <button id="btn-speed" title="관전 배속">▶ 1x</button>
+      <button id="btn-sound" title="효과음 켜기/끄기">🔊</button>
     </div>
     <div class="canvas-wrap">
       <canvas id="cv-hunt" width="1100" height="620"></canvas>
@@ -226,7 +229,7 @@
     <div class="box">
       <div class="r-title" id="r-title"></div>
       <div class="r-body" id="r-body"></div>
-      <button class="primary" id="btn-retry" style="padding:12px 40px">다음 의뢰 →</button>
+      <div class="r-actions" id="r-actions"></div>
     </div>
   </section>
 </div>
@@ -266,6 +269,79 @@ const SPAWNS = [{x:6.5,y:3},{x:6.5,y:-3},{x:-6.5,y:3},{x:-6.5,y:-3}];
 let honorTotal = 0;
 try { honorTotal = parseInt(localStorage.getItem('hunter-contract-honor')) || 0; } catch (e) {}
 function saveHonor() { try { localStorage.setItem('hunter-contract-honor', String(honorTotal)); } catch (e) {} }
+
+// ============================== 사운드 (WebAudio 절차 생성, 외부 파일 없음) ==============================
+let actx = null, sfxOn = true;
+try { sfxOn = localStorage.getItem('hunter-contract-sfx') !== '0'; } catch (e) {}
+function audioCtx() {
+  if (actx === null) {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = false; }
+  }
+  if (actx && actx.state === 'suspended') actx.resume();
+  return actx || null;
+}
+// 첫 사용자 제스처에서 오디오 컨텍스트를 깨운다 (브라우저 자동재생 정책)
+window.addEventListener('pointerdown', () => { audioCtx(); }, { once: true });
+
+// 단일 오실레이터 톤 (freq→slideTo 글라이드, ADSR 근사)
+function tone(freq, dur, type, gain, slideTo, delay) {
+  const ac = audioCtx(); if (!ac || !sfxOn) return;
+  const t0 = ac.currentTime + (delay || 0);
+  const osc = ac.createOscillator(), g = ac.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g); g.connect(ac.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.03);
+}
+// 필터 걸린 노이즈 버스트 (타격감·전기·발소리)
+function noiseBurst(dur, gain, filterType, filterFreq) {
+  const ac = audioCtx(); if (!ac || !sfxOn) return;
+  const t0 = ac.currentTime;
+  const n = Math.max(1, Math.floor(ac.sampleRate * dur));
+  const buf = ac.createBuffer(1, n, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const g = ac.createGain(); g.gain.value = gain;
+  let last = g;
+  if (filterFreq) {
+    const f = ac.createBiquadFilter();
+    f.type = filterType || 'lowpass'; f.frequency.value = filterFreq;
+    src.connect(f); f.connect(g);
+  } else src.connect(g);
+  g.connect(ac.destination);
+  src.start(t0); src.stop(t0 + dur + 0.02);
+}
+const SFX = {
+  bolt()      { tone(880, 0.07, 'square', 0.05, 1500); noiseBurst(0.05, 0.04, 'highpass', 2000); },
+  hitMonster(){ noiseBurst(0.09, 0.14, 'lowpass', 900); tone(180, 0.1, 'triangle', 0.1, 90); },
+  strong()    { noiseBurst(0.14, 0.2, 'lowpass', 700); tone(140, 0.18, 'sawtooth', 0.16, 60); },
+  snare()     { tone(300, 0.13, 'square', 0.14, 70); noiseBurst(0.1, 0.12, 'bandpass', 1400); },
+  shock()     { tone(120, 0.22, 'sawtooth', 0.14, 900); noiseBurst(0.22, 0.1, 'highpass', 1800); },
+  spike()     { noiseBurst(0.08, 0.06, 'highpass', 3000); },
+  fleeBlock() { tone(200, 0.1, 'square', 0.16, 520); tone(520, 0.28, 'triangle', 0.14, 260, 0.08); },
+  hurt()      { tone(260, 0.16, 'sawtooth', 0.13, 90); noiseBurst(0.12, 0.1, 'lowpass', 600); },
+  ko()        { tone(300, 0.5, 'sawtooth', 0.18, 50); },
+  potion()    { tone(600, 0.12, 'sine', 0.1, 950); tone(950, 0.14, 'sine', 0.08, 1300, 0.06); },
+  card()      { tone(700, 0.09, 'triangle', 0.1, 1100); tone(1100, 0.1, 'triangle', 0.08, 1500, 0.05); },
+  lure()      { tone(500, 0.14, 'sine', 0.09, 780); },
+  kill()      { tone(400, 0.14, 'triangle', 0.16, 200); tone(300, 0.2, 'sawtooth', 0.14, 90, 0.1); tone(160, 0.4, 'sine', 0.14, 70, 0.2); },
+  win()       { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, 'triangle', 0.14, null, i * 0.12)); },
+  lose()      { [392, 330, 262].forEach((f, i) => tone(f, 0.34, 'sawtooth', 0.13, null, i * 0.16)); },
+};
+function toggleSfx() {
+  sfxOn = !sfxOn;
+  try { localStorage.setItem('hunter-contract-sfx', sfxOn ? '1' : '0'); } catch (e) {}
+  const b = $('btn-sound'); if (b) b.textContent = sfxOn ? '🔊' : '🔇';
+}
+
+// 화면 흔들림 · 플래시 (타격감)
+function shakeScreen(amt) { if (hunt) hunt.shake = Math.min(9, Math.max(hunt.shake || 0, amt)); }
+function flashScreen(color, life) { if (hunt) hunt.flash = { color, t: 0, life: life || 0.18 }; }
 
 // ============================== 판 상태 ==============================
 let phase = 'quest';
@@ -483,11 +559,38 @@ $('btn-to-place').onclick = () => setPhase('place');
 $('btn-back-prep').onclick = () => setPhase('prep');
 
 // ============================== 사냥 ==============================
+let lastSetup = null;
+// 사냥 시작 시점의 준비 상태(구매·감빗·함정 배치)를 저장 — '같은 세팅으로 재도전'용
+function snapshotSetup() {
+  lastSetup = {
+    quest: run.quest, gold: run.gold,
+    weaponLv: run.weaponLv, armorLv: run.armorLv, potions: run.potions, lures: run.lures,
+    stock: { ...run.stock },
+    gambits: run.gambits.map(g => ({ ...g })),
+    traps: placedTraps.map(t => ({ type: t.type, x: t.x, y: t.y })),
+  };
+}
+function retrySameSetup() {
+  if (!lastSetup) { setPhase('quest'); return; }
+  const s = lastSetup;
+  run = {
+    quest: s.quest, gold: s.gold,
+    weaponLv: s.weaponLv, armorLv: s.armorLv, potions: s.potions, lures: s.lures,
+    stock: { ...s.stock },
+    gambits: s.gambits.map(g => ({ ...g })),
+    cardUsed: [false, false, false],
+  };
+  placedTraps = s.traps.map(t => ({ type: t.type, x: t.x, y: t.y, armed: true }));
+  selectedTrap = null;
+  startHunt();
+}
+
 function startHunt() {
   const def = run.quest;
+  snapshotSetup();
   hunt = {
     t: 180, running: true, over: null, speed: 1,
-    hadKO: false, awaitingLure: false, lastSpent: null,
+    hadKO: false, awaitingLure: false, lastSpent: null, shake: 0, flash: null,
     traps: placedTraps, lure: null, fx: [], bolts: [], log: [],
     monster: (() => {
       const sp = SPAWNS[Math.floor(Math.random() * SPAWNS.length)];
@@ -526,6 +629,7 @@ function fx(x, y, color, r = 0.45, life = 0.25) { hunt.fx.push({ x, y, color, r,
 // 석궁 볼트: 몬스터를 향해 유도 비행, 명중 시 hunterHit 적용
 function fireBolt(h, m, slot, base) {
   hunt.bolts.push({ x: h.x, y: h.y, sx: h.x, sy: h.y, tx: m.x, ty: m.y, base: base, slot: slot, t: 0 });
+  SFX.bolt();
 }
 function updateBolts(dt) {
   const m = hunt.monster;
@@ -539,6 +643,7 @@ function updateBolts(dt) {
       const dmg = hunterHit(b.base);
       m.hp = Math.max(0, m.hp - dmg);
       fx(m.x, m.y, '#ffffff', 0.3);
+      SFX.hitMonster(); shakeScreen(2);
       if (m.state === 'wander') m.state = 'combat';
       b.dead = true;
     }
@@ -599,7 +704,7 @@ function updateMonster(dt) {
     if (m.trapT <= 0) {
       m.state = 'combat';
       m.trapImmune = 6; // 연쇄 스턴 방지 — 6초간 함정 무시하고 지나간다
-      if (m.wasFlee) { m.fleeBlock = 25; m.wasFlee = false; addLog('도주 저지 성공! 몬스터가 지쳐서 느려졌다 (25초)'); }
+      if (m.wasFlee) { m.fleeBlock = 25; m.wasFlee = false; addLog('도주 저지 성공! 몬스터가 지쳐서 느려졌다 (25초)'); SFX.fleeBlock(); shakeScreen(6); flashScreen('rgba(120,220,140,0.45)', 0.3); }
     }
     return;
   }
@@ -788,8 +893,9 @@ function updateTraps(dt) {
       t.armed = false;
       hunt.lastSpent = t;
       fx(t.x, t.y, '#ffd84d', 0.9);
-      if (t.type === 'snare') { applyTrap(m, 4, 0); addLog('속박 덫 발동! (4초 속박)'); }
-      else { applyTrap(m, 2, 30); addLog('마비 룬 발동! (2초 기절 + 피해)'); }
+      shakeScreen(5);
+      if (t.type === 'snare') { applyTrap(m, 4, 0); addLog('속박 덫 발동! (4초 속박)'); SFX.snare(); flashScreen('rgba(255,216,77,0.5)', 0.16); }
+      else { applyTrap(m, 2, 30); addLog('마비 룬 발동! (2초 기절 + 피해)'); SFX.shock(); flashScreen('rgba(120,180,255,0.5)', 0.18); }
     }
   }
 }
@@ -800,8 +906,10 @@ function hitHunter(dmg) {
   if (h.ko) return;
   h.hp = Math.max(0, h.hp - dmg * takenMult());
   fx(h.x, h.y, '#ff6a5e');
+  SFX.hurt(); shakeScreen(4); flashScreen('rgba(200,40,30,0.42)', 0.16);
   if (h.hp <= 0) {
     h.ko = true; h.koT = 10; hunt.hadKO = true;
+    SFX.ko(); shakeScreen(9); flashScreen('rgba(200,20,20,0.6)', 0.4);
     addLog('헌터 기절! 10초 후 부활 (타이머는 계속 흐른다)');
     const m = hunt.monster;
     if (m.state === 'combat') { m.state = 'wander'; m.bphase = 'approach'; }
@@ -886,6 +994,7 @@ function runAction(a, slot, dt) {
     m.hp = Math.max(0, m.hp - dmg);
     h.strongCd = 8;
     fx(m.x, m.y, '#ffe14d', 0.7);
+    SFX.strong(); shakeScreen(4);
     logRule(slot, '강공격! (' + Math.round(dmg) + ' 피해)');
     if (m.state === 'wander') m.state = 'combat';
     return;
@@ -893,6 +1002,7 @@ function runAction(a, slot, dt) {
   if (a === 'potion') {
     run.potions--; h.hp = Math.min(h.maxHp, h.hp + 40); h.potionCd = 5;
     fx(h.x, h.y, '#5ee879', 0.6);
+    SFX.potion();
     logRule(slot, '회복 물약 사용 (+40)');
     chaseBasic(-1, dt);
     return;
@@ -907,6 +1017,7 @@ function runAction(a, slot, dt) {
     if (d < bd) { bd = d; best = t; }
   }
   hunt.lure = { x: best.x, y: best.y, life: 12 };
+  SFX.lure();
   logRule(slot, '미끼 투척 (함정 위로)');
 }
 
@@ -980,6 +1091,7 @@ function chaseBasic(slot, dt) {
 // ---------- 카드 ----------
 function useCard(i) {
   if (!hunt.running || run.cardUsed[i]) return;
+  SFX.card();
   if (i === 0) {
     if (!hunt.lastSpent) { addLog('재가동할 함정이 없다 (아직 발동된 함정 없음)'); return; }
     hunt.lastSpent.armed = true;
@@ -1028,6 +1140,8 @@ $('btn-speed').onclick = () => {
   hunt.speed = hunt.speed === 1 ? 2 : 1;
   $('btn-speed').textContent = '▶ ' + hunt.speed + 'x';
 };
+$('btn-sound').textContent = sfxOn ? '🔊' : '🔇';
+$('btn-sound').onclick = toggleSfx;
 
 // ---------- 판정/정산 ----------
 function failTip(cause) {
@@ -1045,6 +1159,8 @@ function failTip(cause) {
 
 function endHunt(success, headline, cause) {
   hunt.running = false;
+  if (success) { SFX.kill(); shakeScreen(7); flashScreen('rgba(255,240,200,0.4)', 0.35); setTimeout(() => SFX.win(), 350); }
+  else SFX.lose();
   let body;
   if (success) {
     const base = run.quest.baseReward;
@@ -1071,8 +1187,22 @@ function renderResult() {
   $('r-title').textContent = hunt.over.success ? '사냥 성공!' : '사냥 실패…';
   $('r-title').className = 'r-title ' + (hunt.over.success ? 'ok' : 'no');
   $('r-body').textContent = hunt.over.body;
+
+  const box = $('r-actions');
+  box.innerHTML = '';
+  if (lastSetup) {
+    const retry = document.createElement('button');
+    retry.textContent = '↻ 같은 세팅으로 재도전';
+    retry.title = '이전 구매·함정 배치 그대로 다시 사냥한다 (준비 골드 소모 없음)';
+    retry.onclick = () => { hunt = null; retrySameSetup(); };
+    box.appendChild(retry);
+  }
+  const next = document.createElement('button');
+  next.className = 'primary';
+  next.textContent = '다음 의뢰 →';
+  next.onclick = () => { hunt = null; run = null; placedTraps = []; lastSetup = null; setPhase('quest'); };
+  box.appendChild(next);
 }
-$('btn-retry').onclick = () => { hunt = null; run = null; placedTraps = []; setPhase('quest'); };
 
 // ============================== 메인 루프 ==============================
 let lastTs = 0;
@@ -1102,6 +1232,10 @@ function frame(ts) {
     else if (hunt.t <= 0) { hunt.t = 0; endHunt(false, '시간 초과 — ' + m.def.name + '이(가) 어둠 속으로 사라졌다…', 'timeout'); }
   }
 
+  if (hunt) {
+    if (hunt.shake > 0) hunt.shake = Math.max(0, hunt.shake - rawDt * (hunt.shake + 6));
+    if (hunt.flash) { hunt.flash.t += rawDt; if (hunt.flash.t >= hunt.flash.life) hunt.flash = null; }
+  }
   if (phase === 'hunt' && hunt) { renderHUD(); drawArena($('cv-hunt').getContext('2d'), hunt); }
   if (phase === 'place') drawArena($('cv-place').getContext('2d'), null);
 
@@ -1367,6 +1501,9 @@ function drawShadow(ctx, x, y, r) {
 
 function drawArena(ctx, huntState) {
   ctx.clearRect(0, 0, CVW, CVH);
+  ctx.save();
+  const shk = huntState && huntState.shake > 0.1 ? huntState.shake : 0;
+  if (shk) ctx.translate((Math.random() * 2 - 1) * shk, (Math.random() * 2 - 1) * shk);
   if (!groundCanvas) groundCanvas = buildDungeon();
   ctx.drawImage(groundCanvas, 0, 0);
 
@@ -1424,7 +1561,7 @@ function drawArena(ctx, huntState) {
     drawDecal(ctx, SPR[TRAP_SPR[t.type]], t.x, t.y, units, alpha);
   }
 
-  if (!huntState) return;
+  if (!huntState) { ctx.restore(); return; }
   const m = huntState.monster, h = huntState.hunter;
 
   if (huntState.lure) drawDecal(ctx, SPR.lure, huntState.lure.x, huntState.lure.y, 0.7);
@@ -1553,6 +1690,16 @@ function drawArena(ctx, huntState) {
     ctx.beginPath(); ctx.arc(PX(f.x, f.y), PY(f.x, f.y), r, 0, 7); ctx.fill();
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // 화면 플래시 오버레이 (흔들림과 무관하게 화면 전체)
+  if (huntState.flash) {
+    const p = huntState.flash.t / huntState.flash.life;
+    ctx.globalAlpha = Math.max(0, 1 - p);
+    ctx.fillStyle = huntState.flash.color;
+    ctx.fillRect(0, 0, CVW, CVH);
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ============================== 시작 ==============================
