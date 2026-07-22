@@ -973,6 +973,7 @@ function updateMonster(dt) {
   if (m.hp <= 0) { m.state = 'dead'; return; }
   m.elapsed += dt;
   if (m.hurtT > 0) m.hurtT -= dt;
+  if (m.atkT > 0) m.atkT -= dt;
   if (m.kickCd > 0) m.kickCd -= dt;
   if (m.slowT > 0) m.slowT -= dt;
   if (m.fleeBlock > 0) m.fleeBlock -= dt;
@@ -1081,7 +1082,7 @@ function bearTick(m, h, dt, spd) {
     m.enrageT -= dt;
     moveTowards(m, h.x, h.y, 3.5 * spd, dt);
     // 근접 후려치기
-    if (d < 1.5 && m.swipeCd <= 0) { faceAttack(m, h.x); hitHunter(13); m.swipeCd = 1.3; fx(h.x, h.y, '#ff7a2e', 0.6); }
+    if (d < 1.5 && m.swipeCd <= 0) { faceAttack(m, h.x); attackLunge(m, h.x, h.y, 0.14); hitHunter(13); m.swipeCd = 1.3; fx(h.x, h.y, '#ff7a2e', 0.6); }
     // 화염 폭발 (범위 강타)
     if (m.novaCd <= 0) {
       m.novaCd = 3;
@@ -1097,7 +1098,7 @@ function bearTick(m, h, dt, spd) {
   // build: 접근하며 열기 축적. 가까이 붙어 싸울수록 빨리 달아오른다.
   moveTowards(m, h.x, h.y, 2.4 * spd, dt);
   m.heat += dt * (8.5 + (d < 2.5 ? 5 : 0));
-  if (d < 1.4 && m.swipeCd <= 0) { faceAttack(m, h.x); hitHunter(10); m.swipeCd = 1.5; fx(h.x, h.y, '#c98a3a', 0.5); }
+  if (d < 1.4 && m.swipeCd <= 0) { faceAttack(m, h.x); attackLunge(m, h.x, h.y, 0.12); hitHunter(10); m.swipeCd = 1.5; fx(h.x, h.y, '#c98a3a', 0.5); }
   if (m.heat >= 100) { m.hphase = 'enraged'; m.enrageT = 6; m.enraged = true; addLog('화염 곰이 격노했다! 불길이 치솟는다'); SFX.strong(); shakeScreen(6); flashScreen('rgba(255,90,30,0.4)', 0.25); }
 }
 
@@ -1106,7 +1107,7 @@ function deerTick(m, h, dt, spd) {
   // 도주 저지 직후 25초간 탈진 — 헌터가 따라잡을 수 있는 유일한 시간
   if (m.fleeBlock > 0) spd *= 0.72;
   const d = dist(m, h);
-  if (d < 1.35 && m.kickCd <= 0) { faceAttack(m, h.x); hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
+  if (d < 1.35 && m.kickCd <= 0) { faceAttack(m, h.x); attackLunge(m, h.x, h.y, 0.13); hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
 
   // 방심(off-guard): 주기적으로 멈춰 숨을 고른다 — 유효타 창이자 접근 기회
   if (m.offguard > 0) { m.offguard -= dt; m.moving = false; return; }
@@ -1123,7 +1124,7 @@ function deerTick(m, h, dt, spd) {
     m.counterT -= dt;
     const cx = h.x - m.x, cy = h.y - m.y, cd = Math.hypot(cx, cy) || 1;
     moveSlide(m, cx / cd, cy / cd, 9 * spd, dt);
-    if (d < 1.1 && m.kickCd <= 0) { faceAttack(m, h.x); hitHunter(12); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0', 0.55); }
+    if (d < 1.1 && m.kickCd <= 0) { faceAttack(m, h.x); attackLunge(m, h.x, h.y, 0.14); hitHunter(12); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0', 0.55); }
     return;
   }
   m.counterCd = (m.counterCd == null ? 9 : m.counterCd) - dt;
@@ -1328,7 +1329,7 @@ function logRule(i, msg) {
 function updateHunter(dt) {
   const h = hunt.hunter, m = hunt.monster;
   if (m.state === 'dead' || m.state === 'escaped') return;
-  for (const k of ['basicCd','strongCd','potionCd','lureCd','focusT','invuln','dodgeCd']) if (h[k] > 0) h[k] -= dt;
+  for (const k of ['basicCd','strongCd','potionCd','lureCd','focusT','invuln','dodgeCd','atkT']) if (h[k] > 0) h[k] -= dt;
   if (h.guardT > 0) h.guardT -= dt;
   if (h.hurtT > 0) h.hurtT -= dt;
   h.stam = Math.min(h.maxStam, h.stam + 16 * dt);   // 기력 회복
@@ -1361,6 +1362,7 @@ function runAction(a, slot, dt) {
   if (a === 'strong') {
     if (dist(h, m) > w.range) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
     faceAttack(h, m.x);
+    attackLunge(h, m.x, m.y, 0.18);
     h.stam -= 35;
     const crit = w.special === 'crit' && vulnWindow();
     const dmg = hunterHit(w.strong, w.element, { special: w.special });
@@ -1471,6 +1473,8 @@ const BOLT_RANGE = 6;
 function doBasicAttack(h, m, slot) {
   const w = curWeapon();
   faceAttack(h, m.x);
+  if (w.melee) attackLunge(h, m.x, m.y, 0.15);
+  else attackLunge(h, 2 * h.x - m.x, 2 * h.y - m.y, 0.05);  // 원거리는 살짝 반동
   h.basicCd = (h.focusT > 0 ? w.rate * 0.5 : w.rate);
   if (w.melee) {
     const crit = w.special === 'crit' && vulnWindow();
@@ -1736,6 +1740,11 @@ function faceAttack(e, targetX) {
   if (Math.abs(targetX - e.x) > 0.02) e.flipX = targetX < e.x;
   e.faceLockT = 0.35;
 }
+// 공격 반동: 대상 방향으로 찌르는 오프셋을 켠다 (렌더의 lungeOffset가 사용)
+function attackLunge(e, tx, ty, amt) {
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 1;
+  e.atkDx = dx / d; e.atkDy = dy / d; e.atkT = 0.22; e.atkAmt = amt || 0.13;
+}
 
 // ---------- 스프라이트 (game-icons.net, CC BY 3.0 — 실루엣에 음영·외곽선·그림자 베이킹) ----------
 // 원본 아이콘 경로 데이터 (512 그리드, fill 단색). 아래 iconSprite가 그라디언트·외곽선·드롭섀도우를 입힌다.
@@ -1884,6 +1893,11 @@ function drawSprite(ctx, img, x, y, units, opt) {
   ctx.translate(px + (opt.ox || 0), py - s * 0.28 + (opt.oy || 0));
   if (opt.rock) ctx.rotate(opt.rock);
   if (opt.flip) ctx.scale(-1, 1);
+  if (opt.clipBottom) {  // 하단(원본 다리 영역)을 잘라 절차 다리로 대체
+    ctx.beginPath();
+    ctx.rect(-s, -s / 2 + (opt.bob || 0), 2 * s, s * (1 - opt.clipBottom));
+    ctx.clip();
+  }
   if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 20; }
   ctx.globalAlpha = opt.alpha != null ? opt.alpha : 1;
   ctx.drawImage(img, -s / 2, -s / 2 + (opt.bob || 0), s, s);
@@ -1910,6 +1924,60 @@ function drawShadow(ctx, x, y, r) {
   ctx.beginPath();
   ctx.ellipse(PX(x, y) + 2, PY(x, y) + r * 0.32, r, r * 0.4, 0, 0, 7);
   ctx.fill();
+}
+
+// ---------- 손발 분리 애니메이션 (절차 2본 다리 리그) ----------
+// 실루엣 몸통 아래에 관절 다리를 그려 걷기/딛기 모션을 준다. s=스프라이트 크기(px).
+// clip: 몸통 아래에서 잘라낼 비율(원본 실루엣의 다리를 숨김) / foot: 발이 닿는 지면(중심 아래 s비율)
+const LEGRIG = {
+  boar:   { quad:true,  clip:0.40, foot:0.14, wU:9,  wL:6,   fill:'#5a3820', line:'#1c1008', fX:0.17, bX:0.22 },
+  deer:   { quad:true,  clip:0.46, foot:0.18, wU:5,  wL:3.5, fill:'#7a6238', line:'#3a2f1a', fX:0.16, bX:0.21 },
+  bear:   { quad:true,  clip:0.38, foot:0.12, wU:11, wL:7,   fill:'#3e2c1e', line:'#120b06', fX:0.19, bX:0.23 },
+  hunter: { quad:false, clip:0.37, foot:0.15, wU:7,  wL:5.5, fill:'#39445a', line:'#10151f', sp:0.10 },
+};
+function limbSeg(ctx, ax, ay, bx, by) { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
+function boneLeg(ctx, hx, hy, fx, fy, bend, wU, wL, fill, line) {
+  const mx = (hx + fx) / 2 + bend, my = (hy + fy) / 2;
+  ctx.strokeStyle = line;
+  ctx.lineWidth = wU + 3; limbSeg(ctx, hx, hy, mx, my);
+  ctx.lineWidth = wL + 3; limbSeg(ctx, mx, my, fx, fy);
+  ctx.strokeStyle = fill;
+  ctx.lineWidth = wU; limbSeg(ctx, hx, hy, mx, my);
+  ctx.lineWidth = wL; limbSeg(ctx, mx, my, fx, fy);
+  ctx.fillStyle = line; ctx.beginPath(); ctx.ellipse(fx, fy, wL * 0.95, wL * 0.6, 0, 0, 7); ctx.fill();
+}
+// cx: 몸통 중심 x, hipY: 엉덩이(몸통 아래 절단선) y, footY: 발 지면 y, dir: +1 우향/-1 좌향, t: 위상
+function drawLegs(ctx, kind, s, cx, hipY, footY, dir, moving, t) {
+  const r = LEGRIG[kind];
+  const stride = moving ? s * 0.11 : 0;
+  const lift   = moving ? s * 0.08 : 0;
+  ctx.save(); ctx.lineCap = 'round';
+  function leg(rootX, phase) {
+    const fx = rootX + dir * stride * Math.sin(phase);
+    const fy = footY - Math.max(0, Math.sin(phase)) * lift;
+    boneLeg(ctx, rootX, hipY, fx, fy, dir * s * 0.02, r.wU, r.wL, r.fill, r.line);
+  }
+  if (r.quad) {
+    // 대각선 보행 (트롯): 앞뒤 다리 반대 위상
+    leg(cx + dir * s * r.fX, t + Math.PI);  // 앞다리 (뒤편)
+    leg(cx - dir * s * r.bX, t);            // 뒷다리 (뒤편)
+    leg(cx + dir * s * r.fX, t);            // 앞다리 (앞편)
+    leg(cx - dir * s * r.bX, t + Math.PI);  // 뒷다리 (앞편)
+  } else {
+    leg(cx - s * r.sp, t);
+    leg(cx + s * r.sp, t + Math.PI);
+  }
+  ctx.restore();
+}
+// 리그의 엉덩이 절단선 / 발 지면 화면 y 계산 (드로우스프라이트 앵커 -0.28s 기준)
+function rigHipY(kind, sy, s, oy) { return sy + (oy || 0) - s * 0.28 + s * (0.5 - LEGRIG[kind].clip); }
+function rigFootY(kind, sy, s) { return sy + s * LEGRIG[kind].foot; }
+// 공격 반동 오프셋(픽셀): 대상 방향으로 찔렀다 돌아온다
+function lungeOffset(e, sPx) {
+  if (!e.atkT || e.atkT <= 0) return { x: 0, y: 0 };
+  const p = Math.sin((1 - e.atkT / 0.22) * Math.PI);
+  const amt = (e.atkAmt || 0.13) * sPx * p;
+  return { x: (e.atkDx || 0) * amt, y: -(e.atkDy || 0) * amt };
 }
 
 function drawArena(ctx, huntState) {
@@ -2040,8 +2108,18 @@ function drawArena(ctx, huntState) {
       ctx.restore();
     }
     drawShadow(ctx, m.x, m.y, mFeetR);
-    const wob = m.moving ? Math.sin(m.animT * 11) * 0.05 : 0;
-    const bob = m.moving ? Math.abs(Math.sin(m.animT * 11)) * 3 : 0;
+    const sM = mUnits * PPU * 1.15;
+    const mhp = m.hurtT > 0 ? m.hurtT / 0.18 : 0;
+    const mlg = lungeOffset(m, sM);
+    const mox = (m.hurtDx || 0) * mhp * 9 + mlg.x;
+    const moy = -(m.hurtDy || 0) * mhp * 9 + mlg.y;
+    const mMoving = m.moving && m.state !== 'trapped';
+    // 다리 (몸통 뒤에 먼저 그려 밑에서 딛는 모션이 보이게)
+    drawLegs(ctx, m.def.id, sM, PX(m.x, m.y) + mox,
+      rigHipY(m.def.id, PY(m.x, m.y), sM, moy), rigFootY(m.def.id, PY(m.x, m.y), sM),
+      m.flipX ? -1 : 1, mMoving, m.animT * 10);
+    const wob = mMoving ? Math.sin(m.animT * 11) * 0.03 : 0;
+    const bob = mMoving ? Math.abs(Math.sin(m.animT * 11)) * 2 : 0;
     let glow = null;
     if (m.enraged) glow = 'rgba(255,72,54,0.95)';
     if (isBoar && m.state === 'combat' && (m.bphase === 'aim' || m.bphase === 'charge')) glow = 'rgba(255,130,60,0.9)';
@@ -2049,10 +2127,8 @@ function drawArena(ctx, huntState) {
     if (isBear && m.state === 'combat' && m.hphase === 'overheat') glow = 'rgba(150,175,205,0.75)';
     if (m.offguard > 0) glow = 'rgba(120,200,255,0.85)';
     if (m.def.mut && !glow) glow = m.def.mut.tint;  // 변종 상시 오라
-    const mhp = m.hurtT > 0 ? m.hurtT / 0.18 : 0;
     drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits,
-      { flip: m.flipX, rock: wob, bob: -bob, glow: glow,
-        ox: (m.hurtDx || 0) * mhp * 9, oy: -(m.hurtDy || 0) * mhp * 9,
+      { flip: m.flipX, rock: wob, bob: -bob, glow: glow, ox: mox, oy: moy, clipBottom: LEGRIG[m.def.id].clip,
         flash: mhp > 0 ? { color: m.hurtFlash || '#ffffff', alpha: mhp * 0.75 } : null,
         alpha: m.state === 'trapped' ? 0.85 : 1, fallback: isBoar ? '#6e4526' : isBear ? '#4a3526' : '#b3a06e' });
     // 상태 아이콘 (머리 위)
@@ -2089,15 +2165,23 @@ function drawArena(ctx, huntState) {
 
   function drawHunter() {
     if (!h.ko) drawShadow(ctx, h.x, h.y, 0.55 * PPU);
-    const wob = h.moving ? Math.sin(h.animT * 12) * 0.05 : 0;
-    const bob = h.moving ? Math.abs(Math.sin(h.animT * 12)) * 3 : 0;
+    const sH = 1.7 * PPU * 1.15;
+    const hhp = h.hurtT > 0 ? h.hurtT / 0.18 : 0;
+    const hlg = lungeOffset(h, sH);
+    const hox = (h.hurtDx || 0) * hhp * 8 + hlg.x;
+    const hoy = -(h.hurtDy || 0) * hhp * 8 + hlg.y;
+    const hMoving = h.moving && !h.ko;
+    if (!h.ko) drawLegs(ctx, 'hunter', sH, PX(h.x, h.y) + hox,
+      rigHipY('hunter', PY(h.x, h.y), sH, hoy), rigFootY('hunter', PY(h.x, h.y), sH),
+      h.flipX ? -1 : 1, hMoving, h.animT * 11);
+    const wob = hMoving ? Math.sin(h.animT * 12) * 0.03 : 0;
+    const bob = hMoving ? Math.abs(Math.sin(h.animT * 12)) * 2 : 0;
     let glow = h.focusT > 0 ? 'rgba(201,164,74,0.95)' : null;
     if (h.guardT > 0) glow = 'rgba(120,170,255,0.9)';
     if (h.invuln > 0) glow = 'rgba(190,230,255,0.98)';
-    const hhp = h.hurtT > 0 ? h.hurtT / 0.18 : 0;
     drawSprite(ctx, SPR.hunter, h.x, h.y, 1.7,
       { flip: h.flipX, rock: h.ko ? 1.35 : (h.invuln > 0 ? 0.5 : wob), bob: -bob,
-        ox: (h.hurtDx || 0) * hhp * 8, oy: -(h.hurtDy || 0) * hhp * 8,
+        ox: hox, oy: hoy, clipBottom: h.ko ? 0 : LEGRIG.hunter.clip,
         flash: hhp > 0 ? { color: h.hurtFlash || '#ff5a4a', alpha: hhp * 0.7 } : null,
         alpha: h.ko ? 0.5 : (h.invuln > 0 ? 0.7 : 1), glow: glow, fallback: '#3b5f96' });
     // 방어 태세 방패 호
