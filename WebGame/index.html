@@ -1346,10 +1346,24 @@ function update() {
 }
 
 function moveEntity(e, dx, dy) {
-  const nx = e.x + dx;
-  if (!hitsWall(nx, e.y, e.r)) e.x = nx;
-  const ny = e.y + dy;
-  if (!hitsWall(e.x, ny, e.r)) e.y = ny;
+  // axis-separated move with corner assist: when an axis is blocked at a tile
+  // corner, nudge along the other axis toward the opening so doorways don't snag
+  if (dx !== 0) {
+    if (!hitsWall(e.x + dx, e.y, e.r)) e.x += dx;
+    else {
+      const s = Math.abs(dx) * 0.7;
+      if (!hitsWall(e.x + dx, e.y + e.r * 0.6, e.r) && !hitsWall(e.x, e.y + s, e.r)) e.y += s;
+      else if (!hitsWall(e.x + dx, e.y - e.r * 0.6, e.r) && !hitsWall(e.x, e.y - s, e.r)) e.y -= s;
+    }
+  }
+  if (dy !== 0) {
+    if (!hitsWall(e.x, e.y + dy, e.r)) e.y += dy;
+    else {
+      const s = Math.abs(dy) * 0.7;
+      if (!hitsWall(e.x + e.r * 0.6, e.y + dy, e.r) && !hitsWall(e.x + s, e.y, e.r)) e.x += s;
+      else if (!hitsWall(e.x - e.r * 0.6, e.y + dy, e.r) && !hitsWall(e.x - s, e.y, e.r)) e.x -= s;
+    }
+  }
 }
 function hitsWall(x, y, r) {
   for (let oy = -1; oy <= 1; oy++)
@@ -1373,6 +1387,8 @@ function render() {
   camX = clamp(camX, 0, MAP_W * TILE - W);
   camY = clamp(camY, 0, MAP_H * TILE - H);
   if (screenShake > 0.3) { camX += randRange(-screenShake, screenShake); camY += randRange(-screenShake, screenShake); }
+  // integer camera keeps the pixel grid steady (no subpixel shimmer)
+  camX = Math.round(camX); camY = Math.round(camY);
 
   ctx.save();
   ctx.translate(-camX, -camY);
@@ -1712,8 +1728,18 @@ function resize() {
 addEventListener("resize", resize);
 resize();
 
-function frame() {
-  update();
+// fixed 60Hz simulation decoupled from display refresh: consistent speed on
+// any monitor, and dropped frames catch up in whole steps instead of jerking
+const STEP = 1000 / 60;
+let lastT = performance.now(), acc = 0;
+function frame(now) {
+  let dt = (now ?? performance.now()) - lastT;
+  lastT = now ?? performance.now();
+  if (dt > 100) dt = 100; // returning from a background tab shouldn't fast-forward
+  acc += dt;
+  let steps = 0;
+  while (acc >= STEP && steps < 4) { update(); acc -= STEP; steps++; }
+  if (acc >= STEP) acc = 0; // too far behind — drop the backlog
   if (player) render();
   requestAnimationFrame(frame);
 }
