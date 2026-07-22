@@ -169,7 +169,8 @@
         <div id="place-sel" style="font-size:0.9rem;color:var(--amber);min-height:1.4em"></div>
         <div class="tips">몬스터는 우측에서 배회를 시작한다.
 좌우 끝 초록 지점이 탈출구 — 도주형은 그 길목도 대비하라.
-함정 걸림 상태의 몬스터는 받는 피해 2배.</div>
+함정 걸림 상태는 받는 피해 1.5배. 단, 함정에서 풀린 뒤 6초간은
+함정 내성(흰 점선 링)이 생긴다 — 함정을 한 곳에 몰아두면 낭비다.</div>
       </div>
     </div>
   </section>
@@ -216,12 +217,12 @@
 // ============================== 데이터 (기획서 Docs/GameDesign.md 기준) ==============================
 const DB = {
   monsters: [
-    { id:'boar', name:'멧돼지 왕', maxHp:300, prepGold:800, baseReward:100,
+    { id:'boar', name:'멧돼지 왕', maxHp:450, prepGold:800, baseReward:100,
       fleeAtSeconds:1e9, fleeAtHpPct:-1,
-      desc:'튜토리얼. 2초 조준 후 직선 돌진, 돌진 뒤 3초 경직이 딜 타임.\nHP 30% 이하에서 격노(조준 1초). 도주하지 않는다.\n돌진 경로에 함정을 깔면 쉽게 걸린다.' },
-    { id:'deer', name:'질풍 사슴', maxHp:250, prepGold:1000, baseReward:180,
+      desc:'튜토리얼. 가죽이 단단해 평상시엔 피해가 30%만 들어간다.\n2초 조준 후 직선 돌진 — 함정 뒤에서 유인해 돌진을 함정에 꽂아라.\n돌진 뒤 3초 경직과 함정 걸림이 유효타 시간. HP 30% 이하 격노(조준 1초).' },
+    { id:'deer', name:'질풍 사슴', maxHp:320, prepGold:1000, baseReward:180,
       fleeAtSeconds:90, fleeAtHpPct:0.4,
-      desc:'도주형. 헌터보다 빨라 평타가 닿지 않는다 — 함정 없이는 딜 불가.\n1:30 경과 또는 HP 40% 이하 시 탈출구로 도주 시도.\n미끼로 함정 지대에 유인하고, 속박 덫으로 도주를 저지하라.' },
+      desc:'도주형. 헌터보다 빠르고, 눈에 보이는 함정은 피해 다닌다.\n1:30 경과 또는 HP 40% 이하 시 탈출구로 도주 — 도주 중엔 함정을 못 본다.\n몰아붙여 도주를 강제하고, 탈출구 길목의 속박 덫으로 저지하라. 저지된 사슴은 25초간 탈진해 잡을 수 있다.' },
   ],
   trapName: { snare:'속박 덫', shock:'전격 트랩', spike:'가시 지대' },
   trapPrice: { snare:200, shock:150, spike:100 },
@@ -230,10 +231,10 @@ const DB = {
     { name:'집중 사격', desc:'5초간 공격속도 2배' },
     { name:'긴급 미끼', desc:'맵을 클릭해 몬스터를 그 지점으로 강제 이동 (4초)' },
   ],
-  conds: ['always','myhp50','mhp50','trapped'],
-  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림' },
-  acts: ['basic','strong','potion','lure'],
-  actName: { basic:'평타 지속', strong:'강공격', potion:'회복 물약', lure:'미끼 투척' },
+  conds: ['always','myhp50','mhp50','trapped','window'],
+  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림', window:'빈틈(경직·탈진)' },
+  acts: ['basic','strong','potion','lure','kite'],
+  actName: { basic:'평타 지속', strong:'강공격', potion:'회복 물약', lure:'미끼 투척', kite:'함정 유인' },
 };
 const ARENA_X = 7.5, ARENA_Y = 4.5;
 const GATES = [ {x:-7.2,y:0}, {x:7.2,y:0} ];
@@ -256,8 +257,9 @@ function newRun(mdef) {
     stock: { snare:0, shock:0, spike:0 },
     gambits: [
       { cond:'trapped', act:'strong', on:true },
+      { cond:'window', act:'basic', on:true },
       { cond:'myhp50', act:'potion', on:true },
-      { cond:'always', act:'basic', on:true },
+      { cond:'always', act:'kite', on:true },
     ],
     cardUsed: [false, false, false],
   };
@@ -411,6 +413,7 @@ function startHunt() {
       forceT: 0, fx2: 0, fy2: 0,
       bphase: 'approach', pt: 0, cdx: 0, cdy: 0, cdist: 0, chit: false,
       sprintTimer: 5, sprintLeft: 0, sdx: 0, sdy: 0, kickCd: 0,
+      trapImmune: 0,
       face: Math.PI, animT: 0, moving: false,
     },
     hunter: {
@@ -479,12 +482,14 @@ function updateMonster(dt) {
   if (m.kickCd > 0) m.kickCd -= dt;
   if (m.slowT > 0) m.slowT -= dt;
   if (m.fleeBlock > 0) m.fleeBlock -= dt;
+  if (m.trapImmune > 0) m.trapImmune -= dt;
   const spd = m.slowT > 0 ? 0.7 : 1;
 
   if (m.state === 'trapped') {
     m.trapT -= dt;
     if (m.trapT <= 0) {
       m.state = 'combat';
+      m.trapImmune = 6; // 연쇄 스턴 방지 — 6초간 함정 무시하고 지나간다
       if (m.wasFlee) { m.fleeBlock = 25; m.wasFlee = false; addLog('도주 저지 성공! 몬스터가 지쳐서 느려졌다 (25초)'); }
     }
     return;
@@ -571,9 +576,26 @@ function deerTick(m, h, dt, spd) {
     return;
   }
   if (d < 3.5) {
-    const ax = (m.x - h.x) / (d || 1), ay = (m.y - h.y) / (d || 1);
+    let ax = (m.x - h.x) / (d || 1), ay = (m.y - h.y) / (d || 1);
+    if (m.fleeBlock <= 0) { const st = steerAvoid(m, ax, ay); ax = st.x; ay = st.y; }
     moveSlide(m, ax, ay, 4.5 * spd, dt);
   }
+}
+
+// 사슴의 함정 회피: 진행 방향 앞에 함정이 보이면 반대쪽으로 꺾는다.
+// 탈진 중에는 판단력이 떨어져 회피하지 못한다 — 저지 성공의 보상.
+function steerAvoid(m, dx, dy) {
+  const px = m.x + dx * 1.1, py = m.y + dy * 1.1;
+  for (const t of hunt.traps) {
+    if (!t.armed && t.type !== 'spike') continue;
+    if (Math.hypot(t.x - px, t.y - py) < 1.2) {
+      const cross = dx * (t.y - m.y) - dy * (t.x - m.x);
+      const a = cross > 0 ? -1.1 : 1.1;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      return { x: dx * ca - dy * sa, y: dx * sa + dy * ca };
+    }
+  }
+  return { x: dx, y: dy };
 }
 
 // ---------- 함정 ----------
@@ -586,7 +608,8 @@ function updateTraps(dt) {
       if (d < 1.15) { m.slowT = 0.3; m.hp = Math.max(0, m.hp - 10 * dt); if (m.state === 'wander') m.state = 'combat'; }
       continue;
     }
-    if (!t.armed || m.state === 'trapped') continue;
+    // 함정 내성은 교전 중 연쇄 스턴만 막는다 — 도주 저지는 언제나 가능
+    if (!t.armed || m.state === 'trapped' || (m.trapImmune > 0 && m.state !== 'flee')) continue;
     if (d < 0.7) {
       t.armed = false;
       hunt.lastSpent = t;
@@ -616,13 +639,36 @@ function condTrue(c) {
   if (c === 'always') return true;
   if (c === 'myhp50') return h.hp / h.maxHp < 0.5;
   if (c === 'mhp50') return m.hp / m.def.maxHp < 0.5;
+  if (c === 'window') return vulnWindow();
   return m.state === 'trapped';
+}
+// 유효타 창: 멧돼지 경직(recover), 사슴 탈진(도주 저지 후)
+function vulnWindow() {
+  const m = hunt.monster;
+  if (m.state === 'trapped') return true;
+  if (m.def.id === 'boar') return m.state === 'combat' && m.bphase === 'recover';
+  return m.fleeBlock > 0 && m.state !== 'flee';
+}
+// 헌터 공격의 최종 피해 (함정 걸림 2배, 멧돼지는 빈틈 외 30%)
+function hunterHit(base) {
+  const m = hunt.monster;
+  if (m.state === 'trapped') return base * dmgMult() * 1.5;
+  if (m.def.id === 'boar' && !vulnWindow()) {
+    if (!hunt.armorHint) { hunt.armorHint = true; addLog('가죽이 단단하다! 경직·함정 때만 유효타가 들어간다'); }
+    return base * dmgMult() * 0.3;
+  }
+  return base * dmgMult();
 }
 function canRun(a) {
   const h = hunt.hunter;
   if (a === 'basic') return true;
   if (a === 'strong') return h.strongCd <= 0;
   if (a === 'potion') return h.potionCd <= 0 && run.potions > 0 && h.hp < h.maxHp * 0.95;
+  if (a === 'kite') {
+    // 교전 중에만 — 경계 상태면 아래 줄로 넘어가 접근해서 어그로부터 끈다
+    const m = hunt.monster;
+    return m.state === 'combat' && hunt.traps.some(t => t.armed || t.type === 'spike');
+  }
   return h.lureCd <= 0 && run.lures > 0 && !hunt.lure && hunt.traps.some(t => t.armed || t.type === 'spike');
 }
 function logRule(i, msg) {
@@ -635,6 +681,8 @@ function updateHunter(dt) {
   if (m.state === 'dead' || m.state === 'escaped') return;
   for (const k of ['basicCd','strongCd','potionCd','lureCd','focusT']) if (h[k] > 0) h[k] -= dt;
   h.lastLog += dt;
+
+  h.kiteTarget = null;
 
   if (h.ko) {
     h.koT -= dt;
@@ -656,7 +704,7 @@ function runAction(a, slot, dt) {
   if (a === 'basic') { chaseBasic(slot, dt); return; }
   if (a === 'strong') {
     if (dist(h, m) > 1.4) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
-    const dmg = 60 * dmgMult() * (m.state === 'trapped' ? 2 : 1);
+    const dmg = hunterHit(60);
     m.hp = Math.max(0, m.hp - dmg);
     h.strongCd = 8;
     fx(m.x, m.y, '#ffe14d', 0.7);
@@ -671,6 +719,7 @@ function runAction(a, slot, dt) {
     chaseBasic(-1, dt);
     return;
   }
+  if (a === 'kite') { kiteMove(slot, dt); return; }
   // lure: 몬스터에서 가장 가까운 유효 함정 위로 투척
   run.lures--; h.lureCd = 15;
   let best = null, bd = 1e9;
@@ -683,12 +732,49 @@ function runAction(a, slot, dt) {
   logRule(slot, '미끼 투척 (함정 위로)');
 }
 
+// 함정 유인 지능: 공격형(멧돼지)은 함정 뒤에서 돌진을 유도, 회피형(사슴)은 함정 쪽으로 몰이
+function nearestTrapTo(px, py, saveGateTraps) {
+  let best = null, bd = 1e9, bestAny = null, bdAny = 1e9;
+  for (const t of hunt.traps) {
+    if (!t.armed && t.type !== 'spike') continue;
+    const d = Math.hypot(t.x - px, t.y - py);
+    if (d < bdAny) { bdAny = d; bestAny = t; }
+    // 탈출구 길목의 함정은 도주 저지용으로 아껴둔다 (다른 함정이 있을 때)
+    if (saveGateTraps && GATES.some(g => Math.hypot(t.x - g.x, t.y - g.y) < 2)) continue;
+    if (d < bd) { bd = d; best = t; }
+  }
+  return best || bestAny;
+}
+function kiteMove(slot, dt) {
+  const h = hunt.hunter, m = hunt.monster;
+  const t = nearestTrapTo(m.x, m.y, true);
+  if (!t) return;
+  let tx, ty;
+  if (m.def.id === 'boar') {
+    // 미끼 역할: 함정 너머 1.6유닛 지점에 서서 돌진이 함정을 지나가게 한다
+    const dx = t.x - m.x, dy = t.y - m.y, dd = Math.hypot(dx, dy) || 1;
+    tx = t.x + dx / dd * 1.6; ty = t.y + dy / dd * 1.6;
+  } else {
+    // 몰이: 사슴 기준 함정 반대편 2.8유닛 지점으로 붙어 도망 방향을 함정 쪽으로 만든다
+    const dx = m.x - t.x, dy = m.y - t.y, dd = Math.hypot(dx, dy) || 1;
+    tx = m.x + dx / dd * 2.8; ty = m.y + dy / dd * 2.8;
+  }
+  tx = Math.max(-ARENA_X, Math.min(ARENA_X, tx));
+  ty = Math.max(-ARENA_Y, Math.min(ARENA_Y, ty));
+  h.kiteTarget = { x: tx, y: ty, trap: t };
+  if (Math.hypot(h.x - tx, h.y - ty) > 0.25) moveTowards(h, tx, ty, 3.5, dt);
+  if (h.lastLog > 4) {
+    h.lastLog = 0;
+    logRule(slot, m.def.id === 'boar' ? '함정 뒤에서 돌진 유도 중' : '함정 쪽으로 몰이 중');
+  }
+}
+
 function chaseBasic(slot, dt) {
   const h = hunt.hunter, m = hunt.monster;
   if (dist(h, m) > 1.2) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
   if (h.basicCd <= 0) {
     h.basicCd = h.focusT > 0 ? 0.4 : 0.8;
-    const dmg = 20 * dmgMult() * (m.state === 'trapped' ? 2 : 1);
+    const dmg = hunterHit(20);
     m.hp = Math.max(0, m.hp - dmg);
     fx(m.x, m.y, '#ffffff', 0.35);
     if (m.state === 'wander') m.state = 'combat';
@@ -1007,6 +1093,22 @@ function drawArena(ctx, huntState) {
     ctx.setLineDash([]);
   }
 
+  // 함정 유인 목표 마커
+  if (h.kiteTarget) {
+    const k = h.kiteTarget;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232,163,61,0.45)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(W(ctx, h.x), H(ctx, h.y));
+    ctx.lineTo(W(ctx, k.x), H(ctx, k.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(W(ctx, k.x), H(ctx, k.y), 6, 0, 7); ctx.stroke();
+    ctx.restore();
+  }
+
   // 몬스터
   const isBoar = m.def.id === 'boar';
   const mUnits = isBoar ? 1.9 : 1.55;
@@ -1020,6 +1122,17 @@ function drawArena(ctx, huntState) {
     mGlow = 'rgba(255,130,60,0.9)';
   if (m.state !== 'dead' && m.state !== 'escaped') drawShadow(ctx, m.x, m.y, mr);
   drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits, m.face + mWob, { alpha: mAlpha, glow: mGlow, fallback: isBoar ? '#8a5a33' : '#90c878' });
+
+  // 함정 내성 표시 (흰 점선 링)
+  if (m.trapImmune > 0 && m.state !== 'dead' && m.state !== 'escaped') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(240,240,230,0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath(); ctx.arc(W(ctx, m.x), H(ctx, m.y), mr * 1.12, 0, 7); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
 
   // 함정 걸림: 그물 오버레이
   if (m.state === 'trapped') {
