@@ -910,6 +910,28 @@ function moveTowards(p, tx, ty, speed, dt) {
   clampArena(p);
 }
 function moveDir(p, dx, dy, speed, dt) { p.x += dx * speed * dt; p.y += dy * speed * dt; clampArena(p); }
+
+// 캐릭터·몬스터가 서로 겹치지 않도록 최소 간격을 유지한다 (스프라이트 겹침 방지).
+// 돌진·반격 같은 '밀착 타격'이 필요한 순간에는 겹침을 허용해 타격이 연결되게 둔다.
+const MIN_SEP = 1.2;
+function separateEntities() {
+  const m = hunt.monster, h = hunt.hunter;
+  if (m.state === 'dead' || m.state === 'escaped' || h.ko) return;
+  if (m.def.id === 'boar' && m.bphase === 'charge') return;   // 돌진 관통 허용
+  if (m.def.id === 'deer' && m.counterT > 0) return;          // 반격 돌진 허용
+  let dx = h.x - m.x, dy = h.y - m.y, d = Math.hypot(dx, dy);
+  if (d >= MIN_SEP) return;
+  let ux, uy;
+  if (d < 1e-3) { ux = 1; uy = 0; d = 1e-3; } else { ux = dx / d; uy = dy / d; }
+  const push = MIN_SEP - d;
+  // 함정에 걸렸거나 강제 유인 중인 몬스터는 고정 — 헌터만 밀어낸다
+  if (m.state === 'trapped' || m.forceT > 0) {
+    h.x += ux * push; h.y += uy * push; clampArena(h);
+  } else {
+    h.x += ux * push * 0.5; h.y += uy * push * 0.5; clampArena(h);
+    m.x -= ux * push * 0.5; m.y -= uy * push * 0.5; clampArena(m);
+  }
+}
 // 벽에 막히면 접선으로 미끄러짐 (사슴 구석 완화)
 function moveSlide(p, dx, dy, speed, dt) {
   const bx = p.x, by = p.y;
@@ -1078,7 +1100,7 @@ function deerTick(m, h, dt, spd) {
   // 도주 저지 직후 25초간 탈진 — 헌터가 따라잡을 수 있는 유일한 시간
   if (m.fleeBlock > 0) spd *= 0.72;
   const d = dist(m, h);
-  if (d < 1 && m.kickCd <= 0) { hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
+  if (d < 1.35 && m.kickCd <= 0) { hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
 
   // 방심(off-guard): 주기적으로 멈춰 숨을 고른다 — 유효타 창이자 접근 기회
   if (m.offguard > 0) { m.offguard -= dt; m.moving = false; return; }
@@ -1605,6 +1627,7 @@ function frame(ts) {
     updateTraps(dt);
     updateHunter(dt);
     updateBolts(dt);
+    separateEntities();
     faceTrack(hunt.monster, pm, dt);
     faceTrack(hunt.hunter, ph, dt);
     for (const f of hunt.fx) f.t += dt;
