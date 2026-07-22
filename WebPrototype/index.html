@@ -1,16 +1,16 @@
 <title>헌터의 의뢰 — 프로토타입</title>
 <style>
   :root {
-    --bg: #161310;
-    --panel: #211c15;
-    --panel-2: #1a1611;
-    --line: #3a3227;
-    --text: #e9e2cf;
-    --muted: #a2937e;
-    --amber: #e8a33d;
-    --amber-dim: #a97a34;
-    --danger: #d95050;
-    --good: #7cb56c;
+    --bg: #0d0b09;
+    --panel: #191510;
+    --panel-2: #120f0a;
+    --line: #3b3020;
+    --text: #d9cfb6;
+    --muted: #8d8168;
+    --amber: #c9a44a;
+    --amber-dim: #8d7434;
+    --danger: #b23a30;
+    --good: #6f9e5c;
     --info: #6fa3d9;
     font-size: 15px;
   }
@@ -23,6 +23,11 @@
     min-height: 100vh;
   }
   .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums; }
+  header h1, h2, .r-title, .q-name { font-family: 'Nanum Myeongjo', 'Noto Serif KR', Batang, serif; letter-spacing: 0.02em; }
+  .orb { width: 54px; height: 54px; border-radius: 50%; border: 3px solid #5a4a28; background: #140807;
+         position: relative; overflow: hidden; box-shadow: inset 0 0 12px #000, 0 0 8px rgba(0,0,0,0.6); flex: none; }
+  .orb > i { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; display: block;
+             background: radial-gradient(circle at 50% 25%, #d9534a, #7c1f18 75%); transition: height 0.15s linear; }
 
   #app { max-width: 1160px; margin: 0 auto; padding: 20px 16px 40px; }
 
@@ -39,7 +44,7 @@
   .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; }
 
   button {
-    font: inherit; color: var(--text); background: #2b2418; border: 1px solid var(--line);
+    font: inherit; color: var(--text); background: #221b10; border: 1px solid var(--line);
     border-radius: 3px; padding: 8px 14px; cursor: pointer; text-align: left;
   }
   button:hover:not(:disabled) { border-color: var(--amber-dim); }
@@ -84,7 +89,7 @@
   /* 스테이지 (배치/사냥 공용) */
   .stage-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
   @media (max-width: 980px) { .stage-grid { grid-template-columns: 1fr; } }
-  canvas { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 3px; background: #26221c; }
+  canvas { width: 100%; height: auto; display: block; border: 2px solid #2b2214; border-radius: 2px; background: #0a0806; box-shadow: 0 0 24px rgba(0,0,0,0.8) inset; }
   .rail { display: flex; flex-direction: column; gap: 10px; }
   .rail .tips { font-size: 0.82rem; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; white-space: pre-line; }
 
@@ -181,7 +186,7 @@
       <span class="timer mono" id="h-timer">3:00</span>
       <div class="m-block">
         <div class="m-label"><span id="h-mname"></span><span class="state" id="h-mstate"></span></div>
-        <div class="bar"><i id="h-mbar" style="background:var(--danger);width:100%"></i></div>
+        <div class="bar"><i id="h-mbar" style="background:#a32c26;width:100%"></i></div>
       </div>
       <button id="btn-speed" title="관전 배속">▶ 1x</button>
     </div>
@@ -193,9 +198,12 @@
       </div>
     </div>
     <div class="hunt-bottom">
-      <div class="hunter-block">
-        <div class="m-label"><span id="h-hname">헌터</span><span id="h-hinfo"></span></div>
-        <div class="bar"><i id="h-hbar" style="background:#4a90d9;width:100%"></i></div>
+      <div class="hunter-block" style="display:flex;align-items:center;gap:12px">
+        <div class="orb"><i id="h-orb"></i></div>
+        <div style="flex:1">
+          <div class="m-label"><span id="h-hname">헌터</span><span id="h-hinfo"></span></div>
+          <div class="bar"><i id="h-hbar" style="background:#8c2f26;width:100%"></i></div>
+        </div>
       </div>
       <div class="cards" id="cards"></div>
     </div>
@@ -383,7 +391,10 @@ function canvasWorld(cv, e) {
   const r = cv.getBoundingClientRect();
   const px = (e.clientX - r.left) * (cv.width / r.width);
   const py = (e.clientY - r.top) * (cv.height / r.height);
-  return { x: (px - cv.width/2) / PPU, y: (cv.height/2 - py) / PPU };
+  // 등각 투영 역변환: u = x - y, v = x + y
+  const u = (px - CX) / ISO;
+  const v = (py - CY) / (ISO * 0.5);
+  return { x: (u + v) / 2, y: (v - u) / 2 };
 }
 
 $('cv-place').addEventListener('click', e => {
@@ -967,24 +978,29 @@ function renderHUD() {
   $('h-hinfo').textContent = h.ko ? '기절! 부활까지 ' + h.koT.toFixed(1) + '초'
     : 'HP ' + Math.round(h.hp) + '/' + h.maxHp + ' · 물약 ' + run.potions;
   $('h-hbar').style.width = (h.hp / h.maxHp * 100) + '%';
+  $('h-orb').style.height = (h.hp / h.maxHp * 100) + '%';
   $('lure-hint').textContent = hunt.awaitingLure ? '맵을 클릭해 유인 지점을 지정하라!' : '';
 }
 
-// ============================== 렌더링 ==============================
-const PPU = 52.5; // 픽셀/월드유닛
-function W(cv, x) { return cv.canvas.width / 2 + x * PPU; }
-function H(cv, y) { return cv.canvas.height / 2 - y * PPU; }
+// ============================== 렌더링 (디아블로풍 아이소메트릭 던전) ==============================
+const ISO = 33;            // 유닛당 가로 반폭(px)
+const CX = 420, CY = 252;  // 아레나 원점의 화면 위치
+const WALLH = 44;          // 뒷벽 높이(px)
+
+function PX(x, y) { return CX + (x - y) * ISO; }
+function PY(x, y) { return CY + (x + y) * ISO * 0.5; }
 
 function faceTrack(e, prev, dt) {
   const dx = e.x - prev.x, dy = e.y - prev.y;
   if (Math.hypot(dx, dy) > 1e-4) {
-    e.face = Math.atan2(-dy, dx);
+    const su = dx - dy; // 화면상 좌우 성분
+    if (Math.abs(su) > 0.003) e.flipX = su < 0;
     e.animT = (e.animT || 0) + dt;
     e.moving = true;
   } else e.moving = false;
 }
 
-// ---------- SVG 스프라이트 (외부 파일 없이 내장, 오른쪽을 향한 탑다운 뷰) ----------
+// ---------- SVG 스프라이트 (측면 뷰, 오른쪽을 향함 / 함정·미끼는 탑다운 데칼) ----------
 function sprite(body) {
   const img = new Image();
   img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
@@ -993,71 +1009,73 @@ function sprite(body) {
 }
 
 const SPR = {
-  // 전쟁 멧돼지 왕: 붉은 전투 망토 + 금관
+  // 전쟁 멧돼지 왕 (측면): 갈기·전투 망토·금관·엄니
   boar: sprite(
-    '<path d="M14 64 Q2 54 8 46" stroke="#452a12" stroke-width="5" fill="none" stroke-linecap="round"/>' +
-    '<ellipse cx="56" cy="64" rx="46" ry="35" fill="#6e4526" stroke="#452a12" stroke-width="4"/>' +
-    '<ellipse cx="38" cy="64" rx="27" ry="30" fill="#7e1f1f" stroke="#5a1414" stroke-width="3"/>' +
-    '<ellipse cx="38" cy="64" rx="20" ry="23" fill="none" stroke="#c9a24a" stroke-width="2"/>' +
-    '<ellipse cx="62" cy="64" rx="26" ry="9" fill="#543318"/>' +
-    '<path d="M76 38 L92 28 L95 46 Z" fill="#4a2c12" stroke="#301c0a" stroke-width="2"/>' +
-    '<path d="M76 90 L92 100 L95 82 Z" fill="#4a2c12" stroke="#301c0a" stroke-width="2"/>' +
-    '<circle cx="95" cy="64" r="23" fill="#6e4526" stroke="#452a12" stroke-width="4"/>' +
-    '<ellipse cx="113" cy="64" rx="11" ry="9" fill="#96683f" stroke="#452a12" stroke-width="3"/>' +
-    '<circle cx="116" cy="60" r="2" fill="#452a12"/><circle cx="116" cy="68" r="2" fill="#452a12"/>' +
-    '<path d="M106 48 Q120 34 126 44 Q116 45 111 53 Z" fill="#f2ead8" stroke="#c9bfa4" stroke-width="1.5"/>' +
-    '<path d="M106 80 Q120 94 126 84 Q116 83 111 75 Z" fill="#f2ead8" stroke="#c9bfa4" stroke-width="1.5"/>' +
-    '<circle cx="97" cy="50" r="3.5" fill="#1c0c04"/><circle cx="97" cy="78" r="3.5" fill="#1c0c04"/>' +
-    '<circle cx="95" cy="64" r="13" fill="none" stroke="#d8a63a" stroke-width="4"/>' +
-    '<circle cx="108" cy="64" r="3.5" fill="#f0c04a"/><circle cx="99" cy="76" r="3.5" fill="#f0c04a"/>' +
-    '<circle cx="85" cy="71" r="3.5" fill="#f0c04a"/><circle cx="85" cy="57" r="3.5" fill="#f0c04a"/>' +
-    '<circle cx="99" cy="52" r="3.5" fill="#f0c04a"/>'),
-  // 왕실 사슴: 웅장한 뿔 + 금목걸이
+    '<path d="M14 60 Q4 50 10 42" stroke="#452a12" stroke-width="5" fill="none" stroke-linecap="round"/>' +
+    '<rect x="28" y="94" width="11" height="24" rx="4" fill="#5a3417" stroke="#38200a" stroke-width="2.5"/>' +
+    '<rect x="84" y="94" width="11" height="24" rx="4" fill="#5a3417" stroke="#38200a" stroke-width="2.5"/>' +
+    '<ellipse cx="58" cy="78" rx="45" ry="27" fill="#6e4526" stroke="#452a12" stroke-width="4"/>' +
+    '<rect x="44" y="96" width="11" height="21" rx="4" fill="#6e4526" stroke="#38200a" stroke-width="2.5"/>' +
+    '<rect x="68" y="96" width="11" height="21" rx="4" fill="#6e4526" stroke="#38200a" stroke-width="2.5"/>' +
+    '<path d="M16 66 L24 50 L32 60 L42 46 L52 58 L62 44 L72 56 L82 48 L88 58 L82 68 L28 72 Z" fill="#543318"/>' +
+    '<path d="M14 62 Q6 92 24 104 L42 98 Q32 80 34 62 Z" fill="#7e1f1f" stroke="#5a1414" stroke-width="3"/>' +
+    '<path d="M18 68 Q14 88 26 98" stroke="#c9a24a" stroke-width="2" fill="none"/>' +
+    '<circle cx="94" cy="64" r="23" fill="#6e4526" stroke="#452a12" stroke-width="4"/>' +
+    '<path d="M82 46 L92 32 L98 46 Z" fill="#4a2c12" stroke="#301c0a" stroke-width="2"/>' +
+    '<ellipse cx="114" cy="74" rx="11" ry="9" fill="#96683f" stroke="#452a12" stroke-width="3"/>' +
+    '<circle cx="118" cy="72" r="2" fill="#452a12"/>' +
+    '<path d="M108 82 Q124 86 126 72 Q116 74 110 70 Z" fill="#f2ead8" stroke="#c9bfa4" stroke-width="1.5"/>' +
+    '<circle cx="100" cy="58" r="3.5" fill="#2a0b04"/>' +
+    '<path d="M82 44 L86 28 L93 38 L99 26 L105 38 L112 28 L114 44 Z" fill="#d8a63a" stroke="#9c7420" stroke-width="2"/>' +
+    '<circle cx="89" cy="40" r="2.2" fill="#a32c26"/><circle cx="99" cy="38" r="2.2" fill="#2f5d96"/>' +
+    '<circle cx="108" cy="40" r="2.2" fill="#a32c26"/>'),
+  // 왕실 사슴 (측면): 뿔·금목걸이
   deer: sprite(
-    '<circle cx="22" cy="64" r="8" fill="#f0ead8" stroke="#6d7a4a" stroke-width="2"/>' +
-    '<ellipse cx="54" cy="64" rx="36" ry="21" fill="#b3a06e" stroke="#6d5a38" stroke-width="3.5"/>' +
-    '<ellipse cx="48" cy="64" rx="26" ry="8" fill="#c6b485"/>' +
-    '<circle cx="42" cy="56" r="2.5" fill="#f0ead8"/><circle cx="56" cy="70" r="2.5" fill="#f0ead8"/>' +
-    '<circle cx="62" cy="56" r="2.5" fill="#f0ead8"/>' +
-    '<path d="M86 50 Q76 32 60 24 M80 42 Q66 36 56 40 M82 36 Q84 20 92 12 M74 34 Q66 24 54 22" ' +
-      'stroke="#e0d4ac" stroke-width="4.5" fill="none" stroke-linecap="round"/>' +
-    '<path d="M86 78 Q76 96 60 104 M80 86 Q66 92 56 88 M82 92 Q84 108 92 116 M74 94 Q66 104 54 106" ' +
-      'stroke="#e0d4ac" stroke-width="4.5" fill="none" stroke-linecap="round"/>' +
-    '<circle cx="84" cy="64" r="10" fill="none" stroke="#d8a63a" stroke-width="4"/>' +
-    '<circle cx="93" cy="64" r="14" fill="#b3a06e" stroke="#6d5a38" stroke-width="3.5"/>' +
-    '<ellipse cx="105" cy="64" rx="7" ry="5.5" fill="#c9ba8c" stroke="#6d5a38" stroke-width="3"/>' +
-    '<circle cx="110" cy="64" r="2.5" fill="#3d2f1c"/>' +
-    '<circle cx="96" cy="56" r="3" fill="#1c1008"/><circle cx="96" cy="72" r="3" fill="#1c1008"/>'),
-  // 왕국 사냥 기사: 투구 + 깃털 장식 + 석궁 + 망토
+    '<circle cx="24" cy="66" r="7" fill="#f0ead8" stroke="#6d5a38" stroke-width="2"/>' +
+    '<rect x="34" y="86" width="7" height="30" rx="3" fill="#8d7a4c" stroke="#5c4c28" stroke-width="2"/>' +
+    '<rect x="84" y="86" width="7" height="30" rx="3" fill="#8d7a4c" stroke="#5c4c28" stroke-width="2"/>' +
+    '<ellipse cx="60" cy="76" rx="37" ry="21" fill="#b3a06e" stroke="#6d5a38" stroke-width="3.5"/>' +
+    '<rect x="50" y="90" width="7" height="26" rx="3" fill="#b3a06e" stroke="#5c4c28" stroke-width="2"/>' +
+    '<rect x="70" y="90" width="7" height="26" rx="3" fill="#b3a06e" stroke="#5c4c28" stroke-width="2"/>' +
+    '<circle cx="48" cy="64" r="2.5" fill="#f0ead8"/><circle cx="62" cy="70" r="2.5" fill="#f0ead8"/>' +
+    '<circle cx="70" cy="62" r="2.5" fill="#f0ead8"/>' +
+    '<path d="M80 68 L96 30 L110 36 L96 76 Z" fill="#b3a06e" stroke="#6d5a38" stroke-width="3"/>' +
+    '<circle cx="104" cy="32" r="11" fill="#b3a06e" stroke="#6d5a38" stroke-width="3"/>' +
+    '<ellipse cx="114" cy="36" rx="6" ry="5" fill="#c9ba8c" stroke="#6d5a38" stroke-width="2.5"/>' +
+    '<circle cx="117" cy="35" r="2" fill="#3d2f1c"/>' +
+    '<circle cx="106" cy="28" r="2.6" fill="#1c1008"/>' +
+    '<path d="M100 22 Q94 6 82 2 M100 20 Q108 4 120 2 M98 14 Q88 10 80 14 M102 12 Q112 8 122 12" ' +
+      'stroke="#e0d4ac" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+    '<path d="M86 62 L102 52" stroke="#d8a63a" stroke-width="5" stroke-linecap="round"/>'),
+  // 왕국 사냥 기사 (측면): 투구·깃털·석궁·망토
   hunter: sprite(
-    '<ellipse cx="34" cy="64" rx="24" ry="28" fill="#253550" stroke="#17233a" stroke-width="3.5"/>' +
-    '<rect x="22" y="48" width="13" height="30" rx="4" fill="#5d3a1e" stroke="#3c250f" stroke-width="2.5" transform="rotate(-15 28 63)"/>' +
-    '<line x1="27" y1="48" x2="24" y2="37" stroke="#c7a06a" stroke-width="3"/>' +
-    '<line x1="33" y1="48" x2="32" y2="36" stroke="#c7a06a" stroke-width="3"/>' +
-    '<ellipse cx="58" cy="64" rx="34" ry="29" fill="#3b5f96" stroke="#223f66" stroke-width="4"/>' +
-    '<ellipse cx="58" cy="64" rx="26" ry="21" fill="none" stroke="#c9a24a" stroke-width="2"/>' +
-    '<circle cx="52" cy="38" r="9" fill="#8e97a3" stroke="#5c646e" stroke-width="3"/>' +
-    '<circle cx="52" cy="90" r="9" fill="#8e97a3" stroke="#5c646e" stroke-width="3"/>' +
-    '<path d="M70 50 Q52 28 38 32 Q56 42 66 56 Z" fill="#a83030" stroke="#7c2020" stroke-width="2"/>' +
-    '<circle cx="82" cy="64" r="19" fill="#9aa2ac" stroke="#6a727c" stroke-width="4"/>' +
-    '<line x1="82" y1="47" x2="82" y2="81" stroke="#6a727c" stroke-width="3"/>' +
-    '<line x1="86" y1="64" x2="122" y2="64" stroke="#5d3a1e" stroke-width="5" stroke-linecap="round"/>' +
-    '<path d="M110 44 Q126 64 110 84" stroke="#7a5a30" stroke-width="5" fill="none" stroke-linecap="round"/>' +
-    '<line x1="110" y1="44" x2="110" y2="84" stroke="#d8d3c2" stroke-width="1.5"/>' +
-    '<path d="M120 58 L128 64 L120 70 Z" fill="#d8d3c2"/>'),
-  // 속박 덫: 쇠 이빨 덫 (기존 유지, 철 느낌 강화)
+    '<path d="M48 54 Q34 84 44 112 L56 108 Q48 82 54 58 Z" fill="#253550" stroke="#17233a" stroke-width="3"/>' +
+    '<rect x="55" y="92" width="10" height="26" rx="3" fill="#3a3f4a" stroke="#22262e" stroke-width="2.5"/>' +
+    '<rect x="69" y="92" width="10" height="26" rx="3" fill="#3a3f4a" stroke="#22262e" stroke-width="2.5"/>' +
+    '<ellipse cx="66" cy="72" rx="21" ry="26" fill="#3b5f96" stroke="#223f66" stroke-width="4"/>' +
+    '<line x1="66" y1="50" x2="66" y2="96" stroke="#c9a24a" stroke-width="2"/>' +
+    '<circle cx="54" cy="56" r="8" fill="#8e97a3" stroke="#5c646e" stroke-width="3"/>' +
+    '<circle cx="66" cy="40" r="15" fill="#9aa2ac" stroke="#6a727c" stroke-width="3.5"/>' +
+    '<line x1="72" y1="36" x2="78" y2="42" stroke="#3a3f4a" stroke-width="3"/>' +
+    '<path d="M58 28 Q46 10 34 14 Q48 22 54 36 Z" fill="#a83030" stroke="#7c2020" stroke-width="2"/>' +
+    '<circle cx="84" cy="66" r="7" fill="#8e97a3" stroke="#5c646e" stroke-width="2.5"/>' +
+    '<line x1="76" y1="66" x2="118" y2="66" stroke="#5d3a1e" stroke-width="5" stroke-linecap="round"/>' +
+    '<path d="M108 48 Q124 66 108 84" stroke="#7a5a30" stroke-width="5" fill="none" stroke-linecap="round"/>' +
+    '<line x1="108" y1="48" x2="108" y2="84" stroke="#d8d3c2" stroke-width="1.5"/>' +
+    '<path d="M118 61 L128 66 L118 71 Z" fill="#d8d3c2"/>'),
+  // 속박 덫 (바닥 데칼)
   snare: sprite(
     '<circle cx="64" cy="64" r="44" fill="rgba(50,36,16,0.45)" stroke="#cf9a3d" stroke-width="7"/>' +
     '<circle cx="64" cy="64" r="33" fill="none" stroke="#e0b25a" stroke-width="11" stroke-dasharray="7 9"/>' +
     '<circle cx="64" cy="64" r="13" fill="#6b5228" stroke="#452e12" stroke-width="3"/>' +
     '<circle cx="64" cy="64" r="5" fill="#452e12"/>'),
-  // 마비 룬: 마법진
+  // 마비 룬 (바닥 데칼)
   shock: sprite(
     '<circle cx="64" cy="64" r="42" fill="#121a2c" stroke="#6fa3d9" stroke-width="4"/>' +
     '<circle cx="64" cy="64" r="33" fill="none" stroke="#3d6a9c" stroke-width="2.5" stroke-dasharray="6 7"/>' +
     '<path d="M64 32 L83 90 L34 54 L94 54 L45 90 Z" fill="none" stroke="#9fd0f5" stroke-width="3" stroke-linejoin="round"/>' +
     '<circle cx="64" cy="64" r="5" fill="#9fd0f5"/>'),
-  // 가시 지대: 마름쇠(캘트롭) 살포지
+  // 마름쇠 (바닥 데칼)
   spike: sprite(
     '<circle cx="64" cy="64" r="60" fill="rgba(150,60,44,0.18)" stroke="rgba(150,60,44,0.55)" stroke-width="3"/>' +
     '<g stroke="#8a8578" stroke-width="4" stroke-linecap="round">' +
@@ -1069,7 +1087,7 @@ const SPR = {
     '<path d="M74 92 L86 104 M86 92 L74 104 M80 90 L80 106"/></g>' +
     '<g fill="#3a352c"><circle cx="40" cy="44" r="3"/><circle cx="84" cy="36" r="3"/><circle cx="58" cy="72" r="3"/>' +
     '<circle cx="94" cy="68" r="3"/><circle cx="42" cy="94" r="3"/><circle cx="80" cy="98" r="3"/></g>'),
-  // 미끼: 고기
+  // 미끼 (바닥 데칼)
   lure: sprite(
     '<rect x="14" y="57" width="100" height="12" rx="6" fill="#efe8d8" stroke="#c9bfa4" stroke-width="2"/>' +
     '<circle cx="18" cy="56" r="8" fill="#efe8d8"/><circle cx="18" cy="72" r="8" fill="#efe8d8"/>' +
@@ -1079,157 +1097,240 @@ const SPR = {
 };
 
 const TRAP_SPR = { snare: 'snare', shock: 'shock', spike: 'spike' };
+const TORCHES = [[-7.5, -2.2], [-7.5, 2.2], [-3.5, -4.5], [1, -4.5], [5.5, -4.5]];
 
-// 성 안뜰 석판 바닥 — 한 번만 오프스크린에 그려두고 매 프레임 복사한다
+// 던전 정적 배경 프리렌더: 석판 다이아몬드 타일 + 균열·핏자국·뼈 + 뒷벽 + 성문
 let animClock = 0;
 let groundCanvas = null;
-function buildGround() {
+function buildDungeon() {
   const cv = document.createElement('canvas');
   cv.width = 840; cv.height = 520;
   const g = cv.getContext('2d');
-  g.fillStyle = '#26221c';
+  g.fillStyle = '#070605';
   g.fillRect(0, 0, 840, 520);
-  for (let r = 0; r < 13; r++) {
-    for (let c = -1; c < 19; c++) {
-      const x = c * 47 - (r % 2) * 23 + (Math.random() * 4 - 2);
-      const y = r * 43 + (Math.random() * 3 - 1.5);
-      const shade = 34 + Math.floor(Math.random() * 13);
-      g.fillStyle = 'rgb(' + (shade + 8) + ',' + (shade + 3) + ',' + (shade - 4) + ')';
-      g.fillRect(x, y, 43 + Math.random() * 4, 39 + Math.random() * 3);
-      g.strokeStyle = 'rgba(12,10,6,0.5)';
-      g.lineWidth = 2;
-      g.strokeRect(x, y, 44, 40);
+
+  // 바닥 타일 (1유닛 다이아몬드)
+  for (let ty = -4.5; ty < 4.5; ty += 1) {
+    for (let tx = -7.5; tx < 7.5; tx += 1) {
+      const s = 26 + Math.floor(Math.random() * 12);
+      g.fillStyle = 'rgb(' + (s + 5) + ',' + (s + 1) + ',' + (s - 3) + ')';
+      g.beginPath();
+      g.moveTo(PX(tx, ty), PY(tx, ty));
+      g.lineTo(PX(tx + 1, ty), PY(tx + 1, ty));
+      g.lineTo(PX(tx + 1, ty + 1), PY(tx + 1, ty + 1));
+      g.lineTo(PX(tx, ty + 1), PY(tx, ty + 1));
+      g.closePath();
+      g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.5)';
+      g.lineWidth = 1.5;
+      g.stroke();
     }
   }
-  // 세월의 얼룩
-  for (let i = 0; i < 26; i++) {
-    g.fillStyle = 'rgba(10,8,4,' + (0.05 + Math.random() * 0.09) + ')';
+  // 핏자국
+  for (let i = 0; i < 9; i++) {
+    const x = (Math.random() * 2 - 1) * 6.5, y = (Math.random() * 2 - 1) * 3.6;
+    g.fillStyle = 'rgba(88,12,8,' + (0.16 + Math.random() * 0.16) + ')';
     g.beginPath();
-    g.arc(Math.random() * 840, Math.random() * 520, 18 + Math.random() * 42, 0, 7);
+    g.ellipse(PX(x, y), PY(x, y), 14 + Math.random() * 22, 7 + Math.random() * 11, Math.random(), 0, 7);
     g.fill();
   }
-  const grad = g.createRadialGradient(420, 260, 140, 420, 260, 540);
+  // 뼈 무더기
+  g.strokeStyle = 'rgba(200,188,158,0.5)';
+  g.lineWidth = 2.5;
+  for (let i = 0; i < 7; i++) {
+    const x = (Math.random() * 2 - 1) * 6.5, y = (Math.random() * 2 - 1) * 3.6;
+    const bx = PX(x, y), by = PY(x, y);
+    g.beginPath();
+    g.moveTo(bx - 7, by - 3); g.lineTo(bx + 7, by + 3);
+    g.moveTo(bx - 5, by + 4); g.lineTo(bx + 6, by - 4);
+    g.stroke();
+    g.fillStyle = 'rgba(200,188,158,0.5)';
+    g.beginPath(); g.arc(bx + 8, by + 3, 2.5, 0, 7); g.fill();
+  }
+  // 균열
+  g.strokeStyle = 'rgba(0,0,0,0.55)';
+  g.lineWidth = 1.5;
+  for (let i = 0; i < 8; i++) {
+    let x = (Math.random() * 2 - 1) * 6.5, y = (Math.random() * 2 - 1) * 3.6;
+    g.beginPath();
+    g.moveTo(PX(x, y), PY(x, y));
+    for (let k = 0; k < 4; k++) {
+      x += (Math.random() - 0.5) * 1.4; y += (Math.random() - 0.5) * 1.4;
+      g.lineTo(PX(x, y), PY(x, y));
+    }
+    g.stroke();
+  }
+
+  // 뒷벽 2면 (화면 위쪽 두 모서리): x=-7.5 면과 y=-4.5 면
+  function wallFace(x0, y0, x1, y1, base) {
+    const p0x = PX(x0, y0), p0y = PY(x0, y0);
+    const p1x = PX(x1, y1), p1y = PY(x1, y1);
+    g.fillStyle = base;
+    g.beginPath();
+    g.moveTo(p0x, p0y); g.lineTo(p1x, p1y);
+    g.lineTo(p1x, p1y - WALLH); g.lineTo(p0x, p0y - WALLH);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.6)';
+    g.lineWidth = 2;
+    g.stroke();
+    // 돌 블록 이음새
+    g.strokeStyle = 'rgba(0,0,0,0.4)';
+    g.lineWidth = 1.5;
+    for (let t = 0.08; t < 1; t += 0.09) {
+      const mx = p0x + (p1x - p0x) * t, my = p0y + (p1y - p0y) * t;
+      g.beginPath(); g.moveTo(mx, my); g.lineTo(mx, my - WALLH); g.stroke();
+    }
+    g.beginPath();
+    g.moveTo(p0x, p0y - WALLH * 0.5); g.lineTo(p1x, p1y - WALLH * 0.5);
+    g.stroke();
+    // 상단 모서리 하이라이트
+    g.strokeStyle = 'rgba(120,104,74,0.5)';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(p0x, p0y - WALLH); g.lineTo(p1x, p1y - WALLH); g.stroke();
+  }
+  wallFace(-7.5, 4.5, -7.5, -4.5, '#1c1712'); // 왼뒤 (어두운 면)
+  wallFace(-7.5, -4.5, 7.5, -4.5, '#262019'); // 오른뒤 (밝은 면)
+
+  // 왼뒤 벽의 성문 아치 (월드 (-7.5, 0) 부근)
+  const gx = PX(-7.5, 0), gy = PY(-7.5, 0);
+  g.fillStyle = '#0a0806';
+  g.beginPath();
+  g.moveTo(gx - 16, gy + 4);
+  g.lineTo(gx - 16, gy - WALLH + 16);
+  g.quadraticCurveTo(gx, gy - WALLH - 2, gx + 16, gy - WALLH + 16);
+  g.lineTo(gx + 16, gy + 12);
+  g.closePath();
+  g.fill();
+  g.strokeStyle = '#3b3020';
+  g.lineWidth = 3;
+  g.stroke();
+
+  // 오른앞 탈출구 기둥 (월드 (7.5, 0) 부근)
+  const hx = PX(7.5, 0), hy = PY(7.5, 0);
+  g.fillStyle = '#241d13';
+  g.fillRect(hx - 22, hy - 34, 9, 38);
+  g.fillRect(hx + 13, hy - 34, 9, 38);
+  g.strokeStyle = 'rgba(0,0,0,0.6)';
+  g.strokeRect(hx - 22, hy - 34, 9, 38);
+  g.strokeRect(hx + 13, hy - 34, 9, 38);
+
+  // 앞쪽 낮은 난간
+  g.strokeStyle = '#1a1510';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.moveTo(PX(-7.5, 4.5), PY(-7.5, 4.5));
+  g.lineTo(PX(7.5, 4.5), PY(7.5, 4.5));
+  g.lineTo(PX(7.5, -4.5), PY(7.5, -4.5));
+  g.stroke();
+
+  // 횃불 받침
+  g.fillStyle = '#3b2c14';
+  for (const t of TORCHES) {
+    const tx = PX(t[0], t[1]), ty = PY(t[0], t[1]) - WALLH * 0.45;
+    g.fillRect(tx - 2.5, ty, 5, 12);
+  }
+
+  // 비네트 (디아블로식 어둠)
+  const grad = g.createRadialGradient(420, 250, 110, 420, 250, 520);
   grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.5)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.62)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 840, 520);
   return cv;
 }
 
-function drawSprite(ctx, img, x, y, units, angle, opt) {
+function drawSprite(ctx, img, x, y, units, opt) {
   opt = opt || {};
+  const px = PX(x, y), py = PY(x, y);
+  const s = units * ISO * 1.9;
   if (!img.complete || img.naturalWidth === 0) {
     ctx.fillStyle = opt.fallback || '#888';
-    ctx.beginPath(); ctx.arc(W(ctx, x), H(ctx, y), units * PPU * 0.4, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px, py - s * 0.3, s * 0.3, s * 0.4, 0, 0, 7); ctx.fill();
     return;
   }
-  const s = units * PPU;
   ctx.save();
-  ctx.translate(W(ctx, x), H(ctx, y));
-  ctx.rotate(angle || 0);
-  if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 22; }
+  ctx.translate(px, py + 4);
+  if (opt.rock) ctx.rotate(opt.rock);
+  if (opt.flip) ctx.scale(-1, 1);
+  if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 20; }
   ctx.globalAlpha = opt.alpha != null ? opt.alpha : 1;
-  ctx.drawImage(img, -s / 2, -s / 2, s, s);
+  ctx.drawImage(img, -s / 2, -s + (opt.bob || 0), s, s);
   ctx.restore();
 }
 
+function drawDecal(ctx, img, x, y, dUnits, alpha) {
+  if (!img.complete || img.naturalWidth === 0) return;
+  const w = dUnits * ISO * 1.5;
+  const h = w * 0.52;
+  ctx.globalAlpha = alpha != null ? alpha : 1;
+  ctx.drawImage(img, PX(x, y) - w / 2, PY(x, y) - h / 2, w, h);
+  ctx.globalAlpha = 1;
+}
+
 function drawShadow(ctx, x, y, r) {
-  ctx.fillStyle = 'rgba(0,0,0,0.32)';
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.beginPath();
-  ctx.ellipse(W(ctx, x), H(ctx, y) + r * 0.55, r, r * 0.45, 0, 0, 7);
+  ctx.ellipse(PX(x, y), PY(x, y) + 3, r, r * 0.42, 0, 0, 7);
   ctx.fill();
 }
 
 function drawArena(ctx, huntState) {
   const cw = ctx.canvas.width, ch = ctx.canvas.height;
   ctx.clearRect(0, 0, cw, ch);
-
-  // 석판 바닥
-  if (!groundCanvas) groundCanvas = buildGround();
+  if (!groundCanvas) groundCanvas = buildDungeon();
   ctx.drawImage(groundCanvas, 0, 0);
 
-  // 성벽 (돌 블록 테두리)
-  const bx = W(ctx, -ARENA_X) - 12, by = H(ctx, ARENA_Y) - 12;
-  const bw = ARENA_X * 2 * PPU + 24, bh = ARENA_Y * 2 * PPU + 24;
-  ctx.strokeStyle = '#4a4336';
-  ctx.lineWidth = 12;
-  ctx.strokeRect(bx, by, bw, bh);
-  ctx.strokeStyle = '#2b251b';
-  ctx.lineWidth = 2;
-  // 돌 블록 이음새
-  ctx.beginPath();
-  for (let x = bx; x < bx + bw; x += 42) {
-    ctx.moveTo(x, by - 6); ctx.lineTo(x, by + 6);
-    ctx.moveTo(x, by + bh - 6); ctx.lineTo(x, by + bh + 6);
-  }
-  for (let y = by; y < by + bh; y += 42) {
-    ctx.moveTo(bx - 6, y); ctx.lineTo(bx + 6, y);
-    ctx.moveTo(bx + bw - 6, y); ctx.lineTo(bx + bw + 6, y);
-  }
-  ctx.stroke();
-
-  // 횃불 (성벽 위, 일렁이는 불빛)
-  const torches = [[-4, 4.62], [4, 4.62], [-4, -4.62], [4, -4.62]];
-  for (let i = 0; i < torches.length; i++) {
-    const tx = W(ctx, torches[i][0]), ty = H(ctx, torches[i][1]);
-    const fl = 1 + Math.sin(animClock * 11 + i * 1.7) * 0.18;
-    const glow = ctx.createRadialGradient(tx, ty, 2, tx, ty, 34 * fl);
-    glow.addColorStop(0, 'rgba(240,170,60,' + (0.34 * fl) + ')');
-    glow.addColorStop(1, 'rgba(240,170,60,0)');
+  // 횃불 불꽃 (일렁임)
+  for (let i = 0; i < TORCHES.length; i++) {
+    const tx = PX(TORCHES[i][0], TORCHES[i][1]);
+    const ty = PY(TORCHES[i][0], TORCHES[i][1]) - WALLH * 0.45;
+    const fl = 1 + Math.sin(animClock * 11 + i * 1.7) * 0.2;
+    const glow = ctx.createRadialGradient(tx, ty, 2, tx, ty, 40 * fl);
+    glow.addColorStop(0, 'rgba(235,160,52,' + (0.32 * fl) + ')');
+    glow.addColorStop(1, 'rgba(235,160,52,0)');
     ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(tx, ty, 34 * fl, 0, 7); ctx.fill();
-    ctx.fillStyle = '#5d3a1e';
-    ctx.fillRect(tx - 2, ty - 2, 4, 9);
+    ctx.beginPath(); ctx.arc(tx, ty, 40 * fl, 0, 7); ctx.fill();
     ctx.fillStyle = '#e8862d';
-    ctx.beginPath(); ctx.arc(tx, ty - 4, 4.5 * fl, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(tx, ty - 3, 4.5 * fl, 0, 7); ctx.fill();
     ctx.fillStyle = '#f7cf6e';
-    ctx.beginPath(); ctx.arc(tx, ty - 5, 2.2 * fl, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(tx, ty - 4, 2.2 * fl, 0, 7); ctx.fill();
   }
 
-  // 성문(탈출구): 나무 문 + 쇠 장식, 열린 문틈의 초록 들판 빛
-  for (const g of GATES) {
-    const gx = W(ctx, g.x + (g.x < 0 ? -0.42 : 0.42));
-    const gy = H(ctx, g.y);
-    ctx.save();
-    ctx.shadowColor = 'rgba(120,220,130,0.8)';
-    ctx.shadowBlur = 14;
-    ctx.fillStyle = 'rgba(96,180,96,0.85)';
-    ctx.fillRect(gx - 4, gy - 47, 8, 94);
-    ctx.restore();
-    ctx.fillStyle = '#4f3418';
-    ctx.fillRect(gx - 8, gy - 50, 5, 100);
-    ctx.fillRect(gx + 3, gy - 50, 5, 100);
-    ctx.fillStyle = '#2b251b';
-    for (let k = -1; k <= 1; k++) {
-      ctx.fillRect(gx - 9, gy + k * 34 - 2, 7, 4);
-      ctx.fillRect(gx + 2, gy + k * 34 - 2, 7, 4);
-    }
+  // 탈출구 초록 빛 (게임플레이 신호)
+  const pulse = 0.7 + 0.3 * Math.sin(animClock * 3);
+  for (const gpos of GATES) {
+    const gx2 = PX(gpos.x + (gpos.x < 0 ? -0.3 : 0.3), gpos.y);
+    const gy2 = PY(gpos.x + (gpos.x < 0 ? -0.3 : 0.3), gpos.y);
+    const glow = ctx.createRadialGradient(gx2, gy2, 3, gx2, gy2, 34);
+    glow.addColorStop(0, 'rgba(96,200,110,' + (0.45 * pulse) + ')');
+    glow.addColorStop(1, 'rgba(96,200,110,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.ellipse(gx2, gy2, 34, 20, 0, 0, 7); ctx.fill();
   }
 
-  // 함정
+  // 함정·미끼 데칼
   const traps = huntState ? huntState.traps : placedTraps;
   for (const t of traps) {
-    if (t.rot == null) t.rot = Math.random() * 6.28;
     const units = t.type === 'spike' ? 2.4 : 0.95;
     const alpha = (t.armed || t.type === 'spike') ? 1 : 0.25;
-    drawSprite(ctx, SPR[TRAP_SPR[t.type]], t.x, t.y, units, t.rot, { alpha });
+    drawDecal(ctx, SPR[TRAP_SPR[t.type]], t.x, t.y, units, alpha);
   }
 
   if (!huntState) return;
   const m = huntState.monster, h = huntState.hunter;
 
-  // 미끼
   if (huntState.lure)
-    drawSprite(ctx, SPR.lure, huntState.lure.x, huntState.lure.y, 0.55, 0.6, {});
+    drawDecal(ctx, SPR.lure, huntState.lure.x, huntState.lure.y, 0.7);
 
   // 멧돼지 조준선
   if (m.def.id === 'boar' && m.state === 'combat' && m.bphase === 'aim') {
-    ctx.strokeStyle = 'rgba(224,82,82,0.55)';
+    ctx.strokeStyle = 'rgba(200,60,50,0.6)';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([7, 7]);
     ctx.beginPath();
-    ctx.moveTo(W(ctx, m.x), H(ctx, m.y));
-    ctx.lineTo(W(ctx, h.x), H(ctx, h.y));
+    ctx.moveTo(PX(m.x, m.y), PY(m.x, m.y));
+    ctx.lineTo(PX(h.x, h.y), PY(h.x, h.y));
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -1238,86 +1339,105 @@ function drawArena(ctx, huntState) {
   if (h.kiteTarget) {
     const k = h.kiteTarget;
     ctx.save();
-    ctx.strokeStyle = 'rgba(232,163,61,0.45)';
+    ctx.strokeStyle = 'rgba(201,164,74,0.5)';
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 5]);
     ctx.beginPath();
-    ctx.moveTo(W(ctx, h.x), H(ctx, h.y));
-    ctx.lineTo(W(ctx, k.x), H(ctx, k.y));
+    ctx.moveTo(PX(h.x, h.y), PY(h.x, h.y));
+    ctx.lineTo(PX(k.x, k.y), PY(k.x, k.y));
     ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(PX(k.x, k.y), PY(k.x, k.y), 8, 4.5, 0, 0, 7); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(W(ctx, k.x), H(ctx, k.y), 6, 0, 7); ctx.stroke();
     ctx.restore();
   }
 
-  // 몬스터
+  // 유닛 그리기 (화면 y 정렬 — 페인터 알고리즘)
   const isBoar = m.def.id === 'boar';
-  const mUnits = isBoar ? 1.9 : 1.55;
-  const mr = mUnits * PPU * 0.42;
-  const mWob = m.moving ? Math.sin(m.animT * 11) * 0.08 : 0;
-  let mAlpha = 1, mGlow = null;
-  if (m.state === 'escaped') mAlpha = 0.22;
-  if (m.state === 'dead') mAlpha = 0.45;
-  if (m.enraged && m.state !== 'dead' && m.state !== 'escaped') mGlow = 'rgba(255,72,54,0.95)';
-  if (isBoar && m.state === 'combat' && (m.bphase === 'aim' || m.bphase === 'charge'))
-    mGlow = 'rgba(255,130,60,0.9)';
-  if (m.state !== 'dead' && m.state !== 'escaped') drawShadow(ctx, m.x, m.y, mr);
-  drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits, m.face + mWob, { alpha: mAlpha, glow: mGlow, fallback: isBoar ? '#8a5a33' : '#90c878' });
+  const mUnits = isBoar ? 1.9 : 1.7;
+  const mFeetR = mUnits * ISO * 0.42;
 
-  // 함정 내성 표시 (흰 점선 링)
-  if (m.trapImmune > 0 && m.state !== 'dead' && m.state !== 'escaped') {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(240,240,230,0.5)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 6]);
-    ctx.beginPath(); ctx.arc(W(ctx, m.x), H(ctx, m.y), mr * 1.12, 0, 7); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
-
-  // 함정 걸림: 그물 오버레이
-  if (m.state === 'trapped') {
-    const mx = W(ctx, m.x), my = H(ctx, m.y);
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.strokeStyle = '#caa14f';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(mx, my, mr * 0.95, 0, 7); ctx.stroke();
-    ctx.lineWidth = 2;
-    for (let k = -1; k <= 1; k++) {
-      ctx.beginPath(); ctx.moveTo(mx - mr, my + k * mr * 0.5); ctx.lineTo(mx + mr, my + k * mr * 0.5); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(mx + k * mr * 0.5, my - mr); ctx.lineTo(mx + k * mr * 0.5, my + mr); ctx.stroke();
+  function drawMonster() {
+    if (m.state === 'dead' || m.state === 'escaped') {
+      drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits,
+        { alpha: m.state === 'dead' ? 0.4 : 0.18, flip: m.flipX, fallback: '#6e4526' });
+      return;
     }
-    ctx.restore();
+    // 함정 내성: 발밑 흰 점선 링
+    if (m.trapImmune > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(235,230,215,0.5)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 6]);
+      ctx.beginPath();
+      ctx.ellipse(PX(m.x, m.y), PY(m.x, m.y) + 2, mFeetR * 1.25, mFeetR * 0.55, 0, 0, 7);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    drawShadow(ctx, m.x, m.y, mFeetR);
+    const wob = m.moving ? Math.sin(m.animT * 11) * 0.05 : 0;
+    const bob = m.moving ? Math.abs(Math.sin(m.animT * 11)) * 3 : 0;
+    let glow = null;
+    if (m.enraged) glow = 'rgba(255,72,54,0.95)';
+    if (isBoar && m.state === 'combat' && (m.bphase === 'aim' || m.bphase === 'charge'))
+      glow = 'rgba(255,130,60,0.9)';
+    drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits,
+      { flip: m.flipX, rock: wob, bob: -bob, glow: glow,
+        alpha: m.state === 'trapped' ? 0.85 : 1, fallback: isBoar ? '#6e4526' : '#b3a06e' });
+    // 함정 걸림: 그물 오버레이
+    if (m.state === 'trapped') {
+      const mx = PX(m.x, m.y), my = PY(m.x, m.y) - mUnits * ISO * 0.6;
+      const nr = mUnits * ISO * 0.55;
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = '#caa14f';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(mx, my, nr, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1.8;
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath(); ctx.moveTo(mx - nr, my + k * nr * 0.5); ctx.lineTo(mx + nr, my + k * nr * 0.5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(mx + k * nr * 0.5, my - nr); ctx.lineTo(mx + k * nr * 0.5, my + nr); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // 미니 HP바
+    const bw = mUnits * ISO * 1.1;
+    const bx2 = PX(m.x, m.y) - bw / 2, by2 = PY(m.x, m.y) - mUnits * ISO * 1.9 - 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(bx2, by2, bw, 5);
+    ctx.fillStyle = '#a32c26';
+    ctx.fillRect(bx2, by2, bw * m.hp / m.def.maxHp, 5);
   }
 
-  // 몬스터 미니 HP바
-  if (m.state !== 'dead' && m.state !== 'escaped') {
-    const bw = mr * 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 14, bw, 5);
-    ctx.fillStyle = '#e05252';
-    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 14, bw * m.hp / m.def.maxHp, 5);
+  function drawHunter() {
+    if (!h.ko) drawShadow(ctx, h.x, h.y, 0.5 * ISO);
+    const wob = h.moving ? Math.sin(h.animT * 12) * 0.05 : 0;
+    const bob = h.moving ? Math.abs(Math.sin(h.animT * 12)) * 3 : 0;
+    const glow = h.focusT > 0 ? 'rgba(201,164,74,0.95)' : null;
+    drawSprite(ctx, SPR.hunter, h.x, h.y, 1.35,
+      { flip: h.flipX, rock: h.ko ? 1.35 : wob, bob: -bob,
+        alpha: h.ko ? 0.5 : 1, glow: glow, fallback: '#3b5f96' });
+    if (h.ko) {
+      ctx.fillStyle = 'rgba(217,207,182,0.9)';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('💫 ' + h.koT.toFixed(0), PX(h.x, h.y), PY(h.x, h.y) - 54);
+    }
   }
 
-  // 헌터
-  const hWob = h.moving ? Math.sin(h.animT * 12) * 0.09 : 0;
-  const hGlow = h.focusT > 0 ? 'rgba(232,163,61,0.95)' : null;
-  if (!h.ko) drawShadow(ctx, h.x, h.y, 0.45 * PPU);
-  drawSprite(ctx, SPR.hunter, h.x, h.y, 1.15, h.face + hWob, { alpha: h.ko ? 0.4 : 1, glow: hGlow, fallback: '#4a90d9' });
-  if (h.ko) {
-    ctx.fillStyle = 'rgba(232,228,216,0.9)';
-    ctx.font = 'bold 15px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('💫 ' + h.koT.toFixed(0), W(ctx, h.x), H(ctx, h.y) - 32);
-  }
+  // 화면상 아래(y 큰 쪽)에 있는 유닛을 나중에 그린다
+  if (PY(m.x, m.y) <= PY(h.x, h.y)) { drawMonster(); drawHunter(); }
+  else { drawHunter(); drawMonster(); }
 
-  // 이펙트
+  // 이펙트 (바닥에 붙는 타원 플래시)
   for (const f of huntState.fx) {
     const p = f.t / f.life;
+    const r = f.r * ISO * (0.7 + p * 0.9);
     ctx.globalAlpha = 1 - p;
     ctx.fillStyle = f.color;
-    ctx.beginPath(); ctx.arc(W(ctx, f.x), H(ctx, f.y), f.r * PPU * (0.6 + p * 0.8), 0, 7); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(PX(f.x, f.y), PY(f.x, f.y) - 12, r, r * 0.55, 0, 0, 7);
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
