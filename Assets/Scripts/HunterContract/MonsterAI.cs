@@ -129,10 +129,10 @@ public class MonsterAI : MonoBehaviour
                 state = State.Combat;
                 if (wasFleeing)
                 {
-                    // 도주 저지 성공 → 도주 게이지 리셋 (25초간 재도주 금지)
+                    // 도주 저지 성공 → 도주 게이지 리셋 + 25초간 탈진 (재도주 금지, 이속 저하)
                     fleeBlockUntil = Time.time + 25f;
                     wasFleeing = false;
-                    hunt.AddLog("도주 저지 성공! 몬스터가 교전으로 복귀");
+                    hunt.AddLog("도주 저지 성공! 몬스터가 지쳐서 느려졌다 (25초)");
                 }
                 UpdateColor();
             }
@@ -268,6 +268,9 @@ public class MonsterAI : MonoBehaviour
         float dist = Vector2.Distance(transform.position, hp);
         float dt = Time.deltaTime;
 
+        // 도주 저지 직후 탈진 — 헌터(3.5)가 따라잡을 수 있는 유일한 시간
+        float tired = Time.time < fleeBlockUntil ? 0.72f : 1f;
+
         // 근접 시 뿔치기 반격
         if (dist < 1f && kickCd <= 0f)
         {
@@ -281,7 +284,7 @@ public class MonsterAI : MonoBehaviour
         if (sprintLeft > 0f)
         {
             sprintLeft -= dt;
-            MoveWithSlide(sprintDir, 8f);
+            MoveWithSlide(sprintDir, 8f * tired);
             return;
         }
         if (sprintTimer <= 0f)
@@ -298,7 +301,7 @@ public class MonsterAI : MonoBehaviour
         if (dist < 3.5f)
         {
             Vector2 away = ((Vector2)transform.position - hp).normalized;
-            MoveWithSlide(away, 4.5f);
+            MoveWithSlide(away, 4.5f * tired);
         }
     }
 

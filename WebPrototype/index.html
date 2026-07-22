@@ -411,10 +411,12 @@ function startHunt() {
       forceT: 0, fx2: 0, fy2: 0,
       bphase: 'approach', pt: 0, cdx: 0, cdy: 0, cdist: 0, chit: false,
       sprintTimer: 5, sprintLeft: 0, sdx: 0, sdy: 0, kickCd: 0,
+      face: Math.PI, animT: 0, moving: false,
     },
     hunter: {
       hp: 100, maxHp: 100, x: -5, y: 0, ko: false, koT: 0,
       basicCd: 0, strongCd: 0, potionCd: 0, lureCd: 0, focusT: 0, lastLog: -9,
+      face: 0, animT: 0, moving: false,
     },
   };
   addLog('사냥 시작! 제한 시간 3:00');
@@ -483,7 +485,7 @@ function updateMonster(dt) {
     m.trapT -= dt;
     if (m.trapT <= 0) {
       m.state = 'combat';
-      if (m.wasFlee) { m.fleeBlock = 25; m.wasFlee = false; addLog('도주 저지 성공! 몬스터가 교전으로 복귀'); }
+      if (m.wasFlee) { m.fleeBlock = 25; m.wasFlee = false; addLog('도주 저지 성공! 몬스터가 지쳐서 느려졌다 (25초)'); }
     }
     return;
   }
@@ -553,6 +555,8 @@ function boarTick(m, h, dt, spd) {
 
 function deerTick(m, h, dt, spd) {
   if (h.ko) return;
+  // 도주 저지 직후 25초간 탈진 — 헌터가 따라잡을 수 있는 유일한 시간
+  if (m.fleeBlock > 0) spd *= 0.72;
   const d = dist(m, h);
   if (d < 1 && m.kickCd <= 0) { hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
   m.sprintTimer -= dt;
@@ -778,16 +782,20 @@ $('btn-retry').onclick = () => { hunt = null; run = null; placedTraps = []; setP
 // ============================== 메인 루프 ==============================
 let lastTs = 0;
 function frame(ts) {
-  const rawDt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
+  const rawDt = Math.min(0.05, Math.max(0, (ts - lastTs) / 1000 || 0));
   lastTs = ts;
 
   if (phase === 'hunt' && hunt && hunt.running) {
     const dt = rawDt * hunt.speed;
     hunt.t -= dt;
     if (hunt.lure) { hunt.lure.life -= dt; if (hunt.lure.life <= 0) hunt.lure = null; }
+    const pm = { x: hunt.monster.x, y: hunt.monster.y };
+    const ph = { x: hunt.hunter.x, y: hunt.hunter.y };
     updateMonster(dt);
     updateTraps(dt);
     updateHunter(dt);
+    faceTrack(hunt.monster, pm, dt);
+    faceTrack(hunt.hunter, ph, dt);
     for (const f of hunt.fx) f.t += dt;
     hunt.fx = hunt.fx.filter(f => f.t < f.life);
 
@@ -822,13 +830,133 @@ const PPU = 52.5; // 픽셀/월드유닛
 function W(cv, x) { return cv.canvas.width / 2 + x * PPU; }
 function H(cv, y) { return cv.canvas.height / 2 - y * PPU; }
 
+function faceTrack(e, prev, dt) {
+  const dx = e.x - prev.x, dy = e.y - prev.y;
+  if (Math.hypot(dx, dy) > 1e-4) {
+    e.face = Math.atan2(-dy, dx);
+    e.animT = (e.animT || 0) + dt;
+    e.moving = true;
+  } else e.moving = false;
+}
+
+// ---------- SVG 스프라이트 (외부 파일 없이 내장, 오른쪽을 향한 탑다운 뷰) ----------
+function sprite(body) {
+  const img = new Image();
+  img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">' + body + '</svg>');
+  return img;
+}
+
+const SPR = {
+  boar: sprite(
+    '<path d="M14 64 Q2 54 8 46" stroke="#57351b" stroke-width="5" fill="none" stroke-linecap="round"/>' +
+    '<ellipse cx="56" cy="64" rx="46" ry="35" fill="#8a5a33" stroke="#57351b" stroke-width="4"/>' +
+    '<ellipse cx="50" cy="64" rx="38" ry="10" fill="#6b4222"/>' +
+    '<path d="M76 38 L92 28 L95 46 Z" fill="#5d3a1e" stroke="#3d2410" stroke-width="2"/>' +
+    '<path d="M76 90 L92 100 L95 82 Z" fill="#5d3a1e" stroke="#3d2410" stroke-width="2"/>' +
+    '<circle cx="95" cy="64" r="23" fill="#8a5a33" stroke="#57351b" stroke-width="4"/>' +
+    '<ellipse cx="113" cy="64" rx="11" ry="9" fill="#b07c52" stroke="#57351b" stroke-width="3"/>' +
+    '<circle cx="116" cy="60" r="2" fill="#57351b"/><circle cx="116" cy="68" r="2" fill="#57351b"/>' +
+    '<path d="M106 48 Q120 36 125 45 Q116 46 111 53 Z" fill="#f2ead8" stroke="#c9bfa4" stroke-width="1.5"/>' +
+    '<path d="M106 80 Q120 92 125 83 Q116 82 111 75 Z" fill="#f2ead8" stroke="#c9bfa4" stroke-width="1.5"/>' +
+    '<circle cx="97" cy="50" r="3.5" fill="#1c1008"/><circle cx="97" cy="78" r="3.5" fill="#1c1008"/>' +
+    '<circle cx="95" cy="64" r="12" fill="none" stroke="#e8c04d" stroke-width="4" stroke-dasharray="6 4"/>'),
+  deer: sprite(
+    '<circle cx="22" cy="64" r="8" fill="#f0f0e0" stroke="#6d8a52" stroke-width="2"/>' +
+    '<ellipse cx="54" cy="64" rx="36" ry="21" fill="#a9c884" stroke="#6d8a52" stroke-width="3.5"/>' +
+    '<ellipse cx="48" cy="64" rx="26" ry="8" fill="#bcd69a"/>' +
+    '<circle cx="42" cy="56" r="2.5" fill="#f0f0e0"/><circle cx="56" cy="70" r="2.5" fill="#f0f0e0"/>' +
+    '<circle cx="62" cy="56" r="2.5" fill="#f0f0e0"/>' +
+    '<path d="M86 50 Q76 32 60 26 M80 42 Q68 38 58 42 M82 36 Q84 22 92 14" ' +
+      'stroke="#dcd0a8" stroke-width="4.5" fill="none" stroke-linecap="round"/>' +
+    '<path d="M86 78 Q76 96 60 102 M80 86 Q68 90 58 86 M82 92 Q84 106 92 114" ' +
+      'stroke="#dcd0a8" stroke-width="4.5" fill="none" stroke-linecap="round"/>' +
+    '<circle cx="93" cy="64" r="14" fill="#a9c884" stroke="#6d8a52" stroke-width="3.5"/>' +
+    '<ellipse cx="105" cy="64" rx="7" ry="5.5" fill="#c9de9f" stroke="#6d8a52" stroke-width="3"/>' +
+    '<circle cx="110" cy="64" r="2.5" fill="#3d4a2c"/>' +
+    '<circle cx="96" cy="56" r="3" fill="#1c1008"/><circle cx="96" cy="72" r="3" fill="#1c1008"/>'),
+  hunter: sprite(
+    '<rect x="18" y="44" width="15" height="34" rx="5" fill="#6b4a26" stroke="#472e13" stroke-width="2.5" transform="rotate(-18 25 61)"/>' +
+    '<line x1="24" y1="44" x2="20" y2="32" stroke="#c7a06a" stroke-width="3"/>' +
+    '<line x1="30" y1="44" x2="28" y2="31" stroke="#c7a06a" stroke-width="3"/>' +
+    '<ellipse cx="56" cy="64" rx="36" ry="30" fill="#3f6fa6" stroke="#24466e" stroke-width="4"/>' +
+    '<circle cx="80" cy="64" r="20" fill="#2d5182" stroke="#24466e" stroke-width="4"/>' +
+    '<circle cx="86" cy="64" r="9" fill="#182a40"/>' +
+    '<path d="M102 24 Q138 64 102 104" stroke="#8a5a33" stroke-width="6" fill="none" stroke-linecap="round"/>' +
+    '<line x1="102" y1="24" x2="102" y2="104" stroke="#d8d3c2" stroke-width="2"/>' +
+    '<line x1="80" y1="64" x2="118" y2="64" stroke="#c7a06a" stroke-width="3.5"/>' +
+    '<path d="M118 58 L128 64 L118 70 Z" fill="#d8d3c2"/>'),
+  snare: sprite(
+    '<circle cx="64" cy="64" r="44" fill="rgba(60,40,18,0.4)" stroke="#e8a33d" stroke-width="7"/>' +
+    '<circle cx="64" cy="64" r="33" fill="none" stroke="#f0b95a" stroke-width="11" stroke-dasharray="7 9"/>' +
+    '<circle cx="64" cy="64" r="13" fill="#7a5a2e" stroke="#57351b" stroke-width="3"/>' +
+    '<circle cx="64" cy="64" r="5" fill="#57351b"/>'),
+  shock: sprite(
+    '<circle cx="64" cy="64" r="42" fill="#12333c" stroke="#4fc3d9" stroke-width="5"/>' +
+    '<circle cx="64" cy="64" r="30" fill="none" stroke="#2f7f96" stroke-width="3" stroke-dasharray="5 6"/>' +
+    '<circle cx="64" cy="64" r="18" fill="none" stroke="#2f7f96" stroke-width="2.5" stroke-dasharray="4 5"/>' +
+    '<polygon points="70,36 50,68 63,68 56,94 80,58 66,58" fill="#9fe8f5" stroke="#4fc3d9" stroke-width="2"/>'),
+  spike: sprite(
+    '<circle cx="64" cy="64" r="60" fill="rgba(178,64,50,0.2)" stroke="rgba(178,64,50,0.55)" stroke-width="3"/>' +
+    '<g fill="#b24032" stroke="#7c2a20" stroke-width="2">' +
+    '<path d="M34 46 L40 28 L46 46 Z"/><path d="M58 36 L64 18 L70 36 Z"/><path d="M82 50 L88 32 L94 50 Z"/>' +
+    '<path d="M28 78 L34 60 L40 78 Z"/><path d="M56 74 L62 56 L68 74 Z"/><path d="M84 84 L90 66 L96 84 Z"/>' +
+    '<path d="M42 106 L48 88 L54 106 Z"/><path d="M68 104 L74 86 L80 104 Z"/></g>'),
+  lure: sprite(
+    '<rect x="14" y="57" width="100" height="12" rx="6" fill="#efe8d8" stroke="#c9bfa4" stroke-width="2"/>' +
+    '<circle cx="18" cy="56" r="8" fill="#efe8d8"/><circle cx="18" cy="72" r="8" fill="#efe8d8"/>' +
+    '<circle cx="110" cy="56" r="8" fill="#efe8d8"/><circle cx="110" cy="72" r="8" fill="#efe8d8"/>' +
+    '<ellipse cx="64" cy="63" rx="30" ry="20" fill="#c95b4a" stroke="#8f3a2e" stroke-width="3"/>' +
+    '<path d="M48 56 Q64 48 80 58" stroke="#e07a64" stroke-width="4" fill="none"/>'),
+};
+
+const TRAP_SPR = { snare: 'snare', shock: 'shock', spike: 'spike' };
+
+// 바닥 풀 얼룩 (한 번만 생성)
+const groundDots = [];
+for (let i = 0; i < 140; i++) {
+  groundDots.push({
+    x: (Math.random() * 2 - 1) * 7.4, y: (Math.random() * 2 - 1) * 4.4,
+    r: Math.random() * 2.2 + 1,
+    c: Math.random() < 0.5 ? 'rgba(72,98,72,0.28)' : 'rgba(42,62,48,0.32)',
+  });
+}
+
+function drawSprite(ctx, img, x, y, units, angle, opt) {
+  opt = opt || {};
+  if (!img.complete || img.naturalWidth === 0) {
+    ctx.fillStyle = opt.fallback || '#888';
+    ctx.beginPath(); ctx.arc(W(ctx, x), H(ctx, y), units * PPU * 0.4, 0, 7); ctx.fill();
+    return;
+  }
+  const s = units * PPU;
+  ctx.save();
+  ctx.translate(W(ctx, x), H(ctx, y));
+  ctx.rotate(angle || 0);
+  if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 22; }
+  ctx.globalAlpha = opt.alpha != null ? opt.alpha : 1;
+  ctx.drawImage(img, -s / 2, -s / 2, s, s);
+  ctx.restore();
+}
+
+function drawShadow(ctx, x, y, r) {
+  ctx.fillStyle = 'rgba(0,0,0,0.32)';
+  ctx.beginPath();
+  ctx.ellipse(W(ctx, x), H(ctx, y) + r * 0.55, r, r * 0.45, 0, 0, 7);
+  ctx.fill();
+}
+
 function drawArena(ctx, huntState) {
   const cw = ctx.canvas.width, ch = ctx.canvas.height;
   ctx.clearRect(0, 0, cw, ch);
 
-  // 바닥 + 비네트
+  // 바닥 + 풀 얼룩 + 비네트
   ctx.fillStyle = '#16201b';
   ctx.fillRect(0, 0, cw, ch);
+  for (const d of groundDots) {
+    ctx.fillStyle = d.c;
+    ctx.beginPath(); ctx.arc(W(ctx, d.x), H(ctx, d.y), d.r, 0, 7); ctx.fill();
+  }
   const grad = ctx.createRadialGradient(cw/2, ch/2, 120, cw/2, ch/2, 520);
   grad.addColorStop(0, 'rgba(0,0,0,0)');
   grad.addColorStop(1, 'rgba(0,0,0,0.45)');
@@ -840,45 +968,38 @@ function drawArena(ctx, huntState) {
   ctx.lineWidth = 4;
   ctx.strokeRect(W(ctx, -ARENA_X) - 8, H(ctx, ARENA_Y) - 8, ARENA_X * 2 * PPU + 16, ARENA_Y * 2 * PPU + 16);
 
-  // 탈출구
+  // 탈출구 (초록 발광)
   for (const g of GATES) {
-    ctx.fillStyle = 'rgba(63,156,90,0.85)';
     const gx = W(ctx, g.x + (g.x < 0 ? -0.42 : 0.42));
+    ctx.save();
+    ctx.shadowColor = 'rgba(90,220,130,0.9)';
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = 'rgba(63,156,90,0.9)';
     ctx.fillRect(gx - 5, H(ctx, g.y) - 47, 10, 94);
+    ctx.restore();
   }
 
+  // 함정
   const traps = huntState ? huntState.traps : placedTraps;
   for (const t of traps) {
-    const x = W(ctx, t.x), y = H(ctx, t.y);
-    if (t.type === 'spike') {
-      ctx.fillStyle = 'rgba(178,64,50,0.28)';
-      ctx.beginPath(); ctx.arc(x, y, 1.1 * PPU, 0, 7); ctx.fill();
-      ctx.strokeStyle = 'rgba(178,64,50,0.7)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(x, y, 1.1 * PPU, 0, 7); ctx.stroke();
-    } else {
-      const c = t.type === 'snare' ? '232,163,61' : '79,195,217';
-      ctx.strokeStyle = t.armed ? 'rgb(' + c + ')' : 'rgba(' + c + ',0.25)';
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(x, y, 0.42 * PPU, 0, 7); ctx.stroke();
-      ctx.fillStyle = t.armed ? 'rgba(' + c + ',0.22)' : 'rgba(' + c + ',0.06)';
-      ctx.beginPath(); ctx.arc(x, y, 0.42 * PPU, 0, 7); ctx.fill();
-    }
+    if (t.rot == null) t.rot = Math.random() * 6.28;
+    const units = t.type === 'spike' ? 2.4 : 0.95;
+    const alpha = (t.armed || t.type === 'spike') ? 1 : 0.25;
+    drawSprite(ctx, SPR[TRAP_SPR[t.type]], t.x, t.y, units, t.rot, { alpha });
   }
 
   if (!huntState) return;
   const m = huntState.monster, h = huntState.hunter;
 
   // 미끼
-  if (huntState.lure) {
-    ctx.fillStyle = '#f06fa0';
-    ctx.beginPath(); ctx.arc(W(ctx, huntState.lure.x), H(ctx, huntState.lure.y), 7, 0, 7); ctx.fill();
-  }
+  if (huntState.lure)
+    drawSprite(ctx, SPR.lure, huntState.lure.x, huntState.lure.y, 0.55, 0.6, {});
 
   // 멧돼지 조준선
   if (m.def.id === 'boar' && m.state === 'combat' && m.bphase === 'aim') {
-    ctx.strokeStyle = 'rgba(224,82,82,0.5)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = 'rgba(224,82,82,0.55)';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([7, 7]);
     ctx.beginPath();
     ctx.moveTo(W(ctx, m.x), H(ctx, m.y));
     ctx.lineTo(W(ctx, h.x), H(ctx, h.y));
@@ -887,35 +1008,54 @@ function drawArena(ctx, huntState) {
   }
 
   // 몬스터
-  const mr = (m.def.id === 'boar' ? 0.7 : 0.5) * PPU;
-  let mc = m.def.id === 'boar' ? '#8a5a33' : '#90c878';
-  if (m.state === 'trapped') mc = '#7b8188';
-  else if (m.enraged) mc = '#d84a3e';
-  else if (m.def.id === 'boar' && m.bphase === 'aim' && m.state === 'combat') mc = '#e08050';
-  if (m.state === 'dead') mc = '#3a3f45';
-  ctx.globalAlpha = m.state === 'escaped' ? 0.25 : 1;
-  ctx.fillStyle = mc;
-  ctx.beginPath(); ctx.arc(W(ctx, m.x), H(ctx, m.y), mr, 0, 7); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(W(ctx, m.x), H(ctx, m.y), mr, 0, 7); ctx.stroke();
-  ctx.globalAlpha = 1;
+  const isBoar = m.def.id === 'boar';
+  const mUnits = isBoar ? 1.9 : 1.55;
+  const mr = mUnits * PPU * 0.42;
+  const mWob = m.moving ? Math.sin(m.animT * 11) * 0.08 : 0;
+  let mAlpha = 1, mGlow = null;
+  if (m.state === 'escaped') mAlpha = 0.22;
+  if (m.state === 'dead') mAlpha = 0.45;
+  if (m.enraged && m.state !== 'dead' && m.state !== 'escaped') mGlow = 'rgba(255,72,54,0.95)';
+  if (isBoar && m.state === 'combat' && (m.bphase === 'aim' || m.bphase === 'charge'))
+    mGlow = 'rgba(255,130,60,0.9)';
+  if (m.state !== 'dead' && m.state !== 'escaped') drawShadow(ctx, m.x, m.y, mr);
+  drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits, m.face + mWob, { alpha: mAlpha, glow: mGlow, fallback: isBoar ? '#8a5a33' : '#90c878' });
+
+  // 함정 걸림: 그물 오버레이
+  if (m.state === 'trapped') {
+    const mx = W(ctx, m.x), my = H(ctx, m.y);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = '#caa14f';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(mx, my, mr * 0.95, 0, 7); ctx.stroke();
+    ctx.lineWidth = 2;
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath(); ctx.moveTo(mx - mr, my + k * mr * 0.5); ctx.lineTo(mx + mr, my + k * mr * 0.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx + k * mr * 0.5, my - mr); ctx.lineTo(mx + k * mr * 0.5, my + mr); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // 몬스터 미니 HP바
   if (m.state !== 'dead' && m.state !== 'escaped') {
     const bw = mr * 2;
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 12, bw, 5);
+    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 14, bw, 5);
     ctx.fillStyle = '#e05252';
-    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 12, bw * m.hp / m.def.maxHp, 5);
+    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 14, bw * m.hp / m.def.maxHp, 5);
   }
 
   // 헌터
-  ctx.fillStyle = h.ko ? '#5a6068' : '#4a90d9';
-  ctx.beginPath(); ctx.arc(W(ctx, h.x), H(ctx, h.y), 0.4 * PPU, 0, 7); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(W(ctx, h.x), H(ctx, h.y), 0.4 * PPU, 0, 7); ctx.stroke();
-  if (h.focusT > 0) {
-    ctx.strokeStyle = 'rgba(232,163,61,0.8)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(W(ctx, h.x), H(ctx, h.y), 0.55 * PPU, 0, 7); ctx.stroke();
+  const hWob = h.moving ? Math.sin(h.animT * 12) * 0.09 : 0;
+  const hGlow = h.focusT > 0 ? 'rgba(232,163,61,0.95)' : null;
+  if (!h.ko) drawShadow(ctx, h.x, h.y, 0.45 * PPU);
+  drawSprite(ctx, SPR.hunter, h.x, h.y, 1.15, h.face + hWob, { alpha: h.ko ? 0.4 : 1, glow: hGlow, fallback: '#4a90d9' });
+  if (h.ko) {
+    ctx.fillStyle = 'rgba(232,228,216,0.9)';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💫 ' + h.koT.toFixed(0), W(ctx, h.x), H(ctx, h.y) - 32);
   }
 
   // 이펙트
