@@ -1,0 +1,934 @@
+<title>헌터의 의뢰 — 프로토타입</title>
+<style>
+  :root {
+    --bg: #101418;
+    --panel: #1a2129;
+    --panel-2: #151b21;
+    --line: #2a323b;
+    --text: #e8e4d8;
+    --muted: #8d97a3;
+    --amber: #e8a33d;
+    --amber-dim: #a97a34;
+    --danger: #e05252;
+    --good: #6fbf73;
+    --info: #4fc3d9;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body {
+    color: var(--text);
+    font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace; font-variant-numeric: tabular-nums; }
+
+  #app { max-width: 1160px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  header { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 18px; }
+  header .eyebrow { color: var(--amber); font-size: 0.72rem; letter-spacing: 0.18em; font-weight: 600; }
+  header h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; }
+  header .honor { margin-left: auto; color: var(--muted); font-size: 0.85rem; }
+  header .honor b { color: var(--amber); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 10px; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; }
+
+  button {
+    font: inherit; color: var(--text); background: #232b35; border: 1px solid var(--line);
+    border-radius: 3px; padding: 8px 14px; cursor: pointer; text-align: left;
+  }
+  button:hover:not(:disabled) { border-color: var(--amber-dim); }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.primary { background: var(--amber); color: #1a1206; font-weight: 700; text-align: center; border-color: var(--amber); }
+  button.primary:hover:not(:disabled) { background: #f2b558; }
+
+  /* 의뢰 게시판 */
+  .quest-list { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+  .quest-card { display: block; width: 100%; padding: 16px 18px; background: var(--panel); }
+  .quest-card .q-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .quest-card .q-name { font-size: 1.1rem; font-weight: 800; }
+  .quest-card .q-meta { color: var(--amber); font-size: 0.82rem; }
+  .quest-card .q-desc { color: var(--muted); font-size: 0.86rem; white-space: pre-line; }
+
+  /* 준비 */
+  .prep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 860px) { .prep-grid { grid-template-columns: 1fr; } }
+  .prep-top { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; }
+  .prep-top .gold { margin-left: auto; font-size: 1.15rem; color: var(--amber); font-weight: 700; }
+  .shop-list { display: flex; flex-direction: column; gap: 8px; }
+  .shop-list button { display: flex; gap: 10px; align-items: baseline; }
+  .shop-list .s-name { flex: 1; }
+  .shop-list .s-price { color: var(--amber); }
+  .shop-list .s-status { color: var(--muted); font-size: 0.82rem; }
+  .prep-msg { color: var(--danger); font-size: 0.85rem; min-height: 1.4em; margin-top: 8px; }
+  .gambit-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .gambit-row { display: flex; gap: 8px; align-items: center; }
+  .gambit-row .g-n { width: 22px; color: var(--muted); text-align: center; }
+  .gambit-row .g-cond { flex: 1.2; text-align: center; }
+  .gambit-row .g-act { flex: 1; text-align: center; }
+  .gambit-row .g-arrow { color: var(--muted); }
+  .gambit-row .g-on { width: 54px; text-align: center; }
+  .gambit-row .g-on.on { color: var(--good); }
+  .gambit-row .g-on.off { color: var(--muted); }
+  .card-info { background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 12px 14px; font-size: 0.84rem; color: var(--muted); }
+  .card-info b { color: var(--text); }
+  .prep-actions { margin-top: 20px; display: flex; justify-content: flex-end; }
+  .desc-box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 12px 14px; font-size: 0.84rem; color: var(--muted); white-space: pre-line; margin-top: 14px; }
+
+  /* 스테이지 (배치/사냥 공용) */
+  .stage-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+  @media (max-width: 980px) { .stage-grid { grid-template-columns: 1fr; } }
+  canvas { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 3px; background: #16201b; }
+  .rail { display: flex; flex-direction: column; gap: 10px; }
+  .rail .tips { font-size: 0.82rem; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; white-space: pre-line; }
+
+  .topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .topbar .timer { font-size: 1.7rem; font-weight: 700; }
+  .topbar .timer.low { color: var(--danger); }
+  .bar { height: 12px; background: rgba(0,0,0,0.55); border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; transition: width 0.1s linear; }
+  .m-block { flex: 1; min-width: 220px; }
+  .m-label { display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 3px; }
+  .m-label .state { color: var(--amber); }
+
+  #log { background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; font-size: 0.8rem; height: 300px; overflow-y: auto; }
+  #log div { padding: 2px 0; border-bottom: 1px dashed #222a33; color: var(--muted); }
+  #log div:last-child { color: var(--text); }
+
+  .hunt-bottom { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .hunter-block { min-width: 220px; }
+  .cards { display: flex; gap: 8px; margin-left: auto; }
+  .cards button { text-align: center; font-size: 0.85rem; }
+  #lure-hint { color: var(--amber); font-weight: 700; font-size: 0.9rem; min-height: 1.4em; margin-top: 8px; text-align: center; }
+
+  /* 정산 */
+  #p-result .box { max-width: 560px; margin: 40px auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 28px 32px; text-align: center; }
+  #p-result .r-title { font-size: 1.7rem; font-weight: 800; margin-bottom: 18px; }
+  #p-result .r-title.ok { color: var(--good); }
+  #p-result .r-title.no { color: var(--danger); }
+  #p-result .r-body { white-space: pre-line; font-size: 0.95rem; color: var(--muted); margin-bottom: 24px; }
+  #p-result .r-body b { color: var(--amber); }
+</style>
+
+<div id="app">
+  <header>
+    <span class="eyebrow">MONSTER HUNT CONTRACT</span>
+    <h1>헌터의 의뢰</h1>
+    <span class="honor">누적 명예 <b id="honor">0</b> pt</span>
+  </header>
+
+  <!-- 의뢰 게시판 -->
+  <section class="panel active" id="p-quest">
+    <h2>의뢰를 선택하라</h2>
+    <p class="sub">준비한 만큼만 결과가 나온다. 사냥 제한 시간은 3분 — 시간 안에 잡지 못하면 몬스터는 사라진다.</p>
+    <div class="quest-list" id="quest-list"></div>
+  </section>
+
+  <!-- 준비 -->
+  <section class="panel" id="p-prep">
+    <div class="prep-top">
+      <h2 id="prep-title">준비</h2>
+      <span class="gold mono" id="prep-gold"></span>
+    </div>
+    <div class="prep-grid">
+      <div>
+        <h2 style="font-size:0.92rem">상점 <span style="color:var(--muted);font-weight:400">— 장비는 이번 판 대여</span></h2>
+        <div class="shop-list" id="shop-list"></div>
+        <div class="prep-msg" id="prep-msg"></div>
+        <div class="desc-box" id="prep-desc"></div>
+      </div>
+      <div>
+        <h2 style="font-size:0.92rem">감빗 규칙 <span style="color:var(--muted);font-weight:400">— 위 줄이 우선, 클릭해서 변경</span></h2>
+        <div class="gambit-rows" id="gambit-rows"></div>
+        <div class="card-info" id="card-info"></div>
+        <div class="prep-actions">
+          <button class="primary" id="btn-to-place" style="padding:12px 34px">함정 배치로 →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 함정 배치 -->
+  <section class="panel" id="p-place">
+    <div class="topbar">
+      <h2>함정 배치</h2>
+      <span class="sub" style="margin:0">함정을 선택하고 맵을 클릭해 설치하라</span>
+      <button id="btn-back-prep" style="margin-left:auto">← 준비로</button>
+      <button class="primary" id="btn-start-hunt" style="padding:10px 30px">사냥 시작!</button>
+    </div>
+    <div class="stage-grid">
+      <canvas id="cv-place" width="840" height="520"></canvas>
+      <div class="rail">
+        <div id="trap-btns" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div id="place-sel" style="font-size:0.9rem;color:var(--amber);min-height:1.4em"></div>
+        <div class="tips">몬스터는 우측에서 배회를 시작한다.
+좌우 끝 초록 지점이 탈출구 — 도주형은 그 길목도 대비하라.
+함정 걸림 상태의 몬스터는 받는 피해 2배.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 사냥 -->
+  <section class="panel" id="p-hunt">
+    <div class="topbar">
+      <span class="timer mono" id="h-timer">3:00</span>
+      <div class="m-block">
+        <div class="m-label"><span id="h-mname"></span><span class="state" id="h-mstate"></span></div>
+        <div class="bar"><i id="h-mbar" style="background:var(--danger);width:100%"></i></div>
+      </div>
+      <button id="btn-speed" title="관전 배속">▶ 1x</button>
+    </div>
+    <div class="stage-grid">
+      <canvas id="cv-hunt" width="840" height="520"></canvas>
+      <div class="rail">
+        <div style="font-size:0.8rem;color:var(--muted)">감빗 발동 로그</div>
+        <div id="log"></div>
+      </div>
+    </div>
+    <div class="hunt-bottom">
+      <div class="hunter-block">
+        <div class="m-label"><span id="h-hname">헌터</span><span id="h-hinfo"></span></div>
+        <div class="bar"><i id="h-hbar" style="background:#4a90d9;width:100%"></i></div>
+      </div>
+      <div class="cards" id="cards"></div>
+    </div>
+    <div id="lure-hint"></div>
+  </section>
+
+  <!-- 정산 -->
+  <section class="panel" id="p-result">
+    <div class="box">
+      <div class="r-title" id="r-title"></div>
+      <div class="r-body" id="r-body"></div>
+      <button class="primary" id="btn-retry" style="padding:12px 40px">다음 의뢰 →</button>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+// ============================== 데이터 (기획서 Docs/GameDesign.md 기준) ==============================
+const DB = {
+  monsters: [
+    { id:'boar', name:'멧돼지 왕', maxHp:300, prepGold:800, baseReward:100,
+      fleeAtSeconds:1e9, fleeAtHpPct:-1,
+      desc:'튜토리얼. 2초 조준 후 직선 돌진, 돌진 뒤 3초 경직이 딜 타임.\nHP 30% 이하에서 격노(조준 1초). 도주하지 않는다.\n돌진 경로에 함정을 깔면 쉽게 걸린다.' },
+    { id:'deer', name:'질풍 사슴', maxHp:250, prepGold:1000, baseReward:180,
+      fleeAtSeconds:90, fleeAtHpPct:0.4,
+      desc:'도주형. 헌터보다 빨라 평타가 닿지 않는다 — 함정 없이는 딜 불가.\n1:30 경과 또는 HP 40% 이하 시 탈출구로 도주 시도.\n미끼로 함정 지대에 유인하고, 속박 덫으로 도주를 저지하라.' },
+  ],
+  trapName: { snare:'속박 덫', shock:'전격 트랩', spike:'가시 지대' },
+  trapPrice: { snare:200, shock:150, spike:100 },
+  cards: [
+    { name:'함정 재가동', desc:'가장 최근 발동된 함정 1개를 재설치' },
+    { name:'집중 사격', desc:'5초간 공격속도 2배' },
+    { name:'긴급 미끼', desc:'맵을 클릭해 몬스터를 그 지점으로 강제 이동 (4초)' },
+  ],
+  conds: ['always','myhp50','mhp50','trapped'],
+  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림' },
+  acts: ['basic','strong','potion','lure'],
+  actName: { basic:'평타 지속', strong:'강공격', potion:'회복 물약', lure:'미끼 투척' },
+};
+const ARENA_X = 7.5, ARENA_Y = 4.5;
+const GATES = [ {x:-7.2,y:0}, {x:7.2,y:0} ];
+
+let honorTotal = 0;
+try { honorTotal = parseInt(localStorage.getItem('hunter-contract-honor')) || 0; } catch (e) {}
+function saveHonor() { try { localStorage.setItem('hunter-contract-honor', String(honorTotal)); } catch (e) {} }
+
+// ============================== 판 상태 ==============================
+let phase = 'quest';
+let run = null;
+let placedTraps = [];
+let selectedTrap = null;
+let hunt = null;
+
+function newRun(mdef) {
+  return {
+    quest: mdef, gold: mdef.prepGold,
+    weaponLv: 0, armorLv: 0, potions: 0, lures: 0,
+    stock: { snare:0, shock:0, spike:0 },
+    gambits: [
+      { cond:'trapped', act:'strong', on:true },
+      { cond:'myhp50', act:'potion', on:true },
+      { cond:'always', act:'basic', on:true },
+    ],
+    cardUsed: [false, false, false],
+  };
+}
+const dmgMult = () => run.weaponLv === 2 ? 1.5 : run.weaponLv === 1 ? 1.25 : 1;
+const takenMult = () => run.armorLv >= 1 ? 0.8 : 1;
+
+const SHOP = [
+  { name:'무기 강화 Lv1 (피해 +25%)', price:200,
+    status:()=> run.weaponLv>=1?'장착됨':'', can:()=> run.weaponLv<1, buy:()=> run.weaponLv=1 },
+  { name:'무기 강화 Lv2 (피해 +50%)', price:400,
+    status:()=> run.weaponLv>=2?'장착됨':run.weaponLv<1?'Lv1 필요':'', can:()=> run.weaponLv===1, buy:()=> run.weaponLv=2 },
+  { name:'방어구 (받는 피해 -20%)', price:200,
+    status:()=> run.armorLv>=1?'장착됨':'', can:()=> run.armorLv<1, buy:()=> run.armorLv=1 },
+  { name:'속박 덫 (4초 속박, 도주 저지)', price:200,
+    status:()=> '보유 '+run.stock.snare, can:()=>true, buy:()=> run.stock.snare++ },
+  { name:'전격 트랩 (2초 기절 + 피해 30)', price:150,
+    status:()=> '보유 '+run.stock.shock, can:()=>true, buy:()=> run.stock.shock++ },
+  { name:'가시 지대 (지속 도트 + 이속 -30%)', price:100,
+    status:()=> '보유 '+run.stock.spike, can:()=>true, buy:()=> run.stock.spike++ },
+  { name:'회복 물약 x3', price:120,
+    status:()=> '보유 '+run.potions, can:()=>true, buy:()=> run.potions+=3 },
+  { name:'미끼 x2 (경계 상태 유인)', price:80,
+    status:()=> '보유 '+run.lures, can:()=>true, buy:()=> run.lures+=2 },
+];
+
+// ============================== 페이즈 전환 ==============================
+const $ = id => document.getElementById(id);
+function setPhase(p) {
+  phase = p;
+  for (const id of ['p-quest','p-prep','p-place','p-hunt','p-result'])
+    $(id).classList.toggle('active', id === 'p-' + p);
+  if (p === 'quest') renderQuest();
+  if (p === 'prep') renderPrep();
+  if (p === 'place') { renderPlaceRail(); }
+  if (p === 'result') renderResult();
+  $('honor').textContent = honorTotal;
+}
+
+// ============================== 의뢰 ==============================
+function renderQuest() {
+  const list = $('quest-list');
+  list.innerHTML = '';
+  for (const m of DB.monsters) {
+    const b = document.createElement('button');
+    b.className = 'quest-card';
+    b.innerHTML = '<span class="q-head"><span class="q-name">' + m.name + '</span>' +
+      '<span class="q-meta mono">준비 골드 ' + m.prepGold + 'G · 기본 보상 ' + m.baseReward + 'pt</span></span>' +
+      '<span class="q-desc">' + m.desc + '</span>';
+    b.onclick = () => { run = newRun(m); placedTraps = []; selectedTrap = null; prepMsg = ''; setPhase('prep'); };
+    list.appendChild(b);
+  }
+  $('honor').textContent = honorTotal;
+}
+
+// ============================== 준비 ==============================
+let prepMsg = '';
+function renderPrep() {
+  $('prep-title').textContent = '준비 — ' + run.quest.name;
+  $('prep-gold').textContent = '골드 ' + run.gold + 'G';
+  $('prep-desc').textContent = run.quest.desc;
+  $('prep-msg').textContent = prepMsg;
+
+  const list = $('shop-list');
+  list.innerHTML = '';
+  SHOP.forEach((item, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = '<span class="s-name">' + item.name + '</span>' +
+      '<span class="s-price mono">' + item.price + 'G</span>' +
+      '<span class="s-status">' + item.status() + '</span>';
+    b.onclick = () => {
+      if (!item.can()) prepMsg = '구매 불가: ' + item.name;
+      else if (run.gold < item.price) prepMsg = '골드 부족! (' + item.price + 'G 필요, 보유 ' + run.gold + 'G)';
+      else { run.gold -= item.price; item.buy(); prepMsg = ''; }
+      renderPrep();
+    };
+    list.appendChild(b);
+  });
+
+  const rows = $('gambit-rows');
+  rows.innerHTML = '';
+  run.gambits.forEach((g, i) => {
+    const row = document.createElement('div');
+    row.className = 'gambit-row';
+    row.innerHTML = '<span class="g-n mono">' + (i+1) + '</span>';
+    const cb = document.createElement('button');
+    cb.className = 'g-cond'; cb.textContent = DB.condName[g.cond];
+    cb.onclick = () => { g.cond = DB.conds[(DB.conds.indexOf(g.cond)+1) % DB.conds.length]; renderPrep(); };
+    const arrow = document.createElement('span'); arrow.className = 'g-arrow'; arrow.textContent = '→';
+    const ab = document.createElement('button');
+    ab.className = 'g-act'; ab.textContent = DB.actName[g.act];
+    ab.onclick = () => { g.act = DB.acts[(DB.acts.indexOf(g.act)+1) % DB.acts.length]; renderPrep(); };
+    const ob = document.createElement('button');
+    ob.className = 'g-on ' + (g.on ? 'on' : 'off'); ob.textContent = g.on ? 'ON' : 'OFF';
+    ob.onclick = () => { g.on = !g.on; renderPrep(); };
+    row.append(cb, arrow, ab, ob);
+    rows.appendChild(row);
+  });
+
+  $('card-info').innerHTML = '<b>긴급 지시 카드</b> (사냥 중 각 1회, 미사용 1장당 보상 +10%)<br>' +
+    DB.cards.map(c => '· <b>' + c.name + '</b> — ' + c.desc).join('<br>');
+}
+
+// ============================== 함정 배치 ==============================
+function renderPlaceRail() {
+  const box = $('trap-btns');
+  box.innerHTML = '';
+  for (const t of ['snare','shock','spike']) {
+    const b = document.createElement('button');
+    b.textContent = DB.trapName[t] + ' — 보유 ' + run.stock[t];
+    b.disabled = run.stock[t] <= 0 && selectedTrap !== t;
+    b.style.borderColor = selectedTrap === t ? 'var(--amber)' : '';
+    b.onclick = () => { selectedTrap = t; renderPlaceRail(); };
+    box.appendChild(b);
+  }
+  $('place-sel').textContent = selectedTrap ? '선택: ' + DB.trapName[selectedTrap] : '함정을 선택하세요';
+  drawArena($('cv-place').getContext('2d'), null);
+}
+
+function canvasWorld(cv, e) {
+  const r = cv.getBoundingClientRect();
+  const px = (e.clientX - r.left) * (cv.width / r.width);
+  const py = (e.clientY - r.top) * (cv.height / r.height);
+  return { x: (px - cv.width/2) / PPU, y: (cv.height/2 - py) / PPU };
+}
+
+$('cv-place').addEventListener('click', e => {
+  if (phase !== 'place' || !selectedTrap) return;
+  const w = canvasWorld($('cv-place'), e);
+  if (Math.abs(w.x) > ARENA_X || Math.abs(w.y) > ARENA_Y) return;
+  if (run.stock[selectedTrap] <= 0) { selectedTrap = null; renderPlaceRail(); return; }
+  run.stock[selectedTrap]--;
+  placedTraps.push({ type: selectedTrap, x: w.x, y: w.y, armed: true });
+  if (run.stock[selectedTrap] <= 0) selectedTrap = null;
+  renderPlaceRail();
+});
+
+$('btn-to-place').onclick = () => setPhase('place');
+$('btn-back-prep').onclick = () => setPhase('prep');
+
+// ============================== 사냥 ==============================
+function startHunt() {
+  const def = run.quest;
+  hunt = {
+    t: 180, running: true, over: null, speed: 1,
+    hadKO: false, awaitingLure: false, lastSpent: null,
+    traps: placedTraps, lure: null, fx: [], log: [],
+    monster: {
+      def, hp: def.maxHp, x: 5, y: 0, state: 'wander', enraged: false,
+      wp: 0, elapsed: 0, trapT: 0, wasFlee: false, fleeBlock: 0, slowT: 0,
+      forceT: 0, fx2: 0, fy2: 0,
+      bphase: 'approach', pt: 0, cdx: 0, cdy: 0, cdist: 0, chit: false,
+      sprintTimer: 5, sprintLeft: 0, sdx: 0, sdy: 0, kickCd: 0,
+    },
+    hunter: {
+      hp: 100, maxHp: 100, x: -5, y: 0, ko: false, koT: 0,
+      basicCd: 0, strongCd: 0, potionCd: 0, lureCd: 0, focusT: 0, lastLog: -9,
+    },
+  };
+  addLog('사냥 시작! 제한 시간 3:00');
+  renderCards();
+  $('h-mname').textContent = def.name;
+  setPhase('hunt');
+}
+$('btn-start-hunt').onclick = startHunt;
+
+function addLog(s) {
+  hunt.log.push(s);
+  if (hunt.log.length > 40) hunt.log.shift();
+  const el = $('log');
+  el.innerHTML = hunt.log.map(l => '<div>' + l + '</div>').join('');
+  el.scrollTop = el.scrollHeight;
+}
+function fx(x, y, color, r = 0.45, life = 0.25) { hunt.fx.push({ x, y, color, r, t: 0, life }); }
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const clampArena = p => { p.x = Math.max(-ARENA_X, Math.min(ARENA_X, p.x)); p.y = Math.max(-ARENA_Y, Math.min(ARENA_Y, p.y)); };
+
+function moveTowards(p, tx, ty, speed, dt) {
+  const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+  if (d < 1e-4) return;
+  p.x += dx / d * speed * dt; p.y += dy / d * speed * dt;
+  clampArena(p);
+}
+function moveDir(p, dx, dy, speed, dt) { p.x += dx * speed * dt; p.y += dy * speed * dt; clampArena(p); }
+// 벽에 막히면 접선으로 미끄러짐 (사슴 구석 완화)
+function moveSlide(p, dx, dy, speed, dt) {
+  const bx = p.x, by = p.y;
+  moveDir(p, dx, dy, speed, dt);
+  if (Math.hypot(p.x - bx, p.y - by) < speed * dt * 0.4) {
+    let tx = -dy, ty = dx;
+    if (Math.abs(bx + tx) > ARENA_X || Math.abs(by + ty) > ARENA_Y) { tx = -tx; ty = -ty; }
+    moveDir(p, tx, ty, speed, dt);
+  }
+}
+
+// ---------- 몬스터 ----------
+function applyTrap(m, dur, dmg) {
+  if (m.state === 'dead' || m.state === 'escaped') return;
+  if (dmg > 0) damageMonster(dmg, false);
+  if (m.state === 'flee') m.wasFlee = true;
+  m.state = 'trapped';
+  m.trapT = Math.max(m.trapT, dur);
+  m.bphase = 'approach';
+}
+function damageMonster(amount, fromHunter) {
+  const m = hunt.monster;
+  if (m.hp <= 0) return;
+  m.hp = Math.max(0, m.hp - amount);
+  if (m.state === 'wander' && fromHunter !== 'trapOnly') m.state = m.state === 'wander' ? 'combat' : m.state;
+}
+
+function updateMonster(dt) {
+  const m = hunt.monster, h = hunt.hunter;
+  if (m.state === 'dead' || m.state === 'escaped') return;
+  if (m.hp <= 0) { m.state = 'dead'; return; }
+  m.elapsed += dt;
+  if (m.kickCd > 0) m.kickCd -= dt;
+  if (m.slowT > 0) m.slowT -= dt;
+  if (m.fleeBlock > 0) m.fleeBlock -= dt;
+  const spd = m.slowT > 0 ? 0.7 : 1;
+
+  if (m.state === 'trapped') {
+    m.trapT -= dt;
+    if (m.trapT <= 0) {
+      m.state = 'combat';
+      if (m.wasFlee) { m.fleeBlock = 25; m.wasFlee = false; addLog('도주 저지 성공! 몬스터가 교전으로 복귀'); }
+    }
+    return;
+  }
+
+  if (m.def.id === 'boar' && !m.enraged && m.hp / m.def.maxHp < 0.3) {
+    m.enraged = true; addLog('멧돼지 왕이 격노했다! (조준 시간 단축)');
+  }
+
+  if (m.state !== 'flee' &&
+      (m.elapsed >= m.def.fleeAtSeconds || (m.def.fleeAtHpPct > 0 && m.hp / m.def.maxHp < m.def.fleeAtHpPct)) &&
+      m.fleeBlock <= 0) {
+    m.state = 'flee';
+    addLog(m.def.name + '이(가) 도주를 시작했다!');
+  }
+
+  if (m.forceT > 0) { m.forceT -= dt; moveTowards(m, m.fx2, m.fy2, 4.5 * spd, dt); return; }
+
+  if (m.state === 'wander') {
+    if (hunt.lure) {
+      moveTowards(m, hunt.lure.x, hunt.lure.y, 2.5 * spd, dt);
+      if (dist(m, hunt.lure) < 0.5) { hunt.lure = null; addLog(m.def.name + '이(가) 미끼를 먹었다'); }
+      // 함정 체크는 아래 공통 처리
+    } else {
+      const wps = [{x:-5,y:3},{x:5,y:3},{x:5,y:-3},{x:-5,y:-3}];
+      const wp = wps[m.wp];
+      moveTowards(m, wp.x, wp.y, 1.8 * spd, dt);
+      if (dist(m, wp) < 0.4) m.wp = (m.wp + 1) % 4;
+    }
+    if (!h.ko && dist(m, h) < 4) m.state = 'combat';
+  }
+  else if (m.state === 'combat') {
+    if (m.def.id === 'boar') boarTick(m, h, dt, spd);
+    else deerTick(m, h, dt, spd);
+  }
+  else if (m.state === 'flee') {
+    const g = dist(m, GATES[0]) < dist(m, GATES[1]) ? GATES[0] : GATES[1];
+    moveTowards(m, g.x, g.y, 5.5 * spd, dt);
+    if (dist(m, g) < 0.4) m.state = 'escaped';
+  }
+}
+
+function boarTick(m, h, dt, spd) {
+  if (h.ko) return;
+  const d = dist(m, h);
+  if (m.bphase === 'approach') {
+    moveTowards(m, h.x, h.y, 2.2 * spd, dt);
+    if (d <= 5) { m.bphase = 'aim'; m.pt = m.enraged ? 1 : 2; }
+  } else if (m.bphase === 'aim') {
+    m.pt -= dt;
+    if (m.pt <= 0) {
+      const dx = h.x - m.x, dy = h.y - m.y, dd = Math.hypot(dx, dy) || 1;
+      m.cdx = dx / dd; m.cdy = dy / dd;
+      m.bphase = 'charge'; m.cdist = 0; m.chit = false;
+    }
+  } else if (m.bphase === 'charge') {
+    const bx = m.x, by = m.y;
+    moveDir(m, m.cdx, m.cdy, 10 * spd, dt);
+    m.cdist += Math.hypot(m.x - bx, m.y - by);
+    if (!m.chit && dist(m, h) < 0.9) { hitHunter(25); m.chit = true; }
+    const wall = Math.abs(m.x) >= ARENA_X - 0.05 || Math.abs(m.y) >= ARENA_Y - 0.05;
+    if (m.cdist >= 8 || wall) { m.bphase = 'recover'; m.pt = 3; }
+  } else { // recover
+    m.pt -= dt;
+    if (m.pt <= 0) m.bphase = 'approach';
+  }
+}
+
+function deerTick(m, h, dt, spd) {
+  if (h.ko) return;
+  const d = dist(m, h);
+  if (d < 1 && m.kickCd <= 0) { hitHunter(10); m.kickCd = 2; fx(h.x, h.y, '#a8e0a0'); }
+  m.sprintTimer -= dt;
+  if (m.sprintLeft > 0) { m.sprintLeft -= dt; moveSlide(m, m.sdx, m.sdy, 8 * spd, dt); return; }
+  if (m.sprintTimer <= 0) {
+    m.sprintTimer = 5; m.sprintLeft = 1.5;
+    const ax = (m.x - h.x), ay = (m.y - h.y), ad = Math.hypot(ax, ay) || 1;
+    const sgn = Math.random() < 0.5 ? 1 : -1;
+    let sx = ax / ad + (-ay / ad) * 0.8 * sgn, sy = ay / ad + (ax / ad) * 0.8 * sgn;
+    const sd = Math.hypot(sx, sy) || 1;
+    m.sdx = sx / sd; m.sdy = sy / sd;
+    return;
+  }
+  if (d < 3.5) {
+    const ax = (m.x - h.x) / (d || 1), ay = (m.y - h.y) / (d || 1);
+    moveSlide(m, ax, ay, 4.5 * spd, dt);
+  }
+}
+
+// ---------- 함정 ----------
+function updateTraps(dt) {
+  const m = hunt.monster;
+  if (m.state === 'dead' || m.state === 'escaped') return;
+  for (const t of hunt.traps) {
+    const d = Math.hypot(t.x - m.x, t.y - m.y);
+    if (t.type === 'spike') {
+      if (d < 1.15) { m.slowT = 0.3; m.hp = Math.max(0, m.hp - 10 * dt); if (m.state === 'wander') m.state = 'combat'; }
+      continue;
+    }
+    if (!t.armed || m.state === 'trapped') continue;
+    if (d < 0.7) {
+      t.armed = false;
+      hunt.lastSpent = t;
+      fx(t.x, t.y, '#ffd84d', 0.9);
+      if (t.type === 'snare') { applyTrap(m, 4, 0); addLog('속박 덫 발동! (4초 속박)'); }
+      else { applyTrap(m, 2, 30); addLog('전격 트랩 발동! (2초 기절 + 피해)'); }
+    }
+  }
+}
+
+// ---------- 헌터 ----------
+function hitHunter(dmg) {
+  const h = hunt.hunter;
+  if (h.ko) return;
+  h.hp = Math.max(0, h.hp - dmg * takenMult());
+  fx(h.x, h.y, '#ff6a5e');
+  if (h.hp <= 0) {
+    h.ko = true; h.koT = 10; hunt.hadKO = true;
+    addLog('헌터 기절! 10초 후 부활 (타이머는 계속 흐른다)');
+    const m = hunt.monster;
+    if (m.state === 'combat') { m.state = 'wander'; m.bphase = 'approach'; }
+  }
+}
+
+function condTrue(c) {
+  const h = hunt.hunter, m = hunt.monster;
+  if (c === 'always') return true;
+  if (c === 'myhp50') return h.hp / h.maxHp < 0.5;
+  if (c === 'mhp50') return m.hp / m.def.maxHp < 0.5;
+  return m.state === 'trapped';
+}
+function canRun(a) {
+  const h = hunt.hunter;
+  if (a === 'basic') return true;
+  if (a === 'strong') return h.strongCd <= 0;
+  if (a === 'potion') return h.potionCd <= 0 && run.potions > 0 && h.hp < h.maxHp * 0.95;
+  return h.lureCd <= 0 && run.lures > 0 && !hunt.lure && hunt.traps.some(t => t.armed || t.type === 'spike');
+}
+function logRule(i, msg) {
+  const g = run.gambits[i];
+  addLog('[' + (i+1) + '] ' + DB.condName[g.cond] + '→' + DB.actName[g.act] + ': ' + msg);
+}
+
+function updateHunter(dt) {
+  const h = hunt.hunter, m = hunt.monster;
+  if (m.state === 'dead' || m.state === 'escaped') return;
+  for (const k of ['basicCd','strongCd','potionCd','lureCd','focusT']) if (h[k] > 0) h[k] -= dt;
+  h.lastLog += dt;
+
+  if (h.ko) {
+    h.koT -= dt;
+    if (h.koT <= 0) { h.ko = false; h.hp = h.maxHp * 0.5; addLog('헌터가 일어났다! (HP 50%)'); }
+    return;
+  }
+
+  for (let i = 0; i < run.gambits.length; i++) {
+    const g = run.gambits[i];
+    if (!g.on || !condTrue(g.cond) || !canRun(g.act)) continue;
+    runAction(g.act, i, dt);
+    return;
+  }
+  chaseBasic(-1, dt);
+}
+
+function runAction(a, slot, dt) {
+  const h = hunt.hunter, m = hunt.monster;
+  if (a === 'basic') { chaseBasic(slot, dt); return; }
+  if (a === 'strong') {
+    if (dist(h, m) > 1.4) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
+    const dmg = 60 * dmgMult() * (m.state === 'trapped' ? 2 : 1);
+    m.hp = Math.max(0, m.hp - dmg);
+    h.strongCd = 8;
+    fx(m.x, m.y, '#ffe14d', 0.7);
+    logRule(slot, '강공격! (' + Math.round(dmg) + ' 피해)');
+    if (m.state === 'wander') m.state = 'combat';
+    return;
+  }
+  if (a === 'potion') {
+    run.potions--; h.hp = Math.min(h.maxHp, h.hp + 40); h.potionCd = 5;
+    fx(h.x, h.y, '#5ee879', 0.6);
+    logRule(slot, '회복 물약 사용 (+40)');
+    chaseBasic(-1, dt);
+    return;
+  }
+  // lure: 몬스터에서 가장 가까운 유효 함정 위로 투척
+  run.lures--; h.lureCd = 15;
+  let best = null, bd = 1e9;
+  for (const t of hunt.traps) {
+    if (!t.armed && t.type !== 'spike') continue;
+    const d = Math.hypot(t.x - m.x, t.y - m.y);
+    if (d < bd) { bd = d; best = t; }
+  }
+  hunt.lure = { x: best.x, y: best.y, life: 12 };
+  logRule(slot, '미끼 투척 (함정 위로)');
+}
+
+function chaseBasic(slot, dt) {
+  const h = hunt.hunter, m = hunt.monster;
+  if (dist(h, m) > 1.2) { moveTowards(h, m.x, m.y, 3.5, dt); return; }
+  if (h.basicCd <= 0) {
+    h.basicCd = h.focusT > 0 ? 0.4 : 0.8;
+    const dmg = 20 * dmgMult() * (m.state === 'trapped' ? 2 : 1);
+    m.hp = Math.max(0, m.hp - dmg);
+    fx(m.x, m.y, '#ffffff', 0.35);
+    if (m.state === 'wander') m.state = 'combat';
+    if (slot >= 0 && h.lastLog > 2) { h.lastLog = 0; logRule(slot, '평타 공격 중'); }
+  }
+}
+
+// ---------- 카드 ----------
+function useCard(i) {
+  if (!hunt.running || run.cardUsed[i]) return;
+  if (i === 0) {
+    if (!hunt.lastSpent) { addLog('재가동할 함정이 없다 (아직 발동된 함정 없음)'); return; }
+    hunt.lastSpent.armed = true;
+    fx(hunt.lastSpent.x, hunt.lastSpent.y, '#ffffff', 0.7);
+    run.cardUsed[0] = true;
+    addLog('카드: 함정 재가동! ' + DB.trapName[hunt.lastSpent.type] + ' 재설치');
+  } else if (i === 1) {
+    hunt.hunter.focusT = 5;
+    run.cardUsed[1] = true;
+    addLog('카드: 집중 사격! 5초간 공격속도 2배');
+  } else {
+    hunt.awaitingLure = true;
+    run.cardUsed[2] = true;
+    addLog('카드: 긴급 미끼 — 맵을 클릭해 유인 지점을 지정하라');
+  }
+  renderCards();
+}
+function renderCards() {
+  const box = $('cards');
+  box.innerHTML = '';
+  DB.cards.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.textContent = c.name;
+    b.title = c.desc;
+    b.disabled = !hunt || !hunt.running || run.cardUsed[i];
+    b.onclick = () => useCard(i);
+    box.appendChild(b);
+  });
+}
+
+$('cv-hunt').addEventListener('click', e => {
+  if (phase !== 'hunt' || !hunt || !hunt.awaitingLure) return;
+  const w = canvasWorld($('cv-hunt'), e);
+  if (Math.abs(w.x) > ARENA_X || Math.abs(w.y) > ARENA_Y) return;
+  hunt.awaitingLure = false;
+  const m = hunt.monster;
+  if (m.state !== 'trapped' && m.state !== 'dead' && m.state !== 'escaped') {
+    m.forceT = 4; m.fx2 = w.x; m.fy2 = w.y;
+  }
+  fx(w.x, w.y, '#f06fa0', 0.8, 0.5);
+  addLog('긴급 미끼 투척! 몬스터가 유인된다 (4초)');
+});
+
+$('btn-speed').onclick = () => {
+  if (!hunt) return;
+  hunt.speed = hunt.speed === 1 ? 2 : 1;
+  $('btn-speed').textContent = '▶ ' + hunt.speed + 'x';
+};
+
+// ---------- 판정/정산 ----------
+function endHunt(success, headline) {
+  hunt.running = false;
+  let body;
+  if (success) {
+    const base = run.quest.baseReward;
+    const timeBonus = Math.min(60, Math.floor(hunt.t / 10) * 5);
+    const unused = run.cardUsed.filter(u => !u).length;
+    const cardBonus = unused * 10;
+    const koBonus = hunt.hadKO ? 0 : 20;
+    const totalPct = 100 + timeBonus + cardBonus + koBonus;
+    const pts = Math.round(base * totalPct / 100);
+    honorTotal += pts; saveHonor();
+    body = headline + '\n\n기본 보상: ' + base + 'pt\n남은 시간 보너스: +' + timeBonus +
+      '%\n카드 미사용 보너스: +' + cardBonus + '% (' + unused + '장)\n노 기절 보너스: +' + koBonus +
+      '%\n─────────────\n획득 명예: ' + pts + 'pt (배율 ' + totalPct + '%)\n누적 명예: ' + honorTotal + 'pt';
+  } else {
+    honorTotal += 30; saveHonor();
+    body = headline + '\n\n위로금: 30pt\n누적 명예: ' + honorTotal + 'pt\n\n(본편에서는 실패해도 도감 정보가 남아 재도전이 쉬워진다)';
+  }
+  hunt.over = { success, body };
+  setTimeout(() => setPhase('result'), 900);
+}
+
+function renderResult() {
+  $('r-title').textContent = hunt.over.success ? '사냥 성공!' : '사냥 실패…';
+  $('r-title').className = 'r-title ' + (hunt.over.success ? 'ok' : 'no');
+  $('r-body').textContent = hunt.over.body;
+}
+$('btn-retry').onclick = () => { hunt = null; run = null; placedTraps = []; setPhase('quest'); };
+
+// ============================== 메인 루프 ==============================
+let lastTs = 0;
+function frame(ts) {
+  const rawDt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
+  lastTs = ts;
+
+  if (phase === 'hunt' && hunt && hunt.running) {
+    const dt = rawDt * hunt.speed;
+    hunt.t -= dt;
+    if (hunt.lure) { hunt.lure.life -= dt; if (hunt.lure.life <= 0) hunt.lure = null; }
+    updateMonster(dt);
+    updateTraps(dt);
+    updateHunter(dt);
+    for (const f of hunt.fx) f.t += dt;
+    hunt.fx = hunt.fx.filter(f => f.t < f.life);
+
+    const m = hunt.monster;
+    if (m.state === 'dead') endHunt(true, '사냥 성공! ' + m.def.name + '을(를) 처치했다.');
+    else if (m.state === 'escaped') endHunt(false, m.def.name + '이(가) 탈출구로 도주했다…');
+    else if (hunt.t <= 0) { hunt.t = 0; endHunt(false, '시간 초과 — ' + m.def.name + '이(가) 어둠 속으로 사라졌다…'); }
+  }
+
+  if (phase === 'hunt' && hunt) { renderHUD(); drawArena($('cv-hunt').getContext('2d'), hunt); }
+  if (phase === 'place') drawArena($('cv-place').getContext('2d'), null);
+
+  requestAnimationFrame(frame);
+}
+
+function renderHUD() {
+  const m = hunt.monster, h = hunt.hunter;
+  const t = Math.ceil(hunt.t);
+  $('h-timer').textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  $('h-timer').classList.toggle('low', hunt.t < 30);
+  const stateLabel = { wander:'경계', combat: m.enraged ? '격노' : '교전', flee:'도주 시도!', trapped:'함정 걸림', dead:'처치됨', escaped:'도주함' }[m.state];
+  $('h-mstate').textContent = stateLabel + '  ' + Math.round(m.hp) + '/' + m.def.maxHp;
+  $('h-mbar').style.width = (m.hp / m.def.maxHp * 100) + '%';
+  $('h-hinfo').textContent = h.ko ? '기절! 부활까지 ' + h.koT.toFixed(1) + '초'
+    : 'HP ' + Math.round(h.hp) + '/' + h.maxHp + ' · 물약 ' + run.potions;
+  $('h-hbar').style.width = (h.hp / h.maxHp * 100) + '%';
+  $('lure-hint').textContent = hunt.awaitingLure ? '맵을 클릭해 유인 지점을 지정하라!' : '';
+}
+
+// ============================== 렌더링 ==============================
+const PPU = 52.5; // 픽셀/월드유닛
+function W(cv, x) { return cv.canvas.width / 2 + x * PPU; }
+function H(cv, y) { return cv.canvas.height / 2 - y * PPU; }
+
+function drawArena(ctx, huntState) {
+  const cw = ctx.canvas.width, ch = ctx.canvas.height;
+  ctx.clearRect(0, 0, cw, ch);
+
+  // 바닥 + 비네트
+  ctx.fillStyle = '#16201b';
+  ctx.fillRect(0, 0, cw, ch);
+  const grad = ctx.createRadialGradient(cw/2, ch/2, 120, cw/2, ch/2, 520);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  // 벽
+  ctx.strokeStyle = '#3a4148';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(W(ctx, -ARENA_X) - 8, H(ctx, ARENA_Y) - 8, ARENA_X * 2 * PPU + 16, ARENA_Y * 2 * PPU + 16);
+
+  // 탈출구
+  for (const g of GATES) {
+    ctx.fillStyle = 'rgba(63,156,90,0.85)';
+    const gx = W(ctx, g.x + (g.x < 0 ? -0.42 : 0.42));
+    ctx.fillRect(gx - 5, H(ctx, g.y) - 47, 10, 94);
+  }
+
+  const traps = huntState ? huntState.traps : placedTraps;
+  for (const t of traps) {
+    const x = W(ctx, t.x), y = H(ctx, t.y);
+    if (t.type === 'spike') {
+      ctx.fillStyle = 'rgba(178,64,50,0.28)';
+      ctx.beginPath(); ctx.arc(x, y, 1.1 * PPU, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(178,64,50,0.7)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, 1.1 * PPU, 0, 7); ctx.stroke();
+    } else {
+      const c = t.type === 'snare' ? '232,163,61' : '79,195,217';
+      ctx.strokeStyle = t.armed ? 'rgb(' + c + ')' : 'rgba(' + c + ',0.25)';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, 0.42 * PPU, 0, 7); ctx.stroke();
+      ctx.fillStyle = t.armed ? 'rgba(' + c + ',0.22)' : 'rgba(' + c + ',0.06)';
+      ctx.beginPath(); ctx.arc(x, y, 0.42 * PPU, 0, 7); ctx.fill();
+    }
+  }
+
+  if (!huntState) return;
+  const m = huntState.monster, h = huntState.hunter;
+
+  // 미끼
+  if (huntState.lure) {
+    ctx.fillStyle = '#f06fa0';
+    ctx.beginPath(); ctx.arc(W(ctx, huntState.lure.x), H(ctx, huntState.lure.y), 7, 0, 7); ctx.fill();
+  }
+
+  // 멧돼지 조준선
+  if (m.def.id === 'boar' && m.state === 'combat' && m.bphase === 'aim') {
+    ctx.strokeStyle = 'rgba(224,82,82,0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(W(ctx, m.x), H(ctx, m.y));
+    ctx.lineTo(W(ctx, h.x), H(ctx, h.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 몬스터
+  const mr = (m.def.id === 'boar' ? 0.7 : 0.5) * PPU;
+  let mc = m.def.id === 'boar' ? '#8a5a33' : '#90c878';
+  if (m.state === 'trapped') mc = '#7b8188';
+  else if (m.enraged) mc = '#d84a3e';
+  else if (m.def.id === 'boar' && m.bphase === 'aim' && m.state === 'combat') mc = '#e08050';
+  if (m.state === 'dead') mc = '#3a3f45';
+  ctx.globalAlpha = m.state === 'escaped' ? 0.25 : 1;
+  ctx.fillStyle = mc;
+  ctx.beginPath(); ctx.arc(W(ctx, m.x), H(ctx, m.y), mr, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(W(ctx, m.x), H(ctx, m.y), mr, 0, 7); ctx.stroke();
+  ctx.globalAlpha = 1;
+  // 몬스터 미니 HP바
+  if (m.state !== 'dead' && m.state !== 'escaped') {
+    const bw = mr * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 12, bw, 5);
+    ctx.fillStyle = '#e05252';
+    ctx.fillRect(W(ctx, m.x) - bw/2, H(ctx, m.y) - mr - 12, bw * m.hp / m.def.maxHp, 5);
+  }
+
+  // 헌터
+  ctx.fillStyle = h.ko ? '#5a6068' : '#4a90d9';
+  ctx.beginPath(); ctx.arc(W(ctx, h.x), H(ctx, h.y), 0.4 * PPU, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(W(ctx, h.x), H(ctx, h.y), 0.4 * PPU, 0, 7); ctx.stroke();
+  if (h.focusT > 0) {
+    ctx.strokeStyle = 'rgba(232,163,61,0.8)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(W(ctx, h.x), H(ctx, h.y), 0.55 * PPU, 0, 7); ctx.stroke();
+  }
+
+  // 이펙트
+  for (const f of huntState.fx) {
+    const p = f.t / f.life;
+    ctx.globalAlpha = 1 - p;
+    ctx.fillStyle = f.color;
+    ctx.beginPath(); ctx.arc(W(ctx, f.x), H(ctx, f.y), f.r * PPU * (0.6 + p * 0.8), 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================== 시작 ==============================
+renderQuest();
+requestAnimationFrame(frame);
+</script>
