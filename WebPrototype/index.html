@@ -258,7 +258,7 @@
     </div>
   </section>
   <footer style="margin-top:22px;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:0.72rem">
-    캐릭터·몬스터·함정 아트: <a href="https://game-icons.net" style="color:var(--amber-dim)">game-icons.net</a> — CC BY 3.0 (Lorc, Delapouite 외). 코드에서 음영·외곽선·그림자 처리.
+아트: 직접 제작한 픽셀 스프라이트 (코드 렌더) · 사운드: WebAudio 절차 생성 · 외부 에셋 없음.
   </footer>
 </div>
 
@@ -1746,57 +1746,38 @@ function attackLunge(e, tx, ty, amt) {
   e.atkDx = dx / d; e.atkDy = dy / d; e.atkT = 0.22; e.atkAmt = amt || 0.13;
 }
 
-// ---------- 스프라이트 (game-icons.net, CC BY 3.0 — 실루엣에 음영·외곽선·그림자 베이킹) ----------
-// 원본 아이콘 경로 데이터 (512 그리드, fill 단색). 아래 iconSprite가 그라디언트·외곽선·드롭섀도우를 입힌다.
-const GICON = {
-  boar: "m244.3 66.3l11.5 25.2l-36.4-13.9l3.4 21.5l-190.66 122l-10.27 125.1l18.23-1.9C77.07 386.1 47.94 462 47.94 462h32.17l30.79-63.1s-41.49-73.4-7.8-124.9c-3.69 81 43.7 117.1 43.7 117.1l35.3-9.4l-2 17.1l59-16.9s-66.8-57.8-36.5-128.1l15.3-9c-16.2 119 72 114.5 91.6 217.2h26.1l-51.5-223.9l17.7 10s13.1 37.7 23.3 66.9c7 20 26.2 33.2 47.4 32.6l29.3-.9c11.8-8.9 16.4-18 17-26.4c.3-5-.6-9.6-2-13.4c-7.5 10.7-21.3 23.5-44.5 24.3l-.5-16.7c28.4-.9 36.7-27.4 36.7-27.4c.9-2.9 3.3-5 6.3-5.7c2.9-.6 6 .5 8 2.8c0 0 14 16.4 12.6 37.2c-.5 7.7-3 16.1-9.2 24.5l18.9-.6l45-48c-69.5-46.6-55-96.4-43.9-146.8l-63.7-26.6c2.1 20.1 1.9 36.9 1.9 36.9l-16.7-.2s.6-39.5-7.7-68.1c-2.3-7.9-5-15.2-9.1-19.7c-44.2 33.7-31.6 97.8-31.6 97.8l-16.3 3.1s-7.7-41.4 9.7-78.9zm231.7 0l-55.7 46.9l33.6 18.6zM346.4 209.4s9.7.2 19.5 4.8c9.7 4.5 19.6 13.3 19.8 30.3c-53.7 4.1-39.3-35.1-39.3-35.1m10.9 171.1l17.8 81h28.2l-7.6-77.1z",
-  deer: "m139.3 20.25l-16.1 4.5c9.4 33.5 22.3 51.1 37 60.3c14.9 9.4 32.1 10.2 50.9 8.5c25-2.3 53.2-9.6 82 1.1c7.8 3.5 16 7.95 24.7 13.85c4.6-1.4 8.6-3.2 12.6-4.5c0 0 3.2-10.25-2-23.35c-4.5-11.5-15.7-26-44-36.2l-5.6 15.6c17.4 6.4 26.8 14.3 31.6 21.8c.7 1.1 1.2 2.1 1.7 3.1c-3.8-2-7.7-3.8-11.5-5.2c-28.1-13-50.6-13.8-68.6-15.8c-9.6-1-17.7-2.2-24.4-7c-6.7-4.9-11.7-13.4-16-28.2l-16 4.7c5.7 19.6 13.3 30.4 22.2 36.9c4 2.9 8.3 5 12.9 6.5c-15.8.85-30.7.67-41.7-5.9c-12.2-7.7-21.9-22.9-29.7-50.7m89.5 3.6c-.9 11.2 1.1 20.3 4.4 27.7c7.7.96 14.4 1.1 21.4 2.3c-5.4-6-10.2-15.2-9.2-28.8zm120.3 13.5l-10.9 12.5c8.2 7.2 10.5 15.8 10.5 23.1c-4.4-3.92-8.4-6.53-13.1-8.9c7.2 8.42 8.2 23.36 8.7 31.4l15.5 1.7s17.6-35.2-10.7-59.8m-80.7 69.35c-17.5 2-26.8-2.6-32.4 13.8c0 0 18.8 27.9 68.9 27.2c-2.8 11.4-1.5 19.8-1.5 29.9c0 33.6-27 62.9-86.5 62.9c-30.2 0-66.9 5.4-94.9 20.5c-19.9 10.7-35.47 26.2-42.36 47.7l7.81 10.9l14.95.2v61.7l-18.24 28.3l5.24 82h17.3l1.5-66c8.6-5 28.3-18 45.1-38c22.8-26.9 40.3-66 19.7-114.4l15.4-6.5c16.9 39.7 11 74.1-3.8 101.8c28.3-.9 52.6-2.7 73.2-6.1l-4.7-56.3l16.6-1.4l15.8 186.9h17.2l2.9-121.7c13.7-5.8 44.9-27.1 59.5-101.1c1.8-9 2.8-16.6 3.3-23.1c2.3-16.5 3.6-35.1 4-56.3l-24.5-7.7h75.3l7.3-16.5c-7.1.3-15.6-3.4-15.6-3.4l1.7-8h15.8l-85.5-44.3c-9.5 3.6-19.5 8.3-26.5 14c-5.6-4-25-16.5-52-17m95.5 226.6c-9.7 18.1-20.1 31.6-29.1 41.2l47.1 20.8l-20.9 47.5l15 7l33.4-64.8l-44.3-37.4c-.4-2.3-.9-6.8-1.2-14.3m-153.8 50.8c-11.3.7-23.3 1.2-36.1 1.4c-8.7 11.5-18.7 22.6-29.1 31.2l8.7 75h17.1v-65c7.3-6 24.9-21.3 39.4-42.6",
-  hunter: "M341 25.97c-25.5 42.42-21.2 82.13-10.9 117.13c10.3 35.1 25.6 66.5 25.6 95.5h.1c6.3-1.4 12.1-1.9 17.9-.9c-.3-34.7-16.8-67-26.4-99.6c-9.7-33-13.4-65.29 9.1-102.87zm-33.3 36.27L154.2 227.7c7.6 0 15.6.9 23.2 2.9c7.2-2.9 13.8-8 19.3-15.1c4.1-5.3 7.5-11.6 10-18.7L304 91.96c.1-9.68 1.2-19.6 3.7-29.72M164.2 107.1c-12.3 0-23.7 6.3-32.5 17.6s-14.5 27.4-14.5 45.4s5.7 34.1 14.5 45.4c1.4 1.8 2.9 3.5 4.4 5l70.9-76.3c-2.5-7.4-6.1-14-10.3-19.5c-8.8-11.3-20.2-17.6-32.5-17.6m264.5 119.5v19h-34c5.9 4.9 9 11.3 10.2 18h23.8v19l64-28zm-225.2 19c1.4 2 2.5 4.3 3.3 6.8c.8 2.4.5 5.1-.2 6.7c-.7 1.9-1.8 3.1-3.2 4.5h131.5c.1-.2.1-.4.1-.6c1.9-8.2 2.5-12.6 8-17.4zm-58.3.5c-8.5 1.3-14.4 4.5-21 6.7l-74.48-1c-23.01-.1-31.67 34.4-7.93 35.4c16.14.3 27.69-2 39.55-4s24.16-3.8 39.56-1.3c9.3 2.2 18.1 7.4 25.3 12c8.7 2.2 17.5 2 23.8.2c5.7-1.6 8.7-4.1 9.9-6.1c-5-7.6-12.3-14.2-9.6-22.3c3-6.4 9.5-9.1 15-12.1c.1 0 .2-.1.3-.1c-2.6-1.9-6.4-3.8-11.3-5.1c-10.2-2.3-19.5-3.2-29.1-2.3m209 13.7c.9-1-.8 1.7-1.3 5.7c-.6 4-.8 9.2-.4 14.4c1.3 6.9.7 16.2 6.2 21.4c6.5 4.1 24.2 5.1 27.2-1.2c1.3-12.3 4.1-23.5.8-35.2c-.8-3-1.9-4.3-2.2-4.5c-8.6-4.6-22.7-8.8-30.3-.6m-19.7 21.1c-51 .9-87.9.2-137.8.6c5.7 15.3-9.3 26.3-21.9 29.9c-.1 0-.2 0-.3.1l130.8 171c-1.4-9.8-1.5-19.3-.9-28.6l-84.2-110.1c.7-14.3 0-25.5-.9-39.3c40.6 2.7 82.7 1.5 119.6-1.7c-2.5-7-3.9-15-4.4-21.6zM112.9 299c-12.5 41.7-2.7 92.3-7.3 138v-.2L101 494h121.1l-16.7-63.3c3.5-12.9 6.8-26.4 8.9-37.6l-61.1-79.9c-17.7-.3-25.6-12.5-40.3-14.2m242.8 21.2c-.6 28.6-15.5 59.4-25.6 93.9c-7.2 24.5-11.5 51.4-4.6 79.9h18.4c-7.7-26.2-3.8-50.4 3.4-74.9c9.3-31.5 25-62.8 26.3-96.1c-6 .3-12.2-.5-17.9-2.8",
-  bear: "M238.431 80.77c-35.155.246-72.04 8.661-108.484 27.94c-159.897 92.488-95.518 226.22-83.813 261.496c20.81 24.447 48.8 32.745 74.469 46.26l-.98-20.2l18.72 6.91l-1.414-14.996l21.487-.039l-33.25-37.34c9.816-13.393 12.76-41.423 15.21-56.044l59.329 12.877l56.068-6.44c3.142 30.472 7.892 60.945 20.21 91.416l69.76 38.625l-3.724-19.205l23.729 4.156l-2.356-16.88l23.426 1.029l-45.639-41.844l.467-41.772c14.428-15.907 44.975-17 52.157-12.23c-1.956 16.792 3.749 24.053 9.314 39.195c7.123 19.382 23.098 32.587 37.812 46.35l2.076-18.77l22.463 4.166l-1.4-16.394l24.455 2.674l-24.123-37.34c.486-20.817.546-41.634-2.256-62.451c-3.414 5.69-8.437 10.6-13.912 14.625c-10.461 7.69-23.42 12.82-36.252 12.326c-8.843-.341-42.722 3.68-60.857-22.658l14.826-10.21c11.768 17.092 33.138 14.358 46.724 14.882c7.047.271 17.368-3.307 24.897-8.842s11.346-12.392 11.064-16.223l-.33-4.476l3.377-2.957s3.945-3.469 7.889-8.206c3.944-4.736 6.94-11.006 6.969-12.492c.011-.588-1.189-3.557-3.434-8.07s-5.342-12.089-1.871-19.95c2.355-5.333 5.118-8.272 6.578-10.831c1.413-2.477 2.416-5.004 2.535-10.856c-.417-4.153-1.148-5.244-2.795-6.623c-1.722-1.441-5.616-3.179-11.742-5.123c-3.19-1.013-3.497-.562-6.055 1.506s-5.59 6.183-10.037 10.187l-3.222 2.903l-4.278-.713c-20.726-3.451-41.094-1.951-60.205 5.607l-3.582 1.416l-3.496-1.61c-12.335-5.685-21.75-10.818-27.205-11.981c-2.728-.582-4.082-.43-5.498.191c-1.416.62-3.404 2.09-5.975 5.928c-3.113 4.649-4.81 12.102-3.736 18.468c1.074 6.367 4.067 11.36 10.791 14.297l-7.205 16.494c-12.43-5.429-19.456-16.646-21.336-27.798s.537-22.527 6.531-31.477c3.815-5.696 8.286-10.025 13.71-12.4c5.423-2.376 11.29-2.414 16.472-1.309c9.322 1.987 17.862 6.877 27.783 11.674c12.084-4.308 24.541-6.575 37.098-7.066c-38.725-39.944-98.414-69.255-164.537-69.78q-1.695-.014-3.397-.002m188.48 101.973c6.752 0 12.225 6.629 12.225 14.807c0 8.177-5.473 14.807-12.224 14.806c-6.751 0-12.223-6.63-12.223-14.806c0-8.177 5.472-14.806 12.223-14.807zm-48.732 5.148c6.75.001 12.223 6.63 12.223 14.807s-5.472 14.806-12.223 14.807c-6.751 0-12.224-6.63-12.224-14.807c0-8.178 5.473-14.807 12.224-14.807m31.096 40.985c8.973-.167 16.408 3.757 16.607 8.765c.12 3.058-2.53 5.961-7.047 7.721l.497 15.873l-17.99.565l-.507-16.176c-4.535-1.603-7.325-4.367-7.447-7.377c-.199-5.008 6.914-9.204 15.887-9.371m-259.828 86.062l7.365 37.684l38.545 25.539l-2.422-14.9l17.178 2.609l-5.457-11.967l18.656.97l-20.46-19.366l-1.395-6.926z",
-  snare: "M60.406 156.688L24 259.75L203.938 324a58.4 58.4 0 0 1 5.625-26.594a57.97 57.97 0 0 1 33.906-30.187l-24.44-53.908l-19.124 54.125l-33-72.718l-19.094 54.093l-33-72.72l-19.968 56.532l-34.438-75.938zm399.781 0l-34.468 75.937l-19.97-56.53l-33 72.718l-19.094-54.094l-33 72.718l-19.125-54.125l-31.936 70.468a36.7 36.7 0 0 0-8.281-.966c-14.28-.007-28.097 8.283-34.875 22.592c-9.33 19.695-1.36 42.64 17.5 51.656c18.86 9.017 41.483.758 50.812-18.937a41 41 0 0 0 2.625-7.25l199.22-71.125zM199.78 178.03v18.69h120.595v-18.69zm50.126 35.345v52.906h18.688v-52.905h-18.688zm10.25 90.563c9.678 0 17.53 7.824 17.53 17.5c.002 9.675-7.854 17.53-17.53 17.53s-17.53-7.853-17.53-17.53s7.852-17.5 17.53-17.5M99.53 336.967c-50.15 13.628-82.56 33.83-82.56 56.22c0 41.017 106.544 74.343 237.718 74.343s237.687-33.327 237.687-74.342c0-22.313-32.124-42.595-81.97-56.22c17.232 8.878 27.533 19.275 27.533 30.47c0 32.127-82.313 58.53-183.25 58.53c-100.938 0-182.657-26.403-182.657-58.53c0-11.257 10.095-21.56 27.5-30.47z",
-  shock: "m192.063 20.375l-44.625 98.563l-36.344-13.657l40.312 47.22l29.47-50.656l17.093 159.437l88.874-159.936l7.906 138.22l74.72-140.408l32.905 9.094l-32.594-57.28l-58.75 91.343L300.657 27.28L216.75 153.657l-24.688-133.28zM61.25 100.813c-22.213 0-40.03 17.785-40.03 40a39.896 39.896 0 0 0 40.03 40.03c.558 0 1.104-.04 1.656-.062l19.5 72.814l-27.812 7.437l4.843 18.064l27.813-7.47l6.656 24.876l-27.812 7.438L70.938 322l27.812-7.438l7.156 26.782l-27.78 7.437l4.81 18.033l27.814-7.438l6.906 25.813l-27.78 7.437l4.843 18.063l27.78-7.438l7.188 26.75l-27.813 7.47l4.844 18.06l27.81-7.467l12.25 45.78h19.345l-13.563-50.593l27.813-7.47l-4.844-18.06l-27.81 7.467l-7.157-26.78l27.78-7.438l-4.812-18.064l-27.81 7.438l-6.907-25.813l27.78-7.436l-4.812-18.063l-27.81 7.47l-7.157-26.78l27.78-7.44l-4.843-18.06l-27.78 7.436l-6.657-24.875l27.78-7.436l-4.843-18.03l-27.78 7.436l-19.564-73.03c12.173-6.842 20.344-19.858 20.344-34.907c0-22.215-17.787-40-40-40zm391.188 0c-22.213 0-40.032 17.785-40.032 40c0 15.052 8.19 28.066 20.375 34.906l-19.56 73.03l-27.814-7.438l-4.844 18.032l27.813 7.47l-6.656 24.842l-27.814-7.437l-4.844 18.06l27.813 7.44l-7.156 26.78l-27.814-7.47l-4.844 18.064l27.813 7.437l-6.906 25.814l-27.814-7.438l-4.844 18.063l27.813 7.436l-7.156 26.78l-27.845-7.467l-4.813 18.06l27.813 7.47l-13.563 50.594h19.313l12.25-45.78l27.813 7.467l4.843-18.06l-27.81-7.47l7.186-26.75l27.813 7.438l4.842-18.063L396 385.187l6.906-25.812l27.813 7.438l4.842-18.032l-27.812-7.467l7.156-26.75L442.72 322l4.842-18.063l-27.812-7.437l6.656-24.875l27.813 7.47l4.842-18.064l-27.812-7.436l19.5-72.813c.562.024 1.12.064 1.688.064c22.212 0 40-17.817 40-40.03c0-22.216-17.788-40-40-40z",
-  spike: "M256 16c-7.5 67.5-37.5 150-37.5 180c0 15 15 30 37.5 30s37.5-15 37.5-30c0-30-30-112.5-37.5-180M143.5 61.156c27.255 62.207 24.5 72.447 32 85.438s15.01 25.97 28 18.47s5.5-20.48-2-33.47s-17.755-15.73-58-70.438m225 0c-40.245 54.707-50.5 57.447-58 70.438s-14.99 25.97-2 33.47s20.5-5.48 28-18.47s4.745-23.23 32-85.438M61.156 143.5c54.707 40.245 57.447 50.5 70.438 58s25.97 14.99 33.47 2s-5.48-20.5-18.47-28s-23.23-4.745-85.438-32m389.688 0c-62.207 27.255-72.447 24.5-85.438 32s-25.97 15.01-18.47 28c7.502 12.99 20.48 5.5 33.47-2s15.73-17.755 70.438-58M196 218.5c-30 0-112.5 30-180 37.5c67.5 7.5 150 37.5 180 37.5c15 0 30-15 30-37.5s-15-37.5-30-37.5m120 0c-15 0-30 15-30 37.5s15 37.5 30 37.5c30 0 112.5-30 180-37.5c-67.5-7.5-150-37.5-180-37.5M256 286c-22.5 0-37.5 15-37.5 30c0 30 30 112.5 37.5 180c7.5-67.5 37.5-150 37.5-180c0-15-15-30-37.5-30m-102.438 15.438c-6.563.164-14.255 4.61-21.968 9.062c-12.99 7.5-15.73 17.755-70.438 58c62.207-27.255 72.447-24.5 85.438-32s25.97-15.01 18.47-28c-3.048-5.277-7.01-7.175-11.5-7.063zm203.844 0c-4.067.19-7.656 2.19-10.47 7.062c-7.498 12.99 5.48 20.5 18.47 28s23.23 4.745 85.438 32c-54.707-40.245-57.447-50.5-70.438-58c-8.12-4.688-16.22-9.378-23-9.063zM195.72 344.75c-8.48.378-14.36 10.508-20.22 20.656c-7.5 12.99-4.745 23.23-32 85.438c40.245-54.707 50.5-57.447 58-70.438s14.99-25.97 2-33.47c-2.842-1.64-5.408-2.292-7.78-2.186m119.53 0c-2.086.1-4.314.78-6.75 2.188c-12.99 7.5-5.5 20.478 2 33.468s17.755 15.73 58 70.438c-27.255-62.207-24.5-72.447-32-85.438c-6.094-10.554-12.21-21.092-21.25-20.656",
-  lure: "M440.156 98.063c-4.05-.11-8.044 1.117-11.656 4c-1.542 1.23-3.1 2.884-4.47 4.75c-22.9 31.22-48.278 57.33-75.186 81c-8.76 14.692 10.695 44.406 25.594 44.406c34.144-12.928 69.617-22.516 106.75-26.314c42.628-4.358 17.688-68.134-26.25-45.47c30.3-22.666 7.094-61.79-14.782-62.374zM310.47 108.156c-6.167-.108-12.215 1.172-17.595 4.28a31 31 0 0 0-4.406 3.095c-.038-.056-.09-.13-.126-.186c-79.912 66.402-116.334 73.468-158.22 86.844c-6.886 2.2-12.27 7.18-16.5 15.5s-6.892 19.843-7.343 33.125c-.9 26.563 6.935 59.927 23.72 89.03c16.72 28.99 43.37 53.946 67.656 67.126c12.143 6.59 23.682 10.167 32.375 10.436s13.915-1.95 17.782-7.375c30.986-43.45 89.343-69.052 156.157-92.25c-.005-.006.003-.023 0-.03a31 31 0 0 0 5.842-2.594c8.2-4.738 13.535-12.897 16.282-22.125s3.22-19.75 2.03-31.25c-.953-9.233-3.033-19.127-6.155-29.374c-5.916 1.366-11.628 3.157-17.908 5.47c2.835 9.25 4.69 17.978 5.5 25.81c1.007 9.74.403 18.06-1.375 24.033c-1.777 5.972-4.412 9.338-7.718 11.25c-3.308 1.91-7.543 2.505-13.595 1.06c-6.052-1.443-13.55-5.07-21.47-10.81c-15.838-11.482-33.334-31.223-47.624-56c-14.29-24.78-22.61-49.838-24.624-69.314c-1.006-9.738-.403-18.027 1.375-24c1.78-5.973 4.414-9.37 7.72-11.28c1.653-.957 3.52-1.58 5.75-1.782c.557-.05 1.147-.067 1.75-.063c1.81.014 3.824.272 6.094.814c6.05 1.444 13.518 5.04 21.437 10.78c8.218 5.957 16.884 14.166 25.314 24.126c5.07-4.055 9.34-8.25 13.406-13.188c-8.97-10.46-18.366-19.26-27.75-26.062c-9.354-6.78-18.733-11.61-28.094-13.844a46 46 0 0 0-7.03-1.125a44 44 0 0 0-2.657-.124zm7.967 34.188c-.438.024-.86.063-1.28.125c-17.327 2.54-14.97 36.035 5.03 74.56c20 38.528 50.52 67.576 67.844 65.032c5.995-.88 9.263-5.687 10.658-12.875c-1.67 2.187-3.847 3.484-6.72 3.907c-15.316 2.248-42.316-23.093-60-57.156c-17.682-34.064-19.254-63.91-3.937-66.157c3.638-.53 7.69.417 12.345 2.782c-8.68-6.8-17.353-10.583-23.938-10.218zM102 325.124c-16.555 1.844-35.304 3.26-57.063 4.376c-49.128 2.523-25.555 71.576 30.094 52.22c-49.365 29.9 3.86 86.927 26.97 46.75c10.362-18.016 21.88-33.79 34.375-47.814c-8.42-9.644-16.078-20.224-22.563-31.47a201 201 0 0 1-11.812-24.06z",
+// ---------- 픽셀 아트 스프라이트 (직접 제작, 저해상 + 니어리스트 확대) ----------
+const PXPAL = {"a":"#2a1608","e":"#a06a38","d":"#8a5a2c","b":"#4a2c14","y":"#160c04","c":"#6e4526","T":"#ece2c8","f":"#2e2410","A":"#e6d6a8","g":"#6a5428","k":"#dcc48c","j":"#c4a668","i":"#a88a4c","h":"#8a7038","m":"#160d07","r":"#9a7a4a","n":"#332314","p":"#634828","o":"#4c3620","q":"#7a5a34","E":"#ff8a2a","s":"#0d1220","R":"#a83232","W":"#b8c0cc","v":"#4e6690","L":"#6a4a24","w":"#6a86b0","u":"#3a4e70","t":"#26324a","J":"#20242a","I":"#4a5058","H":"#8a9098","G":"#c2c8d0","N":"#2f5a92","S":"#bfe4ff","B":"#7fb4ea","P":"#e07a5a","Y":"#d8c48a","Q":"#7c2f24"};
+const PXSPR = {
+  boar: ["..............................","..............................","..............................","..............................","..............................","..........a...a...............",".......aaaeaaaeaaa.a..........","......aeeeaeeeaeeeaeaa........",".....aeeeedeeeeeeeeebbaaaa....",".....aedddddddddddddebeeeea...","....aeddddddddddddddddeeeeea..","....adddddddddddddddddddydeea.","...aedcccccdccddddccdddddddbaa","....acccccccccccccccccdddddddd","....abbccccccccccccccccccccddd",".....abbbbccbbccccbbbcccccbddd","......abbbbbbbbbbbbbbbbbbbTTaa",".......abbbbbbbbbbbbabbbbbaTa.",".......abbaabbbaaabbaabbaa.a..",".......abbaabba..abbaabba.....",".......abbaabba..abbaabba.....",".......abbaabba..abbaabba....."],
+  deer: [".................fAf.....fAf..","..................fAff.ffAf...","...................fAAfAAf....","....................fgfAf.....","...................fgAkAf.....","...................fkkkykff...","..................fkkjjjiiif..","..........fffffff..fjjjhiiif..","........ffkkkkkkkfffjiigfff...","......ffkkkkjjkkkkkfiiif......",".....fkkjjjkjjjjjjjiihhf......",".....fjjjjjjiikjjjjihhhf......","....fkiiiiiiiiiiiiihhggf......",".....fhhhhiihhiiihhhgff.......",".....fgghkkkkkkkkhhggf........","......ffgkkkkkkkkggfggf.......",".......fgggggggggggfggf.......",".......fggffggfffggfggf.......",".......fggffggf.fggfggf.......",".......fggffggf.fggfggf.......",".......fggffggf.fggfggf.......",".......fggffggf.fggfggf.......",".......fggffggf.fggfggf.......",".......fggffggf.fggfggf......."],
+  bear: ["................................","................................","................................","................................","................................","......................m.....m...","........m.....m......mrm...mrm..",".....mmmrmmmmmrmmmmmmrrrm.mrrrm.","....mrrrrrrrrrrrrrrrrrnprmrpnprm","...mrrrrrrrrrrrrrrrrrrrnrrrnonm.","...mrrrrqrrrrrqrrrrrrrrrrrrrnm..","...moooooooqooooqqooqqqrqqqrprm.","..mrpppppppoppppoopppqqqqqqEoom.","...mopppppppppppppppoppqqqqqorrm","...mooppopppppoppppppoppppprrrrm","...mnoooooopooooppooooopppprrrrm","....mnooooooooooooooooooooorrrrr","....mnnnnnnonnnnoonnnnnooooomrmm",".....mnnnnnonnnnoonnnnnnnnnm.m..","......mnnnnnnnnnnnnnnnmnnnnm....","......mnnnnnnnnnnnnnnnmnnnnm....","......mnnnnmnnnnmmnnnnmnnnnm....","......mnnnnmnnnnmmnnnnmnnnnm....","......mnnnnmnnnnmmnnnnmnnnnm....","......mnnnnmnnnnmmnnnnmnnnnm....","......mnnnnmnnnnmmnnnnmnnnnm...."],
+  hunter: ["..........................",".............s............","..........sssRsss.........",".........sRRRRRRRs........","........sRRRRRRRRRs.......","........sRRRRRRRRRs.s.....","........sRRRyWRRRRssWs....","........svRWWWWWRvssWLs...",".........svWWWWWvs.sWLs...",".........svWWWWWvs.sWsLs..",".........swvvWvvws.sWsLs..","........swwwwvwwwwssWsLs..","........swwwwwwwwwssWssLs.",".......swvvvvwvvvvwsWssLs.",".......swvvvvvvvvLLLLLLWs.",".......svvvvvvvvvvvsWssLs.","......swvvvvvvvvvvvwWssLs.",".......svuuuuvuuuuvsWsLs..",".......suuuuuuuuuuusWsLs..",".......suuuuuuuuuuusWsLs..",".......suutuuuuutuusWLs...",".......stttttutttttsWLs...",".......stttttttttttsWs....","........sstttttttss.s.....",".........stttsttts........",".........stttsttts........",".........stttsttts........",".........stttsttts........",".........stttsttts........",".........stttsttts........"],
+  snare: ["......................","...........J..........",".......JJJJIJJJJ......","......JHHHHHHHHHJ.....",".....JIIIIIIIIIIIJ....","....JIIIIJJGJJIIIIJ...","...JIIIJGJJHJJGJIIIJ..","..JIIIJJHJ.J.JHJJIIIJ.","..JIIIGJJ.JJJ.JHGIIIJ.","..JIIJJHJJHHHJ.JJJIIJ.","..JIIJJJJHHHHHJ.JJIIJ.",".JIIIGHJJHHIHHJJHGIIIJ","..JIIJJ.JHHHHHJ.JJIIJ.","..JIIJJJ.JHHHJ.JJJIIJ.","..JIIIGHJJJJJ.JHGIIIJ.","..JIIIJJJHJJ.JHJJIIIJ.","...JIIIJGJJHJJGJIIIJ..","....JIIIIJJGJJIIIIJ...",".....JIIIIIIIIIIIJ....","......JIIIIIIIIIJ.....",".......JJJJIJJJJ......","...........J.........."],
+  shock: ["..........J.........","......JJJJNJJJJ.....",".....JNNNNSBNNNJ....","....JNNNNNNNNNNNJ...","...JNNNNJSBJJNNNNJ..","..JNNNJJJJJ..JJNNNJ.",".JNNNJ.JSBJJJ..JNNNJ",".JNNNJ..JJJSBJ.JNNNJ",".JNNJ....JJJJ...JNNJ",".JNNJ...JSSSJ...JNNJ","JNNNJ...JSSSJ...JNNN",".JNNJ...JSSSJJ..JNNJ",".JNNJ....JJJSBJ.JNNJ",".JNNNJ.....JJJ.JNNNJ",".JNNNJ....JSBJ.JNNNJ","..JNNNJJ..JJJJJNNNJ.","...JNNNNJJSBJNNNNJ..","....JNNNNNNNNNNNJ...",".....JNNNNNNNNNJ....","......JJJJNJJJJ....."],
+  spike: ["........................","........................","........................","........................","........................","........................","........................","........................","..........J........J....",".....J...JGJ...J..JGJ...","....JGJ.JGGGJ.JGJJGGGJ..","...JGGGJJGGGJJGGGJGGGJ..","...JGGGJHHHHHJGGGHHHHHJ.","..JHHHHHHHHHHGHHHHHHHHJ.","..JHHHHGHHHHGGGHHHGHHHHJ",".JHHHHGGGHHHGGGHHGGGHHHJ",".JHHHHGGGJJJHHHHHGJGJJJ.","..JJJHJHHHJHHHJHJHHHHJ..","....JHHHHHHHHHHHHHHHHJ..","...JHHHHHHHHHHHHHHHHHHJ.","...JHHHHHHHJJJJHHHHHHHJ.","....JJJJJJJ....JJJJJJJ.."],
+  lure: ["..................","..................","..................",".........m........","......mmmPmmm.....","....mmPPPPPPPmm...","..mmPPPPPPPPPPPmm.",".mYmPPPPPPPPPPPmYm","mYYYYYRRRPRRRYYYYY",".mYmRRRRRRRRRRRmYm","..mmQQQQQRQQQQQmm.","....mmQQQQQQQmm...","......mmmQmmm.....",".........m........"],
 };
-// 실루엣에 입체 음영을 베이킹한 스프라이트 SVG를 Image로 반환
-// cols = [top, mid, bottom, outline], flip = 기본 방향을 좌우 반전(기본 우향 정규화)
-function iconSprite(d, cols, flip) {
-  const [T, M, B, O] = cols;
-  const g = flip ? '<g transform="translate(512,0) scale(-1,1)">' : '<g>';
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
-    '<defs>' +
-    '<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + T + '"/><stop offset=".5" stop-color="' + M + '"/><stop offset="1" stop-color="' + B + '"/></linearGradient>' +
-    '<linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>' +
-    '<filter id="ds" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".5"/></filter>' +
-    '</defs>' +
-    '<g filter="url(#ds)">' + g +
-    '<path d="' + d + '" fill="url(#bg)" stroke="' + O + '" stroke-width="16" stroke-linejoin="round" paint-order="stroke"/>' +
-    '<path d="' + d + '" fill="url(#hl)"/>' +
-    '</g></g></svg>';
-  const img = new Image();
-  img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return img;
-}
-// 바닥 데칼(함정·미끼)용 — 그림자 없이 평면 음영
-function iconDecal(d, cols) {
-  const [T, M, B, O] = cols;
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
-    '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + T + '"/><stop offset=".5" stop-color="' + M + '"/><stop offset="1" stop-color="' + B + '"/></linearGradient></defs>' +
-    '<path d="' + d + '" fill="url(#bg)" stroke="' + O + '" stroke-width="14" stroke-linejoin="round" paint-order="stroke"/></svg>';
-  const img = new Image();
-  img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  return img;
+// 픽셀 그리드를 정사각 캔버스(발밑 정렬)로 렌더 — 기존 drawSprite 파이프라인에 그대로 투입
+function pixelSprite(rows) {
+  const h = rows.length, w = rows[0].length, S = Math.max(w, h);
+  const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+  const g = cv.getContext('2d');
+  const ox = (S - w) >> 1, oy = S - h;
+  for (let y = 0; y < h; y++) { const r = rows[y]; for (let x = 0; x < w; x++) { const c = PXPAL[r[x]]; if (c) { g.fillStyle = c; g.fillRect(ox + x, oy + y, 1, 1); } } }
+  cv.complete = true; cv.naturalWidth = S; cv.naturalHeight = S;
+  return cv;
 }
 
 const SPR = {
-  boar:   iconSprite(GICON.boar,   ['#9a663a','#6e4526','#3e2412','#1e1109'], true),
-  deer:   iconSprite(GICON.deer,   ['#cbb37e','#a2884f','#675530','#3a2f1a'], false),
-  hunter: iconSprite(GICON.hunter, ['#7a8ba0','#4a5a72','#2a3244','#10151f'], false),
-  bear:   iconSprite(GICON.bear,   ['#7a5238','#4e3826','#281a10','#140d07'], false),
-  snare:  iconDecal(GICON.snare,   ['#b8b0a0','#7d766a','#45403a','#201d18']),
-  shock:  iconDecal(GICON.shock,   ['#cfeaff','#7fb4ea','#3f6fae','#14243c']),
-  spike:  iconDecal(GICON.spike,   ['#b0a89a','#7a7264','#443f38','#1c1915']),
-  lure:   iconDecal(GICON.lure,    ['#d98a6a','#b25a44','#7c2f24','#3a140e']),
+  boar:   pixelSprite(PXSPR.boar),
+  deer:   pixelSprite(PXSPR.deer),
+  hunter: pixelSprite(PXSPR.hunter),
+  bear:   pixelSprite(PXSPR.bear),
+  snare:  pixelSprite(PXSPR.snare),
+  shock:  pixelSprite(PXSPR.shock),
+  spike:  pixelSprite(PXSPR.spike),
+  lure:   pixelSprite(PXSPR.lure),
 };
 
 const TRAP_SPR = { snare: 'snare', shock: 'shock', spike: 'spike' };
@@ -1890,14 +1871,10 @@ function drawSprite(ctx, img, x, y, units, opt) {
     return;
   }
   ctx.save();
+  ctx.imageSmoothingEnabled = false;  // 픽셀 아트 — 니어리스트 확대로 선명하게
   ctx.translate(px + (opt.ox || 0), py - s * 0.28 + (opt.oy || 0));
   if (opt.rock) ctx.rotate(opt.rock);
   if (opt.flip) ctx.scale(-1, 1);
-  if (opt.clipBottom) {  // 하단(원본 다리 영역)을 잘라 절차 다리로 대체
-    ctx.beginPath();
-    ctx.rect(-s, -s / 2 + (opt.bob || 0), 2 * s, s * (1 - opt.clipBottom));
-    ctx.clip();
-  }
   if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 20; }
   ctx.globalAlpha = opt.alpha != null ? opt.alpha : 1;
   ctx.drawImage(img, -s / 2, -s / 2 + (opt.bob || 0), s, s);
@@ -1914,9 +1891,11 @@ function drawSprite(ctx, img, x, y, units, opt) {
 function drawDecal(ctx, img, x, y, dUnits, alpha) {
   if (!img.complete || img.naturalWidth === 0) return;
   const w = dUnits * PPU * 1.5;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = alpha != null ? alpha : 1;
   ctx.drawImage(img, PX(x, y) - w / 2, PY(x, y) - w / 2, w, w);
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 function drawShadow(ctx, x, y, r) {
@@ -1926,52 +1905,6 @@ function drawShadow(ctx, x, y, r) {
   ctx.fill();
 }
 
-// ---------- 손발 분리 애니메이션 (절차 2본 다리 리그) ----------
-// 실루엣 몸통 아래에 관절 다리를 그려 걷기/딛기 모션을 준다. s=스프라이트 크기(px).
-// clip: 몸통 아래에서 잘라낼 비율(원본 실루엣의 다리를 숨김) / foot: 발이 닿는 지면(중심 아래 s비율)
-const LEGRIG = {
-  boar:   { quad:true,  clip:0.40, foot:0.14, wU:9,  wL:6,   fill:'#5a3820', line:'#1c1008', fX:0.17, bX:0.22 },
-  deer:   { quad:true,  clip:0.46, foot:0.18, wU:5,  wL:3.5, fill:'#7a6238', line:'#3a2f1a', fX:0.16, bX:0.21 },
-  bear:   { quad:true,  clip:0.38, foot:0.12, wU:11, wL:7,   fill:'#3e2c1e', line:'#120b06', fX:0.19, bX:0.23 },
-  hunter: { quad:false, clip:0.37, foot:0.15, wU:7,  wL:5.5, fill:'#39445a', line:'#10151f', sp:0.10 },
-};
-function limbSeg(ctx, ax, ay, bx, by) { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
-function boneLeg(ctx, hx, hy, fx, fy, bend, wU, wL, fill, line) {
-  const mx = (hx + fx) / 2 + bend, my = (hy + fy) / 2;
-  ctx.strokeStyle = line;
-  ctx.lineWidth = wU + 3; limbSeg(ctx, hx, hy, mx, my);
-  ctx.lineWidth = wL + 3; limbSeg(ctx, mx, my, fx, fy);
-  ctx.strokeStyle = fill;
-  ctx.lineWidth = wU; limbSeg(ctx, hx, hy, mx, my);
-  ctx.lineWidth = wL; limbSeg(ctx, mx, my, fx, fy);
-  ctx.fillStyle = line; ctx.beginPath(); ctx.ellipse(fx, fy, wL * 0.95, wL * 0.6, 0, 0, 7); ctx.fill();
-}
-// cx: 몸통 중심 x, hipY: 엉덩이(몸통 아래 절단선) y, footY: 발 지면 y, dir: +1 우향/-1 좌향, t: 위상
-function drawLegs(ctx, kind, s, cx, hipY, footY, dir, moving, t) {
-  const r = LEGRIG[kind];
-  const stride = moving ? s * 0.11 : 0;
-  const lift   = moving ? s * 0.08 : 0;
-  ctx.save(); ctx.lineCap = 'round';
-  function leg(rootX, phase) {
-    const fx = rootX + dir * stride * Math.sin(phase);
-    const fy = footY - Math.max(0, Math.sin(phase)) * lift;
-    boneLeg(ctx, rootX, hipY, fx, fy, dir * s * 0.02, r.wU, r.wL, r.fill, r.line);
-  }
-  if (r.quad) {
-    // 대각선 보행 (트롯): 앞뒤 다리 반대 위상
-    leg(cx + dir * s * r.fX, t + Math.PI);  // 앞다리 (뒤편)
-    leg(cx - dir * s * r.bX, t);            // 뒷다리 (뒤편)
-    leg(cx + dir * s * r.fX, t);            // 앞다리 (앞편)
-    leg(cx - dir * s * r.bX, t + Math.PI);  // 뒷다리 (앞편)
-  } else {
-    leg(cx - s * r.sp, t);
-    leg(cx + s * r.sp, t + Math.PI);
-  }
-  ctx.restore();
-}
-// 리그의 엉덩이 절단선 / 발 지면 화면 y 계산 (드로우스프라이트 앵커 -0.28s 기준)
-function rigHipY(kind, sy, s, oy) { return sy + (oy || 0) - s * 0.28 + s * (0.5 - LEGRIG[kind].clip); }
-function rigFootY(kind, sy, s) { return sy + s * LEGRIG[kind].foot; }
 // 공격 반동 오프셋(픽셀): 대상 방향으로 찔렀다 돌아온다
 function lungeOffset(e, sPx) {
   if (!e.atkT || e.atkT <= 0) return { x: 0, y: 0 };
@@ -2114,12 +2047,8 @@ function drawArena(ctx, huntState) {
     const mox = (m.hurtDx || 0) * mhp * 9 + mlg.x;
     const moy = -(m.hurtDy || 0) * mhp * 9 + mlg.y;
     const mMoving = m.moving && m.state !== 'trapped';
-    // 다리 (몸통 뒤에 먼저 그려 밑에서 딛는 모션이 보이게)
-    drawLegs(ctx, m.def.id, sM, PX(m.x, m.y) + mox,
-      rigHipY(m.def.id, PY(m.x, m.y), sM, moy), rigFootY(m.def.id, PY(m.x, m.y), sM),
-      m.flipX ? -1 : 1, mMoving, m.animT * 10);
-    const wob = mMoving ? Math.sin(m.animT * 11) * 0.03 : 0;
-    const bob = mMoving ? Math.abs(Math.sin(m.animT * 11)) * 2 : 0;
+    const wob = mMoving ? Math.sin(m.animT * 10) * 0.045 : 0;
+    const bob = mMoving ? Math.abs(Math.sin(m.animT * 10)) * 3 : 0;
     let glow = null;
     if (m.enraged) glow = 'rgba(255,72,54,0.95)';
     if (isBoar && m.state === 'combat' && (m.bphase === 'aim' || m.bphase === 'charge')) glow = 'rgba(255,130,60,0.9)';
@@ -2128,7 +2057,7 @@ function drawArena(ctx, huntState) {
     if (m.offguard > 0) glow = 'rgba(120,200,255,0.85)';
     if (m.def.mut && !glow) glow = m.def.mut.tint;  // 변종 상시 오라
     drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits,
-      { flip: m.flipX, rock: wob, bob: -bob, glow: glow, ox: mox, oy: moy, clipBottom: LEGRIG[m.def.id].clip,
+      { flip: m.flipX, rock: wob, bob: -bob, glow: glow, ox: mox, oy: moy,
         flash: mhp > 0 ? { color: m.hurtFlash || '#ffffff', alpha: mhp * 0.75 } : null,
         alpha: m.state === 'trapped' ? 0.85 : 1, fallback: isBoar ? '#6e4526' : isBear ? '#4a3526' : '#b3a06e' });
     // 상태 아이콘 (머리 위)
@@ -2171,17 +2100,14 @@ function drawArena(ctx, huntState) {
     const hox = (h.hurtDx || 0) * hhp * 8 + hlg.x;
     const hoy = -(h.hurtDy || 0) * hhp * 8 + hlg.y;
     const hMoving = h.moving && !h.ko;
-    if (!h.ko) drawLegs(ctx, 'hunter', sH, PX(h.x, h.y) + hox,
-      rigHipY('hunter', PY(h.x, h.y), sH, hoy), rigFootY('hunter', PY(h.x, h.y), sH),
-      h.flipX ? -1 : 1, hMoving, h.animT * 11);
-    const wob = hMoving ? Math.sin(h.animT * 12) * 0.03 : 0;
-    const bob = hMoving ? Math.abs(Math.sin(h.animT * 12)) * 2 : 0;
+    const wob = hMoving ? Math.sin(h.animT * 11) * 0.04 : 0;
+    const bob = hMoving ? Math.abs(Math.sin(h.animT * 11)) * 3 : 0;
     let glow = h.focusT > 0 ? 'rgba(201,164,74,0.95)' : null;
     if (h.guardT > 0) glow = 'rgba(120,170,255,0.9)';
     if (h.invuln > 0) glow = 'rgba(190,230,255,0.98)';
     drawSprite(ctx, SPR.hunter, h.x, h.y, 1.7,
       { flip: h.flipX, rock: h.ko ? 1.35 : (h.invuln > 0 ? 0.5 : wob), bob: -bob,
-        ox: hox, oy: hoy, clipBottom: h.ko ? 0 : LEGRIG.hunter.clip,
+        ox: hox, oy: hoy,
         flash: hhp > 0 ? { color: h.hurtFlash || '#ff5a4a', alpha: hhp * 0.7 } : null,
         alpha: h.ko ? 0.5 : (h.invuln > 0 ? 0.7 : 1), glow: glow, fallback: '#3b5f96' });
     // 방어 태세 방패 호
