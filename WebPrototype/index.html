@@ -263,6 +263,11 @@ const DB = {
       recSet: { weaponLv:1, snare:2, spike:1, lures:2 },
       recTip:'양쪽 탈출구 길목에 속박 덫, 중앙에 가시 지대 — 몰아서 도주를 저지',
       desc:'도주형. 헌터보다 빠르고, 눈에 보이는 함정은 피해 다닌다.\n1:30 경과 또는 HP 40% 이하 시 탈출구로 도주 — 도주 중엔 함정을 못 본다.\n몰아붙여 도주를 강제하고, 탈출구 길목의 속박 덫으로 저지하라. 저지된 사슴은 25초간 탈진해 잡을 수 있다.' },
+    { id:'bear', name:'화염 곰', maxHp:720, prepGold:1400, baseReward:260,
+      fleeAtSeconds:1e9, fleeAtHpPct:-1,
+      recSet: { weaponLv:2, armorLv:1, shock:2, potions:6 },
+      recTip:'방어구로 격노를 버티고, 마비 룬으로 과열을 끊어 「과열 빈틈」에 강공격 폭딜',
+      desc:'격노형 탱커. 도망치지 않고 정면으로 달려든다.\n시간이 흐르면 열기가 차오르고, 가득 차면 격노 — 빨라지고 화염 폭발(범위)로 큰 피해를 준다.\n격노가 끝나면 과열 탈진 — 이때만 받는 피해 1.4배가 들어간다.\n방어구·물약으로 격노를 버티고, 마비 룬으로 격노를 끊어 「과열 빈틈」에 강공격을 몰아라.' },
   ],
   trapName: { snare:'속박 덫', shock:'마비 룬', spike:'가시 지대' },
   trapPrice: { snare:200, shock:150, spike:100 },
@@ -686,6 +691,7 @@ function startHunt() {
       bphase: 'approach', pt: 0, cdx: 0, cdy: 0, cdist: 0, chit: false,
       sprintTimer: 5, sprintLeft: 0, sdx: 0, sdy: 0, kickCd: 0,
       trapImmune: 0,
+      heat: 0, hphase: 'build', enrageT: 0, overheatT: 0, swipeCd: 0, novaCd: 0,
       face: Math.PI, animT: 0, moving: false,
       };
     })(),
@@ -762,6 +768,11 @@ function applyTrap(m, dur, dmg) {
   if (m.state === 'dead' || m.state === 'escaped') return;
   if (dmg > 0) damageMonster(dmg, false);
   if (m.state === 'flee') m.wasFlee = true;
+  // 화염 곰: 함정에 걸리면 열기가 식어 격노·과열이 끊긴다
+  if (m.def.id === 'bear') {
+    if (m.hphase === 'enraged') addLog('마비 룬이 격노를 끊었다! 열기가 식는다');
+    m.hphase = 'build'; m.heat = 0; m.enraged = false;
+  }
   m.state = 'trapped';
   m.trapT = Math.max(m.trapT, dur);
   m.bphase = 'approach';
@@ -824,6 +835,7 @@ function updateMonster(dt) {
   }
   else if (m.state === 'combat') {
     if (m.def.id === 'boar') boarTick(m, h, dt, spd);
+    else if (m.def.id === 'bear') bearTick(m, h, dt, spd);
     else deerTick(m, h, dt, spd);
   }
   else if (m.state === 'flee') {
@@ -857,6 +869,46 @@ function boarTick(m, h, dt, spd) {
     m.pt -= dt;
     if (m.pt <= 0) m.bphase = 'approach';
   }
+}
+
+// 화염 곰: 열기 축적 → 격노(빠름·화염 폭발) → 과열 탈진(빈틈 1.4배) 순환
+function bearTick(m, h, dt, spd) {
+  if (h.ko) return;
+  const d = dist(m, h);
+  if (m.swipeCd > 0) m.swipeCd -= dt;
+  if (m.novaCd > 0) m.novaCd -= dt;
+
+  if (m.hphase === 'overheat') {
+    // 탈진: 느리게 배회, 공격 안 함. 이 창에만 폭딜을 허용한다.
+    m.overheatT -= dt;
+    m.enraged = false;
+    moveTowards(m, h.x, h.y, 1.1 * spd, dt);
+    if (m.overheatT <= 0) { m.hphase = 'build'; m.heat = 0; addLog('화염 곰이 열기를 회복한다 — 다시 달아오른다'); }
+    return;
+  }
+
+  if (m.hphase === 'enraged') {
+    m.enraged = true;
+    m.enrageT -= dt;
+    moveTowards(m, h.x, h.y, 3.5 * spd, dt);
+    // 근접 후려치기
+    if (d < 1.5 && m.swipeCd <= 0) { hitHunter(13); m.swipeCd = 1.3; fx(h.x, h.y, '#ff7a2e', 0.6); }
+    // 화염 폭발 (범위 강타)
+    if (m.novaCd <= 0) {
+      m.novaCd = 3;
+      fx(m.x, m.y, '#ff5a1e', 2.4, 0.45);
+      SFX.shock();
+      if (d < 2.5) { hitHunter(11); addLog('화염 폭발! 범위 피해'); }
+    }
+    if (m.enrageT <= 0) { m.hphase = 'overheat'; m.overheatT = 5; m.enraged = false; addLog('화염 곰 과열 — 탈진했다! 지금이 폭딜 기회 (받는 피해 1.4배)'); }
+    return;
+  }
+
+  // build: 접근하며 열기 축적. 가까이 붙어 싸울수록 빨리 달아오른다.
+  moveTowards(m, h.x, h.y, 2.4 * spd, dt);
+  m.heat += dt * (8.5 + (d < 2.5 ? 5 : 0));
+  if (d < 1.4 && m.swipeCd <= 0) { hitHunter(10); m.swipeCd = 1.5; fx(h.x, h.y, '#c98a3a', 0.5); }
+  if (m.heat >= 100) { m.hphase = 'enraged'; m.enrageT = 6; m.enraged = true; addLog('화염 곰이 격노했다! 불길이 치솟는다'); SFX.strong(); shakeScreen(6); flashScreen('rgba(255,90,30,0.4)', 0.25); }
 }
 
 function deerTick(m, h, dt, spd) {
@@ -1021,6 +1073,7 @@ function vulnWindow() {
   const m = hunt.monster;
   if (m.state === 'trapped') return true;
   if (m.def.id === 'boar') return m.state === 'combat' && m.bphase === 'recover';
+  if (m.def.id === 'bear') return m.state === 'combat' && m.hphase === 'overheat';
   return (m.fleeBlock > 0 && m.state !== 'flee') || m.offguard > 0;
 }
 // 헌터 공격의 최종 피해 (함정 걸림 1.5배, 멧돼지는 빈틈 외 30%)
@@ -1031,6 +1084,7 @@ function hunterHit(base) {
     m.trapT = Math.max(0.2, m.trapT - 0.4);
     return base * dmgMult() * 1.5;
   }
+  if (m.def.id === 'bear' && m.hphase === 'overheat') return base * dmgMult() * 1.4;
   if (m.def.id === 'boar' && !vulnWindow()) {
     if (!hunt.armorHint) { hunt.armorHint = true; addLog('가죽이 단단하다! 경직·함정 때만 유효타가 들어간다'); }
     return base * dmgMult() * 0.3;
@@ -1246,6 +1300,8 @@ function failTip(cause) {
   // timeout
   if (id === 'boar')
     return '▸ 멧돼지 가죽은 단단하다 — 함정에 걸린 순간과 돌진 직후 경직에만 유효타가 들어간다.\n▸ 마비 룬·속박 덫으로 딜 타임을 만들고, 그때 강공격을 넣어라. (추천 세트를 눌러보라)';
+  if (id === 'bear')
+    return '▸ 화염 곰은 「과열 탈진」 창에만 받는 피해가 1.4배 — 그때 강공격을 몰아라.\n▸ 격노를 방어구·물약으로 버티거나, 마비 룬으로 격노를 끊어 안전하게 폭딜하라. (추천 세트를 눌러보라)';
   return '▸ 시간이 모자랐다 — 함정으로 묶어 유효타 창을 늘리고, 집중 사격 카드로 막판 화력을 보태라.';
 }
 
@@ -1339,7 +1395,8 @@ function renderHUD() {
   const t = Math.ceil(hunt.t);
   $('h-timer').textContent = Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
   $('h-timer').classList.toggle('low', hunt.t < 30);
-  const stateLabel = { wander:'경계', combat: m.enraged ? '격노' : '교전', flee:'도주 시도!', trapped:'함정 걸림', dead:'처치됨', escaped:'도주함' }[m.state];
+  let stateLabel = { wander:'경계', combat: m.enraged ? '격노' : '교전', flee:'도주 시도!', trapped:'함정 걸림', dead:'처치됨', escaped:'도주함' }[m.state];
+  if (m.def.id === 'bear' && m.state === 'combat' && m.hphase === 'overheat') stateLabel = '과열 — 빈틈!';
   $('h-mstate').textContent = stateLabel + '  ' + Math.round(m.hp) + '/' + m.def.maxHp;
   $('h-mbar').style.width = (m.hp / m.def.maxHp * 100) + '%';
   $('h-hinfo').textContent = h.ko ? '기절! 부활까지 ' + h.koT.toFixed(1) + '초'
@@ -1348,11 +1405,24 @@ function renderHUD() {
   $('h-orb').style.height = (h.hp / h.maxHp * 100) + '%';
   $('lure-hint').textContent = hunt.awaitingLure ? '맵을 클릭해 유인 지점을 지정하라!' : '';
 
-  // 도주 카운트다운 게이지 (도주형 몬스터 전용)
+  // 몬스터 게이지: 도주형=도주 카운트다운 / 화염 곰=열기·과열
   const wrap = $('h-flee-wrap');
   const isFleer = m.def.fleeAtSeconds < 1e8;
-  if (!isFleer || m.state === 'dead' || m.state === 'escaped') {
+  const isBear = m.def.id === 'bear';
+  if (m.state === 'dead' || m.state === 'escaped' || (!isFleer && !isBear)) {
     wrap.classList.remove('show');
+  } else if (isBear) {
+    wrap.classList.add('show');
+    if (m.hphase === 'enraged') {
+      $('h-flee-label').textContent = '🔥 격노 중! 화염 폭발 주의 (' + Math.ceil(m.enrageT) + '초)';
+      $('h-flee-bar').style.width = '100%';
+    } else if (m.hphase === 'overheat') {
+      $('h-flee-label').textContent = '과열 탈진 — 지금 폭딜! (받는 피해 1.4배, ' + Math.ceil(m.overheatT) + '초)';
+      $('h-flee-bar').style.width = (m.overheatT / 5 * 100) + '%';
+    } else {
+      $('h-flee-label').textContent = '열기 ' + Math.round(m.heat) + '% — 가득 차면 격노';
+      $('h-flee-bar').style.width = Math.min(100, m.heat) + '%';
+    }
   } else {
     wrap.classList.add('show');
     if (m.state === 'flee') {
@@ -1432,6 +1502,29 @@ const SPR = {
     '<path d="M100 22 Q94 6 82 2 M100 20 Q108 4 120 2 M98 14 Q88 10 80 14 M102 12 Q112 8 122 12" ' +
       'stroke="#e0d4ac" stroke-width="4" fill="none" stroke-linecap="round"/>' +
     '<path d="M86 62 L102 52" stroke="#d8a63a" stroke-width="5" stroke-linecap="round"/>'),
+  bear: sprite(
+    // 뒷다리·앞다리
+    '<rect x="30" y="92" width="15" height="28" rx="6" fill="#3a2a1e" stroke="#241811" stroke-width="3"/>' +
+    '<rect x="82" y="92" width="15" height="28" rx="6" fill="#3a2a1e" stroke="#241811" stroke-width="3"/>' +
+    // 몸통 (묵직한 타원 + 어깨 혹)
+    '<ellipse cx="58" cy="74" rx="46" ry="31" fill="#4a3526" stroke="#2a1c11" stroke-width="4"/>' +
+    '<path d="M30 52 Q52 34 74 50 Q64 64 44 64 Z" fill="#5a4230" stroke="#2a1c11" stroke-width="3"/>' +
+    '<rect x="46" y="96" width="15" height="25" rx="6" fill="#4a3526" stroke="#241811" stroke-width="3"/>' +
+    '<rect x="70" y="96" width="15" height="25" rx="6" fill="#4a3526" stroke="#241811" stroke-width="3"/>' +
+    // 등의 불씨 갈기
+    '<path d="M22 60 L30 40 L38 56 L48 38 L58 54 L68 40 L74 56 L60 66 L30 68 Z" fill="#7a2a12" opacity="0.9"/>' +
+    '<path d="M28 56 L34 44 L40 54 L48 42 L56 52 L64 44 L68 54" fill="none" stroke="#e0761f" stroke-width="3" stroke-linejoin="round"/>' +
+    // 머리
+    '<circle cx="96" cy="66" r="25" fill="#4a3526" stroke="#2a1c11" stroke-width="4"/>' +
+    '<circle cx="84" cy="44" r="8" fill="#3a2a1e" stroke="#241811" stroke-width="3"/>' +
+    '<circle cx="110" cy="46" r="8" fill="#3a2a1e" stroke="#241811" stroke-width="3"/>' +
+    // 주둥이
+    '<ellipse cx="116" cy="74" rx="13" ry="10" fill="#6b5238" stroke="#2a1c11" stroke-width="3"/>' +
+    '<ellipse cx="122" cy="74" rx="4" ry="3.5" fill="#1a1008"/>' +
+    // 눈 (불빛)
+    '<circle cx="100" cy="60" r="3.6" fill="#ff7a1e"/><circle cx="100" cy="60" r="1.6" fill="#ffd98a"/>' +
+    // 송곳니
+    '<path d="M110 82 L113 90 L116 82 Z" fill="#f2ead8"/>'),
   hunter: sprite(
     '<path d="M48 54 Q34 84 44 112 L56 108 Q48 82 54 58 Z" fill="#253550" stroke="#17233a" stroke-width="3"/>' +
     '<rect x="55" y="92" width="10" height="26" rx="3" fill="#3a3f4a" stroke="#22262e" stroke-width="2.5"/>' +
@@ -1700,7 +1793,8 @@ function drawArena(ctx, huntState) {
   }
 
   const isBoar = m.def.id === 'boar';
-  const mUnits = isBoar ? 2.5 : 2.2;
+  const isBear = m.def.id === 'bear';
+  const mUnits = isBoar ? 2.5 : isBear ? 2.8 : 2.2;
   const mFeetR = mUnits * PPU * 0.28;
 
   function drawMonster() {
@@ -1723,13 +1817,17 @@ function drawArena(ctx, huntState) {
     let glow = null;
     if (m.enraged) glow = 'rgba(255,72,54,0.95)';
     if (isBoar && m.state === 'combat' && (m.bphase === 'aim' || m.bphase === 'charge')) glow = 'rgba(255,130,60,0.9)';
+    if (isBear && m.state === 'combat' && m.hphase === 'enraged') glow = 'rgba(255,90,30,0.95)';
+    if (isBear && m.state === 'combat' && m.hphase === 'overheat') glow = 'rgba(150,175,205,0.75)';
     if (m.offguard > 0) glow = 'rgba(120,200,255,0.85)';
     drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits,
       { flip: m.flipX, rock: wob, bob: -bob, glow: glow,
-        alpha: m.state === 'trapped' ? 0.85 : 1, fallback: isBoar ? '#6e4526' : '#b3a06e' });
+        alpha: m.state === 'trapped' ? 0.85 : 1, fallback: isBoar ? '#6e4526' : isBear ? '#4a3526' : '#b3a06e' });
     // 상태 아이콘 (머리 위)
     let icon = '';
     if (m.state === 'trapped') icon = '🕸';
+    else if (isBear && m.hphase === 'enraged') icon = '🔥';
+    else if (isBear && m.hphase === 'overheat') icon = '😵';
     else if (m.offguard > 0) icon = '💤';
     else if (m.state === 'flee') icon = '🏃';
     else if (isBoar && m.bphase === 'aim') icon = '❗';
