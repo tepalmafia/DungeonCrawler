@@ -287,6 +287,65 @@ const ARENA_X = 9, ARENA_Y = 5.2;
 const GATES = [ {x:-8.7,y:0}, {x:8.7,y:0} ];
 const SPAWNS = [{x:6.5,y:3},{x:6.5,y:-3},{x:-6.5,y:3},{x:-6.5,y:-3}];
 
+// ============================== 돌연변이 개체 (변종 접사 + 오늘의 의뢰) ==============================
+const MUTATORS = [
+  { id:'giant',    name:'거대',      desc:'HP +40%, 이속 -15%',      hp:1.4, spd:0.85, reward:1.5, tint:'#c08a3a' },
+  { id:'swift',    name:'신속',      desc:'이속 +25%, HP -10%',      hp:0.9, spd:1.25, reward:1.4, tint:'#4a9ad0' },
+  { id:'ironhide', name:'강철 가죽', desc:'받는 무기 피해 -28%',      dmgTaken:0.72, reward:1.5, tint:'#9aa0aa', def:true },
+  { id:'frenzied', name:'광포',      desc:'공격 피해 +35%',          dmgDealt:1.35, hp:0.95, reward:1.4, tint:'#c0392b' },
+  { id:'regen',    name:'재생',      desc:'초당 HP 4 회복 (빈틈엔 정지)', regen:4, reward:1.5, tint:'#4caf6a', noFleer:true, def:true },
+];
+// 결정적 RNG (오늘의 의뢰가 하루 동안 고정되고 매일 바뀌도록)
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function daySeed() {
+  const d = new Date();
+  return d.getFullYear() * 366 + Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5);
+}
+function makeMutant(baseId, affixIds) {
+  const base = DB.monsters.find(m => m.id === baseId);
+  let hp = base.maxHp, spd = 1, dmgTaken = 1, dmgDealt = 1, regen = 0, reward = 1;
+  const names = [];
+  for (const id of affixIds) {
+    const a = MUTATORS.find(x => x.id === id);
+    names.push(a.name);
+    hp *= a.hp || 1; spd *= a.spd || 1; dmgTaken *= a.dmgTaken || 1;
+    dmgDealt *= a.dmgDealt || 1; regen += a.regen || 0; reward *= a.reward || 1;
+  }
+  return Object.assign({}, base, {
+    name: '⟨' + names.join('·') + '⟩ ' + base.name,
+    maxHp: Math.round(hp),
+    baseReward: Math.round(base.baseReward * reward),
+    mut: { affixIds, spdMult: spd, dmgTakenMult: dmgTaken, dmgDealtMult: dmgDealt, regen: regen,
+           tint: (MUTATORS.find(x => x.id === affixIds[0]) || {}).tint, rewardMult: reward },
+  });
+}
+function dailyMutant() {
+  const rng = mulberry32(daySeed());
+  const base = DB.monsters[Math.floor(rng() * DB.monsters.length)];
+  const isFleer = base.fleeAtSeconds < 1e8;
+  // 도주형에는 재생처럼 HP 감량 승리 조건과 상성이 나쁜 접사를 제외
+  let pool = MUTATORS.filter(m => !(m.noFleer && isFleer)).map(m => m.id);
+  const defensive = new Set(MUTATORS.filter(m => m.def).map(m => m.id));
+  const count = rng() < 0.4 ? 2 : 1;
+  const chosen = [];
+  for (let i = 0; i < count; i++) {
+    // 방어 접사 2개가 겹치면 격파 불가 조합이 되므로 최대 1개만 허용
+    const cand = chosen.some(c => defensive.has(c)) ? pool.filter(id => !defensive.has(id)) : pool;
+    if (!cand.length) break;
+    const pick = cand[Math.floor(rng() * cand.length)];
+    chosen.push(pick);
+    pool = pool.filter(id => id !== pick);
+  }
+  return makeMutant(base.id, chosen);
+}
+
 let honorTotal = 0;      // 사용 가능한 명예 pt (해금 상점에서 소모)
 let honorLifetime = 0;   // 누적 획득 명예 (랭크 산정용, 감소하지 않음)
 let unlocks = {};        // 영구 해금: { slot5, fleesoon, prepgold }
@@ -518,6 +577,22 @@ function renderMeta() {
 function renderQuest() {
   const list = $('quest-list');
   list.innerHTML = '';
+
+  // 오늘의 돌연변이 의뢰 (날짜 시드로 하루 고정, 매일 변경)
+  const mut = dailyMutant();
+  const affLine = mut.mut.affixIds.map(id => {
+    const a = MUTATORS.find(x => x.id === id);
+    return '<b style="color:' + a.tint + '">' + a.name + '</b> (' + a.desc + ')';
+  }).join(' · ');
+  const mb = document.createElement('button');
+  mb.className = 'quest-card';
+  mb.style.cssText = 'border:1px solid ' + (mut.mut.tint || 'var(--amber)') + ';box-shadow:0 0 14px rgba(201,164,74,0.18)';
+  mb.innerHTML = '<span class="q-head"><span class="q-name">' + mut.name + '</span>' +
+    '<span class="q-meta mono" style="color:#e0b25a">☀ 오늘의 의뢰 · 보상 ×' + mut.mut.rewardMult.toFixed(2) + '</span></span>' +
+    '<span class="q-desc">돌연변이 개체 — ' + affLine + '\n기본 몬스터 전술은 동일하다. 변종 특성에 맞춰 준비를 조정하라. (매일 자정 갱신)</span>';
+  mb.onclick = () => { run = newRun(mut); placedTraps = []; selectedTrap = null; prepMsg = ''; setPhase('prep'); };
+  list.appendChild(mb);
+
   for (const m of DB.monsters) {
     const b = document.createElement('button');
     b.className = 'quest-card';
@@ -793,7 +868,10 @@ function updateMonster(dt) {
   if (m.slowT > 0) m.slowT -= dt;
   if (m.fleeBlock > 0) m.fleeBlock -= dt;
   if (m.trapImmune > 0) m.trapImmune -= dt;
-  const spd = m.slowT > 0 ? 0.7 : 1;
+  // 변종 재생: 함정·빈틈(유효타 창)이 아닐 때만 회복 — 폭딜은 온전히 들어간다
+  if (m.def.mut && m.def.mut.regen && m.state !== 'trapped' && !vulnWindow())
+    m.hp = Math.min(m.def.maxHp, m.hp + m.def.mut.regen * dt);
+  const spd = (m.slowT > 0 ? 0.7 : 1) * (m.def.mut ? m.def.mut.spdMult : 1);
 
   if (m.state === 'trapped') {
     m.trapT -= dt;
@@ -1039,8 +1117,9 @@ function updateTraps(dt) {
 
 // ---------- 헌터 ----------
 function hitHunter(dmg) {
-  const h = hunt.hunter;
+  const h = hunt.hunter, mm = hunt.monster;
   if (h.ko) return;
+  if (mm.def.mut) dmg *= mm.def.mut.dmgDealtMult;
   h.hp = Math.max(0, h.hp - dmg * takenMult());
   fx(h.x, h.y, '#ff6a5e');
   SFX.hurt(); shakeScreen(4); flashScreen('rgba(200,40,30,0.42)', 0.16);
@@ -1080,16 +1159,17 @@ function vulnWindow() {
 // 몸부림: 함정에 걸린 몬스터는 맞을 때마다 걸림 시간이 0.4초씩 줄어든다 — 폭딜일수록 창이 짧아진다
 function hunterHit(base) {
   const m = hunt.monster;
+  const mt = m.def.mut ? m.def.mut.dmgTakenMult : 1;  // 변종 강철 가죽 등
   if (m.state === 'trapped') {
     m.trapT = Math.max(0.2, m.trapT - 0.4);
-    return base * dmgMult() * 1.5;
+    return base * dmgMult() * 1.5 * mt;
   }
-  if (m.def.id === 'bear' && m.hphase === 'overheat') return base * dmgMult() * 1.4;
+  if (m.def.id === 'bear' && m.hphase === 'overheat') return base * dmgMult() * 1.4 * mt;
   if (m.def.id === 'boar' && !vulnWindow()) {
     if (!hunt.armorHint) { hunt.armorHint = true; addLog('가죽이 단단하다! 경직·함정 때만 유효타가 들어간다'); }
-    return base * dmgMult() * 0.3;
+    return base * dmgMult() * 0.3 * mt;
   }
-  return base * dmgMult();
+  return base * dmgMult() * mt;
 }
 function canRun(a) {
   const h = hunt.hunter;
@@ -1319,7 +1399,8 @@ function endHunt(success, headline, cause) {
     const totalPct = 100 + timeBonus + cardBonus + koBonus;
     const pts = Math.round(base * totalPct / 100);
     earnHonor(pts);
-    body = headline + '\n\n기본 보상: ' + base + 'pt\n남은 시간 보너스: +' + timeBonus +
+    const mutNote = run.quest.mut ? '\n(돌연변이 보상 배율 ×' + run.quest.mut.rewardMult.toFixed(2) + ' 반영됨)' : '';
+    body = headline + mutNote + '\n\n기본 보상: ' + base + 'pt\n남은 시간 보너스: +' + timeBonus +
       '%\n카드 미사용 보너스: +' + cardBonus + '% (' + unused + '장)\n노 기절 보너스: +' + koBonus +
       '%\n─────────────\n획득 명예: ' + pts + 'pt (배율 ' + totalPct + '%)\n보유 명예: ' + honorTotal + 'pt · 랭크 ' + rankOf(honorLifetime).name;
   } else {
@@ -1820,6 +1901,7 @@ function drawArena(ctx, huntState) {
     if (isBear && m.state === 'combat' && m.hphase === 'enraged') glow = 'rgba(255,90,30,0.95)';
     if (isBear && m.state === 'combat' && m.hphase === 'overheat') glow = 'rgba(150,175,205,0.75)';
     if (m.offguard > 0) glow = 'rgba(120,200,255,0.85)';
+    if (m.def.mut && !glow) glow = m.def.mut.tint;  // 변종 상시 오라
     drawSprite(ctx, SPR[m.def.id], m.x, m.y, mUnits,
       { flip: m.flipX, rock: wob, bob: -bob, glow: glow,
         alpha: m.state === 'trapped' ? 0.85 : 1, fallback: isBoar ? '#6e4526' : isBear ? '#4a3526' : '#b3a06e' });
