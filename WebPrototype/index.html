@@ -138,14 +138,28 @@
   <header>
     <span class="eyebrow">ROYAL HUNT CONTRACT</span>
     <h1>헌터의 의뢰</h1>
-    <span class="honor">누적 명예 <b id="honor">0</b> pt</span>
+    <span class="honor"><b id="rank" style="color:var(--amber)">견습 헌터</b> · 명예 <b id="honor">0</b> pt</span>
   </header>
 
   <!-- 의뢰 게시판 -->
   <section class="panel active" id="p-quest">
-    <h2>의뢰를 선택하라</h2>
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <h2>의뢰를 선택하라</h2>
+      <button id="btn-open-meta" style="margin-left:auto">✦ 명예 해금 상점</button>
+    </div>
     <p class="sub">준비한 만큼만 결과가 나온다. 사냥 제한 시간은 3분 — 시간 안에 잡지 못하면 몬스터는 사라진다.</p>
     <div class="quest-list" id="quest-list"></div>
+  </section>
+
+  <!-- 명예 해금 상점 (메타) -->
+  <section class="panel" id="p-meta">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px">
+      <h2>명예 해금 상점</h2>
+      <button id="btn-meta-back" style="margin-left:auto">← 의뢰 게시판</button>
+    </div>
+    <p class="sub" id="meta-sub">사냥으로 모은 명예 pt로 영구 강화를 해금한다. 랭크는 누적 획득량으로 오른다 (소모해도 내려가지 않는다).</p>
+    <div class="shop-list" id="meta-list" style="max-width:640px"></div>
+    <div class="prep-msg" id="meta-msg" style="color:var(--info)"></div>
   </section>
 
   <!-- 준비 -->
@@ -257,18 +271,57 @@ const DB = {
     { name:'집중 사격', desc:'5초간 공격속도 2배' },
     { name:'긴급 미끼', desc:'맵을 클릭해 몬스터를 그 지점으로 강제 이동 (4초)' },
   ],
-  conds: ['always','myhp50','mhp50','trapped','window'],
-  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림', window:'빈틈(경직·탈진)' },
+  conds: ['always','myhp50','mhp50','trapped','window','fleesoon'],
+  condName: { always:'항상', myhp50:'내 HP<50%', mhp50:'몬스터 HP<50%', trapped:'함정에 걸림', window:'빈틈(경직·탈진)', fleesoon:'도주 임박' },
   acts: ['basic','strong','potion','lure','kite'],
   actName: { basic:'평타 지속', strong:'강공격', potion:'회복 물약', lure:'미끼 투척', kite:'함정 유인' },
 };
+// 감빗 조건 순환 목록 — 「도주 임박」은 해금 시에만 노출
+function activeConds() { return DB.conds.filter(c => c !== 'fleesoon' || unlocks.fleesoon); }
 const ARENA_X = 9, ARENA_Y = 5.2;
 const GATES = [ {x:-8.7,y:0}, {x:8.7,y:0} ];
 const SPAWNS = [{x:6.5,y:3},{x:6.5,y:-3},{x:-6.5,y:3},{x:-6.5,y:-3}];
 
-let honorTotal = 0;
-try { honorTotal = parseInt(localStorage.getItem('hunter-contract-honor')) || 0; } catch (e) {}
-function saveHonor() { try { localStorage.setItem('hunter-contract-honor', String(honorTotal)); } catch (e) {} }
+let honorTotal = 0;      // 사용 가능한 명예 pt (해금 상점에서 소모)
+let honorLifetime = 0;   // 누적 획득 명예 (랭크 산정용, 감소하지 않음)
+let unlocks = {};        // 영구 해금: { slot5, fleesoon, prepgold }
+try {
+  honorTotal = parseInt(localStorage.getItem('hunter-contract-honor')) || 0;
+  honorLifetime = parseInt(localStorage.getItem('hunter-contract-lifetime'));
+  if (isNaN(honorLifetime)) honorLifetime = honorTotal; // 구버전 마이그레이션
+  unlocks = JSON.parse(localStorage.getItem('hunter-contract-unlocks') || '{}') || {};
+} catch (e) {}
+function saveHonor() {
+  try {
+    localStorage.setItem('hunter-contract-honor', String(honorTotal));
+    localStorage.setItem('hunter-contract-lifetime', String(honorLifetime));
+    localStorage.setItem('hunter-contract-unlocks', JSON.stringify(unlocks));
+  } catch (e) {}
+}
+function earnHonor(pts) { honorTotal += pts; honorLifetime += pts; saveHonor(); }
+
+// 랭크 — 누적 획득 명예로 산정 (해금 소모와 무관)
+const RANKS = [
+  { min: 0, name: '견습 헌터' }, { min: 300, name: '정식 헌터' }, { min: 800, name: '숙련 헌터' },
+  { min: 1800, name: '명장 헌터' }, { min: 4000, name: '전설의 헌터' },
+];
+function rankOf(pt) { let r = RANKS[0]; for (const x of RANKS) if (pt >= x.min) r = x; return r; }
+function nextRank(pt) { for (const x of RANKS) if (pt < x.min) return x; return null; }
+
+// 해금 상점 목록
+const META = [
+  { id: 'slot5', name: '감빗 5번째 규칙 슬롯', cost: 250,
+    desc: '전술 규칙을 하나 더 — 우선순위 판단의 폭이 넓어진다.' },
+  { id: 'fleesoon', name: '신규 감빗 조건 「도주 임박」', cost: 200,
+    desc: '도주형이 곧 튈 시점을 조건으로 잡아 미리 길목으로 몰이한다.' },
+  { id: 'prepgold', name: '준비 예산 +150G (영구)', cost: 400,
+    desc: '모든 의뢰의 준비 골드가 150 늘어난다.' },
+];
+function refreshHonorUI() {
+  const rk = rankOf(honorLifetime);
+  if ($('rank')) $('rank').textContent = rk.name;
+  if ($('honor')) $('honor').textContent = honorTotal;
+}
 
 // ============================== 사운드 (WebAudio 절차 생성, 외부 파일 없음) ==============================
 let actx = null, sfxOn = true;
@@ -350,17 +403,20 @@ let placedTraps = [];
 let selectedTrap = null;
 let hunt = null;
 
+function prepBudget(mdef) { return mdef.prepGold + (unlocks.prepgold ? 150 : 0); }
 function newRun(mdef) {
+  const gambits = [
+    { cond:'trapped', act:'strong', on:true },
+    { cond:'window', act:'basic', on:true },
+    { cond:'myhp50', act:'potion', on:true },
+    { cond:'always', act:'kite', on:true },
+  ];
+  if (unlocks.slot5) gambits.push({ cond:'mhp50', act:'strong', on:false });
   return {
-    quest: mdef, gold: mdef.prepGold,
+    quest: mdef, gold: prepBudget(mdef),
     weaponLv: 0, armorLv: 0, potions: 0, lures: 0,
     stock: { snare:0, shock:0, spike:0 },
-    gambits: [
-      { cond:'trapped', act:'strong', on:true },
-      { cond:'window', act:'basic', on:true },
-      { cond:'myhp50', act:'potion', on:true },
-      { cond:'always', act:'kite', on:true },
-    ],
+    gambits: gambits,
     cardUsed: [false, false, false],
   };
 }
@@ -397,7 +453,7 @@ const SHOP = [
 // 추천 세트 자동 구매 — 구매 내역을 초기화하고 몬스터별 권장 구성으로 채운다
 function applyRecSet() {
   const rs = run.quest.recSet;
-  run.gold = run.quest.prepGold;
+  run.gold = prepBudget(run.quest);
   run.weaponLv = 0; run.armorLv = 0; run.potions = 0; run.lures = 0;
   run.stock = { snare:0, shock:0, spike:0 };
   let cost = 0;
@@ -408,7 +464,7 @@ function applyRecSet() {
   if (rs.spike) { run.stock.spike = rs.spike; cost += rs.spike * 100; }
   if (rs.potions) { run.potions = rs.potions; cost += Math.ceil(rs.potions / 3) * 120; }
   if (rs.lures) { run.lures = rs.lures; cost += Math.ceil(rs.lures / 2) * 80; }
-  run.gold = run.quest.prepGold - cost;
+  run.gold = prepBudget(run.quest) - cost;
   prepMsg = '추천 세트 구매 완료 — ' + run.quest.recTip;
   renderPrep();
 }
@@ -417,13 +473,40 @@ function applyRecSet() {
 const $ = id => document.getElementById(id);
 function setPhase(p) {
   phase = p;
-  for (const id of ['p-quest','p-prep','p-place','p-hunt','p-result'])
+  for (const id of ['p-quest','p-prep','p-place','p-hunt','p-result','p-meta'])
     $(id).classList.toggle('active', id === 'p-' + p);
   if (p === 'quest') renderQuest();
   if (p === 'prep') renderPrep();
   if (p === 'place') { renderPlaceRail(); }
   if (p === 'result') renderResult();
-  $('honor').textContent = honorTotal;
+  if (p === 'meta') renderMeta();
+  refreshHonorUI();
+}
+
+// ============================== 명예 해금 상점 ==============================
+function renderMeta() {
+  const nx = nextRank(honorLifetime);
+  $('meta-sub').textContent = nx
+    ? '현재 랭크: ' + rankOf(honorLifetime).name + ' · 다음 「' + nx.name + '」까지 누적 ' + (nx.min - honorLifetime) + 'pt. 명예 pt로 영구 강화를 해금한다 (소모해도 랭크는 유지).'
+    : '최고 랭크 달성 — ' + rankOf(honorLifetime).name + '. 명예 pt로 영구 강화를 해금한다.';
+  const list = $('meta-list');
+  list.innerHTML = '';
+  for (const it of META) {
+    const owned = !!unlocks[it.id];
+    const b = document.createElement('button');
+    b.style.cssText = 'display:flex;gap:10px;align-items:baseline;width:100%';
+    b.innerHTML = '<span class="s-name">' + it.name + '<span style="color:var(--muted);font-size:0.82rem;display:block;font-weight:400">' + it.desc + '</span></span>' +
+      '<span class="s-price mono">' + it.cost + 'pt</span>' +
+      '<span class="s-status">' + (owned ? '해금됨 ✓' : '') + '</span>';
+    b.disabled = owned || honorTotal < it.cost;
+    b.onclick = () => {
+      if (owned || honorTotal < it.cost) return;
+      honorTotal -= it.cost; unlocks[it.id] = true; saveHonor();
+      $('meta-msg').textContent = '해금 완료 — ' + it.name;
+      refreshHonorUI(); renderMeta();
+    };
+    list.appendChild(b);
+  }
 }
 
 // ============================== 의뢰 ==============================
@@ -439,7 +522,7 @@ function renderQuest() {
     b.onclick = () => { run = newRun(m); placedTraps = []; selectedTrap = null; prepMsg = ''; setPhase('prep'); };
     list.appendChild(b);
   }
-  $('honor').textContent = honorTotal;
+  refreshHonorUI();
 }
 
 // ============================== 준비 ==============================
@@ -488,7 +571,7 @@ function renderPrep() {
     row.innerHTML = '<span class="g-n mono">' + (i+1) + '</span>';
     const cb = document.createElement('button');
     cb.className = 'g-cond'; cb.textContent = DB.condName[g.cond];
-    cb.onclick = () => { g.cond = DB.conds[(DB.conds.indexOf(g.cond)+1) % DB.conds.length]; renderPrep(); };
+    cb.onclick = () => { const ac = activeConds(); g.cond = ac[(ac.indexOf(g.cond)+1) % ac.length]; renderPrep(); };
     const arrow = document.createElement('span'); arrow.className = 'g-arrow'; arrow.textContent = '→';
     const ab = document.createElement('button');
     ab.className = 'g-act'; ab.textContent = DB.actName[g.act];
@@ -557,6 +640,8 @@ $('cv-place').addEventListener('click', e => {
 $('btn-recset').onclick = applyRecSet;
 $('btn-to-place').onclick = () => setPhase('place');
 $('btn-back-prep').onclick = () => setPhase('prep');
+$('btn-open-meta').onclick = () => { $('meta-msg').textContent = ''; setPhase('meta'); };
+$('btn-meta-back').onclick = () => setPhase('quest');
 
 // ============================== 사냥 ==============================
 let lastSetup = null;
@@ -922,6 +1007,13 @@ function condTrue(c) {
   if (c === 'myhp50') return h.hp / h.maxHp < 0.5;
   if (c === 'mhp50') return m.hp / m.def.maxHp < 0.5;
   if (c === 'window') return vulnWindow();
+  if (c === 'fleesoon') {
+    if (m.def.fleeAtSeconds >= 1e8) return false;
+    if (m.state === 'flee' || m.state === 'trapped') return false;
+    const soonTime = (m.def.fleeAtSeconds - m.elapsed) < 20;
+    const soonHp = m.def.fleeAtHpPct > 0 && (m.hp / m.def.maxHp) < (m.def.fleeAtHpPct + 0.1);
+    return soonTime || soonHp;
+  }
   return m.state === 'trapped';
 }
 // 유효타 창: 멧돼지 경직(recover), 사슴 탈진(도주 저지 후)
@@ -1170,14 +1262,14 @@ function endHunt(success, headline, cause) {
     const koBonus = hunt.hadKO ? 0 : 20;
     const totalPct = 100 + timeBonus + cardBonus + koBonus;
     const pts = Math.round(base * totalPct / 100);
-    honorTotal += pts; saveHonor();
+    earnHonor(pts);
     body = headline + '\n\n기본 보상: ' + base + 'pt\n남은 시간 보너스: +' + timeBonus +
       '%\n카드 미사용 보너스: +' + cardBonus + '% (' + unused + '장)\n노 기절 보너스: +' + koBonus +
-      '%\n─────────────\n획득 명예: ' + pts + 'pt (배율 ' + totalPct + '%)\n누적 명예: ' + honorTotal + 'pt';
+      '%\n─────────────\n획득 명예: ' + pts + 'pt (배율 ' + totalPct + '%)\n보유 명예: ' + honorTotal + 'pt · 랭크 ' + rankOf(honorLifetime).name;
   } else {
-    honorTotal += 30; saveHonor();
+    earnHonor(30);
     body = headline + '\n\n【 다음엔 이렇게 】\n' + failTip(cause) +
-      '\n\n위로금: 30pt · 누적 명예: ' + honorTotal + 'pt';
+      '\n\n위로금: 30pt · 보유 명예: ' + honorTotal + 'pt';
   }
   hunt.over = { success, body };
   setTimeout(() => setPhase('result'), 900);
