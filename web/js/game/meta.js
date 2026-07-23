@@ -20,7 +20,7 @@ const CLASSES = {
   },
 };
 
-// 도감 — 몬스터 목록 (일반 12종 + 보스 5종). 처치하면 발견된다.
+// 도감 — 몬스터 목록 (일반 17종 + 보스 5종). 처치하면 발견된다.
 const CODEX_ENEMIES = [
   { id: 'slime',      name: '슬라임',       sprite: 'slime',      desc: '던전에서 가장 흔한 주민. 통통 튀며 다가온다.' },
   { id: 'toxicSlime', name: '독 슬라임',    sprite: 'toxicSlime', desc: '죽으면 독구름을 남긴다. 시체 위를 밟지 마라.' },
@@ -34,6 +34,11 @@ const CODEX_ENEMIES = [
   { id: 'wraith',     name: '망령',         sprite: 'wraith',     desc: '비물질 상태로 벽을 통과한다. 실체화됐을 때만 벨 수 있다.' },
   { id: 'fireSpirit', name: '화염 정령',    sprite: 'fireSpirit', desc: '화염구의 착탄 지점에 불길이 남는다.' },
   { id: 'necro',      name: '강령술사',     sprite: 'necro',      desc: '도망다니며 부하를 소환한다. 최우선으로 처치하라.' },
+  { id: 'bomber',      name: '폭탄벌레',     sprite: 'bomber',      desc: '붙으면 심지에 불을 붙이고 자폭한다. 자폭당하면 보상도 없다 — 터지기 전에 잡아라.' },
+  { id: 'thornPlant',  name: '가시덩굴',     sprite: 'thornPlant',  desc: '움직이지 않는 대신 가시 산탄을 3연발로 퍼붓는다. 산탄 사이 틈으로 파고들어라.' },
+  { id: 'executioner', name: '처형자',       sprite: 'executioner', desc: '바닥에 붉은 처형 구역을 그린 뒤 도끼를 내려찍는다. 구역 밖이면 안전하다.' },
+  { id: 'magmaSlime',  name: '마그마 슬라임', sprite: 'magmaSlime', desc: '죽으면 불길을 남기고 작은 마그마 둘로 갈라진다. 광역기로 한꺼번에 정리하라.' },
+  { id: 'voidEye',     name: '공허의 눈',    sprite: 'voidEye',     desc: '다가가면 순간이동으로 도망치며 추적탄을 쏜다. 추적탄은 직각 대시로 뿌리쳐라.' },
   { id: 'boss1', boss: true, name: '무덤지기 카론',     sprite: 'boss',      desc: '1층의 주인. 낫 연격과 영혼 부채꼴, 그리고 저주 지대.' },
   { id: 'boss2', boss: true, name: '포자왕 믹서스',     sprite: 'bossSpore', desc: '2층의 주인. 부하가 살아있는 동안 재생한다 — 부하를 한꺼번에 쓸어담을 수단을 연구하라.' },
   { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 중장갑이 강한 일격을 경감한다 — 갑옷을 무시하고 스며드는 피해가 열쇠.' },

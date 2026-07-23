@@ -15,12 +15,12 @@ const FLOOR_DATA = {
   3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'archer', 'spider'], rule: '골렘은 등 뒤가 약점' },
   4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'boar', 'golem'], rule: '용암을 밟지 마라' },
   5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'lavaHound', 'necro', 'archer'], rule: '어둠이 시야를 가린다' },
-  // 6~10층: 심층 — 테마가 한 바퀴 돌며 더 흉포해진다
-  6: { name: '피의 묘지',   enemies: ['slime', 'archer', 'boar', 'wraith', 'necro'], rule: null },
-  7: { name: '맹독 심연',   enemies: ['mushroom', 'toxicSlime', 'spider', 'bat', 'necro'], rule: '독 안개를 피하라' },
-  8: { name: '절망의 감옥', enemies: ['golem', 'wraith', 'archer', 'spider', 'fireSpirit'], rule: '골렘은 등 뒤가 약점' },
-  9: { name: '겁화의 핵',   enemies: ['fireSpirit', 'lavaHound', 'golem', 'boar', 'necro'], rule: '용암을 밟지 마라' },
-  10: { name: '심연의 왕좌', enemies: ['wraith', 'fireSpirit', 'lavaHound', 'necro', 'golem', 'archer'], rule: '어둠이 시야를 가린다' },
+  // 6~10층: 심층 — 층마다 전용 신규 몬스터가 등장한다
+  6: { name: '피의 묘지',   enemies: ['bomber', 'bomber', 'archer', 'boar', 'wraith', 'necro'], rule: '폭탄벌레가 붉게 빛나면 도망쳐라' },
+  7: { name: '맹독 심연',   enemies: ['thornPlant', 'thornPlant', 'toxicSlime', 'spider', 'bat', 'necro'], rule: '가시덩굴은 움직이지 않는다 — 각도를 노려라' },
+  8: { name: '절망의 감옥', enemies: ['executioner', 'executioner', 'golem', 'wraith', 'archer', 'bomber'], rule: '처형자의 붉은 구역에서 벗어나라' },
+  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'fireSpirit', 'lavaHound', 'thornPlant'], rule: '마그마 슬라임은 죽어도 끝이 아니다' },
+  10: { name: '심연의 왕좌', enemies: ['voidEye', 'voidEye', 'executioner', 'magmaSlime', 'wraith', 'necro'], rule: '공허의 눈은 추적탄을 쏜다 — 직각으로 대시하라' },
 };
 
 const Dungeon = {
@@ -90,7 +90,7 @@ const Dungeon = {
     const comp = [];
     const heatBonus = Game.heat >= 2 ? 2 : 0; // 열기 2: 적 수 증가
     const n = Math.min(12, 2 + Math.ceil(depth * 0.7) + Math.floor((this.floor - 1) * 0.8) + heatBonus);
-    const eliteChance = 0.03 + (this.floor - 1) * 0.03;
+    const eliteChance = 0.03 + (this.floor - 1) * 0.04; // 층당 4% — 심층은 정예가 흔하다
     for (let i = 0; i < n; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: RNG.chance(eliteChance) });
     }
