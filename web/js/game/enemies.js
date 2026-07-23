@@ -11,6 +11,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     animT: Math.random() * 10,
     flip: false,
     hitCd: 0,
+    spawnT: 0.35, // 등장 연출 (땅에서 솟아오름)
     status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
 
     effSpeed() {
@@ -45,6 +46,18 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       if (this.flash > 0) return Sprites.white(baseImg);
       if (this.elite) return Sprites.tint(baseImg);
       return baseImg;
+    },
+
+    // 걷기 프레임 선택 (프레임이 정의된 적만; rate = 발걸음 속도)
+    walkFrame(rate = 6) {
+      const fr = Sprites.enemyFrames[this.sprite];
+      if (!fr) return Sprites[this.sprite];
+      return fr.walk[Math.floor(this.animT * rate) % 2];
+    },
+
+    attackFrame() {
+      const fr = Sprites.enemyFrames[this.sprite];
+      return (fr && fr.attack) || Sprites[this.sprite];
     },
 
     drawStatus(ctx) {
@@ -148,7 +161,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.restore();
         }
         const bob = Math.sin(this.animT * 7) * 2;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        const img = this.state === 'aim' ? this.attackFrame() : this.walkFrame(6);
+        Renderer.drawSprite(this.skin(img), this.x, this.y - bob, { flip: this.flip, shadow: true });
         this.drawStatus(ctx);
       },
     }),
@@ -221,7 +235,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         let rot = 0;
         if (this.state === 'windup') shakeX = (Math.random() - 0.5) * 4;
         if (this.state === 'charge') rot = this.flip ? -0.08 : 0.08;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x + shakeX, this.y, { flip: this.flip, rot, shadow: true });
+        const img = this.state === 'charge' ? this.walkFrame(16)
+          : this.state === 'wander' ? this.walkFrame(7) : Sprites[this.sprite];
+        Renderer.drawSprite(this.skin(img), this.x + shakeX, this.y, { flip: this.flip, rot, shadow: true });
         if (this.state === 'stunned') {
           ctx.fillStyle = '#f7b32b';
           for (let i = 0; i < 3; i++) {
@@ -279,7 +295,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const inflate = this.state === 'puff' ? 1 + this.stateT * 0.5 : 1 + Math.sin(this.animT * 3) * 0.04;
-        Renderer.drawSprite(this.skin(Sprites.mushroom), this.x, this.y, {
+        const img = this.state === 'puff' ? Sprites.mushroom : this.walkFrame(4);
+        Renderer.drawSprite(this.skin(img), this.x, this.y, {
           flip: this.flip, squashX: inflate, squashY: inflate, shadow: true,
         });
         this.drawStatus(ctx);
@@ -347,7 +364,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const crouch = this.state === 'spin' ? 0.75 : 1;
-        Renderer.drawSprite(this.skin(Sprites.spider), this.x, this.y, {
+        const img = this.state === 'spin' ? Sprites.spider : this.walkFrame(10);
+        Renderer.drawSprite(this.skin(img), this.x, this.y, {
           flip: this.flip, squashY: crouch, squashX: 2 - crouch, shadow: true,
         });
         if (this.state === 'spin') {
@@ -407,7 +425,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const lift = this.state === 'slam' ? -this.stateT * 8 : 0;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y + lift, { flip: this.flip, shadow: true });
+        const img = this.state === 'slam' ? this.attackFrame() : this.walkFrame(3.5);
+        Renderer.drawSprite(this.skin(img), this.x, this.y + lift, { flip: this.flip, shadow: true });
         // 방패 방향 표시 (전방 호)
         ctx.save();
         ctx.globalAlpha = 0.35;
@@ -555,7 +574,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = Math.sin(this.animT * 4) * 2;
         const raise = this.state === 'summon' ? -this.stateT * 6 : 0;
-        Renderer.drawSprite(this.skin(Sprites.necro), this.x, this.y - bob + raise, { flip: this.flip, shadow: true });
+        const img = this.state === 'summon' ? this.attackFrame() : this.walkFrame(5);
+        Renderer.drawSprite(this.skin(img), this.x, this.y - bob + raise, { flip: this.flip, shadow: true });
         if (this.state === 'summon') {
           ctx.fillStyle = '#38b764';
           ctx.globalAlpha = 0.5 + Math.sin(this.animT * 15) * 0.3;

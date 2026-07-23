@@ -24,6 +24,7 @@ const Game = {
   pendingSpawns: [],
   interactables: [],
   bossSlashes: [],
+  corpses: [],      // 사망 연출 (무너져 내리는 잔상)
   kills: 0,
   time: 0,
   hitstop: 0,
@@ -98,6 +99,7 @@ const Game = {
     this.pendingSpawns = [];
     this.interactables = [];
     this.bossSlashes = [];
+    this.corpses = [];
     this.roomCleared = false;
     Particles.clear();
 
@@ -217,6 +219,17 @@ const Game = {
       speed: 190, life: 0.55, size: 4,
       gravity: 300, dir: Math.atan2(dir.y, dir.x), spread: 2.6,
     });
+
+    // 사망 연출: 무너져 내리는 잔상
+    const spriteKey = e.isBoss ? e.def.sprite : e.sprite;
+    if (spriteKey && Sprites[spriteKey]) {
+      this.corpses.push({
+        img: e.elite ? Sprites.tint(Sprites[spriteKey]) : Sprites[spriteKey],
+        x: e.x, y: e.y, flip: e.flip,
+        t: 0, dur: e.isBoss ? 0.7 : 0.35,
+        scale: e.isBoss ? e.def.scale : 1,
+      });
+    }
 
     const p = this.player;
 
@@ -597,9 +610,21 @@ const Game = {
       }
     }
 
+    // ── 사망 연출 잔상 수명 ──
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      this.corpses[i].t += dt;
+      if (this.corpses[i].t >= this.corpses[i].dur) this.corpses.splice(i, 1);
+    }
+
     // ── 적 갱신 + 상태이상 ──
     for (const e of this.enemies) {
       if (e.dead) continue;
+      // 등장 연출 중에는 행동하지 않는다 (플레이어 공격은 가능)
+      if (e.spawnT > 0) {
+        e.spawnT -= dt;
+        e.animT += dt;
+        continue;
+      }
       if (e.status.burn > 0) {
         e.status.burn -= dt;
         e.status.burnTick -= dt;
@@ -1105,10 +1130,42 @@ const Game = {
       ctx.drawImage(Sprites.gem, Math.round(o.x - 7), Math.round(o.y - 7), 14, 14);
     }
 
+    // 사망 잔상 (무너져 내리며 페이드)
+    for (const c of this.corpses) {
+      const k = Math.min(1, c.t / c.dur);
+      Renderer.drawSprite(c.img, c.x, c.y + k * 8, {
+        flip: c.flip,
+        alpha: (1 - k) * 0.9,
+        squashY: (1 - k * 0.75) * c.scale,
+        squashX: (1 + k * 0.45) * c.scale,
+      });
+    }
+
     const drawables = [...this.enemies];
     if (this.state !== 'over') drawables.push(this.player);
     drawables.sort((a, b) => a.y - b.y);
-    for (const d of drawables) d.draw(ctx);
+    for (const d of drawables) {
+      // 등장 연출: 땅에서 솟아오르며 실체화
+      if (d.spawnT > 0) {
+        const k = 1 - d.spawnT / (d.isBoss ? 0.6 : 0.35);
+        const key = d.isBoss ? d.def.sprite : d.sprite;
+        const img = d.elite ? Sprites.tint(Sprites[key]) : Sprites[key];
+        const sc = d.isBoss ? d.def.scale : 1;
+        Renderer.drawSprite(img, d.x, d.y + (1 - k) * 10, {
+          flip: d.flip,
+          alpha: 0.25 + 0.75 * k,
+          squashY: (0.25 + 0.75 * k) * sc,
+          squashX: (1.5 - 0.5 * k) * sc,
+        });
+        if (Math.random() < 0.4) {
+          Particles.burst(d.x + (Math.random() - 0.5) * 24, d.y + 14, {
+            count: 1, colors: ['#5c1e5e', '#8a3a8c'], speed: 40, life: 0.3, size: 3, gravity: -80,
+          });
+        }
+        continue;
+      }
+      d.draw(ctx);
+    }
 
     // 투사체
     for (const a of this.arrows) {

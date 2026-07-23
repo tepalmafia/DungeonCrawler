@@ -52,6 +52,7 @@ function createPlayer(x, y, classId = 'knight') {
     kbx: 0, kby: 0,
     animT: 0,
     moving: false,
+    attackPoseT: 0, // 공격 자세 프레임 유지 시간
 
     sprImg() {
       return Sprites[cls.sprite];
@@ -64,6 +65,7 @@ function createPlayer(x, y, classId = 'knight') {
     update(dt, game) {
       this.animT += dt;
       if (this.attackCd > 0) this.attackCd -= dt;
+      if (this.attackPoseT > 0) this.attackPoseT -= dt;
       if (this.comboTimer > 0) this.comboTimer -= dt; else this.combo = 0;
       if (this.invuln > 0) this.invuln -= dt;
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
@@ -248,6 +250,8 @@ function createPlayer(x, y, classId = 'knight') {
       let cd = cdBase * this.atkCdMul;
       if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
       this.attackCd = cd;
+      this.attackPoseT = 0.18;
+      if (dir.x !== 0) this.flip = dir.x < 0; // 공격 방향을 바라본다
 
       if (this.classId === 'knight') {
         this._meleeAttack(dir, game, finisher);
@@ -318,10 +322,13 @@ function createPlayer(x, y, classId = 'knight') {
         });
       }
 
-      // 걷기 애니메이션: 프레임 교체 (벌림-정지-모음-정지 사이클) + 살짝 바운스
+      // 애니메이션: 공격 자세 > 걷기 사이클(벌림-정지-모음-정지) > 정지
       const frames = Sprites.playerFrames[cls.sprite];
       const cycle = [1, 0, 2, 0];
-      const img = this.moving ? frames[cycle[Math.floor(this.animT * 9) % 4]] : frames[0];
+      let img;
+      if (this.attackPoseT > 0) img = frames[3];
+      else if (this.moving) img = frames[cycle[Math.floor(this.animT * 9) % 4]];
+      else img = frames[0];
       const bob = this.moving ? Math.abs(Math.sin(this.animT * 11)) * 1.5 : Math.sin(this.animT * 3) * 1;
       const rot = this.moving ? Math.sin(this.animT * 11) * 0.04 : 0;
       const flash = this.invuln > 0 && Math.floor(this.invuln * 18) % 2 === 0;

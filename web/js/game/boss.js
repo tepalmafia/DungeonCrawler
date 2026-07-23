@@ -63,6 +63,7 @@ function createBoss(floor, x, y) {
     r: 24 * Math.max(1, def.scale * 0.7),
     speed: def.speed, xpVal: 0,
     dead: false, elite: false,
+    spawnT: 0.6, // 등장 연출
     flash: 0,
     kbx: 0, kby: 0,
     animT: 0,
