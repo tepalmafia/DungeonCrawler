@@ -10,7 +10,7 @@ const CLASSES = {
   },
   archer: {
     id: 'archer', name: '궁수', sprite: 'playerArcher', color: '#38b764',
-    hp: 4, speed: 210, unlock: 300,
+    hp: 4, speed: 200, unlock: 300,
     desc: '빠른 화살 연사. 3발째는 관통 강화 화살.',
   },
   mage: {
