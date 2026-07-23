@@ -39,8 +39,10 @@ const Meta = {
       classes: { knight: true },   // 해금된 직업
       cls: 'knight',               // 선택된 직업
       runs: 0,
+      wins: 0,
       bestFloor: 0,
       totalKills: 0,
+      heat: 0,       // 열기 (고난이도 0~5, 첫 클리어 후 해금)
       muted: false,
     };
   },
@@ -104,17 +106,32 @@ const Meta = {
     return true;
   },
 
-  // 런 정산: 도달 층수·처치 수 비례 (기획안 §2-5)
-  runReward(floor, roomIndex, kills, victory) {
-    const base = kills + (floor - 1) * 25 + (roomIndex - 1) * 2 + (victory ? 100 : 0);
-    return Math.max(1, Math.round(base * (1 + 0.15 * this.lvl('greed'))));
+  // 열기(고난이도)는 탑을 한 번 정복해야 해금된다
+  heatUnlocked() {
+    return this.data.wins > 0 || this.data.bestFloor >= 5;
   },
 
-  endRun(floor, roomIndex, kills, victory) {
-    const earned = this.runReward(floor, roomIndex, kills, victory);
+  heat() {
+    return this.heatUnlocked() ? Math.min(5, Math.max(0, this.data.heat)) : 0;
+  },
+
+  setHeat(h) {
+    this.data.heat = Math.min(5, Math.max(0, h));
+    this.save();
+  },
+
+  // 런 정산: 도달 층수·처치 수 비례 + 열기 보너스 (기획안 §2-5)
+  runReward(floor, roomIndex, kills, victory, heat = 0) {
+    const base = kills + (floor - 1) * 25 + (roomIndex - 1) * 2 + (victory ? 100 : 0);
+    return Math.max(1, Math.round(base * (1 + 0.15 * this.lvl('greed')) * (1 + 0.2 * heat)));
+  },
+
+  endRun(floor, roomIndex, kills, victory, heat = 0) {
+    const earned = this.runReward(floor, roomIndex, kills, victory, heat);
     this.data.shards += earned;
     this.data.runs++;
     this.data.totalKills += kills;
+    if (victory) this.data.wins++;
     this.data.bestFloor = Math.max(this.data.bestFloor, victory ? 5 : floor);
     this.save();
     return earned;

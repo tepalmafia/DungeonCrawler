@@ -82,7 +82,8 @@ const Dungeon = {
   combatComp(depth) {
     const data = FLOOR_DATA[this.floor] || FLOOR_DATA[1];
     const comp = [];
-    const n = Math.min(11, 2 + Math.ceil(depth * 0.7) + Math.floor((this.floor - 1) * 0.8));
+    const heatBonus = Game.heat >= 2 ? 2 : 0; // 열기 2: 적 수 증가
+    const n = Math.min(12, 2 + Math.ceil(depth * 0.7) + Math.floor((this.floor - 1) * 0.8) + heatBonus);
     const eliteChance = 0.03 + (this.floor - 1) * 0.03;
     for (let i = 0; i < n; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: RNG.chance(eliteChance) });

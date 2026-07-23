@@ -47,9 +47,25 @@ const Game = {
   runEnded: false,
   shardsEarned: 0,
   shardAnimT: 0,
+  runSeed: 0,
+  heat: 0,
+  paused: false,
 
-  restart() {
+  restart(seed) {
+    // 시드 런: 같은 시드 + 같은 선택 = 같은 던전 (기획안 §8.1)
+    if (seed == null && this._urlSeed != null) {
+      seed = this._urlSeed;
+      this._urlSeed = null; // URL 시드는 첫 런에만 적용
+    }
+    this.runSeed = seed != null ? seed : Math.floor(Math.random() * 36 ** 6);
+    RNG.seed(this.runSeed);
+    this.heat = Meta.heat();
     this.player = createPlayer(0, 0, Meta.data.cls);
+    if (this.heat >= 5) {
+      this.player.maxHp = Math.max(1, this.player.maxHp - 1);
+      this.player.hp = this.player.maxHp;
+    }
+    this.paused = false;
     this.runEnded = false;
     this.shardsEarned = 0;
     this.shardAnimT = 0;
@@ -114,10 +130,19 @@ const Game = {
       this.interactables.push({ kind: 'camp', x: c.x, y: c.y, r: 30, used: false, t: 0 });
     } else if (type === 'boss') {
       const c = World.center();
-      this.enemies.push(createBoss(Dungeon.floor, c.x + TS * 4, c.y));
+      const boss = createBoss(Dungeon.floor, c.x + TS * 4, c.y);
+      if (this.heat >= 5) {
+        boss.hp = boss.maxHp = Math.round(boss.maxHp * 1.5);
+      }
+      this.enemies.push(boss);
       this.banner = { text: BOSS_DEFS[Dungeon.floor].banner, life: 2.0, maxLife: 2.0 };
       AudioSys.roar();
     }
+  },
+
+  // 열기 반영 적 강화 배율
+  enemyHpMul() {
+    return (1 + (Dungeon.floor - 1) * 0.3) * (this.heat >= 1 ? 1.25 : 1);
   },
 
   damageEnemy(e, dmg, dir, { feel = true, crit = false, kb = 190, color } = {}) {
@@ -229,7 +254,7 @@ const Game = {
       const a = Math.random() * Math.PI * 2;
       this.orbs.push({ x: e.x, y: e.y, val: v, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 });
     }
-    let heartChance = 0.1 * p.luckMul;
+    let heartChance = 0.1 * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
     if (p.flags.bloodlust) heartChance += 0.12;
     if (Math.random() < heartChance) {
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
@@ -254,7 +279,7 @@ const Game = {
   endRun(victory) {
     if (this.runEnded) return;
     this.runEnded = true;
-    this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory);
+    this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat);
     this.shardAnimT = 0;
   },
 
@@ -430,9 +455,18 @@ const Game = {
     }
   },
 
+  // 현재 상태에 맞는 BGM 테마 결정
+  _musicKey() {
+    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') return 'hub';
+    if (this.state === 'over' || this.state === 'victory') return null;
+    if (Dungeon.roomType === 'boss' && this.enemies.some((e) => e.isBoss && !e.dead)) return 'boss';
+    return 'f' + Math.min(5, Dungeon.floor);
+  },
+
   // ── 메인 틱 ──
   tick(dt) {
     this.blinkT += dt;
+    Music.ensure(this._musicKey());
 
     if (this.state === 'hub') {
       this._tickHub();
@@ -489,6 +523,13 @@ const Game = {
       Meta.data.muted = AudioSys.muted;
       Meta.save();
     }
+
+    // 일시정지
+    if (Input.pressed('Escape', 'KeyP')) {
+      this.paused = !this.paused;
+      AudioSys.pickup();
+    }
+    if (this.paused) return;
 
     if (this.hitstop > 0) {
       this.hitstop -= dt;
@@ -548,8 +589,9 @@ const Game = {
       const m = this.markers[i];
       m.t -= dt;
       if (m.t <= 0) {
-        const floorScale = 1 + (Dungeon.floor - 1) * 0.3;
-        this.enemies.push(createEnemy(m.type, m.x, m.y, m.elite, floorScale));
+        const e = createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
+        if (this.heat >= 3) e.speed *= 1.15;
+        this.enemies.push(e);
         Particles.burst(m.x, m.y, { count: 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });
         this.markers.splice(i, 1);
       }
@@ -796,8 +838,9 @@ const Game = {
           Particles.burst(it.x, it.y - 10, { count: 14, colors: ['#f7b32b', '#ffd866'], speed: 150, life: 0.5, size: 3, gravity: 200 });
         } else if (it.kind === 'camp') {
           AudioSys.pickup();
-          p.hp = Math.min(p.maxHp, p.hp + 2);
-          Particles.text(p.x, p.y - 28, '+2', { color: '#e43b44', size: 18 });
+          const heal = this.heat >= 4 ? 1 : 2; // 열기 4: 모닥불 회복 감소
+          p.hp = Math.min(p.maxHp, p.hp + heal);
+          Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
         }
       }
@@ -840,6 +883,23 @@ const Game = {
   // ── 거점 화면들 ──
   _tickHub() {
     if (Input.pressed('KeyM')) { AudioSys.toggleMute(); Meta.data.muted = AudioSys.muted; Meta.save(); }
+
+    // 열기(고난이도) 조절 — 첫 정복 후 해금
+    if (Meta.heatUnlocked()) {
+      if (Input.pressed('ArrowLeft')) { Meta.setHeat(Meta.data.heat - 1); AudioSys.orb(); }
+      if (Input.pressed('ArrowRight')) { Meta.setHeat(Meta.data.heat + 1); AudioSys.orb(); }
+      if (Input.mouse.justDown) {
+        const [minus, plus] = HUD.heatButtonRects();
+        const mx = Input.mouse.x, my = Input.mouse.y;
+        if (mx >= minus.x && mx <= minus.x + minus.w && my >= minus.y && my <= minus.y + minus.h) {
+          Meta.setHeat(Meta.data.heat - 1); AudioSys.orb();
+        }
+        if (mx >= plus.x && mx <= plus.x + plus.w && my >= plus.y && my <= plus.y + plus.h) {
+          Meta.setHeat(Meta.data.heat + 1); AudioSys.orb();
+        }
+      }
+    }
+
     const rects = HUD.hubButtonRects();
     let act = -1;
     if (Input.pressed('Digit1') || Input.pressed('Space', 'Enter')) act = 0;
@@ -1127,6 +1187,21 @@ const Game = {
 
     HUD.draw(ctx, this);
 
+    // 일시정지 오버레이
+    if (this.paused && this.state === 'play') {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = 'rgba(8,8,15,0.6)';
+      ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 36px monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText('일시정지', Renderer.W / 2, 250);
+      ctx.font = '14px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, 290);
+      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, 316);
+    }
+
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);
     if (this.state === 'over') HUD.drawGameOver(ctx, this, this.blinkT);
@@ -1154,6 +1229,10 @@ const Game = {
   const qs = new URLSearchParams(location.search);
   if (qs.has('class') && Meta.classUnlocked(qs.get('class'))) {
     Meta.selectClass(qs.get('class'));
+  }
+  if (qs.has('seed')) {
+    const parsed = parseInt(qs.get('seed'), 36);
+    if (!Number.isNaN(parsed)) Game._urlSeed = parsed >>> 0;
   }
   if (qs.has('autostart') || qs.has('demo')) Game.restart();
   if (qs.has('demo')) installDemoBot();

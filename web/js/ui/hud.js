@@ -242,10 +242,18 @@ const HUD = {
   },
 
   hubButtonRects() {
-    const w = 320, h = 56, gap = 18;
+    const w = 320, h = 56, gap = 16;
     const x = (Renderer.W - w) / 2;
-    const y0 = 268;
+    const y0 = 284;
     return [0, 1, 2].map((i) => ({ x, y: y0 + i * (h + gap), w, h }));
+  },
+
+  heatButtonRects() {
+    const cy = 243;
+    return [
+      { x: Renderer.W / 2 - 116, y: cy - 15, w: 26, h: 26 },
+      { x: Renderer.W / 2 + 90, y: cy - 15, w: 26, h: 26 },
+    ];
   },
 
   backButtonRect() {
@@ -290,10 +298,37 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = '14px monospace';
     ctx.fillStyle = '#9aa0b4';
-    ctx.fillText(`선택된 직업: `, Renderer.W / 2 - 30, 220);
+    ctx.fillText(`선택된 직업: `, Renderer.W / 2 - 30, 215);
     ctx.fillStyle = cls.color;
     ctx.font = 'bold 14px monospace';
-    ctx.fillText(cls.name, Renderer.W / 2 + 42, 220);
+    ctx.fillText(cls.name, Renderer.W / 2 + 42, 215);
+
+    // 열기(고난이도) 셀렉터 — 첫 정복 후 표시
+    if (Meta.heatUnlocked()) {
+      const heat = Meta.heat();
+      const [minus, plus] = this.heatButtonRects();
+      for (const [r, sym] of [[minus, '◀'], [plus, '▶']]) {
+        const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                      Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = hover ? '#e43b44' : '#4a4a5c';
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = '#e8e0cf';
+        ctx.textAlign = 'center';
+        ctx.fillText(sym, r.x + r.w / 2, r.y + 18);
+      }
+      ctx.font = 'bold 15px monospace';
+      ctx.fillStyle = heat > 0 ? '#e43b44' : '#666a80';
+      let flames = '';
+      for (let i = 0; i < 5; i++) flames += i < heat ? '♦' : '·';
+      ctx.fillText(`열기 ${heat}  ${flames}`, Renderer.W / 2, 248);
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#666a80';
+      const heatDesc = ['보통 난이도', '적 HP +25%', '+ 적 수 증가', '+ 적 속도 +15%', '+ 회복 감소', '+ 보스 강화, 시작 HP -1'][heat];
+      ctx.fillText(`${heatDesc} · 파편 +${heat * 20}%`, Renderer.W / 2, 266);
+    }
 
     const labels = [
       { text: '출발', sub: '심연의 탑에 도전한다', color: '#38b764' },
@@ -464,12 +499,22 @@ const HUD = {
       Renderer.W / 2, 272);
 
     this._drawShardReward(ctx, game, 330);
+    this._drawRunTag(ctx, game, 448);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px monospace';
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('R — 즉시 재도전   ·   클릭/Space — 거점으로', Renderer.W / 2, 415);
     }
+  },
+
+  // 시드·열기 표기 (시드 공유용)
+  _drawRunTag(ctx, game, y) {
+    ctx.textAlign = 'center';
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#4a4a5c';
+    const heatStr = game.heat > 0 ? ` · 열기 ${game.heat}` : '';
+    ctx.fillText(`시드 ${game.runSeed.toString(36).toUpperCase()}${heatStr} — ?seed=${game.runSeed.toString(36).toUpperCase()} 로 같은 던전 도전`, Renderer.W / 2, y);
   },
 
   // 파편 정산 카운트업 애니메이션
@@ -507,6 +552,7 @@ const HUD = {
     ctx.fillText(`클리어 시간 ${(game.time / 60).toFixed(1)}분`, Renderer.W / 2, 295);
 
     this._drawShardReward(ctx, game, 350);
+    this._drawRunTag(ctx, game, 465);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px monospace';

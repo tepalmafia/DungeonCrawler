@@ -21,6 +21,10 @@ const AudioSys = {
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
+    // 언락 전에 요청된 BGM이 있으면 이제 시작
+    if (typeof Music !== 'undefined' && Music.pending && !Music.current) {
+      Music.start(Music.pending);
+    }
   },
 
   toggleMute() {
@@ -104,5 +108,115 @@ const AudioSys = {
   gameover() {
     [392, 311, 233, 155].forEach((f, i) =>
       this._tone({ type: 'triangle', f0: f, dur: 0.3, vol: 0.3, delay: i * 0.22 }));
+  },
+};
+
+// ══════════════ 절차 생성 BGM ══════════════
+// 층 테마별 코드 진행(루트 노트 열)과 스케일로 베이스+아르페지오+드럼을
+// 16분음표 시퀀서로 합성한다. 오디오 파일 0개.
+const Music = {
+  themes: {
+    hub:  { bpm: 66,  roots: [45, 41, 43, 45], scale: [0, 3, 7, 10], drums: false, calm: true },
+    f1:   { bpm: 92,  roots: [38, 38, 41, 36], scale: [0, 3, 5, 7],  drums: false },
+    f2:   { bpm: 86,  roots: [40, 40, 43, 45], scale: [0, 2, 3, 7],  drums: false },
+    f3:   { bpm: 102, roots: [36, 36, 39, 41], scale: [0, 1, 5, 7],  drums: true },
+    f4:   { bpm: 118, roots: [38, 38, 36, 34], scale: [0, 3, 6, 7],  drums: true },
+    f5:   { bpm: 82,  roots: [33, 33, 36, 32], scale: [0, 1, 3, 7],  drums: true },
+    boss: { bpm: 132, roots: [36, 36, 34, 39], scale: [0, 1, 6, 7],  drums: true },
+  },
+  current: null,
+  pending: null,
+  step: 0,
+  nextT: 0,
+  _timer: null,
+
+  _freq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  },
+
+  // 원하는 테마를 선언 — 이미 재생 중이면 무시, 다르면 전환 (null이면 정지)
+  ensure(key) {
+    if (!AudioSys.ctx) {
+      this.pending = key; // 오디오 언락 후 시작
+      return;
+    }
+    if (key === this.current) return;
+    this.stop();
+    if (key) this.start(key);
+  },
+
+  start(key) {
+    if (!AudioSys.ctx || !this.themes[key]) { this.pending = key; return; }
+    this.current = key;
+    this.pending = null;
+    this.step = 0;
+    this.nextT = AudioSys.ctx.currentTime + 0.05;
+    if (!this._timer) {
+      this._timer = setInterval(() => this._tick(), 50);
+    }
+  },
+
+  stop() {
+    this.current = null;
+    if (this._timer) {
+      clearInterval(this._timer);
+      this._timer = null;
+    }
+  },
+
+  // 룩어헤드 스케줄러: 0.18초 앞까지 노트 예약
+  _tick() {
+    if (!this.current || !AudioSys.ctx || AudioSys.muted) {
+      if (this.current && AudioSys.ctx) {
+        // 음소거 중에도 박자는 진행시킨다
+        const th = this.themes[this.current];
+        const stepDur = 60 / th.bpm / 4;
+        while (this.nextT < AudioSys.ctx.currentTime + 0.18) {
+          this.nextT += stepDur;
+          this.step++;
+        }
+      }
+      return;
+    }
+    const th = this.themes[this.current];
+    const stepDur = 60 / th.bpm / 4;
+    while (this.nextT < AudioSys.ctx.currentTime + 0.18) {
+      this._schedule(this.nextT, th);
+      this.nextT += stepDur;
+      this.step++;
+    }
+  },
+
+  _schedule(t, th) {
+    const ctx = AudioSys.ctx;
+    const s = this.step % 16;
+    const bar = Math.floor(this.step / 16) % th.roots.length;
+    const root = th.roots[bar];
+    const delay = Math.max(0, t - ctx.currentTime);
+
+    // 베이스 (마디 첫 박 + 뒤 박)
+    if (s === 0 || s === 8) {
+      AudioSys._tone({ type: 'sawtooth', f0: this._freq(root), dur: 0.28, vol: th.calm ? 0.055 : 0.075, delay });
+      AudioSys._tone({ type: 'sine', f0: this._freq(root - 12), dur: 0.3, vol: 0.06, delay });
+    }
+    // 아르페지오 (8분음표, 스케일 순환)
+    if (s % 2 === 0) {
+      const deg = th.scale[(this.step / 2) % th.scale.length | 0];
+      const octave = (Math.floor(this.step / 8) % 2) * 12;
+      AudioSys._tone({
+        type: 'triangle',
+        f0: this._freq(root + 12 + deg + octave),
+        dur: 0.14, vol: th.calm ? 0.035 : 0.042, delay,
+      });
+    }
+    // 드럼 (긴장감 있는 층/보스)
+    if (th.drums) {
+      if (s % 4 === 0) {
+        AudioSys._tone({ type: 'sine', f0: 105, f1: 38, dur: 0.1, vol: 0.16, delay });
+      }
+      if (s % 4 === 2) {
+        AudioSys._noise({ dur: 0.03, vol: 0.05, freq: 6000, q: 1, delay });
+      }
+    }
   },
 };

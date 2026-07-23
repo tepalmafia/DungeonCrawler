@@ -573,6 +573,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   if (!def) throw new Error('알 수 없는 적 타입: ' + type);
   const e = Object.assign(base, def());
   e.hp = Math.ceil(e.hp * floorScale);
+  // 깊은 층일수록 XP도 증가 (레벨 커브 유지)
+  e.xpVal = Math.round(e.xpVal * (0.7 + 0.3 * floorScale));
 
   if (elite) {
     e.hp = Math.ceil(e.hp * 2.5);
