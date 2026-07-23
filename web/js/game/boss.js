@@ -19,7 +19,8 @@ const BOSS_DEFS = {
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
-    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 95, speed: 34,
+    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 115, speed: 34,
+    mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '포자왕 믹서스',
     p1: ['fan:spore', 'ring', 'summon:mushroom'],
     p2: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
@@ -27,7 +28,8 @@ const BOSS_DEFS = {
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
   },
   3: {
-    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.1, r: 33, hp: 125, speed: 30,
+    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.1, r: 33, hp: 100, speed: 30,
+    mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
     p1: ['charge', 'ring'],
     p2: ['charge', 'fan:rock', 'ring', 'charge'],
@@ -35,7 +37,8 @@ const BOSS_DEFS = {
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
-    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 140, speed: 44,
+    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 155, speed: 44,
+    mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '용암 심장 이그니스',
     p1: ['fan:fire', 'charge:trail'],
     p2: ['fan:fire', 'charge:trail', 'curse:fire', 'ring'],
@@ -43,7 +46,8 @@ const BOSS_DEFS = {
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
-    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 175, speed: 50,
+    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 200, speed: 50,
+    mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라' },
     banner: '심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring'],
     p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite'],
@@ -75,6 +79,13 @@ function createBoss(floor, x, y) {
     stateT: 0,
     patternIdx: 0,
     attack: null,     // 현재 공격 {kind, opt}
+    // 기믹 상태
+    armorCap: def.mechanic?.type === 'armor' ? def.mechanic.cap : 0,
+    rageT: 0,
+    rageStacks: 0,
+    veilsDone: 0,
+    phased: false,    // 어둠 장막 중 무적
+    _regenTick: 0,
     swingCount: 0,
     aimDir: { x: -1, y: 0 },
     curses: [],
@@ -110,8 +121,54 @@ function createBoss(floor, x, y) {
         this.kby *= Math.pow(0.0001, dt);
       }
 
+      // ── 기믹: 포자 갑피 (부하 생존 시 재생) ──
+      if (this.def.mechanic?.type === 'regen' && this.state !== 'enter') {
+        const hasMinion = game.enemies.some((o) => !o.isBoss && !o.dead);
+        if (hasMinion && this.hp < this.maxHp) {
+          this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
+          this._regenTick += dt;
+          if (this._regenTick >= 1.0) {
+            this._regenTick = 0;
+            Particles.text(this.x, this.y - 40, '재생 +4', { color: '#38b764', size: 12 });
+          }
+        }
+      }
+
+      // ── 기믹: 백열 (16초마다 가속, 최대 4중첩) ──
+      if (this.def.mechanic?.type === 'rage' && this.state !== 'enter') {
+        this.rageT += dt;
+        if (this.rageT >= 16 && this.rageStacks < 4) {
+          this.rageT = 0;
+          this.rageStacks++;
+          game.banner = { text: `이그니스가 더 뜨거워진다! (×${this.rageStacks})`, life: 1.3, maxLife: 1.3, color: '#ff7043' };
+          AudioSys.roar();
+          Particles.burst(this.x, this.y, { count: 18, colors: ['#ff7043', '#ffd866'], speed: 180, life: 0.5, size: 4 });
+        }
+      }
+
+      // ── 기믹: 어둠 장막 (HP 70%·35%에서 무적 + 영혼 구슬) ──
+      if (this.def.mechanic?.type === 'veil' && this.state !== 'veil' && this.state !== 'enter') {
+        const thresholds = [0.7, 0.35];
+        if (this.veilsDone < thresholds.length && this.hp <= this.maxHp * thresholds[this.veilsDone]) {
+          this.state = 'veil';
+          this.stateT = 0;
+          this.phased = true;
+          this.attack = null;
+          game.banner = { text: '영혼 구슬을 파괴하라!', life: 2.0, maxLife: 2.0, color: '#b13ae0' };
+          AudioSys.roar();
+          for (let i = 0; i < 3; i++) {
+            const a = (i / 3) * Math.PI * 2 + Math.random();
+            const pos = {
+              x: Math.min(Math.max(this.x + Math.cos(a) * 200, TS * 1.5), TS * (World.cols - 1.5)),
+              y: Math.min(Math.max(this.y + Math.sin(a) * 150, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5)),
+            };
+            game.enemies.push(createEnemy('soulOrb', pos.x, pos.y, false, 1 + (Dungeon.floor - 1) * 0.3));
+          }
+        }
+      }
+
       // 페이즈 전환
-      if (this.phase === 1 && this.hp <= this.maxHp / 2) {
+      if (this.phase === 1 && this.hp <= this.maxHp / 2 && this.state !== 'veil') {
         this.phase = 2;
         this.state = 'idle';
         this.stateT = -0.8;
@@ -132,7 +189,7 @@ function createBoss(floor, x, y) {
         case 'idle': {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          const wait = this.phase === 2 ? 0.75 : 1.1;
+          const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks);
           if (this.stateT >= wait) {
             this.attack = this._nextPattern();
             this.state = 'windup';
@@ -214,6 +271,39 @@ function createBoss(floor, x, y) {
         case 'stunned':
           if (this.stateT > (this.phase === 2 ? 0.6 : 1.0)) { this.state = 'idle'; this.stateT = 0; }
           break;
+
+        case 'veil': {
+          const orbs = game.enemies.filter((o) => o.type === 'soulOrb' && !o.dead);
+          if (orbs.length === 0) {
+            // 성공: 장막 붕괴 → 긴 그로기 (집중 딜 타임)
+            this.phased = false;
+            this.veilsDone++;
+            this.state = 'stunned';
+            this.stateT = -2.2;
+            game.banner = { text: '장막이 깨졌다!', life: 1.6, maxLife: 1.6, color: '#f7b32b' };
+            Renderer.shake(6, 0.4);
+            AudioSys.thud();
+          } else if (this.stateT > 8) {
+            // 실패: 구슬 회수 → 15% 회복 + 반격
+            for (const o of orbs) {
+              o.dead = true;
+              Particles.burst(o.x, o.y, { count: 10, colors: ['#b13ae0', '#5c1e5e'], speed: 120, life: 0.4, size: 3 });
+            }
+            this.phased = false;
+            this.veilsDone++;
+            this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.15);
+            game.banner = { text: '눅스가 영혼을 흡수했다...', life: 1.8, maxLife: 1.8, color: '#e43b44' };
+            AudioSys.roar();
+            const baseAngle = Math.atan2(p.y - this.y, p.x - this.x);
+            for (let i = 0; i < 9; i++) {
+              const a = baseAngle + (i - 4) * 0.22;
+              game.spawnProjectile('soul', this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 210, dmg: 1 });
+            }
+            this.state = 'idle';
+            this.stateT = 0;
+          }
+          break;
+        }
       }
 
       // 저주 장판 폭발 처리
@@ -237,8 +327,8 @@ function createBoss(floor, x, y) {
         }
       }
 
-      // 접촉 데미지
-      if (this.hitCd <= 0 && p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
+      // 접촉 데미지 (장막 중 제외)
+      if (this.state !== 'veil' && this.hitCd <= 0 && p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
         this.hitCd = 0.8;
         game.hurtPlayer(1, { x: dx / d, y: dy / d });
       }
@@ -355,6 +445,7 @@ function createBoss(floor, x, y) {
       const shakeX = this.state === 'windup' && this.attack?.kind === 'charge' ? (Math.random() - 0.5) * 5 : 0;
       Renderer.drawSprite(img, this.x + shakeX, this.y - bob, {
         flip: this.flip,
+        alpha: this.phased ? 0.35 : 1,
         squashX: this.def.scale,
         squashY: this.def.scale,
       });

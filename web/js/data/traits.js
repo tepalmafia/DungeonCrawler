@@ -74,16 +74,30 @@ const TRAITS = [
     desc: '중독된 적이 죽으면 독구름을 남긴다 (적에게 지속 피해)', flag: 'plague' },
 ];
 
-// 레벨업 카드 뽑기 — 이미 가진 고유(flag) 특성은 제외
+// 레벨업 카드 뽑기 — 이미 가진 고유(flag) 특성은 제외.
+// 태그 시너지 가중치: 보유한 태그의 특성이 더 자주 등장한다 (트리를 "판다"는
+// 플레이 성립 — 보스 기믹의 정답 트리를 연구해 완성할 수 있게 지원).
 function rollTraitCards(player, n = 3) {
   const pool = TRAITS.filter((t) => !t.flag || !player.flags[t.flag]);
+  const tagCount = {};
+  for (const id of player.traits) {
+    const tr = TRAITS.find((x) => x.id === id);
+    if (tr) tagCount[tr.tag] = (tagCount[tr.tag] || 0) + 1;
+  }
+  const weightOf = (t) => 1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1);
+
   const cards = [];
-  const used = new Set();
-  while (cards.length < n && used.size < pool.length) {
-    const t = pool[Math.floor(Math.random() * pool.length)];
-    if (used.has(t.id)) continue;
-    used.add(t.id);
-    cards.push(t);
+  const avail = [...pool];
+  while (cards.length < n && avail.length > 0) {
+    let total = 0;
+    for (const t of avail) total += weightOf(t);
+    let roll = Math.random() * total;
+    let idx = 0;
+    for (; idx < avail.length - 1; idx++) {
+      roll -= weightOf(avail[idx]);
+      if (roll <= 0) break;
+    }
+    cards.push(avail.splice(idx, 1)[0]);
   }
   return cards;
 }

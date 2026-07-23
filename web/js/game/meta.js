@@ -35,10 +35,10 @@ const CODEX_ENEMIES = [
   { id: 'fireSpirit', name: '화염 정령',    sprite: 'fireSpirit', desc: '화염구의 착탄 지점에 불길이 남는다.' },
   { id: 'necro',      name: '강령술사',     sprite: 'necro',      desc: '도망다니며 부하를 소환한다. 최우선으로 처치하라.' },
   { id: 'boss1', boss: true, name: '무덤지기 카론',     sprite: 'boss',      desc: '1층의 주인. 낫 연격과 영혼 부채꼴, 그리고 저주 지대.' },
-  { id: 'boss2', boss: true, name: '포자왕 믹서스',     sprite: 'bossSpore', desc: '2층의 주인. 포자 탄막과 버섯 소환으로 방을 메운다.' },
-  { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 사슬 풀린 돌진과 충격파 링.' },
-  { id: 'boss4', boss: true, name: '용암 심장 이그니스', sprite: 'bossIgnis', desc: '4층의 주인. 지나간 모든 곳이 불탄다.' },
-  { id: 'boss5', boss: true, name: '심연의 군주 눅스',   sprite: 'bossAbyss', desc: '탑의 정점. 어둠 그 자체.' },
+  { id: 'boss2', boss: true, name: '포자왕 믹서스',     sprite: 'bossSpore', desc: '2층의 주인. 부하가 살아있는 동안 재생한다 — 부하를 한꺼번에 쓸어담을 수단을 연구하라.' },
+  { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 중장갑이 강한 일격을 경감한다 — 갑옷을 무시하고 스며드는 피해가 열쇠.' },
+  { id: 'boss4', boss: true, name: '용암 심장 이그니스', sprite: 'bossIgnis', desc: '4층의 주인. 시간이 지날수록 백열해 빨라진다 — 속전속결하거나, 오래 버틸 몸을 만들라.' },
+  { id: 'boss5', boss: true, name: '심연의 군주 눅스',   sprite: 'bossAbyss', desc: '탑의 정점. 어둠 장막 중에는 영혼 구슬만이 유일한 약점 — 흩어진 구슬을 잡을 기동력을 갖춰라.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
