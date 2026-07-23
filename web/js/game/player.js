@@ -155,13 +155,19 @@ function createPlayer(x, y, classId = 'knight') {
 
       const attackInput = Input.mouse.justDown || Input.pressed('KeyJ');
       if (attackInput && this.attackCd <= 0 && this.dashTimer <= 0) {
-        let dir;
-        if (Input.mouse.justDown) {
+        // 자동 타겟팅: 가장 가까운 적을 자동 조준. 적이 없으면 마우스/이동 방향
+        let dir = null;
+        const target = this.autoTarget(game);
+        if (target) {
+          const dx = target.x - this.x;
+          const dy = target.y - this.y;
+          const d = Math.hypot(dx, dy) || 1;
+          dir = { x: dx / d, y: dy / d };
+        } else if (Input.mouse.justDown) {
           const dx = Input.mouse.x - Renderer.offsetX - this.x;
           const dy = Input.mouse.y - Renderer.offsetY - this.y;
           const d = Math.hypot(dx, dy) || 1;
           dir = { x: dx / d, y: dy / d };
-          if (dx !== 0) this.flip = dx < 0;
         } else {
           dir = { ...this.facing };
         }
@@ -172,6 +178,19 @@ function createPlayer(x, y, classId = 'knight') {
         this.slashes[i].life -= dt;
         if (this.slashes[i].life <= 0) this.slashes.splice(i, 1);
       }
+    },
+
+    // 자동 타겟: 사거리 내 가장 가까운 적 (비물질 망령 제외)
+    autoTarget(game) {
+      const maxRange = this.classId === 'knight' ? 240 : 520;
+      let best = maxRange;
+      let target = null;
+      for (const e of game.enemies) {
+        if (e.dead || e.phased || e.spawnT > 0) continue;
+        const d = Math.hypot(e.x - this.x, e.y - this.y);
+        if (d < best) { best = d; target = e; }
+      }
+      return target;
     },
 
     currentAtk() {
