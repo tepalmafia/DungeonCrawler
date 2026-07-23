@@ -38,6 +38,11 @@ function createPlayer(x, y, classId = 'knight') {
     slashes: [],
     dashCritReady: false,
 
+    // 직업 스킬 (K / 우클릭): 검사 회전 베기 / 궁수 화살비 / 마도사 메테오
+    skillCd: 0,
+    skillCdMul: 1,
+    spinT: 0, // 회전 베기 연출
+
     dashMax: 1,
     dashCharges: 1,
     dashRegenT: 0,
@@ -62,10 +67,93 @@ function createPlayer(x, y, classId = 'knight') {
       return this.rflags.engine ? 0.05 : 1.5 * this.dashRegenMul;
     },
 
+    skillMaxCd() {
+      const base = { knight: 6, archer: 7, mage: 8 }[this.classId] || 6;
+      return base * this.skillCdMul;
+    },
+
+    skillName() {
+      return { knight: '회전 베기', archer: '화살비', mage: '메테오' }[this.classId];
+    },
+
+    // 스킬 조준점: 자동 타겟 위치 > 마우스 > 바라보는 방향 앞
+    _skillTarget(game) {
+      const t = this.autoTarget(game);
+      if (t) return { x: t.x, y: t.y };
+      return { x: this.x + this.facing.x * 180, y: this.y + this.facing.y * 180 };
+    },
+
+    useSkill(game) {
+      this.skillCd = this.skillMaxCd();
+
+      if (this.classId === 'knight') {
+        // 회전 베기: 360° 강타 + 넉백
+        this.spinT = 0.35;
+        AudioSys.slash();
+        AudioSys.thud();
+        Renderer.shake(4, 0.2);
+        Particles.ring(this.x, this.y, { r0: 20, r1: 100, life: 0.3, color: '#4a6ede', width: 5 });
+        Particles.ring(this.x, this.y, { r0: 10, r1: 70, life: 0.22, color: '#ffffff', width: 3 });
+        let hits = 0;
+        for (const e of game.enemies) {
+          if (e.dead || e.phased) continue;
+          const dx = e.x - this.x, dy = e.y - this.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 100 + e.r) continue;
+          const dir = { x: dx / (d || 1), y: dy / (d || 1) };
+          const dmg = this.currentAtk() * 2;
+          const crit = this.rflags.allcrit || Math.random() < this.critChance;
+          game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, dir, { crit, kb: 380 });
+          hits++;
+        }
+        // 검기 방출
+        if (this.flags.kn_wave) {
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            game.pbolts.push({
+              kind: 'pwave', x: this.x, y: this.y,
+              dir: { x: Math.cos(a), y: Math.sin(a) },
+              speed: 340, finisher: false, pierce: true, life: 0.4, hit: new Set(),
+            });
+          }
+        }
+        // 피의 회전
+        if (this.flags.kn_blood && hits >= 3 && this.hp < this.maxHp) {
+          this.hp++;
+          Particles.text(this.x, this.y - 28, '+1', { color: '#e43b44', size: 15 });
+        }
+      } else if (this.classId === 'archer') {
+        // 화살비: 지점 광역 폭격
+        const t = this._skillTarget(game);
+        AudioSys.bow();
+        game.rains.push({
+          x: t.x, y: t.y, r: 95, t: 0, next: 0.25,
+          shots: 9, fired: 0,
+          explo: this.flags.ar_explo,
+        });
+      } else {
+        // 메테오: 예고 후 대광역 낙하
+        const t = this._skillTarget(game);
+        AudioSys.bolt();
+        game.meteors.push({ x: t.x, y: t.y, t: 0.9, r: 90 });
+        if (this.flags.mg_meteor3) {
+          for (let i = 0; i < 2; i++) {
+            game.meteors.push({
+              x: t.x + (Math.random() - 0.5) * 190,
+              y: t.y + (Math.random() - 0.5) * 150,
+              t: 1.1 + i * 0.25, r: 80,
+            });
+          }
+        }
+      }
+    },
+
     update(dt, game) {
       this.animT += dt;
       if (this.attackCd > 0) this.attackCd -= dt;
       if (this.attackPoseT > 0) this.attackPoseT -= dt;
+      if (this.skillCd > 0) this.skillCd -= dt;
+      if (this.spinT > 0) this.spinT -= dt;
       if (this.comboTimer > 0) this.comboTimer -= dt; else this.combo = 0;
       if (this.invuln > 0) this.invuln -= dt;
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
@@ -151,6 +239,11 @@ function createPlayer(x, y, classId = 'knight') {
       for (let i = this.ghosts.length - 1; i >= 0; i--) {
         this.ghosts[i].life -= dt;
         if (this.ghosts[i].life <= 0) this.ghosts.splice(i, 1);
+      }
+
+      // 스킬 (K / 우클릭)
+      if ((Input.pressed('KeyK') || Input.mouse.rightJustDown) && this.skillCd <= 0 && this.dashTimer <= 0) {
+        this.useSkill(game);
       }
 
       const attackInput = Input.mouse.justDown || Input.pressed('KeyJ');
@@ -277,25 +370,34 @@ function createPlayer(x, y, classId = 'knight') {
       } else if (this.classId === 'archer') {
         AudioSys.bow();
         World.moveEntity(this, -dir.x * 5, -dir.y * 5); // 반동
-        game.pbolts.push({
-          kind: 'parrow', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
-          dir: { ...dir }, speed: finisher ? 560 : 480,
-          finisher, pierce: finisher, life: 1.1, hit: new Set(),
-        });
+        // 이중 사격: 부채꼴 2발
+        const angles = this.flags.ar_double ? [-0.11, 0.11] : [0];
+        for (const off of angles) {
+          const a = Math.atan2(dir.y, dir.x) + off;
+          const d2 = { x: Math.cos(a), y: Math.sin(a) };
+          game.pbolts.push({
+            kind: 'parrow', x: this.x + d2.x * 14, y: this.y + d2.y * 14,
+            dir: d2, speed: finisher ? 560 : 480,
+            finisher, pierce: finisher, life: 1.1, hit: new Set(),
+          });
+        }
         Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
           count: 3, colors: ['#d9cbb8', '#38b764'], speed: 50, life: 0.2, size: 2,
         });
       } else {
         AudioSys.bolt();
+        // 파이어볼: 관통 + 상시 착탄 폭발
+        const fireball = this.flags.mg_fireball;
         game.pbolts.push({
           kind: 'pbolt', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
           dir: { ...dir }, speed: finisher ? 260 : 300,
-          finisher, pierce: false, homing: 5.0,
-          aoe: finisher ? 70 : 0,
+          finisher, pierce: fireball, homing: 5.0,
+          aoe: finisher ? 70 : (fireball ? 40 : 0),
+          fire: fireball,
           life: 2.0, hit: new Set(),
         });
         Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
-          count: 4, colors: ['#c56cf0', '#8a5ac2'], speed: 60, life: 0.25, size: 3,
+          count: 4, colors: fireball ? ['#ff7043', '#ffd866'] : ['#c56cf0', '#8a5ac2'], speed: 60, life: 0.25, size: 3,
         });
       }
     },
@@ -359,7 +461,8 @@ function createPlayer(x, y, classId = 'knight') {
       else if (this.moving) img = frames[cycle[Math.floor(this.animT * 9) % 4]];
       else img = frames[0];
       const bob = this.moving ? Math.abs(Math.sin(this.animT * 11)) * 1.5 : Math.sin(this.animT * 3) * 1;
-      const rot = this.moving ? Math.sin(this.animT * 11) * 0.04 : 0;
+      let rot = this.moving ? Math.sin(this.animT * 11) * 0.04 : 0;
+      if (this.spinT > 0) rot = (0.35 - this.spinT) * 18; // 회전 베기: 한 바퀴 돌기
       const flash = this.invuln > 0 && Math.floor(this.invuln * 18) % 2 === 0;
 
       Renderer.drawSprite(flash ? Sprites.white(img) : img,

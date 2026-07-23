@@ -177,7 +177,7 @@ const Meta = {
     this.data.runs++;
     this.data.totalKills += kills;
     if (victory) this.data.wins++;
-    this.data.bestFloor = Math.max(this.data.bestFloor, victory ? 5 : floor);
+    this.data.bestFloor = Math.max(this.data.bestFloor, victory ? 10 : floor);
     this.save();
     return earned;
   },

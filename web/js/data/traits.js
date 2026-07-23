@@ -72,19 +72,44 @@ const TRAITS = [
     desc: '중독된 적에게 주는 피해 +1', flag: 'corrode' },
   { id: 'plague',  name: '역병',   tag: '독', color: '#6ab04c',
     desc: '중독된 적이 죽으면 독구름을 남긴다 (적에게 지속 피해)', flag: 'plague' },
+
+  // ── 직업 전용 (해당 직업에게만 카드로 등장) ──
+  { id: 'kn_spin_cd', name: '회전 가속', tag: '검사', color: '#4a6ede', cls: 'knight', stack: true,
+    desc: '회전 베기 쿨다운 -30%', apply: (p) => { p.skillCdMul *= 0.7; } },
+  { id: 'kn_wave', name: '검기 방출', tag: '검사', color: '#4a6ede', cls: 'knight',
+    desc: '회전 베기가 검기 8발을 사방으로 방출한다', flag: 'kn_wave' },
+  { id: 'kn_blood', name: '피의 회전', tag: '검사', color: '#4a6ede', cls: 'knight',
+    desc: '회전 베기로 3마리 이상 적중 시 HP 1 회복', flag: 'kn_blood' },
+
+  { id: 'ar_rain_cd', name: '신속 장전', tag: '궁수', color: '#38b764', cls: 'archer', stack: true,
+    desc: '화살비 쿨다운 -30%', apply: (p) => { p.skillCdMul *= 0.7; } },
+  { id: 'ar_explo', name: '폭발 화살비', tag: '궁수', color: '#38b764', cls: 'archer',
+    desc: '화살비의 화살이 착탄 시 폭발한다', flag: 'ar_explo' },
+  { id: 'ar_double', name: '이중 사격', tag: '궁수', color: '#38b764', cls: 'archer',
+    desc: '기본 공격이 화살 2발을 부채꼴로 쏜다', flag: 'ar_double' },
+
+  { id: 'mg_meteor3', name: '유성우', tag: '마도사', color: '#8a5ac2', cls: 'mage',
+    desc: '메테오가 3개 떨어진다', flag: 'mg_meteor3' },
+  { id: 'mg_fireball', name: '파이어볼', tag: '마도사', color: '#8a5ac2', cls: 'mage',
+    desc: '기본 마탄이 관통 화염구가 되어 착탄 시 폭발한다', flag: 'mg_fireball' },
+  { id: 'mg_ash', name: '잿불 지대', tag: '마도사', color: '#8a5ac2', cls: 'mage',
+    desc: '메테오 자리에 불타는 지대가 남는다 (적 지속 피해)', flag: 'mg_ash' },
 ];
 
 // 레벨업 카드 뽑기 — 이미 가진 고유(flag) 특성은 제외.
 // 태그 시너지 가중치: 보유한 태그의 특성이 더 자주 등장한다 (트리를 "판다"는
 // 플레이 성립 — 보스 기믹의 정답 트리를 연구해 완성할 수 있게 지원).
 function rollTraitCards(player, n = 3) {
-  const pool = TRAITS.filter((t) => !t.flag || !player.flags[t.flag]);
+  // 직업 전용 특성은 해당 직업에게만 등장한다
+  const pool = TRAITS.filter((t) =>
+    (!t.flag || !player.flags[t.flag]) && (!t.cls || t.cls === player.classId));
   const tagCount = {};
   for (const id of player.traits) {
     const tr = TRAITS.find((x) => x.id === id);
     if (tr) tagCount[tr.tag] = (tagCount[tr.tag] || 0) + 1;
   }
-  const weightOf = (t) => 1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1);
+  const weightOf = (t) =>
+    (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
 
   const cards = [];
   const avail = [...pool];

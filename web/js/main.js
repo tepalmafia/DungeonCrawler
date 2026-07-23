@@ -15,6 +15,8 @@ const Game = {
   enemies: [],
   arrows: [],
   pbolts: [],       // 플레이어 투사체 (궁수 화살 / 마도사 마탄)
+  rains: [],        // 궁수 스킬: 화살비
+  meteors: [],      // 마도사 스킬: 메테오
   pickups: [],
   orbs: [],
   zones: [],        // 적에게 피해 주는 장판 (감전/독구름)
@@ -98,6 +100,8 @@ const Game = {
     this.enemies = [];
     this.arrows = [];
     this.pbolts = [];
+    this.rains = [];
+    this.meteors = [];
     this.orbs = [];
     this.zones = [];
     this.firePatches = [];
@@ -213,7 +217,7 @@ const Game = {
     if (e.dead) return;
     e.dead = true;
     this.kills++;
-    Meta.codexKill(e.isBoss ? 'boss' + Dungeon.floor : e.type);
+    Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : e.type);
     this.hitstop = Math.max(this.hitstop, 0.08);
     Renderer.shake(3, 0.15);
     AudioSys.die();
@@ -328,7 +332,7 @@ const Game = {
   onBossDead() {
     this.arrows = [];
     this.rings = [];
-    if (Dungeon.floor >= 5) {
+    if (Dungeon.floor >= 10) {
       this.endRun(true);
       this.state = 'victory';
       Renderer.shake(8, 0.6);
@@ -718,15 +722,16 @@ const Game = {
       const z = this.zones[i];
       z.life -= dt;
       if (z.life <= 0) { this.zones.splice(i, 1); continue; }
-      if (z.kind === 'poison') {
+      if (z.kind === 'poison' || z.kind === 'fire') {
         z.tickT -= dt;
         if (z.tickT <= 0) {
           z.tickT = 0.8;
           for (const e of this.enemies) {
             if (e.dead || e.phased) continue;
             if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) {
-              e.status.poison = Math.max(e.status.poison, 1.5);
-              this.damageEnemy(e, 1, { x: 0, y: 0 }, { feel: false, kb: 0, color: '#6ab04c' });
+              if (z.kind === 'poison') e.status.poison = Math.max(e.status.poison, 1.5);
+              else e.status.burn = Math.max(e.status.burn, 1.2);
+              this.damageEnemy(e, 1, { x: 0, y: 0 }, { feel: false, kb: 0, color: z.kind === 'poison' ? '#6ab04c' : '#ff7043' });
             }
           }
         }
@@ -863,6 +868,69 @@ const Game = {
           speed: 70, life: 0.25, size: 2,
         });
         this.pbolts.splice(i, 1);
+      }
+    }
+
+    // ── 궁수 스킬: 화살비 ──
+    for (let i = this.rains.length - 1; i >= 0; i--) {
+      const r = this.rains[i];
+      r.t += dt;
+      if (r.fired < r.shots) {
+        r.next -= dt;
+        if (r.next <= 0) {
+          r.next = 0.08;
+          r.fired++;
+          const a = Math.random() * Math.PI * 2;
+          const rr = Math.sqrt(Math.random()) * r.r * 0.9;
+          const ix = r.x + Math.cos(a) * rr;
+          const iy = r.y + Math.sin(a) * rr;
+          AudioSys.shoot();
+          Particles.burst(ix, iy, { count: 5, colors: ['#d9cbb8', '#38b764'], speed: 90, life: 0.25, size: 2 });
+          Particles.ring(ix, iy, { r0: 3, r1: 20, life: 0.18, color: '#d9cbb8', width: 2 });
+          for (const e of this.enemies) {
+            if (e.dead || e.phased) continue;
+            const dd = Math.hypot(e.x - ix, e.y - iy);
+            if (dd < 30 + e.r) {
+              p.strike(this, e, { x: (e.x - ix) / (dd || 1), y: (e.y - iy) / (dd || 1) }, { kb: 130 });
+            }
+          }
+          if (r.explo) {
+            this._explode(ix, iy, 36, 1, ['#38b764', '#ffd866'], '#38b764');
+          }
+        }
+      } else if (r.t > 2) {
+        this.rains.splice(i, 1);
+      }
+    }
+
+    // ── 마도사 스킬: 메테오 ──
+    for (let i = this.meteors.length - 1; i >= 0; i--) {
+      const m = this.meteors[i];
+      m.t -= dt;
+      if (m.t <= 0) {
+        Renderer.shake(6, 0.3);
+        this.hitstop = Math.max(this.hitstop, 0.07);
+        AudioSys.thud();
+        AudioSys.roar();
+        Particles.burst(m.x, m.y, { count: 26, colors: ['#ff7043', '#ffd866', '#e25822'], speed: 240, life: 0.5, size: 4, gravity: 150 });
+        Particles.ring(m.x, m.y, { r0: 10, r1: m.r, life: 0.35, color: '#ff7043', width: 6 });
+        Particles.ring(m.x, m.y, { r0: 6, r1: m.r * 0.6, life: 0.25, color: '#fff7c0', width: 3 });
+        Particles.star(m.x, m.y, { size: 40, color: '#ffd866' });
+        for (const e of this.enemies) {
+          if (e.dead || e.phased) continue;
+          const dd = Math.hypot(e.x - m.x, e.y - m.y);
+          if (dd < m.r + e.r) {
+            const dir = { x: (e.x - m.x) / (dd || 1), y: (e.y - m.y) / (dd || 1) };
+            const dmg = p.currentAtk() * 3;
+            const crit = p.rflags.allcrit || Math.random() < p.critChance;
+            this.hitEnemy(e, crit ? Math.round(dmg * p.critMul) : dmg, dir, { crit, kb: 320 });
+            if (!e.dead) e.status.burn = Math.max(e.status.burn, p.flags.inferno ? 4 : 2);
+          }
+        }
+        if (p.flags.mg_ash) {
+          this.zones.push({ x: m.x, y: m.y, r: 70, life: 3, kind: 'fire', tickT: 0.4, hit: null });
+        }
+        this.meteors.splice(i, 1);
       }
     }
 
@@ -1036,7 +1104,7 @@ const Game = {
       this.transition = { phase: 'out', t: 0, type: 'boss' };
     }
     if (Input.pressed('KeyN')) {
-      if (Dungeon.floor >= 5) {
+      if (Dungeon.floor >= 10) {
         this.endRun(true);
         this.state = 'victory';
       } else {
@@ -1224,15 +1292,42 @@ const Game = {
       }
     }
 
-    // 감전/독구름 장판 (적 피해)
+    // 감전/독구름/잿불 장판 (적 피해)
     for (const z of this.zones) {
-      const col = z.kind === 'poison' ? '#6ab04c' : '#ffd866';
+      const col = z.kind === 'poison' ? '#6ab04c' : z.kind === 'fire' ? '#ff7043' : '#ffd866';
       ctx.globalAlpha = Math.min(0.4, z.life) * (0.7 + Math.random() * 0.3);
       ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+
+    // 화살비 예고 원
+    for (const r of this.rains) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#d9cbb8';
+      ctx.setLineDash([6, 6]);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    // 메테오 예고 원
+    for (const m of this.meteors) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + Math.sin(this.blinkT * 20) * 0.12;
+      ctx.strokeStyle = '#ff7043';
+      ctx.fillStyle = 'rgba(255,112,67,0.12)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
 
     // 스폰 마커
@@ -1382,7 +1477,17 @@ const Game = {
 
     // 플레이어 투사체
     for (const b of this.pbolts) {
-      if (b.kind === 'parrow') {
+      if (b.kind === 'pwave') {
+        // 검기: 진행 방향에 수직인 칼날
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(Math.atan2(b.dir.y, b.dir.x));
+        ctx.fillStyle = '#c8d4e4';
+        ctx.fillRect(-2, -10, 5, 20);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-1, -6, 3, 12);
+        ctx.restore();
+      } else if (b.kind === 'parrow') {
         Renderer.drawSprite(Sprites.arrow, b.x, b.y, { rot: Math.atan2(b.dir.y, b.dir.x), scale: 3 });
         if (b.finisher) {
           ctx.globalAlpha = 0.5;
@@ -1394,7 +1499,7 @@ const Game = {
         }
       } else {
         const r = b.finisher ? 9 : 6;
-        ctx.fillStyle = '#8a5ac2';
+        ctx.fillStyle = b.fire ? '#ff7043' : '#8a5ac2';
         ctx.beginPath();
         ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
         ctx.fill();
@@ -1402,6 +1507,23 @@ const Game = {
         ctx.beginPath();
         ctx.arc(b.x, b.y, r * 0.45, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+
+    // 낙하 중인 메테오 (마지막 0.45초)
+    for (const m of this.meteors) {
+      if (m.t < 0.45) {
+        const k = m.t / 0.45; // 1→0
+        const my = m.y - k * 380;
+        ctx.fillStyle = '#ff7043';
+        ctx.beginPath();
+        ctx.arc(m.x + k * 60, my, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff7c0';
+        ctx.beginPath();
+        ctx.arc(m.x + k * 60 + 3, my - 3, 6, 0, Math.PI * 2);
+        ctx.fill();
+        Particles.burst(m.x + k * 60, my, { count: 1, colors: ['#ff7043', '#ffd866'], speed: 30, life: 0.25, size: 3 });
       }
     }
 
@@ -1427,8 +1549,8 @@ const Game = {
 
     Particles.draw(ctx);
 
-    // 5층: 어둠 (시야 제한) — HUD보다 아래에
-    if (World.floor === 5 && this.state !== 'over' && this.state !== 'victory') {
+    // 어둠 기믹 층: 시야 제한 — HUD보다 아래에
+    if (World.hazard === 'dark' && this.state !== 'over' && this.state !== 'victory') {
       const p = this.player;
       const g = ctx.createRadialGradient(p.x, p.y, 130, p.x, p.y, 300);
       g.addColorStop(0, 'rgba(5,3,10,0)');
@@ -1511,7 +1633,7 @@ const Game = {
   if (qs.has('demo')) installDemoBot();
   if (qs.has('floor')) {
     // 테스트용: 특정 층 직행
-    Dungeon.floor = Math.min(5, Math.max(1, parseInt(qs.get('floor'), 10) || 1));
+    Dungeon.floor = Math.min(10, Math.max(1, parseInt(qs.get('floor'), 10) || 1));
     Dungeon.roomIndex = 1;
     Dungeon.build('combat');
   }

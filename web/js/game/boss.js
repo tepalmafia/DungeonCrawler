@@ -37,7 +37,7 @@ const BOSS_DEFS = {
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
-    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 155, speed: 44,
+    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 280, speed: 44,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '용암 심장 이그니스',
     p1: ['fan:fire', 'charge:trail'],
@@ -46,13 +46,58 @@ const BOSS_DEFS = {
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
-    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 200, speed: 50,
+    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 360, speed: 50,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라' },
     banner: '심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring'],
     p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite'],
     rageText: '심연이 깨어난다...!',
     deathPalette: ['#e43b44', '#16101f', '#c9b8e8'],
+  },
+  // ── 6~10층 각성 보스: 같은 존재의 심층 강화판 (기믹 강화 + 패턴 확장) ──
+  6: {
+    name: '원혼 카론', sprite: 'boss', scale: 1.2, r: 26, hp: 340, speed: 48,
+    banner: '원혼 카론',
+    p1: ['sweep', 'fan:soul', 'curse'],
+    p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith'],
+    rageText: '원혼이 울부짖는다!',
+    deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
+  },
+  7: {
+    name: '역병왕 믹서스', sprite: 'bossSpore', scale: 1.2, r: 32, hp: 420, speed: 38,
+    mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
+    banner: '역병왕 믹서스',
+    p1: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
+    p2: ['fan:spore', 'ring', 'summon:mushroom', 'curse', 'fan:spore'],
+    rageText: '역병이 들끓는다!',
+    deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
+  },
+  8: {
+    name: '절망의 바르곤', sprite: 'bossGolem', scale: 1.2, r: 33, hp: 400, speed: 34,
+    mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
+    banner: '절망의 바르곤',
+    p1: ['charge', 'fan:rock', 'ring'],
+    p2: ['charge', 'charge', 'fan:rock', 'ring', 'curse'],
+    rageText: '절망이 짓누른다!',
+    deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
+  },
+  9: {
+    name: '겁화의 이그니스', sprite: 'bossIgnis', scale: 1.3, r: 30, hp: 520, speed: 48,
+    mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
+    banner: '겁화의 이그니스',
+    p1: ['fan:fire', 'charge:trail', 'curse:fire'],
+    p2: ['fan:fire', 'charge:trail', 'curse:fire', 'ring', 'charge:trail'],
+    rageText: '겁화가 폭주한다!',
+    deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
+  },
+  10: {
+    name: '진 심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.6, r: 30, hp: 640, speed: 54,
+    mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라', veils: [0.75, 0.5, 0.25] },
+    banner: '진 심연의 군주 눅스',
+    p1: ['sweep', 'fan:soul', 'ring', 'curse'],
+    p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite', 'ring'],
+    rageText: '심연이 모든 것을 삼킨다...!',
+    deathPalette: ['#e43b44', '#0a0612', '#c9b8e8'],
   },
 };
 
@@ -125,11 +170,11 @@ function createBoss(floor, x, y) {
       if (this.def.mechanic?.type === 'regen' && this.state !== 'enter') {
         const hasMinion = game.enemies.some((o) => !o.isBoss && !o.dead);
         if (hasMinion && this.hp < this.maxHp) {
-          this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
+          this.hp = Math.min(this.maxHp, this.hp + 8 * dt);
           this._regenTick += dt;
           if (this._regenTick >= 1.0) {
             this._regenTick = 0;
-            Particles.text(this.x, this.y - 40, '재생 +4', { color: '#38b764', size: 12 });
+            Particles.text(this.x, this.y - 40, '재생 +8', { color: '#38b764', size: 12 });
           }
         }
       }
@@ -148,7 +193,7 @@ function createBoss(floor, x, y) {
 
       // ── 기믹: 어둠 장막 (HP 70%·35%에서 무적 + 영혼 구슬) ──
       if (this.def.mechanic?.type === 'veil' && this.state !== 'veil' && this.state !== 'enter') {
-        const thresholds = [0.7, 0.35];
+        const thresholds = this.def.mechanic.veils || [0.7, 0.35];
         if (this.veilsDone < thresholds.length && this.hp <= this.maxHp * thresholds[this.veilsDone]) {
           this.state = 'veil';
           this.stateT = 0;
