@@ -24,16 +24,26 @@ const HUD = {
       ctx.fillRect(x, barY, 40 * fill, 6);
     }
 
+    // ── 스킬 쿨다운 (K / 우클릭) ──
+    const skRatio = Math.max(0, Math.min(1, 1 - p.skillCd / p.skillMaxCd()));
+    ctx.fillStyle = '#1c1c28';
+    ctx.fillRect(14, barY + 12, 86, 6);
+    ctx.fillStyle = skRatio >= 1 ? '#f7b32b' : '#8a6a2b';
+    ctx.fillRect(14, barY + 12, 86 * skRatio, 6);
+    ctx.fillStyle = skRatio >= 1 ? '#f7b32b' : '#666a80';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${p.skillName()} K`, 104, barY + 19);
+
     // ── XP 바 + 레벨 ──
     const xpRatio = Math.min(1, game.xp / game.xpNext);
     ctx.fillStyle = '#1c1c28';
-    ctx.fillRect(14, barY + 12, 86, 6);
+    ctx.fillRect(14, barY + 24, 86, 6);
     ctx.fillStyle = '#2ec4b6';
-    ctx.fillRect(14, barY + 12, 86 * xpRatio, 6);
+    ctx.fillRect(14, barY + 24, 86 * xpRatio, 6);
     ctx.fillStyle = '#9aa0b4';
     ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`Lv.${game.level}`, 104, barY + 20);
+    ctx.fillText(`Lv.${game.level}`, 104, barY + 32);
 
     // ── 획득 특성 아이콘 ──
     const counts = {};
@@ -42,7 +52,7 @@ const HUD = {
     for (const id of Object.keys(counts)) {
       const trait = TRAITS.find((t) => t.id === id);
       if (!trait) continue;
-      const y = barY + 34 + ti * 22;
+      const y = barY + 46 + ti * 22;
       if (y > Renderer.H - 60) break;
       ctx.fillStyle = '#141420';
       ctx.fillRect(14, y, 18, 18);
@@ -839,7 +849,7 @@ const HUD = {
     ctx.fillText('심연의 탑 정복!', Renderer.W / 2, 170);
     ctx.font = 'bold 16px monospace';
     ctx.fillStyle = '#e43b44';
-    ctx.fillText('심연의 군주 눅스가 소멸했다', Renderer.W / 2, 208);
+    ctx.fillText('10층 — 진 심연의 군주 눅스가 소멸했다', Renderer.W / 2, 208);
 
     ctx.font = '17px monospace';
     ctx.fillStyle = '#e8e0cf';

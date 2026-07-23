@@ -35,7 +35,41 @@ const FLOOR_THEMES = {
     grade: 'rgba(120,40,140,0.06)', accent: '#b13ae0',
     decals: ['skull', 'crack', 'voidspeck'],
   },
+  // ── 6~10층 심층: 더 어둡고 핏빛으로 물든 변주 ──
+  6: { // 피의 묘지
+    floor: ['#221419', '#26161c', '#1d1216', '#24151a'],
+    wallBase: '#3a222c', wallFace: '#522e3d', wallDark: '#1c1014', roof: '#170c10',
+    grade: 'rgba(200,40,60,0.07)', accent: '#e43b44',
+    decals: ['skull', 'bones', 'crack', 'pebbles'],
+  },
+  7: { // 맹독 심연
+    floor: ['#101c14', '#121f12', '#0e1a10', '#111e15'],
+    wallBase: '#1a2e20', wallFace: '#26422e', wallDark: '#0b140e', roof: '#08110b',
+    grade: 'rgba(80,180,60,0.08)', accent: '#6ab04c',
+    decals: ['moss', 'spore', 'puddle', 'bones'],
+  },
+  8: { // 절망의 감옥
+    floor: ['#181820', '#1b1b25', '#15151d', '#191924'],
+    wallBase: '#282838', wallFace: '#383850', wallDark: '#12121a', roof: '#0e0e15',
+    grade: 'rgba(70,70,120,0.08)', accent: '#a9c1d8',
+    decals: ['chain', 'crack', 'bones', 'skull'],
+  },
+  9: { // 겁화의 핵
+    floor: ['#2a1210', '#2e1412', '#25100e', '#2c1311'],
+    wallBase: '#451f18', wallFace: '#663026', wallDark: '#1e0d0a', roof: '#1a0a08',
+    grade: 'rgba(255,90,30,0.09)', accent: '#ffd866',
+    decals: ['ember', 'crack'],
+  },
+  10: { // 심연의 왕좌
+    floor: ['#120a1c', '#140b20', '#0f0818', '#130a1f'],
+    wallBase: '#241636', wallFace: '#352052', wallDark: '#0e0716', roof: '#0a0511',
+    grade: 'rgba(150,30,160,0.09)', accent: '#e43b44',
+    decals: ['skull', 'voidspeck', 'crack'],
+  },
 };
+
+// 층별 환경 기믹 (테마 순환)
+const FLOOR_HAZARDS = { 2: 'fog', 3: 'prison', 4: 'lava', 5: 'dark', 7: 'fog', 8: 'prison', 9: 'lava', 10: 'dark' };
 
 // 바닥 장식 그리기 루틴 — 전부 코드 픽셀
 const DECAL_PAINTERS = {
@@ -125,6 +159,7 @@ const World = {
   buildRoom(depth, type, floor = 1) {
     this.floor = floor;
     this.theme = FLOOR_THEMES[floor] || FLOOR_THEMES[1];
+    this.hazard = FLOOR_HAZARDS[floor] || null;
     this.fogZones = [];
     this.lavaTiles = [];
 
@@ -141,13 +176,13 @@ const World = {
 
     if (combatRoom) {
       // 장애물 (3층 감옥은 세로 창살 느낌으로 더 많이)
-      const nObstacles = (floor === 3 ? 2 : 0) + RNG.int(2, 4 + Math.min(2, Math.floor(depth / 3)));
+      const nObstacles = (this.hazard === 'prison' ? 2 : 0) + RNG.int(2, 4 + Math.min(2, Math.floor(depth / 3)));
       for (let i = 0; i < nObstacles; i++) {
         for (let tries = 0; tries < 20; tries++) {
           const tx = RNG.int(4, this.cols - 5);
           const ty = RNG.int(2, this.rows - 3);
           if (ty === 5) continue; // 가운데 통로 확보
-          const vertical = floor === 3 && RNG.chance(0.6); // 감옥 창살
+          const vertical = this.hazard === 'prison' && RNG.chance(0.6); // 감옥 창살
           const wide = !vertical && RNG.chance(0.4);
           if (this.map[ty][tx] !== 0) continue;
           this.map[ty][tx] = 1;
@@ -161,8 +196,8 @@ const World = {
       }
     }
 
-    // 2층: 독 안개 지대
-    if (floor === 2 && combatRoom) {
+    // 독 안개 지대
+    if (this.hazard === 'fog' && combatRoom) {
       const n = RNG.int(2, 3);
       for (let i = 0; i < n; i++) {
         this.fogZones.push({
@@ -173,8 +208,8 @@ const World = {
       }
     }
 
-    // 4층: 용암 웅덩이 (보스방 포함)
-    if (floor === 4 && (combatRoom || type === 'boss')) {
+    // 용암 웅덩이 (보스방 포함)
+    if (this.hazard === 'lava' && (combatRoom || type === 'boss')) {
       const n = type === 'boss' ? 3 : RNG.int(2, 4);
       for (let i = 0; i < n; i++) {
         const tx = RNG.int(3, this.cols - 5);

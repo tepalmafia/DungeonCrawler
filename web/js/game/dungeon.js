@@ -15,6 +15,12 @@ const FLOOR_DATA = {
   3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'archer', 'spider'], rule: '골렘은 등 뒤가 약점' },
   4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'boar', 'golem'], rule: '용암을 밟지 마라' },
   5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'lavaHound', 'necro', 'archer'], rule: '어둠이 시야를 가린다' },
+  // 6~10층: 심층 — 테마가 한 바퀴 돌며 더 흉포해진다
+  6: { name: '피의 묘지',   enemies: ['slime', 'archer', 'boar', 'wraith', 'necro'], rule: null },
+  7: { name: '맹독 심연',   enemies: ['mushroom', 'toxicSlime', 'spider', 'bat', 'necro'], rule: '독 안개를 피하라' },
+  8: { name: '절망의 감옥', enemies: ['golem', 'wraith', 'archer', 'spider', 'fireSpirit'], rule: '골렘은 등 뒤가 약점' },
+  9: { name: '겁화의 핵',   enemies: ['fireSpirit', 'lavaHound', 'golem', 'boar', 'necro'], rule: '용암을 밟지 마라' },
+  10: { name: '심연의 왕좌', enemies: ['wraith', 'fireSpirit', 'lavaHound', 'necro', 'golem', 'archer'], rule: '어둠이 시야를 가린다' },
 };
 
 const Dungeon = {

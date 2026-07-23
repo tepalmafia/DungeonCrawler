@@ -34,6 +34,9 @@ const Input = {
         this.mouse.justDown = true;
         this.anyKeyPressed = true;
       }
+      if (e.button === 2) {
+        this.mouse.rightJustDown = true; // 우클릭 = 스킬
+      }
       AudioSys.unlock();
     });
 
@@ -56,6 +59,7 @@ const Input = {
   endFrame() {
     this.justPressed = {};
     this.mouse.justDown = false;
+    this.mouse.rightJustDown = false;
     this.anyKeyPressed = false;
   },
 };
