@@ -589,6 +589,37 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     }),
   };
 
+  // ── 영혼 구슬 (눅스 '어둠 장막' 기믹 표적): 공격 안 함, 제한시간 내 파괴 대상 ──
+  defs.soulOrb = () => ({
+    hp: 2, r: 12, speed: 0, xpVal: 3, sprite: null,
+    spawnT: 0, // 등장 연출 없음 (즉시 타격 가능해야 공정)
+    update(dt, game) {
+      this.tickTimers(dt);
+      this.applyKnockback(dt);
+    },
+    draw(ctx) {
+      const pulse = 1 + Math.sin(this.animT * 6) * 0.15;
+      const rr = 10 * pulse;
+      // 외곽 글로우
+      const g = ctx.createRadialGradient(this.x, this.y, 2, this.x, this.y, rr * 2.4);
+      g.addColorStop(0, 'rgba(177,58,224,0.5)');
+      g.addColorStop(1, 'rgba(177,58,224,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, rr * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      // 본체
+      ctx.fillStyle = this.flash > 0 ? '#ffffff' : '#b13ae0';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, rr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e0c9f5';
+      ctx.beginPath();
+      ctx.arc(this.x - 2, this.y - 2, rr * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    },
+  });
+
   const def = defs[type];
   if (!def) throw new Error('알 수 없는 적 타입: ' + type);
   const e = Object.assign(base, def());

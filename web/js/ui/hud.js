@@ -108,6 +108,12 @@ const HUD = {
       ctx.fillRect(x, 58, w * Math.max(0, boss.hp / boss.maxHp), 10);
       ctx.strokeStyle = '#3a3a4a';
       ctx.strokeRect(x + 0.5, 58.5, w - 1, 9);
+      // 기믹 표시 — 해법은 플레이어가 연구한다
+      if (boss.def && boss.def.mechanic) {
+        ctx.font = '11px monospace';
+        ctx.fillStyle = boss.phased ? '#b13ae0' : '#9aa0b4';
+        ctx.fillText(boss.def.mechanic.label, Renderer.W / 2, 82);
+      }
     }
 
     // ── 배너 ──

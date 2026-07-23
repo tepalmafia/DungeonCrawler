@@ -156,6 +156,12 @@ const Game = {
 
   damageEnemy(e, dmg, dir, { feel = true, crit = false, kb = 190, color } = {}) {
     if (e.dead || e.phased) return;
+    // 기믹: 중장갑 — 직접 타격만 경감. 화상/중독 틱, 폭발·연쇄·장판(feel=false)은 무시
+    if (e.armorCap && feel && dmg > e.armorCap) {
+      dmg = e.armorCap;
+      crit = false;
+      Particles.text(e.x, e.y - 38, '경감!', { color: '#9aa0b4', size: 11 });
+    }
     e.hp -= dmg;
     e.flash = 0.1;
     if (kb && !e.isBoss) {
@@ -167,14 +173,20 @@ const Game = {
     }
 
     if (feel) {
-      this.hitstop = Math.max(this.hitstop, crit ? 0.09 : 0.04);
-      Renderer.shake(crit ? 4 : 2, 0.12);
+      this.hitstop = Math.max(this.hitstop, crit ? 0.1 : 0.045);
+      Renderer.shake(crit ? 5 : 2.5, 0.13);
       Particles.burst(e.x, e.y, {
-        count: crit ? 12 : 6,
+        count: crit ? 16 : 9,
         colors: ['#ffffff', '#f7b32b', '#ffd866'],
-        speed: 160, life: 0.3, size: 3,
+        speed: crit ? 220 : 170, life: 0.32, size: 3,
         dir: Math.atan2(dir.y, dir.x), spread: 1.6,
       });
+      // 타격 충격파 링 (크리는 이중 링 + 임팩트 스타)
+      Particles.ring(e.x, e.y, { r0: 4, r1: crit ? 40 : 26, life: crit ? 0.28 : 0.2, color: crit ? '#ffd866' : '#ffffff', width: crit ? 4 : 3 });
+      if (crit) {
+        Particles.ring(e.x, e.y, { r0: 2, r1: 22, life: 0.18, color: '#ffffff', width: 2 });
+        Particles.star(e.x, e.y, { size: 30, color: '#fff7c0' });
+      }
       if (crit) AudioSys.crit(); else AudioSys.hit();
 
       const p = this.player;
@@ -222,11 +234,18 @@ const Game = {
       boss: e.def ? e.def.deathPalette : ['#b13ae0'],
     };
     Particles.burst(e.x, e.y, {
-      count: e.isBoss ? 40 : 18,
+      count: e.isBoss ? 48 : 22,
       colors: palettes[e.type] || ['#ffffff'],
-      speed: 190, life: 0.55, size: 4,
+      speed: 210, life: 0.55, size: 4,
       gravity: 300, dir: Math.atan2(dir.y, dir.x), spread: 2.6,
     });
+    const killPal = palettes[e.type] || ['#ffffff'];
+    Particles.ring(e.x, e.y, { r0: 6, r1: e.isBoss ? 90 : 44, life: e.isBoss ? 0.45 : 0.3, color: killPal[0], width: 4 });
+    Particles.star(e.x, e.y, { size: e.isBoss ? 46 : 26, color: '#ffffff' });
+    if (e.isBoss) {
+      Particles.ring(e.x, e.y, { r0: 4, r1: 140, life: 0.6, color: '#ffffff', width: 3 });
+      Particles.ring(e.x, e.y, { r0: 2, r1: 60, life: 0.35, color: killPal[1] || killPal[0], width: 5 });
+    }
 
     // 사망 연출: 무너져 내리는 잔상
     const spriteKey = e.isBoss ? e.def.sprite : e.sprite;
@@ -283,8 +302,10 @@ const Game = {
   },
 
   _explode(x, y, radius, dmg, colors, textColor) {
-    Particles.burst(x, y, { count: 16, colors, speed: 200, life: 0.4, size: 4 });
-    Renderer.shake(3, 0.15);
+    Particles.burst(x, y, { count: 20, colors, speed: 220, life: 0.4, size: 4 });
+    Particles.ring(x, y, { r0: 8, r1: radius, life: 0.3, color: colors[0], width: 5 });
+    Particles.ring(x, y, { r0: 4, r1: radius * 0.6, life: 0.22, color: '#ffffff', width: 2 });
+    Renderer.shake(3.5, 0.16);
     AudioSys.thud();
     for (const other of this.enemies) {
       if (other.dead || other.phased) continue;
@@ -343,13 +364,14 @@ const Game = {
     p.invuln = 0.9;
     p.kbx = dir.x * kb;
     p.kby = dir.y * kb;
-    this.hitstop = Math.max(this.hitstop, 0.06);
+    this.hitstop = Math.max(this.hitstop, 0.065);
     this.vignette = 0.6;
     Renderer.shake(6, 0.3);
     AudioSys.hurt();
     Particles.burst(p.x, p.y, {
-      count: 10, colors: ['#e43b44', '#8a1c2c'], speed: 140, life: 0.4, size: 3,
+      count: 13, colors: ['#e43b44', '#8a1c2c'], speed: 160, life: 0.4, size: 3,
     });
+    Particles.ring(p.x, p.y, { r0: 6, r1: 38, life: 0.25, color: '#e43b44', width: 4 });
 
     // 가시 갑옷 (특성) + 가시 방패 (유물)
     if (p.flags.thorns || p.rflags.spikeshield) {

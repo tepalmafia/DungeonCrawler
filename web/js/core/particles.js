@@ -2,6 +2,18 @@
 const Particles = {
   list: [],
   texts: [],
+  rings: [],   // 확장 충격파 링 (타격 이펙트)
+  slashes: [], // 임팩트 스타 (교차 섬광선)
+
+  // 타격 지점에서 퍼지는 링
+  ring(x, y, { r0 = 4, r1 = 30, life = 0.22, color = '#ffffff', width = 3 } = {}) {
+    this.rings.push({ x, y, r0, r1, life, maxLife: life, color, width });
+  },
+
+  // 크리티컬용 교차 섬광 (4방향 별)
+  star(x, y, { size = 26, life = 0.16, color = '#fff7c0' } = {}) {
+    this.slashes.push({ x, y, size, life, maxLife: life, color, rot: Math.random() * Math.PI });
+  },
 
   burst(x, y, { count = 8, colors = ['#ffffff'], speed = 120, life = 0.4, size = 3, gravity = 0, spread = Math.PI * 2, dir = 0 } = {}) {
     for (let i = 0; i < count; i++) {
@@ -42,9 +54,50 @@ const Particles = {
       t.y += t.vy * dt;
       t.vy *= Math.pow(0.1, dt);
     }
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      this.rings[i].life -= dt;
+      if (this.rings[i].life <= 0) this.rings.splice(i, 1);
+    }
+    for (let i = this.slashes.length - 1; i >= 0; i--) {
+      this.slashes[i].life -= dt;
+      if (this.slashes[i].life <= 0) this.slashes.splice(i, 1);
+    }
   },
 
   draw(ctx) {
+    // 충격파 링
+    for (const r of this.rings) {
+      const k = 1 - r.life / r.maxLife; // 0→1
+      const rad = r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 2)); // ease-out
+      ctx.save();
+      ctx.globalAlpha = (r.life / r.maxLife) * 0.85;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = Math.max(1, r.width * (r.life / r.maxLife));
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, rad, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // 임팩트 스타 (교차 섬광선)
+    for (const s of this.slashes) {
+      const k = s.life / s.maxLife;
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.rot);
+      ctx.globalAlpha = k;
+      ctx.strokeStyle = s.color;
+      ctx.lineCap = 'round';
+      for (const [len, w] of [[s.size * (1.4 - k * 0.4), 3], [s.size * 0.55, 2]]) {
+        ctx.lineWidth = w;
+        ctx.beginPath();
+        ctx.moveTo(-len, 0); ctx.lineTo(len, 0);
+        ctx.moveTo(0, -len); ctx.lineTo(0, len);
+        ctx.stroke();
+        ctx.rotate(Math.PI / 4);
+      }
+      ctx.restore();
+    }
+
     for (const p of this.list) {
       ctx.globalAlpha = Math.min(1, p.life / (p.maxLife * 0.5));
       ctx.fillStyle = p.color;
@@ -68,5 +121,7 @@ const Particles = {
   clear() {
     this.list.length = 0;
     this.texts.length = 0;
+    this.rings.length = 0;
+    this.slashes.length = 0;
   },
 };
