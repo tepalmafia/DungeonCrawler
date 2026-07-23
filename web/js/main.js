@@ -532,6 +532,7 @@ const Game = {
   tick(dt) {
     this.blinkT += dt;
     Music.ensure(this._musicKey());
+    if (Bot.enabled) Bot.update(this, dt);
 
     if (this.state === 'hub') {
       this._tickHub();
@@ -1066,6 +1067,11 @@ const Game = {
   // ── 거점 화면들 ──
   // ── 테스트 모드 치트 (testMode가 켜졌을 때만) ──
   _tickCheats() {
+    // 어디서나: V 봇 모드 토글
+    if (Input.pressed('KeyV')) {
+      Bot.toggle();
+      this.banner = { text: Bot.enabled ? '🤖 봇 모드 ON' : '봇 모드 OFF', life: 1.2, maxLife: 1.2 };
+    }
     // 어디서나: O 파편 +500 / I 도감 완성 / Y 직업·열기 해금
     if (Input.pressed('KeyO')) {
       Meta.data.shards += 500;
@@ -1651,7 +1657,13 @@ const Game = {
     const parsed = parseInt(qs.get('seed'), 36);
     if (!Number.isNaN(parsed)) Game._urlSeed = parsed >>> 0;
   }
-  if (qs.has('autostart') || qs.has('demo')) Game.restart();
+  if (qs.has('bot')) {
+    Bot.enabled = true;
+    Game.testMode = true; // 봇 모드는 테스트 도구 — 단축키도 함께 켠다
+  }
+  if (qs.has('botloop')) { Bot.enabled = true; Bot.loop = true; Game.testMode = true; }
+  if (qs.has('ff')) Bot.ff = Math.min(8, Math.max(1, parseInt(qs.get('ff'), 10) || 1));
+  if (qs.has('autostart') || qs.has('demo') || Bot.enabled) Game.restart();
   if (qs.has('demo')) installDemoBot();
   if (qs.has('floor')) {
     // 테스트용: 특정 층 직행
@@ -1675,8 +1687,11 @@ const Game = {
     last = now;
     acc += dt;
     while (acc >= STEP) {
-      Game.tick(STEP);
-      Input.endFrame();
+      // 배속 (?ff=N): 프레임당 N틱 — 봇 소크 테스트용
+      for (let i = 0; i < Bot.ff; i++) {
+        Game.tick(STEP);
+        Input.endFrame();
+      }
       acc -= STEP;
     }
     Renderer.update(dt);
