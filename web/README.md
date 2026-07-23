@@ -3,7 +3,11 @@
 외부 프로그램·라이브러리 없이 순수 HTML5 + Canvas + Web Audio로 만든 로그라이크 던전 크롤러 액션 RPG.
 기획안: [`docs/GAME_DESIGN.md`](../docs/GAME_DESIGN.md)
 
-## 실행 방법
+## 🎮 바로 플레이
+
+**https://tepalmafia.github.io/DungeonCrawler/** — 설치 없이 브라우저에서 바로 플레이 (main 브랜치 푸시 시 자동 배포)
+
+## 실행 방법 (로컬)
 
 `web/index.html`을 브라우저에서 열면 바로 실행됩니다. 또는 로컬 서버로:
 
