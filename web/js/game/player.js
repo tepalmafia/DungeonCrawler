@@ -313,6 +313,16 @@ function createPlayer(x, y, classId = 'knight') {
         finisher,
       });
 
+      // 칼날 궤적 스파크 (부채꼴 가장자리를 따라)
+      const sparkN = finisher ? 7 : 4;
+      for (let i = 0; i < sparkN; i++) {
+        const a = angle + (i / (sparkN - 1) - 0.5) * arc;
+        Particles.burst(this.x + Math.cos(a) * range * 0.9, this.y + Math.sin(a) * range * 0.9, {
+          count: 1, colors: finisher ? ['#ffd866', '#fff7c0'] : ['#ffffff', '#c8d4e4'],
+          speed: 60, life: 0.22, size: 2, dir: a, spread: 0.6,
+        });
+      }
+
       World.moveEntity(this, dir.x * 10, dir.y * 10);
 
       let hitAny = false;
@@ -374,6 +384,7 @@ function createPlayer(x, y, classId = 'knight') {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(s.angle);
+        // 웨지 (그라데이션)
         ctx.globalAlpha = t * 0.85;
         const grad = ctx.createRadialGradient(0, 0, s.range * 0.3, 0, 0, s.range);
         grad.addColorStop(0, s.finisher ? 'rgba(247,179,43,0)' : 'rgba(255,255,255,0)');
@@ -384,6 +395,21 @@ function createPlayer(x, y, classId = 'knight') {
         ctx.arc(0, 0, s.range, -s.arc / 2, s.arc / 2);
         ctx.closePath();
         ctx.fill();
+        // 칼날 궤적 (밝은 외곽 호 — 시간에 따라 휘둘러지는 느낌)
+        const sweep = (1 - t) * s.arc; // 진행도만큼 호가 그려짐
+        ctx.globalAlpha = t;
+        ctx.strokeStyle = s.finisher ? '#ffd866' : '#ffffff';
+        ctx.lineWidth = s.finisher ? 4 : 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(0, 0, s.range * 0.94, -s.arc / 2, -s.arc / 2 + Math.max(sweep, s.arc * 0.35));
+        ctx.stroke();
+        // 안쪽 보조 호
+        ctx.globalAlpha = t * 0.5;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, s.range * 0.6, -s.arc / 2, s.arc / 2);
+        ctx.stroke();
         ctx.restore();
         ctx.globalAlpha = 1;
       }
