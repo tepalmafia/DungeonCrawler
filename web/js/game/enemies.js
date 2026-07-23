@@ -84,7 +84,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const squash = 1 + Math.sin(this.animT * 6) * 0.15;
         Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y, {
-          flip: this.flip, squashX: 2 - squash, squashY: squash,
+          flip: this.flip, squashX: 2 - squash, squashY: squash, shadow: true,
         });
         this.drawStatus(ctx);
       },
@@ -148,7 +148,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.restore();
         }
         const bob = Math.sin(this.animT * 7) * 2;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, { flip: this.flip });
+        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, { flip: this.flip, shadow: true });
         this.drawStatus(ctx);
       },
     }),
@@ -221,7 +221,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         let rot = 0;
         if (this.state === 'windup') shakeX = (Math.random() - 0.5) * 4;
         if (this.state === 'charge') rot = this.flip ? -0.08 : 0.08;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x + shakeX, this.y, { flip: this.flip, rot });
+        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x + shakeX, this.y, { flip: this.flip, rot, shadow: true });
         if (this.state === 'stunned') {
           ctx.fillStyle = '#f7b32b';
           for (let i = 0; i < 3; i++) {
@@ -280,7 +280,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const inflate = this.state === 'puff' ? 1 + this.stateT * 0.5 : 1 + Math.sin(this.animT * 3) * 0.04;
         Renderer.drawSprite(this.skin(Sprites.mushroom), this.x, this.y, {
-          flip: this.flip, squashX: inflate, squashY: inflate,
+          flip: this.flip, squashX: inflate, squashY: inflate, shadow: true,
         });
         this.drawStatus(ctx);
       },
@@ -308,7 +308,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const flap = 1 + Math.sin(this.animT * 18) * 0.25;
         Renderer.drawSprite(this.skin(Sprites.bat), this.x, this.y + Math.sin(this.animT * 9) * 3, {
-          flip: this.flip, squashX: flap, squashY: 2 - flap,
+          flip: this.flip, squashX: flap, squashY: 2 - flap, shadow: true,
         });
         this.drawStatus(ctx);
       },
@@ -348,7 +348,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const crouch = this.state === 'spin' ? 0.75 : 1;
         Renderer.drawSprite(this.skin(Sprites.spider), this.x, this.y, {
-          flip: this.flip, squashY: crouch, squashX: 2 - crouch,
+          flip: this.flip, squashY: crouch, squashX: 2 - crouch, shadow: true,
         });
         if (this.state === 'spin') {
           ctx.fillStyle = '#ff4757';
@@ -407,7 +407,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const lift = this.state === 'slam' ? -this.stateT * 8 : 0;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y + lift, { flip: this.flip });
+        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y + lift, { flip: this.flip, shadow: true });
         // 방패 방향 표시 (전방 호)
         ctx.save();
         ctx.globalAlpha = 0.35;
@@ -463,7 +463,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = Math.sin(this.animT * 3) * 4;
         Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, {
-          flip: this.flip, alpha: this.phased ? 0.35 : 0.95,
+          flip: this.flip, alpha: this.phased ? 0.35 : 0.95, shadow: !this.phased,
         });
         this.drawStatus(ctx);
       },
@@ -507,7 +507,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const bob = Math.sin(this.animT * 4) * 4;
         const heat = this.state === 'cast' ? 1 + this.stateT * 0.3 : 1;
         Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, {
-          flip: this.flip, squashX: heat, squashY: heat,
+          flip: this.flip, squashX: heat, squashY: heat, shadow: true,
         });
         if (Math.random() < 0.3) {
           Particles.burst(this.x, this.y - bob + 10, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 25, life: 0.4, size: 3, gravity: -120 });
@@ -555,7 +555,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = Math.sin(this.animT * 4) * 2;
         const raise = this.state === 'summon' ? -this.stateT * 6 : 0;
-        Renderer.drawSprite(this.skin(Sprites.necro), this.x, this.y - bob + raise, { flip: this.flip });
+        Renderer.drawSprite(this.skin(Sprites.necro), this.x, this.y - bob + raise, { flip: this.flip, shadow: true });
         if (this.state === 'summon') {
           ctx.fillStyle = '#38b764';
           ctx.globalAlpha = 0.5 + Math.sin(this.animT * 15) * 0.3;

@@ -11,7 +11,7 @@
 
 const BOSS_DEFS = {
   1: {
-    name: '무덤지기 카론', sprite: 'boss', scale: 1, hp: 60, speed: 42,
+    name: '무덤지기 카론', sprite: 'boss', scale: 1.15, hp: 60, speed: 42,
     banner: '무덤지기 카론',
     p1: ['sweep', 'fan:soul'],
     p2: ['sweep', 'fan:soul', 'curse'],
@@ -43,7 +43,7 @@ const BOSS_DEFS = {
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
-    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.5, hp: 175, speed: 50,
+    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.7, hp: 175, speed: 50,
     banner: '심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring'],
     p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite'],

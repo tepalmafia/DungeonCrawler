@@ -7,10 +7,10 @@ const HUD = {
     const p = game.player;
     for (let i = 0; i < p.maxHp; i++) {
       const img = i < p.hp ? Sprites.heart : Sprites.heartEmpty;
-      ctx.drawImage(img, 14 + (i % 10) * 30, 12 + Math.floor(i / 10) * 22, img.width * 3, img.height * 3);
+      ctx.drawImage(img, 14 + (i % 10) * 32, 12 + Math.floor(i / 10) * 25, img.width * 3, img.height * 3);
     }
     const hpRows = Math.ceil(p.maxHp / 10);
-    const barY = 16 + hpRows * 22 + 4;
+    const barY = 18 + hpRows * 25 + 4;
 
     // ── 대시 충전 (칸 표시) ──
     for (let i = 0; i < p.dashMax; i++) {
@@ -450,7 +450,7 @@ const HUD = {
       ctx.save();
       if (!unlocked) ctx.globalAlpha = 0.35;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, cx - 24, r.y + lift + 18, 48, 48);
+      ctx.drawImage(img, cx - img.width, r.y + lift + 14, img.width * 2, img.height * 2);
       ctx.restore();
 
       ctx.font = 'bold 20px monospace';
