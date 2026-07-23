@@ -43,6 +43,7 @@ const Game = {
 
   roomCleared: false,
   transition: null,
+  codexTab: 0, // 도감 탭 (0 몬스터 / 1 유물 / 2 특성)
 
   // 런 정산
   runEnded: false,
@@ -194,6 +195,7 @@ const Game = {
     if (e.dead) return;
     e.dead = true;
     this.kills++;
+    Meta.codexKill(e.isBoss ? 'boss' + Dungeon.floor : e.type);
     this.hitstop = Math.max(this.hitstop, 0.08);
     Renderer.shake(3, 0.15);
     AudioSys.die();
@@ -418,6 +420,7 @@ const Game = {
     const t = this.traitCards[i];
     if (!t) return;
     applyTrait(this.player, t);
+    Meta.codexTrait(t.id);
     Particles.text(this.player.x, this.player.y - 30, t.name + '!', { color: t.color, size: 16 });
     this.pendingChoices = Math.max(0, this.pendingChoices - 1);
     if (this.pendingChoices > 0) {
@@ -455,6 +458,7 @@ const Game = {
 
   acquireRelic(relic) {
     applyRelic(this.player, relic);
+    Meta.codexRelic(relic.id);
     const rar = RARITY[relic.rarity];
     this.banner = { text: `[${rar.label}] ${relic.name}`, life: 2.0, maxLife: 2.0, color: rar.color };
     Particles.text(this.player.x, this.player.y - 30, relic.name, { color: rar.color, size: 17 });
@@ -491,6 +495,10 @@ const Game = {
     }
     if (this.state === 'classes') {
       this._tickClasses();
+      return;
+    }
+    if (this.state === 'codex') {
+      this._tickCodex();
       return;
     }
     if (this.state === 'over' || this.state === 'victory') {
@@ -878,6 +886,7 @@ const Game = {
         this.enemies.length === 0 && this.markers.length === 0 && this.pendingSpawns.length === 0 &&
         this.bossRewardT <= 0 && this.state === 'play') {
       this.roomCleared = true;
+      Meta.save(); // 도감 킬 기록 등 방 단위 저장
       if (p.flags.regen && p.hp < p.maxHp) {
         p.hp++;
         Particles.text(p.x, p.y - 28, '+1', { color: '#e43b44', size: 14 });
@@ -930,6 +939,7 @@ const Game = {
     if (Input.pressed('Digit1') || Input.pressed('Space', 'Enter')) act = 0;
     if (Input.pressed('Digit2')) act = 1;
     if (Input.pressed('Digit3')) act = 2;
+    if (Input.pressed('Digit4')) act = 3;
     if (Input.mouse.justDown) {
       rects.forEach((r, i) => {
         if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
@@ -939,6 +949,29 @@ const Game = {
     if (act === 0) { AudioSys.buy(); this.restart(); }
     else if (act === 1) { AudioSys.pickup(); this.state = 'altar'; }
     else if (act === 2) { AudioSys.pickup(); this.state = 'classes'; }
+    else if (act === 3) { AudioSys.pickup(); this.state = 'codex'; }
+  },
+
+  _tickCodex() {
+    if (Input.pressed('Escape', 'Digit0', 'Backspace')) { this.state = 'hub'; return; }
+    if (Input.pressed('Digit1')) this.codexTab = 0;
+    if (Input.pressed('Digit2')) this.codexTab = 1;
+    if (Input.pressed('Digit3')) this.codexTab = 2;
+    if (Input.mouse.justDown) {
+      const back = HUD.backButtonRect();
+      if (Input.mouse.x >= back.x && Input.mouse.x <= back.x + back.w &&
+          Input.mouse.y >= back.y && Input.mouse.y <= back.y + back.h) {
+        this.state = 'hub';
+        return;
+      }
+      HUD.codexTabRects().forEach((r, i) => {
+        if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+            Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) {
+          this.codexTab = i;
+          AudioSys.orb();
+        }
+      });
+    }
   },
 
   _tickAltar() {
@@ -1021,10 +1054,11 @@ const Game = {
     const ctx = Renderer.ctx;
     Renderer.begin();
 
-    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') {
+    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes' || this.state === 'codex') {
       if (this.state === 'hub') HUD.drawHub(ctx, this.blinkT);
       else if (this.state === 'altar') HUD.drawAltar(ctx, this.blinkT);
-      else HUD.drawClasses(ctx, this.blinkT);
+      else if (this.state === 'classes') HUD.drawClasses(ctx, this.blinkT);
+      else HUD.drawCodex(ctx, this.blinkT, this);
       return;
     }
 
