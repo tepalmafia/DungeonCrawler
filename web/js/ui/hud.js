@@ -242,10 +242,10 @@ const HUD = {
   },
 
   hubButtonRects() {
-    const w = 320, h = 56, gap = 16;
+    const w = 320, h = 46, gap = 10;
     const x = (Renderer.W - w) / 2;
-    const y0 = 284;
-    return [0, 1, 2].map((i) => ({ x, y: y0 + i * (h + gap), w, h }));
+    const y0 = 278;
+    return [0, 1, 2, 3].map((i) => ({ x, y: y0 + i * (h + gap), w, h }));
   },
 
   heatButtonRects() {
@@ -330,10 +330,14 @@ const HUD = {
       ctx.fillText(`${heatDesc} · 파편 +${heat * 20}%`, Renderer.W / 2, 266);
     }
 
+    const disc = Object.keys(Meta.data.codex.kills).length + Object.keys(Meta.data.codex.relics).length +
+                 Object.keys(Meta.data.codex.traits).length;
+    const total = CODEX_ENEMIES.length + RELICS.length + TRAITS.length;
     const labels = [
       { text: '출발', sub: '심연의 탑에 도전한다', color: '#38b764' },
       { text: '기억의 제단', sub: '영혼 파편으로 영구 강화', color: '#2ec4b6' },
       { text: '직업 선택', sub: '검사 · 궁수 · 마도사', color: '#b13ae0' },
+      { text: '도감', sub: `수집 기록 ${disc}/${total}`, color: '#f7b32b' },
     ];
     this.hubButtonRects().forEach((r, i) => {
       const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
@@ -344,12 +348,12 @@ const HUD = {
       ctx.lineWidth = hover ? 3 : 1.5;
       ctx.strokeRect(r.x, r.y, r.w, r.h);
       ctx.textAlign = 'left';
-      ctx.font = 'bold 19px monospace';
+      ctx.font = 'bold 17px monospace';
       ctx.fillStyle = '#e8e0cf';
-      ctx.fillText(`${i + 1}. ${labels[i].text}`, r.x + 22, r.y + 25);
-      ctx.font = '12px monospace';
+      ctx.fillText(`${i + 1}. ${labels[i].text}`, r.x + 22, r.y + 20);
+      ctx.font = '11px monospace';
       ctx.fillStyle = '#666a80';
-      ctx.fillText(labels[i].sub, r.x + 22, r.y + 44);
+      ctx.fillText(labels[i].sub, r.x + 22, r.y + 37);
     });
 
     ctx.textAlign = 'center';
@@ -476,6 +480,169 @@ const HUD = {
     });
 
     this._drawBackButton(ctx);
+  },
+
+  // ══════════════ 도감 ══════════════
+
+  codexTabRects() {
+    const w = 130, h = 34, gap = 10;
+    const x0 = (Renderer.W - (3 * w + 2 * gap)) / 2;
+    return [0, 1, 2].map((i) => ({ x: x0 + i * (w + gap), y: 84, w, h }));
+  },
+
+  // 스프라이트를 지정한 상자 안에 픽셀 퍼펙트로 맞춰 그린다
+  _fitSprite(ctx, img, cx, cy, box) {
+    const s = Math.max(1, Math.floor(box / Math.max(img.width, img.height)));
+    const w = img.width * s;
+    const h = img.height * s;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
+  },
+
+  drawCodex(ctx, blinkT, game) {
+    this._drawHubBg(ctx, blinkT);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px monospace';
+    ctx.fillStyle = '#f7b32b';
+    ctx.fillText('도감', Renderer.W / 2, 56);
+
+    const codex = Meta.data.codex;
+    const tabs = ['몬스터', '유물', '특성'];
+    const mx = Input.mouse.x, my = Input.mouse.y;
+
+    // 탭
+    this.codexTabRects().forEach((r, i) => {
+      const active = game.codexTab === i;
+      const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+      ctx.fillStyle = active ? '#1d1d2e' : hover ? '#181826' : '#141420';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = active ? '#f7b32b' : '#4a4a5c';
+      ctx.lineWidth = active ? 2 : 1;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.font = 'bold 14px monospace';
+      ctx.fillStyle = active ? '#f7b32b' : '#9aa0b4';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${i + 1}. ${tabs[i]}`, r.x + r.w / 2, r.y + 22);
+    });
+
+    let hovered = null;
+
+    if (game.codexTab === 0) {
+      // 몬스터: 6열 그리드, 처치 수 표시
+      const found = CODEX_ENEMIES.filter((e) => codex.kills[e.id.startsWith('boss') ? 'boss' + e.id.slice(4) : e.id] > 0).length;
+      this._codexHeader(ctx, found, CODEX_ENEMIES.length);
+      const cols = 6, cw = 145, chh = 96;
+      const x0 = (Renderer.W - cols * cw) / 2;
+      CODEX_ENEMIES.forEach((e, i) => {
+        const killKey = e.boss ? 'boss' + e.id.slice(4) : e.id;
+        const kills = codex.kills[killKey] || 0;
+        const r = { x: x0 + (i % cols) * cw + 4, y: 138 + Math.floor(i / cols) * chh, w: cw - 8, h: chh - 8 };
+        const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+        if (hover) hovered = { name: kills > 0 ? e.name : '???', desc: kills > 0 ? e.desc : '아직 만나지 못했다...' };
+        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = kills > 0 ? (e.boss ? '#e43b44' : '#4a4a5c') : '#26262f';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        if (kills > 0) {
+          this._fitSprite(ctx, Sprites[e.sprite], r.x + r.w / 2, r.y + 34, 48);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = e.boss ? '#e43b44' : '#e8e0cf';
+          ctx.textAlign = 'center';
+          ctx.fillText(e.name, r.x + r.w / 2, r.y + r.h - 20);
+          ctx.fillStyle = '#666a80';
+          ctx.fillText(`처치 ${kills}`, r.x + r.w / 2, r.y + r.h - 7);
+        } else {
+          ctx.font = 'bold 24px monospace';
+          ctx.fillStyle = '#33333f';
+          ctx.textAlign = 'center';
+          ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 8);
+        }
+      });
+    } else if (game.codexTab === 1) {
+      // 유물: 등급색 테두리
+      const found = RELICS.filter((rl) => codex.relics[rl.id]).length;
+      this._codexHeader(ctx, found, RELICS.length);
+      const cols = 7, cw = 128, chh = 96;
+      const x0 = (Renderer.W - cols * cw) / 2;
+      RELICS.forEach((rl, i) => {
+        const owned = !!codex.relics[rl.id];
+        const rar = RARITY[rl.rarity];
+        const r = { x: x0 + (i % cols) * cw + 4, y: 138 + Math.floor(i / cols) * chh, w: cw - 8, h: chh - 8 };
+        const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+        if (hover) hovered = { name: owned ? `[${rar.label}] ${rl.name}` : '???', desc: owned ? rl.desc : '아직 발견하지 못했다...' };
+        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = owned ? rar.color : '#26262f';
+        ctx.lineWidth = owned && rl.rarity === 'legendary' ? 2 : 1;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.textAlign = 'center';
+        if (owned) {
+          ctx.font = 'bold 22px monospace';
+          ctx.fillStyle = rar.color;
+          ctx.fillText(rl.name[0], r.x + r.w / 2, r.y + 40);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#e8e0cf';
+          ctx.fillText(rl.name, r.x + r.w / 2, r.y + r.h - 12);
+        } else {
+          ctx.font = 'bold 24px monospace';
+          ctx.fillStyle = '#33333f';
+          ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 8);
+        }
+      });
+    } else {
+      // 특성: 획득 횟수 표시
+      const found = TRAITS.filter((t) => codex.traits[t.id] > 0).length;
+      this._codexHeader(ctx, found, TRAITS.length);
+      const cols = 8, cw = 112, chh = 82;
+      const x0 = (Renderer.W - cols * cw) / 2;
+      TRAITS.forEach((t, i) => {
+        const picks = codex.traits[t.id] || 0;
+        const r = { x: x0 + (i % cols) * cw + 3, y: 138 + Math.floor(i / cols) * chh, w: cw - 6, h: chh - 6 };
+        const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+        if (hover) hovered = { name: picks > 0 ? `[${t.tag}] ${t.name}` : '???', desc: picks > 0 ? t.desc : '아직 선택하지 못했다...' };
+        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = picks > 0 ? t.color : '#26262f';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.textAlign = 'center';
+        if (picks > 0) {
+          ctx.font = 'bold 18px monospace';
+          ctx.fillStyle = t.color;
+          ctx.fillText(t.name[0], r.x + r.w / 2, r.y + 30);
+          ctx.font = '10px monospace';
+          ctx.fillStyle = '#e8e0cf';
+          ctx.fillText(t.name, r.x + r.w / 2, r.y + r.h - 20);
+          ctx.fillStyle = '#666a80';
+          ctx.fillText(`x${picks}`, r.x + r.w / 2, r.y + r.h - 8);
+        } else {
+          ctx.font = 'bold 20px monospace';
+          ctx.fillStyle = '#33333f';
+          ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 6);
+        }
+      });
+    }
+
+    // 하단 상세 정보
+    if (hovered) {
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText(hovered.name, Renderer.W / 2, Renderer.H - 92);
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText(hovered.desc, Renderer.W / 2, Renderer.H - 74);
+    }
+
+    this._drawBackButton(ctx);
+  },
+
+  _codexHeader(ctx, found, total) {
+    ctx.textAlign = 'right';
+    ctx.font = '13px monospace';
+    ctx.fillStyle = found >= total ? '#f7b32b' : '#9aa0b4';
+    ctx.fillText(`발견 ${found}/${total}${found >= total ? ' — 완성!' : ''}`, Renderer.W - 40, 100);
   },
 
   drawGameOver(ctx, game, blinkT) {

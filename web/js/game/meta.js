@@ -20,6 +20,27 @@ const CLASSES = {
   },
 };
 
+// 도감 — 몬스터 목록 (일반 12종 + 보스 5종). 처치하면 발견된다.
+const CODEX_ENEMIES = [
+  { id: 'slime',      name: '슬라임',       sprite: 'slime',      desc: '던전에서 가장 흔한 주민. 통통 튀며 다가온다.' },
+  { id: 'toxicSlime', name: '독 슬라임',    sprite: 'toxicSlime', desc: '죽으면 독구름을 남긴다. 시체 위를 밟지 마라.' },
+  { id: 'archer',     name: '해골 궁수',    sprite: 'archer',     desc: '조준선이 붉게 고정되면 발사된다. 대시로 피하라.' },
+  { id: 'boar',       name: '돌진 멧돼지',  sprite: 'boar',       desc: '벽으로 유인하면 스스로 부딪혀 그로기에 빠진다.' },
+  { id: 'lavaHound',  name: '용암 개',      sprite: 'lavaHound',  desc: '더 빠른 돌진, 그리고 지나간 자리에 불길을 남긴다.' },
+  { id: 'mushroom',   name: '버섯',         sprite: 'mushroom',   desc: '가까이 다가가면 부풀어 올라 포자를 사방에 터뜨린다.' },
+  { id: 'bat',        name: '박쥐',         sprite: 'bat',        desc: '어지러운 궤도로 날아든다. 예측하지 말고 반응하라.' },
+  { id: 'spider',     name: '독거미',       sprite: 'spider',     desc: '거미줄에 맞으면 발이 느려진다.' },
+  { id: 'golem',      name: '간수 골렘',    sprite: 'golem',      desc: '정면 공격은 막아낸다. 등 뒤가 약점.' },
+  { id: 'wraith',     name: '망령',         sprite: 'wraith',     desc: '비물질 상태로 벽을 통과한다. 실체화됐을 때만 벨 수 있다.' },
+  { id: 'fireSpirit', name: '화염 정령',    sprite: 'fireSpirit', desc: '화염구의 착탄 지점에 불길이 남는다.' },
+  { id: 'necro',      name: '강령술사',     sprite: 'necro',      desc: '도망다니며 부하를 소환한다. 최우선으로 처치하라.' },
+  { id: 'boss1', boss: true, name: '무덤지기 카론',     sprite: 'boss',      desc: '1층의 주인. 낫 연격과 영혼 부채꼴, 그리고 저주 지대.' },
+  { id: 'boss2', boss: true, name: '포자왕 믹서스',     sprite: 'bossSpore', desc: '2층의 주인. 포자 탄막과 버섯 소환으로 방을 메운다.' },
+  { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 사슬 풀린 돌진과 충격파 링.' },
+  { id: 'boss4', boss: true, name: '용암 심장 이그니스', sprite: 'bossIgnis', desc: '4층의 주인. 지나간 모든 곳이 불탄다.' },
+  { id: 'boss5', boss: true, name: '심연의 군주 눅스',   sprite: 'bossAbyss', desc: '탑의 정점. 어둠 그 자체.' },
+];
+
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
 const META_UPGRADES = [
   { id: 'vit',    name: '육체', desc: '시작 최대 HP +1',        max: 3, costs: [40, 90, 180] },
@@ -44,6 +65,7 @@ const Meta = {
       totalKills: 0,
       heat: 0,       // 열기 (고난이도 0~5, 첫 클리어 후 해금)
       muted: false,
+      codex: { kills: {}, relics: {}, traits: {} }, // 도감 기록
     };
   },
 
@@ -104,6 +126,22 @@ const Meta = {
     this.data.cls = id;
     this.save();
     return true;
+  },
+
+  // ── 도감 기록 (kills는 방 클리어/정산 시점에 저장) ──
+  codexKill(key) {
+    this.data.codex.kills[key] = (this.data.codex.kills[key] || 0) + 1;
+  },
+
+  codexRelic(id) {
+    if (!this.data.codex.relics[id]) {
+      this.data.codex.relics[id] = true;
+      this.save();
+    }
+  },
+
+  codexTrait(id) {
+    this.data.codex.traits[id] = (this.data.codex.traits[id] || 0) + 1;
   },
 
   // 열기(고난이도)는 탑을 한 번 정복해야 해금된다
