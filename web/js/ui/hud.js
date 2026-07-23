@@ -158,6 +158,17 @@ const HUD = {
       ctx.fillText('음소거 (M)', 14, Renderer.H - 44);
     }
 
+    // ── 봇 모드 표시 ──
+    if (Bot.enabled) {
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#b13ae0';
+      let botLabel = '🤖 봇 모드';
+      if (Bot.ff > 1) botLabel += ` ×${Bot.ff}`;
+      if (Bot.loop) botLabel += ` (런 ${Bot.runs}·승 ${Bot.wins})`;
+      ctx.fillText(botLabel, Renderer.W - 16, 30);
+    }
+
     // ── 테스트 모드 표시 + 단축키 도움말 ──
     if (game.testMode) {
       ctx.textAlign = 'right';
@@ -171,7 +182,7 @@ const HUD = {
       const lines = [
         'G 무적  H 회복  K 전멸',
         'L 레벨업  U 유물  O 파편',
-        'B 보스방  N 다음층',
+        'B 보스방  N 다음층  V 봇',
       ];
       ctx.font = '10px monospace';
       ctx.fillStyle = 'rgba(154,160,180,0.75)';
@@ -405,7 +416,7 @@ const HUD = {
       ctx.fillText('⚙ 테스트 모드 ON (T로 끄기)', 24, Renderer.H - 20);
       ctx.font = '11px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText('O 파편+500 · I 도감 완성 · Y 직업/열기 해금 · 게임 중 G무적 K전멸 N다음층...', 24, Renderer.H - 40);
+      ctx.fillText('O 파편+500 · I 도감 완성 · Y 직업/열기 해금 · V 봇 모드 · 게임 중 G무적 K전멸 N다음층...', 24, Renderer.H - 40);
     }
   },
 
