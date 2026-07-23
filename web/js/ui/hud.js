@@ -668,10 +668,10 @@ const HUD = {
     let hovered = null;
 
     if (game.codexTab === 0) {
-      // 몬스터: 6열 그리드, 처치 수 표시
+      // 몬스터: 8열 그리드 (22종 = 3행), 처치 수 표시
       const found = CODEX_ENEMIES.filter((e) => codex.kills[e.id.startsWith('boss') ? 'boss' + e.id.slice(4) : e.id] > 0).length;
       this._codexHeader(ctx, found, CODEX_ENEMIES.length);
-      const cols = 6, cw = 145, chh = 96;
+      const cols = 8, cw = 116, chh = 92;
       const x0 = (Renderer.W - cols * cw) / 2;
       CODEX_ENEMIES.forEach((e, i) => {
         const killKey = e.boss ? 'boss' + e.id.slice(4) : e.id;

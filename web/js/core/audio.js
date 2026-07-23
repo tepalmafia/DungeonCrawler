@@ -78,6 +78,45 @@ const AudioSys = {
   deny()   { this._tone({ type: 'square', f0: 140, f1: 90, dur: 0.12, vol: 0.25 }); },
   shard()  { this._tone({ type: 'sine', f0: 700 + Math.random() * 500, dur: 0.05, vol: 0.12 }); },
 
+  // ── 직업 스킬 전용 사운드 ──
+  // 검사 회전 베기: 휘몰아치는 3연속 바람 가르기 + 금속 울림
+  spin() {
+    for (let i = 0; i < 3; i++) {
+      this._noise({ dur: 0.09, vol: 0.28, freq: 1400 + i * 900, q: 1.2, delay: i * 0.07 });
+    }
+    this._tone({ type: 'sawtooth', f0: 180, f1: 420, dur: 0.28, vol: 0.22 });
+    this._tone({ type: 'square', f0: 900, f1: 1400, dur: 0.12, vol: 0.12, delay: 0.14 });
+  },
+
+  // 궁수 화살비: 시위 3연발 + 상승 휘파람 (하늘로 쏘아올림)
+  rainCast() {
+    for (let i = 0; i < 3; i++) {
+      this._tone({ type: 'square', f0: 340, f1: 160, dur: 0.06, vol: 0.2, delay: i * 0.06 });
+    }
+    this._tone({ type: 'sine', f0: 500, f1: 1300, dur: 0.4, vol: 0.14, delay: 0.1 });
+  },
+
+  // 화살비 착탄: 가볍고 둔탁한 톡톡 (연발이라 작게)
+  rainHit() {
+    this._noise({ dur: 0.04, vol: 0.16, freq: 2200, q: 1.5 });
+    this._tone({ type: 'triangle', f0: 260, f1: 130, dur: 0.06, vol: 0.14 });
+  },
+
+  // 마도사 메테오 시전: 불길한 상승 울림 (낙하 예고)
+  meteorCast() {
+    this._tone({ type: 'sawtooth', f0: 70, f1: 180, dur: 0.8, vol: 0.25 });
+    this._tone({ type: 'sine', f0: 300, f1: 700, dur: 0.7, vol: 0.12, delay: 0.1 });
+    this._noise({ dur: 0.6, vol: 0.1, freq: 500, q: 0.5 });
+  },
+
+  // 메테오 착탄: 대폭발 굉음 + 잔불 튀는 소리
+  meteorImpact() {
+    this._tone({ type: 'sine', f0: 150, f1: 28, dur: 0.45, vol: 0.65 });
+    this._noise({ dur: 0.35, vol: 0.45, freq: 350, q: 0.6 });
+    this._noise({ dur: 0.12, vol: 0.2, freq: 1800, q: 1, delay: 0.12 });
+    this._noise({ dur: 0.1, vol: 0.14, freq: 2600, q: 1.5, delay: 0.26 });
+  },
+
   wave() {
     [330, 440, 554].forEach((f, i) =>
       this._tone({ type: 'triangle', f0: f, dur: 0.12, vol: 0.25, delay: i * 0.09 }));

@@ -569,6 +569,96 @@ const Sprites = (() => {
     return rows.map((r) => r.padEnd(w, '.'));
   }
 
+  // ══════════════ 심층(6~10층) 전용 몬스터 — 신규 원화 + 신규 행동 ══════════════
+
+  // 폭탄벌레 (6층): 다가와서 자폭한다
+  sprites.bomber = make(pad([
+    '............s',
+    '...........ff',
+    '..........ff',
+    '.......bbbbbb',
+    '.....bbbbbbbbbb',
+    '....bBBbbbbbbBBb',
+    '...bbbbbbbbbbbbbb',
+    '...bbRRbbbbbbRRbb',
+    '...bbbbbbbbbbbbbb',
+    '....bbbbBBBBbbbb',
+    '.....bbBBBBBBbb',
+    '......bbbbbbbb',
+    '.....l..l..l..l',
+  ]), {
+    b: '#5c3a3a', B: '#8a5c50', R: '#ff4757', f: '#d9cbb8', s: '#ffd866', l: '#2a1c1c',
+  });
+
+  // 가시덩굴 (7층): 고정 포탑, 가시 산탄
+  sprites.thornPlant = make(pad([
+    '.....t....t....t',
+    '..t...t..t...t',
+    '....ppppppppp',
+    '..tpppppppppppt',
+    '..ppPPppppPPppp',
+    '.tppPPppppPPppt..t',
+    '..ppppppppppppp',
+    '...pppRRRRppp',
+    '....ppppppppp',
+    '......ss.ss',
+    '.....sss.sss',
+  ]), {
+    p: '#4a7a3f', P: '#7ab04c', t: '#d9cbb8', R: '#8a1c2c', s: '#5e3a26',
+  });
+
+  // 처형자 (8층): 도끼 내려찍기 (직사각 텔레그래프)
+  sprites.executioner = make(pad([
+    '.......hhhhhh......X',
+    '......hhhhhhhh....XX',
+    '......hrrrrrrh....XXx',
+    '......hhhhhhhh.....x',
+    '....aaaahhhhaaaa...x',
+    '...aaaaaaaaaaaaaa..x',
+    '...aa.aaaaaaaa.ax..x',
+    '...aa.aaaaaaaa.axxxx',
+    '...aa.aaddddaa.aa..x',
+    '......aaaaaaaa.....x',
+    '......aaaaaaaa',
+    '......aaa..aaa',
+    '......aaa..aaa',
+    '.....aaaa..aaaa',
+  ]), {
+    h: '#5d6b84', r: '#e43b44', a: '#3d3d52', d: '#2a2a3a', x: '#5e3a26', X: '#c8d4e4',
+  });
+
+  // 마그마 슬라임 (9층): 죽으면 둘로 갈라진다 (용암 균열 껍질)
+  sprites.magmaSlime = make(pad([
+    '.......mmmmmm',
+    '.....mmmmmmmmmm',
+    '....mmccmmmmccmm',
+    '...mmmmmmccmmmmm',
+    '...mWkmmmmmmWkmm',
+    '..mmmccmmmmmccmmm',
+    '..mmmmmmmccmmmmmm',
+    '..mccmmmmmmmmccmm',
+    '...DDDDDDDDDDDDD',
+  ]), {
+    m: '#4a1f1a', c: '#ff7043', W: '#ffd866', k: '#1a1c2c', D: '#2a0f0d',
+  });
+
+  // 공허의 눈 (10층): 도약 회피 + 추적탄
+  sprites.voidEye = make(pad([
+    '.....kkkkkk',
+    '...kkkkkkkkkk',
+    '..kkwwwwwwwwkk',
+    '.kkwwwwwwwwwwkk',
+    '.kkwwwRRRRwwwkk',
+    '.kkwwRRrrRRwwkk',
+    '.kkwwwRRRRwwwkk',
+    '..kkwwwwwwwwkk',
+    '...kkkkkkkkkk',
+    '..t..t....t..t',
+    '.t....t..t....t',
+  ]), {
+    k: '#241832', w: '#c9b8e8', R: '#b13ae0', r: '#0a0612', t: '#3d2c5c',
+  });
+
   // 1층: 무덤지기 카론 — 낫을 든 사신
   sprites.boss = make(pad([
     '..........kkkkkkkkkk',

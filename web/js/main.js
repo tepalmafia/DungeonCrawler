@@ -7,6 +7,8 @@ const PROJ_STYLES = {
   fire:  { color: '#ff7043', r: 6, patchOnEnd: true },
   rock:  { color: '#6b7a94', r: 6 },
   web:   { color: '#e8e0cf', r: 5 },
+  thorn: { color: '#7ab04c', r: 5 },
+  voidorb: { color: '#b13ae0', r: 8, wavy: false },
 };
 
 const Game = {
@@ -217,7 +219,7 @@ const Game = {
     if (e.dead) return;
     e.dead = true;
     this.kills++;
-    Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : e.type);
+    Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : (e.codexType || e.type));
     this.hitstop = Math.max(this.hitstop, 0.08);
     Renderer.shake(3, 0.15);
     AudioSys.die();
@@ -235,6 +237,12 @@ const Game = {
       wraith: ['#a9c1d8', '#5d6b84'],
       fireSpirit: ['#ff9a3c', '#ffd866', '#7a1010'],
       necro: ['#2a4a3a', '#38b764'],
+      bomber: ['#5c3a3a', '#ff4757', '#ffd866'],
+      thornPlant: ['#4a7a3f', '#7ab04c'],
+      executioner: ['#3d3d52', '#5d6b84', '#c8d4e4'],
+      magmaSlime: ['#4a1f1a', '#ff7043', '#ffd866'],
+      magmaSmall: ['#4a1f1a', '#ff7043'],
+      voidEye: ['#241832', '#b13ae0', '#c9b8e8'],
       boss: e.def ? e.def.deathPalette : ['#b13ae0'],
     };
     Particles.burst(e.x, e.y, {
@@ -291,6 +299,8 @@ const Game = {
       return;
     }
 
+    if (e.noDrops) return; // 폭탄벌레 자폭 등 — 보상 없는 죽음
+
     let val = e.xpVal;
     while (val > 0) {
       const v = Math.min(3, val);
@@ -298,7 +308,9 @@ const Game = {
       const a = Math.random() * Math.PI * 2;
       this.orbs.push({ x: e.x, y: e.y, val: v, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 });
     }
-    let heartChance = 0.1 * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
+    // 하트: 기본 6% + 층이 깊을수록 감소 (최저 50%) — 심층일수록 회복이 귀하다
+    const floorDecay = Math.max(0.5, 1 - 0.04 * (Dungeon.floor - 1));
+    let heartChance = 0.06 * floorDecay * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
     if (p.flags.bloodlust) heartChance += 0.12;
     if (Math.random() < heartChance) {
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
@@ -415,9 +427,9 @@ const Game = {
     }
   },
 
-  spawnProjectile(kind, x, y, dir, { speed = 250, dmg = 1, slow = 0 } = {}) {
+  spawnProjectile(kind, x, y, dir, { speed = 250, dmg = 1, slow = 0, homing = false, life = 4 } = {}) {
     const style = PROJ_STYLES[kind] || PROJ_STYLES.arrow;
-    this.arrows.push({ kind, x, y, dir, speed, dmg, slow, r: style.r || 4, life: 4, t: 0 });
+    this.arrows.push({ kind, x, y, dir, speed, dmg, slow, homing, r: style.r || 4, life, t: 0 });
   },
 
   gainXp(v) {
@@ -674,6 +686,7 @@ const Game = {
       m.t -= dt;
       if (m.t <= 0) {
         const e = createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
+        e.speed *= 1 + 0.02 * (Dungeon.floor - 1); // 층당 +2% 속도 — 심층일수록 압박
         if (this.heat >= 3) e.speed *= 1.15;
         this.enemies.push(e);
         Particles.burst(m.x, m.y, { count: 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });
@@ -771,6 +784,16 @@ const Game = {
       const a = this.arrows[i];
       a.life -= dt;
       a.t += dt;
+      // 추적탄 (공허의 눈): 플레이어를 향해 천천히 선회 — 직각으로 대시하면 뿌리칠 수 있다
+      if (a.homing) {
+        const cur = Math.atan2(a.dir.y, a.dir.x);
+        const tgt = Math.atan2(p.y - a.y, p.x - a.x);
+        let diff = tgt - cur;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const na = cur + Math.sign(diff) * Math.min(Math.abs(diff), 2.1 * dt);
+        a.dir = { x: Math.cos(na), y: Math.sin(na) };
+      }
       let vx = a.dir.x, vy = a.dir.y;
       if (PROJ_STYLES[a.kind]?.wavy) {
         const wave = Math.sin(a.t * 9) * 0.35;
@@ -884,7 +907,7 @@ const Game = {
           const rr = Math.sqrt(Math.random()) * r.r * 0.9;
           const ix = r.x + Math.cos(a) * rr;
           const iy = r.y + Math.sin(a) * rr;
-          AudioSys.shoot();
+          AudioSys.rainHit();
           Particles.burst(ix, iy, { count: 5, colors: ['#d9cbb8', '#38b764'], speed: 90, life: 0.25, size: 2 });
           Particles.ring(ix, iy, { r0: 3, r1: 20, life: 0.18, color: '#d9cbb8', width: 2 });
           for (const e of this.enemies) {
@@ -910,8 +933,7 @@ const Game = {
       if (m.t <= 0) {
         Renderer.shake(6, 0.3);
         this.hitstop = Math.max(this.hitstop, 0.07);
-        AudioSys.thud();
-        AudioSys.roar();
+        AudioSys.meteorImpact();
         Particles.burst(m.x, m.y, { count: 26, colors: ['#ff7043', '#ffd866', '#e25822'], speed: 240, life: 0.5, size: 4, gravity: 150 });
         Particles.ring(m.x, m.y, { r0: 10, r1: m.r, life: 0.35, color: '#ff7043', width: 6 });
         Particles.ring(m.x, m.y, { r0: 6, r1: m.r * 0.6, life: 0.25, color: '#fff7c0', width: 3 });

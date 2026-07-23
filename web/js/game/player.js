@@ -89,8 +89,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.classId === 'knight') {
         // 회전 베기: 360° 강타 + 넉백
         this.spinT = 0.35;
-        AudioSys.slash();
-        AudioSys.thud();
+        AudioSys.spin();
         Renderer.shake(4, 0.2);
         Particles.ring(this.x, this.y, { r0: 20, r1: 100, life: 0.3, color: '#4a6ede', width: 5 });
         Particles.ring(this.x, this.y, { r0: 10, r1: 70, life: 0.22, color: '#ffffff', width: 3 });
@@ -125,7 +124,7 @@ function createPlayer(x, y, classId = 'knight') {
       } else if (this.classId === 'archer') {
         // 화살비: 지점 광역 폭격
         const t = this._skillTarget(game);
-        AudioSys.bow();
+        AudioSys.rainCast();
         game.rains.push({
           x: t.x, y: t.y, r: 95, t: 0, next: 0.25,
           shots: 9, fired: 0,
@@ -134,7 +133,7 @@ function createPlayer(x, y, classId = 'knight') {
       } else {
         // 메테오: 예고 후 대광역 낙하
         const t = this._skillTarget(game);
-        AudioSys.bolt();
+        AudioSys.meteorCast();
         game.meteors.push({ x: t.x, y: t.y, t: 0.9, r: 90 });
         if (this.flags.mg_meteor3) {
           for (let i = 0; i < 2; i++) {
