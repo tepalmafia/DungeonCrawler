@@ -141,6 +141,26 @@ const HUD = {
       ctx.fillStyle = '#666a80';
       ctx.fillText('음소거 (M)', 14, Renderer.H - 44);
     }
+
+    // ── 테스트 모드 표시 + 단축키 도움말 ──
+    if (game.testMode) {
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText('⚙ 테스트 모드', Renderer.W - 16, 46);
+      if (p.god) {
+        ctx.fillStyle = '#5ce0e6';
+        ctx.fillText('무적', Renderer.W - 16, 62);
+      }
+      const lines = [
+        'G 무적  H 회복  K 전멸',
+        'L 레벨업  U 유물  O 파편',
+        'B 보스방  N 다음층',
+      ];
+      ctx.font = '10px monospace';
+      ctx.fillStyle = 'rgba(154,160,180,0.75)';
+      lines.forEach((l, i) => ctx.fillText(l, Renderer.W - 16, Renderer.H - 46 + i * 14));
+    }
   },
 
   cardRects(n) {
@@ -360,6 +380,17 @@ const HUD = {
     ctx.font = '12px monospace';
     ctx.fillStyle = '#4a4a5c';
     ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거', Renderer.W / 2, Renderer.H - 20);
+
+    // 테스트 모드 상태 (T로 토글)
+    if (Game.testMode) {
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText('⚙ 테스트 모드 ON (T로 끄기)', 24, Renderer.H - 20);
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText('O 파편+500 · I 도감 완성 · Y 직업/열기 해금 · 게임 중 G무적 K전멸 N다음층...', 24, Renderer.H - 40);
+    }
   },
 
   altarRowRects() {
