@@ -513,6 +513,99 @@ const HUD = {
     this._drawBackButton(ctx);
   },
 
+  // ══════════════ 획득 목록 (게임 중 Tab) ══════════════
+
+  drawInventory(ctx, game) {
+    const p = game.player;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(8,8,15,0.85)';
+    ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px monospace';
+    ctx.fillStyle = '#f7b32b';
+    ctx.fillText('획득 목록', Renderer.W / 2, 42);
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#666a80';
+    ctx.fillText('Tab / ESC — 닫기', Renderer.W / 2, 62);
+
+    // 현재 스탯 요약
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#9aa0b4';
+    const stats = [
+      `공격력 ${p.currentAtk()}`,
+      `크리 ${Math.round(p.critChance * 100)}% ×${p.critMul.toFixed(1)}`,
+      `이동 ${Math.round(p.speed)}`,
+      `대시 ${p.dashMax}회`,
+      `XP ×${p.xpMul.toFixed(2)}`,
+    ];
+    ctx.fillText(stats.join('   ·   '), Renderer.W / 2, 90);
+
+    // ── 왼쪽: 특성 ──
+    const counts = {};
+    for (const id of p.traits) counts[id] = (counts[id] || 0) + 1;
+    const traitIds = Object.keys(counts);
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillStyle = '#2ec4b6';
+    ctx.fillText(`특성 (${traitIds.length})`, 70, 126);
+
+    let y = 150;
+    if (traitIds.length === 0) {
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#4a4a5c';
+      ctx.fillText('아직 없음 — 레벨업으로 획득', 70, y);
+    }
+    const maxRows = 11;
+    traitIds.slice(0, maxRows).forEach((id) => {
+      const t = TRAITS.find((tr) => tr.id === id);
+      if (!t) return;
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = t.color;
+      const stack = counts[id] > 1 ? ` x${counts[id]}` : '';
+      ctx.fillText(`[${t.tag}] ${t.name}${stack}`, 70, y);
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText(t.desc, 82, y + 15);
+      y += 33;
+    });
+    if (traitIds.length > maxRows) {
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(`... 외 ${traitIds.length - maxRows}개`, 70, y);
+    }
+
+    // ── 오른쪽: 유물 ──
+    ctx.font = 'bold 15px monospace';
+    ctx.fillStyle = '#f7b32b';
+    ctx.fillText(`유물 (${p.relics.length})`, 510, 126);
+
+    y = 150;
+    if (p.relics.length === 0) {
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#4a4a5c';
+      ctx.fillText('아직 없음 — 보물상자·보스에게서 획득', 510, y);
+    }
+    p.relics.slice(0, maxRows).forEach((id) => {
+      const rl = RELICS.find((r) => r.id === id);
+      if (!rl) return;
+      const rar = RARITY[rl.rarity];
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = rar.color;
+      ctx.fillText(`[${rar.label}] ${rl.name}`, 510, y);
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText(rl.desc, 522, y + 15);
+      y += 33;
+    });
+    if (p.relics.length > maxRows) {
+      ctx.font = '11px monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(`... 외 ${p.relics.length - maxRows}개`, 510, y);
+    }
+  },
+
   // ══════════════ 도감 ══════════════
 
   codexTabRects() {
@@ -683,8 +776,8 @@ const HUD = {
     ctx.textAlign = 'center';
 
     ctx.font = 'bold 44px monospace';
-    ctx.fillStyle = '#e43b44';
-    ctx.fillText('전사했다...', Renderer.W / 2, 180);
+    ctx.fillStyle = game.gaveUp ? '#9aa0b4' : '#e43b44';
+    ctx.fillText(game.gaveUp ? '런 포기' : '전사했다...', Renderer.W / 2, 180);
 
     ctx.font = '18px monospace';
     ctx.fillStyle = '#e8e0cf';

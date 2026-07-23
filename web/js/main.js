@@ -45,6 +45,9 @@ const Game = {
   transition: null,
   codexTab: 0, // 도감 탭 (0 몬스터 / 1 유물 / 2 특성)
   testMode: false, // 테스트 모드 (거점에서 T, 또는 ?test=1)
+  showInventory: false, // 획득 목록 (Tab)
+  choiceLockT: 0,   // 카드 UI 오클릭 방지 잠금 시간
+  gaveUp: false,    // 런 포기 여부 (정산 화면 문구)
 
   // 런 정산
   runEnded: false,
@@ -69,6 +72,8 @@ const Game = {
       this.player.hp = this.player.maxHp;
     }
     this.paused = false;
+    this.showInventory = false;
+    this.gaveUp = false;
     this.runEnded = false;
     this.shardsEarned = 0;
     this.shardAnimT = 0;
@@ -412,6 +417,7 @@ const Game = {
     this.traitCards = rollTraitCards(this.player, n);
     if (this.traitCards.length === 0) { this.pendingChoices = 0; return; }
     this.state = 'levelup';
+    this.choiceLockT = 0.4; // 오클릭 방지
     AudioSys.levelup();
     Particles.burst(this.player.x, this.player.y, {
       count: 16, colors: ['#2ec4b6', '#a9fff7'], speed: 130, life: 0.6, size: 3, gravity: -80,
@@ -428,6 +434,7 @@ const Game = {
     if (this.pendingChoices > 0) {
       const n = this.traitCardCount();
       this.traitCards = rollTraitCards(this.player, n);
+      this.choiceLockT = 0.35; // 연속 선택 사이에도 잠금 (더블클릭 방지)
       if (this.traitCards.length === 0) { this.pendingChoices = 0; this.state = 'play'; }
     } else {
       this.state = 'play';
@@ -441,6 +448,7 @@ const Game = {
       return;
     }
     this.state = 'relic';
+    this.choiceLockT = 0.4; // 오클릭 방지
     AudioSys.chest();
   },
 
@@ -519,10 +527,12 @@ const Game = {
       return;
     }
     if (this.state === 'levelup') {
+      this.choiceLockT -= dt;
       this._handleCardInput(this.traitCards, (i) => this.pickTrait(i));
       return;
     }
     if (this.state === 'relic') {
+      this.choiceLockT -= dt;
       this._handleCardInput(this.relicCards, (i) => this.pickRelic(i));
       return;
     }
@@ -547,12 +557,31 @@ const Game = {
       Meta.save();
     }
 
-    // 일시정지
+    // 획득 목록 (Tab) — 열려 있는 동안 게임 정지
+    if (Input.pressed('Tab')) {
+      this.showInventory = !this.showInventory;
+      AudioSys.pickup();
+    }
+    if (this.showInventory) {
+      if (Input.pressed('Escape', 'KeyP')) this.showInventory = false;
+      return;
+    }
+
+    // 일시정지 (Q로 런 포기 가능)
     if (Input.pressed('Escape', 'KeyP')) {
       this.paused = !this.paused;
       AudioSys.pickup();
     }
-    if (this.paused) return;
+    if (this.paused) {
+      if (Input.pressed('KeyQ')) {
+        this.paused = false;
+        this.gaveUp = true;
+        this.endRun(false);
+        this.state = 'over';
+        AudioSys.gameover();
+      }
+      return;
+    }
 
     // 테스트 모드 치트
     if (this.testMode) {
@@ -1124,6 +1153,9 @@ const Game = {
     for (let i = 0; i < cards.length; i++) {
       if (Input.pressed('Digit' + (i + 1))) { pick(i); return; }
     }
+    // 오클릭 방지: 카드가 열린 직후 잠깐은 마우스 클릭 무시
+    // (전투 중 연타하던 클릭이 카드를 잘못 고르는 것을 막는다)
+    if (this.choiceLockT > 0) return;
     if (Input.mouse.justDown) {
       const rects = HUD.cardRects(cards.length);
       for (let i = 0; i < rects.length; i++) {
@@ -1396,19 +1428,28 @@ const Game = {
 
     HUD.draw(ctx, this);
 
+    // 획득 목록 오버레이 (Tab)
+    if (this.showInventory && this.state === 'play') {
+      HUD.drawInventory(ctx, this);
+    }
+
     // 일시정지 오버레이
-    if (this.paused && this.state === 'play') {
+    if (this.paused && this.state === 'play' && !this.showInventory) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = 'rgba(8,8,15,0.6)';
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
       ctx.textAlign = 'center';
       ctx.font = 'bold 36px monospace';
       ctx.fillStyle = '#e8e0cf';
-      ctx.fillText('일시정지', Renderer.W / 2, 250);
+      ctx.fillText('일시정지', Renderer.W / 2, 240);
       ctx.font = '14px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, 290);
-      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, 316);
+      ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, 280);
+      ctx.fillText('Tab — 획득 목록 보기', Renderer.W / 2, 304);
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText('Q — 런 포기하고 정산', Renderer.W / 2, 328);
+      ctx.fillStyle = '#4a4a5c';
+      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, 356);
     }
 
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);

@@ -9,7 +9,7 @@ const Input = {
     this._canvas = canvas;
 
     window.addEventListener('keydown', (e) => {
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) {
         e.preventDefault();
       }
       if (!this.keys[e.code]) this.justPressed[e.code] = true;
