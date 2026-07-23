@@ -1,0 +1,17 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #08080f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  cursor: crosshair;
+}
