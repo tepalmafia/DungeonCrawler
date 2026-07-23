@@ -1,58 +1,61 @@
-// 플레이어 (검사): 이동 / 3연격 콤보 / 대시(무적·충전식) + 특성·유물로 성장
-function createPlayer(x, y) {
+// 플레이어 — 직업 3종 (검사: 근접 3연격 / 궁수: 화살 / 마도사: 유도 마탄).
+// 타격 판정(strike)은 공용: 크리·상태이상·시너지가 모든 직업에서 동일하게 작동한다.
+function createPlayer(x, y, classId = 'knight') {
+  const cls = CLASSES[classId] || CLASSES.knight;
   return {
     x, y,
     r: 13,
-    maxHp: 5,
-    hp: 5,
-    speed: 195,
+    classId: cls.id,
+    maxHp: cls.hp + Meta.lvl('vit'),
+    hp: cls.hp + Meta.lvl('vit'),
+    speed: cls.speed,
     facing: { x: 1, y: 0 },
     flip: false,
 
-    // 특성·유물로 성장하는 스탯
-    bonusAtk: 0,
+    bonusAtk: Meta.lvl('pow'),
     atkCdMul: 1,
     critChance: 0.05,
     critMul: 2,
     rangeMul: 1,
-    comboLv: 0,       // 콤보 마스터 스택
+    comboLv: 0,
     xpMul: 1,
     magnetMul: 1,
     luckMul: 1,
-    dashRegenMul: 1,
-    flags: {},        // 특성 고유 효과
-    rflags: {},       // 유물 고유 효과
+    dashRegenMul: Math.pow(0.9, Meta.lvl('dash')),
+    flags: {},
+    rflags: {},
     traits: [],
     relics: [],
     lifestealCd: 0,
     reviveUsed: false,
 
-    // 보호막 (수호의 문장)
     shield: false,
     shieldT: 0,
 
-    // 공격
     combo: 0,
     comboTimer: 0,
     attackCd: 0,
     slashes: [],
-    dashCritReady: false, // 사냥꾼의 각반
+    dashCritReady: false,
 
-    // 대시 (충전식 — 시간의 모래로 2회 충전)
     dashMax: 1,
     dashCharges: 1,
     dashRegenT: 0,
     dashTimer: 0,
     dashDir: { x: 1, y: 0 },
-    dashHit: null,    // 돌파 특성: 이번 대시로 때린 적
+    dashHit: null,
     ghosts: [],
     _trailDist: 0,
 
     invuln: 0,
-    slowT: 0,         // 거미줄 감속
+    slowT: 0,
     kbx: 0, kby: 0,
     animT: 0,
     moving: false,
+
+    sprImg() {
+      return Sprites[cls.sprite];
+    },
 
     dashRegenTime() {
       return this.rflags.engine ? 0.05 : 1.5 * this.dashRegenMul;
@@ -66,7 +69,6 @@ function createPlayer(x, y) {
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
 
-      // 대시 충전
       if (this.dashCharges < this.dashMax) {
         this.dashRegenT += dt;
         if (this.dashRegenT >= this.dashRegenTime()) {
@@ -75,7 +77,6 @@ function createPlayer(x, y) {
         }
       }
 
-      // 보호막 재생
       if (this.flags.shield && !this.shield) {
         this.shieldT += dt;
         if (this.shieldT >= 8) {
@@ -85,7 +86,6 @@ function createPlayer(x, y) {
         }
       }
 
-      // ── 이동 입력 ──
       let mx = 0, my = 0;
       if (Input.down('KeyA', 'ArrowLeft')) mx -= 1;
       if (Input.down('KeyD', 'ArrowRight')) mx += 1;
@@ -99,7 +99,6 @@ function createPlayer(x, y) {
       }
       this.moving = len > 0;
 
-      // ── 대시 ──
       if (Input.pressed('Space', 'ShiftLeft', 'ShiftRight') && this.dashCharges >= 1) {
         this.dashCharges--;
         this.dashTimer = 0.16;
@@ -120,7 +119,6 @@ function createPlayer(x, y) {
         World.moveEntity(this, this.dashDir.x * step, this.dashDir.y * step);
         this.ghosts.push({ x: this.x, y: this.y, flip: this.flip, life: 0.25 });
 
-        // 특성: 잔전류
         if (this.flags.shocktrail) {
           this._trailDist += step;
           if (this._trailDist >= 26) {
@@ -128,7 +126,6 @@ function createPlayer(x, y) {
             game.zones.push({ x: this.x, y: this.y, r: 26, life: 1.2, hit: new Set() });
           }
         }
-        // 특성: 돌파 — 대시로 적을 치고 지나간다
         if (this.flags.ram) {
           for (const e of game.enemies) {
             if (e.dead || this.dashHit.has(e) || e.phased) continue;
@@ -154,7 +151,6 @@ function createPlayer(x, y) {
         if (this.ghosts[i].life <= 0) this.ghosts.splice(i, 1);
       }
 
-      // ── 공격 ──
       const attackInput = Input.mouse.justDown || Input.pressed('KeyJ');
       if (attackInput && this.attackCd <= 0 && this.dashTimer <= 0) {
         let dir;
@@ -176,7 +172,6 @@ function createPlayer(x, y) {
       }
     },
 
-    // 현재 스탯 기준 공격력 계산 (특성·유물 보정 포함)
     currentAtk() {
       let atk = 1 + this.bonusAtk;
       if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 2;
@@ -185,21 +180,107 @@ function createPlayer(x, y) {
       return atk;
     },
 
-    attack(dir, game) {
-      const stage = this.combo;
-      const finisher = stage === 2;
-      const range = (finisher ? 78 : 64) * this.rangeMul;
-      const arc = finisher ? 2.4 : 1.9;
-      const baseDmg = this.currentAtk();
-      const finisherMul = 2 + this.comboLv * 0.5 * 2; // 콤보 마스터: +50%/스택
-      const dmg = finisher ? Math.round(baseDmg * finisherMul) : baseDmg;
-      const angle = Math.atan2(dir.y, dir.x);
+    // ── 공용 타격 판정: 크리·추가피해·상태이상·연쇄를 한 곳에서 ──
+    // 반환: 'blocked' | 'hit'
+    strike(game, e, hitDir, { finisher = false, kb = 190 } = {}) {
+      if (e.blocksFrom && e.blocksFrom(hitDir)) {
+        Particles.text(e.x, e.y - 22, '막힘', { color: '#5ce0e6', size: 13 });
+        Particles.burst(e.x - hitDir.x * 12, e.y - hitDir.y * 12, {
+          count: 5, colors: ['#5ce0e6', '#94a1b8'], speed: 90, life: 0.25, size: 2,
+        });
+        AudioSys.clank();
+        return 'blocked';
+      }
 
-      let cd = (finisher ? 0.45 : 0.22) * this.atkCdMul;
-      if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
-      this.attackCd = cd;
+      let crit = Math.random() < this.critChance;
+      if (this.rflags.allcrit) crit = true;
+      if (this.flags.firecrit && e.status.burn > 0) crit = true;
+      if (this.dashCritReady) { crit = true; this.dashCritReady = false; }
+
+      let bonus = 0;
+      if (this.flags.corrode && e.status.poison > 0) bonus += 1;
+      if (this.flags.static && e.status.shock > 0) bonus += 1;
+
+      const baseDmg = this.currentAtk();
+      const dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv)) : baseDmg;
+      const finalDmg = (crit ? Math.round(dmg * this.critMul) : dmg) + bonus;
+      game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
+
+      if (this.flags.ignite && !e.dead && Math.random() < 0.25) {
+        e.status.burn = this.flags.inferno ? 4 : 2;
+        Particles.burst(e.x, e.y, { count: 4, colors: ['#ff7043', '#ffd866'], speed: 60, life: 0.3, size: 3 });
+      }
+      if (this.flags.poison && !e.dead && Math.random() < 0.3) {
+        e.status.poison = 4;
+        Particles.burst(e.x, e.y, { count: 4, colors: ['#6ab04c'], speed: 60, life: 0.3, size: 3 });
+      }
+      if (this.flags.chain && Math.random() < 0.2) {
+        let nearest = null;
+        let best = 170;
+        for (const o of game.enemies) {
+          if (o === e || o.dead || o.phased) continue;
+          const od = Math.hypot(o.x - e.x, o.y - e.y);
+          if (od < best) { best = od; nearest = o; }
+        }
+        if (nearest) {
+          nearest.status.shock = 2;
+          game.damageEnemy(nearest, 2, { x: 0, y: 0 }, { feel: false, kb: 60, color: '#ffd866' });
+          const steps = 6;
+          for (let s = 0; s <= steps; s++) {
+            const lx = e.x + ((nearest.x - e.x) * s) / steps + (Math.random() - 0.5) * 10;
+            const ly = e.y + ((nearest.y - e.y) * s) / steps + (Math.random() - 0.5) * 10;
+            Particles.burst(lx, ly, { count: 1, colors: ['#ffd866', '#fff7c0'], speed: 15, life: 0.2, size: 3 });
+          }
+        }
+      }
+      return 'hit';
+    },
+
+    attack(dir, game) {
+      const finisher = this.combo === 2;
       this.comboTimer = 0.9;
       this.combo = (this.combo + 1) % 3;
+
+      let cdBase;
+      if (this.classId === 'knight') cdBase = finisher ? 0.45 : 0.22;
+      else if (this.classId === 'archer') cdBase = finisher ? 0.5 : 0.28;
+      else cdBase = finisher ? 0.58 : 0.32;
+      let cd = cdBase * this.atkCdMul;
+      if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
+      this.attackCd = cd;
+
+      if (this.classId === 'knight') {
+        this._meleeAttack(dir, game, finisher);
+      } else if (this.classId === 'archer') {
+        AudioSys.bow();
+        World.moveEntity(this, -dir.x * 5, -dir.y * 5); // 반동
+        game.pbolts.push({
+          kind: 'parrow', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
+          dir: { ...dir }, speed: finisher ? 560 : 480,
+          finisher, pierce: finisher, life: 1.1, hit: new Set(),
+        });
+        Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
+          count: 3, colors: ['#d9cbb8', '#38b764'], speed: 50, life: 0.2, size: 2,
+        });
+      } else {
+        AudioSys.bolt();
+        game.pbolts.push({
+          kind: 'pbolt', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
+          dir: { ...dir }, speed: finisher ? 260 : 300,
+          finisher, pierce: false, homing: 5.0,
+          aoe: finisher ? 70 : 0,
+          life: 2.0, hit: new Set(),
+        });
+        Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
+          count: 4, colors: ['#c56cf0', '#8a5ac2'], speed: 60, life: 0.25, size: 3,
+        });
+      }
+    },
+
+    _meleeAttack(dir, game, finisher) {
+      const range = (finisher ? 78 : 64) * this.rangeMul;
+      const arc = finisher ? 2.4 : 1.9;
+      const angle = Math.atan2(dir.y, dir.x);
       AudioSys.slash();
 
       this.slashes.push({
@@ -213,7 +294,7 @@ function createPlayer(x, y) {
 
       let hitAny = false;
       for (const e of game.enemies) {
-        if (e.dead || e.phased) continue; // 비물질 망령은 못 맞춘다
+        if (e.dead || e.phased) continue;
         const dx = e.x - this.x;
         const dy = e.y - this.y;
         const dist = Math.hypot(dx, dy);
@@ -224,64 +305,7 @@ function createPlayer(x, y) {
         if (Math.abs(diff) > arc / 2 + 0.25) continue;
 
         const hitDir = { x: dx / (dist || 1), y: dy / (dist || 1) };
-
-        // 골렘 정면 방어
-        if (e.blocksFrom && e.blocksFrom(hitDir)) {
-          Particles.text(e.x, e.y - 22, '막힘', { color: '#5ce0e6', size: 13 });
-          Particles.burst(e.x - hitDir.x * 12, e.y - hitDir.y * 12, {
-            count: 5, colors: ['#5ce0e6', '#94a1b8'], speed: 90, life: 0.25, size: 2,
-          });
-          AudioSys.clank();
-          hitAny = true;
-          continue;
-        }
-
-        // 크리티컬 판정 (유리 대검 / 발화점 / 각반 / 일반 확률)
-        let crit = Math.random() < this.critChance;
-        if (this.rflags.allcrit) crit = true;
-        if (this.flags.firecrit && e.status.burn > 0) crit = true;
-        if (this.dashCritReady) { crit = true; this.dashCritReady = false; }
-
-        // 부식·정전기: 상태이상 적에게 추가 피해
-        let bonus = 0;
-        if (this.flags.corrode && e.status.poison > 0) bonus += 1;
-        if (this.flags.static && e.status.shock > 0) bonus += 1;
-
-        const finalDmg = (crit ? Math.round(dmg * this.critMul) : dmg) + bonus;
-        const kb = finisher ? 320 : 190;
-        game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
-
-        // 상태이상 부여
-        if (this.flags.ignite && !e.dead && Math.random() < 0.25) {
-          e.status.burn = this.flags.inferno ? 4 : 2;
-          Particles.burst(e.x, e.y, { count: 4, colors: ['#ff7043', '#ffd866'], speed: 60, life: 0.3, size: 3 });
-        }
-        if (this.flags.poison && !e.dead && Math.random() < 0.3) {
-          e.status.poison = 4;
-          Particles.burst(e.x, e.y, { count: 4, colors: ['#6ab04c'], speed: 60, life: 0.3, size: 3 });
-        }
-
-        // 연쇄 번개
-        if (this.flags.chain && Math.random() < 0.2) {
-          let nearest = null;
-          let best = 170;
-          for (const o of game.enemies) {
-            if (o === e || o.dead || o.phased) continue;
-            const od = Math.hypot(o.x - e.x, o.y - e.y);
-            if (od < best) { best = od; nearest = o; }
-          }
-          if (nearest) {
-            nearest.status.shock = 2;
-            game.damageEnemy(nearest, 2, { x: 0, y: 0 }, { feel: false, kb: 60, color: '#ffd866' });
-            // 번개 시각 효과: 두 적 사이 파티클 라인
-            const steps = 6;
-            for (let s = 0; s <= steps; s++) {
-              const lx = e.x + ((nearest.x - e.x) * s) / steps + (Math.random() - 0.5) * 10;
-              const ly = e.y + ((nearest.y - e.y) * s) / steps + (Math.random() - 0.5) * 10;
-              Particles.burst(lx, ly, { count: 1, colors: ['#ffd866', '#fff7c0'], speed: 15, life: 0.2, size: 3 });
-            }
-          }
-        }
+        this.strike(game, e, hitDir, { finisher, kb: finisher ? 320 : 190 });
         hitAny = true;
       }
       if (hitAny && finisher) Renderer.shake(3, 0.15);
@@ -289,7 +313,7 @@ function createPlayer(x, y) {
 
     draw(ctx) {
       for (const g of this.ghosts) {
-        Renderer.drawSprite(Sprites.player, g.x, g.y, {
+        Renderer.drawSprite(this.sprImg(), g.x, g.y, {
           flip: g.flip, alpha: g.life * 1.6,
         });
       }
@@ -298,13 +322,12 @@ function createPlayer(x, y) {
       const rot = this.moving ? Math.sin(this.animT * 11) * 0.08 : 0;
       const flash = this.invuln > 0 && Math.floor(this.invuln * 18) % 2 === 0;
 
-      Renderer.drawSprite(flash ? Sprites.white(Sprites.player) : Sprites.player,
+      Renderer.drawSprite(flash ? Sprites.white(this.sprImg()) : this.sprImg(),
         this.x, this.y - bob, {
           flip: this.flip, rot,
           alpha: this.invuln > 0 ? 0.8 : 1,
         });
 
-      // 보호막 링
       if (this.shield) {
         ctx.save();
         ctx.globalAlpha = 0.5 + Math.sin(this.animT * 5) * 0.2;

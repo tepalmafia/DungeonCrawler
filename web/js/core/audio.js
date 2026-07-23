@@ -12,7 +12,7 @@ const AudioSys = {
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.35;
+      this.master.gain.value = this.muted ? 0 : 0.35;
       this.master.connect(this.ctx.destination);
 
       const len = this.ctx.sampleRate;
@@ -68,6 +68,11 @@ const AudioSys = {
   pickup() { this._tone({ type: 'sine', f0: 660, dur: 0.08, vol: 0.3 }); this._tone({ type: 'sine', f0: 990, dur: 0.12, vol: 0.3, delay: 0.08 }); },
   thud()   { this._tone({ type: 'sine', f0: 95, f1: 35, dur: 0.18, vol: 0.6 }); this._noise({ dur: 0.1, vol: 0.35, freq: 300 }); },
   shoot()  { this._noise({ dur: 0.06, vol: 0.2, freq: 1800, q: 2 }); },
+  bow()    { this._tone({ type: 'square', f0: 320, f1: 150, dur: 0.07, vol: 0.2 }); this._noise({ dur: 0.05, vol: 0.15, freq: 2500, q: 1.5 }); },
+  bolt()   { this._tone({ type: 'sine', f0: 480, f1: 720, dur: 0.09, vol: 0.22 }); },
+  buy()    { this._tone({ type: 'triangle', f0: 587, dur: 0.08, vol: 0.3 }); this._tone({ type: 'triangle', f0: 880, dur: 0.1, vol: 0.3, delay: 0.07 }); },
+  deny()   { this._tone({ type: 'square', f0: 140, f1: 90, dur: 0.12, vol: 0.25 }); },
+  shard()  { this._tone({ type: 'sine', f0: 700 + Math.random() * 500, dur: 0.05, vol: 0.12 }); },
 
   wave() {
     [330, 440, 554].forEach((f, i) =>

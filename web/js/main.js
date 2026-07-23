@@ -1,5 +1,5 @@
 // 게임 루프 + 던전 진행 + 전투 판정 허브.
-// 상태: start | play | levelup | relic | transition | over | victory
+// 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
   soul:  { color: '#b13ae0', r: 7, wavy: true },
@@ -10,10 +10,11 @@ const PROJ_STYLES = {
 };
 
 const Game = {
-  state: 'start',
+  state: 'hub',
   player: null,
   enemies: [],
   arrows: [],
+  pbolts: [],       // 플레이어 투사체 (궁수 화살 / 마도사 마탄)
   pickups: [],
   orbs: [],
   zones: [],        // 적에게 피해 주는 장판 (감전/독구름)
@@ -42,8 +43,16 @@ const Game = {
   roomCleared: false,
   transition: null,
 
+  // 런 정산
+  runEnded: false,
+  shardsEarned: 0,
+  shardAnimT: 0,
+
   restart() {
-    this.player = createPlayer(0, 0);
+    this.player = createPlayer(0, 0, Meta.data.cls);
+    this.runEnded = false;
+    this.shardsEarned = 0;
+    this.shardAnimT = 0;
     this.kills = 0;
     this.time = 0;
     this.hitstop = 0;
@@ -64,6 +73,7 @@ const Game = {
   onRoomBuilt(type) {
     this.enemies = [];
     this.arrows = [];
+    this.pbolts = [];
     this.orbs = [];
     this.zones = [];
     this.firePatches = [];
@@ -240,10 +250,19 @@ const Game = {
     }
   },
 
+  // 런 종료 정산 — 영혼 파편 지급 (1회만)
+  endRun(victory) {
+    if (this.runEnded) return;
+    this.runEnded = true;
+    this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory);
+    this.shardAnimT = 0;
+  },
+
   onBossDead() {
     this.arrows = [];
     this.rings = [];
     if (Dungeon.floor >= 5) {
+      this.endRun(true);
       this.state = 'victory';
       Renderer.shake(8, 0.6);
       AudioSys.gameover();
@@ -313,6 +332,7 @@ const Game = {
         return;
       }
       p.hp = 0;
+      this.endRun(false);
       this.state = 'over';
       AudioSys.gameover();
       Renderer.shake(8, 0.5);
@@ -340,9 +360,13 @@ const Game = {
     }
   },
 
+  traitCardCount() {
+    return Math.min(4, 3 + (this.player.rflags.kingseal ? 1 : 0) + Meta.lvl('choice'));
+  },
+
   openTraitChoice(reason) {
     this.choiceReason = reason;
-    const n = this.player.rflags.kingseal ? 4 : 3;
+    const n = this.traitCardCount();
     this.traitCards = rollTraitCards(this.player, n);
     if (this.traitCards.length === 0) { this.pendingChoices = 0; return; }
     this.state = 'levelup';
@@ -359,7 +383,7 @@ const Game = {
     Particles.text(this.player.x, this.player.y - 30, t.name + '!', { color: t.color, size: 16 });
     this.pendingChoices = Math.max(0, this.pendingChoices - 1);
     if (this.pendingChoices > 0) {
-      const n = this.player.rflags.kingseal ? 4 : 3;
+      const n = this.traitCardCount();
       this.traitCards = rollTraitCards(this.player, n);
       if (this.traitCards.length === 0) { this.pendingChoices = 0; this.state = 'play'; }
     } else {
@@ -410,13 +434,31 @@ const Game = {
   tick(dt) {
     this.blinkT += dt;
 
-    if (this.state === 'start') {
-      if (Input.anyKeyPressed || Input.mouse.justDown) this.restart();
+    if (this.state === 'hub') {
+      this._tickHub();
+      return;
+    }
+    if (this.state === 'altar') {
+      this._tickAltar();
+      return;
+    }
+    if (this.state === 'classes') {
+      this._tickClasses();
       return;
     }
     if (this.state === 'over' || this.state === 'victory') {
       Particles.update(dt);
-      if (Input.pressed('KeyR') || Input.mouse.justDown) this.restart();
+      // 파편 정산 카운트업 (+ 카운트 사운드)
+      const prev = Math.floor(this.shardAnimT * 40);
+      this.shardAnimT += dt;
+      const cur = Math.min(this.shardsEarned, Math.floor(this.shardAnimT * 40));
+      if (cur > prev && cur <= this.shardsEarned && cur % 3 === 0) AudioSys.shard();
+
+      if (Input.pressed('KeyR')) { this.restart(); return; }
+      if (Input.mouse.justDown || Input.pressed('Space', 'Enter')) {
+        this.state = 'hub';
+        AudioSys.pickup();
+      }
       return;
     }
     if (this.state === 'levelup') {
@@ -442,7 +484,11 @@ const Game = {
       return;
     }
 
-    if (Input.pressed('KeyM')) AudioSys.toggleMute();
+    if (Input.pressed('KeyM')) {
+      AudioSys.toggleMute();
+      Meta.data.muted = AudioSys.muted;
+      Meta.save();
+    }
 
     if (this.hitstop > 0) {
       this.hitstop -= dt;
@@ -621,6 +667,71 @@ const Game = {
       if (this.bossSlashes[i].life <= 0) this.bossSlashes.splice(i, 1);
     }
 
+    // ── 플레이어 투사체 (궁수 화살 / 마도사 유도 마탄) ──
+    for (let i = this.pbolts.length - 1; i >= 0; i--) {
+      const b = this.pbolts[i];
+      b.life -= dt;
+
+      // 유도: 가장 가까운 적을 향해 선회
+      if (b.homing) {
+        let target = null;
+        let best = 280;
+        for (const e of this.enemies) {
+          if (e.dead || e.phased) continue;
+          const ed = Math.hypot(e.x - b.x, e.y - b.y);
+          if (ed < best) { best = ed; target = e; }
+        }
+        if (target) {
+          const want = Math.atan2(target.y - b.y, target.x - b.x);
+          let cur = Math.atan2(b.dir.y, b.dir.x);
+          let diff = want - cur;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          cur += Math.sign(diff) * Math.min(Math.abs(diff), b.homing * dt);
+          b.dir = { x: Math.cos(cur), y: Math.sin(cur) };
+        }
+      }
+
+      b.x += b.dir.x * b.speed * dt;
+      b.y += b.dir.y * b.speed * dt;
+
+      // 마탄 잔광
+      if (b.kind === 'pbolt' && Math.random() < 0.5) {
+        Particles.burst(b.x, b.y, { count: 1, colors: ['#c56cf0', '#8a5ac2'], speed: 12, life: 0.25, size: 2 });
+      }
+
+      let remove = b.life <= 0 || World.isSolidAt(b.x, b.y);
+      if (!remove) {
+        for (const e of this.enemies) {
+          if (e.dead || e.phased || b.hit.has(e)) continue;
+          if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + 7) {
+            b.hit.add(e);
+            const res = p.strike(this, e, { ...b.dir }, {
+              finisher: b.finisher,
+              kb: b.finisher ? 300 : 170,
+            });
+            if (b.aoe) {
+              this._explode(b.x, b.y, b.aoe, Math.max(1, p.currentAtk()), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0');
+            }
+            if (res === 'blocked' || !b.pierce) remove = true;
+            break;
+          }
+        }
+      }
+      if (remove) {
+        if (b.aoe && b.hit.size === 0) {
+          // 벽에 맞아도 대마탄은 폭발
+          this._explode(b.x, b.y, b.aoe, Math.max(1, p.currentAtk()), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0');
+        }
+        Particles.burst(b.x, b.y, {
+          count: 4,
+          colors: b.kind === 'pbolt' ? ['#c56cf0'] : ['#d9cbb8'],
+          speed: 70, life: 0.25, size: 2,
+        });
+        this.pbolts.splice(i, 1);
+      }
+    }
+
     // ── XP 보석 ──
     const magnetR = (this.roomCleared || p.rflags.magnetall) ? 9999 : 95 * p.magnetMul;
     for (let i = this.orbs.length - 1; i >= 0; i--) {
@@ -726,6 +837,84 @@ const Game = {
     }
   },
 
+  // ── 거점 화면들 ──
+  _tickHub() {
+    if (Input.pressed('KeyM')) { AudioSys.toggleMute(); Meta.data.muted = AudioSys.muted; Meta.save(); }
+    const rects = HUD.hubButtonRects();
+    let act = -1;
+    if (Input.pressed('Digit1') || Input.pressed('Space', 'Enter')) act = 0;
+    if (Input.pressed('Digit2')) act = 1;
+    if (Input.pressed('Digit3')) act = 2;
+    if (Input.mouse.justDown) {
+      rects.forEach((r, i) => {
+        if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+            Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) act = i;
+      });
+    }
+    if (act === 0) { AudioSys.buy(); this.restart(); }
+    else if (act === 1) { AudioSys.pickup(); this.state = 'altar'; }
+    else if (act === 2) { AudioSys.pickup(); this.state = 'classes'; }
+  },
+
+  _tickAltar() {
+    if (Input.pressed('Escape', 'Digit0', 'Backspace')) { this.state = 'hub'; return; }
+    let act = -1;
+    for (let i = 0; i < META_UPGRADES.length; i++) {
+      if (Input.pressed('Digit' + (i + 1))) act = i;
+    }
+    const rects = HUD.altarRowRects();
+    const back = HUD.backButtonRect();
+    if (Input.mouse.justDown) {
+      if (Input.mouse.x >= back.x && Input.mouse.x <= back.x + back.w &&
+          Input.mouse.y >= back.y && Input.mouse.y <= back.y + back.h) {
+        this.state = 'hub';
+        return;
+      }
+      rects.forEach((r, i) => {
+        if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+            Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) act = i;
+      });
+    }
+    if (act >= 0) {
+      const up = META_UPGRADES[act];
+      if (Meta.buy(up.id)) AudioSys.buy();
+      else AudioSys.deny();
+    }
+  },
+
+  _tickClasses() {
+    if (Input.pressed('Escape', 'Digit0', 'Backspace')) { this.state = 'hub'; return; }
+    let act = -1;
+    const ids = Object.keys(CLASSES);
+    for (let i = 0; i < ids.length; i++) {
+      if (Input.pressed('Digit' + (i + 1))) act = i;
+    }
+    const rects = HUD.cardRects(ids.length);
+    const back = HUD.backButtonRect();
+    if (Input.mouse.justDown) {
+      if (Input.mouse.x >= back.x && Input.mouse.x <= back.x + back.w &&
+          Input.mouse.y >= back.y && Input.mouse.y <= back.y + back.h) {
+        this.state = 'hub';
+        return;
+      }
+      rects.forEach((r, i) => {
+        if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+            Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) act = i;
+      });
+    }
+    if (act >= 0) {
+      const id = ids[act];
+      if (Meta.classUnlocked(id)) {
+        Meta.selectClass(id);
+        AudioSys.pickup();
+      } else if (Meta.unlockClass(id)) {
+        AudioSys.relic('epic');
+      } else {
+        AudioSys.deny();
+      }
+    }
+  },
+
   _handleCardInput(cards, pick) {
     for (let i = 0; i < cards.length; i++) {
       if (Input.pressed('Digit' + (i + 1))) { pick(i); return; }
@@ -746,12 +935,15 @@ const Game = {
   render() {
     const ctx = Renderer.ctx;
     Renderer.begin();
-    World.draw(ctx, this.blinkT);
 
-    if (this.state === 'start') {
-      HUD.drawStartScreen(ctx, this.blinkT);
+    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') {
+      if (this.state === 'hub') HUD.drawHub(ctx, this.blinkT);
+      else if (this.state === 'altar') HUD.drawAltar(ctx, this.blinkT);
+      else HUD.drawClasses(ctx, this.blinkT);
       return;
     }
+
+    World.draw(ctx, this.blinkT);
 
     World.drawDoors(ctx, this.blinkT);
 
@@ -876,6 +1068,31 @@ const Game = {
       }
     }
 
+    // 플레이어 투사체
+    for (const b of this.pbolts) {
+      if (b.kind === 'parrow') {
+        Renderer.drawSprite(Sprites.arrow, b.x, b.y, { rot: Math.atan2(b.dir.y, b.dir.x) });
+        if (b.finisher) {
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#38b764';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      } else {
+        const r = b.finisher ? 9 : 6;
+        ctx.fillStyle = '#8a5ac2';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e0c9f5';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // 보스 검격
     for (const s of this.bossSlashes) {
       const t = s.life / s.maxLife;
@@ -931,8 +1148,13 @@ const Game = {
   const canvas = document.getElementById('game');
   Renderer.init(canvas);
   Input.init(canvas);
+  Meta.load();
+  AudioSys.muted = Meta.data.muted;
 
   const qs = new URLSearchParams(location.search);
+  if (qs.has('class') && Meta.classUnlocked(qs.get('class'))) {
+    Meta.selectClass(qs.get('class'));
+  }
   if (qs.has('autostart') || qs.has('demo')) Game.restart();
   if (qs.has('demo')) installDemoBot();
   if (qs.has('floor')) {

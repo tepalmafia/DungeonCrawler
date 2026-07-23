@@ -243,6 +243,14 @@ const Sprites = (() => {
     h: '#94a1b8', f: '#f0c297', k: '#1a1c2c',
     t: '#3b5dc9', y: '#f7b32b', d: '#29366f', b: '#6b4034',
   });
+  sprites.playerArcher = make(PLAYER_ROWS, { // 팔레트 스왑: 궁수 (초록 후드)
+    h: '#2a6b4a', f: '#f0c297', k: '#1a1c2c',
+    t: '#38b764', y: '#d9cbb8', d: '#1d4a33', b: '#5e3a26',
+  });
+  sprites.playerMage = make(PLAYER_ROWS, { // 팔레트 스왑: 마도사 (보라 로브)
+    h: '#5c2e8a', f: '#f0c297', k: '#1a1c2c',
+    t: '#8a5ac2', y: '#ffd866', d: '#3d1e5c', b: '#29366f',
+  });
 
   // 일반 적
   sprites.slime = make(SLIME_ROWS, {

@@ -217,37 +217,230 @@ const HUD = {
     if (line) ctx.fillText(line, cx, y);
   },
 
-  drawStartScreen(ctx, blinkT) {
+  // ══════════════ 거점 (기억의 제단 앞) ══════════════
+
+  _drawHubBg(ctx, blinkT) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = 'rgba(8,8,15,0.82)';
+    ctx.fillStyle = '#0b0912';
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+    // 별처럼 흩날리는 영혼 입자
+    ctx.fillStyle = '#2ec4b6';
+    for (let i = 0; i < 24; i++) {
+      const sx = (i * 173 + 89) % Renderer.W;
+      const sy = ((i * 97 + blinkT * 12 * ((i % 3) + 1)) % Renderer.H);
+      ctx.globalAlpha = 0.15 + (i % 4) * 0.08;
+      ctx.fillRect(sx, Renderer.H - sy, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  _shardLabel(ctx, x, y, align = 'right') {
+    ctx.textAlign = align;
+    ctx.font = 'bold 17px monospace';
+    ctx.fillStyle = '#2ec4b6';
+    ctx.fillText(`◆ ${Meta.data.shards}`, x, y);
+  },
+
+  hubButtonRects() {
+    const w = 320, h = 56, gap = 18;
+    const x = (Renderer.W - w) / 2;
+    const y0 = 268;
+    return [0, 1, 2].map((i) => ({ x, y: y0 + i * (h + gap), w, h }));
+  },
+
+  backButtonRect() {
+    return { x: Renderer.W / 2 - 90, y: Renderer.H - 62, w: 180, h: 40 };
+  },
+
+  _drawBackButton(ctx) {
+    const r = this.backButtonRect();
+    const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                  Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+    ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = hover ? '#9aa0b4' : '#4a4a5c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = '#9aa0b4';
+    ctx.fillText('돌아가기 (ESC)', r.x + r.w / 2, r.y + 25);
+  },
+
+  drawHub(ctx, blinkT) {
+    this._drawHubBg(ctx, blinkT);
     ctx.textAlign = 'center';
 
     ctx.font = 'bold 46px monospace';
     ctx.fillStyle = '#f7b32b';
-    ctx.fillText('던전 크롤러', Renderer.W / 2, 140);
-    ctx.font = 'bold 24px monospace';
+    ctx.fillText('던전 크롤러', Renderer.W / 2, 120);
+    ctx.font = 'bold 22px monospace';
     ctx.fillStyle = '#e8e0cf';
-    ctx.fillText('― 심연의 탑 ―', Renderer.W / 2, 180);
+    ctx.fillText('― 심연의 탑 ―', Renderer.W / 2, 156);
 
-    ctx.font = '15px monospace';
-    ctx.fillStyle = '#9aa0b4';
-    const lines = [
-      'WASD/방향키  이동',
-      '마우스 클릭/J  공격 (3연격 콤보)',
-      'Space/Shift  대시 (무적)',
-      '5개 층의 심연을 정복하라',
-    ];
-    lines.forEach((l, i) => ctx.fillText(l, Renderer.W / 2, 255 + i * 26));
-
-    if (Math.floor(blinkT * 1.6) % 2 === 0) {
-      ctx.font = 'bold 18px monospace';
-      ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('클릭 또는 아무 키나 눌러 시작', Renderer.W / 2, 420);
+    this._shardLabel(ctx, Renderer.W - 24, 36);
+    if (Meta.data.runs > 0) {
+      ctx.textAlign = 'left';
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(`도전 ${Meta.data.runs}회 · 최고 ${Meta.data.bestFloor}층 · 누적 처치 ${Meta.data.totalKills}`, 24, 36);
     }
+
+    const cls = CLASSES[Meta.data.cls];
+    ctx.textAlign = 'center';
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#9aa0b4';
+    ctx.fillText(`선택된 직업: `, Renderer.W / 2 - 30, 220);
+    ctx.fillStyle = cls.color;
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(cls.name, Renderer.W / 2 + 42, 220);
+
+    const labels = [
+      { text: '출발', sub: '심연의 탑에 도전한다', color: '#38b764' },
+      { text: '기억의 제단', sub: '영혼 파편으로 영구 강화', color: '#2ec4b6' },
+      { text: '직업 선택', sub: '검사 · 궁수 · 마도사', color: '#b13ae0' },
+    ];
+    this.hubButtonRects().forEach((r, i) => {
+      const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                    Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+      ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = labels[i].color;
+      ctx.lineWidth = hover ? 3 : 1.5;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 19px monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText(`${i + 1}. ${labels[i].text}`, r.x + 22, r.y + 25);
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(labels[i].sub, r.x + 22, r.y + 44);
+    });
+
+    ctx.textAlign = 'center';
     ctx.font = '12px monospace';
     ctx.fillStyle = '#4a4a5c';
-    ctx.fillText('M3 프로토타입 — 심연의 탑 5층', Renderer.W / 2, 510);
+    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거', Renderer.W / 2, Renderer.H - 20);
+  },
+
+  altarRowRects() {
+    const w = 620, h = 58, gap = 12;
+    const x = (Renderer.W - w) / 2;
+    const y0 = 130;
+    return META_UPGRADES.map((_, i) => ({ x, y: y0 + i * (h + gap), w, h }));
+  },
+
+  drawAltar(ctx, blinkT) {
+    this._drawHubBg(ctx, blinkT);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px monospace';
+    ctx.fillStyle = '#2ec4b6';
+    ctx.fillText('기억의 제단', Renderer.W / 2, 70);
+    this._shardLabel(ctx, Renderer.W - 24, 36);
+
+    this.altarRowRects().forEach((r, i) => {
+      const up = META_UPGRADES[i];
+      const lv = Meta.lvl(up.id);
+      const cost = Meta.cost(up.id);
+      const maxed = cost === null;
+      const affordable = !maxed && Meta.data.shards >= cost;
+      const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                    Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+
+      ctx.fillStyle = hover && !maxed ? '#1d1d2e' : '#141420';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = maxed ? '#4a4a5c' : affordable ? '#2ec4b6' : '#3a3a4a';
+      ctx.lineWidth = hover && affordable ? 3 : 1.5;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 17px monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText(`${i + 1}. ${up.name}`, r.x + 18, r.y + 24);
+      ctx.font = '13px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText(up.desc, r.x + 18, r.y + 45);
+
+      // 레벨 핍
+      for (let l = 0; l < up.max; l++) {
+        ctx.fillStyle = l < lv ? '#2ec4b6' : '#2a2a3a';
+        ctx.fillRect(r.x + 350 + l * 18, r.y + 24, 12, 12);
+      }
+
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 15px monospace';
+      if (maxed) {
+        ctx.fillStyle = '#666a80';
+        ctx.fillText('완성', r.x + r.w - 18, r.y + 35);
+      } else {
+        ctx.fillStyle = affordable ? '#2ec4b6' : '#8a4a4a';
+        ctx.fillText(`◆ ${cost}`, r.x + r.w - 18, r.y + 35);
+      }
+    });
+
+    this._drawBackButton(ctx);
+  },
+
+  drawClasses(ctx, blinkT) {
+    this._drawHubBg(ctx, blinkT);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px monospace';
+    ctx.fillStyle = '#b13ae0';
+    ctx.fillText('직업 선택', Renderer.W / 2, 70);
+    this._shardLabel(ctx, Renderer.W - 24, 36);
+
+    const ids = Object.keys(CLASSES);
+    const rects = this.cardRects(ids.length);
+    ids.forEach((id, i) => {
+      const cls = CLASSES[id];
+      const unlocked = Meta.classUnlocked(id);
+      const selected = Meta.data.cls === id;
+      const affordable = Meta.data.shards >= cls.unlock;
+      const r = rects[i];
+      const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                    Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+      const lift = hover ? -6 : 0;
+
+      ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
+      ctx.fillRect(r.x, r.y + lift, r.w, r.h);
+      ctx.strokeStyle = selected ? '#f7b32b' : unlocked ? cls.color : '#3a3a4a';
+      ctx.lineWidth = selected || hover ? 3 : 1.5;
+      ctx.strokeRect(r.x, r.y + lift, r.w, r.h);
+
+      const cx = r.x + r.w / 2;
+      ctx.textAlign = 'center';
+
+      // 스프라이트 미리보기
+      const img = Sprites[cls.sprite];
+      ctx.save();
+      if (!unlocked) ctx.globalAlpha = 0.35;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, cx - 24, r.y + lift + 18, 48, 48);
+      ctx.restore();
+
+      ctx.font = 'bold 20px monospace';
+      ctx.fillStyle = unlocked ? '#e8e0cf' : '#666a80';
+      ctx.fillText(cls.name, cx, r.y + lift + 92);
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText(`HP ${cls.hp} · 속도 ${cls.speed}`, cx, r.y + lift + 112);
+      ctx.font = '12px monospace';
+      this._wrapText(ctx, cls.desc, cx, r.y + lift + 134, r.w - 26, 17);
+
+      ctx.font = 'bold 14px monospace';
+      if (selected) {
+        ctx.fillStyle = '#f7b32b';
+        ctx.fillText('▶ 선택됨', cx, r.y + lift + this.cardRects(ids.length)[0].h - 14);
+      } else if (unlocked) {
+        ctx.fillStyle = cls.color;
+        ctx.fillText('클릭하여 선택', cx, r.y + lift + this.cardRects(ids.length)[0].h - 14);
+      } else {
+        ctx.fillStyle = affordable ? '#2ec4b6' : '#8a4a4a';
+        ctx.fillText(`◆ ${cls.unlock} 해금`, cx, r.y + lift + this.cardRects(ids.length)[0].h - 14);
+      }
+    });
+
+    this._drawBackButton(ctx);
   },
 
   drawGameOver(ctx, game, blinkT) {
@@ -270,10 +463,26 @@ const HUD = {
     ctx.fillText(`Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · ${game.time.toFixed(1)}초`,
       Renderer.W / 2, 272);
 
+    this._drawShardReward(ctx, game, 330);
+
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
-      ctx.font = 'bold 18px monospace';
+      ctx.font = 'bold 17px monospace';
       ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('R 키 또는 클릭으로 재도전', Renderer.W / 2, 380);
+      ctx.fillText('R — 즉시 재도전   ·   클릭/Space — 거점으로', Renderer.W / 2, 415);
+    }
+  },
+
+  // 파편 정산 카운트업 애니메이션
+  _drawShardReward(ctx, game, y) {
+    const shown = Math.min(game.shardsEarned, Math.floor(game.shardAnimT * 40));
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 26px monospace';
+    ctx.fillStyle = '#2ec4b6';
+    ctx.fillText(`◆ 영혼 파편 +${shown}`, Renderer.W / 2, y);
+    if (shown >= game.shardsEarned) {
+      ctx.font = '13px monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(`보유: ◆ ${Meta.data.shards}`, Renderer.W / 2, y + 26);
     }
   },
 
@@ -297,10 +506,12 @@ const HUD = {
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`클리어 시간 ${(game.time / 60).toFixed(1)}분`, Renderer.W / 2, 295);
 
+    this._drawShardReward(ctx, game, 350);
+
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
-      ctx.font = 'bold 18px monospace';
+      ctx.font = 'bold 17px monospace';
       ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('R 키 또는 클릭으로 새로운 런 시작', Renderer.W / 2, 400);
+      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', Renderer.W / 2, 430);
     }
   },
 };
