@@ -182,7 +182,7 @@ function createPlayer(x, y, classId = 'knight') {
 
     // 자동 타겟: 사거리 내 가장 가까운 적 (비물질 망령 제외)
     autoTarget(game) {
-      const maxRange = this.classId === 'knight' ? 240 : 520;
+      const maxRange = this.classId === 'knight' ? 240 : this.classId === 'archer' ? 440 : 520;
       let best = maxRange;
       let target = null;
       for (const e of game.enemies) {
@@ -264,7 +264,7 @@ function createPlayer(x, y, classId = 'knight') {
 
       let cdBase;
       if (this.classId === 'knight') cdBase = finisher ? 0.45 : 0.22;
-      else if (this.classId === 'archer') cdBase = finisher ? 0.5 : 0.28;
+      else if (this.classId === 'archer') cdBase = finisher ? 0.58 : 0.33; // 밸런스: 원거리 저위험 보상
       else cdBase = finisher ? 0.58 : 0.32;
       let cd = cdBase * this.atkCdMul;
       if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
@@ -301,7 +301,7 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     _meleeAttack(dir, game, finisher) {
-      const range = (finisher ? 78 : 64) * this.rangeMul;
+      const range = (finisher ? 86 : 70) * this.rangeMul; // 밸런스: 근접 리스크 보상
       const arc = finisher ? 2.4 : 1.9;
       const angle = Math.atan2(dir.y, dir.x);
       AudioSys.slash();

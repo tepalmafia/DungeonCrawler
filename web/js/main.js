@@ -1542,12 +1542,22 @@ function installDemoBot() {
     }
 
     if (target) {
-      moveToward(target.x, target.y, 40);
-      if (best < 80 && p.attackCd <= 0) {
-        p.facing = { x: (target.x - p.x) / best, y: (target.y - p.y) / best };
-        Input.justPressed['KeyJ'] = true;
+      const ranged = p.classId !== 'knight';
+      if (ranged) {
+        // 원거리: 카이팅 — 거리 유지하며 쿨마다 사격
+        if (best < 180) moveToward(p.x * 2 - target.x, p.y * 2 - target.y, 4); // 반대로 도주
+        else if (best > 360) moveToward(target.x, target.y, 40);
+        else Input.keys['KeyW'] = Input.keys['KeyA'] = Input.keys['KeyS'] = Input.keys['KeyD'] = false;
+        if (p.attackCd <= 0 && best < 500) Input.justPressed['KeyJ'] = true;
+        if (best < 100 && p.dashCharges >= 1) Input.justPressed['Space'] = true;
+      } else {
+        moveToward(target.x, target.y, 40);
+        if (best < 80 && p.attackCd <= 0) {
+          p.facing = { x: (target.x - p.x) / best, y: (target.y - p.y) / best };
+          Input.justPressed['KeyJ'] = true;
+        }
+        if (t > 2.5) { Input.justPressed['Space'] = true; t = 0; }
       }
-      if (t > 2.5) { Input.justPressed['Space'] = true; t = 0; }
     } else {
       const it = game.interactables.find((i) => !i.used);
       if (it) moveToward(it.x, it.y, 4);
