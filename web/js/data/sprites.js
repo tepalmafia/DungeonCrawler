@@ -1,9 +1,10 @@
 // 픽셀아트를 문자열 배열로 정의하고 Canvas로 렌더링 — 외부 이미지 파일 없음.
 // 각 문자는 팔레트의 색 인덱스. '.'은 투명.
+// 팔레트 스왑: 같은 픽셀맵에 다른 팔레트를 적용해 변종을 만든다 (기획안 §11.1).
 const Sprites = (() => {
   const sprites = {};
-  const whites = new Map(); // 피격 플래시용 흰색 버전 캐시
-  const tints = new Map();  // 정예 변종 등 색조 버전 캐시
+  const whites = new Map();
+  const tints = new Map();
 
   function make(rows, pal) {
     const h = rows.length;
@@ -43,9 +44,8 @@ const Sprites = (() => {
     return whites.get(img);
   }
 
-  // 팔레트 스왑 대용: 색조를 덧입힌 변종 (정예 적 = 보라 기운)
   function tintOf(img, color = '#b13ae0', alpha = 0.45) {
-    const key = img.width + ':' + img.height + ':' + color;
+    const key = img.width + ':' + img.height + ':' + color + ':' + (img.__tid || (img.__tid = Math.random()));
     if (!tints.has(key)) {
       const c = document.createElement('canvas');
       c.width = img.width;
@@ -61,8 +61,9 @@ const Sprites = (() => {
     return tints.get(key);
   }
 
-  // ── 플레이어: 검사 ──────────────────────────────
-  sprites.player = make([
+  // ══════════════ 원본 픽셀맵 (팔레트 스왑으로 재사용) ══════════════
+
+  const PLAYER_ROWS = [
     '................',
     '......hhhh......',
     '.....hhhhhh.....',
@@ -79,13 +80,9 @@ const Sprites = (() => {
     '....dd....dd....',
     '...bbb....bbb...',
     '................',
-  ], {
-    h: '#94a1b8', f: '#f0c297', k: '#1a1c2c',
-    t: '#3b5dc9', y: '#f7b32b', d: '#29366f', b: '#6b4034',
-  });
+  ];
 
-  // ── 슬라임 ──────────────────────────────────────
-  sprites.slime = make([
+  const SLIME_ROWS = [
     '................',
     '................',
     '................',
@@ -98,12 +95,9 @@ const Sprites = (() => {
     '.gggggggggggggg.',
     '..dddddddddddd..',
     '................',
-  ], {
-    g: '#38b764', a: '#a7f070', d: '#257179', W: '#f4f4f4', k: '#1a1c2c',
-  });
+  ];
 
-  // ── 해골 궁수 ───────────────────────────────────
-  sprites.archer = make([
+  const ARCHER_ROWS = [
     '................',
     '......wwww......',
     '.....wwwwww.....',
@@ -120,12 +114,9 @@ const Sprites = (() => {
     '.....ww..ww.....',
     '................',
     '................',
-  ], {
-    w: '#e8e0cf', m: '#a99e8c', k: '#5c1e1e',
-  });
+  ];
 
-  // ── 돌진 멧돼지 ─────────────────────────────────
-  sprites.boar = make([
+  const BOAR_ROWS = [
     '................',
     '..dd............',
     '.dddd......dd...',
@@ -138,12 +129,9 @@ const Sprites = (() => {
     '..dd..dd.dd.d...',
     '................',
     '................',
-  ], {
-    b: '#8d5a3b', d: '#5e3a26', k: '#1a1c2c', w: '#f4f4f4',
-  });
+  ];
 
-  // ── 보스: 무덤지기 카론 (사신) ──────────────────
-  sprites.boss = make([
+  const REAPER_ROWS = [
     '......kkkkkk......',
     '.....kkkkkkkk.....',
     '....kkkkkkkkkk....',
@@ -162,12 +150,158 @@ const Sprites = (() => {
     '..ppp.pppp.ppp....',
     '...pp..ppp..pp....',
     '..................',
-  ], {
+  ];
+
+  const MUSHROOM_ROWS = [
+    '................',
+    '......mmmm......',
+    '....mmmmmmmm....',
+    '...mmMMmmMMmm...',
+    '..mmmmmmmmmmmm..',
+    '..MmmmmmmmmmmM..',
+    '...ssssssssss...',
+    '.....ssssss.....',
+    '.....sksskss....',
+    '.....ssssss.....',
+    '....ss....ss....',
+  ];
+
+  const BAT_ROWS = [
+    '................',
+    '.ww..........ww.',
+    '.wwww......wwww.',
+    '..wwwwwwwwwwww..',
+    '..wwwbbbbbbwww..',
+    '...wbbkbbkbbw...',
+    '....bbbbbbbb....',
+    '.....b.bb.b.....',
+  ];
+
+  const SPIDER_ROWS = [
+    '................',
+    '..l..l....l..l..',
+    '...l.l.ll.l.l...',
+    '....bbbbbbbb....',
+    '...bbrrbbrrbb...',
+    '...bbbbbbbbbb...',
+    '..l.bbbbbbbb.l..',
+    '..l..bbbbbb..l..',
+    '.l....bbbb....l.',
+    '.l............l.',
+  ];
+
+  const GOLEM_ROWS = [
+    '................',
+    '....gggggggg....',
+    '...gggggggggg...',
+    '...ggkkggkkgg...',
+    '...gggggggggg...',
+    '..ggddggggddgg..',
+    '.gg.gggggggg.gg.',
+    '.gg.gggggggg.gg.',
+    '.gg.dggggggd.gg.',
+    '....gggggggg....',
+    '....ggg..ggg....',
+    '....ggg..ggg....',
+    '...dggg..gggd...',
+  ];
+
+  const WRAITH_ROWS = [
+    '................',
+    '......wwww......',
+    '....wwwwwwww....',
+    '...wwwwwwwwww...',
+    '...wwkwwwwkww...',
+    '...wwwwwwwwww...',
+    '....wwwmmwww....',
+    '...wwwwwwwwww...',
+    '...wwwwwwwwww...',
+    '....wwwwwwww....',
+    '....ww.ww.ww....',
+    '.....w..w..w....',
+  ];
+
+  const NECRO_ROWS = [
+    '................',
+    '......nnnn......',
+    '.....nnnnnn.....',
+    '.....nffffn.....',
+    '.....nfgfgn.....',
+    '.....nnnnnn.....',
+    '....nnnnnnnn....',
+    '...nnnnnnnnnn...',
+    '...nn.nnnn.nn...',
+    '...nnnnnnnnnn...',
+    '...nnnnnnnnnn...',
+    '...nn.nnnn.nn...',
+    '....n..nn..n....',
+  ];
+
+  // ══════════════ 스프라이트 생성 ══════════════
+
+  sprites.player = make(PLAYER_ROWS, {
+    h: '#94a1b8', f: '#f0c297', k: '#1a1c2c',
+    t: '#3b5dc9', y: '#f7b32b', d: '#29366f', b: '#6b4034',
+  });
+
+  // 일반 적
+  sprites.slime = make(SLIME_ROWS, {
+    g: '#38b764', a: '#a7f070', d: '#257179', W: '#f4f4f4', k: '#1a1c2c',
+  });
+  sprites.toxicSlime = make(SLIME_ROWS, { // 팔레트 스왑: 독 슬라임
+    g: '#8a3a8c', a: '#c56cf0', d: '#5c1e5e', W: '#d8f070', k: '#1a1c2c',
+  });
+  sprites.archer = make(ARCHER_ROWS, {
+    w: '#e8e0cf', m: '#a99e8c', k: '#5c1e1e',
+  });
+  sprites.boar = make(BOAR_ROWS, {
+    b: '#8d5a3b', d: '#5e3a26', k: '#1a1c2c', w: '#f4f4f4',
+  });
+  sprites.lavaHound = make(BOAR_ROWS, { // 팔레트 스왑: 용암 개
+    b: '#d35400', d: '#7a1010', k: '#ffd866', w: '#ffd866',
+  });
+  sprites.mushroom = make(MUSHROOM_ROWS, {
+    m: '#8a5ac2', M: '#d8c8f0', s: '#d9cbb8', k: '#1a1c2c',
+  });
+  sprites.bat = make(BAT_ROWS, {
+    w: '#5c5c74', b: '#3a2a52', k: '#e43b44',
+  });
+  sprites.spider = make(SPIDER_ROWS, {
+    b: '#241832', r: '#e43b44', l: '#3a3a4a',
+  });
+  sprites.golem = make(GOLEM_ROWS, {
+    g: '#5d6b84', d: '#3d4a5c', k: '#5ce0e6',
+  });
+  sprites.wraith = make(WRAITH_ROWS, {
+    w: '#a9c1d8', k: '#16121f', m: '#5d6b84',
+  });
+  sprites.fireSpirit = make(WRAITH_ROWS, { // 팔레트 스왑: 화염 정령
+    w: '#ff9a3c', k: '#7a1010', m: '#ffd866',
+  });
+  sprites.necro = make(NECRO_ROWS, {
+    n: '#2a4a3a', f: '#120d16', g: '#38b764',
+  });
+
+  // 보스
+  sprites.boss = make(REAPER_ROWS, { // 1층: 무덤지기 카론
     k: '#16121f', w: '#e8e0cf', r: '#b13ae0', m: '#a99e8c',
     p: '#241832', q: '#4a3070',
   });
+  sprites.bossSpore = make(MUSHROOM_ROWS, { // 2층: 포자왕 (거대 렌더링)
+    m: '#38b764', M: '#d8f070', s: '#e8e0cf', k: '#5c1e5e',
+  });
+  sprites.bossGolem = make(GOLEM_ROWS, { // 3층: 간수장 (거대 렌더링)
+    g: '#6b7a94', d: '#454f63', k: '#e43b44',
+  });
+  sprites.bossIgnis = make(WRAITH_ROWS, { // 4층: 용암 심장 (거대 렌더링)
+    w: '#ff7043', k: '#ffd866', m: '#7a1010',
+  });
+  sprites.bossAbyss = make(REAPER_ROWS, { // 5층: 심연의 군주
+    k: '#0a0612', w: '#c9b8e8', r: '#e43b44', m: '#5c1e5e',
+    p: '#16101f', q: '#8a1c2c',
+  });
 
-  // ── 보물 상자 ───────────────────────────────────
+  // 오브젝트
   const chestPal = { b: '#5e3a26', B: '#8d5a3b', g: '#f7b32b', k: '#120d16' };
   sprites.chest = make([
     '................',
@@ -194,7 +328,6 @@ const Sprites = (() => {
     '................',
   ], chestPal);
 
-  // ── XP 보석 ─────────────────────────────────────
   sprites.gem = make([
     '...c...',
     '..ccc..',
@@ -205,7 +338,6 @@ const Sprites = (() => {
     '...c...',
   ], { c: '#2ec4b6', C: '#a9fff7' });
 
-  // ── HUD 하트 ────────────────────────────────────
   const heartMap = [
     '.rr..rr.',
     'rArrrrrr',
@@ -217,7 +349,6 @@ const Sprites = (() => {
   sprites.heart = make(heartMap, { r: '#e43b44', A: '#f5817e' });
   sprites.heartEmpty = make(heartMap, { r: '#3a3a4a', A: '#4a4a5c' });
 
-  // ── 화살 (오른쪽 방향 기준, 코드에서 회전) ───────
   sprites.arrow = make([
     '........',
     'ssssssww',

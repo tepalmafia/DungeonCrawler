@@ -80,6 +80,19 @@ const AudioSys = {
   },
 
   orb()   { this._tone({ type: 'sine', f0: 880 + Math.random() * 220, dur: 0.06, vol: 0.15 }); },
+  clank() { this._tone({ type: 'square', f0: 1200, f1: 700, dur: 0.06, vol: 0.25 }); this._noise({ dur: 0.05, vol: 0.2, freq: 3000, q: 3 }); },
+
+  // 유물 획득 팡파레 — 등급이 높을수록 화려하게
+  relic(rarity) {
+    const seqs = {
+      common:    [523, 784],
+      rare:      [523, 659, 988],
+      epic:      [523, 659, 784, 1175],
+      legendary: [392, 523, 659, 784, 1047, 1319],
+    };
+    (seqs[rarity] || seqs.common).forEach((f, i) =>
+      this._tone({ type: 'triangle', f0: f, dur: 0.16, vol: 0.3, delay: i * 0.09 }));
+  },
   chest() { this._tone({ type: 'triangle', f0: 392, dur: 0.1, vol: 0.3 }); this._tone({ type: 'triangle', f0: 587, dur: 0.12, vol: 0.3, delay: 0.09 }); this._tone({ type: 'triangle', f0: 784, dur: 0.16, vol: 0.3, delay: 0.18 }); },
   roar()  { this._tone({ type: 'sawtooth', f0: 70, f1: 38, dur: 0.7, vol: 0.55 }); this._noise({ dur: 0.5, vol: 0.3, freq: 250, q: 0.6 }); },
 
