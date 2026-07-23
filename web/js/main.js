@@ -1114,7 +1114,7 @@ const Game = {
     for (const a of this.arrows) {
       const style = PROJ_STYLES[a.kind] || PROJ_STYLES.arrow;
       if (style.sprite) {
-        Renderer.drawSprite(Sprites.arrow, a.x, a.y, { rot: Math.atan2(a.dir.y, a.dir.x) });
+        Renderer.drawSprite(Sprites.arrow, a.x, a.y, { rot: Math.atan2(a.dir.y, a.dir.x), scale: 3 });
       } else {
         ctx.fillStyle = style.color;
         ctx.beginPath();
@@ -1131,7 +1131,7 @@ const Game = {
     // 플레이어 투사체
     for (const b of this.pbolts) {
       if (b.kind === 'parrow') {
-        Renderer.drawSprite(Sprites.arrow, b.x, b.y, { rot: Math.atan2(b.dir.y, b.dir.x) });
+        Renderer.drawSprite(Sprites.arrow, b.x, b.y, { rot: Math.atan2(b.dir.y, b.dir.x), scale: 3 });
         if (b.finisher) {
           ctx.globalAlpha = 0.5;
           ctx.fillStyle = '#38b764';
@@ -1184,6 +1184,17 @@ const Game = {
       ctx.fillStyle = g;
       ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
     }
+
+    // [아트 리마스터] 층 컬러 그레이딩 + 상시 비네트 (던전 분위기)
+    ctx.fillStyle = World.theme.grade;
+    ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
+    const vg = ctx.createRadialGradient(
+      Renderer.W / 2, Renderer.H / 2, Renderer.H * 0.42,
+      Renderer.W / 2, Renderer.H / 2, Renderer.H * 0.85);
+    vg.addColorStop(0, 'rgba(5,3,10,0)');
+    vg.addColorStop(1, 'rgba(5,3,10,0.34)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
 
     HUD.draw(ctx, this);
 

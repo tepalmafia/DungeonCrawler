@@ -1,5 +1,5 @@
-// Canvas 렌더링 + 카메라 셰이크. 픽셀아트는 3배 확대(픽셀 퍼펙트)로 그린다.
-const SCALE = 3;
+// Canvas 렌더링 + 카메라 셰이크. 24px 픽셀아트는 2배 확대(픽셀 퍼펙트)로 그린다.
+const SCALE = 2;
 
 const Renderer = {
   canvas: null,
@@ -45,11 +45,22 @@ const Renderer = {
     this.ctx.translate(Math.round(this.offsetX), Math.round(this.offsetY));
   },
 
-  // 스프라이트를 중심 기준으로 그린다. squash: 스쿼시&스트레치 애니메이션용
-  drawSprite(img, x, y, { flip = false, alpha = 1, squashX = 1, squashY = 1, rot = 0 } = {}) {
+  // 스프라이트를 중심 기준으로 그린다. squash: 스쿼시&스트레치, shadow: 발밑 그림자
+  drawSprite(img, x, y, { flip = false, alpha = 1, squashX = 1, squashY = 1, rot = 0, scale = SCALE, shadow = false } = {}) {
     const ctx = this.ctx;
-    const w = img.width * SCALE * squashX;
-    const h = img.height * SCALE * squashY;
+    const w = img.width * scale * squashX;
+    const h = img.height * scale * squashY;
+
+    if (shadow) {
+      ctx.save();
+      ctx.globalAlpha = 0.28 * alpha;
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.ellipse(Math.round(x), Math.round(y + h / 2 - 4), w * 0.26, w * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(Math.round(x), Math.round(y));

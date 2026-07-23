@@ -318,13 +318,17 @@ function createPlayer(x, y, classId = 'knight') {
         });
       }
 
-      const bob = this.moving ? Math.abs(Math.sin(this.animT * 11)) * 3 : Math.sin(this.animT * 3) * 1;
-      const rot = this.moving ? Math.sin(this.animT * 11) * 0.08 : 0;
+      // 걷기 애니메이션: 프레임 교체 (벌림-정지-모음-정지 사이클) + 살짝 바운스
+      const frames = Sprites.playerFrames[cls.sprite];
+      const cycle = [1, 0, 2, 0];
+      const img = this.moving ? frames[cycle[Math.floor(this.animT * 9) % 4]] : frames[0];
+      const bob = this.moving ? Math.abs(Math.sin(this.animT * 11)) * 1.5 : Math.sin(this.animT * 3) * 1;
+      const rot = this.moving ? Math.sin(this.animT * 11) * 0.04 : 0;
       const flash = this.invuln > 0 && Math.floor(this.invuln * 18) % 2 === 0;
 
-      Renderer.drawSprite(flash ? Sprites.white(this.sprImg()) : this.sprImg(),
+      Renderer.drawSprite(flash ? Sprites.white(img) : img,
         this.x, this.y - bob, {
-          flip: this.flip, rot,
+          flip: this.flip, rot, shadow: true,
           alpha: this.invuln > 0 ? 0.8 : 1,
         });
 
