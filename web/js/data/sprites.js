@@ -562,23 +562,169 @@ const Sprites = (() => {
     mushroom:  { walk: [sprites.mushroom, make(MUSHROOM_WALK2, PAL.mushroom)] },
   };
 
-  // 보스
-  sprites.boss = make(REAPER_ROWS, { // 1층: 무덤지기 카론
+  // ══════════════ 보스 전용 대형 스프라이트 ══════════════
+  // pad(): 가장 긴 행 기준으로 오른쪽을 투명으로 채워 행 길이를 맞춘다
+  function pad(rows) {
+    const w = Math.max(...rows.map((r) => r.length));
+    return rows.map((r) => r.padEnd(w, '.'));
+  }
+
+  // 1층: 무덤지기 카론 — 낫을 든 사신
+  sprites.boss = make(pad([
+    '..........kkkkkkkkkk',
+    '........kkkkkkkkkkkkkk',
+    '.......kkkkkkkkkkkkkkkk',
+    '......kkkkkkkkkkkkkkkkkk....bb',
+    '......kkkkwwwwwwwwkkkkkk...bbb',
+    '.....kkkwwwwwwwwwwwwkkkk..bbbb',
+    '.....kkkwwwwwwwwwwwwkkk..bbbb',
+    '.....kkwwrrwwwwwwrrwwkk..bbb',
+    '.....kkwwrrwwwwwwrrwwkk..bbb',
+    '.....kkkwwwwwwwwwwwwkkk...bb',
+    '......kkwwmmwwwwmmwwkk....ss',
+    '......kkkwmmmmmmmmwkkk....ss',
+    '.......kkkwwmmmmwwkkk.....ss',
+    '........kkkkkkkkkkkk......ss',
+    '......ppppppppppppppp.....ss',
+    '.....pppppppppppppppppp...ss',
+    '....pppppqqqqqqqqqqppppp..ss',
+    '...pppppppppppppppppppppp.ss',
+    '...pppppppppppppppppppp.ssss',
+    '...ppppppppppppppppppppwsssw',
+    '...pqqpppppppppppppppp..ss',
+    '...pppppppppppppppppppp.ss',
+    '...pppppppppppppppppppp.ss',
+    '...ppppppppppppppppppp..ss',
+    '....pppppp.pppppppppp...ss',
+    '....ppppp...ppppppppp...ss',
+    '.....pppp....pppp.ppp...ss',
+    '.....ppp......ppp..pp',
+    '......pp.......pp',
+    '.......p........p',
+  ]), {
     k: '#16121f', w: '#e8e0cf', r: '#b13ae0', m: '#8a8074',
-    p: '#241832', q: '#4a3070',
+    p: '#241832', q: '#4a3070', s: '#6b4a34', b: '#c8d4e4',
   });
-  sprites.bossAbyss = make(REAPER_ROWS, { // 5층: 심연의 군주
-    k: '#0a0612', w: '#c9b8e8', r: '#e43b44', m: '#5c1e5e',
-    p: '#16101f', q: '#8a1c2c',
+
+  // 2층: 포자왕 믹서스 — 거대 버섯 군주
+  sprites.bossSpore = make(pad([
+    '...............mmmmmmmmmm',
+    '...........mmmmmmmmmmmmmmmm',
+    '.........mmmmmmMMMMmmmmmmmmmm',
+    '.......mmmmmmmMMMMMMmmmmmmmmmm',
+    '......mmmmmmmmmMMMMmmmmmmMMmmmm',
+    '.....mmmMMmmmmmmmmmmmmmmMMMMmmmm',
+    '....mmmMMMMmmmmmmmmmmmmmmMMmmmmmm',
+    '....mmmmMMmmmmmmmmmmmmmmmmmmmmmmm',
+    '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
+    '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
+    '...DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
+    '....DDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
+    '.......ssssssssssssssssssssss',
+    '......ssssssssssssssssssssssss',
+    '......ssskkkssssssssssskkksss',
+    '......ssskkkssssssssssskkksss',
+    '......ssssssssssssssssssssssss',
+    '......sssssrrrrrrrrrrrrsssssss',
+    '......ssssrrSSSSSSSSSSrrssssss',
+    '......sssssssssssssssssssssss',
+    '.......sssssssssssssssssssss',
+    '.......SsssssssssssssssssssS',
+    '........ssss...ssss...ssss',
+    '.......sss......sss....sss',
+  ]), {
+    m: '#38b764', M: '#d8f070', D: '#1d7a42',
+    s: '#e8e0cf', S: '#b8ae9c', k: '#5c1e5e', r: '#8a3a8c',
   });
-  sprites.bossSpore = make(MUSHROOM_ROWS, { // 2층: 포자왕 (거대 렌더링)
-    m: '#38b764', M: '#d8f070', D: '#1d7a42', s: '#e8e0cf', k: '#5c1e5e',
+
+  // 3층: 간수장 바르곤 — 사슬 묶인 거대 골렘
+  sprites.bossGolem = make(pad([
+    '..........gggggggggggggggg',
+    '........gggggggggggggggggggg',
+    '........ggGGGGGGGGGGGGGGGGgg',
+    '........ggkkkkggggggkkkkggg',
+    '........ggkkkkggggggkkkkggg',
+    '........gggggggddddggggggg',
+    '......dggggggggggggggggggggd',
+    '....ggg.ggggggggggggggggg.ggg',
+    '...gggg.ggddggggggggddgg.gggg',
+    '..ggggg.gggggggggggggggg.ggggg',
+    '..gggdg.gggggggggggggggg.gdggg',
+    '..ggggg.ggggddddddddgggg.ggggg',
+    '..cgggg.gggddggggggddggg.ggggc',
+    '..cdggg.gggggggggggggggg.gggdc',
+    '..ggggg..dggggggggggggd..ggggg',
+    '...ggg....gggggggggggg....ggg',
+    '...ccc....gggggggggggg....ccc',
+    '...c.c....ggggg..ggggg....c.c',
+    '..........ggggg..ggggg',
+    '..........ggggg..ggggg',
+    '.........dggggd..dggggd',
+    '.........gggggg..gggggg',
+  ]), {
+    g: '#6b7a94', d: '#454f63', G: '#8a9ab4', k: '#e43b44', c: '#9aa0b4',
   });
-  sprites.bossGolem = make(GOLEM_ROWS, { // 3층: 간수장 (거대 렌더링)
-    g: '#6b7a94', d: '#454f63', k: '#e43b44',
+
+  // 4층: 용암 심장 이그니스 — 백열하는 화염 정령체
+  sprites.bossIgnis = make(pad([
+    '................oo',
+    '...........oo..oooo..oo',
+    '..........oooo.oooo.oooo',
+    '..........ooooooooooooooo',
+    '.........ooooyyyyyyyyoooo',
+    '........oooyyyyyyyyyyyyooo',
+    '.......oooyyyyyyyyyyyyyyoo',
+    '.......ooyyykkyyyyyykkyyyoo',
+    '.......ooyyykkyyyyyykkyyyoo',
+    '......oooyyyyyyyyyyyyyyyyooo',
+    '......ooyyyyWWWWWWWWyyyyyyoo',
+    '......ooyyyWWWWWWWWWWyyyyyoo',
+    '......ooyyyWWWWWWWWWWyyyyyoo',
+    '......oooyyyWWWWWWWWyyyyyooo',
+    '.......ooyyyyyyyyyyyyyyyyoo',
+    '.......rooyyyyyyyyyyyyyyoor',
+    '.......roooyyyyyyyyyyyyooor',
+    '........roooyyyyyyyyyyooor',
+    '........rrooooyyyyyyooorr',
+    '.........rroooo.ooooorr',
+    '..........rroo...oorr',
+    '...........rr.....rr',
+  ]), {
+    o: '#ff7043', y: '#ffd866', W: '#fff7d0', r: '#7a1010', k: '#4a0a0a',
   });
-  sprites.bossIgnis = make(WRAITH_ROWS, { // 4층: 용암 심장 (거대 렌더링)
-    w: '#ff7043', k: '#ffd866', m: '#7a1010', W: '#d95420',
+
+  // 5층: 심연의 군주 눅스 — 왕관과 뿔을 지닌 그림자 군주
+  sprites.bossAbyss = make(pad([
+    '...KK..................KK',
+    '..KKK......cccccc......KKK',
+    '..KK....cc.cccccc.cc....KK',
+    '..KK....cccccccccccc....KK',
+    '...KK..kkkkkkkkkkkkkk..KK',
+    '...KKkkkkkkkkkkkkkkkkkkKK',
+    '....kkkkkkkkkkkkkkkkkkkk',
+    '....kkkwwwwwwwwwwwwwwkkk',
+    '...kkkwwwwwwwwwwwwwwwwkkk',
+    '...kkwwrrrwwwwwwwwrrrwwkk',
+    '...kkwwrrrwwwwwwwwrrrwwkk',
+    '...kkkwwwwwwwwwwwwwwwwkkk',
+    '....kkwwwmmmmmmmmmmwwkk',
+    '.....kkkwwmmmmmmwwkkkk',
+    '......kkkkkkkkkkkkkkk',
+    '....pppppppppppppppppp',
+    '...pppppppppppppppppppp',
+    '..ppppqqqqppppppqqqqpppp',
+    '..pppppppppppppppppppppp',
+    '..pqqpppppppppppppppppqp',
+    '..pppppppppppppppppppppp',
+    '..pppppppppppppppppppppp',
+    '...ppppp.pppppppp.ppppp',
+    '...pppp...pppppp...pppp',
+    '....ppp....pppp.....ppp',
+    '.....pp.....pp.......pp',
+    '......p......p',
+  ]), {
+    K: '#3d2c5c', c: '#f7b32b', k: '#0a0612', w: '#c9b8e8',
+    r: '#e43b44', m: '#5c1e5e', p: '#16101f', q: '#8a1c2c',
   });
 
   // ══════════════ 오브젝트 ══════════════

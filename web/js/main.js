@@ -1185,6 +1185,26 @@ const Game = {
       }
     }
 
+    // 자동 타겟 표시 (모서리 브래킷)
+    if (this.state === 'play' && this.player) {
+      const t = this.player.autoTarget(this);
+      if (t) {
+        const r = t.r + 8;
+        const L = 6;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(228,59,68,0.75)';
+        ctx.lineWidth = 2;
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          ctx.beginPath();
+          ctx.moveTo(t.x + sx * r, t.y + sy * r - sy * L);
+          ctx.lineTo(t.x + sx * r, t.y + sy * r);
+          ctx.lineTo(t.x + sx * r - sx * L, t.y + sy * r);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
     // 플레이어 투사체
     for (const b of this.pbolts) {
       if (b.kind === 'parrow') {

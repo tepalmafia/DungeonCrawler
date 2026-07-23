@@ -11,7 +11,7 @@
 
 const BOSS_DEFS = {
   1: {
-    name: '무덤지기 카론', sprite: 'boss', scale: 1.15, hp: 60, speed: 42,
+    name: '무덤지기 카론', sprite: 'boss', scale: 1, r: 26, hp: 60, speed: 42,
     banner: '무덤지기 카론',
     p1: ['sweep', 'fan:soul'],
     p2: ['sweep', 'fan:soul', 'curse'],
@@ -19,7 +19,7 @@ const BOSS_DEFS = {
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
-    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.9, hp: 95, speed: 34,
+    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 95, speed: 34,
     banner: '포자왕 믹서스',
     p1: ['fan:spore', 'ring', 'summon:mushroom'],
     p2: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
@@ -27,7 +27,7 @@ const BOSS_DEFS = {
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
   },
   3: {
-    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.8, hp: 125, speed: 30,
+    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.1, r: 33, hp: 125, speed: 30,
     banner: '간수장 바르곤',
     p1: ['charge', 'ring'],
     p2: ['charge', 'fan:rock', 'ring', 'charge'],
@@ -35,7 +35,7 @@ const BOSS_DEFS = {
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
-    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.8, hp: 140, speed: 44,
+    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 140, speed: 44,
     banner: '용암 심장 이그니스',
     p1: ['fan:fire', 'charge:trail'],
     p2: ['fan:fire', 'charge:trail', 'curse:fire', 'ring'],
@@ -43,7 +43,7 @@ const BOSS_DEFS = {
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
-    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.7, hp: 175, speed: 50,
+    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 175, speed: 50,
     banner: '심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring'],
     p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite'],
@@ -60,7 +60,7 @@ function createBoss(floor, x, y) {
     def,
     x, y,
     hp: def.hp, maxHp: def.hp,
-    r: 24 * Math.max(1, def.scale * 0.7),
+    r: def.r || 24,
     speed: def.speed, xpVal: 0,
     dead: false, elite: false,
     spawnT: 0.6, // 등장 연출
@@ -350,7 +350,7 @@ function createBoss(floor, x, y) {
       const img = this.flash > 0 ? Sprites.white(Sprites[this.def.sprite]) : Sprites[this.def.sprite];
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
-      ctx.ellipse(this.x, this.y + 26 * this.def.scale, 22 * this.def.scale, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(this.x, this.y + this.r + 8, this.r * 1.05, 7, 0, 0, Math.PI * 2);
       ctx.fill();
       const shakeX = this.state === 'windup' && this.attack?.kind === 'charge' ? (Math.random() - 0.5) * 5 : 0;
       Renderer.drawSprite(img, this.x + shakeX, this.y - bob, {
