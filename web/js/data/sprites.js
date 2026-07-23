@@ -148,6 +148,18 @@ const Sprites = (() => {
     },
   };
 
+  // 일부 행만 바꾼 변형 픽셀맵 생성 (걷기/공격 프레임용)
+  function withRows(rows, replacements) {
+    const out = [...rows];
+    for (const [idx, row] of Object.entries(replacements)) out[Number(idx)] = row;
+    return out;
+  }
+
+  // 공격 자세: 오른팔을 앞으로 뻗는다 (좌우는 flip으로 처리)
+  const PLAYER_TOP_ATTACK = withRows(PLAYER_TOP, {
+    12: '.....ffttttttttttffff...',
+  });
+
   sprites.playerFrames = {};
   for (const key of Object.keys(CLASS_PALETTES)) {
     const pal = CLASS_PALETTES[key];
@@ -155,6 +167,7 @@ const Sprites = (() => {
       make([...PLAYER_TOP, ...PLAYER_LEGS_STAND], pal),
       make([...PLAYER_TOP, ...PLAYER_LEGS_APART], pal),
       make([...PLAYER_TOP, ...PLAYER_LEGS_CROSS], pal),
+      make([...PLAYER_TOP_ATTACK, ...PLAYER_LEGS_STAND], pal), // [3] 공격 자세
     ];
     sprites[key] = sprites.playerFrames[key][0]; // 정지 프레임 (거점 미리보기·잔상용)
   }
@@ -469,6 +482,85 @@ const Sprites = (() => {
   sprites.necro = make(NECRO_ROWS, {
     n: '#2a4a3a', f: '#0d0b14', g: '#38b764', s: '#d9cbb8', N: '#1c3328',
   });
+
+  // ══════════════ 적 걷기·공격 프레임 (행 치환 변형) ══════════════
+
+  const ARCHER_WALK2 = withRows(ARCHER_ROWS, {
+    15: '........ww....ww........',
+    16: '........ww....ww........',
+    17: '.......ww......ww.......',
+    18: '......www......www......',
+  });
+  const ARCHER_AIM = withRows(ARCHER_ROWS, { // 팔을 앞으로 뻗은 조준 자세
+    10: '......ww.wwwwwwwwww.....',
+  });
+
+  const BOAR_WALK2 = withRows(BOAR_ROWS, {
+    13: '..dbb.dbbb...dbb.dbbb...',
+    14: '...db..db.....db..db....',
+  });
+
+  const GOLEM_WALK2 = withRows(GOLEM_ROWS, {
+    14: '.....ggggg....ggggg.....',
+    15: '.....ggggg....ggggg.....',
+    16: '....dggggd....dggggd....',
+    17: '....gggggg....gggggg....',
+  });
+  const GOLEM_SLAM = withRows(GOLEM_ROWS, { // 두 팔을 들어올린 내려찍기 자세
+    5: '..gg.gggggggggggggg.gg..',
+    6: '..gg.dggggggggggggd.gg..',
+    7: '..gg..gggggggggggg..gg..',
+    8: '......ggddggggddgg......',
+    9: '......gggggggggggg......',
+    10: '......gggggggggggg......',
+    11: '......ggggddddgggg......',
+    12: '......dggggggggggd......',
+  });
+
+  const SPIDER_WALK2 = withRows(SPIDER_ROWS, {
+    3: '....l....l....l....l....',
+    4: '...l....ll....ll....l...',
+    5: '....l...ll....ll...l....',
+    11: '..l...bbbbbbbbbbbb...l..',
+    12: '.l.....bbbbbbbbbb.....l.',
+    14: 'l........bbbbbb........l',
+  });
+
+  const NECRO_WALK2 = withRows(NECRO_ROWS, {
+    17: '......nn..nnnn..nn......',
+    18: '......n....nn....n......',
+  });
+  const NECRO_SUMMON = withRows(NECRO_ROWS, { // 두 팔을 들어올린 소환 자세
+    8: '..s....nnnnnnnnnn....s..',
+    9: '..nn..nnnnnnnnnnnn..nn..',
+    10: '...nn..nnnnnnnnnn..nn...',
+    11: '......nnnnnnnnnnnn......',
+    12: '........nnnnnnnn........',
+  });
+
+  const MUSHROOM_WALK2 = withRows(MUSHROOM_ROWS, {
+    14: '......sss......sss......',
+  });
+
+  const PAL = {
+    archer: { w: '#e8e0cf', m: '#8a8074', k: '#5c1e1e' },
+    boar: { b: '#8d5a3b', B: '#a4714e', d: '#5e3a26', k: '#1a1c2c', w: '#f4f4f4' },
+    lavaHound: { b: '#d35400', B: '#f07a2a', d: '#7a1010', k: '#ffd866', w: '#ffd866' },
+    golem: { g: '#5d6b84', d: '#3d4a5c', k: '#5ce0e6' },
+    spider: { b: '#2a1c3d', r: '#e43b44', l: '#4a4a5c' },
+    necro: { n: '#2a4a3a', f: '#0d0b14', g: '#38b764', s: '#d9cbb8', N: '#1c3328' },
+    mushroom: { m: '#8a5ac2', M: '#d8c8f0', D: '#5c3a8a', s: '#d9cbb8', k: '#1a1c2c' },
+  };
+
+  sprites.enemyFrames = {
+    archer:    { walk: [sprites.archer, make(ARCHER_WALK2, PAL.archer)], attack: make(ARCHER_AIM, PAL.archer) },
+    boar:      { walk: [sprites.boar, make(BOAR_WALK2, PAL.boar)] },
+    lavaHound: { walk: [sprites.lavaHound, make(BOAR_WALK2, PAL.lavaHound)] },
+    golem:     { walk: [sprites.golem, make(GOLEM_WALK2, PAL.golem)], attack: make(GOLEM_SLAM, PAL.golem) },
+    spider:    { walk: [sprites.spider, make(SPIDER_WALK2, PAL.spider)] },
+    necro:     { walk: [sprites.necro, make(NECRO_WALK2, PAL.necro)], attack: make(NECRO_SUMMON, PAL.necro) },
+    mushroom:  { walk: [sprites.mushroom, make(MUSHROOM_WALK2, PAL.mushroom)] },
+  };
 
   // 보스
   sprites.boss = make(REAPER_ROWS, { // 1층: 무덤지기 카론
