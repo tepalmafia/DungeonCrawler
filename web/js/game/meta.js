@@ -66,6 +66,7 @@ const Meta = {
       heat: 0,       // 열기 (고난이도 0~5, 첫 클리어 후 해금)
       muted: false,
       codex: { kills: {}, relics: {}, traits: {} }, // 도감 기록
+      welcomed: false, // 환영 파편 지급 여부
     };
   },
 
@@ -75,6 +76,12 @@ const Meta = {
       this.data = raw ? { ...this._default(), ...JSON.parse(raw) } : this._default();
     } catch (e) {
       this.data = this._default();
+    }
+    // 환영 선물: 처음부터 다른 직업을 해금해 볼 수 있도록 파편 지급 (1회)
+    if (!this.data.welcomed) {
+      this.data.welcomed = true;
+      this.data.shards += 800;
+      this.save();
     }
   },
 
