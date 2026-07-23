@@ -1,17 +1,24 @@
-// 적 3종 — 기획안 원칙: 모든 공격에는 예고 동작(텔레그래프)이 있어야 한다.
+// 적 3종 + 정예 변종 — 기획안 원칙: 모든 공격에는 예고 동작(텔레그래프)이 있어야 한다.
 //  슬라임: 느린 추적 + 접촉 데미지 (기본기 연습용)
 //  해골 궁수: 거리 유지, 조준선 표시 후 발사 (회피 유도)
 //  멧돼지: 예고 후 직선 돌진, 벽에 박으면 그로기 (유인 플레이 유도)
+// 상태이상: burn(지속 피해) / shock(감속) — 특성 시너지의 재료
 
-function createEnemy(type, x, y) {
+function createEnemy(type, x, y, elite = false) {
   const base = {
-    type, x, y,
+    type, x, y, elite,
     dead: false,
-    flash: 0,       // 피격 시 흰색 점멸
-    kbx: 0, kby: 0, // 넉백
+    flash: 0,
+    kbx: 0, kby: 0,
     animT: Math.random() * 10,
     flip: false,
-    hitCd: 0,       // 접촉 데미지 쿨다운
+    hitCd: 0,
+    status: { burn: 0, burnTick: 0, shock: 0 },
+
+    // 감전 시 감속된 실효 속도
+    effSpeed() {
+      return this.speed * (this.status.shock > 0 ? 0.55 : 1);
+    },
 
     applyKnockback(dt) {
       if (Math.abs(this.kbx) > 1 || Math.abs(this.kby) > 1) {
@@ -36,11 +43,32 @@ function createEnemy(type, x, y) {
         game.hurtPlayer(dmg, { x: (p.x - this.x) / d, y: (p.y - this.y) / d });
       }
     },
+
+    // 스프라이트 선택: 피격 플래시 > 정예 색조 > 기본
+    skin(baseImg) {
+      if (this.flash > 0) return Sprites.white(baseImg);
+      if (this.elite) return Sprites.tint(baseImg);
+      return baseImg;
+    },
+
+    drawStatus(ctx) {
+      if (this.status.burn > 0 && Math.random() < 0.25) {
+        Particles.burst(this.x + (Math.random() - 0.5) * 14, this.y - 8, {
+          count: 1, colors: ['#ff7043', '#ffd866'], speed: 30, life: 0.35, size: 3, gravity: -140,
+        });
+      }
+      if (this.status.shock > 0 && Math.random() < 0.2) {
+        ctx.fillStyle = '#ffd866';
+        ctx.fillRect(this.x + (Math.random() - 0.5) * 22, this.y + (Math.random() - 0.5) * 18, 3, 3);
+      }
+    },
   };
 
+  let e;
+
   if (type === 'slime') {
-    return Object.assign(base, {
-      hp: 3, maxHp: 3, r: 14, speed: 62,
+    e = Object.assign(base, {
+      hp: 3, maxHp: 3, r: 14, speed: 62, xpVal: 5,
 
       update(dt, game) {
         this.tickTimers(dt);
@@ -48,27 +76,25 @@ function createEnemy(type, x, y) {
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y;
         const d = Math.hypot(dx, dy) || 1;
-        // 통통 튀며 접근 (사인파로 속도 변조)
         const hop = Math.max(0, Math.sin(this.animT * 6));
-        World.moveEntity(this, (dx / d) * this.speed * hop * dt, (dy / d) * this.speed * hop * dt);
+        const spd = this.effSpeed() * hop;
+        World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
         this.flip = dx < 0;
         this.touchPlayer(game, 1);
       },
 
-      draw() {
+      draw(ctx) {
         const squash = 1 + Math.sin(this.animT * 6) * 0.15;
-        const img = this.flash > 0 ? Sprites.white(Sprites.slime) : Sprites.slime;
-        Renderer.drawSprite(img, this.x, this.y, {
+        Renderer.drawSprite(this.skin(Sprites.slime), this.x, this.y, {
           flip: this.flip, squashX: 2 - squash, squashY: squash,
         });
+        this.drawStatus(ctx);
       },
     });
-  }
-
-  if (type === 'archer') {
-    return Object.assign(base, {
-      hp: 2, maxHp: 2, r: 13, speed: 88,
-      state: 'reposition', // reposition → aim → shoot
+  } else if (type === 'archer') {
+    e = Object.assign(base, {
+      hp: 2, maxHp: 2, r: 13, speed: 88, xpVal: 7,
+      state: 'reposition',
       stateT: 0,
       aimDir: { x: 1, y: 0 },
       strafe: Math.random() < 0.5 ? 1 : -1,
@@ -83,16 +109,16 @@ function createEnemy(type, x, y) {
         this.flip = dx < 0;
 
         if (this.state === 'reposition') {
-          // 이상적 거리(170~240) 유지하며 옆걸음
           let vx = 0, vy = 0;
           if (d < 170) { vx = -dx / d; vy = -dy / d; }
           else if (d > 240) { vx = dx / d; vy = dy / d; }
           else { vx = -dy / d * this.strafe; vy = dx / d * this.strafe; }
-          const hit = World.moveEntity(this, vx * this.speed * dt, vy * this.speed * dt);
+          const spd = this.effSpeed();
+          const hit = World.moveEntity(this, vx * spd * dt, vy * spd * dt);
           if (hit.x || hit.y) this.strafe *= -1;
           if (this.stateT > 1.1) { this.state = 'aim'; this.stateT = 0; }
         } else if (this.state === 'aim') {
-          // 텔레그래프: 조준선 표시. 마지막 0.25초에 방향 고정 → 대시로 회피 가능
+          // 텔레그래프: 조준선. 마지막 0.25초에 방향 고정 → 대시로 회피 가능
           if (this.stateT < 0.45) this.aimDir = { x: dx / d, y: dy / d };
           if (this.stateT > 0.7) {
             game.spawnArrow(this.x, this.y, this.aimDir);
@@ -105,7 +131,6 @@ function createEnemy(type, x, y) {
       },
 
       draw(ctx) {
-        // 조준선 텔레그래프
         if (this.state === 'aim') {
           const locked = this.stateT >= 0.45;
           ctx.save();
@@ -119,16 +144,14 @@ function createEnemy(type, x, y) {
           ctx.restore();
         }
         const bob = Math.sin(this.animT * 7) * 2;
-        const img = this.flash > 0 ? Sprites.white(Sprites.archer) : Sprites.archer;
-        Renderer.drawSprite(img, this.x, this.y - bob, { flip: this.flip });
+        Renderer.drawSprite(this.skin(Sprites.archer), this.x, this.y - bob, { flip: this.flip });
+        this.drawStatus(ctx);
       },
     });
-  }
-
-  if (type === 'boar') {
-    return Object.assign(base, {
-      hp: 5, maxHp: 5, r: 17, speed: 55,
-      state: 'wander', // wander → windup → charge → stunned
+  } else if (type === 'boar') {
+    e = Object.assign(base, {
+      hp: 5, maxHp: 5, r: 17, speed: 55, xpVal: 12,
+      state: 'wander',
       stateT: 0,
       chargeDir: { x: 1, y: 0 },
       wanderDir: { x: 1, y: 0 },
@@ -148,12 +171,11 @@ function createEnemy(type, x, y) {
             const a = Math.random() * Math.PI * 2;
             this.wanderDir = { x: Math.cos(a), y: Math.sin(a) };
           }
-          World.moveEntity(this, this.wanderDir.x * this.speed * dt, this.wanderDir.y * this.speed * dt);
+          const spd = this.effSpeed();
+          World.moveEntity(this, this.wanderDir.x * spd * dt, this.wanderDir.y * spd * dt);
           this.flip = this.wanderDir.x < 0;
-          // 플레이어 발견 → 돌진 준비
           if (d < 300) { this.state = 'windup'; this.stateT = 0; }
         } else if (this.state === 'windup') {
-          // 텔레그래프: 제자리에서 부들부들 + 흙먼지 (0.7초)
           this.chargeDir = { x: dx / d, y: dy / d };
           this.flip = dx < 0;
           if (Math.random() < 0.35) {
@@ -163,15 +185,13 @@ function createEnemy(type, x, y) {
           }
           if (this.stateT > 0.7) { this.state = 'charge'; this.stateT = 0; this.chargeDist = 0; }
         } else if (this.state === 'charge') {
-          const step = 430 * dt;
+          const step = 430 * (this.status.shock > 0 ? 0.7 : 1) * dt;
           const hit = World.moveEntity(this, this.chargeDir.x * step, this.chargeDir.y * step);
           this.chargeDist += step;
-          // 돌진 중 플레이어 타격: 큰 넉백
           if (p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r + 2) {
             game.hurtPlayer(1, this.chargeDir, 420);
           }
           if (hit.x || hit.y) {
-            // 벽에 박음 → 그로기 (반격 기회)
             this.state = 'stunned';
             this.stateT = 0;
             Renderer.shake(5, 0.25);
@@ -193,12 +213,10 @@ function createEnemy(type, x, y) {
       draw(ctx) {
         let shakeX = 0;
         let rot = 0;
-        if (this.state === 'windup') shakeX = (Math.random() - 0.5) * 4; // 부들부들
+        if (this.state === 'windup') shakeX = (Math.random() - 0.5) * 4;
         if (this.state === 'charge') rot = this.flip ? -0.08 : 0.08;
-        const img = this.flash > 0 ? Sprites.white(Sprites.boar) : Sprites.boar;
-        Renderer.drawSprite(img, this.x + shakeX, this.y, { flip: this.flip, rot });
+        Renderer.drawSprite(this.skin(Sprites.boar), this.x + shakeX, this.y, { flip: this.flip, rot });
 
-        // 그로기 별 표시
         if (this.state === 'stunned') {
           ctx.fillStyle = '#f7b32b';
           for (let i = 0; i < 3; i++) {
@@ -208,22 +226,26 @@ function createEnemy(type, x, y) {
               Math.round(this.y - 28 + Math.sin(a) * 5 - 2), 4, 4);
           }
         }
-        // 돌진 예고 느낌표
         if (this.state === 'windup') {
           ctx.fillStyle = '#ff4757';
           ctx.font = 'bold 18px monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 30);
         }
+        this.drawStatus(ctx);
       },
     });
+  } else {
+    throw new Error('알 수 없는 적 타입: ' + type);
   }
 
-  throw new Error('알 수 없는 적 타입: ' + type);
+  // 정예 보정: HP·속도·크기·XP 강화
+  if (elite) {
+    e.hp = Math.ceil(e.hp * 2.5);
+    e.maxHp = e.hp;
+    e.speed *= 1.15;
+    e.r *= 1.15;
+    e.xpVal *= 3;
+  }
+  return e;
 }
-
-const ENEMY_STATS = {
-  slime: { name: '슬라임' },
-  archer: { name: '해골 궁수' },
-  boar: { name: '돌진 멧돼지' },
-};

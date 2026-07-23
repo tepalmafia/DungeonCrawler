@@ -74,6 +74,15 @@ const AudioSys = {
       this._tone({ type: 'triangle', f0: f, dur: 0.12, vol: 0.25, delay: i * 0.09 }));
   },
 
+  levelup() {
+    [523, 659, 784, 1047].forEach((f, i) =>
+      this._tone({ type: 'triangle', f0: f, dur: 0.14, vol: 0.3, delay: i * 0.08 }));
+  },
+
+  orb()   { this._tone({ type: 'sine', f0: 880 + Math.random() * 220, dur: 0.06, vol: 0.15 }); },
+  chest() { this._tone({ type: 'triangle', f0: 392, dur: 0.1, vol: 0.3 }); this._tone({ type: 'triangle', f0: 587, dur: 0.12, vol: 0.3, delay: 0.09 }); this._tone({ type: 'triangle', f0: 784, dur: 0.16, vol: 0.3, delay: 0.18 }); },
+  roar()  { this._tone({ type: 'sawtooth', f0: 70, f1: 38, dur: 0.7, vol: 0.55 }); this._noise({ dur: 0.5, vol: 0.3, freq: 250, q: 0.6 }); },
+
   gameover() {
     [392, 311, 233, 155].forEach((f, i) =>
       this._tone({ type: 'triangle', f0: f, dur: 0.3, vol: 0.3, delay: i * 0.22 }));

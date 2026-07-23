@@ -3,6 +3,7 @@
 const Sprites = (() => {
   const sprites = {};
   const whites = new Map(); // 피격 플래시용 흰색 버전 캐시
+  const tints = new Map();  // 정예 변종 등 색조 버전 캐시
 
   function make(rows, pal) {
     const h = rows.length;
@@ -40,6 +41,24 @@ const Sprites = (() => {
       whites.set(img, c);
     }
     return whites.get(img);
+  }
+
+  // 팔레트 스왑 대용: 색조를 덧입힌 변종 (정예 적 = 보라 기운)
+  function tintOf(img, color = '#b13ae0', alpha = 0.45) {
+    const key = img.width + ':' + img.height + ':' + color;
+    if (!tints.has(key)) {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, c.width, c.height);
+      tints.set(key, c);
+    }
+    return tints.get(key);
   }
 
   // ── 플레이어: 검사 ──────────────────────────────
@@ -123,6 +142,69 @@ const Sprites = (() => {
     b: '#8d5a3b', d: '#5e3a26', k: '#1a1c2c', w: '#f4f4f4',
   });
 
+  // ── 보스: 무덤지기 카론 (사신) ──────────────────
+  sprites.boss = make([
+    '......kkkkkk......',
+    '.....kkkkkkkk.....',
+    '....kkkkkkkkkk....',
+    '....kkwwwwwwkk....',
+    '...kkwwwwwwwwkk...',
+    '...kkwrwwwwrwkk...',
+    '...kkwwwwwwwwkk...',
+    '....kkwmmmmwkk....',
+    '.....kkkkkkkk.....',
+    '....pppppppppp....',
+    '...pppppppppppp...',
+    '..pppppppppppppp..',
+    '..pppqqppppqqppp..',
+    '..pppppppppppppp..',
+    '..pppppppppppppp..',
+    '..ppp.pppp.ppp....',
+    '...pp..ppp..pp....',
+    '..................',
+  ], {
+    k: '#16121f', w: '#e8e0cf', r: '#b13ae0', m: '#a99e8c',
+    p: '#241832', q: '#4a3070',
+  });
+
+  // ── 보물 상자 ───────────────────────────────────
+  const chestPal = { b: '#5e3a26', B: '#8d5a3b', g: '#f7b32b', k: '#120d16' };
+  sprites.chest = make([
+    '................',
+    '..bbbbbbbbbbbb..',
+    '.bBBBBBBBBBBBBb.',
+    '.bBBBBBBBBBBBBb.',
+    '.bggggggggggggb.',
+    '.bBBBBBBggBBBBb.',
+    '.bBBBBBBggBBBBb.',
+    '.bBBBBBBBBBBBBb.',
+    '.bbbbbbbbbbbbbb.',
+    '................',
+  ], chestPal);
+  sprites.chestOpen = make([
+    '.bbbbbbbbbbbbbb.',
+    '.bkkkkkkkkkkkkb.',
+    '.bkkkkkkkkkkkkb.',
+    '.bbbbbbbbbbbbbb.',
+    '.bggggggggggggb.',
+    '.bBBBBBBBBBBBBb.',
+    '.bBBBBBBBBBBBBb.',
+    '.bBBBBBBBBBBBBb.',
+    '.bbbbbbbbbbbbbb.',
+    '................',
+  ], chestPal);
+
+  // ── XP 보석 ─────────────────────────────────────
+  sprites.gem = make([
+    '...c...',
+    '..ccc..',
+    '.ccCcc.',
+    'ccCCCcc',
+    '.ccCcc.',
+    '..ccc..',
+    '...c...',
+  ], { c: '#2ec4b6', C: '#a9fff7' });
+
   // ── HUD 하트 ────────────────────────────────────
   const heartMap = [
     '.rr..rr.',
@@ -142,5 +224,5 @@ const Sprites = (() => {
     '........',
   ], { s: '#a99e8c', w: '#f4f4f4' });
 
-  return { ...sprites, white: whiteOf };
+  return { ...sprites, white: whiteOf, tint: tintOf };
 })();
