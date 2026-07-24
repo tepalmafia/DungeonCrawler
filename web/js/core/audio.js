@@ -63,17 +63,54 @@ const AudioSys = {
     src.start(t, Math.random() * 0.5, dur + 0.05);
   },
 
-  slash()  { this._noise({ dur: 0.07, vol: 0.22, freq: 2400, q: 0.8 }); },
-  hit()    { this._noise({ dur: 0.06, vol: 0.4, freq: 900 }); this._tone({ f0: 180, f1: 60, dur: 0.08, vol: 0.35 }); },
-  crit()   { this.hit(); this._tone({ f0: 520, f1: 1100, dur: 0.12, vol: 0.3, delay: 0.02 }); },
-  hurt()   { this._tone({ type: 'sawtooth', f0: 200, f1: 55, dur: 0.25, vol: 0.5 }); this._noise({ dur: 0.15, vol: 0.3, freq: 500 }); },
-  die()    { this._tone({ f0: 320, f1: 40, dur: 0.2, vol: 0.35 }); this._noise({ dur: 0.12, vol: 0.25, freq: 700 }); },
-  dash()   { this._noise({ dur: 0.12, vol: 0.18, freq: 3000, q: 0.5 }); },
+  // 피치 변주 — 같은 효과음이 반복돼도 기계적으로 들리지 않게 ±spread 만큼 흔든다
+  _v(f, spread = 0.08) { return f * (1 - spread + Math.random() * spread * 2); },
+
+  // 검격: 콤보 단계(0/1/2)마다 음이 올라가고, 3타(마무리)는 낮은 붕 소리가 겹친다
+  slash(step = 0) {
+    const base = [2200, 2600, 3100][step] || 2400;
+    this._noise({ dur: step === 2 ? 0.1 : 0.07, vol: step === 2 ? 0.3 : 0.22, freq: this._v(base), q: 0.8 });
+    if (step === 2) this._tone({ type: 'sine', f0: 140, f1: 50, dur: 0.14, vol: 0.3 });
+  },
+  hit()    { this._noise({ dur: 0.06, vol: 0.4, freq: this._v(900) }); this._tone({ f0: this._v(180), f1: 60, dur: 0.08, vol: 0.35 }); },
+  crit()   {
+    this._noise({ dur: 0.08, vol: 0.45, freq: this._v(750) });
+    this._tone({ f0: this._v(160), f1: 45, dur: 0.12, vol: 0.42 });                     // 묵직한 저음
+    this._tone({ f0: this._v(520), f1: 1100, dur: 0.12, vol: 0.3, delay: 0.02 });       // 상승 임팩트
+    this._tone({ type: 'triangle', f0: this._v(1800), f1: 900, dur: 0.07, vol: 0.14, delay: 0.01 }); // 금속성 핑
+  },
+  hurt()   {
+    this._tone({ type: 'sine', f0: 65, f1: 30, dur: 0.22, vol: 0.65 });                 // 몸에 꽂히는 저음
+    this._tone({ type: 'sawtooth', f0: this._v(200), f1: 55, dur: 0.25, vol: 0.5 });
+    this._noise({ dur: 0.15, vol: 0.3, freq: 500 });
+  },
+  // 처치음: 적 급에 따라 무게가 다르다 (정예는 굵게, 보스는 굉음)
+  die(grade = 'small') {
+    if (grade === 'boss') {
+      this._tone({ f0: 200, f1: 25, dur: 0.6, vol: 0.55 });
+      this._tone({ type: 'sine', f0: 70, f1: 20, dur: 0.7, vol: 0.6, delay: 0.05 });
+      this._noise({ dur: 0.5, vol: 0.4, freq: 400, q: 0.5 });
+    } else if (grade === 'elite') {
+      this._tone({ f0: this._v(260), f1: 30, dur: 0.3, vol: 0.45 });
+      this._noise({ dur: 0.2, vol: 0.32, freq: this._v(550), q: 0.7 });
+    } else {
+      this._tone({ f0: this._v(320), f1: 40, dur: 0.2, vol: 0.35 });
+      this._noise({ dur: 0.12, vol: 0.25, freq: this._v(700) });
+    }
+  },
+  dash()   { this._noise({ dur: 0.12, vol: 0.18, freq: this._v(3000), q: 0.5 }); },
   pickup() { this._tone({ type: 'sine', f0: 660, dur: 0.08, vol: 0.3 }); this._tone({ type: 'sine', f0: 990, dur: 0.12, vol: 0.3, delay: 0.08 }); },
-  thud()   { this._tone({ type: 'sine', f0: 95, f1: 35, dur: 0.18, vol: 0.6 }); this._noise({ dur: 0.1, vol: 0.35, freq: 300 }); },
-  shoot()  { this._noise({ dur: 0.06, vol: 0.2, freq: 1800, q: 2 }); },
-  bow()    { this._tone({ type: 'square', f0: 320, f1: 150, dur: 0.07, vol: 0.2 }); this._noise({ dur: 0.05, vol: 0.15, freq: 2500, q: 1.5 }); },
-  bolt()   { this._tone({ type: 'sine', f0: 480, f1: 720, dur: 0.09, vol: 0.22 }); },
+  thud()   { this._tone({ type: 'sine', f0: this._v(95), f1: 35, dur: 0.18, vol: 0.6 }); this._noise({ dur: 0.1, vol: 0.35, freq: 300 }); },
+  shoot()  { this._noise({ dur: 0.06, vol: 0.2, freq: this._v(1800), q: 2 }); },
+  bow(finisher = false) {
+    this._tone({ type: 'square', f0: this._v(320), f1: 150, dur: 0.07, vol: finisher ? 0.26 : 0.2 });
+    this._noise({ dur: 0.05, vol: 0.15, freq: this._v(2500), q: 1.5 });
+    if (finisher) this._tone({ type: 'sine', f0: 120, f1: 60, dur: 0.1, vol: 0.2 });
+  },
+  bolt(finisher = false) {
+    this._tone({ type: 'sine', f0: this._v(480), f1: finisher ? 880 : 720, dur: 0.09, vol: finisher ? 0.28 : 0.22 });
+    if (finisher) this._noise({ dur: 0.08, vol: 0.14, freq: 1600, q: 1.2 });
+  },
   buy()    { this._tone({ type: 'triangle', f0: 587, dur: 0.08, vol: 0.3 }); this._tone({ type: 'triangle', f0: 880, dur: 0.1, vol: 0.3, delay: 0.07 }); },
   deny()   { this._tone({ type: 'square', f0: 140, f1: 90, dur: 0.12, vol: 0.25 }); },
   shard()  { this._tone({ type: 'sine', f0: 700 + Math.random() * 500, dur: 0.05, vol: 0.12 }); },

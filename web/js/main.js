@@ -34,6 +34,8 @@ const Game = {
   hitstop: 0,
   banner: null,
   vignette: 0,
+  critFlash: 0,  // 크리티컬 순간 화면 백색 섬광
+  hurtFlash: 0,  // 피격 순간 화면 적색 섬광
   blinkT: 0,
 
   xp: 0,
@@ -90,6 +92,8 @@ const Game = {
     this.hitstop = 0;
     this.banner = null;
     this.vignette = 0;
+    this.critFlash = 0;
+    this.hurtFlash = 0;
     this.xp = 0;
     this.level = 1;
     this.xpNext = 36;

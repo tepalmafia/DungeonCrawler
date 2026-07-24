@@ -47,6 +47,8 @@ const GamePlay = {
 
     this.time += dt;
     if (this.vignette > 0) this.vignette -= dt * 1.5;
+    if (this.critFlash > 0) this.critFlash -= dt * 3;
+    if (this.hurtFlash > 0) this.hurtFlash -= dt * 2;
     if (this.banner) {
       this.banner.life -= dt;
       if (this.banner.life <= 0) this.banner = null;

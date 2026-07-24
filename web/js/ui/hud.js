@@ -3,11 +3,14 @@ const HUD = {
   draw(ctx, game) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // ── 하트 (HP) ──
+    // ── 하트 (HP) — 피격 직후엔 부르르 떨린다 ──
     const p = game.player;
+    const hShake = game.hurtFlash > 0 ? game.hurtFlash * 22 : 0;
     for (let i = 0; i < p.maxHp; i++) {
       const img = i < p.hp ? Sprites.heart : Sprites.heartEmpty;
-      ctx.drawImage(img, 14 + (i % 10) * 32, 12 + Math.floor(i / 10) * 25, img.width * 3, img.height * 3);
+      const jx = hShake ? (Math.random() - 0.5) * hShake : 0;
+      const jy = hShake ? (Math.random() - 0.5) * hShake : 0;
+      ctx.drawImage(img, 14 + (i % 10) * 32 + jx, 12 + Math.floor(i / 10) * 25 + jy, img.width * 3, img.height * 3);
     }
     const hpRows = Math.ceil(p.maxHp / 10);
     const barY = 18 + hpRows * 25 + 4;
@@ -148,6 +151,16 @@ const HUD = {
       g.addColorStop(0, 'rgba(228,59,68,0)');
       g.addColorStop(1, `rgba(228,59,68,${Math.min(0.5, game.vignette)})`);
       ctx.fillStyle = g;
+      ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+    }
+
+    // ── 피격 적색 섬광 / 크리티컬 백색 섬광 (한 프레임의 손맛) ──
+    if (game.hurtFlash > 0) {
+      ctx.fillStyle = `rgba(228,59,68,${Math.min(0.14, game.hurtFlash * 0.6)})`;
+      ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+    }
+    if (game.critFlash > 0) {
+      ctx.fillStyle = `rgba(255,247,192,${Math.min(0.12, game.critFlash * 1.2)})`;
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
 
