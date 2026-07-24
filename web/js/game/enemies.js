@@ -2,6 +2,17 @@
 // 상태이상: burn(화상) / shock(감전·감속) / poison(중독) — 특성 시너지의 재료.
 // 층이 깊어질수록 HP가 배율로 강화된다.
 
+// ── 역할 태그 (AI 고도화) — 조향 오버레이(play._steer)와 예측 사격이 읽는다 ──
+// 돌격(melee, 기본값): 협공 각도 / 사격(shoot): 예측 사격 + 측면 재배치 / 지원(support): 후방 유지
+const ENEMY_ROLES = {
+  archer: 'shoot', sniper: 'shoot', frostArcher: 'shoot', turret: 'shoot', thornPlant: 'shoot',
+  wisp: 'shoot', crystal: 'shoot', imp: 'shoot', voidEye: 'shoot', mushroom: 'shoot', fireSpirit: 'shoot',
+  necro: 'support', shaman: 'support',
+};
+function enemyRole(e) {
+  return ENEMY_ROLES[e.type] || 'melee';
+}
+
 function createEnemy(type, x, y, elite = false, floorScale = 1) {
   const base = {
     type, x, y, elite,
@@ -53,13 +64,20 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
 
     touchPlayer(game, dmg) {
       const p = game.player;
-      if (this.hitCd > 0 || p.invuln > 0) return;
-      if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
+      if (this.hitCd > 0) return;
+      const d = Math.hypot(p.x - this.x, p.y - this.y);
+      if (d < p.r + this.r) {
+        const dir = { x: (p.x - this.x) / (d || 1), y: (p.y - this.y) / (d || 1) };
+        if (p.invuln > 0) {
+          // 무적 중 접촉은 피해가 없지만 — 대시 무적이라면 '완벽 회피' 판정 기회다
+          // (hurtPlayer의 무적 분기가 처리. 기존엔 여기서 끊겨 근접 몹 상대 완벽 회피가 불가능했다)
+          if (p.dashTimer > 0) game.hurtPlayer(dmg, dir);
+          return;
+        }
         this.hitCd = 0.8;
         // 심층 압박 (R1): 7층+ 정예·우두머리의 접촉은 2 — 후반에도 죽음이 가깝다
         if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);
-        const d = Math.hypot(p.x - this.x, p.y - this.y) || 1;
-        game.hurtPlayer(dmg, { x: (p.x - this.x) / d, y: (p.y - this.y) / d });
+        game.hurtPlayer(dmg, dir);
       }
     },
 
