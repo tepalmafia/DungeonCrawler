@@ -200,9 +200,8 @@ const HUD = {
       ctx.textAlign = 'right';
       ctx.font = 'bold 12px monospace';
       ctx.fillStyle = '#b13ae0';
-      let botLabel = '🤖 봇 모드';
-      if (Bot.ff > 1) botLabel += ` ×${Bot.ff}`;
-      if (Bot.loop) botLabel += ` (런 ${Bot.runs}·승 ${Bot.wins})`;
+      let botLabel = `🤖 봇 모드 ×${Bot.ff} (1~4 배속)`;
+      if (Bot.loop) botLabel += ` · 런 ${Bot.runs}·승 ${Bot.wins}`;
       ctx.fillText(botLabel, Renderer.W - 16, 30);
       const rep = Bot.deathReport();
       if (rep.total > 0) {
