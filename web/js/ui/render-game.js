@@ -108,6 +108,36 @@ const GameRender = {
           ctx.fill();
           ctx.globalAlpha = 1;
         }
+      } else if (it.kind === 'mystery') {
+        // 미지의 기연: 소용돌이치는 보라 기운 + 물음표 — 정체는 받아야 안다
+        if (!it.used) {
+          ctx.globalAlpha = 0.25 + Math.sin(it.t * 3) * 0.12;
+          ctx.fillStyle = '#b13ae0';
+          ctx.beginPath(); ctx.arc(it.x, it.y - 4, 34 + Math.sin(it.t * 2) * 5, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = '#241832';
+        ctx.fillRect(it.x - 13, it.y - 2, 26, 14);
+        ctx.fillStyle = '#3d2c5c';
+        ctx.fillRect(it.x - 10, it.y - 10, 20, 10);
+        if (!it.used) {
+          for (let k = 0; k < 3; k++) {
+            const a = it.t * 1.6 + (k / 3) * Math.PI * 2;
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = '#c9b8e8';
+            ctx.fillRect(it.x + Math.cos(a) * 20 - 1.5, it.y - 8 + Math.sin(a) * 9 - 1.5, 3, 3);
+            ctx.globalAlpha = 1;
+          }
+          ctx.font = 'bold 16px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#b13ae0';
+          ctx.fillText('?', it.x, it.y - 16);
+          ctx.font = 'bold 12px monospace';
+          ctx.fillText('미지의 기연', it.x, it.y - 44);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('받아들이기 전엔 알 수 없다', it.x, it.y - 30);
+        }
       } else if (it.kind === 'cursedChest') {
         // 저주받은 상자: 보라 기운 + 거래 조건 라벨
         if (!it.used) {

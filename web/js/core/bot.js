@@ -260,6 +260,7 @@ const Bot = {
       const it = game.interactables.find((i) => {
         if (i.used) return false;
         if (i.kind === 'chest' || i.kind === 'camp') return true;
+        if (i.kind === 'mystery') return p.maxHp >= 4 && p.hp >= 3;              // 도박은 최악을 감당할 수 있을 때만
         if (i.kind === 'cursedChest') return p.maxHp >= 3;                       // 최대 HP 여유가 있으면 유물 거래 수락
         if (i.kind === 'bloodAltar') return p.hp >= 4 && p.hp >= p.maxHp - 1;    // 체력이 넉넉할 때만 피의 계약
         return false;

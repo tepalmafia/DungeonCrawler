@@ -459,6 +459,52 @@ const GamePlay = {
           p.hp = Math.min(p.maxHp, p.hp + heal);
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
+        } else if (it.kind === 'mystery') {
+          // 미지의 기연: 수락하는 순간 정체가 드러난다 (60% 순이익 / 25% 대가 있는 이익 / 15% 손해)
+          const roll = Math.random();
+          this.hurtFlash = 0.15;
+          Renderer.shake(4, 0.25);
+          Particles.burst(it.x, it.y, { count: 20, colors: ['#b13ae0', '#ffd866', '#241832'], speed: 160, life: 0.5, size: 3 });
+          if (roll < 0.25) {
+            const rolled = rollRelics(p, 1, false);
+            if (rolled.length > 0) this.acquireRelic(rolled[0]);
+            else { Meta.data.shards += 40; Meta.save(); Particles.text(p.x, p.y - 30, '◆ +40', { color: '#2ec4b6', size: 15 }); }
+            this.banner = { text: '기연 — 잠들어 있던 유물을 얻었다!', life: 2.0, maxLife: 2.0, color: '#f7b32b' };
+          } else if (roll < 0.40) {
+            p.bonusAtk += 1;
+            this.banner = { text: '기연 — 힘이 깃든다 (공격력 +1)', life: 2.0, maxLife: 2.0, color: '#ffd866' };
+            AudioSys.crit();
+          } else if (roll < 0.55) {
+            p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1);
+            this.banner = { text: '기연 — 생명력이 차오른다 (최대 HP +1)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+            AudioSys.pickup();
+          } else if (roll < 0.60) {
+            const bonus = 30 + Dungeon.floor * 3;
+            Meta.data.shards += bonus; Meta.save();
+            Particles.text(p.x, p.y - 30, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
+            this.banner = { text: '기연 — 영혼 파편이 쏟아진다!', life: 2.0, maxLife: 2.0, color: '#2ec4b6' };
+            AudioSys.buy();
+          } else if (roll < 0.85) {
+            // 대가 있는 이익: 저주받은 유물 (유물 풀 고갈 시 파편으로 대체 — 보상 없는 저주 방지)
+            const rolled = rollRelics(p, 1, false);
+            if (rolled.length > 0) {
+              this.acquireRelic(rolled[0]);
+              p.maxHp = Math.max(1, p.maxHp - 1);
+              p.hp = Math.min(p.hp, p.maxHp);
+              this.banner = { text: '기연 — 유물을 얻었지만... 저주가 스며든다 (최대 HP -1)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
+              AudioSys.hurt();
+            } else {
+              Meta.data.shards += 40; Meta.save();
+              Particles.text(p.x, p.y - 30, '◆ +40', { color: '#2ec4b6', size: 15 });
+              this.banner = { text: '기연 — 영혼 파편을 얻었다', life: 1.8, maxLife: 1.8, color: '#2ec4b6' };
+            }
+          } else {
+            // 손해: 피의 대가 (한도: HP 1까지만)
+            p.hp = Math.max(1, p.hp - 2);
+            this.banner = { text: '기연 — 함정이었다! (HP -2)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+            this.hurtFlash = 0.22;
+            AudioSys.hurt();
+          }
         } else if (it.kind === 'cursedChest') {
           // 저주받은 상자: 유물 +1, 최대 HP -1
           const rolled = rollRelics(p, 1, false);
