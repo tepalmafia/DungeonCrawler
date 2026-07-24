@@ -1045,7 +1045,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           World.moveEntity(this, this.hopDir.x * 300 * dt, this.hopDir.y * 300 * dt);
           if (this.stateT > 0.4) {
             this.state = 'sit'; this.stateT = 0;
-            game.firePatches.push({ x: this.x, y: this.y, r: 26, life: 1.8, kind: 'poison' });
+            game.firePatches.push({ x: this.x, y: this.y, r: 26, life: 1.4, kind: 'poison' });
             Particles.burst(this.x, this.y + 6, { count: 5, colors: ['#6ab04c', '#4a7a3f'], speed: 60, life: 0.3, size: 2 });
           }
         }
@@ -1071,7 +1071,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.flip = dx < 0;
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
         if (this.hitCd <= 0 && p.invuln <= 0 && d < p.r + this.r) {
-          this.hitCd = 0.55;
+          this.hitCd = 0.7; // 2층 절벽 완화
           game.hurtPlayer(1, { x: dx / d, y: dy / d }, 120);
         }
       },

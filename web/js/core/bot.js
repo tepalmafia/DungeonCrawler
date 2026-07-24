@@ -46,10 +46,19 @@ const Bot = {
 
   _move(p, tx, ty) {
     this._releaseKeys();
-    if (tx < p.x - 3) Input.keys['KeyA'] = true;
-    if (tx > p.x + 3) Input.keys['KeyD'] = true;
-    if (ty < p.y - 3) Input.keys['KeyW'] = true;
-    if (ty > p.y + 3) Input.keys['KeyS'] = true;
+    let ax = tx < p.x - 3 ? -1 : tx > p.x + 3 ? 1 : 0;
+    let ay = ty < p.y - 3 ? -1 : ty > p.y + 3 ? 1 : 0;
+    // 벽 슬라이드: 대각 이동 중 한 축이 벽에 막히면 그 축만 포기하고 미끄러진다 (사람의 벽 타기)
+    if (ax !== 0 && ay !== 0) {
+      const bx = World.isSolidAt(p.x + ax * 26, p.y);
+      const by = World.isSolidAt(p.x, p.y + ay * 26);
+      if (bx && !by) ax = 0;
+      else if (by && !bx) ay = 0;
+    }
+    if (ax < 0) Input.keys['KeyA'] = true;
+    if (ax > 0) Input.keys['KeyD'] = true;
+    if (ay < 0) Input.keys['KeyW'] = true;
+    if (ay > 0) Input.keys['KeyS'] = true;
   },
 
   // 레벨업 카드 휴리스틱: 이미 보유한 태그(스탯 제외)와 같은 태그 우선, 없으면 1번
@@ -162,11 +171,20 @@ const Bot = {
       if (near) { this._move(p, p.x * 2 - near.x, p.y * 2 - near.y); return; }
     }
 
-    // ── 위협 회피 (텔레그래프 읽기) — 이동보다 우선 ──
+    // ── 위협 회피 (텔레그래프 읽기) — 이동보다 우선. 원거리는 회피 중에도 무빙샷 ──
     const dodge = this._threat(game, p);
     if (dodge) {
       this._move(p, p.x + dodge.x * 120, p.y + dodge.y * 120);
       if (dodge.dash && p.dashCharges >= 1) this._dash();
+      if (p.classId !== 'knight' && p.attackCd <= 0) {
+        let nt = null, ntd = 460;
+        for (const e of game.enemies) {
+          if (e.dead || e.phased) continue;
+          const dd = Math.hypot(e.x - p.x, e.y - p.y);
+          if (dd < ntd && this._hasLoS(p.x, p.y, e.x, e.y)) { ntd = dd; nt = e; }
+        }
+        if (nt) { Input.justPressed['KeyJ'] = true; Bot.stats.attacks++; }
+      }
       return;
     }
 
@@ -193,7 +211,9 @@ const Bot = {
       if (e.dead || e.phased) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d < 300) near++;
-      const score = prio(e) * 10000 + d;
+      // 시야가 막힌 적은 후순위 — 보이는 적부터 잡는다 (벽 뒤 대치 방지)
+      const losPenalty = this._hasLoS(p.x, p.y, e.x, e.y) ? 0 : 2000;
+      const score = prio(e) * 10000 + d + losPenalty;
       if (score < best) { best = score; target = e; }
     }
 
@@ -208,10 +228,14 @@ const Bot = {
       }
       if (p.classId !== 'knight') {
         // 원거리: 카이팅 (접근이 필요할 때만 진행 감시 — 카이팅 후퇴는 정상 동작)
-        if (d < 160) this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
+        const los = this._hasLoS(p.x, p.y, target.x, target.y);
+        if (!los) {
+          // 장애물이 조준선을 막고 있다 — 옆으로 돌아 시야를 연다
+          this._strafeForLoS(p, target, dt);
+        } else if (d < 160) this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
         else if (d > 340) { this._move(p, target.x, target.y); this._watchGoal(target, d, dt, p); }
         else this._releaseKeys();
-        if (p.attackCd <= 0 && d < 500) { Input.justPressed['KeyJ'] = true; Bot.stats.attacks++; }
+        if (los && p.attackCd <= 0 && d < 500) { Input.justPressed['KeyJ'] = true; Bot.stats.attacks++; }
         if (d < 90 && p.dashCharges >= 1) this._dash();
       } else {
         // 근접: 히트&런 — 준비되면 파고들어 베고, 쿨 중엔 몸을 뺀다
@@ -232,17 +256,57 @@ const Bot = {
       }
     } else {
       // 적 없음: 상호작용(상자/모닥불) → 문
-      // 기연(저주 상자/피의 제단)은 봇이 판단할 수 없으니 건드리지 않는다
-      const it = game.interactables.find((i) => !i.used && (i.kind === 'chest' || i.kind === 'camp'));
+      // 상호작용: 상자/모닥불은 항상, 기연은 이득 조건일 때만 수락
+      const it = game.interactables.find((i) => {
+        if (i.used) return false;
+        if (i.kind === 'chest' || i.kind === 'camp') return true;
+        if (i.kind === 'cursedChest') return p.maxHp >= 3;                       // 최대 HP 여유가 있으면 유물 거래 수락
+        if (i.kind === 'bloodAltar') return p.hp >= 4 && p.hp >= p.maxHp - 1;    // 체력이 넉넉할 때만 피의 계약
+        return false;
+      });
       if (it) {
         this._move(p, it.x, it.y);
         this._watchGoal(it, Math.hypot(it.x - p.x, it.y - p.y), dt, p);
       } else if (World.doorsActive && World.doors.length > 0) {
-        const door = World.doors[0];
+        // 문 선택: 이점이 있는 방을 고른다 — 보물 > 모닥불(다쳤을 때) > 기연 > 정예(카드 보상) > 전투
+        const doorScore = (opt) => {
+          if (opt.type === 'treasure') return 5;
+          if (opt.type === 'camp') return p.hp < p.maxHp * 0.7 ? 4.5 : 1.5;
+          if (opt.type === 'event') return 4;
+          if (opt.type === 'elite') return 3;
+          return 2;
+        };
+        let door = World.doors[0];
+        for (const d2 of World.doors) {
+          if (doorScore(d2.opt) > doorScore(door.opt)) door = d2;
+        }
         this._move(p, door.x, door.y);
         this._watchGoal(door, Math.hypot(door.x - p.x, door.y - p.y), dt, p);
       } else this._releaseKeys();
     }
+  },
+
+  // 시야(LoS) 판정 — 목표까지 직선상에 벽이 있는가 (24px 간격 샘플링)
+  _hasLoS(x0, y0, x1, y1) {
+    const d = Math.hypot(x1 - x0, y1 - y0);
+    const steps = Math.max(1, Math.ceil(d / 24));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      if (World.isSolidAt(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) return false;
+    }
+    return true;
+  },
+
+  // 시야가 막혔을 때: 목표를 중심으로 옆으로 돌아 조준선을 연다
+  _strafeForLoS(p, target, dt) {
+    this._losT = (this._losT || 0) + dt;
+    if (this._losT > 1.2) { this._losT = 0; this._losSign = -(this._losSign || 1); }
+    const s = this._losSign || 1;
+    const dx = target.x - p.x, dy = target.y - p.y;
+    const d = Math.hypot(dx, dy) || 1;
+    // 접선 방향 + 접근 성분 (멀수록 강하게 — 모퉁이를 돌며 다가가야 시야가 열린다)
+    const app = d > 200 ? 75 : 25;
+    this._move(p, p.x + (-dy / d) * 85 * s + (dx / d) * app, p.y + (dx / d) * 85 * s + (dy / d) * app);
   },
 
   // 목표 진행 감시 — 3초간 목표에 가까워지지 못하면 탐색 모드 발동 (벽 뒤 목표 우회)
@@ -298,6 +362,16 @@ const Bot = {
         if (along > 0 && along < 500 && Math.abs(perp) < 50) {
           const s = perp >= 0 ? 1 : -1;
           return { x: -e.chargeDir.y * s, y: e.chargeDir.x * s, dash: e.state === 'charge' };
+        }
+      }
+    }
+    // 보스 저주 장판: 예고 원 안에 서 있으면 터지기 전에 벗어난다
+    for (const e of game.enemies) {
+      if (!e.isBoss || e.dead || !e.curses) continue;
+      for (const c of e.curses) {
+        const dd = Math.hypot(p.x - c.x, p.y - c.y);
+        if (dd < 62 + p.r) {
+          return { x: (p.x - c.x) / (dd || 1), y: (p.y - c.y) / (dd || 1), dash: c.t < 0.35 };
         }
       }
     }
