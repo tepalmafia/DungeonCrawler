@@ -300,7 +300,7 @@ const GamePlay = {
               kb: b.finisher ? 300 : 170,
             });
             if (b.aoe) {
-              this._explode(b.x, b.y, b.aoe, Math.max(1, p.currentAtk()), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0');
+              this._explode(b.x, b.y, b.aoe, Math.max(1, Math.ceil(p.currentAtk() * 0.6)), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0'); // 파이어볼 폭발 하향 (리그 +79%→목표 ~45%)
             }
             if (res === 'blocked' || !b.pierce) remove = true;
             break;
@@ -310,7 +310,7 @@ const GamePlay = {
       if (remove) {
         if (b.aoe && b.hit.size === 0) {
           // 벽에 맞아도 대마탄은 폭발
-          this._explode(b.x, b.y, b.aoe, Math.max(1, p.currentAtk()), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0');
+          this._explode(b.x, b.y, b.aoe, Math.max(1, Math.ceil(p.currentAtk() * 0.6)), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0'); // 파이어볼 폭발 하향 (리그 +79%→목표 ~45%)
         }
         Particles.burst(b.x, b.y, {
           count: 4,
@@ -346,7 +346,7 @@ const GamePlay = {
             }
           }
           if (r.explo) {
-            this._explode(ix, iy, 36, 1, ['#38b764', '#ffd866'], '#38b764');
+            this._explode(ix, iy, 36, 2, ['#38b764', '#ffd866'], '#38b764'); // 폭발 화살비 상향
           }
         }
       } else if (r.t > 2) {
@@ -378,7 +378,7 @@ const GamePlay = {
           }
         }
         if (p.flags.mg_ash) {
-          this.zones.push({ x: m.x, y: m.y, r: 70, life: 3, kind: 'fire', tickT: 0.4, hit: null });
+          this.zones.push({ x: m.x, y: m.y, r: 70, life: 5, kind: 'fire', tickT: 0.4, hit: null }); // 잿불 지대 상향
         }
         this.meteors.splice(i, 1);
       }
