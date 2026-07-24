@@ -297,12 +297,14 @@ const GameCombat = {
       if (p.dashTimer > 0 && !p._pdodged && this.state === 'play') {
         p._pdodged = true;
         p.pdodgeCrit = true;
-        this.slowmoT = 0.4;
-        Particles.ring(p.x, p.y, { r0: 8, r1: 64, life: 0.4, color: '#5ce0e6', width: 4 });
-        Particles.ring(p.x, p.y, { r0: 4, r1: 34, life: 0.28, color: '#ffffff', width: 2 });
-        Particles.text(p.x, p.y - 32, '완벽 회피!', { color: '#5ce0e6', size: 15 });
+        this.slowmoT = 0.45;
+        this.pdodgeFlash = 0.3; // 화면 청록 섬광 — 발동을 온몸으로 알린다
+        Particles.ring(p.x, p.y, { r0: 8, r1: 84, life: 0.45, color: '#5ce0e6', width: 5 });
+        Particles.ring(p.x, p.y, { r0: 4, r1: 44, life: 0.3, color: '#ffffff', width: 3 });
+        Particles.burst(p.x, p.y, { count: 14, colors: ['#5ce0e6', '#a9fff7', '#ffffff'], speed: 170, life: 0.5, size: 3 });
+        Particles.text(p.x, p.y - 34, '완벽 회피!', { color: '#5ce0e6', size: 19 });
         AudioSys.pdodge();
-        Renderer.shake(2, 0.1);
+        Renderer.shake(3, 0.14);
       }
       return;
     }
@@ -392,6 +394,20 @@ const GameCombat = {
   },
 
   spawnProjectile(kind, x, y, dir, { speed = 250, dmg = 1, slow = 0, homing = false, life = 4 } = {}) {
+    // 예측 사격 (AI 고도화, 3층+): 플레이어를 정조준한 직사 탄은 이동 방향을 반쯤 읽는다.
+    // 정조준 탄(코사인 0.94+)만 — 나선탄·부채꼴 가장자리 같은 패턴탄은 그대로 둔다
+    if (!homing && this.bb && this.player && Dungeon.floor >= 3) {
+      const p = this.player;
+      const ax = p.x - x, ay = p.y - y;
+      const ad = Math.hypot(ax, ay) || 1;
+      if ((dir.x * ax + dir.y * ay) / ad > 0.94) {
+        const t = ad / speed;
+        const lx = p.x + this.bb.pvx * t * 0.5;
+        const ly = p.y + this.bb.pvy * t * 0.5;
+        const ld = Math.hypot(lx - x, ly - y) || 1;
+        dir = { x: (lx - x) / ld, y: (ly - y) / ld };
+      }
+    }
     const style = PROJ_STYLES[kind] || PROJ_STYLES.arrow;
     this.arrows.push({ kind, x, y, dir, speed, dmg, slow, homing, r: style.r || 4, life, t: 0 });
   },

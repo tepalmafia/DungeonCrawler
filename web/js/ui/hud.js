@@ -163,6 +163,11 @@ const HUD = {
       ctx.fillStyle = `rgba(255,247,192,${Math.min(0.08, game.critFlash * 1.0)})`; // 완화 — 번쩍임이 눈 아프지 않게
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
+    if (game.pdodgeFlash > 0) {
+      // 완벽 회피: 청록 섬광 — 슬로모와 함께 '해냈다'는 확실한 신호
+      ctx.fillStyle = `rgba(92,224,230,${Math.min(0.14, game.pdodgeFlash * 0.5)})`;
+      ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+    }
 
     if (AudioSys.muted) {
       ctx.textAlign = 'left';

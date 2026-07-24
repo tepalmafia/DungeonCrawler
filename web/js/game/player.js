@@ -40,6 +40,7 @@ function createPlayer(x, y, classId = 'knight') {
     dashCritReady: false,
     pdodgeCrit: false, // 완벽 회피 보상: 다음 일격 확정 크리
     _pdodged: false,
+    dashAtkT: 0, // 대시 파생기 입력 창
 
     // 직업 스킬 (K / 우클릭): 검사 회전 베기 / 궁수 화살비 / 마도사 메테오
     skillCd: 0,
@@ -205,6 +206,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.invuln > 0) this.invuln -= dt;
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
       if (this._overchargeCd > 0) this._overchargeCd -= dt;
+      if (this.dashAtkT > 0) this.dashAtkT -= dt;
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
 
@@ -248,6 +250,7 @@ function createPlayer(x, y, classId = 'knight') {
         this._trailDist = 0;
         this.dashHit = new Set();
         this._pdodged = false; // 완벽 회피: 대시당 1회
+        this.dashAtkT = 0.35; // 대시 파생기 입력 창: 대시 중 + 직후 0.19초 (0.16초는 너무 빡빡했다)
         if (this.rflags.dashcrit) this.dashCritReady = true;
         // 불꽃 대시 (특성): 대시 궤적에 불타는 자취
         if (this.flags.dashfire) {
@@ -308,8 +311,8 @@ function createPlayer(x, y, classId = 'knight') {
       }
 
       const attackInput = Input.mouse.justDown || Input.pressed('KeyJ');
-      // 대시 파생기 (P2): 대시 중에 공격 — 직업별 특수기 (돌진 찌르기/후퇴 사격/점멸 폭발)
-      if (attackInput && this.attackCd <= 0 && this.dashTimer > 0) {
+      // 대시 파생기 (P2): 대시 중·직후 입력 창(0.35초) 안에 공격 — 직업별 특수기
+      if (attackInput && this.attackCd <= 0 && this.dashAtkT > 0) {
         this.dashAttack(game);
       } else if (attackInput && this.attackCd <= 0 && this.dashTimer <= 0) {
         // 자동 타겟팅: 가장 가까운 적을 자동 조준. 적이 없으면 마우스/이동 방향
@@ -483,9 +486,14 @@ function createPlayer(x, y, classId = 'knight') {
     dashAttack(game) {
       this.attackCd = 0.5 * this.atkCdMul;
       this.attackPoseT = 0.18;
+      this.dashAtkT = 0; // 파생기는 대시당 1회
       const dir = { ...this.dashDir };
       const angle = Math.atan2(dir.y, dir.x);
       if (dir.x !== 0) this.flip = dir.x < 0;
+      // 파생기 체감: 순간 잔상 + 흔들림 + 발동 표시
+      Renderer.shake(3, 0.14);
+      Particles.text(this.x, this.y - 34, '파생기!', { color: '#5ce0e6', size: 13 });
+      this.ghosts.push({ x: this.x, y: this.y, flip: this.flip, life: 0.3 });
 
       if (this.classId === 'knight') {
         // 돌진 찌르기: 좁고 긴 관통 일격 (대시 방향으로 꿰뚫는다)

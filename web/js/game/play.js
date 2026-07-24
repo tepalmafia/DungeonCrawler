@@ -1,6 +1,41 @@
 // 플레이 상태 프레임 갱신 — 환경 위험/스폰/적/장판/투사체/스킬 이펙트/픽업/방 클리어.
 // Game.tick(main.js)이 상태 분기 후 매 프레임 호출한다.
 const GamePlay = {
+  // AI 고도화 — 개체 상태 기계를 건드리지 않는 '조향 오버레이'.
+  // 역할(돌격/사격/지원)에 따라 이동에 보정을 더한다: 협공 각도 / 측면 재배치 / 후방 유지 / 광역 예고 산개.
+  // 보스·우두머리·중립(항아리 등)·고정형(speed 0)은 제외 — 개성은 각자의 상태 기계가 지킨다.
+  _steer(e, dt, p) {
+    if (e.neutral || e.isBoss || e.isMini || e.phased || !e.speed) return;
+    const dx = p.x - e.x, dy = p.y - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+
+    // 산개: 메테오 예고 반경 안이면 탈출이 최우선 — 광역기가 '조준하는 재미'가 된다
+    for (const m of this.meteors) {
+      if (m.t > 0) {
+        const md = Math.hypot(e.x - m.x, e.y - m.y);
+        if (md < m.r + 10) {
+          World.moveEntity(e, ((e.x - m.x) / (md || 1)) * e.speed * 0.9 * dt, ((e.y - m.y) / (md || 1)) * e.speed * 0.9 * dt);
+          return;
+        }
+      }
+    }
+
+    const role = enemyRole(e);
+    if (!e._flank) e._flank = (Math.random() < 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.5);
+    const tx = -dy / d, ty = dx / d; // 접선 방향
+
+    if (role === 'melee' && d > 140 && d < 420) {
+      // 협공: 접근 궤적을 옆으로 벌린다 — 전원이 한 방향에서 몰리지 않게 (도착 각도가 갈라진다)
+      World.moveEntity(e, tx * e.speed * 0.35 * e._flank * dt, ty * e.speed * 0.35 * e._flank * dt);
+    } else if (role === 'shoot' && d > 150 && d < 480 && this.bb && this.bb.meleeEngaged >= 1) {
+      // 재배치: 아군 돌격조가 플레이어와 붙었으면 측면으로 — 사선이 분산된다
+      World.moveEntity(e, tx * e.speed * 0.4 * e._flank * dt, ty * e.speed * 0.4 * e._flank * dt);
+    } else if (role === 'support' && d < 200) {
+      // 지원(강령술사·주술사): 플레이어에게서 물러나 아군 뒤에 숨는다
+      World.moveEntity(e, (-dx / d) * e.speed * 0.5 * dt, (-dy / d) * e.speed * 0.5 * dt);
+    }
+  },
+
   _tickPlay(dt) {
     // 완벽 회피 슬로모 — 세계가 0.35배로 늘어진다 (보상의 손맛)
     if (this.slowmoT > 0) {
@@ -65,6 +100,22 @@ const GamePlay = {
     if (this.vignette > 0) this.vignette -= dt * 1.5;
     if (this.critFlash > 0) this.critFlash -= dt * 3;
     if (this.hurtFlash > 0) this.hurtFlash -= dt * 2;
+    if (this.pdodgeFlash > 0) this.pdodgeFlash -= dt * 1.5; // 완벽 회피 청록 섬광
+
+    // 교착 방지 실드: 벽 안에 갇힌 적(벽 통과 이동의 잔재 등)을 2초마다 유효 위치로 재소환
+    this._wallCheckT = (this._wallCheckT || 0) + dt;
+    if (this._wallCheckT > 2) {
+      this._wallCheckT = 0;
+      for (const e of this.enemies) {
+        if (e.dead || e.neutral || e.isBoss || e.phased) continue;
+        if (World.isSolidAt(e.x, e.y)) {
+          const pos = World.randomSpawnPos(this.player, 120);
+          e.x = pos.x;
+          e.y = pos.y;
+          e.spawnT = 0.35;
+        }
+      }
+    }
     if (this.banner) {
       this.banner.life -= dt;
       if (this.banner.life <= 0) this.banner = null;
@@ -150,6 +201,24 @@ const GamePlay = {
       if (this.corpses[i].t >= this.corpses[i].dur) this.corpses.splice(i, 1);
     }
 
+    // ── 전장 정보(blackboard) — 개체 AI가 읽는 공용 데이터 (AI 고도화) ──
+    // 플레이어 이동 속도 추정(스무딩·대시 스파이크 클램프): 예측 사격이 읽는다
+    if (!this._bbPrev) this._bbPrev = { x: p.x, y: p.y };
+    {
+      const rvx = (p.x - this._bbPrev.x) / Math.max(dt, 1e-4);
+      const rvy = (p.y - this._bbPrev.y) / Math.max(dt, 1e-4);
+      let pvx = (this.bb ? this.bb.pvx : 0) * 0.8 + rvx * 0.2;
+      let pvy = (this.bb ? this.bb.pvy : 0) * 0.8 + rvy * 0.2;
+      const pv = Math.hypot(pvx, pvy);
+      if (pv > 240) { pvx *= 240 / pv; pvy *= 240 / pv; }
+      let engaged = 0;
+      for (const e of this.enemies) {
+        if (!e.dead && !e.neutral && enemyRole(e) === 'melee' && Math.hypot(e.x - p.x, e.y - p.y) < 95) engaged++;
+      }
+      this.bb = { pvx, pvy, meleeEngaged: engaged };
+      this._bbPrev = { x: p.x, y: p.y };
+    }
+
     // ── 적 갱신 + 상태이상 ──
     for (const e of this.enemies) {
       if (e.dead) continue;
@@ -177,6 +246,7 @@ const GamePlay = {
       }
       if (e.status.shock > 0) e.status.shock -= dt;
       if (!e.dead) e.update(dt, this);
+      if (!e.dead) this._steer(e, dt, p);
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
 
