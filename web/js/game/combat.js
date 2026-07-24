@@ -334,6 +334,11 @@ const GameCombat = {
         if (Bot.enabled) Bot.onDeath(Dungeon.floor); // 층별 사망 집계
         p.hp = p.maxHp;
         p.invuln = 2;
+        // 제자리 부활은 용암 호수 한복판 등에서 즉사 루프를 만든다 (계측: 998연속 사망) — 방 입구에서 재기
+        const rs = World.playerStart();
+        p.x = rs.x;
+        p.y = rs.y;
+        p.kbx = p.kby = 0;
         this.banner = { text: '♻ 부활 (테스트 모드)', life: 1.2, maxLife: 1.2, color: '#5ce0e6' };
         Particles.burst(p.x, p.y, { count: 16, colors: ['#5ce0e6', '#a9fff7'], speed: 160, life: 0.5, size: 3 });
         return;
