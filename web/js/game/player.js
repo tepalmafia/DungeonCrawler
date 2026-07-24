@@ -298,7 +298,7 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     currentAtk() {
-      let atk = 1 + this.bonusAtk;
+      let atk = 1 + this.bonusAtk + (this.floorAtk || 0); // floorAtk: 모닥불 담금질 (이번 층 한정)
       if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 1; // DPS 리그: +2는 +59%로 과함
       if (this.flags.berserk && this.hp <= 2) atk += 1;
       if (this.rflags.berserkhelm && this.hp <= 3) atk += 4; // 에픽 가치 밴드 보정

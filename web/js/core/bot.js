@@ -259,7 +259,13 @@ const Bot = {
       // 상호작용: 상자/모닥불은 항상, 기연은 이득 조건일 때만 수락
       const it = game.interactables.find((i) => {
         if (i.used) return false;
-        if (i.kind === 'chest' || i.kind === 'camp') return true;
+        if (i.kind === 'chest') return true;
+        if (i.kind === 'camp') {
+          // 숫돌이 살아 있으면 다쳤을 때만 휴식, 아니면 담금질 쪽으로
+          const ws = game.interactables.some((o) => o.kind === 'whetstone' && !o.used);
+          return !ws || p.hp < p.maxHp * 0.7;
+        }
+        if (i.kind === 'whetstone') return p.hp >= p.maxHp * 0.7;                 // 건강하면 공격력을 갈아둔다
         if (i.kind === 'mystery') return p.maxHp >= 4 && p.hp >= 3;              // 도박은 최악을 감당할 수 있을 때만
         if (i.kind === 'cursedChest') return p.maxHp >= 3;                       // 최대 HP 여유가 있으면 유물 거래 수락
         if (i.kind === 'bloodAltar') return p.hp >= 4 && p.hp >= p.maxHp - 1;    // 체력이 넉넉할 때만 피의 계약

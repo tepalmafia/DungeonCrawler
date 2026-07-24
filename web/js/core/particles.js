@@ -5,17 +5,30 @@ const Particles = {
   rings: [],   // 확장 충격파 링 (타격 이펙트)
   slashes: [], // 임팩트 스타 (교차 섬광선)
 
+  // 전역 상한 — 물량방 광역기에서 파티클이 무한히 쌓이면 GC 히치(타격 렉)가 생긴다
+  MAX_PARTS: 500,
+  MAX_TEXTS: 28,
+  MAX_RINGS: 24,
+  MAX_STARS: 12,
+
   // 타격 지점에서 퍼지는 링
   ring(x, y, { r0 = 4, r1 = 30, life = 0.22, color = '#ffffff', width = 3 } = {}) {
+    if (this.rings.length >= this.MAX_RINGS) this.rings.shift();
     this.rings.push({ x, y, r0, r1, life, maxLife: life, color, width });
   },
 
   // 크리티컬용 교차 섬광 (4방향 별)
   star(x, y, { size = 26, life = 0.16, color = '#fff7c0' } = {}) {
+    if (this.slashes.length >= this.MAX_STARS) this.slashes.shift();
     this.slashes.push({ x, y, size, life, maxLife: life, color, rot: Math.random() * Math.PI });
   },
 
   burst(x, y, { count = 8, colors = ['#ffffff'], speed = 120, life = 0.4, size = 3, gravity = 0, spread = Math.PI * 2, dir = 0 } = {}) {
+    // 상한 접근 시 개수 축소, 초과 시 스킵 — 연출 밀도만 낮추고 프레임을 지킨다
+    const room = this.MAX_PARTS - this.list.length;
+    if (room <= 0) return;
+    if (count > room) count = room;
+    else if (this.list.length > this.MAX_PARTS * 0.7) count = Math.max(1, Math.ceil(count * 0.5));
     for (let i = 0; i < count; i++) {
       const a = dir + (Math.random() - 0.5) * spread;
       const s = speed * (0.4 + Math.random() * 0.8);
@@ -33,6 +46,7 @@ const Particles = {
   },
 
   text(x, y, str, { color = '#ffffff', size = 15, life = 0.7 } = {}) {
+    if (this.texts.length >= this.MAX_TEXTS) this.texts.shift(); // 오래된 숫자부터 양보
     this.texts.push({ x, y, str, color, size, life, maxLife: life, vy: -55 });
   },
 

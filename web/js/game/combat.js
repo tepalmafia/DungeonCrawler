@@ -1,6 +1,17 @@
 // 전투 판정 허브 — 피해/처치/폭발/피격/투사체 생성.
 // main.js에서 Object.assign(Game, GameCombat)으로 Game에 합쳐진다.
 const GameCombat = {
+  // 히트스톱 과열 방지 — 고공속·광역 물량전에서 매 타격마다 최대치로 멈추면
+  // 게임이 끊기는 것처럼 느껴진다(타격 렉). 0.3초 창 안에서는 첫 타만 온전히, 이후는 35%.
+  _applyHitstop(v) {
+    if (this.time - (this._lastStopT ?? -9) > 0.3) {
+      this.hitstop = Math.max(this.hitstop, v);
+      this._lastStopT = this.time;
+    } else {
+      this.hitstop = Math.max(this.hitstop, v * 0.35);
+    }
+  },
+
   damageEnemy(e, dmg, dir, { feel = true, crit = false, kb = 190, color } = {}) {
     if (e.dead || e.phased) return;
     // 기믹: 중장갑 — 직접 타격만 경감. 화상/중독 틱, 폭발·연쇄·장판(feel=false)은 무시
@@ -20,7 +31,7 @@ const GameCombat = {
     }
 
     if (feel) {
-      this.hitstop = Math.max(this.hitstop, crit ? 0.1 : 0.045);
+      this._applyHitstop(crit ? 0.1 : 0.045);
       Renderer.shake(crit ? 5 : 2.5, 0.13);
       Particles.burst(e.x, e.y, {
         count: crit ? 16 : 9,
@@ -66,7 +77,8 @@ const GameCombat = {
     e.dead = true;
     this.kills++;
     Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : (e.codexType || e.type));
-    this.hitstop = Math.max(this.hitstop, 0.08);
+    if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
+    else this._applyHitstop(0.08);
     Renderer.shake(3, 0.15);
     AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');
 
@@ -197,9 +209,14 @@ const GameCombat = {
     // 보스전 중에는 절반 — 부하가 회복 셔틀이 되지 않게 (긴장 유지)
     const floorDecay = Math.max(0.5, 1 - 0.04 * (Dungeon.floor - 1));
     const bossFight = this.enemies.some((b) => b.isBoss && !b.dead) ? 0.5 : 1;
-    let heartChance = 0.045 * floorDecay * bossFight * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
+    // 행운(×2 중첩)·클로버(×1.8)가 겹치면 ×7.2까지 폭주 — 총 배율 상한 ×3
+    const luckMul = Math.min(3, p.luckMul);
+    let heartChance = 0.045 * floorDecay * bossFight * luckMul * (this.heat >= 4 ? 0.5 : 1);
     if (p.flags.bloodlust) heartChance += 0.12;
+    if (p.hp >= p.maxHp) heartChance *= 0.35; // 풀피면 감쇠 — 못 먹는 하트가 바닥에 쌓이는 낭비 방지
+    if ((this._roomHearts || 0) >= 2) heartChance *= 0.25; // 방당 2개 이후 급감 (물량 방 인플레 방지)
     if (Math.random() < heartChance) {
+      this._roomHearts = (this._roomHearts || 0) + 1;
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
     }
   },
