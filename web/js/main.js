@@ -161,8 +161,22 @@ const Game = {
     const floorScale = this.floorHpScale();
 
     // 방 템플릿 오브젝트 (M2·M3): 항아리·균열 벽 — 방 클리어 판정에서 제외되는 중립 개체
-    for (const s of (World.potSpots || [])) this.enemies.push(createPot(s.x, s.y, s.rare));
+    // 일반 항아리의 18%는 폭발 항아리 — 잘 터뜨리면 무기, 잘못 터뜨리면 부상 (환경 무기)
+    for (const s of (World.potSpots || [])) this.enemies.push(createPot(s.x, s.y, s.rare, !s.rare && RNG.chance(0.18)));
     for (const s of (World.crackSpots || [])) this.enemies.push(createCrack(s.tx, s.ty, s.x, s.y));
+    if (World.goldCrackSpot) {
+      const g = World.goldCrackSpot;
+      this.enemies.push(createCrack(g.tx, g.ty, g.x, g.y, true)); // 금빛 균열 — 비밀 금고의 단서
+    }
+    // 가시 함정 (맵 M2): 감옥 테마 전투방 — 주기적으로 솟아 편을 가리지 않고 찌른다
+    this.traps = [];
+    this._siege = null;
+    if (World.hazard === 'prison' && (type === 'combat' || type === 'elite' || type === 'siege')) {
+      for (let i = 0; i < 2; i++) {
+        const pos = World.safeSpot(RNG.range(TS * 4, TS * 16), RNG.range(TS * 2.5, TS * 8.5) + World.offsetY);
+        this.traps.push({ x: pos.x, y: pos.y, t: RNG.range(0, 2.0), state: 'idle', hit: null });
+      }
+    }
 
     // 문 수식어 (P4): 위험-보상 트레이드오프 적용
     this._roomMod = (type === 'combat' || type === 'elite') ? (Dungeon.pendingMod || null) : null;
@@ -213,6 +227,24 @@ const Game = {
       const c = World.center();
       this.interactables.push({ kind: 'mystery', x: c.x, y: c.y, r: 26, used: false, t: 0 });
       this.banner = { text: '기이한 기운이 감돈다...', life: 1.8, maxLife: 1.8, color: '#b13ae0' };
+    } else if (type === 'vault') {
+      // 비밀 금고 (맵 M3): 진행을 소모하지 않는 순수 보너스 — 상자 2개 + 진귀한 항아리
+      const c = World.center();
+      const s1 = World.safeSpot(c.x - 70, c.y);
+      const s2 = World.safeSpot(c.x + 70, c.y);
+      this.interactables.push({ kind: 'chest', x: s1.x, y: s1.y, r: 24, used: false, t: 0 });
+      this.interactables.push({ kind: 'chest', x: s2.x, y: s2.y, r: 24, used: false, t: 0 });
+      const p1 = World.safeSpot(c.x - 150, c.y - 70);
+      const p2 = World.safeSpot(c.x + 150, c.y - 70);
+      this.enemies.push(createPot(p1.x, p1.y, true), createPot(p2.x, p2.y, true));
+      this.banner = { text: '비밀 금고 — 마음껏 챙겨라', life: 2.0, maxLife: 2.0, color: '#ffd866' };
+    } else if (type === 'siege') {
+      // 습격 (맵 M4): 세 번의 파도 — 버티면 정예급 보상
+      this._siege = { wave: 1, total: 3 };
+      Dungeon.siegeWave(1).forEach((s, i) => {
+        this.pendingSpawns.push({ delay: 1.0 + i * 0.3, type: s.type, elite: s.elite });
+      });
+      this.banner = { text: '습격 — 세 번의 파도를 버텨라!', life: 2.2, maxLife: 2.2, color: '#e43b44' };
     } else if (type === 'boss') {
       const c = World.center();
       const boss = createBoss(Dungeon.floor, c.x + TS * 4, c.y);

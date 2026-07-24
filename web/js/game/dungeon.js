@@ -8,32 +8,34 @@ const ROOM_META = {
   boss:      { label: '보스',    color: '#e43b44' },
   nextfloor: { label: '다음 층', color: '#38b764' },
   shortcut:  { label: '지름길',  color: '#e43b44' },
+  vault:     { label: '금고',    color: '#ffd866' },
+  siege:     { label: '습격',    color: '#e43b44' },
 };
 
 // ── 설계된 위협 세트 (R2) — 무리가 '물량'이 아니라 '퍼즐'이 되도록.
 // 방 구성의 45%는 랜덤 샘플 대신 손제작 조합에서 뽑는다: 우선순위 판단이 생긴다.
 // 위협 세트 — 층 귀속 (min~max): 층 전용 로스터와 함께 순환. 같은 세트가 다른 층에 안 나온다
 const THREAT_SETS = [
-  { min: 1, max: 1, units: ['skeleton', 'skeleton', 'archer', 'archer'] },         // 근접 압박 + 후방 화살
-  { min: 1, max: 1, units: ['boar', 'boar', 'swarm'] },                            // 교차 돌진 + 벌레 떼
-  { min: 2, max: 2, units: ['sporePuff', 'sporePuff', 'frog', 'frog'] },           // 독구름 지뢰밭 위 개구리
-  { min: 2, max: 2, units: ['acidSnail', 'acidSnail', 'spider', 'spider'] },       // 산성 지형 + 거미줄 감속
-  { min: 3, max: 3, units: ['shieldSkeleton', 'shieldSkeleton', 'sniper', 'sniper'] }, // 방패벽 뒤 저격수
-  { min: 3, max: 3, units: ['golem', 'jailer', 'frostMage', 'frostMage'] },        // 탱커+사슬 끌기+감속탄
-  { min: 4, max: 4, units: ['ashWalker', 'ashWalker', 'emberMoth', 'emberMoth'] }, // 불길 잠식 + 급강하
-  { min: 4, max: 4, units: ['lavaHound', 'lavaHound', 'cinder', 'cinder', 'cinder'] }, // 화염 물량 러시
-  { min: 5, max: 5, units: ['shaman', 'shade', 'shade', 'acolyte'] },              // 힐러 컷 + 그림자 습격
-  { min: 5, max: 5, units: ['necro', 'necro', 'gazer', 'crystal'] },               // 이중 소환 + 탄막
-  { min: 6, max: 6, units: ['bomber', 'bomber', 'charger', 'charger'] },           // 자폭 유도 + 돌진 교차
-  { min: 6, max: 6, units: ['bloodBat', 'bloodBat', 'bloodBat', 'ghoul', 'ghoul'] }, // 흡혈 무리
-  { min: 7, max: 7, units: ['turret', 'turret', 'venomLasher', 'venomLasher'] },   // 고정 화망 + 채찍 근접
-  { min: 7, max: 7, units: ['sporeMother', 'acidSlug', 'acidSlug'] },              // 포자 생산 + 산성 포격
-  { min: 8, max: 8, units: ['executioner', 'chainWraith', 'chainWraith', 'frostArcher'] }, // 처형 구역+속박
-  { min: 8, max: 8, units: ['warden', 'stalker', 'stalker', 'frostGolem'] },       // 방패벽 + 은신 기습
-  { min: 9, max: 9, units: ['lavaBurster', 'flameJuggler', 'flameJuggler', 'imp'] }, // 장판 포화
-  { min: 9, max: 9, units: ['obsidianBeast', 'obsidianBeast', 'magmaSlime', 'magmaSlime'] }, // 중장갑 전선
-  { min: 10, max: 10, units: ['mirrorKnight', 'riftCaster', 'riftCaster', 'voidSpawn', 'voidSpawn'] }, // 반격 기사 + 균열
-  { min: 10, max: 10, units: ['voidEye', 'voidSpawn', 'voidSpawn', 'voidSpawn', 'riftCaster'] }, // 공허 무리
+  { min: 1, max: 1, units: ['skeleton', 'skeleton', 'archer', 'archer'], wants: 'open' },         // 근접 압박 + 후방 화살
+  { min: 1, max: 1, units: ['boar', 'boar', 'swarm'], wants: 'open' },                            // 교차 돌진 + 벌레 떼
+  { min: 2, max: 2, units: ['sporePuff', 'sporePuff', 'frog', 'frog'], wants: 'hazard' },           // 독구름 지뢰밭 위 개구리
+  { min: 2, max: 2, units: ['acidSnail', 'acidSnail', 'spider', 'spider'], wants: 'corridor' },       // 산성 지형 + 거미줄 감속
+  { min: 3, max: 3, units: ['shieldSkeleton', 'shieldSkeleton', 'sniper', 'sniper'], wants: 'pillars' }, // 방패벽 뒤 저격수
+  { min: 3, max: 3, units: ['golem', 'jailer', 'frostMage', 'frostMage'], wants: 'corridor' },        // 탱커+사슬 끌기+감속탄
+  { min: 4, max: 4, units: ['ashWalker', 'ashWalker', 'emberMoth', 'emberMoth'], wants: 'open' }, // 불길 잠식 + 급강하
+  { min: 4, max: 4, units: ['lavaHound', 'lavaHound', 'cinder', 'cinder', 'cinder'], wants: 'hazard' }, // 화염 물량 러시
+  { min: 5, max: 5, units: ['shaman', 'shade', 'shade', 'acolyte'], wants: 'pillars' },              // 힐러 컷 + 그림자 습격
+  { min: 5, max: 5, units: ['necro', 'necro', 'gazer', 'crystal'], wants: 'open' },               // 이중 소환 + 탄막
+  { min: 6, max: 6, units: ['bomber', 'bomber', 'charger', 'charger'], wants: 'corridor' },           // 자폭 유도 + 돌진 교차
+  { min: 6, max: 6, units: ['bloodBat', 'bloodBat', 'bloodBat', 'ghoul', 'ghoul'], wants: 'open' }, // 흡혈 무리
+  { min: 7, max: 7, units: ['turret', 'turret', 'venomLasher', 'venomLasher'], wants: 'pillars' },   // 고정 화망 + 채찍 근접
+  { min: 7, max: 7, units: ['sporeMother', 'acidSlug', 'acidSlug'], wants: 'hazard' },              // 포자 생산 + 산성 포격
+  { min: 8, max: 8, units: ['executioner', 'chainWraith', 'chainWraith', 'frostArcher'], wants: 'open' }, // 처형 구역+속박
+  { min: 8, max: 8, units: ['warden', 'stalker', 'stalker', 'frostGolem'], wants: 'pillars' },       // 방패벽 + 은신 기습
+  { min: 9, max: 9, units: ['lavaBurster', 'flameJuggler', 'flameJuggler', 'imp'], wants: 'open' }, // 장판 포화
+  { min: 9, max: 9, units: ['obsidianBeast', 'obsidianBeast', 'magmaSlime', 'magmaSlime'], wants: 'corridor' }, // 중장갑 전선
+  { min: 10, max: 10, units: ['mirrorKnight', 'riftCaster', 'riftCaster', 'voidSpawn', 'voidSpawn'], wants: 'pillars' }, // 반격 기사 + 균열
+  { min: 10, max: 10, units: ['voidEye', 'voidSpawn', 'voidSpawn', 'voidSpawn', 'riftCaster'], wants: 'open' }, // 공허 무리
 ];
 
 // 층별 데이터 (기획안 §8.2)
@@ -77,6 +79,9 @@ const Dungeon = {
     this.tookTreasure = false;
     this.tookCamp = false;
     this.tookEvent = false;
+    this.tookSiege = false;
+    this.vaultFound = false;
+    this.vaultCrackPlaced = false;
     this.miniSeen = false;
     this.shortcutHot = false;
     this.build('combat');
@@ -88,6 +93,9 @@ const Dungeon = {
     this.tookTreasure = false;
     this.tookCamp = false;
     this.tookEvent = false;
+    this.tookSiege = false;
+    this.vaultFound = false;
+    this.vaultCrackPlaced = false;
     this.miniSeen = false;
     this.shortcutHot = false; // 지름길 효과는 도착 층에서만
     this.build('combat');
@@ -105,14 +113,24 @@ const Dungeon = {
       this.tookTreasure = false;
       this.tookCamp = false;
       this.tookEvent = false;
+    this.tookSiege = false;
+    this.vaultFound = false;
+    this.vaultCrackPlaced = false;
       this.miniSeen = false;
       this.shortcutHot = true;
       this.build('combat');
       return;
     }
+    // 금고방 (맵 M3): 진행을 소모하지 않는 보너스 방 — roomIndex 유지, 나올 때 같은 갈림길
+    if (type === 'vault') {
+      this.vaultFound = false;
+      this.build('vault');
+      return;
+    }
     if (type === 'treasure') this.tookTreasure = true;
     if (type === 'camp') this.tookCamp = true;
     if (type === 'event') this.tookEvent = true;
+    if (type === 'siege') this.tookSiege = true;
     this.roomIndex++;
     this.build(type);
   },
@@ -123,6 +141,22 @@ const Dungeon = {
     Game.onRoomBuilt(type);
   },
 
+  // 습격방 웨이브 구성 (맵 M4): 파도가 갈수록 거세진다 — 3파도는 정예 섞임
+  siegeWave(wave) {
+    const data = floorData(this.floor);
+    const comp = [];
+    const n = Math.min(14, 3 + Math.min(8, this.floor) + wave * 2);
+    const eliteChance = wave >= 3 ? Math.min(0.5, 0.1 + this.floor * 0.03) : 0.05;
+    while (comp.length < n) {
+      const type = RNG.pick(data.enemies);
+      comp.push({ type, elite: RNG.chance(eliteChance) });
+      if (type === 'swarm') {
+        for (let k = 0; k < 3; k++) comp.push({ type: 'swarm', elite: false });
+      }
+    }
+    return comp;
+  },
+
   floorName() {
     return floorData(this.floor).name;
   },
@@ -130,6 +164,8 @@ const Dungeon = {
   doorOptions() {
     const next = this.roomIndex + 1;
     if (next >= this.totalRooms) {
+      // 금빛 균열을 부쉈다면 보스 직전이라도 금고는 들를 수 있다
+      if (this.vaultFound) return [{ type: 'vault', ...ROOM_META.vault }, { type: 'boss', ...ROOM_META.boss }];
       return [{ type: 'boss', ...ROOM_META.boss }];
     }
     const options = ['combat'];
@@ -139,9 +175,11 @@ const Dungeon = {
     if (!this.tookTreasure) pool.push('treasure');
     if (!this.tookCamp && next >= 4) pool.push('camp');
     if (!this.tookEvent && next >= 3) pool.push('event'); // 기연: 리스크-리워드 이벤트
+    if (this.floor >= 3 && !this.tookSiege) pool.push('siege'); // 습격 (맵 M4): 3층+ 웨이브 생존 도전
     pool.push('combat');
 
-    const n = RNG.int(2, 3);
+    // 금고 발견 시: 문 3개 상한을 지키려 일반 문을 2개로 줄이고 금고 문을 끼운다
+    const n = this.vaultFound ? 2 : RNG.int(2, 3);
     while (options.length < n && pool.length > 0) {
       const pick = pool.splice(Math.floor(RNG.next() * pool.length), 1)[0];
       if (!options.includes(pick)) options.push(pick);
@@ -150,6 +188,7 @@ const Dungeon = {
       const j = Math.floor(RNG.next() * (i + 1));
       [options[i], options[j]] = [options[j], options[i]];
     }
+    if (this.vaultFound) options.unshift('vault');
     return options.map((t) => {
       const opt = { type: t, ...ROOM_META[t] };
       // 문 수식어 (P4): 전투/정예 문에 35% 확률로 위험-보상 트레이드오프가 붙는다 —
@@ -179,7 +218,11 @@ const Dungeon = {
     const ef = this.floor <= 10 ? this.floor : ((this.floor - 11) % 5) + 6;
     const sets = THREAT_SETS.filter((s) => ef >= s.min && ef <= (s.max || 99));
     if (sets.length && RNG.chance(0.45)) {
-      const set = RNG.pick(sets);
+      // 지형 커플링 (맵 M1): 템플릿 태그에 맞는 세트를 75% 우선 — 저격수는 기둥 뒤에서,
+      // 돌진수는 회랑에서 만난다. 손제작 지형과 손제작 무리가 서로를 알게 하는 연결부
+      const tag = (typeof World !== 'undefined' && World.lastTemplateTag) || 'open';
+      const matched = sets.filter((s) => s.wants === tag);
+      const set = matched.length && RNG.chance(0.75) ? RNG.pick(matched) : RNG.pick(sets);
       for (const t of set.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
       comp.setUsed = true;
     }
