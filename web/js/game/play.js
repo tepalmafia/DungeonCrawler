@@ -79,8 +79,12 @@ const GamePlay = {
       } else {
         for (const fp of this.firePatches) {
           if (Math.hypot(p.x - fp.x, p.y - fp.y) < fp.r) {
-            this.hurtPlayer(1, { x: 0, y: 0 }, 60);
-            break;
+            if (fp.kind === 'ice') {
+              p.slowT = Math.max(p.slowT, 0.35); // 빙판: 피해 없이 미끄러운 감속
+            } else {
+              this.hurtPlayer(1, { x: 0, y: 0 }, 60);
+              break;
+            }
           }
         }
       }
@@ -92,7 +96,7 @@ const GamePlay = {
       s.delay -= dt;
       if (s.delay <= 0) {
         const pos = World.randomSpawnPos(this.player);
-        this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, t: 0.7 });
+        this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, t: s.mini ? 1.1 : 0.7 });
         this.pendingSpawns.splice(i, 1);
       }
     }
@@ -100,11 +104,19 @@ const GamePlay = {
       const m = this.markers[i];
       m.t -= dt;
       if (m.t <= 0) {
-        const e = createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
+        const e = m.mini
+          ? createMiniboss(m.type, m.x, m.y, this.enemyHpMul())
+          : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
         e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
         if (this.heat >= 3) e.speed *= 1.15;
         this.enemies.push(e);
-        Particles.burst(m.x, m.y, { count: 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });
+        if (m.mini) {
+          this.banner = { text: `⚠ ${e.miniName} 출현!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
+          AudioSys.roar();
+          Renderer.shake(4, 0.3);
+          Particles.ring(m.x, m.y, { r0: 8, r1: 70, life: 0.4, color: '#e43b44', width: 4 });
+        }
+        Particles.burst(m.x, m.y, { count: m.mini ? 16 : 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });
         this.markers.splice(i, 1);
       }
     }

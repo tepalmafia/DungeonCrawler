@@ -10,17 +10,17 @@ const ROOM_META = {
 
 // 층별 데이터 (기획안 §8.2)
 const FLOOR_DATA = {
-  1: { name: '지하 묘지',   enemies: ['slime', 'slime', 'archer', 'boar'], rule: null },
-  2: { name: '곰팡이 동굴', enemies: ['mushroom', 'bat', 'toxicSlime', 'spider'], rule: '독 안개를 피하라' },
-  3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'archer', 'spider'], rule: '골렘은 등 뒤가 약점' },
-  4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'boar', 'golem'], rule: '용암을 밟지 마라' },
-  5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'lavaHound', 'necro', 'archer'], rule: '어둠이 시야를 가린다' },
+  1: { name: '지하 묘지',   enemies: ['slime', 'slime', 'skeleton', 'archer', 'boar', 'swarm'], rule: null },
+  2: { name: '곰팡이 동굴', enemies: ['mushroom', 'bat', 'toxicSlime', 'spider', 'frog', 'leech'], rule: '독 안개를 피하라' },
+  3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'archer', 'shieldSkeleton', 'iceSlime', 'sniper'], rule: '골렘은 등 뒤가 약점' },
+  4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'boar', 'wisp', 'berserker', 'golem'], rule: '용암을 밟지 마라' },
+  5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'necro', 'shaman', 'crystal', 'archer'], rule: '어둠이 시야를 가린다' },
   // 6~10층: 심층 — 층마다 전용 신규 몬스터가 등장한다
-  6: { name: '피의 묘지',   enemies: ['bomber', 'bomber', 'archer', 'boar', 'wraith', 'necro'], rule: '폭탄벌레가 붉게 빛나면 도망쳐라' },
-  7: { name: '맹독 심연',   enemies: ['thornPlant', 'thornPlant', 'toxicSlime', 'spider', 'bat', 'necro'], rule: '가시덩굴은 움직이지 않는다 — 각도를 노려라' },
-  8: { name: '절망의 감옥', enemies: ['executioner', 'executioner', 'golem', 'wraith', 'archer', 'bomber'], rule: '처형자의 붉은 구역에서 벗어나라' },
-  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'fireSpirit', 'lavaHound', 'thornPlant'], rule: '마그마 슬라임은 죽어도 끝이 아니다' },
-  10: { name: '심연의 왕좌', enemies: ['voidEye', 'voidEye', 'executioner', 'magmaSlime', 'wraith', 'necro'], rule: '공허의 눈은 추적탄을 쏜다 — 직각으로 대시하라' },
+  6: { name: '피의 묘지',   enemies: ['bomber', 'bomber', 'ghoul', 'charger', 'skeleton', 'wraith', 'necro'], rule: '폭탄벌레가 붉게 빛나면 도망쳐라' },
+  7: { name: '맹독 심연',   enemies: ['thornPlant', 'thornPlant', 'turret', 'mimic', 'frog', 'toxicSlime', 'necro'], rule: '가시덩굴은 움직이지 않는다 — 각도를 노려라' },
+  8: { name: '절망의 감옥', enemies: ['executioner', 'executioner', 'stalker', 'brute', 'sniper', 'shieldSkeleton'], rule: '처형자의 붉은 구역에서 벗어나라' },
+  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'wisp', 'berserker', 'lavaHound'], rule: '마그마 슬라임은 죽어도 끝이 아니다' },
+  10: { name: '심연의 왕좌', enemies: ['voidEye', 'voidEye', 'glutton', 'frostArcher', 'stalker', 'crystal', 'necro'], rule: '공허의 눈은 추적탄을 쏜다 — 직각으로 대시하라' },
 };
 
 // 11층+ (무한 모드 '심연 회랑'): 6~10층 구성을 순환하며 끝없이 강해진다
@@ -107,7 +107,16 @@ const Dungeon = {
     const n = Math.min(16, 3 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 0.9) + heatBonus);
     const eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
     for (let i = 0; i < n; i++) {
-      comp.push({ type: RNG.pick(data.enemies), elite: RNG.chance(eliteChance) });
+      const type = RNG.pick(data.enemies);
+      comp.push({ type, elite: RNG.chance(eliteChance) });
+      // 벌레 떼는 4마리씩 몰려온다 (1마리 몫으로 취급)
+      if (type === 'swarm') {
+        for (let k = 0; k < 3; k++) comp.push({ type: 'swarm', elite: false });
+      }
+    }
+    // 중간보스 (우두머리): 2층부터 방마다 12% 확률로 난입 — 그 방의 난이도가 확 뛴다
+    if (this.floor >= 2 && RNG.chance(0.12)) {
+      comp.push({ type: RNG.pick(data.enemies.filter((t) => t !== 'swarm')), elite: false, mini: true });
     }
     return comp;
   },

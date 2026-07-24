@@ -708,35 +708,33 @@ const HUD = {
     let hovered = null;
 
     if (game.codexTab === 0) {
-      // 몬스터: 8열 그리드 (22종 = 3행), 처치 수 표시
+      // 몬스터: 10열 컴팩트 그리드 (42종 = 5행), 처치 수는 호버 설명에 표시
       const found = CODEX_ENEMIES.filter((e) => codex.kills[e.id.startsWith('boss') ? 'boss' + e.id.slice(4) : e.id] > 0).length;
       this._codexHeader(ctx, found, CODEX_ENEMIES.length);
-      const cols = 8, cw = 116, chh = 92;
+      const cols = 10, cw = 94, chh = 59;
       const x0 = (Renderer.W - cols * cw) / 2;
       CODEX_ENEMIES.forEach((e, i) => {
         const killKey = e.boss ? 'boss' + e.id.slice(4) : e.id;
         const kills = codex.kills[killKey] || 0;
-        const r = { x: x0 + (i % cols) * cw + 4, y: 138 + Math.floor(i / cols) * chh, w: cw - 8, h: chh - 8 };
+        const r = { x: x0 + (i % cols) * cw + 3, y: 132 + Math.floor(i / cols) * chh, w: cw - 6, h: chh - 6 };
         const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
-        if (hover) hovered = { name: kills > 0 ? e.name : '???', desc: kills > 0 ? e.desc : '아직 만나지 못했다...' };
+        if (hover) hovered = { name: kills > 0 ? `${e.name} (처치 ${kills})` : '???', desc: kills > 0 ? e.desc : '아직 만나지 못했다...' };
         ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
         ctx.fillRect(r.x, r.y, r.w, r.h);
         ctx.strokeStyle = kills > 0 ? (e.boss ? '#e43b44' : '#4a4a5c') : '#26262f';
         ctx.lineWidth = 1;
         ctx.strokeRect(r.x, r.y, r.w, r.h);
         if (kills > 0) {
-          this._fitSprite(ctx, Sprites[e.sprite], r.x + r.w / 2, r.y + 34, 48);
-          ctx.font = '11px monospace';
+          this._fitSprite(ctx, Sprites[e.sprite], r.x + r.w / 2, r.y + 22, 30);
+          ctx.font = '10px monospace';
           ctx.fillStyle = e.boss ? '#e43b44' : '#e8e0cf';
           ctx.textAlign = 'center';
-          ctx.fillText(e.name, r.x + r.w / 2, r.y + r.h - 20);
-          ctx.fillStyle = '#666a80';
-          ctx.fillText(`처치 ${kills}`, r.x + r.w / 2, r.y + r.h - 7);
+          ctx.fillText(e.name.length > 7 ? e.name.slice(0, 7) : e.name, r.x + r.w / 2, r.y + r.h - 6);
         } else {
-          ctx.font = 'bold 24px monospace';
+          ctx.font = 'bold 18px monospace';
           ctx.fillStyle = '#33333f';
           ctx.textAlign = 'center';
-          ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 8);
+          ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 6);
         }
       });
     } else if (game.codexTab === 1) {

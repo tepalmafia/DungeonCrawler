@@ -9,6 +9,9 @@ const PROJ_STYLES = {
   web:   { color: '#e8e0cf', r: 5 },
   thorn: { color: '#7ab04c', r: 5 },
   voidorb: { color: '#b13ae0', r: 8, wavy: false },
+  ice:   { color: '#a9e3ff', r: 5 },
+  shard: { color: '#c9b8e8', r: 4 },
+  mana:  { color: '#b89ae8', r: 5 },
 };
 
 const Game = {
@@ -151,7 +154,7 @@ const Game = {
 
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {
-        this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite });
+        this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini });
       });
       // 층 첫 방이면 층 이름 배너
       if (depth === 1) {
