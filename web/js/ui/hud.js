@@ -173,8 +173,14 @@ const HUD = {
       ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       ctx.fillStyle = '#666a80';
-      ctx.fillText('매뉴얼 (H) · 음소거 (M)', 14, Renderer.H - 44);
+      ctx.fillText('🔇 음소거 (M)', 14, Renderer.H - 44);
     }
+
+    // ── 상시 단축키 바 — 최하단 중앙, 흐리게 (플레이 방해 없이 항상 보인다) ──
+    ctx.textAlign = 'center';
+    ctx.font = '11px monospace';
+    ctx.fillStyle = 'rgba(154,160,180,0.45)';
+    ctx.fillText('WASD 이동 · J/클릭 공격 · Space 대시 · K 스킬 · Tab 목록 · H 도움말 · ESC 일시정지', Renderer.W / 2, Renderer.H - 6);
 
     // ── 봇 모드 표시 + 층별 사망 리포트 ──
     if (Bot.enabled) {
