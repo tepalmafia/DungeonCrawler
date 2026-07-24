@@ -5,14 +5,34 @@ const GameRewards = {
   endRun(victory) {
     if (this.runEnded) return;
     this.runEnded = true;
-    this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat);
+    if (this.endless) {
+      // 무한 모드: 10층 정산에서 이미 받은 몫을 뺀 초과분만 지급
+      this.shardsEarned = Meta.endlessRun(
+        Dungeon.floor, Dungeon.roomIndex, this.kills, this.heat,
+        this.shardsPaid, this.kills - this.killsPaid);
+    } else {
+      this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat);
+    }
     this.shardAnimT = 0;
+  },
+
+  // 무한 모드 진입 — 승리 화면에서 C: 정산은 유지하고 11층으로 계속 내려간다
+  continueEndless() {
+    this.endless = true;
+    this.runEnded = false;
+    this.shardsPaid = (this.shardsPaid || 0) + this.shardsEarned;
+    this.killsPaid = this.kills;
+    this.shardsEarned = 0;
+    this.state = 'play';
+    this.banner = { text: '심연 회랑 — 끝없는 하강이 시작된다', life: 2.5, maxLife: 2.5, color: '#b13ae0' };
+    AudioSys.roar();
+    Dungeon.nextFloor();
   },
 
   onBossDead() {
     this.arrows = [];
     this.rings = [];
-    if (Dungeon.floor >= 10) {
+    if (Dungeon.floor >= 10 && !this.endless) {
       this.endRun(true);
       this.state = 'victory';
       Renderer.shake(8, 0.6);

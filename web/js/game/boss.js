@@ -102,13 +102,17 @@ const BOSS_DEFS = {
 };
 
 function createBoss(floor, x, y) {
-  const def = BOSS_DEFS[floor] || BOSS_DEFS[1];
+  // 11층+ (무한 모드): 각성 보스(6~10층)를 순환하며 층당 +15% HP로 강해진다
+  const defKey = floor <= 10 ? floor : ((floor - 11) % 5) + 6;
+  const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
+  const hpScale = floor > 10 ? 1 + 0.15 * (floor - 10) : 1;
+  const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,
     name: def.name,
     def,
     x, y,
-    hp: def.hp, maxHp: def.hp,
+    hp, maxHp: hp,
     r: def.r || 24,
     speed: def.speed, xpVal: 0,
     dead: false, elite: false,

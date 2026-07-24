@@ -99,7 +99,7 @@ const GamePlay = {
       m.t -= dt;
       if (m.t <= 0) {
         const e = createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
-        e.speed *= 1 + 0.02 * (Dungeon.floor - 1); // 층당 +2% 속도 — 심층일수록 압박
+        e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
         if (this.heat >= 3) e.speed *= 1.15;
         this.enemies.push(e);
         Particles.burst(m.x, m.y, { count: 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });

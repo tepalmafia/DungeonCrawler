@@ -80,6 +80,9 @@ const Game = {
     this.showInventory = false;
     this.gaveUp = false;
     this.runEnded = false;
+    this.endless = false;
+    this.shardsPaid = 0;
+    this.killsPaid = 0;
     this.shardsEarned = 0;
     this.shardAnimT = 0;
     this.kills = 0;
@@ -167,7 +170,7 @@ const Game = {
         boss.hp = boss.maxHp = Math.round(boss.maxHp * 1.5);
       }
       this.enemies.push(boss);
-      this.banner = { text: BOSS_DEFS[Dungeon.floor].banner, life: 2.0, maxLife: 2.0 };
+      this.banner = { text: boss.def.banner, life: 2.0, maxLife: 2.0 };
       AudioSys.roar();
     }
   },
@@ -216,6 +219,11 @@ const Game = {
       if (cur > prev && cur <= this.shardsEarned && cur % 3 === 0) AudioSys.shard();
 
       if (Input.pressed('KeyR')) { this.restart(); return; }
+      // 무한 모드: 승리 화면에서 C — 심연 회랑으로 계속
+      if (this.state === 'victory' && Input.pressed('KeyC')) {
+        this.continueEndless();
+        return;
+      }
       if (Input.mouse.justDown || Input.pressed('Space', 'Enter')) {
         this.state = 'hub';
         AudioSys.pickup();
