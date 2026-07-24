@@ -291,11 +291,22 @@ const GameRender = {
       }
     }
 
+    // 픽업 — 우호 글로우: 초록(하트)/청록(XP 보석) 은은한 빛 — 붉은 테의 적 탄환과 색 언어로 구분
     for (const pk of this.pickups) {
       const bob = Math.sin(pk.t * 5) * 3;
+      ctx.save();
+      ctx.globalAlpha = 0.22 + Math.sin(pk.t * 4) * 0.06;
+      ctx.fillStyle = '#38b764';
+      ctx.beginPath(); ctx.arc(pk.x, pk.y + bob * 0.5, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
       ctx.drawImage(Sprites.heart, Math.round(pk.x - 12), Math.round(pk.y - 9 + bob), 24, 18);
     }
     for (const o of this.orbs) {
+      ctx.save();
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = '#2ec4b6';
+      ctx.beginPath(); ctx.arc(o.x, o.y, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
       ctx.drawImage(Sprites.gem, Math.round(o.x - 7), Math.round(o.y - 7), 14, 14);
     }
 
@@ -336,9 +347,19 @@ const GameRender = {
       d.draw(ctx);
     }
 
-    // 투사체
+    // 투사체 — 위험 헤일로: 모든 적 탄환에 공통 붉은 테 (아이템·XP 보석과 즉시 구분되는 위험 색 언어)
     for (const a of this.arrows) {
       const style = PROJ_STYLES[a.kind] || PROJ_STYLES.arrow;
+      const hr = (style.r || 6) + 5;
+      ctx.save();
+      ctx.globalAlpha = 0.16 + Math.sin(a.t * 12) * 0.05;
+      ctx.fillStyle = '#e43b44';
+      ctx.beginPath(); ctx.arc(a.x, a.y, hr + 2, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.65;
+      ctx.strokeStyle = '#e43b44';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(a.x, a.y, hr, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
       if (style.sprite) {
         Renderer.drawSprite(Sprites.arrow, a.x, a.y, { rot: Math.atan2(a.dir.y, a.dir.x), scale: 3 });
       } else {

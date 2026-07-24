@@ -119,6 +119,10 @@ const Dungeon = {
       this.miniSeen = false;
       this.shortcutHot = true;
       this.build('combat');
+      // 보상 감사: 층 스킵은 그 층의 XP·유물 기회를 통째로 버리는 것 — 위험(정예 들끓음)만 있고
+      // 런 파워 보상이 없었다. 도착 즉시 특성 1장으로 손실을 일부 보전 (그래도 정상 진행보다 약간 손해 = 의도)
+      Game.pendingChoices++;
+      Game.openTraitChoice('shortcut');
       return;
     }
     // 금고방 (맵 M3): 진행을 소모하지 않는 보너스 방 — roomIndex 유지, 나올 때 같은 갈림길
