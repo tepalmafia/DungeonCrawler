@@ -111,6 +111,12 @@ const AudioSys = {
     }
   },
   dash()   { this._noise({ dur: 0.12, vol: 0.18, freq: this._v(3000), q: 0.5 }); },
+  // 완벽 회피: 상승 사인 + 유리 같은 반짝임 — 시간이 늘어지는 순간의 청각 신호
+  pdodge() {
+    this._tone({ type: 'sine', f0: 480, f1: 1250, dur: 0.22, vol: 0.32 });
+    this._tone({ type: 'triangle', f0: this._v(1900), f1: 2400, dur: 0.12, vol: 0.12, delay: 0.05 });
+    this._noise({ dur: 0.1, vol: 0.1, freq: 2600, q: 1.5 });
+  },
   pickup() { this._tone({ type: 'sine', f0: 660, dur: 0.08, vol: 0.3 }); this._tone({ type: 'sine', f0: 990, dur: 0.12, vol: 0.3, delay: 0.08 }); },
   thud()   { if (!this._gate('thud', 60, 2)) return; this._tone({ type: 'sine', f0: this._v(95), f1: 35, dur: 0.18, vol: 0.6 }); this._noise({ dur: 0.1, vol: 0.35, freq: 300 }); },
   shoot()  { if (!this._gate('shoot')) return; this._noise({ dur: 0.06, vol: 0.2, freq: this._v(1800), q: 2 }); },

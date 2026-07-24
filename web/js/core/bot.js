@@ -292,11 +292,15 @@ const Bot = {
       } else if (World.doorsActive && World.doors.length > 0) {
         // 문 선택: 이점이 있는 방을 고른다 — 보물 > 모닥불(다쳤을 때) > 기연 > 정예(카드 보상) > 전투
         const doorScore = (opt) => {
-          if (opt.type === 'treasure') return 5;
-          if (opt.type === 'camp') return p.hp < p.maxHp * 0.7 ? 4.5 : 1.5;
-          if (opt.type === 'event') return 4;
-          if (opt.type === 'elite') return 3;
-          return 2;
+          let s;
+          if (opt.type === 'treasure') s = 5;
+          else if (opt.type === 'camp') s = p.hp < p.maxHp * 0.7 ? 4.5 : 1.5;
+          else if (opt.type === 'event') s = 4;
+          else if (opt.type === 'elite') s = 3;
+          else s = 2;
+          // 문 수식어: 체력이 넉넉하면 위험-보상 문을 선호
+          if (opt.mod && p.hp >= p.maxHp * 0.6) s += opt.mod.id === 'guarded' ? 1.5 : 0.8;
+          return s;
         };
         let door = World.doors[0];
         for (const d2 of World.doors) {

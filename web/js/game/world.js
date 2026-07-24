@@ -952,6 +952,16 @@ const World = {
       ctx.textAlign = 'center';
       ctx.fillStyle = c;
       ctx.fillText(d.opt.label, d.x, d.y - 53);
+
+      // 문 수식어 (위험-보상): 명판 위에 경고 라벨 + 설명
+      if (d.opt.mod) {
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = '#e43b44';
+        ctx.fillText(`⚠ ${d.opt.mod.label}`, d.x, d.y - 72);
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#9aa0b4';
+        ctx.fillText(d.opt.mod.desc, d.x, d.y - 84);
+      }
     }
   },
 

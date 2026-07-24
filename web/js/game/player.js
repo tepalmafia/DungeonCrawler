@@ -38,6 +38,8 @@ function createPlayer(x, y, classId = 'knight') {
     attackCd: 0,
     slashes: [],
     dashCritReady: false,
+    pdodgeCrit: false, // 완벽 회피 보상: 다음 일격 확정 크리
+    _pdodged: false,
 
     // 직업 스킬 (K / 우클릭): 검사 회전 베기 / 궁수 화살비 / 마도사 메테오
     skillCd: 0,
@@ -243,7 +245,17 @@ function createPlayer(x, y, classId = 'knight') {
         this.dashDir = len > 0 ? { x: mx, y: my } : { ...this.facing };
         this._trailDist = 0;
         this.dashHit = new Set();
+        this._pdodged = false; // 완벽 회피: 대시당 1회
         if (this.rflags.dashcrit) this.dashCritReady = true;
+        // 불꽃 대시 (특성): 대시 궤적에 불타는 자취
+        if (this.flags.dashfire) {
+          for (let k = 0; k < 3; k++) {
+            game.zones.push({
+              x: this.x + this.dashDir.x * k * 34, y: this.y + this.dashDir.y * k * 34,
+              r: 26, life: 1.6, kind: 'fire', tickT: 0.15 + k * 0.1, hit: null,
+            });
+          }
+        }
         AudioSys.dash();
         Particles.burst(this.x, this.y, {
           count: 8, colors: ['#8a8aa0', '#5c5c74'], speed: 60, life: 0.35, size: 3,
@@ -294,7 +306,10 @@ function createPlayer(x, y, classId = 'knight') {
       }
 
       const attackInput = Input.mouse.justDown || Input.pressed('KeyJ');
-      if (attackInput && this.attackCd <= 0 && this.dashTimer <= 0) {
+      // 대시 파생기 (P2): 대시 중에 공격 — 직업별 특수기 (돌진 찌르기/후퇴 사격/점멸 폭발)
+      if (attackInput && this.attackCd <= 0 && this.dashTimer > 0) {
+        this.dashAttack(game);
+      } else if (attackInput && this.attackCd <= 0 && this.dashTimer <= 0) {
         // 자동 타겟팅: 가장 가까운 적을 자동 조준. 적이 없으면 마우스/이동 방향
         let dir = null;
         const target = this.autoTarget(game);
@@ -357,6 +372,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.rflags.allcrit) crit = true;
       if (this.flags.firecrit && e.status.burn > 0) crit = true;
       if (this.dashCritReady) { crit = true; this.dashCritReady = false; }
+      if (this.pdodgeCrit) { crit = true; this.pdodgeCrit = false; } // 완벽 회피 보상: 다음 일격 확정 크리
 
       let bonus = 0;
       if (this.flags.corrode && e.status.poison > 0) bonus += 1;
@@ -427,6 +443,7 @@ function createPlayer(x, y, classId = 'knight') {
             kind: 'parrow', x: this.x + d2.x * 14, y: this.y + d2.y * 14,
             dir: d2, speed: finisher ? 560 : 480,
             finisher, pierce: finisher, life: 1.1, hit: new Set(),
+            bounces: this.flags.rebound ? 1 : 0, // 도탄 특성
           });
         }
         Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
@@ -443,10 +460,70 @@ function createPlayer(x, y, classId = 'knight') {
           aoe: finisher ? 70 : (fireball ? 40 : 0),
           fire: fireball,
           life: 2.0, hit: new Set(),
+          bounces: this.flags.rebound ? 1 : 0, // 도탄 특성
         });
         Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
           count: 4, colors: fireball ? ['#ff7043', '#ffd866'] : ['#c56cf0', '#8a5ac2'], speed: 60, life: 0.25, size: 3,
         });
+      }
+
+      // 지진파 (특성): 마무리 일격이 전방으로 관통 충격파를 쏜다
+      if (finisher && this.flags.quake) {
+        game.pbolts.push({
+          kind: 'pwave', x: this.x + dir.x * 12, y: this.y + dir.y * 12,
+          dir: { ...dir }, speed: 330, finisher: false, pierce: true, life: 0.55, hit: new Set(),
+        });
+      }
+    },
+
+    // 대시 파생기 — 대시의 기세를 공격으로 잇는다 (손맛 동사 확장)
+    dashAttack(game) {
+      this.attackCd = 0.5 * this.atkCdMul;
+      this.attackPoseT = 0.18;
+      const dir = { ...this.dashDir };
+      const angle = Math.atan2(dir.y, dir.x);
+      if (dir.x !== 0) this.flip = dir.x < 0;
+
+      if (this.classId === 'knight') {
+        // 돌진 찌르기: 좁고 긴 관통 일격 (대시 방향으로 꿰뚫는다)
+        AudioSys.slash(2);
+        this.slashes.push({ angle, range: 108, arc: 0.7, life: 0.14, maxLife: 0.14, finisher: true });
+        World.moveEntity(this, dir.x * 14, dir.y * 14);
+        for (const e of game.enemies) {
+          if (e.dead || e.phased) continue;
+          const dx = e.x - this.x, dy = e.y - this.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 108 + e.r) continue;
+          let diff = Math.atan2(dy, dx) - angle;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          if (Math.abs(diff) > 0.35 + 0.25) continue;
+          const hitDir = { x: dx / (dist || 1), y: dy / (dist || 1) };
+          const dmg = Math.round(this.currentAtk() * 2);
+          let crit = this.rflags.allcrit || Math.random() < this.critChance;
+          if (this.pdodgeCrit) { crit = true; this.pdodgeCrit = false; }
+          game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, hitDir, { crit, kb: 360 });
+        }
+      } else if (this.classId === 'archer') {
+        // 후퇴 사격: 물러나며 3발 부채꼴 — 카이팅의 리듬
+        AudioSys.bow(true);
+        World.moveEntity(this, -dir.x * 30, -dir.y * 30);
+        for (const off of [-0.22, 0, 0.22]) {
+          const a = angle + off;
+          const d2 = { x: Math.cos(a), y: Math.sin(a) };
+          game.pbolts.push({
+            kind: 'parrow', x: this.x + d2.x * 14, y: this.y + d2.y * 14,
+            dir: d2, speed: 540, finisher: false, pierce: false, life: 1.0, hit: new Set(),
+            bounces: this.flags.rebound ? 1 : 0,
+          });
+        }
+      } else {
+        // 점멸 폭발: 대시로 빠져나온 자리가 터진다
+        AudioSys.bolt(true);
+        game._explode(
+          this.x - dir.x * 34, this.y - dir.y * 34, 80,
+          Math.max(1, Math.round(this.currentAtk() * 1.5)),
+          ['#c56cf0', '#8a5ac2', '#ffd866'], '#c56cf0');
       }
     },
 
