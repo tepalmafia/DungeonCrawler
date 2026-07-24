@@ -114,6 +114,11 @@ const AudioSys = {
   buy()    { this._tone({ type: 'triangle', f0: 587, dur: 0.08, vol: 0.3 }); this._tone({ type: 'triangle', f0: 880, dur: 0.1, vol: 0.3, delay: 0.07 }); },
   deny()   { this._tone({ type: 'square', f0: 140, f1: 90, dur: 0.12, vol: 0.25 }); },
   shard()  { this._tone({ type: 'sine', f0: 700 + Math.random() * 500, dur: 0.05, vol: 0.12 }); },
+  // 스킬 준비 완료 — 은은한 2음 차임 (전투 소음에 묻히지 않되 거슬리지 않게)
+  skillReady() {
+    this._tone({ type: 'sine', f0: 880, dur: 0.07, vol: 0.1 });
+    this._tone({ type: 'sine', f0: 1320, dur: 0.1, vol: 0.1, delay: 0.06 });
+  },
 
   // ── 직업 스킬 전용 사운드 ──
   // 검사 회전 베기: 휘몰아치는 3연속 바람 가르기 + 금속 울림

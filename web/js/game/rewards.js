@@ -14,6 +14,8 @@ const GameRewards = {
       this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat);
     }
     this.shardAnimT = 0;
+    // 오클릭 방지: 전투 중 연타하던 클릭이 정산 화면을 바로 넘기지 않게 잠시 입력 잠금
+    this.overLockT = 1.2;
   },
 
   // 무한 모드 진입 — 승리 화면에서 C: 정산은 유지하고 11층으로 계속 내려간다

@@ -330,6 +330,7 @@ const GamePlay = {
             const dd = Math.hypot(e.x - ix, e.y - iy);
             if (dd < 30 + e.r) {
               p.strike(this, e, { x: (e.x - ix) / (dd || 1), y: (e.y - iy) / (dd || 1) }, { kb: 130 });
+              if (!e.dead) e.status.shock = Math.max(e.status.shock, 0.9); // 화살비 지역 장악: 잠깐 감속
             }
           }
           if (r.explo) {
@@ -358,7 +359,7 @@ const GamePlay = {
           const dd = Math.hypot(e.x - m.x, e.y - m.y);
           if (dd < m.r + e.r) {
             const dir = { x: (e.x - m.x) / (dd || 1), y: (e.y - m.y) / (dd || 1) };
-            const dmg = p.currentAtk() * 3;
+            const dmg = p.currentAtk() * 4;
             const crit = p.rflags.allcrit || Math.random() < p.critChance;
             this.hitEnemy(e, crit ? Math.round(dmg * p.critMul) : dmg, dir, { crit, kb: 320 });
             if (!e.dead) e.status.burn = Math.max(e.status.burn, p.flags.inferno ? 4 : 2);
