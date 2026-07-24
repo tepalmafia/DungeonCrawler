@@ -55,7 +55,7 @@ const GameScreens = {
       Particles.text(p.x, p.y - 30, '회복!', { color: '#e43b44', size: 15 });
       AudioSys.pickup();
     }
-    if (Input.pressed('KeyK')) {
+    if (Input.pressed('KeyX')) { // K→X: 봇 스킬 키(K)와 충돌 — 봇이 스킬 쓸 때마다 방 전멸 (계측 왜곡 원인)
       for (const e of [...this.enemies]) {
         if (!e.dead) { e.spawnT = 0; e.phased = false; this.damageEnemy(e, 99999, { x: 0, y: -1 }, { feel: false }); }
       }
