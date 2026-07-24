@@ -84,22 +84,63 @@ const Sprites = (() => {
   }
 
   // ══════════════ 플레이어 (24×24, 걷기 프레임 3장) ══════════════
-  // 상체 공통 + 다리 프레임 3종 (정지 / 벌림 / 모음)
+  // 직업별 전용 상체 (중세 리디자인) + 다리 프레임 3종 (정지 / 벌림 / 모음)
 
-  const PLAYER_TOP = [
+  // 검사: 깃털 장식 대투구 + 판금 어깨 갑주 + 서코트
+  const KNIGHT_TOP = [
     '........................',
+    '...........rr...........',
+    '..........rrrr..........',
+    '........hhhhhhhh........',
+    '.......hhhhhhhhhh.......',
+    '.......hHHhhhhHHh.......',
+    '.......hkkkkkkkkh.......',
+    '.......hHHhhhhHHh.......',
+    '........hhhhhhhh........',
+    '......ss.tttttt.ss......',
+    '.....sssttttttttsss.....',
+    '.....ffttttttttttff.....',
+    '.....ffttyyyyyyttff.....',
+    '.....ffttttttttttff.....',
+    '.....FfttttttttttfF.....',
+    '......TttttttttttT......',
+    '.......TTttttttTT.......',
+  ];
+  // 궁수: 깊은 후드(그늘진 얼굴 + 빛나는 눈) + 가죽 어깨망토 + 교차 가죽끈
+  const ARCHER_TOP = [
+    '........................',
+    '..........hhhh..........',
     '.........hhhhhh.........',
     '........hhhhhhhh........',
     '.......hhhhhhhhhh.......',
-    '.......hhHHHHHHhh.......',
-    '.......hHffffffHh.......',
-    '.......hHfkffkfFh.......',
-    '.......hHffffffFh.......',
-    '........FffmmffF........',
-    '.........ffffff.........',
+    '.......hhHkkkkHhh.......',
+    '.......hhkgkkgkhh.......',
+    '.......hhHkkkkHhh.......',
+    '........hhffffhh........',
+    '.......ccttttttcc.......',
+    '......cctxttttxtcc......',
+    '.....ffttxxttxxttff.....',
+    '.....ffttyyyyyyttff.....',
+    '.....ffttttttttttff.....',
+    '.....FfttttttttttfF.....',
+    '......TttttttttttT......',
+    '.......TTttttttTT.......',
+  ];
+  // 마도사: 챙 넓은 마법사 모자(금 별 장식) + 백발 수염 + 룬 벨트 로브
+  const MAGE_TOP = [
+    '...........pp...........',
+    '..........pppp..........',
+    '.........ppyppp.........',
+    '........pppppppp........',
+    '.........pppppp.........',
+    '......pppppppppppp......',
+    '....pppppppppppppppp....',
+    '.......hffffffffh.......',
+    '.......hfvffffvfh.......',
+    '........ffwwwwff........',
+    '.........wwwwww.........',
     '.......tttttttttt.......',
     '......tttttttttttt......',
-    '.....ffttttttttttff.....',
     '.....ffttyyyyyyttff.....',
     '.....FfttttttttttfF.....',
     '......TttttttttttT......',
@@ -133,21 +174,6 @@ const Sprites = (() => {
     '........................',
   ];
 
-  const CLASS_PALETTES = {
-    player: { // 검사
-      h: '#b8c4d8', H: '#7a8aa4', f: '#f0c297', F: '#c99a6e', m: '#b97a5a', k: '#1a1c2c',
-      t: '#4a6ede', T: '#2c4a9e', y: '#f7b32b', d: '#29366f', b: '#6b4034', B: '#4a2a20',
-    },
-    playerArcher: { // 궁수 (초록 후드)
-      h: '#3d9960', H: '#256b42', f: '#f0c297', F: '#c99a6e', m: '#b97a5a', k: '#1a1c2c',
-      t: '#38b764', T: '#1d7a42', y: '#d9cbb8', d: '#1d4a33', b: '#5e3a26', B: '#3d2418',
-    },
-    playerMage: { // 마도사 (보라 로브)
-      h: '#8a5ac2', H: '#5c2e8a', f: '#f0c297', F: '#c99a6e', m: '#b97a5a', k: '#1a1c2c',
-      t: '#9a6ad2', T: '#6a3aa2', y: '#ffd866', d: '#3d1e5c', b: '#29366f', B: '#1a2148',
-    },
-  };
-
   // 일부 행만 바꾼 변형 픽셀맵 생성 (걷기/공격 프레임용)
   function withRows(rows, replacements) {
     const out = [...rows];
@@ -155,19 +181,44 @@ const Sprites = (() => {
     return out;
   }
 
-  // 공격 자세: 오른팔을 앞으로 뻗는다 (좌우는 flip으로 처리)
-  const PLAYER_TOP_ATTACK = withRows(PLAYER_TOP, {
-    12: '.....ffttttttttttffff...',
-  });
+  const CLASS_SPRITES = {
+    player: { // 검사 — 강철 갑주 + 청색 서코트 + 붉은 깃털
+      top: KNIGHT_TOP,
+      attack: withRows(KNIGHT_TOP, { 13: '.....ffttttttttttffff...' }),
+      pal: {
+        h: '#c8d4e4', H: '#8a9ab4', k: '#16121f', r: '#e43b44', s: '#a4b0c4',
+        f: '#9aa6ba', F: '#6a7690', t: '#4a6ede', T: '#2c4a9e', y: '#f7b32b',
+        d: '#29366f', b: '#5d6b84', B: '#3d4a5c',
+      },
+    },
+    playerArcher: { // 궁수 — 짙은 초록 후드 + 가죽 망토, 그늘 속 빛나는 눈
+      top: ARCHER_TOP,
+      attack: withRows(ARCHER_TOP, { 13: '.....ffttttttttttffff...' }),
+      pal: {
+        h: '#256b42', H: '#1a4a2e', k: '#0d1410', g: '#a7f070', f: '#f0c297',
+        F: '#c99a6e', c: '#5e3a26', x: '#8a5a3a', t: '#38b764', T: '#1d7a42',
+        y: '#d9cbb8', d: '#1d4a33', b: '#5e3a26', B: '#3d2418',
+      },
+    },
+    playerMage: { // 마도사 — 별 장식 보라 대모자 + 백발 수염 + 룬 벨트
+      top: MAGE_TOP,
+      attack: withRows(MAGE_TOP, { 13: '.....ffttyyyyyyttffff...' }),
+      pal: {
+        p: '#6a3aa2', h: '#c8c8d8', f: '#f0c297', F: '#c99a6e', v: '#5ce0e6',
+        w: '#e8e8f0', t: '#8a5ac2', T: '#5c2e8a', y: '#ffd866',
+        d: '#3d1e5c', b: '#29366f', B: '#1a2148',
+      },
+    },
+  };
 
   sprites.playerFrames = {};
-  for (const key of Object.keys(CLASS_PALETTES)) {
-    const pal = CLASS_PALETTES[key];
+  for (const key of Object.keys(CLASS_SPRITES)) {
+    const { top, attack, pal } = CLASS_SPRITES[key];
     sprites.playerFrames[key] = [
-      make([...PLAYER_TOP, ...PLAYER_LEGS_STAND], pal),
-      make([...PLAYER_TOP, ...PLAYER_LEGS_APART], pal),
-      make([...PLAYER_TOP, ...PLAYER_LEGS_CROSS], pal),
-      make([...PLAYER_TOP_ATTACK, ...PLAYER_LEGS_STAND], pal), // [3] 공격 자세
+      make([...top, ...PLAYER_LEGS_STAND], pal),
+      make([...top, ...PLAYER_LEGS_APART], pal),
+      make([...top, ...PLAYER_LEGS_CROSS], pal),
+      make([...attack, ...PLAYER_LEGS_STAND], pal), // [3] 공격 자세
     ];
     sprites[key] = sprites.playerFrames[key][0]; // 정지 프레임 (거점 미리보기·잔상용)
   }
@@ -608,7 +659,7 @@ const Sprites = (() => {
   });
 
   // 처형자 (8층): 도끼 내려찍기 (직사각 텔레그래프)
-  sprites.executioner = make(pad([
+  const EXEC_ROWS = pad([
     '.......hhhhhh......X',
     '......hhhhhhhh....XX',
     '......hrrrrrrh....XXx',
@@ -623,7 +674,8 @@ const Sprites = (() => {
     '......aaa..aaa',
     '......aaa..aaa',
     '.....aaaa..aaaa',
-  ]), {
+  ]);
+  sprites.executioner = make(EXEC_ROWS, {
     h: '#5d6b84', r: '#e43b44', a: '#3d3d52', d: '#2a2a3a', x: '#5e3a26', X: '#c8d4e4',
   });
 
@@ -643,7 +695,7 @@ const Sprites = (() => {
   });
 
   // 공허의 눈 (10층): 도약 회피 + 추적탄
-  sprites.voidEye = make(pad([
+  const VOIDEYE_ROWS = pad([
     '.....kkkkkk',
     '...kkkkkkkkkk',
     '..kkwwwwwwwwkk',
@@ -655,14 +707,15 @@ const Sprites = (() => {
     '...kkkkkkkkkk',
     '..t..t....t..t',
     '.t....t..t....t',
-  ]), {
+  ]);
+  sprites.voidEye = make(VOIDEYE_ROWS, {
     k: '#241832', w: '#c9b8e8', R: '#b13ae0', r: '#0a0612', t: '#3d2c5c',
   });
 
   // ══════════════ 확장 몬스터 20종 (신규 원화 + 신규 행동) ══════════════
 
   // 해골 병사: 녹슨 검 — 찌르기 돌진
-  sprites.skeleton = make(pad([
+  const SKELETON_ROWS = pad([
     '......WWWWW',
     '.....WWwwwwW',
     '.....Wwkwwkw',
@@ -678,13 +731,14 @@ const Sprites = (() => {
     '.....sww.wws',
     '....sww...wws',
     '....Www...wwW',
-  ]), {
+  ]);
+  sprites.skeleton = make(SKELETON_ROWS, {
     W: '#f0ece0', w: '#d8d3c5', s: '#a09a8a', m: '#6a665a', k: '#16121f',
     r: '#8a5a3a', g: '#5e3a26', A: '#5d6b84',
   });
 
   // 방패 해골: 전면 대형 방패
-  sprites.shieldSkeleton = make(pad([
+  const SHIELD_ROWS = pad([
     '.....wwww....B',
     '....wwwwww..BB',
     '....wkwwkw..BB',
@@ -698,7 +752,8 @@ const Sprites = (() => {
     '....wwwww...BB',
     '....w...w....B',
     '...ww...ww',
-  ]), { w: '#d8d3c5', k: '#1a1c2c', m: '#8a8074', B: '#3a7ca5' });
+  ]);
+  sprites.shieldSkeleton = make(SHIELD_ROWS, { w: '#d8d3c5', k: '#1a1c2c', m: '#8a8074', B: '#3a7ca5' });
 
   // 저격 해골: 후드 + 장궁
   sprites.sniper = make(pad([
@@ -718,13 +773,14 @@ const Sprites = (() => {
   ]), { h: '#3d3d52', k: '#e43b44', w: '#d8d3c5', l: '#8a6a3a' });
 
   // 벌레 떼: 아주 작은 벌레 (4마리씩 몰려온다)
-  sprites.swarm = make(pad([
+  const SWARM_ROWS = pad([
     '..k..k',
     '.kbbbbk',
     '.bBBBBb',
     '.bbbbbb',
     '..l..l',
-  ]), { k: '#1a1c2c', b: '#5c3a5c', B: '#8a5a8a', l: '#2a1c2c' });
+  ]);
+  sprites.swarm = make(SWARM_ROWS, { k: '#1a1c2c', b: '#5c3a5c', B: '#8a5a8a', l: '#2a1c2c' });
 
   // 독두꺼비: 도약 + 착지 독 장판
   sprites.frog = make(pad([
@@ -744,7 +800,7 @@ const Sprites = (() => {
   });
 
   // 흡혈 거머리: 마디 지렁이
-  sprites.leech = make(pad([
+  const LEECH_ROWS = pad([
     '.......rr',
     '.....rrRRr',
     '....rRRrrRRr',
@@ -755,7 +811,8 @@ const Sprites = (() => {
     '...rrrr..rrrr',
     '....rr....rr',
     '....k......k',
-  ]), {
+  ]);
+  sprites.leech = make(LEECH_ROWS, {
     r: '#5a1424', R: '#8a3040', W: '#c05060', k: '#1a0c12',
   });
 
@@ -829,7 +886,7 @@ const Sprites = (() => {
     f: '#2a6a9a', F: '#5aaad8', W: '#a8e0f8', w: '#e8f8ff', k: '#101820',
   });
   // 주술사: 아군을 치유하는 토템 가면
-  sprites.shaman = make(pad([
+  const SHAMAN_ROWS = pad([
     '....t.tt.t',
     '....tttttt',
     '...ttwwwwtt',
@@ -841,10 +898,11 @@ const Sprites = (() => {
     '..g.tttttt.g',
     '....tt..tt',
     '...ttt..ttt',
-  ]), { t: '#6a4a8a', w: '#d9cbb8', k: '#38b764', m: '#4a2a5a', g: '#8a6a3a' });
+  ]);
+  sprites.shaman = make(SHAMAN_ROWS, { t: '#6a4a8a', w: '#d9cbb8', k: '#38b764', m: '#4a2a5a', g: '#8a6a3a' });
 
   // 수정 정령: 죽으면 파편 사방 발사
-  sprites.crystal = make(pad([
+  const CRYSTAL_ROWS = pad([
     '.......W',
     '......cWc',
     '.....cCWCc',
@@ -858,12 +916,13 @@ const Sprites = (() => {
     '......dcd',
     '..c....d....c',
     '.cWc.......cWc',
-  ]), {
+  ]);
+  sprites.crystal = make(CRYSTAL_ROWS, {
     c: '#6a4aa8', C: '#9a7ad0', w: '#d8c8f8', W: '#ffffff', d: '#4a3078',
   });
 
   // 구울: 시체를 먹고 강해진다
-  sprites.ghoul = make(pad([
+  const GHOUL_ROWS = pad([
     '.......gGGGg',
     '......gGGGGGg',
     '......GrGGGrG',
@@ -879,7 +938,8 @@ const Sprites = (() => {
     '.......dG.Gd',
     '......gGG.GGg',
     '.....gGG...GGg',
-  ]), {
+  ]);
+  sprites.ghoul = make(GHOUL_ROWS, {
     g: '#4a5a40', G: '#6a7a5a', d: '#3a4a30', r: '#e43b44', m: '#2a3220', b: '#7a2430',
   });
 
@@ -929,7 +989,7 @@ const Sprites = (() => {
   ]), { g: '#8a6a3a', G: '#c09a4a', w: '#f0e8d5', r: '#6a1020', l: '#3a2a12' });
 
   // 그림자 추적자: 등 뒤로 순간이동
-  sprites.stalker = make(pad([
+  const STALKER_ROWS = pad([
     '.....kkkk',
     '....kkkkkk',
     '....krkkrk',
@@ -943,10 +1003,11 @@ const Sprites = (() => {
     '....kkkkk',
     '....k...k',
     '...kk...kk',
-  ]), { k: '#241832', r: '#b13ae0', s: '#4a3a5c' });
+  ]);
+  sprites.stalker = make(STALKER_ROWS, { k: '#241832', r: '#b13ae0', s: '#4a3a5c' });
 
   // 덩치: 넓은 부채꼴 몽둥이 휘두르기
-  sprites.brute = make(pad([
+  const BRUTE_ROWS = pad([
     '.....bbbbbb.....g',
     '....bbbbbbbb...gg',
     '....bkbbbbkb...gg',
@@ -959,7 +1020,8 @@ const Sprites = (() => {
     '.bb..bbbbbb..g',
     '.....bb..bb',
     '....bbb..bbb',
-  ]), { b: '#7a5a4a', k: '#ffd866', m: '#4a3226', g: '#5e3a26' });
+  ]);
+  sprites.brute = make(BRUTE_ROWS, { b: '#7a5a4a', k: '#ffd866', m: '#4a3226', g: '#5e3a26' });
 
   // 임프: 짧은 순간이동 + 화염구
   sprites.imp = make(pad([
@@ -992,6 +1054,33 @@ const Sprites = (() => {
     '...pppppppppp',
     '....pp....pp',
   ]), { p: '#8a6a9a', k: '#ffd866', w: '#f0e8d5', R: '#4a1020' });
+
+  // ══════════════ 신규 24종 — 팔레트 스왑 변종 (층 전용 로스터 확장) ══════════════
+  // 같은 실루엣이라도 층이 달라 마주치지 않고, 팔레트·기믹이 완전히 다르다
+  sprites.sporePuff = make(MUSHROOM_ROWS, { m: '#b8a0d0', M: '#ece4f8', D: '#8a6aa8', s: '#c9d94a', k: '#1a1c2c' });
+  sprites.acidSnail = make(SLIME_ROWS, { g: '#8a8a3a', a: '#c9d94a', G: '#55561f', W: '#f0f0c0', k: '#1a1c2c' });
+  sprites.jailer = make(EXEC_ROWS, { h: '#3a5a7c', r: '#5ce0e6', a: '#2c3c50', d: '#1d2836', x: '#8a6a3a', X: '#a9c1d8' });
+  sprites.frostMage = make(SHAMAN_ROWS, { t: '#3a6a9a', w: '#e8f4fa', k: '#5ce0e6', m: '#24455e', g: '#a9c1d8' });
+  sprites.cinder = make(SWARM_ROWS, { k: '#2a1208', b: '#d35400', B: '#ff9a3c', l: '#7a1010' });
+  sprites.ashWalker = make(GOLEM_ROWS, { g: '#4a4448', d: '#2e2a30', k: '#ff7043' });
+  sprites.emberMoth = make(BAT_ROWS, { w: '#d97a20', b: '#8a3a10', k: '#ffd866', f: '#ffd866' });
+  sprites.acolyte = make(NECRO_ROWS, { n: '#3a2a5c', f: '#0d0b14', g: '#b13ae0', s: '#c9b8e8', N: '#241838' });
+  sprites.shade = make(STALKER_ROWS, { k: '#101018', r: '#5c7cff', s: '#2a2a44' });
+  sprites.gazer = make(VOIDEYE_ROWS, { k: '#182448', w: '#a8c0f0', R: '#4a6ede', r: '#080c1e', t: '#2c3c6e' });
+  sprites.bloodBat = make(BAT_ROWS, { w: '#8a2430', b: '#5a1424', k: '#ffd866', f: '#ff4757' });
+  sprites.boneHeap = make(SKELETON_ROWS, { W: '#e8dfc8', w: '#c8bfa8', s: '#948a72', m: '#5e564a', k: '#16121f', r: '#6a4a2a', g: '#4a3020', A: '#7a5a3a' });
+  sprites.venomLasher = make(GHOUL_ROWS, { g: '#3f6a35', G: '#6a9a48', d: '#2a4a24', r: '#c9d94a', m: '#1d3318', b: '#55702a' });
+  sprites.sporeMother = make(MUSHROOM_ROWS, { m: '#a04a7a', M: '#e8b8d0', D: '#702a52', s: '#c9b89a', k: '#1a1c2c' });
+  sprites.acidSlug = make(LEECH_ROWS, { r: '#6a7a1a', R: '#9aa82a', W: '#d8e858', k: '#141a06' });
+  sprites.warden = make(BRUTE_ROWS, { b: '#4a5a74', k: '#5ce0e6', m: '#2c3850', g: '#1d2836' });
+  sprites.chainWraith = make(WRAITH_ROWS, { w: '#8a8a9a', k: '#16121f', m: '#4a3a3a', W: '#c05060' });
+  sprites.frostGolem = make(GOLEM_ROWS, { g: '#5a9ac8', d: '#3a6a94', k: '#f0faff' });
+  sprites.obsidianBeast = make(BOAR_ROWS, { b: '#2c2434', B: '#443a54', d: '#181220', k: '#b13ae0', w: '#b13ae0' });
+  sprites.flameJuggler = make(SHAMAN_ROWS, { t: '#c04a3a', w: '#ffd866', k: '#ff9a3c', m: '#7a1010', g: '#ffd866' });
+  sprites.lavaBurster = make(CRYSTAL_ROWS, { c: '#a83a1a', C: '#e06030', w: '#ffd866', W: '#fff0c0', d: '#701d0a' });
+  sprites.voidSpawn = make(SWARM_ROWS, { k: '#12081e', b: '#3d2c5c', B: '#7a5ac2', l: '#241838' });
+  sprites.riftCaster = make(NECRO_ROWS, { n: '#241838', f: '#0d0b14', g: '#c9b8e8', s: '#b13ae0', N: '#160e24' });
+  sprites.mirrorKnight = make(SHIELD_ROWS, { w: '#e8ecf4', k: '#1a1c2c', m: '#9aa6ba', B: '#c8d4e4' });
 
   // 1층: 무덤지기 카론 — 낫을 든 사신
   sprites.boss = make(pad([

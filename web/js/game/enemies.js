@@ -1,4 +1,4 @@
-// 적 12종 + 정예 변종 — 원칙: 모든 공격에는 예고 동작(텔레그래프)이 있다.
+// 적 61종(층 전용 로스터) + 정예 변종 — 원칙: 모든 공격에는 예고 동작(텔레그래프)이 있다.
 // 상태이상: burn(화상) / shock(감전·감속) / poison(중독) — 특성 시너지의 재료.
 // 층이 깊어질수록 HP가 배율로 강화된다.
 
@@ -7,7 +7,9 @@
 const ENEMY_ROLES = {
   archer: 'shoot', sniper: 'shoot', frostArcher: 'shoot', turret: 'shoot', thornPlant: 'shoot',
   wisp: 'shoot', crystal: 'shoot', imp: 'shoot', voidEye: 'shoot', mushroom: 'shoot', fireSpirit: 'shoot',
-  necro: 'support', shaman: 'support',
+  frostMage: 'shoot', acolyte: 'shoot', gazer: 'shoot', acidSlug: 'shoot', chainWraith: 'shoot',
+  flameJuggler: 'shoot', lavaBurster: 'shoot', riftCaster: 'shoot',
+  necro: 'support', shaman: 'support', sporeMother: 'support',
 };
 function enemyRole(e) {
   return ENEMY_ROLES[e.type] || 'melee';
@@ -1628,6 +1630,950 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.drawStatus(ctx);
       },
     }),
+
+    // ══════ 신규 24종 — 층 전용 로스터 (2026-07 확장): 층마다 다른 몹, 다른 기믹 ══════
+
+    // ── [2층] 포자 방울: 느리게 떠다니다 죽으면 독구름 — 움직이는 지뢰 ──
+    sporePuff: () => ({
+      hp: 2, r: 12, speed: 34, xpVal: 5, sprite: 'sporePuff',
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const wob = Math.sin(this.animT * 2.4) * 0.4;
+        World.moveEntity(this, (dx / d + -dy / d * wob) * this.effSpeed() * dt, (dy / d + dx / d * wob) * this.effSpeed() * dt);
+        this.touchPlayer(game, 1);
+      },
+      onDeath(game) {
+        game.firePatches.push({ x: this.x, y: this.y, r: 44, life: 2.2, kind: 'poison' });
+      },
+      draw(ctx) {
+        const bob = Math.sin(this.animT * 3) * 4;
+        Renderer.drawSprite(this.skin(Sprites.sporePuff), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [2층] 산성 달팽이: 느린 장갑 몹 — 지나간 자리에 산성 점액 (지형 오염) ──
+    acidSnail: () => ({
+      hp: 6, r: 13, speed: 24, xpVal: 8, sprite: 'acidSnail', armorCap: 1,
+      trailCd: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.trailCd > 0) this.trailCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        if (this.trailCd <= 0) {
+          this.trailCd = 0.55;
+          game.firePatches.push({ x: this.x, y: this.y + 4, r: 16, life: 2.4, kind: 'poison' });
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        const sq = 1 + Math.sin(this.animT * 2.5) * 0.08;
+        Renderer.drawSprite(this.skin(Sprites.acidSnail), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [3층] 간수: 사슬 갈고리를 조준해 던져 플레이어를 끌어당긴다 — 위치 파괴자 ──
+    jailer: () => ({
+      hp: 7, r: 15, speed: 52, xpVal: 13, sprite: 'jailer',
+      state: 'stalk', stateT: 0, hookCd: 2.0, aimDir: { x: 1, y: 0 },
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        if (this.hookCd > 0) this.hookCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.state === 'stalk') {
+          const spd = this.effSpeed();
+          if (d > 240) World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+          else if (d < 150) World.moveEntity(this, (-dx / d) * spd * 0.7 * dt, (-dy / d) * spd * 0.7 * dt);
+          if (this.hookCd <= 0 && d < 300 && d > 100) { this.state = 'aim'; this.stateT = 0; }
+        } else if (this.state === 'aim') {
+          // 조준 0.75초 — 0.5초에 조준 고정 (사슬 궤도가 보인다)
+          if (this.stateT < 0.5) this.aimDir = { x: dx / d, y: dy / d };
+          if (this.stateT > 0.75) {
+            this.state = 'stalk'; this.stateT = 0; this.hookCd = 3.5;
+            // 사슬 스냅: 궤도 위에 있으면 끌려온다
+            const rx = p.x - this.x, ry = p.y - this.y;
+            const along = rx * this.aimDir.x + ry * this.aimDir.y;
+            const perp = Math.abs(-rx * this.aimDir.y + ry * this.aimDir.x);
+            for (let i = 0; i < 9; i++) {
+              Particles.burst(this.x + this.aimDir.x * i * 32, this.y + this.aimDir.y * i * 32, { count: 1, colors: ['#a9c1d8'], speed: 20, life: 0.22, size: 2 });
+            }
+            AudioSys.thud();
+            if (along > 0 && along < 290 && perp < 26 + p.r) {
+              game.hurtPlayer(1, { x: -this.aimDir.x, y: -this.aimDir.y }, 520);
+              Particles.text(p.x, p.y - 30, '사슬!', { color: '#5ce0e6', size: 13 });
+            }
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        if (this.state === 'aim') {
+          const locked = this.stateT >= 0.5;
+          ctx.save();
+          ctx.globalAlpha = locked ? 0.8 : 0.3;
+          ctx.strokeStyle = locked ? '#5ce0e6' : '#4a6a8a';
+          ctx.lineWidth = 2; ctx.setLineDash([4, 5]);
+          ctx.beginPath(); ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x + this.aimDir.x * 290, this.y + this.aimDir.y * 290); ctx.stroke();
+          ctx.restore();
+        }
+        Renderer.drawSprite(this.skin(Sprites.jailer), this.x, this.y, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [3층] 서리 술사: 3갈래 감속탄 + 접근하면 짧은 도약 (2회 후 휴식) ──
+    frostMage: () => ({
+      hp: 4, r: 13, speed: 55, xpVal: 12, sprite: 'frostMage',
+      castCd: 1.6, blinkCd: 0, blinks: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.castCd > 0) this.castCd -= dt;
+        if (this.blinkCd > 0) this.blinkCd -= dt; else this.blinks = 0;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (d < 120 && this.blinks < 2) {
+          this.blinks++; this.blinkCd = 4.0;
+          Particles.burst(this.x, this.y, { count: 8, colors: ['#a9c1d8', '#e8f4fa'], speed: 90, life: 0.3, size: 3 });
+          const a = Math.atan2(-dy, -dx) + (Math.random() - 0.5) * 1.2;
+          const nx = this.x + Math.cos(a) * 150, ny = this.y + Math.sin(a) * 150;
+          if (!World.isSolidAt(nx, ny)) { this.x = nx; this.y = ny; }
+          AudioSys.dash();
+        } else if (d < 200) {
+          World.moveEntity(this, (-dx / d) * this.effSpeed() * dt, (-dy / d) * this.effSpeed() * dt);
+        }
+        if (this.castCd <= 0 && d < 420) {
+          this.castCd = 2.8;
+          const base = Math.atan2(dy, dx);
+          for (const off of [-0.32, 0, 0.32]) {
+            game.spawnProjectile('ice', this.x, this.y, { x: Math.cos(base + off), y: Math.sin(base + off) }, { speed: 200, dmg: 1, slow: 1.2 });
+          }
+          AudioSys.shoot();
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        const bob = Math.sin(this.animT * 2.6) * 3;
+        if (this.castCd < 0.4) {
+          ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#a8d8ee';
+          ctx.beginPath(); ctx.arc(this.x, this.y - 16, 4 + (0.4 - this.castCd) * 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        }
+        Renderer.drawSprite(this.skin(Sprites.frostMage), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [4층] 불씨: 작고 빠른 돌격 — 죽으면 그 자리에 불길 ──
+    cinder: () => ({
+      hp: 2, r: 10, speed: 100, xpVal: 5, sprite: 'cinder',
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const wig = Math.sin(this.animT * 9) * 0.5;
+        World.moveEntity(this, (dx / d + -dy / d * wig) * this.effSpeed() * dt, (dy / d + dx / d * wig) * this.effSpeed() * dt);
+        if (Math.random() < 0.15) {
+          Particles.burst(this.x, this.y, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 30, life: 0.3, size: 2, gravity: -100 });
+        }
+        this.touchPlayer(game, 1);
+      },
+      onDeath(game) {
+        game.firePatches.push({ x: this.x, y: this.y, r: 26, life: 1.4, kind: 'fire' });
+      },
+      draw(ctx) {
+        const sq = 1 + Math.sin(this.animT * 10) * 0.15;
+        Renderer.drawSprite(this.skin(Sprites.cinder), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [4층] 재의 보행자: 느린 탱커 — 걸음마다 불길을 남겨 지형을 잠식한다 ──
+    ashWalker: () => ({
+      hp: 8, r: 16, speed: 40, xpVal: 13, sprite: 'ashWalker',
+      trailCd: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.trailCd > 0) this.trailCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        if (this.trailCd <= 0) {
+          this.trailCd = 0.6;
+          game.firePatches.push({ x: this.x, y: this.y + 4, r: 18, life: 1.2, kind: 'fire' });
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        Renderer.drawSprite(this.skin(Sprites.ashWalker), this.x, this.y, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [4층] 불나방: 주위를 맴돌다 예고 후 급강하 — 착지점에 불씨 ──
+    emberMoth: () => ({
+      hp: 3, r: 11, speed: 90, xpVal: 9, sprite: 'emberMoth',
+      state: 'orbit', stateT: 0, orbitDir: 1, diveDir: { x: 1, y: 0 },
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.state === 'orbit') {
+          const spd = this.effSpeed();
+          const tx = (dx / d) * (d - 150) * 0.02 + (-dy / d) * this.orbitDir;
+          const ty = (dy / d) * (d - 150) * 0.02 + (dx / d) * this.orbitDir;
+          const td = Math.hypot(tx, ty) || 1;
+          World.moveEntity(this, (tx / td) * spd * dt, (ty / td) * spd * dt);
+          if (this.stateT > 2.2 && d < 260) { this.state = 'tele'; this.stateT = 0; }
+        } else if (this.state === 'tele') {
+          if (this.stateT > 0.5) {
+            this.state = 'dive'; this.stateT = 0;
+            this.diveDir = { x: dx / d, y: dy / d };
+            AudioSys.shoot();
+          }
+        } else if (this.state === 'dive') {
+          World.moveEntity(this, this.diveDir.x * 430 * dt, this.diveDir.y * 430 * dt);
+          if (this.stateT > 0.38) {
+            this.state = 'orbit'; this.stateT = 0;
+            this.orbitDir = Math.random() < 0.5 ? 1 : -1;
+            game.firePatches.push({ x: this.x, y: this.y, r: 20, life: 1.1, kind: 'fire' });
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        const bob = Math.sin(this.animT * 9) * 5;
+        if (this.state === 'tele') {
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 22);
+        }
+        Renderer.drawSprite(this.skin(Sprites.emberMoth), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [5층] 어둠 사제: 조준선을 그리며 관통 어둠탄 — 저격수의 어둠 변종 ──
+    acolyte: () => ({
+      hp: 5, r: 13, speed: 52, xpVal: 13, sprite: 'acolyte',
+      state: 'drift', stateT: 0, aimDir: { x: 1, y: 0 },
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.state === 'drift') {
+          const spd = this.effSpeed();
+          if (d < 260) World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
+          if (this.stateT > 1.6) { this.state = 'channel'; this.stateT = 0; }
+        } else if (this.state === 'channel') {
+          if (this.stateT < 0.8) this.aimDir = { x: dx / d, y: dy / d };
+          if (this.stateT > 1.2) {
+            game.spawnProjectile('soul', this.x, this.y, this.aimDir, { speed: 470, dmg: 1 });
+            AudioSys.shoot();
+            this.state = 'drift'; this.stateT = 0;
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        if (this.state === 'channel') {
+          const locked = this.stateT >= 0.8;
+          ctx.save();
+          ctx.globalAlpha = locked ? 0.8 : 0.25;
+          ctx.strokeStyle = locked ? '#b13ae0' : '#5c3a8a';
+          ctx.lineWidth = locked ? 3 : 1;
+          ctx.setLineDash([8, 4]);
+          ctx.beginPath(); ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x + this.aimDir.x * 600, this.y + this.aimDir.y * 600); ctx.stroke();
+          ctx.restore();
+        }
+        const bob = Math.sin(this.animT * 2.4) * 3;
+        Renderer.drawSprite(this.skin(Sprites.acolyte), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [5층] 그림자: 실체화 주기를 읽어라 — 흐릿할 땐 벨 수 없다 ──
+    shade: () => ({
+      hp: 5, r: 13, speed: 70, xpVal: 13, sprite: 'shade',
+      phased: true, phaseT: 0, leapCd: 0, state: 'chase', stateT: 0, leapDir: { x: 1, y: 0 },
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.phaseT += dt; this.stateT += dt;
+        if (this.leapCd > 0) this.leapCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.phased && this.phaseT > 1.5) { this.phased = false; this.phaseT = 0;
+          Particles.burst(this.x, this.y, { count: 8, colors: ['#5c7cff', '#2a2a44'], speed: 70, life: 0.3, size: 3 }); }
+        else if (!this.phased && this.phaseT > 2.6) { this.phased = true; this.phaseT = 0; this.state = 'chase'; }
+        if (this.state === 'chase') {
+          World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+          if (!this.phased && d < 130 && this.leapCd <= 0) { this.state = 'crouch'; this.stateT = 0; }
+        } else if (this.state === 'crouch') {
+          if (this.stateT > 0.4) {
+            this.state = 'leap'; this.stateT = 0;
+            this.leapDir = { x: dx / d, y: dy / d };
+            AudioSys.shoot();
+          }
+        } else if (this.state === 'leap') {
+          World.moveEntity(this, this.leapDir.x * 380 * dt, this.leapDir.y * 380 * dt);
+          if (this.stateT > 0.3) { this.state = 'chase'; this.leapCd = 2.6; }
+        }
+        if (!this.phased) this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        ctx.save();
+        if (this.phased) ctx.globalAlpha = 0.35;
+        if (this.state === 'crouch') {
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 24);
+        }
+        Renderer.drawSprite(this.skin(Sprites.shade), this.x, this.y, { flip: this.flip, shadow: !this.phased });
+        ctx.restore();
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [5층] 응시자: 충전 후 6방향 탄환 — 각도 사이 틈으로 파고들어라 ──
+    gazer: () => ({
+      hp: 6, r: 14, speed: 40, xpVal: 14, sprite: 'gazer',
+      novaCd: 2.0, novaRot: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.novaCd > 0) this.novaCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const spd = this.effSpeed();
+        if (d < 180) World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
+        else if (d > 320) World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+        if (this.novaCd <= 0 && d < 400) {
+          this.novaCd = 3.2;
+          this.novaRot += 0.5;
+          for (let i = 0; i < 6; i++) {
+            const a = this.novaRot + (i / 6) * Math.PI * 2;
+            game.spawnProjectile('mana', this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 180, dmg: 1 });
+          }
+          AudioSys.shoot();
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        const bob = Math.sin(this.animT * 3.2) * 5;
+        if (this.novaCd < 0.5) {
+          ctx.save(); ctx.globalAlpha = 0.35; ctx.strokeStyle = '#4a6ede'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(this.x, this.y - bob, 18 + (0.5 - this.novaCd) * 20, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
+        Renderer.drawSprite(this.skin(Sprites.gazer), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [6층] 피의 박쥐: 급강하로 물면 제 피를 채운다 — 방치하면 계속 회복 ──
+    bloodBat: () => ({
+      hp: 4, r: 11, speed: 95, xpVal: 10, sprite: 'bloodBat',
+      wanderT: 0, wx: 0, wy: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        this.wanderT -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.wanderT <= 0) {
+          this.wanderT = 0.5 + Math.random() * 0.5;
+          const jitter = (Math.random() - 0.5) * 1.6;
+          this.wx = dx / d + -dy / d * jitter;
+          this.wy = dy / d + dx / d * jitter;
+        }
+        const wd = Math.hypot(this.wx, this.wy) || 1;
+        World.moveEntity(this, (this.wx / wd) * this.effSpeed() * dt, (this.wy / wd) * this.effSpeed() * dt);
+        const ph = p.hp;
+        this.touchPlayer(game, 1);
+        if (p.hp < ph) {
+          this.hp = Math.min(this.maxHp, this.hp + 2);
+          Particles.text(this.x, this.y - 22, '+2', { color: '#ff4757', size: 12 });
+        }
+      },
+      draw(ctx) {
+        const bob = Math.sin(this.animT * 10) * 5;
+        Renderer.drawSprite(this.skin(Sprites.bloodBat), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [6층] 뼈무더기: 쓰러뜨려도 뼈 더미가 남는다 — 더미를 부수지 않으면 되살아난다 ──
+    boneHeap: () => ({
+      hp: 5, r: 14, speed: 55, xpVal: 11, sprite: 'boneHeap',
+      revived: false,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        this.touchPlayer(game, 1);
+      },
+      onDeath(game) {
+        if (this.revived) return; // 한 번 되살아난 몸은 조용히 눕는다
+        const pile = createEnemy('bonePile', this.x, this.y, false, 1);
+        pile.spawnT = 0.1;
+        game.enemies.push(pile);
+      },
+      draw(ctx) {
+        Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y, { flip: this.flip, shadow: true });
+        if (this.revived) { ctx.fillStyle = '#ff4757'; ctx.fillRect(this.x - 1, this.y - 20, 3, 3); }
+        this.drawStatus(ctx);
+      },
+    }),
+    // 뼈 더미 (boneHeap 사망 잔해): 2.6초 안에 부수지 않으면 재조립된다
+    bonePile: () => ({
+      hp: 3, r: 12, speed: 0, xpVal: 3, sprite: 'boneHeap',
+      riseT: 2.6, risen: false,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (!this.risen) {
+          this.riseT -= dt;
+          if (this.riseT <= 0) {
+            // 재조립: 그 자리에서 절반 체력의 뼈무더기로 부활
+            this.risen = true;
+            this.speed = 58;
+            this.hp = this.maxHp = Math.max(2, Math.ceil(this.maxHp * 1.4));
+            Particles.burst(this.x, this.y, { count: 12, colors: ['#e8dfc8', '#948a72'], speed: 110, life: 0.4, size: 3 });
+            AudioSys.thud();
+          }
+          return;
+        }
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        if (!this.risen) {
+          // 더미 상태: 납작하게 눌린 스프라이트 + 재조립 게이지
+          Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y + 6, { flip: this.flip, squashX: 1.5, squashY: 0.45, shadow: true });
+          const w = 22, frac = 1 - this.riseT / 2.6;
+          ctx.fillStyle = 'rgba(13,11,20,0.6)'; ctx.fillRect(this.x - w / 2, this.y - 22, w, 3);
+          ctx.fillStyle = '#e8dfc8'; ctx.fillRect(this.x - w / 2, this.y - 22, w * frac, 3);
+        } else {
+          Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y, { flip: this.flip, shadow: true });
+        }
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [7층] 독채찍: 근접 채찍 휘두르기 — 부채꼴 범위 밖으로 돌아라 ──
+    venomLasher: () => ({
+      hp: 7, r: 14, speed: 58, xpVal: 14, sprite: 'venomLasher',
+      state: 'chase', stateT: 0, lashCd: 0, faceA: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        if (this.lashCd > 0) this.lashCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.state === 'chase') {
+          if (d > 75) World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+          if (d < 95 && this.lashCd <= 0) { this.state = 'windup'; this.stateT = 0; this.faceA = Math.atan2(dy, dx); }
+        } else if (this.state === 'windup') {
+          if (this.stateT > 0.55) {
+            this.state = 'chase'; this.lashCd = 2.2;
+            // 채찍 타격: 전방 부채꼴 (반경 95, ±0.75rad)
+            const pa = Math.atan2(p.y - this.y, p.x - this.x);
+            let diff = pa - this.faceA;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            for (let i = -3; i <= 3; i++) {
+              const a = this.faceA + i * 0.24;
+              Particles.burst(this.x + Math.cos(a) * 70, this.y + Math.sin(a) * 70, { count: 2, colors: ['#c9d94a', '#6a9a48'], speed: 60, life: 0.25, size: 3 });
+            }
+            AudioSys.thud();
+            if (d < 95 + p.r && Math.abs(diff) < 0.75) {
+              game.hurtPlayer(1, { x: dx / d, y: dy / d }, 300);
+              p.slowT = Math.max(p.slowT, 1.0);
+            }
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        if (this.state === 'windup') {
+          ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = '#c9d94a';
+          ctx.beginPath(); ctx.moveTo(this.x, this.y);
+          ctx.arc(this.x, this.y, 95, this.faceA - 0.75, this.faceA + 0.75); ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+        Renderer.drawSprite(this.skin(Sprites.venomLasher), this.x, this.y, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [7층] 포자 어미: 포자 방울을 계속 낳는다 — 어미부터 끊어라 ──
+    sporeMother: () => ({
+      hp: 12, r: 18, speed: 30, xpVal: 18, sprite: 'sporeMother',
+      spawnCd: 3.0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.spawnCd > 0) this.spawnCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const spd = this.effSpeed();
+        if (d < 150) World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
+        const kids = game.enemies.filter((e) => !e.dead && e.type === 'sporePuff').length;
+        if (this.spawnCd <= 0 && kids < 4) {
+          this.spawnCd = 4.5;
+          for (let i = 0; i < 2; i++) {
+            const a = Math.random() * Math.PI * 2;
+            game.markers.push({ x: this.x + Math.cos(a) * 50, y: this.y + Math.sin(a) * 50, type: 'sporePuff', elite: false, t: 0.7 });
+          }
+          Particles.burst(this.x, this.y, { count: 10, colors: ['#e8b8d0', '#a04a7a'], speed: 80, life: 0.35, size: 3 });
+          AudioSys.shoot();
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        const sq = 1 + Math.sin(this.animT * 2.2) * 0.07;
+        Renderer.drawSprite(this.skin(Sprites.sporeMother), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [7층] 산성 민달팽이: 포물선 산탄 — 착탄 지점이 미리 보인다 ──
+    acidSlug: () => ({
+      hp: 8, r: 15, speed: 26, xpVal: 14, sprite: 'acidSlug',
+      lobCd: 2.0, globs: [],
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.lobCd > 0) this.lobCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (d > 140) World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        if (this.lobCd <= 0 && d < 360) {
+          this.lobCd = 3.4;
+          this.globs.push({ x: p.x, y: p.y, t: 0.9 });
+          AudioSys.shoot();
+        }
+        for (let i = this.globs.length - 1; i >= 0; i--) {
+          const g = this.globs[i];
+          g.t -= dt;
+          if (g.t <= 0) {
+            this.globs.splice(i, 1);
+            game.firePatches.push({ x: g.x, y: g.y, r: 36, life: 3.0, kind: 'poison' });
+            const pd = Math.hypot(p.x - g.x, p.y - g.y);
+            if (pd < 42 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 200);
+            Particles.burst(g.x, g.y, { count: 10, colors: ['#c9d94a', '#6a7a1a'], speed: 100, life: 0.35, size: 3 });
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        for (const g of this.globs) {
+          ctx.save(); ctx.globalAlpha = 0.3 + (0.9 - g.t) * 0.4; ctx.strokeStyle = '#c9d94a'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(g.x, g.y, 36 * (1 - g.t / 0.9) + 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
+        const sq = 1 + Math.sin(this.animT * 2) * 0.08;
+        Renderer.drawSprite(this.skin(Sprites.acidSlug), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [8층] 옥지기: 정면 방패 + 예고 후 돌진 강타 — 등을 노려라 ──
+    warden: () => ({
+      hp: 14, r: 18, speed: 42, xpVal: 20, sprite: 'warden',
+      faceDir: { x: 1, y: 0 },
+      blocksFrom(dir) {
+        const dot = -(dir.x * this.faceDir.x + dir.y * this.faceDir.y);
+        return dot > 0.55;
+      },
+      state: 'walk', stateT: 0, lungeCd: 0, lungeDir: { x: 1, y: 0 },
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        if (this.lungeCd > 0) this.lungeCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        // 방패 방향은 천천히 돈다 (1.5rad/s) — 빠른 측면 이동이면 등이 열린다
+        const want = Math.atan2(dy, dx), cur = Math.atan2(this.faceDir.y, this.faceDir.x);
+        let diff = want - cur;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const na = cur + Math.sign(diff) * Math.min(Math.abs(diff), 1.5 * dt);
+        this.faceDir = { x: Math.cos(na), y: Math.sin(na) };
+        if (this.state === 'walk') {
+          World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+          if (d < 160 && this.lungeCd <= 0) { this.state = 'raise'; this.stateT = 0; }
+        } else if (this.state === 'raise') {
+          if (this.stateT > 0.7) {
+            this.state = 'lunge'; this.stateT = 0;
+            this.lungeDir = { x: dx / d, y: dy / d };
+            AudioSys.thud();
+          }
+        } else if (this.state === 'lunge') {
+          World.moveEntity(this, this.lungeDir.x * 320 * dt, this.lungeDir.y * 320 * dt);
+          this.touchPlayer(game, 2);
+          if (this.stateT > 0.35) { this.state = 'walk'; this.lungeCd = 3.4; }
+        }
+        if (this.state !== 'lunge') this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        if (this.state === 'raise') {
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 28);
+        }
+        Renderer.drawSprite(this.skin(Sprites.warden), this.x, this.y, { flip: this.flip, shadow: true });
+        // 방패 표시: 정면 호
+        const fa = Math.atan2(this.faceDir.y, this.faceDir.x);
+        ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = '#5ce0e6'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 5, fa - 0.9, fa + 0.9); ctx.stroke(); ctx.restore();
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [8층] 사슬 원혼: 발밑에 사슬 올가미 — 예고 원 밖으로 나가라 ──
+    chainWraith: () => ({
+      hp: 6, r: 13, speed: 58, xpVal: 14, sprite: 'chainWraith',
+      snareCd: 2.2, snares: [],
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.snareCd > 0) this.snareCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const spd = this.effSpeed();
+        if (d < 190) World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
+        else if (d > 340) World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+        if (this.snareCd <= 0 && d < 420) {
+          this.snareCd = 3.6;
+          this.snares.push({ x: p.x, y: p.y, t: 0.9 });
+          AudioSys.shoot();
+        }
+        for (let i = this.snares.length - 1; i >= 0; i--) {
+          const s = this.snares[i];
+          s.t -= dt;
+          if (s.t <= 0) {
+            this.snares.splice(i, 1);
+            const pd = Math.hypot(p.x - s.x, p.y - s.y);
+            Particles.burst(s.x, s.y, { count: 12, colors: ['#c05060', '#8a8a9a'], speed: 90, life: 0.35, size: 3 });
+            AudioSys.thud();
+            if (pd < 55 + p.r) {
+              game.hurtPlayer(1, { x: 0, y: 0 }, 40);
+              p.slowT = Math.max(p.slowT, 1.6);
+              Particles.text(p.x, p.y - 30, '속박!', { color: '#c05060', size: 13 });
+            }
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        for (const s of this.snares) {
+          ctx.save(); ctx.globalAlpha = 0.35 + (0.9 - s.t) * 0.4;
+          ctx.strokeStyle = '#c05060'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+          ctx.beginPath(); ctx.arc(s.x, s.y, 55, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
+        const bob = Math.sin(this.animT * 2.8) * 4;
+        Renderer.drawSprite(this.skin(Sprites.chainWraith), this.x, this.y - bob, { flip: this.flip, shadow: false });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [8층] 서리 골렘: 내려찍기 충격파 링 + 빙판 — 링은 대시로 통과 ──
+    frostGolem: () => ({
+      hp: 10, r: 17, speed: 36, xpVal: 17, sprite: 'frostGolem',
+      state: 'walk', stateT: 0, slamCd: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        if (this.slamCd > 0) this.slamCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (this.state === 'walk') {
+          World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+          if (d < 130 && this.slamCd <= 0) { this.state = 'raise'; this.stateT = 0; }
+        } else if (this.state === 'raise') {
+          if (this.stateT > 0.6) {
+            this.state = 'walk'; this.slamCd = 3.2;
+            game.rings.push({ x: this.x, y: this.y, r: 14, speed: 240, width: 10, dmg: 1, maxR: 140 });
+            game.firePatches.push({ x: this.x, y: this.y, r: 46, life: 2.4, kind: 'ice' });
+            Renderer.shake(3, 0.15);
+            AudioSys.thud();
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        let sq = 1;
+        if (this.state === 'raise') sq = 1.12 + this.stateT * 0.1;
+        Renderer.drawSprite(this.skin(Sprites.frostGolem), this.x, this.y, { flip: this.flip, squashX: 2 - sq, squashY: sq, shadow: true });
+        if (this.state === 'raise') {
+          ctx.fillStyle = '#5ce0e6'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 30);
+        }
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [9층] 흑요암수: 중장갑 돌진수 — 죽으면 사방으로 파편이 튄다 ──
+    obsidianBeast: () => ({
+      hp: 14, r: 17, speed: 38, xpVal: 19, sprite: 'obsidianBeast', armorCap: 1,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        this.touchPlayer(game, 2);
+      },
+      onDeath(game) {
+        for (let i = 0; i < 4; i++) {
+          const a = Math.PI / 4 + (i / 4) * Math.PI * 2;
+          game.spawnProjectile('shard', this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 230, dmg: 1, life: 1.2 });
+        }
+      },
+      draw(ctx) {
+        Renderer.drawSprite(this.skin(Sprites.obsidianBeast), this.x, this.y, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [9층] 불꽃 곡예사: 포물선 화염탄 저글링 — 착탄 원이 미리 보인다 ──
+    flameJuggler: () => ({
+      hp: 5, r: 13, speed: 62, xpVal: 14, sprite: 'flameJuggler',
+      lobCd: 1.6, globs: [],
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.lobCd > 0) this.lobCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const spd = this.effSpeed();
+        if (d < 170) World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
+        else if (d > 300) World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+        if (this.lobCd <= 0 && d < 380) {
+          this.lobCd = 2.6;
+          const a = Math.random() * Math.PI * 2;
+          this.globs.push({ x: p.x + Math.cos(a) * 26, y: p.y + Math.sin(a) * 26, t: 0.8 });
+          AudioSys.shoot();
+        }
+        for (let i = this.globs.length - 1; i >= 0; i--) {
+          const g = this.globs[i];
+          g.t -= dt;
+          if (g.t <= 0) {
+            this.globs.splice(i, 1);
+            game.firePatches.push({ x: g.x, y: g.y, r: 30, life: 1.8, kind: 'fire' });
+            const pd = Math.hypot(p.x - g.x, p.y - g.y);
+            if (pd < 36 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 220);
+            Particles.burst(g.x, g.y, { count: 10, colors: ['#ff9a3c', '#ffd866'], speed: 110, life: 0.3, size: 3 });
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        for (const g of this.globs) {
+          ctx.save(); ctx.globalAlpha = 0.35 + (0.8 - g.t) * 0.4; ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(g.x, g.y, 30 * (1 - g.t / 0.8) + 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
+        const bob = Math.sin(this.animT * 3) * 3;
+        Renderer.drawSprite(this.skin(Sprites.flameJuggler), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [9층] 용암 분출자: 플레이어 발밑에 간헐천 — 예고 원에서 비켜서라 ──
+    lavaBurster: () => ({
+      hp: 9, r: 15, speed: 18, xpVal: 16, sprite: 'lavaBurster',
+      geyserCd: 2.4, geysers: [],
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.geyserCd > 0) this.geyserCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (d < 140) World.moveEntity(this, (-dx / d) * this.effSpeed() * dt, (-dy / d) * this.effSpeed() * dt);
+        if (this.geyserCd <= 0 && d < 460) {
+          this.geyserCd = 3.6;
+          this.geysers.push({ x: p.x, y: p.y, t: 0.95 });
+          const a = Math.random() * Math.PI * 2;
+          this.geysers.push({ x: p.x + Math.cos(a) * 90, y: p.y + Math.sin(a) * 90, t: 0.95 });
+          AudioSys.shoot();
+        }
+        for (let i = this.geysers.length - 1; i >= 0; i--) {
+          const g = this.geysers[i];
+          g.t -= dt;
+          if (g.t <= 0) {
+            this.geysers.splice(i, 1);
+            game.firePatches.push({ x: g.x, y: g.y, r: 26, life: 1.2, kind: 'fire' });
+            const pd = Math.hypot(p.x - g.x, p.y - g.y);
+            if (pd < 40 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 260);
+            Particles.burst(g.x, g.y, { count: 14, colors: ['#ff7043', '#ffd866', '#e43b44'], speed: 150, life: 0.4, size: 4, gravity: -160 });
+            Renderer.shake(2, 0.1);
+            AudioSys.thud();
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        for (const g of this.geysers) {
+          ctx.save(); ctx.globalAlpha = 0.4 + (0.95 - g.t) * 0.4;
+          ctx.strokeStyle = '#ff7043'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(g.x, g.y, 40, 0, Math.PI * 2); ctx.stroke();
+          ctx.fillStyle = 'rgba(255,112,67,0.15)';
+          ctx.beginPath(); ctx.arc(g.x, g.y, 40 * (1 - g.t / 0.95), 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        const sq = 1 + Math.sin(this.animT * 5) * 0.06;
+        Renderer.drawSprite(this.skin(Sprites.lavaBurster), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [10층] 공허 유충: 빠른 소형 — 죽는 순간 플레이어를 향해 공허탄 ──
+    voidSpawn: () => ({
+      hp: 3, r: 10, speed: 95, xpVal: 8, sprite: 'voidSpawn',
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const wig = Math.sin(this.animT * 7) * 0.4;
+        World.moveEntity(this, (dx / d + -dy / d * wig) * this.effSpeed() * dt, (dy / d + dx / d * wig) * this.effSpeed() * dt);
+        this.touchPlayer(game, 1);
+      },
+      onDeath(game) {
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        game.spawnProjectile('soul', this.x, this.y, { x: dx / d, y: dy / d }, { speed: 210, dmg: 1, life: 1.6 });
+      },
+      draw(ctx) {
+        const bob = Math.sin(this.animT * 8) * 3;
+        Renderer.drawSprite(this.skin(Sprites.voidSpawn), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [10층] 균열 술사: 플레이어 주위에 균열을 열고 유도탄 발사 ──
+    riftCaster: () => ({
+      hp: 6, r: 13, speed: 55, xpVal: 15, sprite: 'riftCaster',
+      riftCd: 2.0, rifts: [], blinkCd: 0, blinks: 0,
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.riftCd > 0) this.riftCd -= dt;
+        if (this.blinkCd > 0) this.blinkCd -= dt; else this.blinks = 0;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        if (d < 130 && this.blinks < 2) {
+          this.blinks++; this.blinkCd = 4.5;
+          Particles.burst(this.x, this.y, { count: 8, colors: ['#b13ae0', '#c9b8e8'], speed: 90, life: 0.3, size: 3 });
+          const a = Math.atan2(-dy, -dx) + (Math.random() - 0.5) * 1.4;
+          const nx = this.x + Math.cos(a) * 160, ny = this.y + Math.sin(a) * 160;
+          if (!World.isSolidAt(nx, ny)) { this.x = nx; this.y = ny; }
+          AudioSys.dash();
+        } else if (d < 210) {
+          World.moveEntity(this, (-dx / d) * this.effSpeed() * dt, (-dy / d) * this.effSpeed() * dt);
+        }
+        if (this.riftCd <= 0 && d < 440) {
+          this.riftCd = 3.2;
+          for (let i = 0; i < 2; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const rr = 70 + Math.random() * 70;
+            this.rifts.push({ x: p.x + Math.cos(a) * rr, y: p.y + Math.sin(a) * rr, t: 1.0 });
+          }
+          AudioSys.shoot();
+        }
+        for (let i = this.rifts.length - 1; i >= 0; i--) {
+          const rf = this.rifts[i];
+          rf.t -= dt;
+          if (rf.t <= 0) {
+            this.rifts.splice(i, 1);
+            const pd = Math.hypot(p.x - rf.x, p.y - rf.y) || 1;
+            game.spawnProjectile('soul', rf.x, rf.y, { x: (p.x - rf.x) / pd, y: (p.y - rf.y) / pd }, { speed: 150, dmg: 1, homing: true, life: 2.2 });
+            Particles.burst(rf.x, rf.y, { count: 8, colors: ['#b13ae0', '#241838'], speed: 80, life: 0.3, size: 3 });
+          }
+        }
+        this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        for (const rf of this.rifts) {
+          ctx.save(); ctx.globalAlpha = 0.4 + (1.0 - rf.t) * 0.4;
+          ctx.strokeStyle = '#b13ae0'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.arc(rf.x, rf.y, 14 + (1.0 - rf.t) * 10, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
+        const bob = Math.sin(this.animT * 2.6) * 4;
+        Renderer.drawSprite(this.skin(Sprites.riftCaster), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        this.drawStatus(ctx);
+      },
+    }),
+
+    // ── [10층] 거울 기사: 정면 방패 + 반격 자세 — 자세가 끝나기 전에 거리를 벌려라 ──
+    mirrorKnight: () => ({
+      hp: 12, r: 15, speed: 55, xpVal: 20, sprite: 'mirrorKnight',
+      faceDir: { x: 1, y: 0 },
+      blocksFrom(dir) {
+        const dot = -(dir.x * this.faceDir.x + dir.y * this.faceDir.y);
+        return dot > 0.55;
+      },
+      state: 'walk', stateT: 0, stanceCd: 2.0, lungeDir: { x: 1, y: 0 },
+      update(dt, game) {
+        this.tickTimers(dt); this.applyKnockback(dt); this.stateT += dt;
+        if (this.stanceCd > 0) this.stanceCd -= dt;
+        const p = game.player;
+        const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.flip = dx < 0;
+        const want = Math.atan2(dy, dx), cur = Math.atan2(this.faceDir.y, this.faceDir.x);
+        let diff = want - cur;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const na = cur + Math.sign(diff) * Math.min(Math.abs(diff), 2.0 * dt);
+        this.faceDir = { x: Math.cos(na), y: Math.sin(na) };
+        if (this.state === 'walk') {
+          World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+          if (d < 150 && this.stanceCd <= 0) { this.state = 'stance'; this.stateT = 0; }
+        } else if (this.state === 'stance') {
+          // 반격 자세 0.8초 — 끝나는 순간 사거리 안이면 찌르기
+          if (this.stateT > 0.8) {
+            this.stanceCd = 4.0;
+            if (d < 130) {
+              this.state = 'lunge'; this.stateT = 0;
+              this.lungeDir = { x: dx / d, y: dy / d };
+              AudioSys.thud();
+            } else {
+              this.state = 'walk';
+            }
+          }
+        } else if (this.state === 'lunge') {
+          World.moveEntity(this, this.lungeDir.x * 340 * dt, this.lungeDir.y * 340 * dt);
+          this.touchPlayer(game, 2);
+          if (this.stateT > 0.3) this.state = 'walk';
+        }
+        if (this.state === 'walk') this.touchPlayer(game, 1);
+      },
+      draw(ctx) {
+        if (this.state === 'stance') {
+          ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(this.animT * 16) * 0.2;
+          ctx.strokeStyle = '#e8ecf4'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
+        Renderer.drawSprite(this.skin(Sprites.mirrorKnight), this.x, this.y, { flip: this.flip, shadow: true });
+        const fa = Math.atan2(this.faceDir.y, this.faceDir.x);
+        ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = '#c8d4e4'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 5, fa - 0.8, fa + 0.8); ctx.stroke(); ctx.restore();
+        this.drawStatus(ctx);
+      },
+    }),
   };
 
   // ── 영혼 구슬 (눅스 '어둠 장막' 기믹 표적): 공격 안 함, 제한시간 내 파괴 대상 ──
@@ -1719,6 +2665,27 @@ const MINI_AFFIXES = {
         const m = createEnemy(e.type, e.x + (i === 0 ? -20 : 20), e.y, false, game.enemyHpMul());
         m.spawnT = 0.25;
         game.enemies.push(m);
+      }
+    } },
+  frostlord: { name: '서리', color: '#a8d8ee',
+    tick(e, dt, game) {
+      // 주위 110px 냉기 오라 — 가까이 붙으면 발이 느려진다 (근접 딜 트레이드오프)
+      const p = game.player;
+      if (Math.hypot(p.x - e.x, p.y - e.y) < 110) p.slowT = Math.max(p.slowT, 0.25);
+      if (Math.random() < 0.15) {
+        const a = Math.random() * Math.PI * 2;
+        Particles.burst(e.x + Math.cos(a) * 90, e.y + Math.sin(a) * 90, { count: 1, colors: ['#a8d8ee'], speed: 15, life: 0.4, size: 2 });
+      }
+    } },
+  quaker: { name: '진동', color: '#c8a068',
+    tick(e, dt, game) {
+      e._qkT = (e._qkT || 0) + dt;
+      if (e._qkT >= 4) {
+        e._qkT = 0;
+        game.rings.push({ x: e.x, y: e.y, r: 12, speed: 230, width: 10, dmg: 1, maxR: 170 });
+        Particles.burst(e.x, e.y, { count: 10, colors: ['#c8a068', '#8a8074'], speed: 120, life: 0.35, size: 3 });
+        Renderer.shake(2.5, 0.12);
+        AudioSys.thud();
       }
     } },
 };
