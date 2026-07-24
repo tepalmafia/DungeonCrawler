@@ -53,6 +53,10 @@ const GameRewards = {
     this.rings = [];
     if (Dungeon.floor >= 10 && !this.endless) {
       this.endRun(true);
+      // 최속 클리어 기록 (P5): 승리 화면 '신기록!' 표시용
+      this._newRecord = !Meta.data.bestWinTime || this.time < Meta.data.bestWinTime;
+      if (this._newRecord) { Meta.data.bestWinTime = this.time; Meta.save(); }
+      this._vicStart = undefined; // 승리 연출 타이머 리셋
       this.state = 'victory';
       Renderer.shake(8, 0.6);
       AudioSys.gameover();

@@ -971,41 +971,97 @@ const HUD = {
 
   drawVictory(ctx, game, blinkT) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = 'rgba(8,8,15,0.8)';
+    // 연출 타이머: 진입 순간부터 경과 시간 (초)
+    if (game._vicStart === undefined) game._vicStart = blinkT;
+    const t = Math.max(0, blinkT - game._vicStart);
+    const ease = (x) => 1 - Math.pow(1 - Math.min(1, x), 3);
+    const cx = Renderer.W / 2;
+
+    ctx.fillStyle = 'rgba(8,8,15,0.82)';
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+
+    // 회전 광선 (타이틀 뒤) — 승리의 무대 조명
+    ctx.save();
+    ctx.translate(cx, 165);
+    ctx.globalAlpha = 0.10 * ease(t * 1.2);
+    for (let i = 0; i < 10; i++) {
+      const a = t * 0.25 + (i / 10) * Math.PI * 2;
+      ctx.fillStyle = i % 2 === 0 ? '#f7b32b' : '#ffd866';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, 420, a, a + 0.16);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 황금 불티 (자립 애니메이션 — 파티클 시스템 없이 결정적 루프)
+    ctx.save();
+    for (let i = 0; i < 36; i++) {
+      const seed = i * 137.51;
+      const px = ((seed * 7.13) % Renderer.W);
+      const cycle = 5 + (i % 5);
+      const k = ((t * (24 + (i % 4) * 9) + seed) % (Renderer.H + 60));
+      const py = Renderer.H + 30 - k;
+      ctx.globalAlpha = 0.25 + 0.35 * Math.abs(Math.sin(seed + t * 2));
+      ctx.fillStyle = i % 3 === 0 ? '#ffd866' : i % 3 === 1 ? '#f7b32b' : '#fff7d0';
+      const s = 2 + (i % 3);
+      ctx.fillRect(px + Math.sin(t * 1.4 + seed) * 14, py, s, s);
+    }
+    ctx.restore();
+
     ctx.textAlign = 'center';
 
+    // 타이틀: 위에서 떨어지며 착지 (0.5s) + 착지 후 은은한 금빛 맥동
+    const drop = ease(t / 0.5);
+    const ty = 170 - (1 - drop) * 120;
+    ctx.save();
+    ctx.globalAlpha = drop;
     ctx.font = 'bold 48px monospace';
     ctx.fillStyle = '#f7b32b';
-    ctx.fillText('심연의 탑 정복!', Renderer.W / 2, 170);
-    ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = '#e43b44';
-    ctx.fillText('10층 — 진 심연의 군주 눅스가 소멸했다', Renderer.W / 2, 208);
-
-    ctx.font = '17px monospace';
-    ctx.fillStyle = '#e8e0cf';
-    ctx.fillText(`Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개`, Renderer.W / 2, 265);
-    ctx.font = '15px monospace';
-    ctx.fillStyle = '#9aa0b4';
-    ctx.fillText(`클리어 시간 ${(game.time / 60).toFixed(1)}분`, Renderer.W / 2, 295);
-    if (game.dailyRun) {
-      ctx.font = 'bold 14px monospace';
-      ctx.fillStyle = '#f7b32b';
-      ctx.fillText('🗼 오늘의 탑 정복!', Renderer.W / 2, 318);
+    if (t > 0.5) {
+      ctx.shadowColor = '#ffd866';
+      ctx.shadowBlur = 14 + Math.sin(t * 3) * 8;
+    }
+    ctx.fillText('심연의 탑 정복!', cx, ty);
+    ctx.restore();
+    if (t > 0.55) {
+      ctx.font = 'bold 16px monospace';
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText('10층 — 진 심연의 군주 눅스가 소멸했다', cx, 208);
     }
 
-    this._drawShardReward(ctx, game, 350);
+    // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)
+    const rows = [];
+    rows.push({ f: '17px monospace', c: '#e8e0cf', y: 262, s: `Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · 특성 ${game.player.traits.length}장` });
+    const timeStr = `클리어 시간 ${(game.time / 60).toFixed(1)}분` + (game.heat > 0 ? ` · 열기 ${game.heat}` : '');
+    rows.push({ f: '15px monospace', c: '#9aa0b4', y: 290, s: timeStr });
+    if (game._newRecord) rows.push({ f: 'bold 15px monospace', c: '#5ce0e6', y: 314, s: '★ 최속 클리어 신기록!' });
+    if (game.dailyRun) rows.push({ f: 'bold 14px monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '🗼 오늘의 탑 정복!' });
+    rows.forEach((r, i) => {
+      const rt = (t - 0.8 - i * 0.15) / 0.25;
+      if (rt <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = ease(rt);
+      ctx.font = r.f;
+      ctx.fillStyle = r.c;
+      ctx.fillText(r.s, cx, r.y + (1 - ease(rt)) * 10);
+      ctx.restore();
+    });
+
+    if (t > 1.3) this._drawShardReward(ctx, game, 352);
     this._drawRunTag(ctx, game, 497);
 
-    if (Math.floor(blinkT * 1.6) % 2 === 0) {
+    if (t > 1.6 && Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px monospace';
       ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', Renderer.W / 2, 430);
+      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', cx, 432);
     }
-    // 무한 모드 진입 안내
-    ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = '#b13ae0';
-    ctx.fillText('C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)', Renderer.W / 2, 462);
+    if (t > 1.6) {
+      ctx.font = 'bold 16px monospace';
+      ctx.fillStyle = '#b13ae0';
+      ctx.fillText('C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)', cx, 462);
+    }
   },
 
   // ── 전체 매뉴얼 (H 또는 /) — 게임 중·거점 어디서나. 1p 조작·전투 / 2p 던전·성장 ──
