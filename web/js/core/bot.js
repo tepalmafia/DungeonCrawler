@@ -160,6 +160,20 @@ const Bot = {
         const roomKey = Dungeon.floor * 100 + Dungeon.roomIndex;
         if (this._stallRoom === roomKey) this._roomStalls = (this._roomStalls || 0) + 1;
         else { this._stallRoom = roomKey; this._roomStalls = 1; }
+        // 하드 스톨 계측: 5회 누적 시 방 상태를 콘솔에 덤프 — 간헐 교착의 범인을 잡는다
+        if (this._roomStalls === 5 || this._roomStalls === 12) {
+          const snap = game.enemies.filter((e) => !e.dead).map((e) => ({
+            t: e.type, x: Math.round(e.x), y: Math.round(e.y), hp: Math.round(e.hp),
+            ph: !!e.phased, sp: +(e.spawnT || 0).toFixed(2), neu: !!e.neutral,
+            wall: World.isSolidAt(e.x, e.y), st: e.state || null,
+          }));
+          console.log('[BOT-STALL]', JSON.stringify({
+            floor: Dungeon.floor, room: Dungeon.roomIndex, type: Dungeon.roomType,
+            time: Math.round(game.time), px: Math.round(p.x), py: Math.round(p.y),
+            cls: p.classId, skillCd: +p.skillCd.toFixed(1),
+            pend: game.pendingSpawns.length, markers: game.markers.length, enemies: snap,
+          }));
+        }
         if (p.dashCharges >= 1) this._dash();
       }
     }
@@ -267,7 +281,7 @@ const Bot = {
       // 적 없음: 상호작용(상자/모닥불) → 문
       // 상호작용: 상자/모닥불은 항상, 기연은 이득 조건일 때만 수락
       const it = game.interactables.find((i) => {
-        if (i.used) return false;
+        if (i.used || i._botSkip) return false;
         if (i.kind === 'chest') return true;
         if (i.kind === 'camp') {
           // 숫돌이 살아 있으면 다쳤을 때만 휴식, 아니면 담금질 쪽으로
@@ -351,6 +365,7 @@ const Bot = {
       this._goalKey = ref;
       this._bestD = dist;
       this._noProgressT = 0;
+      this._goalFails = 0;
       return;
     }
     if (dist < this._bestD - 6) {
@@ -364,6 +379,15 @@ const Bot = {
         Bot.stats.explores++;
         this._noProgressT = 0;
         this._bestD = Infinity;
+        this._goalFails = (this._goalFails || 0) + 1;
+        // 같은 목표에 6회 연속 실패 = 도달 불가로 판정 — 덤프 남기고 포기 (소크가 게임 버그에 인질로 잡히지 않게)
+        if (this._goalFails >= 6 && ref && ref.kind) {
+          ref._botSkip = true;
+          console.log('[BOT-GOALSTUCK]', JSON.stringify({
+            kind: ref.kind, x: Math.round(ref.x), y: Math.round(ref.y),
+            floor: Dungeon.floor, room: Dungeon.roomIndex, tpl: World.lastTemplate || null,
+          }));
+        }
         if (p.dashCharges >= 1) this._dash();
       }
     }

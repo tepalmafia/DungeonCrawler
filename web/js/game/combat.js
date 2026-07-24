@@ -294,7 +294,7 @@ const GameCombat = {
     if (p.invuln > 0 || this.state !== 'play') {
       // 완벽 회피 (P1) — 대시 무적 중에 공격이 스쳤다: 시간이 늘어지고 다음 일격이 확정 크리.
       // 텔레그래프가 '피할 것'에서 '노릴 것'으로 바뀌는 순간 — 실력 표현의 핵심 축
-      if (p.dashTimer > 0 && !p._pdodged && this.state === 'play') {
+      if (p._dashWin > 0 && !p._pdodged && this.state === 'play') {
         p._pdodged = true;
         p.pdodgeCrit = true;
         this.slowmoT = 0.45;

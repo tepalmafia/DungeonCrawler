@@ -48,15 +48,15 @@ const HUD = {
     ctx.font = '11px monospace';
     ctx.fillText(`Lv.${game.level}`, 104, barY + 32);
 
-    // ── 획득 특성 아이콘 ──
+    // ── 획득 특성 아이콘 (UI 정리: 최근 8종 + 요약 — 전체는 Tab에서) ──
     const counts = {};
     for (const id of p.traits) counts[id] = (counts[id] || 0) + 1;
-    let ti = 0;
-    for (const id of Object.keys(counts)) {
+    const traitIds = Object.keys(counts).filter((id) => TRAITS.find((t) => t.id === id));
+    const maxTraitChips = 8;
+    const shownTraits = traitIds.slice(-maxTraitChips); // 최근 획득 순으로 보여준다
+    shownTraits.forEach((id, ti) => {
       const trait = TRAITS.find((t) => t.id === id);
-      if (!trait) continue;
       const y = barY + 46 + ti * 22;
-      if (y > Renderer.H - 60) break;
       ctx.fillStyle = '#141420';
       ctx.fillRect(14, y, 18, 18);
       ctx.strokeStyle = trait.color;
@@ -72,11 +72,18 @@ const HUD = {
         ctx.textAlign = 'left';
         ctx.fillText('x' + counts[id], 35, y + 13);
       }
-      ti++;
+    });
+    if (traitIds.length > maxTraitChips) {
+      const y = barY + 46 + shownTraits.length * 22;
+      ctx.fillStyle = '#666a80';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`+${traitIds.length - maxTraitChips} (Tab)`, 14, y + 12);
     }
 
-    // ── 유물 아이콘 (하단) ──
-    p.relics.forEach((id, i) => {
+    // ── 유물 아이콘 (하단, 최대 10개 + 요약) ──
+    const maxRelicChips = 10;
+    p.relics.slice(0, maxRelicChips).forEach((id, i) => {
       const relic = RELICS.find((r) => r.id === id);
       if (!relic) return;
       const x = 14 + i * 24;
@@ -91,6 +98,12 @@ const HUD = {
       ctx.textAlign = 'center';
       ctx.fillText(relic.name[0], x + 10, y + 15);
     });
+    if (p.relics.length > maxRelicChips) {
+      ctx.fillStyle = '#666a80';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`+${p.relics.length - maxRelicChips}`, 14 + maxRelicChips * 24, Renderer.H - 20);
+    }
 
     // ── 층 진행도 ──
     ctx.textAlign = 'center';
@@ -224,13 +237,13 @@ const HUD = {
     }
   },
 
-  cardRects(n) {
-    const w = n === 4 ? 210 : 236;
-    const h = 190;
-    const gap = n === 4 ? 16 : 26;
+  cardRects(n, h = 165) {
+    // UI 정리: 선택 카드 축소 (236×190 → 204×165, 화면 폭 79%→67%) — 전장이 계속 보인다
+    const w = n === 4 ? 182 : 204;
+    const gap = n === 4 ? 14 : 18;
     const totalW = n * w + (n - 1) * gap;
     const x0 = (Renderer.W - totalW) / 2;
-    const y = 175;
+    const y = 168;
     const rects = [];
     for (let i = 0; i < n; i++) rects.push({ x: x0 + i * (w + gap), y, w, h });
     return rects;
@@ -243,12 +256,12 @@ const HUD = {
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 32px monospace';
+    ctx.font = 'bold 24px monospace';
     ctx.fillStyle = '#2ec4b6';
-    ctx.fillText(title, Renderer.W / 2, 120);
-    ctx.font = '14px monospace';
+    ctx.fillText(title, Renderer.W / 2, 112);
+    ctx.font = '12px monospace';
     ctx.fillStyle = '#9aa0b4';
-    ctx.fillText(`선택하세요 (1~${cards.length} 키 또는 클릭)`, Renderer.W / 2, 150);
+    ctx.fillText(`선택하세요 (1~${cards.length} 키 또는 클릭)`, Renderer.W / 2, 138);
 
     const rects = this.cardRects(cards.length);
     const mx = Input.mouse.x, my = Input.mouse.y;
@@ -276,22 +289,22 @@ const HUD = {
 
       ctx.textAlign = 'center';
       const cx = r.x + r.w / 2;
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 11px monospace';
       ctx.fillStyle = color;
-      ctx.fillText(tagFn(c), cx, r.y + lift + 32);
-      ctx.font = 'bold 21px monospace';
+      ctx.fillText(tagFn(c), cx, r.y + lift + 26);
+      ctx.font = 'bold 18px monospace';
       ctx.fillStyle = '#e8e0cf';
-      ctx.fillText(c.name, cx, r.y + lift + 66);
-      ctx.font = '13px monospace';
+      ctx.fillText(c.name, cx, r.y + lift + 52);
+      ctx.font = '12px monospace';
       ctx.fillStyle = '#9aa0b4';
-      this._wrapText(ctx, c.desc, cx, r.y + lift + 100, r.w - 28, 19);
+      this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
       // 중첩 특성: 보유 수 / 상한 표시
       if (c.max && game.player) {
         const owned = game.player.traits.filter((id) => id === c.id).length;
         if (owned > 0) {
           ctx.font = '11px monospace';
           ctx.fillStyle = '#666a80';
-          ctx.fillText(`보유 ${owned}/${c.max}`, cx, r.y + lift + r.h - 36);
+          ctx.fillText(`보유 ${owned}/${c.max}`, cx, r.y + lift + r.h - 30);
         }
       }
       // 직업 특성: 스킬 진화 진행도 힌트 (직업 특성 3장 + Lv.12 → 스킬의 형태가 바뀐다)
@@ -306,11 +319,11 @@ const HUD = {
           game.player.evoReady
             ? `⚡ 개화 대기 — Lv.12 (현재 ${game.level})`
             : `⚡ 스킬 진화 ${clsOwned}/3 · Lv.12`,
-          cx, r.y + lift + r.h - 50);
+          cx, r.y + lift + r.h - 44);
       }
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 14px monospace';
       ctx.fillStyle = hover ? color : '#4a4a5c';
-      ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 16);
+      ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 12);
     });
 
     // 리롤 각인: 남은 횟수 표시
@@ -575,7 +588,7 @@ const HUD = {
     this._shardLabel(ctx, Renderer.W - 24, 36);
 
     const ids = Object.keys(CLASSES);
-    const rects = this.cardRects(ids.length);
+    const rects = this.cardRects(ids.length, 190); // 직업 카드는 정보량이 많아 기존 높이 유지
     ids.forEach((id, i) => {
       const cls = CLASSES[id];
       const unlocked = Meta.classUnlocked(id);

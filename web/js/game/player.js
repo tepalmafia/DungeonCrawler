@@ -41,6 +41,7 @@ function createPlayer(x, y, classId = 'knight') {
     pdodgeCrit: false, // 완벽 회피 보상: 다음 일격 확정 크리
     _pdodged: false,
     dashAtkT: 0, // 대시 파생기 입력 창
+    _dashWin: 0, // 완벽 회피 판정 창
 
     // 직업 스킬 (K / 우클릭): 검사 회전 베기 / 궁수 화살비 / 마도사 메테오
     skillCd: 0,
@@ -207,6 +208,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
       if (this._overchargeCd > 0) this._overchargeCd -= dt;
       if (this.dashAtkT > 0) this.dashAtkT -= dt;
+      if (this._dashWin > 0) this._dashWin -= dt;
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
 
@@ -250,6 +252,7 @@ function createPlayer(x, y, classId = 'knight') {
         this._trailDist = 0;
         this.dashHit = new Set();
         this._pdodged = false; // 완벽 회피: 대시당 1회
+        this._dashWin = 0.24; // 완벽 회피 판정 창 — 대시 무적(0.22s) 전체를 커버 (기존 0.16s는 무적보다 짧았다)
         this.dashAtkT = 0.35; // 대시 파생기 입력 창: 대시 중 + 직후 0.19초 (0.16초는 너무 빡빡했다)
         if (this.rflags.dashcrit) this.dashCritReady = true;
         // 불꽃 대시 (특성): 대시 궤적에 불타는 자취

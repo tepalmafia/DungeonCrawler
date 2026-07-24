@@ -292,7 +292,8 @@ const GamePlay = {
       const ring = this.rings[i];
       ring.r += ring.speed * dt;
       const pd = Math.hypot(p.x - ring.x, p.y - ring.y);
-      if (p.invuln <= 0 && Math.abs(pd - ring.r) < ring.width) {
+      if (Math.abs(pd - ring.r) < ring.width) {
+        // 무적 중이어도 hurtPlayer로 — 대시 관통 시 완벽 회피 판정이 살아난다
         const dir = { x: (p.x - ring.x) / (pd || 1), y: (p.y - ring.y) / (pd || 1) };
         this.hurtPlayer(ring.dmg, dir, 300);
       }
@@ -322,7 +323,11 @@ const GamePlay = {
       }
       a.x += vx * a.speed * dt;
       a.y += vy * a.speed * dt;
-      if (p.invuln <= 0 && Math.hypot(p.x - a.x, p.y - a.y) < p.r + a.r) {
+      const pdist = Math.hypot(p.x - a.x, p.y - a.y);
+      if (p.invuln > 0) {
+        // 대시 무적 중 스치는 탄(+12px 그레이즈) = 완벽 회피 판정 — 탄은 그대로 지나간다
+        if (a.dmg > 0 && pdist < p.r + a.r + 12) this.hurtPlayer(a.dmg, a.dir);
+      } else if (pdist < p.r + a.r) {
         if (a.slow > 0) {
           p.slowT = Math.max(p.slowT, a.slow);
           Particles.text(p.x, p.y - 26, '끈적!', { color: '#e8e0cf', size: 13 });

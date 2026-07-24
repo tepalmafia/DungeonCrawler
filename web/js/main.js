@@ -177,8 +177,10 @@ const Game = {
         for (let i = 0; i < 2; i++) {
           this.pendingSpawns.push({ delay: 0.8 + i * 0.4, type: RNG.pick(data.enemies), elite: true });
         }
+        // safeSpot: 템플릿 방은 중앙에 기둥이 있을 수 있다 — 벽 안에 박힌 상자는 열 수 없다
         const gc = World.center();
-        this.interactables.push({ kind: 'chest', x: gc.x, y: gc.y - 60, r: 24, used: false, t: 0 });
+        const gs = World.safeSpot(gc.x, gc.y - 60);
+        this.interactables.push({ kind: 'chest', x: gs.x, y: gs.y, r: 24, used: false, t: 0 });
       }
       this.banner = { text: `⚠ ${this._roomMod.label}`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
     }
