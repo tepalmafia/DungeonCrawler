@@ -156,7 +156,7 @@ const Game = {
     this.player.kbx = this.player.kby = 0;
 
     const depth = Dungeon.roomIndex;
-    const floorScale = 1 + (Dungeon.floor - 1) * 0.3;
+    const floorScale = this.floorHpScale();
 
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {
@@ -197,9 +197,16 @@ const Game = {
     }
   },
 
+  // 층별 적 HP 스케일 — 심층(6층+)은 기울기 상향 (+30%→+40%/층).
+  // 계측 근거: 5층부터 받은 피해가 거의 0 — 성장(공격력·진화·유물)이 +30% 기울기를 추월한다
+  floorHpScale() {
+    const f = Dungeon.floor;
+    return f <= 5 ? 1 + (f - 1) * 0.3 : 2.2 + (f - 5) * 0.4;
+  },
+
   // 열기 반영 적 강화 배율
   enemyHpMul() {
-    return (1 + (Dungeon.floor - 1) * 0.3) * (this.heat >= 1 ? 1.25 : 1);
+    return this.floorHpScale() * (this.heat >= 1 ? 1.25 : 1);
   },
 
   // 현재 상태에 맞는 BGM 테마 결정
