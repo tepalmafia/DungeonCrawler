@@ -76,7 +76,7 @@ const FLOOR_HAZARDS = { 2: 'fog', 3: 'prison', 4: 'lava', 5: 'dark', 7: 'fog', 8
 // 문자: . 바닥 / # 벽 / H 위험 지대(용암 층에서만 용암, 그 외 바닥) / P 항아리(70%) / R 진귀한 항아리 / C 균열 벽(부수면 열린다)
 // 적용 후 도달 불가 지역은 자동 봉인, 균열 벽 뒤 벽감은 적 스폰 금지 구역이 된다.
 const ROOM_TEMPLATES = [
-  { name: '기둥 홀', rows: [
+  { name: '기둥 홀', tag: 'pillars', rows: [
     '..................',
     '...#....P.....#...',
     '..................',
@@ -87,7 +87,7 @@ const ROOM_TEMPLATES = [
     '...#..........#...',
     '..................',
   ] },
-  { name: '쪼개진 호수', theme: 'lava', rows: [
+  { name: '쪼개진 호수', tag: 'hazard', theme: 'lava', rows: [
     '..................',
     '..................',
     '......HHHHHH......',
@@ -99,7 +99,7 @@ const ROOM_TEMPLATES = [
     '..................',
   ] },
   // 계측 조정: 출입구 2개 밀실이라 사망률 1.86/방문(중앙값의 9배) — 상하 개구부를 뚫어 4방향 출입
-  { name: '외곽 링', rows: [
+  { name: '외곽 링', tag: 'corridor', rows: [
     '..................',
     '....###..###......',
     '....#......#......',
@@ -110,7 +110,7 @@ const ROOM_TEMPLATES = [
     '....###..###......',
     '..................',
   ] },
-  { name: '좁은 목', rows: [
+  { name: '좁은 목', tag: 'corridor', rows: [
     '........#.........',
     '........#.........',
     '...P....#.........',
@@ -121,7 +121,7 @@ const ROOM_TEMPLATES = [
     '........#.........',
     '........#.........',
   ] },
-  { name: '감옥 창살', theme: 'prison', rows: [
+  { name: '감옥 창살', tag: 'corridor', theme: 'prison', rows: [
     '..................',
     '....#..#..#..#....',
     '....#..#..#..#....',
@@ -132,7 +132,7 @@ const ROOM_TEMPLATES = [
     '....#..#..#..#....',
     '..................',
   ] },
-  { name: '지그재그 사선', rows: [
+  { name: '지그재그 사선', tag: 'corridor', rows: [
     '..................',
     '....#.............',
     '.....##...........',
@@ -143,7 +143,7 @@ const ROOM_TEMPLATES = [
     '.............#....',
     '..................',
   ] },
-  { name: '세 갈래 회랑', rows: [
+  { name: '세 갈래 회랑', tag: 'corridor', rows: [
     '..................',
     '..................',
     '...####...#####...',
@@ -154,7 +154,7 @@ const ROOM_TEMPLATES = [
     '..................',
     '..................',
   ] },
-  { name: '보물꾼의 벽감', rows: [
+  { name: '보물꾼의 벽감', tag: 'open', rows: [
     '.............###..',
     '.............#R#..',
     '.............#C#..',
@@ -165,7 +165,7 @@ const ROOM_TEMPLATES = [
     '.....#......P.....',
     '..................',
   ] },
-  { name: '항아리 창고', rows: [
+  { name: '항아리 창고', tag: 'open', rows: [
     '..................',
     '..P....#.....P....',
     '..................',
@@ -176,7 +176,7 @@ const ROOM_TEMPLATES = [
     '..P.........#..P..',
     '..................',
   ] },
-  { name: '용암 십자', theme: 'lava', rows: [
+  { name: '용암 십자', tag: 'hazard', theme: 'lava', rows: [
     '..................',
     '........HH........',
     '........HH........',
@@ -187,7 +187,7 @@ const ROOM_TEMPLATES = [
     '........HH........',
     '..................',
   ] },
-  { name: '쌍둥이 방책', rows: [
+  { name: '쌍둥이 방책', tag: 'pillars', rows: [
     '..................',
     '..................',
     '...######.........',
@@ -198,7 +198,7 @@ const ROOM_TEMPLATES = [
     '..................',
     '..................',
   ] },
-  { name: '왕좌 전정', rows: [
+  { name: '왕좌 전정', tag: 'pillars', rows: [
     '..................',
     '....#........#....',
     '........##........',
@@ -209,7 +209,7 @@ const ROOM_TEMPLATES = [
     '....#........#....',
     '..................',
   ] },
-  { name: '무너진 벽감', rows: [
+  { name: '무너진 벽감', tag: 'open', rows: [
     '..................',
     '..................',
     '.......P..........',
@@ -222,7 +222,7 @@ const ROOM_TEMPLATES = [
   ] },
   // ── 층 전용 템플릿 (theme: 해당 층 기믹에서만 등장, 가중치 ×3) ──
   // 묘지 (1·6층 — 기믹 없는 층): 납골당 선반과 묘비 정원
-  { name: '납골당', theme: 'crypt', rows: [
+  { name: '납골당', tag: 'pillars', theme: 'crypt', rows: [
     '..................',
     '...##..##..##.....',
     '...P...........P..',
@@ -233,7 +233,7 @@ const ROOM_TEMPLATES = [
     '...##..##..##.....',
     '..................',
   ] },
-  { name: '묘비 정원', theme: 'crypt', rows: [
+  { name: '묘비 정원', tag: 'pillars', theme: 'crypt', rows: [
     '..................',
     '....#...#...#.....',
     '..................',
@@ -245,7 +245,7 @@ const ROOM_TEMPLATES = [
     '..................',
   ] },
   // 안개 (2·7층): H가 독 안개 웅덩이가 된다
-  { name: '포자 골짜기', theme: 'fog', rows: [
+  { name: '포자 골짜기', tag: 'hazard', theme: 'fog', rows: [
     '..................',
     '....HH......HH....',
     '...HHH..##..HHH...',
@@ -258,7 +258,7 @@ const ROOM_TEMPLATES = [
   ] },
   // 계측 조정: 안쪽 돌출벽이 안개 층에서 구석 몰이 포켓을 만들어 사망률 1.13 — 돌출벽을 없애고
   // 위험을 '보이는 독 웅덩이'로 옮긴다 (몰이가 아니라 판단의 문제가 되도록)
-  { name: '균사 미로', theme: 'fog', rows: [
+  { name: '균사 미로', tag: 'hazard', theme: 'fog', rows: [
     '..................',
     '.....HH....HH.....',
     '...####....####...',
@@ -270,7 +270,7 @@ const ROOM_TEMPLATES = [
     '..................',
   ] },
   // 감옥 (3·8층): 독방 중 하나는 균열 벽으로 봉인된 비밀 감방
-  { name: '독방 블록', theme: 'prison', rows: [
+  { name: '독방 블록', tag: 'corridor', theme: 'prison', rows: [
     '..................',
     '..#..#..#..###....',
     '..#..#..#..#R#....',
@@ -281,7 +281,7 @@ const ROOM_TEMPLATES = [
     '..#..#..#.........',
     '..................',
   ] },
-  { name: '처형장', theme: 'prison', rows: [
+  { name: '처형장', tag: 'open', theme: 'prison', rows: [
     '..................',
     '..................',
     '.....##....##.....',
@@ -294,7 +294,7 @@ const ROOM_TEMPLATES = [
   ] },
   // 용암 (4·9층): 강을 다리로 건너는 방, 잿더미 섬
   // 계측 조정: 1칸 다리에서 넉백 낙사가 잦아 사망률 0.75 — 다리를 2칸 폭으로
-  { name: '용암 강', theme: 'lava', rows: [
+  { name: '용암 강', tag: 'hazard', theme: 'lava', rows: [
     '.........HH.......',
     '.........HH.......',
     '.........HH.......',
@@ -305,7 +305,7 @@ const ROOM_TEMPLATES = [
     '.........HH.......',
     '.........HH.......',
   ] },
-  { name: '잿더미 섬', theme: 'lava', rows: [
+  { name: '잿더미 섬', tag: 'hazard', theme: 'lava', rows: [
     '..................',
     '....##...HH...##..',
     '..................',
@@ -317,7 +317,7 @@ const ROOM_TEMPLATES = [
     '..................',
   ] },
   // 어둠 (5·10층): 옥좌로 향하는 행렬 기둥, 공허의 십자 제단
-  { name: '옥좌 길', theme: 'dark', rows: [
+  { name: '옥좌 길', tag: 'corridor', theme: 'dark', rows: [
     '..................',
     '..................',
     '...#..#..#..#.....',
@@ -328,7 +328,7 @@ const ROOM_TEMPLATES = [
     '..............P...',
     '..................',
   ] },
-  { name: '공허 십자', theme: 'dark', rows: [
+  { name: '공허 십자', tag: 'pillars', theme: 'dark', rows: [
     '..................',
     '........#.........',
     '.......###........',
@@ -449,9 +449,11 @@ const World = {
     this.crackSpots = [];
     this._noSpawn = null;
 
+    this.lastTemplateTag = 'open'; // 지형 태그 (M-커플링): 위협 세트가 지형에 맞는 무리를 고르는 데 쓴다
     if (combatRoom) {
       const tpl = this._pickTemplate();
       this.lastTemplate = tpl ? tpl.name : '무작위 잔해'; // 디버그/검증용
+      this.lastTemplateTag = tpl ? (tpl.tag || 'open') : 'open';
       if (tpl) {
         this._applyTemplate(tpl);
       } else {
@@ -504,6 +506,26 @@ const World = {
             }
           }
         }
+      }
+    }
+
+    // 비밀 금고 (맵 M3): 층당 한 번, 전투방 내부 벽 어딘가에 금빛 균열 — 부수면 금고방 문이 열린다
+    this.goldCrackSpot = null;
+    if (combatRoom && typeof Dungeon !== 'undefined' && !Dungeon.vaultCrackPlaced && RNG.chance(0.14)) {
+      const cracked = new Set(this.crackSpots.map((s) => s.ty * 100 + s.tx));
+      const cands = [];
+      for (let ty = 1; ty < this.rows - 1; ty++) {
+        for (let tx = 2; tx < this.cols - 3; tx++) {
+          if (this.map[ty][tx] !== 1 || cracked.has(ty * 100 + tx)) continue;
+          const openAdj = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) =>
+            this.map[ty + dy] && this.map[ty + dy][tx + dx] === 0);
+          if (openAdj) cands.push({ tx, ty });
+        }
+      }
+      if (cands.length) {
+        const c = cands[Math.floor(RNG.next() * cands.length)];
+        this.goldCrackSpot = { tx: c.tx, ty: c.ty, x: c.tx * TS + TS / 2, y: c.ty * TS + TS / 2 + this.offsetY };
+        Dungeon.vaultCrackPlaced = true;
       }
     }
 
@@ -1024,6 +1046,23 @@ const World = {
       ctx.lineTo(x, y - 7); ctx.lineTo(x + 4, y + 1); ctx.lineTo(x + 9, y - 3);
       ctx.lineTo(x + 9, y + 6); ctx.closePath();
       ctx.fill();
+    } else if (type === 'vault') {
+      // 금고 자물쇠 — 몸통 + 고리
+      ctx.beginPath();
+      ctx.arc(x, y - 4, 6, Math.PI, 0);
+      ctx.stroke();
+      ctx.fillRect(x - 8, y - 4, 16, 11);
+      ctx.fillStyle = '#0d0a12';
+      ctx.fillRect(x - 1.5, y - 1, 3, 5);
+    } else if (type === 'siege') {
+      // 밀려오는 세 겹 파도
+      for (const oy of [-6, 0, 6]) {
+        ctx.beginPath();
+        ctx.moveTo(x - 9, y + oy);
+        ctx.quadraticCurveTo(x - 4, y + oy - 5, x, y + oy);
+        ctx.quadraticCurveTo(x + 4, y + oy + 5, x + 9, y + oy);
+        ctx.stroke();
+      }
     } else if (type === 'treasure') {
       // 보물상자
       ctx.fillRect(x - 9, y - 2, 18, 9);

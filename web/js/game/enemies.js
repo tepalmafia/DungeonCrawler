@@ -2757,15 +2757,21 @@ function createMiniboss(type, x, y, floorScale) {
 
 // ── 파괴 가능 오브젝트 (맵 다양화 M2·M3) — 적이 아니라 지형에 가깝다 ──
 // neutral 플래그: 방 클리어 판정·자동 조준·처치 집계·도감에서 제외된다.
-function createPot(x, y, rare = false) {
+function createPot(x, y, rare = false, boom = false) {
   return {
-    type: 'pot', neutral: true, noDrops: true, rare,
+    type: 'pot', neutral: true, noDrops: true, rare, boom,
     x, y, r: 12, hp: 1, maxHp: 1, speed: 0, xpVal: 0,
     dead: false, phased: false, elite: false, isBoss: false, isMini: false,
     flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0,
     status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
     update(dt) { this.kbx = this.kby = 0; if (this.flash > 0) this.flash -= dt; },
     onDeath(game) {
+      if (this.boom) {
+        // 폭발 항아리 (맵 M2): 0.5초 심지 후 폭발 — 적에게는 무기, 붙어 있으면 부상
+        game.enemies.push(createBoomFuse(this.x, this.y));
+        AudioSys.thud();
+        return;
+      }
       const n = this.rare ? 8 + Dungeon.floor : RNG.int(1, 3);
       Meta.data.shards += n;
       Particles.text(this.x, this.y - 24, `◆ +${n}`, { color: '#2ec4b6', size: this.rare ? 15 : 12 });
@@ -2773,8 +2779,8 @@ function createPot(x, y, rare = false) {
       AudioSys.thud();
     },
     draw(ctx) {
-      const body = this.rare ? '#c09a4a' : '#7a6a5a';
-      const dark = this.rare ? '#8a6a20' : '#5a4a3e';
+      const body = this.boom ? '#8a3030' : this.rare ? '#c09a4a' : '#7a6a5a';
+      const dark = this.boom ? '#5a1c1c' : this.rare ? '#8a6a20' : '#5a4a3e';
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
       ctx.ellipse(this.x, this.y + 9, 9, 3, 0, 0, Math.PI * 2);
@@ -2790,6 +2796,13 @@ function createPot(x, y, rare = false) {
         ctx.fillStyle = '#ffd866';
         ctx.fillRect(this.x - 1, this.y - 3, 3, 3);
       }
+      if (this.boom) {
+        // 심지 표시 — 위험한 항아리라는 시각 신호
+        ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(this.x, this.y - 13); ctx.lineTo(this.x + 3, this.y - 18); ctx.stroke();
+        ctx.fillStyle = Math.floor(performance.now() / 160) % 2 === 0 ? '#ffd866' : '#ff7043';
+        ctx.fillRect(this.x + 2, this.y - 20, 3, 3);
+      }
       if (this.flash > 0) {
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.fillRect(this.x - 8, this.y - 13, 16, 21);
@@ -2798,11 +2811,53 @@ function createPot(x, y, rare = false) {
   };
 }
 
-// 균열 벽 — 부수면 벽 타일이 열린다 (비밀 벽감 입구). 근접·회전·투사체로 파괴 가능.
-function createCrack(tx, ty, x, y) {
+// 폭발 항아리의 심지 — 0.5초 후 폭발: 적 대미지 5 / 플레이어 1 (환경 무기)
+function createBoomFuse(x, y) {
   return {
-    type: 'crack', neutral: true, noDrops: true, tx, ty,
-    x, y, r: 20, hp: 2, maxHp: 2, speed: 0, xpVal: 0,
+    type: 'boomFuse', neutral: true, noDrops: true,
+    x, y, r: 1, hp: 999, maxHp: 999, speed: 0, xpVal: 0,
+    dead: false, phased: true, elite: false, isBoss: false, isMini: false,
+    flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0, fuseT: 0.5,
+    status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
+    update(dt, game) {
+      this.fuseT -= dt;
+      if (Math.random() < 0.5) {
+        Particles.burst(this.x, this.y - 10, { count: 1, colors: ['#ffd866', '#ff7043'], speed: 50, life: 0.2, size: 2, gravity: -120 });
+      }
+      if (this.fuseT <= 0) {
+        this.dead = true;
+        game._explode(this.x, this.y, 85, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
+        for (const e of game.enemies) {
+          if (e.dead || e.neutral || e.isBoss) continue;
+          const d = Math.hypot(e.x - this.x, e.y - this.y);
+          if (d < 85 + e.r) {
+            game.damageEnemy(e, 5, { x: (e.x - this.x) / (d || 1), y: (e.y - this.y) / (d || 1) }, { feel: false, kb: 260, color: '#ff9a3c' });
+          }
+        }
+        const p = game.player;
+        const pd = Math.hypot(p.x - this.x, p.y - this.y);
+        if (pd < 70 + p.r) {
+          game.hurtPlayer(1, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 300);
+        }
+        Renderer.shake(4, 0.18);
+      }
+    },
+    draw(ctx) {
+      // 심지가 타들어가는 항아리 잔해
+      ctx.fillStyle = '#5a1c1c';
+      ctx.fillRect(this.x - 6, this.y - 3, 12, 8);
+      ctx.fillStyle = Math.floor(this.fuseT * 10) % 2 === 0 ? '#ffd866' : '#ff4757';
+      ctx.beginPath(); ctx.arc(this.x, this.y - 8, 4, 0, Math.PI * 2); ctx.fill();
+    },
+  };
+}
+
+// 균열 벽 — 부수면 벽 타일이 열린다 (비밀 벽감 입구). 근접·회전·투사체로 파괴 가능.
+// gold=true: 금빛 균열 (맵 M3) — 부수면 이 층의 비밀 금고방 문이 열린다
+function createCrack(tx, ty, x, y, gold = false) {
+  return {
+    type: 'crack', neutral: true, noDrops: true, tx, ty, gold,
+    x, y, r: 20, hp: gold ? 3 : 2, maxHp: gold ? 3 : 2, speed: 0, xpVal: 0,
     dead: false, phased: false, elite: false, isBoss: false, isMini: false,
     flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0,
     status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
@@ -2812,13 +2867,32 @@ function createCrack(tx, ty, x, y) {
       AudioSys.thud();
       Renderer.shake(4, 0.2);
       Particles.burst(this.x, this.y, {
-        count: 18, colors: ['#8a8074', '#5a5a6e', '#3a3a48'], speed: 160, life: 0.5, size: 4, gravity: 260,
+        count: 18, colors: this.gold ? ['#ffd866', '#c09a4a', '#8a6a20'] : ['#8a8074', '#5a5a6e', '#3a3a48'],
+        speed: 160, life: 0.5, size: 4, gravity: 260,
       });
-      Particles.text(this.x, this.y - 22, '벽이 무너졌다!', { color: '#ffd866', size: 13 });
+      if (this.gold) {
+        Dungeon.vaultFound = true;
+        Game.banner = { text: '비밀 금고를 발견했다! 다음 갈림길에 금빛 문이 나타난다', life: 2.6, maxLife: 2.6, color: '#ffd866' };
+        Particles.text(this.x, this.y - 22, '금고 발견!', { color: '#ffd866', size: 15 });
+        AudioSys.buy();
+      } else {
+        Particles.text(this.x, this.y - 22, '벽이 무너졌다!', { color: '#ffd866', size: 13 });
+      }
     },
     draw(ctx) {
-      // 벽 타일 위의 균열 — 자세히 보면 눈에 띈다 (탐색 보상)
+      // 벽 타일 위의 균열 — 자세히 보면 눈에 띈다 (탐색 보상). 금빛 균열은 은은히 빛난다
       ctx.save();
+      if (this.gold) {
+        const glow = 0.35 + Math.sin(performance.now() * 0.004) * 0.15;
+        ctx.strokeStyle = this.flash > 0 ? '#ffffff' : `rgba(255,216,102,${glow})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(this.x - 6, this.y - 15); ctx.lineTo(this.x - 2, this.y - 5); ctx.lineTo(this.x - 8, this.y + 3);
+        ctx.moveTo(this.x - 2, this.y - 5); ctx.lineTo(this.x + 5, this.y + 1); ctx.lineTo(this.x + 2, this.y + 12);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
       ctx.strokeStyle = this.flash > 0 ? '#ffffff' : 'rgba(10,8,14,0.6)';
       ctx.lineWidth = 2;
       ctx.beginPath();

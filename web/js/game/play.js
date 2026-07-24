@@ -287,6 +287,31 @@ const GamePlay = {
       if (fp.life <= 0) this.firePatches.splice(i, 1);
     }
 
+    // ── 가시 함정 (맵 M2): 예열(빛남) → 솟음 — 편을 가리지 않는다. 적을 함정 위로 유인하라 ──
+    for (const tr of (this.traps || [])) {
+      tr.t += dt;
+      if (tr.state === 'idle' && tr.t > 2.2) {
+        tr.state = 'arm'; tr.t = 0;
+      } else if (tr.state === 'arm' && tr.t > 0.6) {
+        tr.state = 'up'; tr.t = 0; tr.hit = new Set();
+        AudioSys.thud();
+        Particles.burst(tr.x, tr.y, { count: 5, colors: ['#c8d4e4', '#8a9ab4'], speed: 90, life: 0.25, size: 2, gravity: -80 });
+      } else if (tr.state === 'up') {
+        if (!tr.hit.has('p') && Math.hypot(p.x - tr.x, p.y - tr.y) < 22 + p.r) {
+          tr.hit.add('p');
+          this.hurtPlayer(1, { x: 0, y: -1 }, 140, '가시 함정');
+        }
+        for (const e of this.enemies) {
+          if (e.dead || e.neutral || e.phased || e.isBoss || tr.hit.has(e)) continue;
+          if (Math.hypot(e.x - tr.x, e.y - tr.y) < 22 + e.r) {
+            tr.hit.add(e);
+            this.damageEnemy(e, 2, { x: 0, y: 0 }, { feel: false, kb: 0, color: '#c8d4e4' });
+          }
+        }
+        if (tr.t > 0.35) { tr.state = 'idle'; tr.t = 0; }
+      }
+    }
+
     // ── 충격파 링 ──
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const ring = this.rings[i];
@@ -665,8 +690,29 @@ const GamePlay = {
     if (!this.roomCleared &&
         this.enemies.every((e) => e.neutral) && this.markers.length === 0 && this.pendingSpawns.length === 0 &&
         this.bossRewardT <= 0 && this.state === 'play') {
+      // 습격방 (맵 M4): 파도가 남았으면 클리어 대신 다음 파도가 밀려온다
+      if (this._siege && this._siege.wave < this._siege.total) {
+        this._siege.wave++;
+        Dungeon.siegeWave(this._siege.wave).forEach((s, i) => {
+          this.pendingSpawns.push({ delay: 0.8 + i * 0.25, type: s.type, elite: s.elite });
+        });
+        this.banner = { text: `파도 ${this._siege.wave} / ${this._siege.total}`, life: 1.6, maxLife: 1.6, color: '#e43b44' };
+        AudioSys.bossAppear();
+        return;
+      }
       this.roomCleared = true;
       Meta.save(); // 도감 킬 기록 등 방 단위 저장
+      // 습격 완주 보상: 파편 뭉치 + 정예급 특성 선택
+      if (this._siege) {
+        this._siege = null;
+        const bonus = 14 + Dungeon.floor * 2;
+        Meta.data.shards += bonus;
+        Particles.text(p.x, p.y - 34, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
+        this.banner = { text: '습격을 버텨냈다!', life: 1.8, maxLife: 1.8, color: '#ffd866' };
+        this.pendingChoices++;
+        this.openTraitChoice('elite');
+        AudioSys.buy();
+      }
       // 문 수식어 보상: 사나운 무리 — 위험을 감수한 만큼 파편으로 돌려준다
       if (this._roomMod && this._roomMod.id === 'horde') {
         const bonus = 10 + Dungeon.floor * 2;

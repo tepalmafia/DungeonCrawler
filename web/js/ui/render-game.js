@@ -35,6 +35,40 @@ const GameRender = {
       }
     }
 
+    // 가시 함정 (맵 M2) — 예열 단계에서 빛나 위치를 알린다
+    for (const tr of (this.traps || [])) {
+      ctx.save();
+      if (tr.state === 'idle') {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#14141d';
+        ctx.beginPath(); ctx.arc(tr.x, tr.y, 20, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3a3a4c';
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * Math.PI * 2 + 0.5;
+          ctx.fillRect(tr.x + Math.cos(a) * 11 - 1, tr.y + Math.sin(a) * 11 - 1, 3, 3);
+        }
+      } else if (tr.state === 'arm') {
+        ctx.globalAlpha = 0.6 + Math.sin(tr.t * 30) * 0.2;
+        ctx.fillStyle = '#2a2434';
+        ctx.beginPath(); ctx.arc(tr.x, tr.y, 21, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#e43b44'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(tr.x, tr.y, 22, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#1c1c28';
+        ctx.beginPath(); ctx.arc(tr.x, tr.y, 21, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#c8d4e4';
+        for (let k = 0; k < 7; k++) {
+          const a = (k / 7) * Math.PI * 2;
+          const sx = tr.x + Math.cos(a) * 10, sy = tr.y + Math.sin(a) * 10;
+          ctx.beginPath();
+          ctx.moveTo(sx - 3, sy + 4); ctx.lineTo(sx, sy - 9); ctx.lineTo(sx + 3, sy + 4);
+          ctx.closePath(); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
     // 감전/독구름/잿불 장판 (적 피해)
     for (const z of this.zones) {
       const col = z.kind === 'poison' ? '#6ab04c' : z.kind === 'fire' ? '#ff7043' : '#ffd866';
