@@ -886,12 +886,16 @@ const HUD = {
     ctx.fillText(`클리어 시간 ${(game.time / 60).toFixed(1)}분`, Renderer.W / 2, 295);
 
     this._drawShardReward(ctx, game, 350);
-    this._drawRunTag(ctx, game, 465);
+    this._drawRunTag(ctx, game, 497);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px monospace';
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', Renderer.W / 2, 430);
     }
+    // 무한 모드 진입 안내
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = '#b13ae0';
+    ctx.fillText('C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)', Renderer.W / 2, 462);
   },
 };

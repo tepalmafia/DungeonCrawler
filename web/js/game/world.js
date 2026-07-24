@@ -158,8 +158,10 @@ const World = {
 
   buildRoom(depth, type, floor = 1) {
     this.floor = floor;
-    this.theme = FLOOR_THEMES[floor] || FLOOR_THEMES[1];
-    this.hazard = FLOOR_HAZARDS[floor] || null;
+    // 11층+ (무한 모드): 6~10층 테마·기믹을 순환
+    const themeKey = floor <= 10 ? floor : ((floor - 11) % 5) + 6;
+    this.theme = FLOOR_THEMES[themeKey] || FLOOR_THEMES[1];
+    this.hazard = floor <= 10 ? (FLOOR_HAZARDS[floor] || null) : (FLOOR_HAZARDS[themeKey] || null);
     this.fogZones = [];
     this.lavaTiles = [];
 
@@ -503,20 +505,147 @@ const World = {
   drawDoors(ctx, animT) {
     if (!this.doorsActive) return;
     for (const d of this.doors) {
-      const glow = 0.5 + Math.sin(animT * 4) * 0.2;
-      ctx.fillStyle = '#120d16';
-      ctx.fillRect(d.x - 16, d.y - 26, 32, 52);
-      ctx.strokeStyle = d.opt.color;
-      ctx.globalAlpha = glow;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(d.x - 16, d.y - 26, 32, 52);
+      const c = d.opt.color;
+      const pulse = 0.5 + Math.sin(animT * 3 + d.y * 0.01) * 0.18;
+
+      // 바닥 빛 웅덩이
+      ctx.save();
+      ctx.globalAlpha = 0.16 + pulse * 0.1;
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.ellipse(d.x, d.y + 30, 26, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 석조 프레임 (기둥 + 아치 + 쐐기돌)
+      ctx.fillStyle = '#0d0a12';
+      ctx.fillRect(d.x - 20, d.y - 22, 40, 52); // 안쪽 어둠
+      ctx.fillStyle = '#2a2438';
+      ctx.fillRect(d.x - 26, d.y - 22, 7, 54);  // 왼 기둥
+      ctx.fillRect(d.x + 19, d.y - 22, 7, 54);  // 오른 기둥
+      ctx.beginPath();                          // 아치
+      ctx.arc(d.x, d.y - 20, 26, Math.PI, 0);
+      ctx.arc(d.x, d.y - 20, 19, 0, Math.PI, true);
+      ctx.fill();
+      ctx.fillStyle = '#3a3450';                // 기둥 하이라이트 + 쐐기돌
+      ctx.fillRect(d.x - 25, d.y - 22, 2, 54);
+      ctx.fillRect(d.x + 20, d.y - 22, 2, 54);
+      ctx.fillRect(d.x - 4, d.y - 48, 8, 9);
+      ctx.fillStyle = '#1a1626';                // 받침돌
+      ctx.fillRect(d.x - 27, d.y + 28, 54, 5);
+
+      // 포탈 내부 발광 (방 타입 색)
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(d.x - 19, d.y - 21, 38, 50);
+      ctx.arc(d.x, d.y - 20, 19, Math.PI, 0);
+      ctx.clip();
+      const g = ctx.createRadialGradient(d.x, d.y + 2, 3, d.x, d.y + 2, 34);
+      g.addColorStop(0, c);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.34 + pulse * 0.22;
+      ctx.fillStyle = g;
+      ctx.fillRect(d.x - 20, d.y - 42, 40, 74);
+      // 세로 일렁임
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#ffffff';
+      for (let k = 0; k < 3; k++) {
+        const sx = d.x - 12 + k * 12 + Math.sin(animT * 2 + k * 2.1) * 3;
+        ctx.fillRect(sx, d.y - 38, 2, 66);
+      }
+      // 상승 입자 (결정적 애니메이션 — 랜덤 없음)
+      ctx.fillStyle = c;
+      for (let k = 0; k < 4; k++) {
+        const ph = (animT * 22 + k * 17) % 52;
+        ctx.globalAlpha = 0.5 * (1 - ph / 52);
+        ctx.fillRect(d.x - 10 + k * 7, d.y + 24 - ph, 2, 2);
+      }
+      ctx.restore();
+
+      // 타입 아이콘 (포탈 중앙)
+      this._doorIcon(ctx, d.opt.type, d.x, d.y - 2, c, pulse);
+
+      // 명판 (라벨)
+      const w = ctx.measureText ? Math.max(40, d.opt.label.length * 13 + 14) : 46;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#0d0a12';
+      ctx.fillRect(d.x - w / 2, d.y - 66, w, 18);
       ctx.globalAlpha = 1;
-      ctx.font = 'bold 13px monospace';
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(d.x - w / 2, d.y - 66, w, 18);
+      ctx.font = 'bold 12px monospace';
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#08080f';
-      ctx.fillText(d.opt.label, d.x + 1, d.y - 33);
-      ctx.fillStyle = d.opt.color;
-      ctx.fillText(d.opt.label, d.x, d.y - 34);
+      ctx.fillStyle = c;
+      ctx.fillText(d.opt.label, d.x, d.y - 53);
     }
+  },
+
+  // 방 타입별 문 아이콘 — 외부 폰트 없이 도형으로 그린다
+  _doorIcon(ctx, type, x, y, color, pulse) {
+    ctx.save();
+    ctx.globalAlpha = 0.75 + pulse * 0.25;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    if (type === 'combat') {
+      // 교차하는 두 자루 검
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(x - 8 * s, y + 8);
+        ctx.lineTo(x + 8 * s, y - 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 8 * s, y + 4);
+        ctx.lineTo(x - 4 * s, y + 8);
+        ctx.stroke();
+      }
+    } else if (type === 'elite') {
+      // 왕관
+      ctx.beginPath();
+      ctx.moveTo(x - 9, y + 6); ctx.lineTo(x - 9, y - 3); ctx.lineTo(x - 4, y + 1);
+      ctx.lineTo(x, y - 7); ctx.lineTo(x + 4, y + 1); ctx.lineTo(x + 9, y - 3);
+      ctx.lineTo(x + 9, y + 6); ctx.closePath();
+      ctx.fill();
+    } else if (type === 'treasure') {
+      // 보물상자
+      ctx.fillRect(x - 9, y - 2, 18, 9);
+      ctx.beginPath();
+      ctx.arc(x, y - 2, 9, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = '#0d0a12';
+      ctx.fillRect(x - 1.5, y - 2, 3, 5);
+    } else if (type === 'camp') {
+      // 모닥불 불꽃
+      ctx.beginPath();
+      ctx.moveTo(x, y - 9);
+      ctx.quadraticCurveTo(x + 8, y - 1, x + 5, y + 5);
+      ctx.quadraticCurveTo(x + 3, y + 8, x, y + 8);
+      ctx.quadraticCurveTo(x - 6, y + 7, x - 5, y + 1);
+      ctx.quadraticCurveTo(x - 4, y - 3, x, y - 9);
+      ctx.fill();
+    } else if (type === 'boss') {
+      // 해골
+      ctx.beginPath();
+      ctx.arc(x, y - 2, 8, Math.PI * 0.9, Math.PI * 0.1);
+      ctx.fill();
+      ctx.fillRect(x - 8, y - 2, 16, 6);
+      ctx.fillRect(x - 5, y + 4, 3, 4);
+      ctx.fillRect(x + 2, y + 4, 3, 4);
+      ctx.fillStyle = '#0d0a12';
+      ctx.beginPath();
+      ctx.arc(x - 3.5, y - 2, 2.2, 0, Math.PI * 2);
+      ctx.arc(x + 3.5, y - 2, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'nextfloor') {
+      // 아래로 향하는 계단 화살표
+      ctx.beginPath();
+      ctx.moveTo(x, y + 8); ctx.lineTo(x - 8, y - 2); ctx.lineTo(x - 3, y - 2);
+      ctx.lineTo(x - 3, y - 8); ctx.lineTo(x + 3, y - 8); ctx.lineTo(x + 3, y - 2);
+      ctx.lineTo(x + 8, y - 2); ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   },
 };

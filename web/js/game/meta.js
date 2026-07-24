@@ -188,4 +188,16 @@ const Meta = {
     this.save();
     return earned;
   },
+
+  // 무한 모드 정산: 전체 보상에서 10층 정산 때 이미 받은 몫(paid)을 뺀 차액만 지급.
+  // runs/wins는 10층 정산에서 이미 집계됐으므로 다시 세지 않는다.
+  endlessRun(floor, roomIndex, kills, heat, paid, killsDelta) {
+    const total = this.runReward(floor, roomIndex, kills, true, heat);
+    const earned = Math.max(0, total - paid);
+    this.data.shards += earned;
+    this.data.totalKills += Math.max(0, killsDelta);
+    this.data.bestFloor = Math.max(this.data.bestFloor, floor);
+    this.save();
+    return earned;
+  },
 };

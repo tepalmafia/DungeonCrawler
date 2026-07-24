@@ -23,6 +23,13 @@ const FLOOR_DATA = {
   10: { name: '심연의 왕좌', enemies: ['voidEye', 'voidEye', 'executioner', 'magmaSlime', 'wraith', 'necro'], rule: '공허의 눈은 추적탄을 쏜다 — 직각으로 대시하라' },
 };
 
+// 11층+ (무한 모드 '심연 회랑'): 6~10층 구성을 순환하며 끝없이 강해진다
+function floorData(floor) {
+  if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
+  const base = FLOOR_DATA[((floor - 11) % 5) + 6];
+  return { name: `심연 회랑 ${floor}층`, enemies: base.enemies, rule: base.rule };
+}
+
 const Dungeon = {
   floor: 1,
   roomIndex: 1,
@@ -32,12 +39,16 @@ const Dungeon = {
   newRun() {
     this.floor = 1;
     this.roomIndex = 1;
+    this.tookTreasure = false;
+    this.tookCamp = false;
     this.build('combat');
   },
 
   nextFloor() {
     this.floor++;
     this.roomIndex = 1;
+    this.tookTreasure = false;
+    this.tookCamp = false;
     this.build('combat');
   },
 
@@ -46,6 +57,8 @@ const Dungeon = {
       this.nextFloor();
       return;
     }
+    if (type === 'treasure') this.tookTreasure = true;
+    if (type === 'camp') this.tookCamp = true;
     this.roomIndex++;
     this.build(type);
   },
@@ -57,7 +70,7 @@ const Dungeon = {
   },
 
   floorName() {
-    return FLOOR_DATA[this.floor]?.name || `${this.floor}층`;
+    return floorData(this.floor).name;
   },
 
   doorOptions() {
@@ -68,8 +81,9 @@ const Dungeon = {
     const options = ['combat'];
     const pool = [];
     if (next >= 3) pool.push('elite', 'elite');
-    pool.push('treasure');
-    if (next >= 2) pool.push('camp');
+    // 보물·모닥불은 층당 1회만 — 한 번 들어가면 그 층에서는 다시 나오지 않는다
+    if (!this.tookTreasure) pool.push('treasure');
+    if (!this.tookCamp && next >= 4) pool.push('camp');
     pool.push('combat');
 
     const n = RNG.int(2, 3);
@@ -86,11 +100,11 @@ const Dungeon = {
 
   // 전투방 적 구성 — 깊이·층에 따라 수와 정예 확률 증가
   combatComp(depth) {
-    const data = FLOOR_DATA[this.floor] || FLOOR_DATA[1];
+    const data = floorData(this.floor);
     const comp = [];
     const heatBonus = Game.heat >= 2 ? 2 : 0; // 열기 2: 적 수 증가
     const n = Math.min(12, 2 + Math.ceil(depth * 0.7) + Math.floor((this.floor - 1) * 0.8) + heatBonus);
-    const eliteChance = 0.03 + (this.floor - 1) * 0.04; // 층당 4% — 심층은 정예가 흔하다
+    const eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
     for (let i = 0; i < n; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: RNG.chance(eliteChance) });
     }
@@ -98,7 +112,7 @@ const Dungeon = {
   },
 
   eliteComp(depth) {
-    const data = FLOOR_DATA[this.floor] || FLOOR_DATA[1];
+    const data = floorData(this.floor);
     const comp = [];
     const nElites = depth >= 6 || this.floor >= 4 ? 2 : 1;
     for (let i = 0; i < nElites; i++) {
