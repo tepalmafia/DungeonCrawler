@@ -1742,3 +1742,90 @@ function createMiniboss(type, x, y, floorScale) {
   };
   return e;
 }
+
+// ── 파괴 가능 오브젝트 (맵 다양화 M2·M3) — 적이 아니라 지형에 가깝다 ──
+// neutral 플래그: 방 클리어 판정·자동 조준·처치 집계·도감에서 제외된다.
+function createPot(x, y, rare = false) {
+  return {
+    type: 'pot', neutral: true, noDrops: true, rare,
+    x, y, r: 12, hp: 1, maxHp: 1, speed: 0, xpVal: 0,
+    dead: false, phased: false, elite: false, isBoss: false, isMini: false,
+    flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0,
+    status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
+    update(dt) { this.kbx = this.kby = 0; if (this.flash > 0) this.flash -= dt; },
+    onDeath(game) {
+      const n = this.rare ? 8 + Dungeon.floor : RNG.int(1, 3);
+      Meta.data.shards += n;
+      Particles.text(this.x, this.y - 24, `◆ +${n}`, { color: '#2ec4b6', size: this.rare ? 15 : 12 });
+      if (this.rare && Math.random() < 0.5) game.pickups.push({ x: this.x, y: this.y, t: 0, r: 12 });
+      AudioSys.thud();
+    },
+    draw(ctx) {
+      const body = this.rare ? '#c09a4a' : '#7a6a5a';
+      const dark = this.rare ? '#8a6a20' : '#5a4a3e';
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y + 9, 9, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = dark;
+      ctx.fillRect(this.x - 8, this.y - 6, 16, 14);
+      ctx.fillStyle = body;
+      ctx.fillRect(this.x - 7, this.y - 5, 14, 9);
+      ctx.fillRect(this.x - 5, this.y - 10, 10, 5);
+      ctx.fillStyle = dark;
+      ctx.fillRect(this.x - 4, this.y - 13, 8, 3);
+      if (this.rare) {
+        ctx.fillStyle = '#ffd866';
+        ctx.fillRect(this.x - 1, this.y - 3, 3, 3);
+      }
+      if (this.flash > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fillRect(this.x - 8, this.y - 13, 16, 21);
+      }
+    },
+  };
+}
+
+// 균열 벽 — 부수면 벽 타일이 열린다 (비밀 벽감 입구). 근접·회전·투사체로 파괴 가능.
+function createCrack(tx, ty, x, y) {
+  return {
+    type: 'crack', neutral: true, noDrops: true, tx, ty,
+    x, y, r: 20, hp: 2, maxHp: 2, speed: 0, xpVal: 0,
+    dead: false, phased: false, elite: false, isBoss: false, isMini: false,
+    flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0,
+    status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
+    update(dt) { this.kbx = this.kby = 0; if (this.flash > 0) this.flash -= dt; },
+    onDeath() {
+      World.breakWall(this.tx, this.ty);
+      AudioSys.thud();
+      Renderer.shake(4, 0.2);
+      Particles.burst(this.x, this.y, {
+        count: 18, colors: ['#8a8074', '#5a5a6e', '#3a3a48'], speed: 160, life: 0.5, size: 4, gravity: 260,
+      });
+      Particles.text(this.x, this.y - 22, '벽이 무너졌다!', { color: '#ffd866', size: 13 });
+    },
+    draw(ctx) {
+      // 벽 타일 위의 균열 — 자세히 보면 눈에 띈다 (탐색 보상)
+      ctx.save();
+      ctx.strokeStyle = this.flash > 0 ? '#ffffff' : 'rgba(10,8,14,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.x - 6, this.y - 15);
+      ctx.lineTo(this.x - 2, this.y - 5);
+      ctx.lineTo(this.x - 8, this.y + 3);
+      ctx.moveTo(this.x - 2, this.y - 5);
+      ctx.lineTo(this.x + 5, this.y + 1);
+      ctx.lineTo(this.x + 2, this.y + 12);
+      ctx.stroke();
+      if (this.hp < this.maxHp) {
+        ctx.strokeStyle = 'rgba(255,216,102,0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.x + 7, this.y - 12);
+        ctx.lineTo(this.x + 3, this.y - 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+  };
+}

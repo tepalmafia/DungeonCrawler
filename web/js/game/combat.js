@@ -84,6 +84,17 @@ const GameCombat = {
   killEnemy(e, dir) {
     if (e.dead) return;
     e.dead = true;
+    // 중립 개체(항아리·균열 벽): 처치 집계·도감·드랍 없이 부서진다
+    if (e.neutral) {
+      Particles.burst(e.x, e.y, {
+        count: 10,
+        colors: e.type === 'pot' ? ['#7a6a5a', '#5a4a3e', '#c09a4a'] : ['#8a8074', '#5a5a6e'],
+        speed: 140, life: 0.4, size: 3, gravity: 260,
+        dir: Math.atan2(dir.y, dir.x), spread: 2.4,
+      });
+      if (e.onDeath) e.onDeath(this);
+      return;
+    }
     this.kills++;
     Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : (e.codexType || e.type));
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조

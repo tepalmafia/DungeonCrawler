@@ -297,6 +297,12 @@ const GamePlay = {
       }
 
       let remove = b.life <= 0 || World.isSolidAt(b.x, b.y);
+      // 벽에 맞은 투사체가 균열 벽이면 균열에 피해 — 원거리 직업도 비밀 벽감을 열 수 있다
+      if (remove && b.life > 0) {
+        const crack = this.enemies.find((e) => e.type === 'crack' && !e.dead &&
+          Math.abs(e.x - b.x) < TS * 0.8 && Math.abs(e.y - b.y) < TS * 0.8);
+        if (crack) this.damageEnemy(crack, 1, b.dir || { x: 1, y: 0 }, { feel: false });
+      }
       if (!remove) {
         for (const e of this.enemies) {
           if (e.dead || e.phased || b.hit.has(e)) continue;
@@ -550,9 +556,9 @@ const GamePlay = {
 
     Particles.update(dt);
 
-    // ── 방 클리어 ──
+    // ── 방 클리어 ── (항아리·균열 벽 같은 중립 개체는 남아 있어도 클리어)
     if (!this.roomCleared &&
-        this.enemies.length === 0 && this.markers.length === 0 && this.pendingSpawns.length === 0 &&
+        this.enemies.every((e) => e.neutral) && this.markers.length === 0 && this.pendingSpawns.length === 0 &&
         this.bossRewardT <= 0 && this.state === 'play') {
       this.roomCleared = true;
       Meta.save(); // 도감 킬 기록 등 방 단위 저장

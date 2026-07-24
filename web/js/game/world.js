@@ -71,6 +71,156 @@ const FLOOR_THEMES = {
 // 층별 환경 기믹 (테마 순환)
 const FLOOR_HAZARDS = { 2: 'fog', 3: 'prison', 4: 'lava', 5: 'dark', 7: 'fog', 8: 'prison', 9: 'lava', 10: 'dark' };
 
+// ── 손제작 방 템플릿 (맵 다양화 M1) — Spelunky/Isaac 방식: 랜덤은 '조각의 선택'에만, 조각은 손제작 ──
+// 18×9 = 내부 격자 (테두리 벽 제외). 규칙: 좌우 2열과 5번째 행(중앙 통로·문 접근로)은 항상 비운다.
+// 문자: . 바닥 / # 벽 / H 위험 지대(용암 층에서만 용암, 그 외 바닥) / P 항아리(70%) / R 진귀한 항아리 / C 균열 벽(부수면 열린다)
+// 적용 후 도달 불가 지역은 자동 봉인, 균열 벽 뒤 벽감은 적 스폰 금지 구역이 된다.
+const ROOM_TEMPLATES = [
+  { name: '기둥 홀', rows: [
+    '..................',
+    '...#....P.....#...',
+    '..................',
+    '......#......#....',
+    '..................',
+    '......#......#....',
+    '..................',
+    '...#..........#...',
+    '..................',
+  ] },
+  { name: '쪼개진 호수', lavaOnly: true, rows: [
+    '..................',
+    '..................',
+    '......HHHHHH......',
+    '.....HHHHHHHH.....',
+    '..................',
+    '.....HHHHHHHH.....',
+    '......HHHHHH......',
+    '..................',
+    '..................',
+  ] },
+  { name: '외곽 링', rows: [
+    '..................',
+    '....########......',
+    '....#......#......',
+    '....#..P...#......',
+    '..................',
+    '....#...P..#......',
+    '....#......#......',
+    '....########......',
+    '..................',
+  ] },
+  { name: '좁은 목', rows: [
+    '........#.........',
+    '........#.........',
+    '...P....#.........',
+    '........#....P....',
+    '..................',
+    '........#.........',
+    '...P....#....P....',
+    '........#.........',
+    '........#.........',
+  ] },
+  { name: '감옥 창살', prison: true, rows: [
+    '..................',
+    '....#..#..#..#....',
+    '....#..#..#..#....',
+    '..................',
+    '..................',
+    '..................',
+    '....#..#..#..#....',
+    '....#..#..#..#....',
+    '..................',
+  ] },
+  { name: '지그재그 사선', rows: [
+    '..................',
+    '....#.............',
+    '.....##...........',
+    '.......##....P....',
+    '..................',
+    '....P....##.......',
+    '...........##.....',
+    '.............#....',
+    '..................',
+  ] },
+  { name: '세 갈래 회랑', rows: [
+    '..................',
+    '..................',
+    '...####...#####...',
+    '..................',
+    '..................',
+    '..................',
+    '...#####...####...',
+    '..................',
+    '..................',
+  ] },
+  { name: '보물꾼의 벽감', rows: [
+    '.............###..',
+    '.............#R#..',
+    '.............#C#..',
+    '..................',
+    '..................',
+    '.....#............',
+    '...#...#..........',
+    '.....#......P.....',
+    '..................',
+  ] },
+  { name: '항아리 창고', rows: [
+    '..................',
+    '..P....#.....P....',
+    '..................',
+    '....P.....#.......',
+    '..................',
+    '.......#.....P....',
+    '..................',
+    '..P.........#..P..',
+    '..................',
+  ] },
+  { name: '용암 십자', lavaOnly: true, rows: [
+    '..................',
+    '........HH........',
+    '........HH........',
+    '.....HHHHHHHH.....',
+    '..................',
+    '.....HHHHHHHH.....',
+    '........HH........',
+    '........HH........',
+    '..................',
+  ] },
+  { name: '쌍둥이 방책', rows: [
+    '..................',
+    '..................',
+    '...######.........',
+    '..................',
+    '..................',
+    '..................',
+    '.........######...',
+    '..................',
+    '..................',
+  ] },
+  { name: '왕좌 전정', rows: [
+    '..................',
+    '....#........#....',
+    '........##........',
+    '........##........',
+    '..................',
+    '........##........',
+    '........##........',
+    '....#........#....',
+    '..................',
+  ] },
+  { name: '무너진 벽감', rows: [
+    '..................',
+    '..................',
+    '.......P..........',
+    '..................',
+    '..................',
+    '..#C#.............',
+    '..#R#....#........',
+    '..###..........#..',
+    '..................',
+  ] },
+];
+
 // 바닥 장식 그리기 루틴 — 전부 코드 픽셀
 const DECAL_PAINTERS = {
   skull(ctx, x, y) {
@@ -175,25 +325,34 @@ const World = {
     }
 
     const combatRoom = type === 'combat' || type === 'elite';
+    this.potSpots = [];
+    this.crackSpots = [];
+    this._noSpawn = null;
 
     if (combatRoom) {
-      // 장애물 (3층 감옥은 세로 창살 느낌으로 더 많이)
-      const nObstacles = (this.hazard === 'prison' ? 2 : 0) + RNG.int(2, 4 + Math.min(2, Math.floor(depth / 3)));
-      for (let i = 0; i < nObstacles; i++) {
-        for (let tries = 0; tries < 20; tries++) {
-          const tx = RNG.int(4, this.cols - 5);
-          const ty = RNG.int(2, this.rows - 3);
-          if (ty === 5) continue; // 가운데 통로 확보
-          const vertical = this.hazard === 'prison' && RNG.chance(0.6); // 감옥 창살
-          const wide = !vertical && RNG.chance(0.4);
-          if (this.map[ty][tx] !== 0) continue;
-          this.map[ty][tx] = 1;
-          if (vertical && ty + 1 < this.rows - 2 && ty + 1 !== 5 && this.map[ty + 1][tx] === 0) {
-            this.map[ty + 1][tx] = 1;
-          } else if (wide && tx + 1 < this.cols - 2 && this.map[ty][tx + 1] === 0) {
-            this.map[ty][tx + 1] = 1;
+      const tpl = this._pickTemplate();
+      this.lastTemplate = tpl ? tpl.name : '무작위 잔해'; // 디버그/검증용
+      if (tpl) {
+        this._applyTemplate(tpl);
+      } else {
+        // 무작위 잔해 (구 방식 — 템플릿 풀의 한 갈래로 유지해 변화를 준다)
+        const nObstacles = (this.hazard === 'prison' ? 2 : 0) + RNG.int(2, 4 + Math.min(2, Math.floor(depth / 3)));
+        for (let i = 0; i < nObstacles; i++) {
+          for (let tries = 0; tries < 20; tries++) {
+            const tx = RNG.int(4, this.cols - 5);
+            const ty = RNG.int(2, this.rows - 3);
+            if (ty === 5) continue; // 가운데 통로 확보
+            const vertical = this.hazard === 'prison' && RNG.chance(0.6); // 감옥 창살
+            const wide = !vertical && RNG.chance(0.4);
+            if (this.map[ty][tx] !== 0) continue;
+            this.map[ty][tx] = 1;
+            if (vertical && ty + 1 < this.rows - 2 && ty + 1 !== 5 && this.map[ty + 1][tx] === 0) {
+              this.map[ty + 1][tx] = 1;
+            } else if (wide && tx + 1 < this.cols - 2 && this.map[ty][tx + 1] === 0) {
+              this.map[ty][tx + 1] = 1;
+            }
+            break;
           }
-          break;
         }
       }
     }
@@ -211,8 +370,8 @@ const World = {
       }
     }
 
-    // 용암 웅덩이 (보스방 포함)
-    if (this.hazard === 'lava' && (combatRoom || type === 'boss')) {
+    // 용암 웅덩이 (보스방 포함) — 템플릿이 이미 용암을 깔았다면 생략
+    if (this.hazard === 'lava' && (combatRoom || type === 'boss') && this.lavaTiles.length === 0) {
       const n = type === 'boss' ? 3 : RNG.int(2, 4);
       for (let i = 0; i < n; i++) {
         const tx = RNG.int(3, this.cols - 5);
@@ -231,6 +390,97 @@ const World = {
     this.doors = [];
     this.doorsActive = false;
     this._prerenderFloor();
+  },
+
+  // ── 템플릿 시스템 (M1~M4) ──
+  _pickTemplate() {
+    // null = 무작위 잔해 (구 방식). 테마 맞춤 템플릿은 가중치를 올린다.
+    const pool = [{ tpl: null, w: 2 }];
+    for (const t of ROOM_TEMPLATES) {
+      if (t.lavaOnly && this.hazard !== 'lava') continue;
+      const w = (t.prison && this.hazard === 'prison') || (t.lavaOnly && this.hazard === 'lava') ? 3 : 1;
+      pool.push({ tpl: t, w });
+    }
+    let total = 0;
+    for (const e of pool) total += e.w;
+    let roll = RNG.next() * total;
+    for (const e of pool) {
+      roll -= e.w;
+      if (roll <= 0) return e.tpl;
+    }
+    return null;
+  },
+
+  _applyTemplate(tpl) {
+    const flip = RNG.chance(0.5); // 좌우 반전으로 체감 풀 2배
+    for (let r = 0; r < 9; r++) {
+      const row = tpl.rows[r];
+      for (let c = 0; c < 18; c++) {
+        const ch = row[flip ? 17 - c : c];
+        if (ch === '.') continue;
+        const tx = 1 + c, ty = 1 + r;
+        const cx = tx * TS + TS / 2, cy = ty * TS + TS / 2 + this.offsetY;
+        if (ch === '#') {
+          this.map[ty][tx] = 1;
+        } else if (ch === 'H') {
+          if (this.hazard === 'lava') {
+            this.map[ty][tx] = 2;
+            this.lavaTiles.push({ tx, ty });
+          }
+        } else if (ch === 'P') {
+          if (RNG.chance(0.7)) this.potSpots.push({ x: cx, y: cy + 4, rare: false });
+        } else if (ch === 'R') {
+          this.potSpots.push({ x: cx, y: cy + 4, rare: true });
+        } else if (ch === 'C') {
+          this.map[ty][tx] = 1;
+          this.crackSpots.push({ tx, ty, x: cx, y: cy });
+        }
+      }
+    }
+    this._sealAndMarkAlcoves();
+  },
+
+  // 입구에서 도달 가능한지 BFS — passCracks=true면 균열 벽을 통과 가능으로 취급
+  _flood(passCracks) {
+    const seen = Array.from({ length: this.rows }, () => new Array(this.cols).fill(false));
+    const cracks = new Set(this.crackSpots.map((s) => s.ty * 100 + s.tx));
+    const q = [[2, 5]]; // 플레이어 진입 지점 (중앙 통로 왼쪽 끝)
+    seen[5][2] = true;
+    while (q.length) {
+      const [tx, ty] = q.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = tx + dx, ny = ty + dy;
+        if (nx <= 0 || ny <= 0 || nx >= this.cols - 1 || ny >= this.rows - 1 || seen[ny][nx]) continue;
+        if (this.map[ny][nx] === 1 && !(passCracks && cracks.has(ny * 100 + nx))) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return seen;
+  },
+
+  // 연결성 보장: 영원히 도달 불가한 바닥은 벽으로 봉인 (적이 갇혀 방이 안 끝나는 사고 방지),
+  // 균열 벽을 부숴야만 닿는 벽감은 적 스폰 금지 구역으로 표시
+  _sealAndMarkAlcoves() {
+    const now = this._flood(false);
+    const ever = this._flood(true);
+    this._noSpawn = Array.from({ length: this.rows }, () => new Array(this.cols).fill(false));
+    for (let ty = 1; ty < this.rows - 1; ty++) {
+      for (let tx = 1; tx < this.cols - 1; tx++) {
+        if (this.map[ty][tx] === 1) continue;
+        if (!ever[ty][tx]) this.map[ty][tx] = 1;
+        else if (!now[ty][tx]) this._noSpawn[ty][tx] = true;
+      }
+    }
+  },
+
+  // 균열 벽 파괴 (M3) — 타일을 바닥으로 바꾸고 다시 굽는다
+  breakWall(tx, ty) {
+    if (this.map[ty] && this.map[ty][tx] === 1) {
+      this.map[ty][tx] = 0;
+      if (this._noSpawn && this._noSpawn[ty]) this._noSpawn[ty][tx] = false;
+      this._prerenderFloor();
+    }
   },
 
   openDoors(options) {
@@ -296,6 +546,7 @@ const World = {
       const tx = RNG.int(2, this.cols - 3);
       const ty = RNG.int(1, this.rows - 2);
       if (this.map[ty][tx] !== 0) continue;
+      if (this._noSpawn && this._noSpawn[ty][tx]) continue; // 벽감(비밀 공간)엔 적이 스폰되지 않는다
       const x = tx * TS + TS / 2;
       const y = ty * TS + TS / 2 + this.offsetY;
       if (Math.hypot(x - player.x, y - player.y) >= minDist) return { x, y };
