@@ -15,12 +15,12 @@ const FLOOR_DATA = {
   2: { name: '곰팡이 동굴', enemies: ['mushroom', 'bat', 'toxicSlime', 'spider', 'frog', 'leech'], rule: '독 안개를 피하라' },
   3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'archer', 'shieldSkeleton', 'iceSlime', 'sniper'], rule: '골렘은 등 뒤가 약점' },
   4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'boar', 'wisp', 'berserker', 'golem'], rule: '용암을 밟지 마라' },
-  5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'necro', 'shaman', 'crystal', 'archer'], rule: '어둠이 시야를 가린다' },
+  5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'necro', 'shaman', 'crystal', 'archer', 'golem'], rule: '어둠이 시야를 가린다' },
   // 6~10층: 심층 — 층마다 전용 신규 몬스터가 등장한다
-  6: { name: '피의 묘지',   enemies: ['bomber', 'bomber', 'ghoul', 'charger', 'skeleton', 'wraith', 'necro', 'swarm'], rule: '폭탄벌레가 붉게 빛나면 도망쳐라' },
+  6: { name: '피의 묘지',   enemies: ['bomber', 'bomber', 'ghoul', 'charger', 'skeleton', 'wraith', 'necro', 'swarm', 'brute'], rule: '폭탄벌레가 붉게 빛나면 도망쳐라' },
   7: { name: '맹독 심연',   enemies: ['thornPlant', 'thornPlant', 'turret', 'mimic', 'frog', 'toxicSlime', 'spider', 'necro'], rule: '가시덩굴은 움직이지 않는다 — 각도를 노려라' },
   8: { name: '절망의 감옥', enemies: ['executioner', 'executioner', 'stalker', 'brute', 'sniper', 'shieldSkeleton', 'iceSlime'], rule: '처형자의 붉은 구역에서 벗어나라' },
-  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'wisp', 'berserker', 'lavaHound', 'fireSpirit'], rule: '마그마 슬라임은 죽어도 끝이 아니다' },
+  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'wisp', 'berserker', 'lavaHound', 'fireSpirit', 'golem'], rule: '마그마 슬라임은 죽어도 끝이 아니다' },
   10: { name: '심연의 왕좌', enemies: ['voidEye', 'voidEye', 'glutton', 'frostArcher', 'stalker', 'crystal', 'shaman', 'necro'], rule: '공허의 눈은 추적탄을 쏜다 — 직각으로 대시하라' },
 };
 
@@ -123,9 +123,10 @@ const Dungeon = {
     }
     // 중간보스 (우두머리): 층당 최소 1회 보장 — 12% 운빨로는 절반의 층을 그냥 지나쳤다 (기대 0.6회/층)
     // 방마다 14%, 층 후반(보스 전 4방)까지 안 나왔으면 확정 난입. 심층(6층+)은 두 번째 우두머리 12%.
+    // 단, 확정 보장은 3층부터 — 2층 확정은 초반 약체 빌드에 과했다 (계측: 검사 2층 사망 1→11회)
     if (this.floor >= 2) {
       const roomsLeft = this.totalRooms - 1 - this.roomIndex; // 보스방 전까지 남은 방 수
-      const force = !this.miniSeen && roomsLeft <= 4;
+      const force = !this.miniSeen && roomsLeft <= 4 && this.floor >= 3;
       const chance = this.miniSeen ? (this.floor >= 6 ? 0.12 : 0) : 0.14;
       if (force || RNG.chance(chance)) {
         comp.push({ type: RNG.pick(data.enemies.filter((t) => t !== 'swarm')), elite: false, mini: true });
