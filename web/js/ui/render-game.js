@@ -502,6 +502,8 @@ const GameRender = {
 
       ctx.textAlign = 'center';
       ctx.font = '14px monospace';
+      ctx.fillStyle = '#5ce0e6';
+      ctx.fillText('H 또는 / — 전체 매뉴얼 (던전·성장 안내 포함)', Renderer.W / 2, Renderer.H - 100);
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, Renderer.H - 78);
       ctx.fillStyle = '#e43b44';
