@@ -158,6 +158,10 @@ const Game = {
     const depth = Dungeon.roomIndex;
     const floorScale = this.floorHpScale();
 
+    // 방 템플릿 오브젝트 (M2·M3): 항아리·균열 벽 — 방 클리어 판정에서 제외되는 중립 개체
+    for (const s of (World.potSpots || [])) this.enemies.push(createPot(s.x, s.y, s.rare));
+    for (const s of (World.crackSpots || [])) this.enemies.push(createCrack(s.tx, s.ty, s.x, s.y));
+
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {
         this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini });

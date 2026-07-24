@@ -148,7 +148,7 @@ const Bot = {
     if (game.kills !== this._killWatch.kills || inLongFight) {
       this._killWatch.kills = game.kills;
       this._killWatch.t = 0;
-    } else if (game.enemies.some((e) => !e.dead && e.spawnT <= 0)) {
+    } else if (game.enemies.some((e) => !e.dead && !e.neutral && e.spawnT <= 0)) {
       this._killWatch.t += dt;
       if (this._killWatch.t > 7) {
         this._killWatch.t = 0;
@@ -164,7 +164,7 @@ const Bot = {
     if (game.reviveMode && p.invuln > 1.2) {
       let near = null, nd = 170;
       for (const e of game.enemies) {
-        if (e.dead || e.phased) continue;
+        if (e.dead || e.phased || e.neutral) continue;
         const dd = Math.hypot(e.x - p.x, e.y - p.y);
         if (dd < nd) { nd = dd; near = e; }
       }
@@ -179,7 +179,7 @@ const Bot = {
       if (p.classId !== 'knight' && p.attackCd <= 0) {
         let nt = null, ntd = 460;
         for (const e of game.enemies) {
-          if (e.dead || e.phased) continue;
+          if (e.dead || e.phased || e.neutral) continue;
           const dd = Math.hypot(e.x - p.x, e.y - p.y);
           if (dd < ntd && this._hasLoS(p.x, p.y, e.x, e.y)) { ntd = dd; nt = e; }
         }
@@ -208,7 +208,7 @@ const Bot = {
       (bossFight && !e.isBoss) ? 2 :
       e.isBoss ? 3 : 2;
     for (const e of game.enemies) {
-      if (e.dead || e.phased) continue;
+      if (e.dead || e.phased || e.neutral) continue; // 항아리·균열은 전투 타겟이 아니다
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d < 300) near++;
       // 시야가 막힌 적은 후순위 — 보이는 적부터 잡는다 (벽 뒤 대치 방지)
@@ -274,6 +274,21 @@ const Bot = {
       if (it) {
         this._move(p, it.x, it.y);
         this._watchGoal(it, Math.hypot(it.x - p.x, it.y - p.y), dt, p);
+      } else if (game.enemies.some((e) => !e.dead && e.neutral)) {
+        // 항아리·균열 벽 부수기 — 방을 떠나기 전 파괴 가능 오브젝트 회수
+        let brk = null, bd = Infinity;
+        for (const e of game.enemies) {
+          if (e.dead || !e.neutral) continue;
+          const dd = Math.hypot(e.x - p.x, e.y - p.y);
+          if (dd < bd) { bd = dd; brk = e; }
+        }
+        this._move(p, brk.x, brk.y);
+        this._watchGoal(brk, bd, dt, p);
+        if (bd < 70 && p.attackCd <= 0) {
+          p.facing = { x: (brk.x - p.x) / (bd || 1), y: (brk.y - p.y) / (bd || 1) };
+          Input.justPressed['KeyJ'] = true;
+          Bot.stats.attacks++;
+        }
       } else if (World.doorsActive && World.doors.length > 0) {
         // 문 선택: 이점이 있는 방을 고른다 — 보물 > 모닥불(다쳤을 때) > 기연 > 정예(카드 보상) > 전투
         const doorScore = (opt) => {

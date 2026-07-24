@@ -326,7 +326,7 @@ function createPlayer(x, y, classId = 'knight') {
       let best = maxRange;
       let target = null;
       for (const e of game.enemies) {
-        if (e.dead || e.phased || e.spawnT > 0) continue;
+        if (e.dead || e.phased || e.spawnT > 0 || e.neutral) continue; // 항아리 등 중립 개체는 조준 안 함
         const d = Math.hypot(e.x - this.x, e.y - this.y);
         if (d < best) { best = d; target = e; }
       }
