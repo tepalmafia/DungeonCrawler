@@ -20,7 +20,7 @@ const CLASSES = {
   },
 };
 
-// 도감 — 몬스터 목록 (일반 61종 + 보스 5종). 처치하면 발견된다.
+// 도감 — 몬스터 목록 (일반 61종 + 보스 10종). 처치하면 발견된다.
 const CODEX_ENEMIES = [
   { id: 'slime',      name: '슬라임',       sprite: 'slime',      desc: '던전에서 가장 흔한 주민. 통통 튀며 다가온다.' },
   { id: 'toxicSlime', name: '독 슬라임',    sprite: 'toxicSlime', desc: '죽으면 독구름을 남긴다. 시체 위를 밟지 마라.' },
@@ -89,6 +89,11 @@ const CODEX_ENEMIES = [
   { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 중장갑이 강한 일격을 경감한다 — 갑옷을 무시하고 스며드는 피해가 열쇠.' },
   { id: 'boss4', boss: true, name: '용암 심장 이그니스', sprite: 'bossIgnis', desc: '4층의 주인. 시간이 지날수록 백열해 빨라진다 — 속전속결하거나, 오래 버틸 몸을 만들라.' },
   { id: 'boss5', boss: true, name: '심연의 군주 눅스',   sprite: 'bossAbyss', desc: '탑의 정점. 어둠 장막 중에는 영혼 구슬만이 유일한 약점 — 흩어진 구슬을 잡을 기동력을 갖춰라.' },
+  { id: 'boss6', boss: true, name: '원혼 카론',         sprite: 'bossWraith',  desc: '6층의 주인. 죽음에서 돌아온 뱃사공 — 회전 나선탄과 뼈무더기 소환.' },
+  { id: 'boss7', boss: true, name: '역병왕 믹서스',     sprite: 'bossPlague',  desc: '7층의 주인. 맹독 간헐천이 바닥을 잠식한다 — 포자 방울부터 끊어라.' },
+  { id: 'boss8', boss: true, name: '절망의 바르곤',     sprite: 'bossDespair', desc: '8층의 주인. 사슬 올가미가 발을 묶는다 — 예고 원 밖으로.' },
+  { id: 'boss9', boss: true, name: '겁화의 이그니스',   sprite: 'bossInferno', desc: '9층의 주인. 백열하는 간헐천 연쇄 — 멈추는 순간 타오른다.' },
+  { id: 'boss10', boss: true, name: '진 심연의 군주 눅스', sprite: 'bossVoid',  desc: '탑의 진정한 정점. 세 겹의 어둠 장막과 공허 유충 — 모든 것을 건 최후의 시험.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
@@ -200,7 +205,7 @@ const Meta = {
       const key = e.boss ? 'boss' + e.id.slice(4) : e.id;
       return this.data.codex.kills[key] > 0;
     }).length;
-    const milestones = [[10, 100], [25, 150], [40, 250], [55, 350], [66, 500]]; // 확장 66종 기준
+    const milestones = [[10, 100], [25, 150], [40, 250], [55, 350], [71, 600]]; // 확장 71종 기준
     if (!this.data.codexRewarded) this.data.codexRewarded = {};
     for (const [need, reward] of milestones) {
       if (found >= need && !this.data.codexRewarded[need]) {

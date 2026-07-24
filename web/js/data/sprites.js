@@ -1083,7 +1083,7 @@ const Sprites = (() => {
   sprites.mirrorKnight = make(SHIELD_ROWS, { w: '#e8ecf4', k: '#1a1c2c', m: '#9aa6ba', B: '#c8d4e4' });
 
   // 1층: 무덤지기 카론 — 낫을 든 사신
-  sprites.boss = make(pad([
+  const BOSS_ROWS = pad([
     '..........kkkkkkkkkk',
     '........kkkkkkkkkkkkkk',
     '.......kkkkkkkkkkkkkkkk',
@@ -1114,13 +1114,14 @@ const Sprites = (() => {
     '.....ppp......ppp..pp',
     '......pp.......pp',
     '.......p........p',
-  ]), {
+  ]);
+  sprites.boss = make(BOSS_ROWS, {
     k: '#16121f', w: '#e8e0cf', r: '#b13ae0', m: '#8a8074',
     p: '#241832', q: '#4a3070', s: '#6b4a34', b: '#c8d4e4',
   });
 
   // 2층: 포자왕 믹서스 — 거대 버섯 군주
-  sprites.bossSpore = make(pad([
+  const BOSSSPORE_ROWS = pad([
     '...............mmmmmmmmmm',
     '...........mmmmmmmmmmmmmmmm',
     '.........mmmmmmMMMMmmmmmmmmmm',
@@ -1145,13 +1146,14 @@ const Sprites = (() => {
     '.......SsssssssssssssssssssS',
     '........ssss...ssss...ssss',
     '.......sss......sss....sss',
-  ]), {
+  ]);
+  sprites.bossSpore = make(BOSSSPORE_ROWS, {
     m: '#38b764', M: '#d8f070', D: '#1d7a42',
     s: '#e8e0cf', S: '#b8ae9c', k: '#5c1e5e', r: '#8a3a8c',
   });
 
   // 3층: 간수장 바르곤 — 사슬 묶인 거대 골렘
-  sprites.bossGolem = make(pad([
+  const BOSSGOLEM_ROWS = pad([
     '..........gggggggggggggggg',
     '........gggggggggggggggggggg',
     '........ggGGGGGGGGGGGGGGGGgg',
@@ -1174,12 +1176,13 @@ const Sprites = (() => {
     '..........ggggg..ggggg',
     '.........dggggd..dggggd',
     '.........gggggg..gggggg',
-  ]), {
+  ]);
+  sprites.bossGolem = make(BOSSGOLEM_ROWS, {
     g: '#6b7a94', d: '#454f63', G: '#8a9ab4', k: '#e43b44', c: '#9aa0b4',
   });
 
   // 4층: 용암 심장 이그니스 — 백열하는 화염 정령체
-  sprites.bossIgnis = make(pad([
+  const BOSSIGNIS_ROWS = pad([
     '................oo',
     '...........oo..oooo..oo',
     '..........oooo.oooo.oooo',
@@ -1202,12 +1205,13 @@ const Sprites = (() => {
     '.........rroooo.ooooorr',
     '..........rroo...oorr',
     '...........rr.....rr',
-  ]), {
+  ]);
+  sprites.bossIgnis = make(BOSSIGNIS_ROWS, {
     o: '#ff7043', y: '#ffd866', W: '#fff7d0', r: '#7a1010', k: '#4a0a0a',
   });
 
   // 5층: 심연의 군주 눅스 — 왕관과 뿔을 지닌 그림자 군주
-  sprites.bossAbyss = make(pad([
+  const BOSSABYSS_ROWS = pad([
     '...KK..................KK',
     '..KKK......cccccc......KKK',
     '..KK....cc.cccccc.cc....KK',
@@ -1235,10 +1239,18 @@ const Sprites = (() => {
     '....ppp....pppp.....ppp',
     '.....pp.....pp.......pp',
     '......p......p',
-  ]), {
+  ]);
+  sprites.bossAbyss = make(BOSSABYSS_ROWS, {
     K: '#3d2c5c', c: '#f7b32b', k: '#0a0612', w: '#c9b8e8',
     r: '#e43b44', m: '#5c1e5e', p: '#16101f', q: '#8a1c2c',
   });
+
+  // ── 각성 보스 (6~10층) — 같은 실루엣, 다른 존재감: 전용 팔레트 ──
+  sprites.bossWraith = make(BOSS_ROWS, { k: '#1a0d12', w: '#d8c8c8', r: '#e43b44', m: '#6a5a5a', p: '#2c1218', q: '#5a2430', s: '#4a3a3a', b: '#e8a0a8' });
+  sprites.bossPlague = make(BOSSSPORE_ROWS, { m: '#6ab04c', M: '#c9d94a', D: '#3a6a2a', s: '#d8c8e8', S: '#a89ac0', k: '#3d1e5c', r: '#b13ae0' });
+  sprites.bossDespair = make(BOSSGOLEM_ROWS, { g: '#383850', d: '#242438', G: '#5a5a7c', k: '#5ce0e6', c: '#6a6a8a' });
+  sprites.bossInferno = make(BOSSIGNIS_ROWS, { o: '#ffd866', y: '#fff7d0', W: '#ffffff', r: '#d35400', k: '#7a1010' });
+  sprites.bossVoid = make(BOSSABYSS_ROWS, { K: '#5c1e5e', c: '#e43b44', k: '#050308', w: '#e8d8f8', r: '#ff4757', m: '#8a1c8c', p: '#0e0716', q: '#c02040' });
 
   // ══════════════ 오브젝트 ══════════════
 

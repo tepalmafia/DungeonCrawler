@@ -56,46 +56,46 @@ const BOSS_DEFS = {
   },
   // ── 6~10층 각성 보스: 같은 존재의 심층 강화판 (기믹 강화 + 패턴 확장) ──
   6: {
-    name: '원혼 카론', sprite: 'boss', scale: 1.2, r: 26, hp: 550, speed: 48,
+    awakened: true, name: '원혼 카론', sprite: 'bossWraith', scale: 1.2, r: 26, hp: 550, speed: 48,
     banner: '원혼 카론',
-    p1: ['sweep', 'fan:soul', 'curse'],
-    p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith'],
+    p1: ['sweep', 'spiral:soul', 'curse'],
+    p2: ['sweep', 'spiral:soul', 'curse', 'summon:boneHeap', 'spiral:soul'],
     rageText: '원혼이 울부짖는다!',
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
   },
   7: {
-    name: '역병왕 믹서스', sprite: 'bossSpore', scale: 1.2, r: 32, hp: 680, speed: 38,
+    awakened: true, name: '역병왕 믹서스', sprite: 'bossPlague', scale: 1.2, r: 32, hp: 680, speed: 38,
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '역병왕 믹서스',
-    p1: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
-    p2: ['fan:spore', 'ring', 'summon:mushroom', 'curse', 'fan:spore'],
+    p1: ['fan:spore', 'ring', 'summon:sporePuff', 'geyser:poison'],
+    p2: ['fan:spore', 'geyser:poison', 'summon:sporePuff', 'ring', 'fan:spore'],
     rageText: '역병이 들끓는다!',
     deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
   },
   8: {
-    name: '절망의 바르곤', sprite: 'bossGolem', scale: 1.2, r: 33, hp: 650, speed: 34,
+    awakened: true, name: '절망의 바르곤', sprite: 'bossDespair', scale: 1.2, r: 33, hp: 650, speed: 34,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '절망의 바르곤',
-    p1: ['charge', 'fan:rock', 'ring'],
-    p2: ['charge', 'charge', 'fan:rock', 'ring', 'curse'],
+    p1: ['charge', 'snare', 'fan:rock', 'ring'],
+    p2: ['snare', 'charge', 'fan:rock', 'ring', 'snare', 'charge'],
     rageText: '절망이 짓누른다!',
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
   },
   9: {
-    name: '겁화의 이그니스', sprite: 'bossIgnis', scale: 1.3, r: 30, hp: 850, speed: 48,
+    awakened: true, name: '겁화의 이그니스', sprite: 'bossInferno', scale: 1.3, r: 30, hp: 850, speed: 48,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '겁화의 이그니스',
-    p1: ['fan:fire', 'charge:trail', 'curse:fire'],
-    p2: ['fan:fire', 'charge:trail', 'curse:fire', 'ring', 'charge:trail'],
+    p1: ['fan:fire', 'charge:trail', 'geyser:fire'],
+    p2: ['geyser:fire', 'charge:trail', 'fan:fire', 'ring', 'charge:trail', 'geyser:fire'],
     rageText: '겁화가 폭주한다!',
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
   },
   10: {
-    name: '진 심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.6, r: 30, hp: 1300, speed: 54,
+    awakened: true, name: '진 심연의 군주 눅스', sprite: 'bossVoid', scale: 1.6, r: 30, hp: 1300, speed: 54,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라', veils: [0.75, 0.5, 0.25] },
     banner: '진 심연의 군주 눅스',
-    p1: ['sweep', 'fan:soul', 'ring', 'curse'],
-    p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite', 'ring'],
+    p1: ['sweep', 'spiral:soul', 'ring', 'curse'],
+    p2: ['spiral:soul', 'sweep', 'curse', 'summon:voidSpawn', 'ring', 'spiral:soul'],
     rageText: '심연이 모든 것을 삼킨다...!',
     deathPalette: ['#e43b44', '#0a0612', '#c9b8e8'],
   },
@@ -240,6 +240,16 @@ function createBoss(floor, x, y) {
         }
       }
 
+      // ── 3페이즈 '맹공' (각성 보스 전용, HP 25%↓): 수치가 아니라 판정 밀도로 조인다 —
+      // 패턴 간격 단축 + 시전마다 추적 장판 1개 중첩. 전부 피할 수 있지만 안전한 틈이 좁아진다
+      if (!this._onslaught && this.def.awakened && this.phase === 2 && this.hp <= this.maxHp * 0.25 && this.state !== 'veil') {
+        this._onslaught = true;
+        game.banner = { text: `${this.name} — 최후의 맹공!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
+        AudioSys.roar();
+        Renderer.shake(6, 0.35);
+        Particles.ring(this.x, this.y, { r0: 12, r1: 140, life: 0.6, color: '#e43b44', width: 5 });
+      }
+
       // 페이즈 전환
       if (this.phase === 1 && this.hp <= this.maxHp / 2 && this.state !== 'veil') {
         this.phase = 2;
@@ -262,7 +272,7 @@ function createBoss(floor, x, y) {
         case 'idle': {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage);
+          const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1);
           if (this.stateT >= wait) {
             this.attack = this._nextPattern();
             this.state = 'windup';
@@ -276,7 +286,7 @@ function createBoss(floor, x, y) {
           const k = this.attack.kind;
           // 조준 갱신 (마지막 순간 고정)
           if (this.stateT < 0.35) this.aimDir = { x: dx / d, y: dy / d };
-          const windups = { sweep: 0.55, fan: 0.65, curse: 0.5, summon: 0.6, charge: 0.75, ring: 0.6 };
+          const windups = { sweep: 0.55, fan: 0.65, curse: 0.5, summon: 0.6, charge: 0.75, ring: 0.6, spiral: 0.7, snare: 0.55, geyser: 0.6 };
           if ((k === 'fan' || k === 'curse') && Math.random() < 0.4) {
             Particles.burst(this.x + (Math.random() - 0.5) * 40, this.y + (Math.random() - 0.5) * 40, {
               count: 1, colors: this.def.deathPalette, speed: -60, life: 0.3, size: 3,
@@ -396,6 +406,13 @@ function createBoss(floor, x, y) {
           if (c.fire) {
             game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire' });
           }
+          if (c.poison) {
+            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 3.0, kind: 'poison' });
+          }
+          if (c.snare && Math.hypot(p.x - c.x, p.y - c.y) < 55 + p.r) {
+            p.slowT = Math.max(p.slowT, 1.6);
+            Particles.text(p.x, p.y - 30, '속박!', { color: '#c05060', size: 13 });
+          }
           this.curses.splice(i, 1);
         }
       }
@@ -410,6 +427,10 @@ function createBoss(floor, x, y) {
     _execute(game, dx, dy, d) {
       const { kind, opt } = this.attack;
       const p = game.player;
+      // 맹공: 어떤 패턴을 쓰든 플레이어 발밑에 예고 장판 1개가 따라붙는다 (중첩 압박)
+      if (this._onslaught) {
+        this.curses.push({ x: p.x, y: p.y, t: 1.0 });
+      }
 
       if (kind === 'sweep') {
         this.state = 'sweep';
@@ -448,6 +469,42 @@ function createBoss(floor, x, y) {
           game.markers.push({ x: pos.x, y: pos.y, type: mType, elite: isElite, t: 0.7 });
         }
         AudioSys.roar();
+        this.state = 'idle';
+      } else if (kind === 'spiral') {
+        // 나선 탄막 (심층 시그니처): 시전마다 회전하는 2겹 8방 탄 — 겹 사이 속도차가 나선을 그린다
+        const projKind = opt[0] || 'soul';
+        const rot = this.patternIdx * 0.45;
+        for (let i = 0; i < 8; i++) {
+          const a = rot + (i / 8) * Math.PI * 2;
+          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 200, dmg: 1 });
+          const a2 = a + Math.PI / 8;
+          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a2), y: Math.sin(a2) }, { speed: 130, dmg: 1 });
+        }
+        AudioSys.shoot();
+        this.state = 'idle';
+      } else if (kind === 'snare') {
+        // 사슬 속박 (감옥 계열 시그니처): 예고 원 → 안에 있으면 피해 + 속박
+        this.curses.push({ x: p.x, y: p.y, t: 0.85, snare: true });
+        for (let i = 0; i < 2; i++) {
+          this.curses.push({
+            x: p.x + (Math.random() - 0.5) * 220,
+            y: Math.min(Math.max(p.y + (Math.random() - 0.5) * 170, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5)),
+            t: 0.95 + i * 0.1, snare: true,
+          });
+        }
+        AudioSys.shoot();
+        this.state = 'idle';
+      } else if (kind === 'geyser') {
+        // 간헐천 (화염/맹독 시그니처): 플레이어를 쫓는 4연속 분출 — 계속 움직여야 산다
+        const flag = opt[0] === 'poison' ? { poison: true } : { fire: true };
+        for (let i = 0; i < 4; i++) {
+          this.curses.push({
+            x: p.x + (Math.random() - 0.5) * 120 * i,
+            y: Math.min(Math.max(p.y + (Math.random() - 0.5) * 100 * i, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5)),
+            t: 0.8 + i * 0.22, ...flag,
+          });
+        }
+        AudioSys.shoot();
         this.state = 'idle';
       } else if (kind === 'charge') {
         this.state = 'charge';

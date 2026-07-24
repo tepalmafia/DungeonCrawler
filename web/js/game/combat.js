@@ -96,7 +96,8 @@ const GameCombat = {
       return;
     }
     this.kills++;
-    Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : (e.codexType || e.type));
+    // 보스 도감 키: 1~10층은 층 그대로, 무한 모드는 순환 각성 보스(6~10)로 귀속
+    Meta.codexKill(e.isBoss ? 'boss' + (Dungeon.floor <= 10 ? Dungeon.floor : ((Dungeon.floor - 11) % 5) + 6) : (e.codexType || e.type));
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
     Renderer.shake(3, 0.15);
