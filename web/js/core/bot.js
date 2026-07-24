@@ -44,8 +44,85 @@ const Bot = {
     for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) Input.keys[k] = false;
   },
 
+  // 벽 인지 회피: 가려는 방향이 막혔으면 가까운 열린 각도로 회전 — "벽에 몸 비비기" 방지
+  _freeDir(p, dir, dist = 90) {
+    const base = Math.atan2(dir.y, dir.x);
+    for (const off of [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.2, -2.2, Math.PI]) {
+      const a = base + off;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      if (!World.isSolidAt(p.x + ca * dist * 0.5, p.y + sa * dist * 0.5) &&
+          !World.isSolidAt(p.x + ca * dist, p.y + sa * dist)) {
+        return { x: ca, y: sa, dash: dir.dash };
+      }
+    }
+    return dir;
+  },
+
+  // 타일 BFS 경로 탐색 — 벽 너머 목표로 가는 다음 경유지를 돌려준다 (250ms 캐시)
+  // 경로 스무딩: 시야가 열리는 가장 먼 노드로 직행해 지그재그를 줄인다
+  _pathStep(p, tx, ty) {
+    const oy = World.offsetY || 0;
+    const sx = Math.max(0, Math.min(World.cols - 1, Math.floor(p.x / TS)));
+    const sy = Math.max(0, Math.min(World.rows - 1, Math.floor((p.y - oy) / TS)));
+    const gx = Math.max(0, Math.min(World.cols - 1, Math.floor(tx / TS)));
+    const gy = Math.max(0, Math.min(World.rows - 1, Math.floor((ty - oy) / TS)));
+    const key = sx + ',' + sy + ':' + gx + ',' + gy;
+    const now = performance.now();
+    if (this._pc && this._pc.key === key && now - this._pc.at < 250) return this._pc.step;
+    // 1차: 용암(2)까지 피해서 탐색, 실패 시 2차: 용암 허용 (지나가며 1 피해 감수)
+    const bfs = (avoidLava) => {
+      const prev = new Map();
+      prev.set(sx + ',' + sy, null);
+      const q = [[sx, sy]];
+      while (q.length) {
+        const [cx, cy] = q.shift();
+        if (cx === gx && cy === gy) return prev;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= World.cols || ny >= World.rows) continue;
+          const k = nx + ',' + ny;
+          const tile = World.map[ny] ? World.map[ny][nx] : 1;
+          if (prev.has(k) || tile === 1 || (avoidLava && tile === 2)) continue;
+          prev.set(k, cx + ',' + cy);
+          q.push([nx, ny]);
+        }
+      }
+      return null;
+    };
+    const prev = bfs(true) || bfs(false);
+    const found = !!prev;
+    let step = null;
+    if (found) {
+      const path = [];
+      let cur = gx + ',' + gy;
+      while (cur) { path.push(cur); cur = prev.get(cur); }
+      path.reverse();
+      for (let i = Math.min(path.length - 1, 7); i >= 1; i--) {
+        const [nx, ny] = path[i].split(',').map(Number);
+        const wx = nx * TS + TS / 2, wy = ny * TS + TS / 2 + oy;
+        // 몸통 폭 시야로 스무딩 — 모서리에 몸이 걸리는 경유지는 건너뛰지 않는다
+        if (this._hasLoSFat(p.x, p.y, wx, wy)) { step = { x: wx, y: wy }; break; }
+      }
+      if (!step && path.length > 1) {
+        const [nx, ny] = path[1].split(',').map(Number);
+        step = { x: nx * TS + TS / 2, y: ny * TS + TS / 2 + oy };
+      }
+    }
+    this._pc = { key, step, at: now };
+    return step;
+  },
+
   _move(p, tx, ty) {
     this._releaseKeys();
+    // 벽 너머(또는 몸이 모서리에 걸릴) 목표면 BFS 경유지로 치환 — 벽에 대고 걷는 대신 돌아간다
+    if (!this._hasLoSFat(p.x, p.y, tx, ty)) {
+      const step = this._pathStep(p, tx, ty);
+      if (step) {
+        // 경유지에 도달했으면 캐시를 깨서 즉시 다음 경유지로 — 멈칫거림 방지
+        if (Math.hypot(step.x - p.x, step.y - p.y) < 22 && this._pc) this._pc.at = 0;
+        tx = step.x; ty = step.y;
+      }
+    }
     let ax = tx < p.x - 3 ? -1 : tx > p.x + 3 ? 1 : 0;
     let ay = ty < p.y - 3 ? -1 : ty > p.y + 3 ? 1 : 0;
     // 벽 슬라이드: 대각 이동 중 한 축이 벽에 막히면 그 축만 포기하고 미끄러진다 (사람의 벽 타기)
@@ -78,6 +155,13 @@ const Bot = {
   },
 
   update(game, dt) {
+    // ── 배속 토글 (관전용): 플레이/거점 중 1~4 키 = ×1~×4 ──
+    // (카드 선택 화면에서는 숫자가 카드 선택이므로 제외)
+    if (game.state === 'play' || game.state === 'hub') {
+      for (let k = 1; k <= 4; k++) {
+        if (Input.justPressed['Digit' + k]) this.ff = k;
+      }
+    }
     // ── 카드/보상 화면: 자동 선택 ──
     if (game.state === 'levelup') {
       Input.justPressed['Digit' + (this._bestCard(game) + 1)] = true;
@@ -121,7 +205,13 @@ const Bot = {
     if (wantsMove && moved < 0.4) this._stuckT += dt;
     else this._stuckT = Math.max(0, this._stuckT - dt * 2);
     if (this._stuckT > 0.7) {
-      const a = Math.random() * Math.PI * 2;
+      // 우회 방향은 열린 쪽에서만 뽑는다 — 무작위가 다시 벽을 고르면 끼임이 반복된다
+      const cands = [];
+      for (let k = 0; k < 8; k++) {
+        const a2 = (k / 8) * Math.PI * 2 + Math.random() * 0.4;
+        if (!World.isSolidAt(p.x + Math.cos(a2) * 70, p.y + Math.sin(a2) * 70)) cands.push(a2);
+      }
+      const a = cands.length ? cands[Math.floor(Math.random() * cands.length)] : Math.random() * Math.PI * 2;
       this._detour = { x: Math.cos(a), y: Math.sin(a) };
       this._detourT = 1.0;
       this._stuckT = 0;
@@ -131,6 +221,49 @@ const Bot = {
       this._detourT -= dt;
       this._move(p, p.x + this._detour.x * 100, p.y + this._detour.y * 100);
       return;
+    }
+
+    // ── 구석 몰림 탈출: 벽에 등을 대고 포위당하면 가장 열린 방향으로 대시 관통 ──
+    // (회피가 "적 반대 = 벽 안쪽"만 가리키며 갇히는 사고 방지. 대시 무적이 포위망 돌파 수단 —
+    //  근접몹을 뚫으며 완벽 회피 판정까지 챙길 수 있다)
+    if (this._cornerCd > 0) this._cornerCd -= dt;
+    else {
+      let solidSides = 0;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        if (World.isSolidAt(p.x + Math.cos(a) * 55, p.y + Math.sin(a) * 55)) solidSides++;
+      }
+      let nearFoes = 0, cx = 0, cy = 0;
+      for (const e of game.enemies) {
+        if (e.dead || e.neutral || e.phased) continue;
+        if (Math.hypot(e.x - p.x, e.y - p.y) < 120) { nearFoes++; cx += e.x; cy += e.y; }
+      }
+      if (solidSides >= 4 && nearFoes >= 2) {
+        cx /= nearFoes; cy /= nearFoes;
+        let best = null, bestScore = -Infinity;
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          const dx2 = Math.cos(a), dy2 = Math.sin(a);
+          let open = 0;
+          for (const d2 of [50, 100, 150]) {
+            if (!World.isSolidAt(p.x + dx2 * d2, p.y + dy2 * d2)) open++;
+          }
+          const cd = Math.hypot(p.x - cx, p.y - cy) || 1;
+          const away = (dx2 * (p.x - cx) + dy2 * (p.y - cy)) / cd;
+          // 열린 정도가 우선, 적 반대쪽 약한 가점 — 필요하면 적을 뚫고라도 나간다
+          const score = open * 2 + away;
+          if (score > bestScore) { bestScore = score; best = { x: dx2, y: dy2 }; }
+        }
+        if (best) {
+          this._cornerCd = 1.5;
+          this._detour = best;
+          this._detourT = 0.55;
+          Bot.stats.cornerEscapes = (Bot.stats.cornerEscapes || 0) + 1;
+          if (p.dashCharges >= 1) this._dash();
+          this._move(p, p.x + best.x * 140, p.y + best.y * 140);
+          return;
+        }
+      }
     }
 
     // ── 탐색 모드: 벽 너머 목표에 계속 막히면 방의 다른 지점으로 크게 우회 ──
@@ -190,7 +323,9 @@ const Bot = {
     }
 
     // ── 위협 회피 (텔레그래프 읽기) — 이동보다 우선. 원거리는 회피 중에도 무빙샷 ──
-    const dodge = this._threat(game, p);
+    // 회피 방향이 벽이면 열린 각도로 회전 (벽 인지) — 구석으로 밀려 들어가지 않는다
+    const dodgeRaw = this._threat(game, p);
+    const dodge = dodgeRaw ? this._freeDir(p, dodgeRaw, 100) : null;
     if (dodge) {
       this._move(p, p.x + dodge.x * 120, p.y + dodge.y * 120);
       if (dodge.dash && p.dashCharges >= 1) this._dash();
@@ -347,6 +482,15 @@ const Bot = {
       if (World.isSolidAt(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) return false;
     }
     return true;
+  },
+
+  // 몸통 폭(±r)을 고려한 시야 — 가는 선은 통과해도 몸이 모서리에 걸리는 경로를 걸러낸다
+  // (통로 이동이 덜컹거리는 주범: 중심선 LoS만 보고 직진하다 모서리에 몸이 끼는 것)
+  _hasLoSFat(x0, y0, x1, y1, r = 11) {
+    const d = Math.hypot(x1 - x0, y1 - y0) || 1;
+    const px = (-(y1 - y0) / d) * r, py = ((x1 - x0) / d) * r;
+    return this._hasLoS(x0 + px, y0 + py, x1 + px, y1 + py) &&
+           this._hasLoS(x0 - px, y0 - py, x1 - px, y1 - py);
   },
 
   // 시야가 막혔을 때: 목표를 중심으로 옆으로 돌아 조준선을 연다
