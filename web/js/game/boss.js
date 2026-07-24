@@ -198,11 +198,13 @@ function createBoss(floor, x, y) {
         this._lastMinions = minionCount;
         if (this._regenPause > 0) this._regenPause -= dt;
         if (minionCount > 0 && this._regenPause <= 0 && this.hp < this.maxHp) {
-          this.hp = Math.min(this.maxHp, this.hp + 6 * dt);
+          // 계측 (검사·열기5): 2층 피해 110+ = 전층 최대 — 근접 단일딜은 부하 정리가 느려
+          // 재생을 뚫는 데 오래 걸린다. 6→4/s (재생 정지 컨트롤 해법은 그대로 유효)
+          this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
           this._regenTick += dt;
           if (this._regenTick >= 1.0) {
             this._regenTick = 0;
-            Particles.text(this.x, this.y - 40, '재생 +6', { color: '#38b764', size: 12 });
+            Particles.text(this.x, this.y - 40, '재생 +4', { color: '#38b764', size: 12 });
           }
         }
       }
