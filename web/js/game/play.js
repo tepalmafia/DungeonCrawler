@@ -452,6 +452,36 @@ const GamePlay = {
           p.hp = Math.min(p.maxHp, p.hp + heal);
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
+        } else if (it.kind === 'cursedChest') {
+          // 저주받은 상자: 유물 +1, 최대 HP -1
+          const rolled = rollRelics(p, 1, false);
+          if (rolled.length > 0) this.acquireRelic(rolled[0]);
+          p.maxHp = Math.max(1, p.maxHp - 1);
+          p.hp = Math.min(p.hp, p.maxHp);
+          this.banner = { text: '저주가 스며든다... (최대 HP -1)', life: 2.0, maxLife: 2.0, color: '#b13ae0' };
+          this.hurtFlash = 0.18;
+          AudioSys.hurt();
+          Renderer.shake(4, 0.25);
+          Particles.burst(it.x, it.y, { count: 18, colors: ['#b13ae0', '#241832', '#f7b32b'], speed: 150, life: 0.5, size: 3 });
+        } else if (it.kind === 'bloodAltar') {
+          // 피의 제단: HP 2를 바치고 공격력 +1 (HP 3 미만이면 거부)
+          if (p.hp < 3) {
+            it.used = false; // 소모되지 않음 — 회복하고 다시 올 수 있다
+            if (!it._deniedT || it.t - it._deniedT > 1.5) {
+              it._deniedT = it.t;
+              Particles.text(p.x, p.y - 28, '피가 부족하다...', { color: '#8a1c2c', size: 13 });
+              AudioSys.deny();
+            }
+          } else {
+            p.hp -= 2;
+            p.bonusAtk += 1;
+            this.banner = { text: '피의 계약 — 공격력 +1', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+            this.hurtFlash = 0.2;
+            AudioSys.crit();
+            Renderer.shake(5, 0.3);
+            Particles.burst(it.x, it.y, { count: 20, colors: ['#e43b44', '#8a1c2c', '#ffd866'], speed: 170, life: 0.5, size: 3 });
+            Particles.text(p.x, p.y - 30, '공격력 +1', { color: '#ffd866', size: 16 });
+          }
         }
       }
     }

@@ -94,6 +94,20 @@ const TRAITS = [
     desc: '기본 마탄이 관통 화염구가 되어 착탄 시 폭발한다', flag: 'mg_fireball' },
   { id: 'mg_ash', name: '잿불 지대', tag: '마도사', color: '#8a5ac2', cls: 'mage',
     desc: '메테오 자리에 불타는 지대가 남는다 (적 지속 피해)', flag: 'mg_ash' },
+
+  // ── 전설 (극저확률 — 규칙을 부수는 카드. "미쳐 날뛰는 런"의 씨앗) ──
+  { id: 'unbound',   name: '무한의 갈망', tag: '전설', color: '#ffd866', legend: true,
+    desc: '스탯 특성의 중첩 상한이 사라진다', flag: 'unbound' },
+  { id: 'timeflux',  name: '시간 왜곡',   tag: '전설', color: '#ffd866', legend: true,
+    desc: '스킬 쿨다운이 절반이 된다', apply: (p) => { p.skillCdMul *= 0.5; } },
+  { id: 'glasssoul', name: '유리 영혼',   tag: '전설', color: '#ffd866', legend: true,
+    desc: '공격력 +3, 최대 HP -2', apply: (p) => {
+      p.bonusAtk += 3;
+      p.maxHp = Math.max(1, p.maxHp - 2);
+      p.hp = Math.min(p.hp, p.maxHp);
+    } },
+  { id: 'monarch',   name: '왕의 권능',   tag: '전설', color: '#ffd866', legend: true,
+    desc: '처치 시 5% 확률로 영혼 폭발 (주변에 3 피해)', flag: 'monarch' },
 ];
 
 // 레벨업 카드 뽑기 — 이미 가진 고유(flag) 특성은 제외.
@@ -105,14 +119,17 @@ function rollTraitCards(player, n = 3) {
   const pool = TRAITS.filter((t) =>
     (!t.flag || !player.flags[t.flag]) &&
     (!t.cls || t.cls === player.classId) &&
-    (!t.max || countOf(t.id) < t.max));
+    // 무한의 갈망: 중첩 상한 해제
+    (!t.max || countOf(t.id) < t.max || player.flags.unbound));
   const tagCount = {};
   for (const id of player.traits) {
     const tr = TRAITS.find((x) => x.id === id);
     if (tr) tagCount[tr.tag] = (tagCount[tr.tag] || 0) + 1;
   }
-  const weightOf = (t) =>
-    (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
+  const weightOf = (t) => {
+    if (t.legend) return 0.08; // 전설: 극저확률 — 나오면 런이 특별해진다
+    return (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
+  };
 
   const cards = [];
   const avail = [...pool];

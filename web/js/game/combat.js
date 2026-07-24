@@ -144,6 +144,11 @@ const GameCombat = {
     // 사망 시 발동 효과 (적 고유 + 특성 + 유물)
     if (e.onDeath) e.onDeath(this);
 
+    // 왕의 권능 (전설): 처치 시 5% 영혼 폭발
+    if (p.flags.monarch && Math.random() < 0.05) {
+      this._explode(e.x, e.y, 90, 3, ['#ffd866', '#fff7c0', '#b13ae0'], '#ffd866');
+      Particles.text(e.x, e.y - 34, '왕의 권능!', { color: '#ffd866', size: 14 });
+    }
     if (p.flags.burnboom && e.status.burn > 0) {
       this._explode(e.x, e.y, 80, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
     }
@@ -262,6 +267,14 @@ const GameCombat = {
     }
 
     if (p.hp <= 0) {
+      // 테스트 모드 무한 부활 (F 토글): 죽음 직전 상황을 계속 테스트할 수 있다
+      if (this.testMode && this.reviveMode) {
+        p.hp = p.maxHp;
+        p.invuln = 2;
+        this.banner = { text: '♻ 부활 (테스트 모드)', life: 1.2, maxLife: 1.2, color: '#5ce0e6' };
+        Particles.burst(p.x, p.y, { count: 16, colors: ['#5ce0e6', '#a9fff7'], speed: 160, life: 0.5, size: 3 });
+        return;
+      }
       // 불사조 깃털: 1회 부활
       if (p.rflags.revive && !p.reviveUsed) {
         p.reviveUsed = true;

@@ -170,7 +170,8 @@ const Bot = {
       }
     } else {
       // 적 없음: 상호작용(상자/모닥불) → 문
-      const it = game.interactables.find((i) => !i.used);
+      // 기연(저주 상자/피의 제단)은 봇이 판단할 수 없으니 건드리지 않는다
+      const it = game.interactables.find((i) => !i.used && (i.kind === 'chest' || i.kind === 'camp'));
       if (it) this._move(p, it.x, it.y);
       else if (World.doorsActive && World.doors.length > 0) {
         this._move(p, World.doors[0].x, World.doors[0].y);

@@ -638,6 +638,11 @@ const World = {
       ctx.arc(x - 3.5, y - 2, 2.2, 0, Math.PI * 2);
       ctx.arc(x + 3.5, y - 2, 2.2, 0, Math.PI * 2);
       ctx.fill();
+    } else if (type === 'event') {
+      // 물음표 — 무엇이 기다릴까
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('?', x, y + 6);
     } else if (type === 'nextfloor') {
       // 아래로 향하는 계단 화살표
       ctx.beginPath();

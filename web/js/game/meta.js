@@ -164,7 +164,30 @@ const Meta = {
 
   // ── 도감 기록 (kills는 방 클리어/정산 시점에 저장) ──
   codexKill(key) {
+    const isNew = !this.data.codex.kills[key];
     this.data.codex.kills[key] = (this.data.codex.kills[key] || 0) + 1;
+    if (isNew) this._checkCodexMilestone();
+  },
+
+  // 도감 발견 구간 보상 — 수집이 파편으로 돌아온다 (구간당 1회)
+  _checkCodexMilestone() {
+    const found = CODEX_ENEMIES.filter((e) => {
+      const key = e.boss ? 'boss' + e.id.slice(4) : e.id;
+      return this.data.codex.kills[key] > 0;
+    }).length;
+    const milestones = [[10, 100], [20, 150], [30, 200], [42, 400]];
+    if (!this.data.codexRewarded) this.data.codexRewarded = {};
+    for (const [need, reward] of milestones) {
+      if (found >= need && !this.data.codexRewarded[need]) {
+        this.data.codexRewarded[need] = true;
+        this.data.shards += reward;
+        this.save();
+        if (typeof Game !== 'undefined' && Game.banner !== undefined) {
+          Game.banner = { text: `도감 ${need}종 달성! ◆ +${reward}`, life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
+          AudioSys.buy();
+        }
+      }
+    }
   },
 
   codexRelic(id) {
