@@ -7,7 +7,23 @@ const ROOM_META = {
   event:     { label: '기연',    color: '#b13ae0' },
   boss:      { label: '보스',    color: '#e43b44' },
   nextfloor: { label: '다음 층', color: '#38b764' },
+  shortcut:  { label: '지름길',  color: '#e43b44' },
 };
+
+// ── 설계된 위협 세트 (R2) — 무리가 '물량'이 아니라 '퍼즐'이 되도록.
+// 방 구성의 45%는 랜덤 샘플 대신 손제작 조합에서 뽑는다: 우선순위 판단이 생긴다.
+const THREAT_SETS = [
+  { min: 1, units: ['skeleton', 'skeleton', 'archer', 'archer'] },              // 근접 압박 + 후방 화살
+  { min: 2, units: ['frog', 'frog', 'bat', 'bat', 'bat'] },                     // 독 장판 위 급강하
+  { min: 3, units: ['shieldSkeleton', 'shieldSkeleton', 'sniper', 'sniper'] },  // 방패벽 뒤 저격수 — 우회 퍼즐
+  { min: 3, units: ['golem', 'archer', 'archer', 'archer'] },                   // 탱커가 몸으로 막는 화력선
+  { min: 4, units: ['berserker', 'berserker', 'wisp', 'wisp'] },                // 돌격 + 원거리 견제
+  { min: 5, units: ['shaman', 'brute', 'brute'] },                              // 힐러 컷 퍼즐
+  { min: 5, units: ['necro', 'necro', 'shieldSkeleton', 'shieldSkeleton'] },    // 이중 소환 + 방패벽
+  { min: 6, units: ['bomber', 'bomber', 'boar', 'boar'] },                      // 자폭 유도 + 돌진 교차
+  { min: 7, units: ['turret', 'turret', 'stalker', 'stalker'] },                // 고정 화망 + 은신 기습
+  { min: 8, units: ['executioner', 'frostArcher', 'frostArcher', 'leech', 'leech'] }, // 처형 구역+빙결+흡혈
+];
 
 // 층별 데이터 (기획안 §8.2)
 const FLOOR_DATA = {
@@ -50,6 +66,7 @@ const Dungeon = {
     this.tookCamp = false;
     this.tookEvent = false;
     this.miniSeen = false;
+    this.shortcutHot = false;
     this.build('combat');
   },
 
@@ -60,12 +77,25 @@ const Dungeon = {
     this.tookCamp = false;
     this.tookEvent = false;
     this.miniSeen = false;
+    this.shortcutHot = false; // 지름길 효과는 도착 층에서만
     this.build('combat');
   },
 
   advance(type) {
     if (type === 'nextfloor') {
       this.nextFloor();
+      return;
+    }
+    // 지름길 (R3): 한 층을 건너뛴다 — 도착 층은 정예·우두머리가 들끓지만 정예가 파편을 떨군다
+    if (type === 'shortcut') {
+      this.floor += 2;
+      this.roomIndex = 1;
+      this.tookTreasure = false;
+      this.tookCamp = false;
+      this.tookEvent = false;
+      this.miniSeen = false;
+      this.shortcutHot = true;
+      this.build('combat');
       return;
     }
     if (type === 'treasure') this.tookTreasure = true;
@@ -124,10 +154,21 @@ const Dungeon = {
     const data = floorData(this.floor);
     const comp = [];
     const heatBonus = Game.heat >= 2 ? 2 : 0; // 열기 2: 적 수 증가
-    // 물량감: 로그라이크다운 무리 전투 — 기존보다 +30% 수준 (XP·하트는 마리당 하향으로 보정)
-    const n = Math.min(16, 3 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 0.9) + heatBonus);
-    const eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
-    for (let i = 0; i < n; i++) {
+    // 물량감: 로그라이크다운 무리 전투. 곡선 뒤집기(R1): 1~2층은 -2 — 사망의 90%가
+    // 1~2층에 몰리는 역전 곡선 보정 (신규 이탈 구간 완화)
+    const earlyEase = this.floor <= 2 ? 2 : 0;
+    const n = Math.max(3, Math.min(16, 3 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 0.9) + heatBonus - earlyEase));
+    let eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
+    if (this.shortcutHot) eliteChance = Math.min(0.5, eliteChance * 2); // 지름길 층: 정예 2배
+
+    // 설계된 위협 세트 (R2): 45% 확률로 손제작 조합이 무리의 뼈대가 된다
+    const sets = THREAT_SETS.filter((s) => this.floor >= s.min);
+    if (sets.length && RNG.chance(0.45)) {
+      const set = RNG.pick(sets);
+      for (const t of set.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
+      comp.setUsed = true;
+    }
+    while (comp.length < n) {
       const type = RNG.pick(data.enemies);
       comp.push({ type, elite: RNG.chance(eliteChance) });
       // 벌레 떼는 4마리씩 몰려온다 (1마리 몫으로 취급)
@@ -138,10 +179,13 @@ const Dungeon = {
     // 중간보스 (우두머리): 층당 최소 1회 보장 — 12% 운빨로는 절반의 층을 그냥 지나쳤다 (기대 0.6회/층)
     // 방마다 14%, 층 후반(보스 전 4방)까지 안 나왔으면 확정 난입. 심층(6층+)은 두 번째 우두머리 12%.
     // 단, 확정 보장은 3층부터 — 2층 확정은 초반 약체 빌드에 과했다 (계측: 검사 2층 사망 1→11회)
+    // R1: 2층 확률 14→8% (초반 완화), 지름길 층은 25% + 2번째 해금
     if (this.floor >= 2) {
       const roomsLeft = this.totalRooms - 1 - this.roomIndex; // 보스방 전까지 남은 방 수
       const force = !this.miniSeen && roomsLeft <= 4 && this.floor >= 3;
-      const chance = this.miniSeen ? (this.floor >= 6 ? 0.12 : 0) : 0.14;
+      let chance = this.miniSeen
+        ? ((this.floor >= 6 || this.shortcutHot) ? 0.12 : 0)
+        : (this.shortcutHot ? 0.25 : this.floor === 2 ? 0.08 : 0.14);
       if (force || RNG.chance(chance)) {
         comp.push({ type: RNG.pick(data.enemies.filter((t) => t !== 'swarm')), elite: false, mini: true });
         this.miniSeen = true;
