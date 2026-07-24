@@ -176,9 +176,11 @@ function createPlayer(x, y, classId = 'knight') {
         }
       }
 
-      if (this.flags.shield && !this.shield) {
+      // 보호막 충전: 수호의 문장 특성(8초) 또는 검사 고유 '철벽'(11초)
+      const shieldCd = this.flags.shield ? 8 : (this.classId === 'knight' ? 11 : 0);
+      if (shieldCd > 0 && !this.shield) {
         this.shieldT += dt;
-        if (this.shieldT >= 8) {
+        if (this.shieldT >= shieldCd) {
           this.shield = true;
           this.shieldT = 0;
           Particles.burst(this.x, this.y, { count: 8, colors: ['#5ce0e6'], speed: 60, life: 0.4, size: 3 });
@@ -464,7 +466,7 @@ function createPlayer(x, y, classId = 'knight') {
         // — 근접의 리스크를 "잘 싸우면 버틴다"로 보상한다
         if (this.finisherHealCd <= 0 && this.hp < this.maxHp) {
           this.hp++;
-          this.finisherHealCd = 6;
+          this.finisherHealCd = 4;
           Particles.text(this.x, this.y - 26, '전투 본능 +1', { color: '#e43b44', size: 13 });
           AudioSys.pickup();
         }
