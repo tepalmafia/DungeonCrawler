@@ -16,7 +16,7 @@ const RELICS = [
   { id: 'heartbit',  rarity: 'common', name: '심장 조각',
     desc: '최대 HP +1, 즉시 1 회복', apply: (p) => { p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); } },
   { id: 'whetstone', rarity: 'common', name: '숫돌',
-    desc: '크리티컬 확률 +7%', apply: (p) => { p.critChance += 0.07; } },
+    desc: '크리티컬 확률 +10%', apply: (p) => { p.critChance += 0.10; } },
   { id: 'feather',   rarity: 'common', name: '깃털 장식',
     desc: '대시 충전 속도 +15%', apply: (p) => { p.dashRegenMul *= 0.85; } },
   { id: 'crystal',   rarity: 'common', name: '수정 조각',
@@ -36,11 +36,11 @@ const RELICS = [
   { id: 'spikeshield', rarity: 'rare', name: '가시 방패',
     desc: '피격 시 주변 적에게 2 피해', flag: 'spikeshield' },
   { id: 'agirune',   rarity: 'rare', name: '민첩의 룬',
-    desc: '공격 속도 +15%', apply: (p) => { p.atkCdMul *= 0.85; } },
+    desc: '공격 속도 +20%', apply: (p) => { p.atkCdMul *= 0.80; } },
 
   // ── 에픽 ──
   { id: 'berserkhelm', rarity: 'epic', name: '광전사의 투구',
-    desc: 'HP 3 이하일 때 공격력 +3', flag: 'berserkhelm' },
+    desc: 'HP 3 이하일 때 공격력 +4', flag: 'berserkhelm' },
   { id: 'timesand',  rarity: 'epic', name: '시간의 모래',
     desc: '대시를 2회 연속 사용할 수 있다', apply: (p) => { p.dashMax = 2; } },
   { id: 'phoenix',   rarity: 'epic', name: '불사조 깃털',

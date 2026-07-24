@@ -299,9 +299,9 @@ function createPlayer(x, y, classId = 'knight') {
 
     currentAtk() {
       let atk = 1 + this.bonusAtk;
-      if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 2;
+      if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 1; // DPS 리그: +2는 +59%로 과함
       if (this.flags.berserk && this.hp <= 2) atk += 1;
-      if (this.rflags.berserkhelm && this.hp <= 3) atk += 3;
+      if (this.rflags.berserkhelm && this.hp <= 3) atk += 4; // 에픽 가치 밴드 보정
       return atk;
     },
 
@@ -324,7 +324,7 @@ function createPlayer(x, y, classId = 'knight') {
 
       let bonus = 0;
       if (this.flags.corrode && e.status.poison > 0) bonus += 1;
-      if (this.flags.static && e.status.shock > 0) bonus += 1;
+      if (this.flags.static && e.status.shock > 0) bonus += 2; // 번개 트리 상향
 
       const baseDmg = this.currentAtk();
       const dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv)) : baseDmg;
@@ -339,7 +339,7 @@ function createPlayer(x, y, classId = 'knight') {
         e.status.poison = 4;
         Particles.burst(e.x, e.y, { count: 4, colors: ['#6ab04c'], speed: 60, life: 0.3, size: 3 });
       }
-      if (this.flags.chain && Math.random() < 0.2) {
+      if (this.flags.chain && Math.random() < 0.3) { // 번개 트리 상향 (20%→30%)
         let nearest = null;
         let best = 170;
         for (const o of game.enemies) {

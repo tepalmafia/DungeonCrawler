@@ -45,15 +45,15 @@ const TRAITS = [
   { id: 'overcharge', name: '과충전',   tag: '번개', color: '#ffd866',
     desc: '감전된 적을 처치하면 대시 충전 즉시 회복', flag: 'overcharge' },
   { id: 'chain',      name: '연쇄 번개', tag: '번개', color: '#ffd866',
-    desc: '공격 시 20% 확률로 번개가 근처 적에게 튄다 (2 피해 + 감전)', flag: 'chain' },
+    desc: '공격 시 30% 확률로 번개가 근처 적에게 튄다 (2 피해 + 감전)', flag: 'chain' },
   { id: 'static',     name: '정전기',   tag: '번개', color: '#ffd866',
-    desc: '감전된 적에게 주는 피해 +1', flag: 'static' },
+    desc: '감전된 적에게 주는 피해 +2', flag: 'static' },
 
   // ── 흡혈 시너지 ──
   { id: 'lifesteal', name: '흡혈',      tag: '흡혈', color: '#e43b44',
     desc: '크리티컬 시 HP 1 회복 (4초에 한 번)', flag: 'lifesteal' },
   { id: 'bloodpact', name: '피의 계약', tag: '흡혈', color: '#e43b44',
-    desc: 'HP가 가득 찼을 때 공격력 +2', flag: 'bloodpact' },
+    desc: 'HP가 가득 찼을 때 공격력 +1', flag: 'bloodpact' },
   { id: 'bloodlust', name: '피의 갈증', tag: '흡혈', color: '#e43b44',
     desc: '처치 시 12% 확률로 하트가 떨어진다', flag: 'bloodlust' },
 
@@ -99,7 +99,7 @@ const TRAITS = [
   { id: 'unbound',   name: '무한의 갈망', tag: '전설', color: '#ffd866', legend: true,
     desc: '스탯 특성의 중첩 상한이 사라진다', flag: 'unbound' },
   { id: 'timeflux',  name: '시간 왜곡',   tag: '전설', color: '#ffd866', legend: true,
-    desc: '스킬 쿨다운이 절반이 된다', apply: (p) => { p.skillCdMul *= 0.5; } },
+    desc: '스킬 쿨다운이 60% 짧아진다', apply: (p) => { p.skillCdMul *= 0.4; } },
   { id: 'glasssoul', name: '유리 영혼',   tag: '전설', color: '#ffd866', legend: true,
     desc: '공격력 +3, 최대 HP -2', apply: (p) => {
       p.bonusAtk += 3;
