@@ -1587,7 +1587,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
 
   // ── 영혼 구슬 (눅스 '어둠 장막' 기믹 표적): 공격 안 함, 제한시간 내 파괴 대상 ──
   defs.soulOrb = () => ({
-    hp: 2, r: 12, speed: 0, xpVal: 3, sprite: null,
+    hp: 3, r: 12, speed: 0, xpVal: 3, sprite: null,
     spawnT: 0, // 등장 연출 없음 (즉시 타격 가능해야 공정)
     update(dt, game) {
       this.tickTimers(dt);

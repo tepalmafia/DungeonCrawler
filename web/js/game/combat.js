@@ -189,8 +189,10 @@ const GameCombat = {
       this.orbs.push({ x: e.x, y: e.y, val: v, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 });
     }
     // 하트: 기본 4.5% (개체수 +30% 보정) + 층이 깊을수록 감소 (최저 50%)
+    // 보스전 중에는 절반 — 부하가 회복 셔틀이 되지 않게 (긴장 유지)
     const floorDecay = Math.max(0.5, 1 - 0.04 * (Dungeon.floor - 1));
-    let heartChance = 0.045 * floorDecay * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
+    const bossFight = this.enemies.some((b) => b.isBoss && !b.dead) ? 0.5 : 1;
+    let heartChance = 0.045 * floorDecay * bossFight * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
     if (p.flags.bloodlust) heartChance += 0.12;
     if (Math.random() < heartChance) {
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
