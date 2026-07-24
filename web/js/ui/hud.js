@@ -195,8 +195,12 @@ const HUD = {
       const lines = [
         'G 무적  H 회복  K 전멸',
         'L 레벨업  U 유물  O 파편',
-        'B 보스방  N 다음층  V 봇',
+        'B 보스방  N 다음층  V 봇  F 부활',
       ];
+      if (game.reviveMode) {
+        ctx.fillStyle = '#5ce0e6';
+        ctx.fillText('♻ 무한 부활', Renderer.W - 16, p.god ? 78 : 62);
+      }
       ctx.font = '10px monospace';
       ctx.fillStyle = 'rgba(154,160,180,0.75)';
       lines.forEach((l, i) => ctx.fillText(l, Renderer.W - 16, Renderer.H - 46 + i * 14));
@@ -243,6 +247,15 @@ const HUD = {
       ctx.strokeStyle = color;
       ctx.lineWidth = hover ? 3 : 1.5;
       ctx.strokeRect(r.x, r.y + lift, r.w, r.h);
+      // 전설 카드: 이중 황금 테두리 + 반짝임
+      if (c.legend) {
+        ctx.save();
+        ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.006) * 0.3;
+        ctx.strokeStyle = '#fff7c0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(r.x - 4, r.y + lift - 4, r.w + 8, r.h + 8);
+        ctx.restore();
+      }
 
       ctx.textAlign = 'center';
       const cx = r.x + r.w / 2;

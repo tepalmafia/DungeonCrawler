@@ -4,6 +4,7 @@ const ROOM_META = {
   elite:     { label: '정예',    color: '#b13ae0' },
   treasure:  { label: '보물',    color: '#f7b32b' },
   camp:      { label: '모닥불',  color: '#ff7043' },
+  event:     { label: '기연',    color: '#b13ae0' },
   boss:      { label: '보스',    color: '#e43b44' },
   nextfloor: { label: '다음 층', color: '#38b764' },
 };
@@ -41,6 +42,7 @@ const Dungeon = {
     this.roomIndex = 1;
     this.tookTreasure = false;
     this.tookCamp = false;
+    this.tookEvent = false;
     this.build('combat');
   },
 
@@ -49,6 +51,7 @@ const Dungeon = {
     this.roomIndex = 1;
     this.tookTreasure = false;
     this.tookCamp = false;
+    this.tookEvent = false;
     this.build('combat');
   },
 
@@ -59,6 +62,7 @@ const Dungeon = {
     }
     if (type === 'treasure') this.tookTreasure = true;
     if (type === 'camp') this.tookCamp = true;
+    if (type === 'event') this.tookEvent = true;
     this.roomIndex++;
     this.build(type);
   },
@@ -84,6 +88,7 @@ const Dungeon = {
     // 보물·모닥불은 층당 1회만 — 한 번 들어가면 그 층에서는 다시 나오지 않는다
     if (!this.tookTreasure) pool.push('treasure');
     if (!this.tookCamp && next >= 4) pool.push('camp');
+    if (!this.tookEvent && next >= 3) pool.push('event'); // 기연: 리스크-리워드 이벤트
     pool.push('combat');
 
     const n = RNG.int(2, 3);

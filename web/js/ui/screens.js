@@ -9,6 +9,12 @@ const GameScreens = {
       Bot.toggle();
       this.banner = { text: Bot.enabled ? '🤖 봇 모드 ON' : '봇 모드 OFF', life: 1.2, maxLife: 1.2 };
     }
+    // 어디서나: F 무한 부활 토글 (죽어도 풀피로 되살아난다)
+    if (Input.pressed('KeyF')) {
+      this.reviveMode = !this.reviveMode;
+      this.banner = { text: this.reviveMode ? '♻ 무한 부활 ON' : '무한 부활 OFF', life: 1.2, maxLife: 1.2 };
+      AudioSys[this.reviveMode ? 'buy' : 'deny']();
+    }
     // 어디서나: O 파편 +500 / I 도감 완성 / Y 직업·열기 해금
     if (Input.pressed('KeyO')) {
       Meta.data.shards += 500;

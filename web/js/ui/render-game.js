@@ -108,6 +108,53 @@ const GameRender = {
           ctx.fill();
           ctx.globalAlpha = 1;
         }
+      } else if (it.kind === 'cursedChest') {
+        // 저주받은 상자: 보라 기운 + 거래 조건 라벨
+        if (!it.used) {
+          ctx.globalAlpha = 0.28 + Math.sin(it.t * 3) * 0.12;
+          ctx.fillStyle = '#b13ae0';
+          ctx.beginPath(); ctx.arc(it.x, it.y, 36, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        Renderer.drawSprite(it.used ? Sprites.chestOpen : Sprites.chest, it.x, it.y);
+        if (!it.used) {
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#241832';
+          ctx.fillRect(it.x - 20, it.y - 20, 40, 24); // 어둠이 상자를 덮는다
+          ctx.restore();
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#b13ae0';
+          ctx.fillText('저주받은 상자', it.x, it.y - 44);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('유물 +1 · 최대 HP -1', it.x, it.y - 30);
+        }
+      } else if (it.kind === 'bloodAltar') {
+        // 피의 제단: 돌단 + 핏빛 그릇
+        ctx.fillStyle = '#3d3d52';
+        ctx.fillRect(it.x - 16, it.y - 4, 32, 16);
+        ctx.fillStyle = '#5e5e74';
+        ctx.fillRect(it.x - 12, it.y - 12, 24, 10);
+        ctx.fillStyle = it.used ? '#3a1015' : '#8a1c2c';
+        ctx.beginPath(); ctx.ellipse(it.x, it.y - 10, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
+        if (!it.used) {
+          ctx.globalAlpha = 0.2 + Math.sin(it.t * 4) * 0.08;
+          ctx.fillStyle = '#e43b44';
+          ctx.beginPath(); ctx.arc(it.x, it.y - 6, 30, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+          if (Math.random() < 0.2) {
+            Particles.burst(it.x, it.y - 12, { count: 1, colors: ['#e43b44'], speed: 20, life: 0.4, size: 2, gravity: -80 });
+          }
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#e43b44';
+          ctx.fillText('피의 제단', it.x, it.y - 44);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('HP 2 → 공격력 +1', it.x, it.y - 30);
+        }
       } else if (it.kind === 'camp') {
         ctx.fillStyle = '#5e3a26';
         ctx.save();
