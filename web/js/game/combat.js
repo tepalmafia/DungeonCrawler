@@ -319,6 +319,10 @@ const GameCombat = {
       p.invuln = Math.max(p.invuln, 0.5);
       p.kbx = dir.x * kb * 0.5;
       p.kby = dir.y * kb * 0.5;
+      if (p.flags.guardcrit) {
+        p.pdodgeCrit = true; // 기사도: 막아낸 다음 일격은 확정 크리 (완벽 회피 보상 재사용)
+        Particles.text(p.x, p.y - 40, '반격 준비!', { color: '#f7b32b', size: 13 });
+      }
       Particles.text(p.x, p.y - 26, '막음!', { color: '#5ce0e6', size: 15 });
       Particles.burst(p.x, p.y, { count: 10, colors: ['#5ce0e6', '#a9fff7'], speed: 130, life: 0.35, size: 3 });
       AudioSys.clank();

@@ -38,13 +38,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         World.moveEntity(this, this.kbx * dt, this.kby * dt);
         // 벽 충돌 (P2): 강한 넉백(마무리 일격·회전 베기)이 벽에 막히면 충격 피해 —
         // 지형이 무기가 된다. 적을 벽에 처박는 손맛
-        if (mag > 260 && !(this._slamCd > 0) && !this.isBoss && !this.neutral && typeof Game !== 'undefined') {
+        const slamMaster = typeof Game !== 'undefined' && Game.player && Game.player.flags.slammaster;
+        if (mag > (slamMaster ? 220 : 260) && !(this._slamCd > 0) && !this.isBoss && !this.neutral && typeof Game !== 'undefined') {
           const moved = Math.hypot(this.x - px, this.y - py);
           const expected = mag * dt;
           if (expected > 2 && moved < expected * 0.25) {
             this._slamCd = 0.6;
             this.kbx = this.kby = 0;
-            Game.damageEnemy(this, 2, { x: 0, y: 0 }, { feel: false, kb: 0, color: '#c8d4e4' });
+            Game.damageEnemy(this, slamMaster ? 5 : 2, { x: 0, y: 0 }, { feel: false, kb: 0, color: '#c8d4e4' });
             Particles.burst(this.x, this.y, { count: 8, colors: ['#c8d4e4', '#8a8074'], speed: 130, life: 0.3, size: 3 });
             Particles.text(this.x, this.y - 30, '쾅!', { color: '#c8d4e4', size: 13 });
             AudioSys.thud();

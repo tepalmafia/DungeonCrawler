@@ -101,6 +101,7 @@ function createPlayer(x, y, classId = 'knight') {
 
     useSkill(game) {
       this.skillCd = this.skillMaxCd();
+      if (this.flags.mgward) this.invuln = Math.max(this.invuln, 0.6); // 마력 장막
 
       if (this.classId === 'knight') {
         // 회전 베기: 360° 강타 + 강넉백 + 시전 중 무적 — 포위당했을 때의 탈출 버튼
@@ -208,6 +209,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
       if (this._overchargeCd > 0) this._overchargeCd -= dt;
       if (this.dashAtkT > 0) this.dashAtkT -= dt;
+      if (this._huntT > 0) this._huntT -= dt;
       if (this._dashWin > 0) this._dashWin -= dt;
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
@@ -254,6 +256,7 @@ function createPlayer(x, y, classId = 'knight') {
         this._pdodged = false; // 완벽 회피: 대시당 1회
         this._dashWin = 0.24; // 완벽 회피 판정 창 — 대시 무적(0.22s) 전체를 커버 (기존 0.16s는 무적보다 짧았다)
         this.dashAtkT = 0.35; // 대시 파생기 입력 창: 대시 중 + 직후 0.19초 (0.16초는 너무 빡빡했다)
+        if (this.flags.hunterstep) this._huntT = 1.5; // 사냥꾼의 호흡: 대시 후 공속 창
         if (this.rflags.dashcrit) this.dashCritReady = true;
         // 불꽃 대시 (특성): 대시 궤적에 불타는 자취
         if (this.flags.dashfire) {
@@ -387,7 +390,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.flags.static && e.status.shock > 0) bonus += 2; // 번개 트리 상향
 
       const baseDmg = this.currentAtk();
-      const dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv)) : baseDmg;
+      const dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv + (this.flags.bowmaster ? 1 : 0))) : baseDmg;
       const finalDmg = (crit ? Math.round(dmg * this.critMul) : dmg) + bonus;
       game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
 
@@ -433,6 +436,7 @@ function createPlayer(x, y, classId = 'knight') {
       else cdBase = finisher ? 0.58 : 0.32;
       let cd = cdBase * this.atkCdMul;
       if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
+      if (this._huntT > 0) cd *= 0.7; // 사냥꾼의 호흡
       // 공속 하한 (밸런스 점검): 신속×4 + 민첩의 룬 + 광폭 중첩 시 10타/초까지 치솟는 폭주 차단
       this.attackCd = Math.max(0.12, cd);
       this.attackPoseT = 0.18;
