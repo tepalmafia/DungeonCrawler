@@ -663,20 +663,25 @@ const Sprites = (() => {
 
   // 해골 병사: 녹슨 검 — 찌르기 돌진
   sprites.skeleton = make(pad([
-    '.....wwww',
-    '....wwwwww',
-    '....wkwwkw',
-    '....wwwwww',
-    '.....wmw......s',
-    '...wwwwwww...ss',
-    '..w.wwwww.w.ss',
-    '..w.wwwww.wss',
-    '..w..www..gg',
-    '......w...gg',
-    '....wwwww',
-    '....w...w',
-    '...ww...ww',
-  ]), { w: '#d8d3c5', k: '#1a1c2c', m: '#8a8074', s: '#8a9a8a', g: '#5e3a26' });
+    '......WWWWW',
+    '.....WWwwwwW',
+    '.....Wwkwwkw',
+    '.....Wwwwwww',
+    '.....wwsmmsw',
+    '......wwww.......rr',
+    '...AAwwwwwwAA...rrr',
+    '..AAs.wwwww.sA..rrr',
+    '..As..wswsw..s..rr',
+    '..ws..wwsww..ssrr',
+    '..w...wswsw...gg',
+    '......swwws...g',
+    '.....sww.wws',
+    '....sww...wws',
+    '....Www...wwW',
+  ]), {
+    W: '#f0ece0', w: '#d8d3c5', s: '#a09a8a', m: '#6a665a', k: '#16121f',
+    r: '#8a5a3a', g: '#5e3a26', A: '#5d6b84',
+  });
 
   // 방패 해골: 전면 대형 방패
   sprites.shieldSkeleton = make(pad([
@@ -723,40 +728,51 @@ const Sprites = (() => {
 
   // 독두꺼비: 도약 + 착지 독 장판
   sprites.frog = make(pad([
-    '...gg......gg',
-    '..gkgg....ggkg',
-    '..gggggggggggg',
-    '.gggGGGGGGgggg',
-    '.ggGGGGGGGGgg',
-    '.gggggggggggg',
-    'ggsggggggggsgg',
-    'gg..gggggg..gg',
-    '.....g..g',
-  ]), { g: '#4a7a3f', G: '#7ab04c', k: '#ffd866', s: '#38543a' });
+    '...gg........gg',
+    '..gkGg......gGkg',
+    '..gGGgggggggGGg',
+    '.ggGGGGGGGGGGGg',
+    '.gGGpGGGGGGpGGg',
+    '.gGGGGGppGGGGGg',
+    'ggdGGpGGGGpGGdgg',
+    'gGdddGGGGGGdddGg',
+    'gg.ddgggggddd.gg',
+    '.....gg..gg',
+    '....ggg..ggg',
+  ]), {
+    g: '#3f6a35', G: '#6a9a48', p: '#c9d94a', k: '#ffd866', d: '#2a4a24',
+  });
 
   // 흡혈 거머리: 마디 지렁이
   sprites.leech = make(pad([
-    '......rr',
-    '....rrRRrr',
-    '...rrRRRRrr',
-    '..rrRRrrRRrr',
-    '..rRRrrrrRRr',
-    '..rrrr..rrrr',
-    '...rr....rr',
-    '...k......k',
-  ]), { r: '#6a1c2c', R: '#a43a4a', k: '#1a0c12' });
+    '.......rr',
+    '.....rrRRr',
+    '....rRRrrRRr',
+    '...rRRrRRrRRr',
+    '..rRRrRRRRrRRr',
+    '..rRrRRWWRRrRr',
+    '..rrRRrWWrRRrr',
+    '...rrrr..rrrr',
+    '....rr....rr',
+    '....k......k',
+  ]), {
+    r: '#5a1424', R: '#8a3040', W: '#c05060', k: '#1a0c12',
+  });
 
   // 서리 슬라임: 죽으면 빙판
   sprites.iceSlime = make(pad([
-    '......c.cc',
-    '....ccccccc',
-    '...ccCCCCccc',
-    '..ccCCwwCCcc',
-    '..cCCwkkwCCc.c',
-    '..ccCCCCCCcc',
-    '.ccccccccccccc',
-    '..cccccccccc',
-  ]), { c: '#7ab8d8', C: '#b8e0f0', w: '#ffffff', k: '#1a1c2c' });
+    '......W..cc..W',
+    '....cccWccccW',
+    '...ccCCCCCCccc',
+    '..ccCCWWCCCCcc',
+    '..cCCWkkWCCCCc.c',
+    '..cCCCCCCCCCCc..W',
+    '.ccCCcCCCCcCCcc',
+    '.cccccccccccccc',
+    '..dcccccccccd',
+  ]), {
+    c: '#5a9ac8', C: '#a8d8ee', W: '#f0faff', k: '#16202c', d: '#3a6a94',
+  });
 
   // 서리 궁수: 2연발 얼음 화살
   sprites.frostArcher = make(pad([
@@ -777,32 +793,41 @@ const Sprites = (() => {
 
   // 광전사: 쌍도끼 오크 — 피가 모자라면 격노
   sprites.berserker = make(pad([
-    '..a...........a',
-    '.aaa..rrrr...aaa',
-    '.aa..rrrrrr..aa',
-    '..a..rkrrkr..a',
-    '..a..rrrrrr..a',
-    '..aa.rrmmrr.aa',
-    '...rrrrrrrrrr',
-    '..r.rrrrrrrr.r',
-    '..r.rrrrrrrr.r',
-    '..r..rrrrrr..r',
-    '.....rr..rr',
-    '....rrr..rrr',
-  ]), { r: '#a43a3a', k: '#ffd866', m: '#6a1c1c', a: '#8a9ab0' });
+    '..aa...........aa',
+    '.aAAa..rrrrrr..aAAa',
+    '.aAa..rRRRRRRr..aAa',
+    '..aa..RkRRRRkR..aa',
+    '..a..rRRRRRRRRr..a',
+    '..a..rRRmRRmRRr..a',
+    '..aa..RRmmmmRR..aa',
+    '...rrRRRRRRRRRRrr',
+    '..rr.RRtRRRRtRR.rr',
+    '..r..RRRRRRRRRR..r',
+    '..r..rRRRRRRRRr..r',
+    '.....RRRr..rRRR',
+    '....RRRr....rRRR',
+    '....rrr......rrr',
+  ]), {
+    r: '#8a2f2f', R: '#a94444', m: '#5c1a1a', k: '#ffd866', t: '#3a1010',
+    a: '#8a9ab0', A: '#c8d4e4',
+  });
 
   // 도깨비불: 원을 그리며 접근하는 불꽃
   sprites.wisp = make(pad([
-    '.....ff',
-    '....ffff',
-    '...ffFFff',
-    '..ffFFFFff',
-    '..fFFwwFFf',
-    '..fFwkkwFf',
-    '..ffFFFFff',
-    '...ffffff',
-    '....ffff',
-  ]), { f: '#3a8ac0', F: '#7ac0e8', w: '#e0f5ff', k: '#1a1c2c' });
+    '......f',
+    '.....ff.f',
+    '....fFFff',
+    '...fFFFFFf',
+    '..fFFWWWFFf',
+    '..fFWWwWWFf',
+    '..fFWkWkWFf',
+    '..fFWWWWWFf',
+    '...fFFWFFf',
+    '....fFFFf',
+    '.....fff',
+  ]), {
+    f: '#2a6a9a', F: '#5aaad8', W: '#a8e0f8', w: '#e8f8ff', k: '#101820',
+  });
   // 주술사: 아군을 치유하는 토템 가면
   sprites.shaman = make(pad([
     '....t.tt.t',
@@ -820,46 +845,61 @@ const Sprites = (() => {
 
   // 수정 정령: 죽으면 파편 사방 발사
   sprites.crystal = make(pad([
-    '......c',
-    '.....ccc',
-    '....cCCCc',
-    '...cCCwCCc',
-    '..cCCwwwCCc',
-    '..cCCCwCCCc',
-    '...cCCCCCc',
-    '....cCCCc',
-    '.....ccc',
-    '..c...c...c',
-    '.ccc.....ccc',
-  ]), { c: '#7a5ac2', C: '#b89ae8', w: '#f0e8ff' });
+    '.......W',
+    '......cWc',
+    '.....cCWCc',
+    '....cCCwCCc',
+    '...cCCwwwCCc',
+    '..cCCwwWwwCCc',
+    '..cCCCwwwCCCc',
+    '...dCCCwCCCd',
+    '....dCCCCCd',
+    '.....dCCCd',
+    '......dcd',
+    '..c....d....c',
+    '.cWc.......cWc',
+  ]), {
+    c: '#6a4aa8', C: '#9a7ad0', w: '#d8c8f8', W: '#ffffff', d: '#4a3078',
+  });
 
   // 구울: 시체를 먹고 강해진다
   sprites.ghoul = make(pad([
-    '.....gggg',
-    '....gggggg',
-    '....grggrg',
-    '....gggggg',
-    '.....gmmg',
-    '...gggggggg',
-    '..gggggggggg',
-    '..g.gggggg.g',
-    '..g.gggggg.g',
-    '.gg..gggg..gg',
-    '.....g..g',
-    '....gg..gg',
-  ]), { g: '#6a7a5a', r: '#e43b44', m: '#3a4a30' });
+    '.......gGGGg',
+    '......gGGGGGg',
+    '......GrGGGrG',
+    '......GGGGGGG',
+    '.......GmmmG',
+    '.....gGGGGGGGg',
+    '....gGGGGGGGGGg',
+    '...gG.GGGdGGG.Gg',
+    '...gG.GGdddGG.Gg',
+    '...g..GGGdGGG..g',
+    '..gg..dGGGGGd..gg',
+    '..bg...GGGGG...gb',
+    '.......dG.Gd',
+    '......gGG.GGg',
+    '.....gGG...GGg',
+  ]), {
+    g: '#4a5a40', G: '#6a7a5a', d: '#3a4a30', r: '#e43b44', m: '#2a3220', b: '#7a2430',
+  });
 
   // 뿔벌레: 3연속 짧은 돌진
   sprites.charger = make(pad([
-    '.h..........h',
-    '.hh........hh',
-    '..hhbbbbbbhh',
-    '...bbBBBBbb',
-    '..bbBBBBBBbb',
-    '..bkbBBBBbkb',
-    '..bbbbbbbbbb',
-    '...l.l..l.l',
-  ]), { h: '#d8d3c5', b: '#5a3a2a', B: '#8a5a3a', k: '#ffd866', l: '#2a1c12' });
+    '.hh...........hh',
+    '.Hhh.........hhH',
+    '..Hhh.bbbbbb.hhH',
+    '...hhbBBBBBBbhh',
+    '...bbBBCCCCBBbb',
+    '..bbBCCBBBBCCBb',
+    '..bkbBBBBBBBBkb',
+    '..bbbBdBBBBdBbb',
+    '..dbbbbbbbbbbbd',
+    '...dl.dl..ld.ld',
+    '...ll.ll..ll.ll',
+  ]), {
+    h: '#c8beab', H: '#f0ece0', b: '#4a3020', B: '#7a5030', C: '#a5764a',
+    d: '#2a1c12', k: '#ffd866', l: '#1a120c',
+  });
 
   // 마력 포탑: 회전 탄막
   sprites.turret = make(pad([
@@ -923,17 +963,21 @@ const Sprites = (() => {
 
   // 임프: 짧은 순간이동 + 화염구
   sprites.imp = make(pad([
-    '..r.......r',
-    '.rr.......rr',
-    '..rrrrrrrrr',
-    '..rrkrrkrr',
-    '..rrrrrrrr',
-    '...rmmmmr',
-    '...rrrrrr',
-    '..r.rrrr.r',
-    '....r..r',
-    '...rr..rr',
-  ]), { r: '#c04a3a', k: '#ffd866', m: '#6a1c12' });
+    '..rr.........rr',
+    '.rDr.........rDr',
+    '..rDrrrrrrrrrDr',
+    '...rRRRRRRRRr',
+    '...RRkRRRRkRR',
+    '...RRRRRRRRRR',
+    '....RmmmmmmR',
+    '....RRRRRRRR....f',
+    '...R.RRRRRR.RR.ff',
+    '.....RRRRRR...f',
+    '.....RR..RR..D',
+    '....rr....rrDD',
+  ]), {
+    r: '#8a2c20', R: '#c04a3a', D: '#5a1c14', k: '#ffd866', m: '#4a120c', f: '#ff9a3c',
+  });
 
   // 식탐귀: 빨아들인 뒤 깨문다
   sprites.glutton = make(pad([

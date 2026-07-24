@@ -8,14 +8,29 @@ const Bot = {
   ff: 1,
   runs: 0,       // loop 모드에서 끝낸 런 수
   wins: 0,
+  deaths: {},    // 층별 사망 횟수 {층: 회수} — 무한 부활 모드에서 난이도 리포트
 
   _lastX: 0, _lastY: 0, _stuckT: 0,
   _detourT: 0, _detour: { x: 1, y: 0 },
   _skillT: 0, _restartT: 0,
+  // 목표 진행 감시: 목표에 3초간 가까워지지 못하면 탐색 모드로 우회
+  _goalKey: null, _bestD: Infinity, _noProgressT: 0,
+  _exploreT: 0, _explorePt: null,
 
   toggle() {
     this.enabled = !this.enabled;
     if (!this.enabled) this._releaseKeys();
+  },
+
+  // 사망 기록 (무한 부활·실사망 공통) — 층별 난이도 리포트의 재료
+  onDeath(floor) {
+    this.deaths[floor] = (this.deaths[floor] || 0) + 1;
+  },
+
+  deathReport() {
+    const keys = Object.keys(this.deaths).map(Number).sort((a, b) => a - b);
+    const total = keys.reduce((s, k) => s + this.deaths[k], 0);
+    return { total, byFloor: keys.map((k) => `${k}층:${this.deaths[k]}`).join(' ') };
   },
 
   _releaseKeys() {
@@ -102,6 +117,24 @@ const Bot = {
       return;
     }
 
+    // ── 탐색 모드: 벽 너머 목표에 계속 막히면 방의 다른 지점으로 크게 우회 ──
+    if (this._exploreT > 0) {
+      this._exploreT -= dt;
+      if (this._explorePt) this._move(p, this._explorePt.x, this._explorePt.y);
+      return;
+    }
+
+    // ── 부활 직후: 무적이 남아있는 동안 적 무리에서 물러나 전열을 정비 ──
+    if (game.reviveMode && p.invuln > 1.2) {
+      let near = null, nd = 170;
+      for (const e of game.enemies) {
+        if (e.dead || e.phased) continue;
+        const dd = Math.hypot(e.x - p.x, e.y - p.y);
+        if (dd < nd) { nd = dd; near = e; }
+      }
+      if (near) { this._move(p, p.x * 2 - near.x, p.y * 2 - near.y); return; }
+    }
+
     // ── 위협 회피 (텔레그래프 읽기) — 이동보다 우선 ──
     const dodge = this._threat(game, p);
     if (dodge) {
@@ -146,14 +179,15 @@ const Bot = {
         this._skillT = 0;
       }
       if (p.classId !== 'knight') {
-        // 원거리: 카이팅
+        // 원거리: 카이팅 (접근이 필요할 때만 진행 감시 — 카이팅 후퇴는 정상 동작)
         if (d < 160) this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
-        else if (d > 340) this._move(p, target.x, target.y);
+        else if (d > 340) { this._move(p, target.x, target.y); this._watchGoal(target, d, dt, p); }
         else this._releaseKeys();
         if (p.attackCd <= 0 && d < 500) Input.justPressed['KeyJ'] = true;
         if (d < 90 && p.dashCharges >= 1) Input.justPressed['Space'] = true;
       } else {
         // 근접: 히트&런 — 준비되면 파고들어 베고, 쿨 중엔 몸을 뺀다
+        this._watchGoal(target, d, dt, p);
         if (p.attackCd <= 0) {
           this._move(p, target.x, target.y);
           if (d < 80) {
@@ -172,10 +206,37 @@ const Bot = {
       // 적 없음: 상호작용(상자/모닥불) → 문
       // 기연(저주 상자/피의 제단)은 봇이 판단할 수 없으니 건드리지 않는다
       const it = game.interactables.find((i) => !i.used && (i.kind === 'chest' || i.kind === 'camp'));
-      if (it) this._move(p, it.x, it.y);
-      else if (World.doorsActive && World.doors.length > 0) {
-        this._move(p, World.doors[0].x, World.doors[0].y);
+      if (it) {
+        this._move(p, it.x, it.y);
+        this._watchGoal(it, Math.hypot(it.x - p.x, it.y - p.y), dt, p);
+      } else if (World.doorsActive && World.doors.length > 0) {
+        const door = World.doors[0];
+        this._move(p, door.x, door.y);
+        this._watchGoal(door, Math.hypot(door.x - p.x, door.y - p.y), dt, p);
       } else this._releaseKeys();
+    }
+  },
+
+  // 목표 진행 감시 — 3초간 목표에 가까워지지 못하면 탐색 모드 발동 (벽 뒤 목표 우회)
+  _watchGoal(ref, dist, dt, p) {
+    if (ref !== this._goalKey) {
+      this._goalKey = ref;
+      this._bestD = dist;
+      this._noProgressT = 0;
+      return;
+    }
+    if (dist < this._bestD - 6) {
+      this._bestD = dist;
+      this._noProgressT = 0;
+    } else {
+      this._noProgressT += dt;
+      if (this._noProgressT > 3) {
+        this._explorePt = World.randomSpawnPos(p, 140);
+        this._exploreT = 1.8;
+        this._noProgressT = 0;
+        this._bestD = Infinity;
+        if (p.dashCharges >= 1) Input.justPressed['Space'] = true;
+      }
     }
   },
 
@@ -219,7 +280,17 @@ const Bot = {
       }
     }
     // 서 있는 자리가 위험 지대(용암/독 안개/불길)면 이탈
+    // 8방향을 샘플링해 가장 가까운 안전한 방향으로 — 맵 중앙으로 무작정 걷다 더 깊이 빠지지 않게
     if (World.isLavaAt(p.x, p.y + 10) || World.inFog(p.x, p.y)) {
+      for (const dist of [70, 130]) {
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          const nx = p.x + Math.cos(a) * dist, ny = p.y + Math.sin(a) * dist;
+          if (!World.inFog(nx, ny) && !World.isLavaAt(nx, ny + 10) && !World.isSolidAt(nx, ny)) {
+            return { x: Math.cos(a), y: Math.sin(a), dash: p.dashCharges >= 1 };
+          }
+        }
+      }
       const cx = (World.cols * TS) / 2, cy = (World.rows * TS) / 2;
       return { x: Math.sign(cx - p.x) || 1, y: Math.sign(cy - p.y) || 1 };
     }
