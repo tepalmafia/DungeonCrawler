@@ -36,6 +36,7 @@ const Game = {
   vignette: 0,
   critFlash: 0,  // 크리티컬 순간 화면 백색 섬광
   hurtFlash: 0,  // 피격 순간 화면 적색 섬광
+  overLockT: 0,  // 사망/승리 화면 진입 직후 입력 잠금 (오클릭 방지)
   blinkT: 0,
 
   xp: 0,
@@ -224,6 +225,9 @@ const Game = {
       this.shardAnimT += dt;
       const cur = Math.min(this.shardsEarned, Math.floor(this.shardAnimT * 40));
       if (cur > prev && cur <= this.shardsEarned && cur % 3 === 0) AudioSys.shard();
+
+      // 오클릭 방지: 진입 직후에는 입력을 받지 않는다 (죽은 줄도 모르고 넘어가는 문제)
+      if (this.overLockT > 0) { this.overLockT -= dt; return; }
 
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 무한 모드: 승리 화면에서 C — 심연 회랑으로 계속

@@ -69,7 +69,7 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     skillMaxCd() {
-      const base = { knight: 6, archer: 7, mage: 8 }[this.classId] || 6;
+      const base = { knight: 5, archer: 6, mage: 7 }[this.classId] || 5;
       return base * this.skillCdMul;
     },
 
@@ -88,8 +88,9 @@ function createPlayer(x, y, classId = 'knight') {
       this.skillCd = this.skillMaxCd();
 
       if (this.classId === 'knight') {
-        // 회전 베기: 360° 강타 + 넉백
+        // 회전 베기: 360° 강타 + 강넉백 + 시전 중 무적 — 포위당했을 때의 탈출 버튼
         this.spinT = 0.35;
+        this.invuln = Math.max(this.invuln, 0.4);
         AudioSys.spin();
         Renderer.shake(4, 0.2);
         Particles.ring(this.x, this.y, { r0: 20, r1: 100, life: 0.3, color: '#4a6ede', width: 5 });
@@ -101,7 +102,7 @@ function createPlayer(x, y, classId = 'knight') {
           const d = Math.hypot(dx, dy);
           if (d > 100 + e.r) continue;
           const dir = { x: dx / (d || 1), y: dy / (d || 1) };
-          const dmg = this.currentAtk() * 2;
+          const dmg = this.currentAtk() * 3;
           const crit = this.rflags.allcrit || Math.random() < this.critChance;
           game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, dir, { crit, kb: 380 });
           hits++;
@@ -127,21 +128,21 @@ function createPlayer(x, y, classId = 'knight') {
         const t = this._skillTarget(game);
         AudioSys.rainCast();
         game.rains.push({
-          x: t.x, y: t.y, r: 95, t: 0, next: 0.25,
-          shots: 9, fired: 0,
+          x: t.x, y: t.y, r: 110, t: 0, next: 0.25,
+          shots: 14, fired: 0,
           explo: this.flags.ar_explo,
         });
       } else {
         // 메테오: 예고 후 대광역 낙하
         const t = this._skillTarget(game);
         AudioSys.meteorCast();
-        game.meteors.push({ x: t.x, y: t.y, t: 0.9, r: 90 });
+        game.meteors.push({ x: t.x, y: t.y, t: 0.7, r: 105 });
         if (this.flags.mg_meteor3) {
           for (let i = 0; i < 2; i++) {
             game.meteors.push({
               x: t.x + (Math.random() - 0.5) * 190,
               y: t.y + (Math.random() - 0.5) * 150,
-              t: 1.1 + i * 0.25, r: 80,
+              t: 0.9 + i * 0.25, r: 90,
             });
           }
         }
@@ -152,7 +153,14 @@ function createPlayer(x, y, classId = 'knight') {
       this.animT += dt;
       if (this.attackCd > 0) this.attackCd -= dt;
       if (this.attackPoseT > 0) this.attackPoseT -= dt;
-      if (this.skillCd > 0) this.skillCd -= dt;
+      if (this.skillCd > 0) {
+        this.skillCd -= dt;
+        if (this.skillCd <= 0) {
+          // 스킬 준비 완료 — 은은한 차임 + 표시 (잊고 안 쓰는 것 방지)
+          AudioSys.skillReady();
+          Particles.text(this.x, this.y - 36, this.skillName() + ' 준비!', { color: '#5ce0e6', size: 12 });
+        }
+      }
       if (this.spinT > 0) this.spinT -= dt;
       if (this.comboTimer > 0) this.comboTimer -= dt; else this.combo = 0;
       if (this.invuln > 0) this.invuln -= dt;
