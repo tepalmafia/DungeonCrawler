@@ -242,10 +242,26 @@ const HUD = {
       ctx.font = '13px monospace';
       ctx.fillStyle = '#9aa0b4';
       this._wrapText(ctx, c.desc, cx, r.y + lift + 100, r.w - 28, 19);
+      // 중첩 특성: 보유 수 / 상한 표시
+      if (c.max && game.player) {
+        const owned = game.player.traits.filter((id) => id === c.id).length;
+        if (owned > 0) {
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#666a80';
+          ctx.fillText(`보유 ${owned}/${c.max}`, cx, r.y + lift + r.h - 36);
+        }
+      }
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = hover ? color : '#4a4a5c';
       ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 16);
     });
+
+    // 리롤 각인: 남은 횟수 표시
+    if (game.player && game.player.rerolls > 0 && game.state === 'levelup') {
+      ctx.font = 'bold 14px monospace';
+      ctx.fillStyle = '#2ec4b6';
+      ctx.fillText(`E — 다시 뽑기 (남은 ${game.player.rerolls}회)`, Renderer.W / 2, Renderer.H - 60);
+    }
   },
 
   _wrapText(ctx, text, cx, y, maxW, lineH) {
@@ -421,9 +437,9 @@ const HUD = {
   },
 
   altarRowRects() {
-    const w = 620, h = 58, gap = 12;
+    const w = 620, h = 44, gap = 8;
     const x = (Renderer.W - w) / 2;
-    const y0 = 130;
+    const y0 = 108;
     return META_UPGRADES.map((_, i) => ({ x, y: y0 + i * (h + gap), w, h }));
   },
 
@@ -451,27 +467,27 @@ const HUD = {
       ctx.strokeRect(r.x, r.y, r.w, r.h);
 
       ctx.textAlign = 'left';
-      ctx.font = 'bold 17px monospace';
+      ctx.font = 'bold 15px monospace';
       ctx.fillStyle = '#e8e0cf';
-      ctx.fillText(`${i + 1}. ${up.name}`, r.x + 18, r.y + 24);
-      ctx.font = '13px monospace';
+      ctx.fillText(`${i + 1}. ${up.name}`, r.x + 16, r.y + 19);
+      ctx.font = '12px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText(up.desc, r.x + 18, r.y + 45);
+      ctx.fillText(up.desc, r.x + 16, r.y + 36);
 
       // 레벨 핍
       for (let l = 0; l < up.max; l++) {
         ctx.fillStyle = l < lv ? '#2ec4b6' : '#2a2a3a';
-        ctx.fillRect(r.x + 350 + l * 18, r.y + 24, 12, 12);
+        ctx.fillRect(r.x + 400 + l * 16, r.y + 17, 10, 10);
       }
 
       ctx.textAlign = 'right';
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 14px monospace';
       if (maxed) {
         ctx.fillStyle = '#666a80';
-        ctx.fillText('완성', r.x + r.w - 18, r.y + 35);
+        ctx.fillText('완성', r.x + r.w - 16, r.y + 28);
       } else {
         ctx.fillStyle = affordable ? '#2ec4b6' : '#8a4a4a';
-        ctx.fillText(`◆ ${cost}`, r.x + r.w - 18, r.y + 35);
+        ctx.fillText(`◆ ${cost}`, r.x + r.w - 16, r.y + 28);
       }
     });
 
