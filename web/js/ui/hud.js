@@ -283,6 +283,16 @@ const HUD = {
           ctx.fillText(`보유 ${owned}/${c.max}`, cx, r.y + lift + r.h - 36);
         }
       }
+      // 직업 특성: 스킬 진화 진행도 힌트 (3장 모으면 스킬의 형태가 바뀐다)
+      if (c.cls && game.player && !game.player.skillEvolved) {
+        const clsOwned = game.player.traits.filter((id) => {
+          const t = TRAITS.find((x) => x.id === id);
+          return t && t.cls;
+        }).length;
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = '#f7b32b';
+        ctx.fillText(`⚡ 스킬 진화 ${clsOwned}/3`, cx, r.y + lift + r.h - 50);
+      }
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = hover ? color : '#4a4a5c';
       ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 16);
@@ -451,10 +461,25 @@ const HUD = {
       ctx.fillText(labels[i].sub, r.x + 22, r.y + 37);
     });
 
+    // 오늘의 탑 — 날짜 시드 도전 안내 + 오늘 기록
+    {
+      const now = new Date();
+      const key = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+      const rec = Meta.data.daily && Meta.data.daily.key === key ? Meta.data.daily : null;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = '#f7b32b';
+      ctx.fillText(
+        rec
+          ? `🗼 D — 오늘의 탑 · 오늘 기록: ${rec.floor}층${rec.victory ? ' 정복!' : ''} (${rec.runs}회 도전)`
+          : '🗼 D — 오늘의 탑 (매일 바뀌는 고정 시드, 모두에게 같은 던전)',
+        Renderer.W / 2, Renderer.H - 30);
+    }
+
     ctx.textAlign = 'center';
     ctx.font = '12px monospace';
     ctx.fillStyle = '#4a4a5c';
-    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거', Renderer.W / 2, Renderer.H - 20);
+    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거', Renderer.W / 2, Renderer.H - 12);
 
     // 테스트 모드 상태 (T로 토글)
     if (Game.testMode) {
@@ -852,6 +877,13 @@ const HUD = {
     ctx.fillStyle = game.gaveUp ? '#9aa0b4' : '#e43b44';
     ctx.fillText(game.gaveUp ? '런 포기' : '전사했다...', Renderer.W / 2, 180);
 
+    // 사망 리포트 — 죽음을 다음 런의 지식으로
+    if (!game.gaveUp && game.deathInfo) {
+      ctx.font = '15px monospace';
+      ctx.fillStyle = '#c46a6a';
+      ctx.fillText(`☠ 사인: ${game.deathInfo.src}`, Renderer.W / 2, 210);
+    }
+
     ctx.font = '18px monospace';
     ctx.fillStyle = '#e8e0cf';
     ctx.fillText(
@@ -861,6 +893,21 @@ const HUD = {
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · ${game.time.toFixed(1)}초`,
       Renderer.W / 2, 272);
+
+    // 진전 비교 — 지난 런 대비 어디까지 왔나
+    ctx.font = '13px monospace';
+    if (game.prevRun) {
+      const up = Dungeon.floor > game.prevRun.floor;
+      const same = Dungeon.floor === game.prevRun.floor;
+      ctx.fillStyle = up ? '#38b764' : same ? '#9aa0b4' : '#666a80';
+      ctx.fillText(
+        `지난 런 ${game.prevRun.floor}층 Lv.${game.prevRun.level} → 이번 ${Dungeon.floor}층 Lv.${game.level} ${up ? '▲' : same ? '—' : '▼'}`,
+        Renderer.W / 2, 298);
+    }
+    if (game.dailyRun && Meta.data.daily) {
+      ctx.fillStyle = '#f7b32b';
+      ctx.fillText(`🗼 오늘의 탑 최고 기록: ${Meta.data.daily.floor}층 (${Meta.data.daily.runs}회 도전)`, Renderer.W / 2, game.prevRun ? 316 : 298);
+    }
 
     this._drawShardReward(ctx, game, 330);
     this._drawRunTag(ctx, game, 448);
@@ -914,6 +961,11 @@ const HUD = {
     ctx.font = '15px monospace';
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`클리어 시간 ${(game.time / 60).toFixed(1)}분`, Renderer.W / 2, 295);
+    if (game.dailyRun) {
+      ctx.font = 'bold 14px monospace';
+      ctx.fillStyle = '#f7b32b';
+      ctx.fillText('🗼 오늘의 탑 정복!', Renderer.W / 2, 318);
+    }
 
     this._drawShardReward(ctx, game, 350);
     this._drawRunTag(ctx, game, 497);

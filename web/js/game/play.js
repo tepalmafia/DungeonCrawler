@@ -72,13 +72,13 @@ const GamePlay = {
     if (!World.inFog(p.x, p.y) && p._fogT > 0) p._fogT = Math.max(0, p._fogT - dt * 2); // 안개 밖: 유예 회복
     if (p.invuln <= 0 && p.dashTimer <= 0) {
       if (World.isLavaAt(p.x, p.y + 10)) {
-        this.hurtPlayer(1, { x: 0, y: -1 }, 180);
+        this.hurtPlayer(1, { x: 0, y: -1 }, 180, '용암');
         Particles.text(p.x, p.y - 28, '용암!', { color: '#ff7043', size: 13 });
       } else if (World.inFog(p.x, p.y)) {
         // 유예: 스쳐 지나가는 건 안전 — 0.5초 이상 머물러야 독이 스며든다 (2층 절벽 완화)
         p._fogT = (p._fogT || 0) + dt;
         if (p._fogT > 0.5) {
-          this.hurtPlayer(1, { x: 0, y: 0 }, 60);
+          this.hurtPlayer(1, { x: 0, y: 0 }, 60, '독 안개');
           Particles.text(p.x, p.y - 28, '독!', { color: '#6ab04c', size: 13 });
         } else if (Math.random() < 0.2) {
           Particles.burst(p.x, p.y - 8, { count: 1, colors: ['#6ab04c'], speed: 25, life: 0.3, size: 2, gravity: -80 });
@@ -89,7 +89,7 @@ const GamePlay = {
             if (fp.kind === 'ice') {
               p.slowT = Math.max(p.slowT, 0.35); // 빙판: 피해 없이 미끄러운 감속
             } else {
-              this.hurtPlayer(1, { x: 0, y: 0 }, 60);
+              this.hurtPlayer(1, { x: 0, y: 0 }, 60, '불길');
               break;
             }
           }
