@@ -208,7 +208,7 @@ const Dungeon = {
   combatComp(depth) {
     const data = floorData(this.floor);
     const comp = [];
-    const heatBonus = Game.heat >= 2 ? 2 : 0; // 열기 2: 적 수 증가
+    const heatBonus = (Game.heat >= 2 && this.floor >= 3) ? 2 : 0; // 열기 2: 적 수 증가 (1~2층 제외 — 초반 절벽 방지)
     // 물량감: 로그라이크다운 무리 전투. 곡선 뒤집기(R1): 1~2층은 -2 — 사망의 90%가
     // 1~2층에 몰리는 역전 곡선 보정 (신규 이탈 구간 완화)
     const earlyEase = this.floor <= 2 ? 2 : 0;

@@ -266,7 +266,9 @@ const Game = {
 
   // 열기 반영 적 강화 배율
   enemyHpMul() {
-    return this.floorHpScale() * (this.heat >= 1 ? 1.25 : 1);
+    // 열기 재분배 (계측: 열기5 마도사 사망의 80%가 1층) — 평면 ×1.25 대신 층 비례:
+    // 1층은 가볍게(×1.06+), 10층은 묵직하게(열기5 기준 ×1.79). 열기가 '후반 도전'이 되도록
+    return this.floorHpScale() * (1 + 0.012 * this.heat + 0.012 * this.heat * (Dungeon.floor - 1));
   },
 
   // 현재 상태에 맞는 BGM 테마 결정
