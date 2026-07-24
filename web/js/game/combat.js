@@ -199,7 +199,7 @@ const GameCombat = {
     }
 
     p.hp -= dmg;
-    p.invuln = 0.9;
+    p.invuln = p.classId === 'knight' ? 1.2 : 0.9; // 검사: 근접 리스크 보상 — 다굴 방지
     p.kbx = dir.x * kb;
     p.kby = dir.y * kb;
     this.hitstop = Math.max(this.hitstop, 0.09); // 얻어맞는 순간은 세계가 함께 멈춘다

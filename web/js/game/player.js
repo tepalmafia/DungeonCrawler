@@ -403,7 +403,7 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     _meleeAttack(dir, game, finisher, comboStep = 0) {
-      const range = (finisher ? 86 : 70) * this.rangeMul; // 밸런스: 근접 리스크 보상
+      const range = (finisher ? 94 : 77) * this.rangeMul; // 밸런스: 근접 리스크 보상 (+10% 상향)
       const arc = finisher ? 2.4 : 1.9;
       const angle = Math.atan2(dir.y, dir.x);
       AudioSys.slash(comboStep);
