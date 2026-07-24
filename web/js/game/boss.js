@@ -11,7 +11,7 @@
 
 const BOSS_DEFS = {
   1: {
-    name: '무덤지기 카론', sprite: 'boss', scale: 1, r: 26, hp: 60, speed: 42,
+    name: '무덤지기 카론', sprite: 'boss', scale: 1, r: 26, hp: 95, speed: 42,
     banner: '무덤지기 카론',
     p1: ['sweep', 'fan:soul'],
     p2: ['sweep', 'fan:soul', 'curse'],
@@ -19,7 +19,7 @@ const BOSS_DEFS = {
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
-    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 115, speed: 34,
+    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 220, speed: 34,
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '포자왕 믹서스',
     p1: ['fan:spore', 'ring', 'summon:mushroom'],
@@ -28,7 +28,7 @@ const BOSS_DEFS = {
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
   },
   3: {
-    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.1, r: 33, hp: 100, speed: 30,
+    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.1, r: 33, hp: 190, speed: 30,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
     p1: ['charge', 'ring'],
@@ -37,7 +37,7 @@ const BOSS_DEFS = {
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
-    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 280, speed: 44,
+    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 430, speed: 44,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '용암 심장 이그니스',
     p1: ['fan:fire', 'charge:trail'],
@@ -46,7 +46,7 @@ const BOSS_DEFS = {
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
-    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 360, speed: 50,
+    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 700, speed: 50,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라' },
     banner: '심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring'],
@@ -56,7 +56,7 @@ const BOSS_DEFS = {
   },
   // ── 6~10층 각성 보스: 같은 존재의 심층 강화판 (기믹 강화 + 패턴 확장) ──
   6: {
-    name: '원혼 카론', sprite: 'boss', scale: 1.2, r: 26, hp: 340, speed: 48,
+    name: '원혼 카론', sprite: 'boss', scale: 1.2, r: 26, hp: 550, speed: 48,
     banner: '원혼 카론',
     p1: ['sweep', 'fan:soul', 'curse'],
     p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith'],
@@ -64,7 +64,7 @@ const BOSS_DEFS = {
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
   },
   7: {
-    name: '역병왕 믹서스', sprite: 'bossSpore', scale: 1.2, r: 32, hp: 420, speed: 38,
+    name: '역병왕 믹서스', sprite: 'bossSpore', scale: 1.2, r: 32, hp: 680, speed: 38,
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '역병왕 믹서스',
     p1: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
@@ -73,7 +73,7 @@ const BOSS_DEFS = {
     deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
   },
   8: {
-    name: '절망의 바르곤', sprite: 'bossGolem', scale: 1.2, r: 33, hp: 400, speed: 34,
+    name: '절망의 바르곤', sprite: 'bossGolem', scale: 1.2, r: 33, hp: 650, speed: 34,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '절망의 바르곤',
     p1: ['charge', 'fan:rock', 'ring'],
@@ -82,7 +82,7 @@ const BOSS_DEFS = {
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
   },
   9: {
-    name: '겁화의 이그니스', sprite: 'bossIgnis', scale: 1.3, r: 30, hp: 520, speed: 48,
+    name: '겁화의 이그니스', sprite: 'bossIgnis', scale: 1.3, r: 30, hp: 850, speed: 48,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '겁화의 이그니스',
     p1: ['fan:fire', 'charge:trail', 'curse:fire'],
@@ -91,7 +91,7 @@ const BOSS_DEFS = {
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
   },
   10: {
-    name: '진 심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.6, r: 30, hp: 640, speed: 54,
+    name: '진 심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.6, r: 30, hp: 1300, speed: 54,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라', veils: [0.75, 0.5, 0.25] },
     banner: '진 심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring', 'curse'],
@@ -136,6 +136,8 @@ function createBoss(floor, x, y) {
     phased: false,    // 어둠 장막 중 무적
     _regenTick: 0,
     _regenPause: 0,
+    fightT: 0,        // 전투 경과 시간 — 소프트 인레이지
+    enrage: 0,        // 45초마다 +1 (최대 3): 패턴 가속
     swingCount: 0,
     aimDir: { x: -1, y: 0 },
     curses: [],
@@ -169,6 +171,19 @@ function createBoss(floor, x, y) {
         World.moveEntity(this, this.kbx * 0.3 * dt, this.kby * 0.3 * dt);
         this.kbx *= Math.pow(0.0001, dt);
         this.kby *= Math.pow(0.0001, dt);
+      }
+
+      // ── 소프트 인레이지: 오래 끌수록 보스가 빨라진다 (45초마다, 최대 3중첩) ──
+      // 긴장감의 시간 축 — "언젠가는 잡겠지"가 아니라 "빨리 잡아야 한다"
+      if (this.state !== 'enter') {
+        this.fightT += dt;
+        const want = Math.min(3, Math.floor(this.fightT / 45));
+        if (want > this.enrage) {
+          this.enrage = want;
+          game.banner = { text: `${this.name}의 살기가 짙어진다! (×${this.enrage})`, life: 1.6, maxLife: 1.6, color: '#e43b44' };
+          AudioSys.roar();
+          Particles.ring(this.x, this.y, { r0: 10, r1: 110, life: 0.5, color: '#e43b44', width: 4 });
+        }
       }
 
       // ── 기믹: 포자 갑피 (부하 생존 시 재생) ──
@@ -247,7 +262,7 @@ function createBoss(floor, x, y) {
         case 'idle': {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks);
+          const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage);
           if (this.stateT >= wait) {
             this.attack = this._nextPattern();
             this.state = 'windup';
@@ -337,7 +352,7 @@ function createBoss(floor, x, y) {
             this.phased = false;
             this.veilsDone++;
             this.state = 'stunned';
-            this.stateT = -2.2;
+            this.stateT = -1.4; // 그로기 단축 — 고딜 빌드의 공짜 딜타임 방지
             game.banner = { text: '장막이 깨졌다!', life: 1.6, maxLife: 1.6, color: '#f7b32b' };
             Renderer.shake(6, 0.4);
             AudioSys.thud();
@@ -349,7 +364,7 @@ function createBoss(floor, x, y) {
             }
             this.phased = false;
             this.veilsDone++;
-            this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.15);
+            this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.25); // 실패는 아프게 — 25% 회복
             game.banner = { text: '눅스가 영혼을 흡수했다...', life: 1.8, maxLife: 1.8, color: '#e43b44' };
             AudioSys.roar();
             const baseAngle = Math.atan2(p.y - this.y, p.x - this.x);
@@ -385,10 +400,10 @@ function createBoss(floor, x, y) {
         }
       }
 
-      // 접촉 데미지 (장막 중 제외)
+      // 접촉 데미지 (장막 중 제외) — 2페이즈부터는 몸 자체가 흉기다
       if (this.state !== 'veil' && this.hitCd <= 0 && p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
         this.hitCd = 0.8;
-        game.hurtPlayer(1, { x: dx / d, y: dy / d });
+        game.hurtPlayer(this.phase === 2 ? 2 : 1, { x: dx / d, y: dy / d });
       }
     },
 
