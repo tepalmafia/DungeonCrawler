@@ -78,7 +78,9 @@ function createPlayer(x, y, classId = 'knight') {
 
     skillMaxCd() {
       const base = { knight: 5, archer: 6, mage: 7 }[this.classId] || 5;
-      return base * this.skillCdMul;
+      // 스킬 쿨 하한 (밸런스 점검): 시간 왜곡 × 직업 쿨감 3중첩 + 처치 시 -0.3s가 겹치면
+      // 사실상 상시 스킬이 된다 — 최소 1.5초는 유지
+      return Math.max(1.5, base * this.skillCdMul);
     },
 
     skillName() {
@@ -116,7 +118,7 @@ function createPlayer(x, y, classId = 'knight') {
           if (d > 100 + e.r) continue;
           const dir = { x: dx / (d || 1), y: dy / (d || 1) };
           const dmg = this.currentAtk() * 3;
-          const crit = this.rflags.allcrit || Math.random() < this.critChance;
+          const crit = this.rflags.allcrit || Math.random() < Math.min(0.8, this.critChance);
           game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, dir, { crit, kb: 380 });
           hits++;
         }
@@ -193,7 +195,7 @@ function createPlayer(x, y, classId = 'knight') {
               if (d > 96 + e.r) continue;
               const dir = { x: dx / (d || 1), y: dy / (d || 1) };
               const dmg = Math.max(1, Math.round(this.currentAtk() * 1.5));
-              const crit = this.rflags.allcrit || Math.random() < this.critChance;
+              const crit = this.rflags.allcrit || Math.random() < Math.min(0.8, this.critChance);
               game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, dir, { crit, kb: 260 });
             }
           }
@@ -368,7 +370,7 @@ function createPlayer(x, y, classId = 'knight') {
         return 'blocked';
       }
 
-      let crit = Math.random() < this.critChance;
+      let crit = Math.random() < Math.min(0.8, this.critChance);
       if (this.rflags.allcrit) crit = true;
       if (this.flags.firecrit && e.status.burn > 0) crit = true;
       if (this.dashCritReady) { crit = true; this.dashCritReady = false; }
@@ -425,7 +427,8 @@ function createPlayer(x, y, classId = 'knight') {
       else cdBase = finisher ? 0.58 : 0.32;
       let cd = cdBase * this.atkCdMul;
       if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
-      this.attackCd = cd;
+      // 공속 하한 (밸런스 점검): 신속×4 + 민첩의 룬 + 광폭 중첩 시 10타/초까지 치솟는 폭주 차단
+      this.attackCd = Math.max(0.12, cd);
       this.attackPoseT = 0.18;
       if (dir.x !== 0) this.flip = dir.x < 0; // 공격 방향을 바라본다
 
@@ -500,7 +503,7 @@ function createPlayer(x, y, classId = 'knight') {
           if (Math.abs(diff) > 0.35 + 0.25) continue;
           const hitDir = { x: dx / (dist || 1), y: dy / (dist || 1) };
           const dmg = Math.round(this.currentAtk() * 2);
-          let crit = this.rflags.allcrit || Math.random() < this.critChance;
+          let crit = this.rflags.allcrit || Math.random() < Math.min(0.8, this.critChance);
           if (this.pdodgeCrit) { crit = true; this.pdodgeCrit = false; }
           game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, hitDir, { crit, kb: 360 });
         }

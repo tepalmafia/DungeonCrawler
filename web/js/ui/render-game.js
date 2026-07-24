@@ -10,6 +10,7 @@ const GameRender = {
       else if (this.state === 'altar') HUD.drawAltar(ctx, this.blinkT);
       else if (this.state === 'classes') HUD.drawClasses(ctx, this.blinkT);
       else HUD.drawCodex(ctx, this.blinkT, this);
+      if (this.showManual) HUD.drawManual(ctx, this, this.showManual);
       return;
     }
 
@@ -441,24 +442,75 @@ const GameRender = {
       HUD.drawInventory(ctx, this);
     }
 
-    // 일시정지 오버레이
+    // 일시정지 오버레이 — 게임 중 언제든 열어보는 매뉴얼 (기본 조작 + 전투의 정수)
     if (this.paused && this.state === 'play' && !this.showInventory) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = 'rgba(8,8,15,0.6)';
+      ctx.fillStyle = 'rgba(8,8,15,0.82)';
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
       ctx.textAlign = 'center';
-      ctx.font = 'bold 36px monospace';
+      ctx.font = 'bold 30px monospace';
       ctx.fillStyle = '#e8e0cf';
-      ctx.fillText('일시정지', Renderer.W / 2, 240);
+      ctx.fillText('일시정지 — 매뉴얼', Renderer.W / 2, 72);
+
+      // ── 왼쪽: 기본 조작 ──
+      const lx = Renderer.W / 2 - 396;
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillStyle = '#5ce0e6';
+      ctx.fillText('기본 조작', lx, 122);
+      ctx.font = '13px monospace';
+      const basics = [
+        ['WASD / 방향키', '이동'],
+        ['클릭 / J', '공격 — 3연격, 3타째가 강하다'],
+        ['Space / Shift', '대시 (짧은 무적)'],
+        ['K / 우클릭', '직업 스킬'],
+        ['Tab', '획득 목록 · 현재 스탯'],
+        ['1 2 3', '카드 선택 (E — 리롤, 환생 각인)'],
+        ['M', '음소거'],
+      ];
+      basics.forEach(([k, v], i) => {
+        ctx.fillStyle = '#e8e0cf';
+        ctx.fillText(k, lx, 150 + i * 24);
+        ctx.fillStyle = '#9aa0b4';
+        ctx.fillText(v, lx + 148, 150 + i * 24);
+      });
+
+      // ── 오른쪽: 전투의 정수 (고급 기술) ──
+      const rx = Renderer.W / 2 + 16;
+      ctx.font = 'bold 15px monospace';
+      ctx.fillStyle = '#f7b32b';
+      ctx.fillText('전투의 정수', rx, 122);
+      const tech = [
+        ['완벽 회피', '적 공격이 닿기 직전 대시로 회피', '→ 시간이 느려지고 다음 일격이 확정 크리'],
+        ['대시 파생기', '대시 중 공격 — 직업별 특수기', '검사 돌진 찌르기 / 궁수 후퇴 사격 / 마도사 점멸 폭발'],
+        ['벽 충돌', '3타 마무리·회전 베기로 적을 벽에 처박으면', '추가 피해 — 지형이 무기다'],
+        ['스킬 진화', '직업 특성 3장 + Lv.12', '→ 스킬의 형태가 바뀐다 (회오리 베기 등)'],
+        ['균열 벽', '금이 간 벽은 부술 수 있다', '→ 비밀 벽감에 보상이 숨어 있다'],
+      ];
+      let ty = 150;
+      for (const t of tech) {
+        ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = '#ffd866';
+        ctx.fillText('· ' + t[0], rx, ty);
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#c8d4e4';
+        ctx.fillText(t[1], rx + 16, ty + 18);
+        ctx.fillStyle = '#8a90a4';
+        ctx.fillText(t[2], rx + 16, ty + 34);
+        ty += 58;
+      }
+
+      ctx.textAlign = 'center';
       ctx.font = '14px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, 280);
-      ctx.fillText('Tab — 획득 목록 보기', Renderer.W / 2, 304);
+      ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, Renderer.H - 78);
       ctx.fillStyle = '#e43b44';
-      ctx.fillText('Q — 런 포기하고 정산', Renderer.W / 2, 328);
+      ctx.fillText('Q — 런 포기하고 정산', Renderer.W / 2, Renderer.H - 56);
       ctx.fillStyle = '#4a4a5c';
-      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, 356);
+      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, Renderer.H - 32);
     }
+
+    if (this.showManual && this.state === 'play') HUD.drawManual(ctx, this, this.showManual);
 
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);

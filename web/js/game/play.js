@@ -23,6 +23,17 @@ const GamePlay = {
       return;
     }
 
+    // 매뉴얼 (H 또는 /) — 게임 중 언제든: 1페이지(조작·전투) → 2페이지(던전·성장) → 닫기
+    // 테스트 모드에서 H는 회복 치트와 겹치므로 /만 사용
+    if (Input.pressed('Slash') || (Input.pressed('KeyH') && !this.testMode)) {
+      this.showManual = ((this.showManual || 0) + 1) % 3;
+      AudioSys.pickup();
+    }
+    if (this.showManual) {
+      if (Input.pressed('Escape', 'KeyP')) this.showManual = 0;
+      return; // 매뉴얼이 열려 있는 동안 게임 정지
+    }
+
     // 일시정지 (Q로 런 포기 가능)
     if (Input.pressed('Escape', 'KeyP')) {
       this.paused = !this.paused;
@@ -404,7 +415,7 @@ const GamePlay = {
           if (dd < m.r + e.r) {
             const dir = { x: (e.x - m.x) / (dd || 1), y: (e.y - m.y) / (dd || 1) };
             const dmg = p.currentAtk() * 4;
-            const crit = p.rflags.allcrit || Math.random() < p.critChance;
+            const crit = p.rflags.allcrit || Math.random() < Math.min(0.8, p.critChance);
             this.hitEnemy(e, crit ? Math.round(dmg * p.critMul) : dmg, dir, { crit, kb: 320 });
             if (!e.dead) e.status.burn = Math.max(e.status.burn, p.flags.inferno ? 4 : 2);
           }
