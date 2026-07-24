@@ -22,11 +22,11 @@ const TRAITS = [
     desc: '대시 충전 속도 +25%', apply: (p) => { p.dashRegenMul *= 0.75; } },
   { id: 'magnet',  name: '탐욕',      tag: '스탯', color: '#2ec4b6', stack: true, max: 3,
     desc: 'XP 획득 +15%, 흡인 범위 +80%', apply: (p) => { p.xpMul *= 1.15; p.magnetMul *= 1.8; } },
-  { id: 'luck',    name: '행운',      tag: '스탯', color: '#f7b32b', stack: true, max: 2,
+  { id: 'luck', unlock: { stat: 'totalKills', n: 1000, label: '누적 1000킬' },    name: '행운',      tag: '스탯', color: '#f7b32b', stack: true, max: 2,
     desc: '크리티컬 +5%, 하트 드랍 확률 2배', apply: (p) => { p.critChance += 0.05; p.luckMul *= 2; } },
   { id: 'regen',   name: '회복력',    tag: '스탯', color: '#e43b44',
     desc: '방 클리어 시 HP 1 회복', flag: 'regen' },
-  { id: 'berserk', name: '광전사',    tag: '스탯', color: '#e43b44',
+  { id: 'berserk', unlock: { stat: 'runs', n: 5, label: '5회 도전' }, name: '광전사',    tag: '스탯', color: '#e43b44',
     desc: 'HP 2 이하일 때 공격력 +1, 공격 속도 +30%', flag: 'berserk' },
 
   // ── 화염 시너지 ──
@@ -42,14 +42,14 @@ const TRAITS = [
   // ── 번개 시너지 ──
   { id: 'shocktrail', name: '잔전류',   tag: '번개', color: '#ffd866',
     desc: '대시 경로에 감전 장판을 남긴다 (피해 + 감속)', flag: 'shocktrail' },
-  { id: 'overcharge', name: '과충전',   tag: '번개', color: '#ffd866',
+  { id: 'overcharge', unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' }, name: '과충전',   tag: '번개', color: '#ffd866',
     desc: '감전된 적을 처치하면 대시 충전 즉시 회복 (2초에 1회)', flag: 'overcharge' },
   // ── 동사 특성 (P3): 숫자가 아니라 행동의 모양을 바꾼다 ──
-  { id: 'quake',    name: '지진파',    tag: '스탯', color: '#c8d4e4',
+  { id: 'quake', unlock: { stat: 'bestFloor', n: 3, label: '3층 도달' },    name: '지진파',    tag: '스탯', color: '#c8d4e4',
     desc: '마무리 일격이 전방으로 관통 충격파를 쏜다', flag: 'quake' },
-  { id: 'rebound',  name: '도탄',      tag: '스탯', color: '#ffd866',
+  { id: 'rebound', unlock: { stat: 'totalKills', n: 500, label: '누적 500킬' },  name: '도탄',      tag: '스탯', color: '#ffd866',
     desc: '화살과 마탄이 벽에서 한 번 튕긴다', flag: 'rebound' },
-  { id: 'dashfire', name: '불꽃 대시', tag: '화염', color: '#ff7043',
+  { id: 'dashfire', unlock: { stat: 'bestFloor', n: 5, label: '5층 도달' }, name: '불꽃 대시', tag: '화염', color: '#ff7043',
     desc: '대시가 불타는 자취를 남긴다 (적 지속 피해)', flag: 'dashfire' },
   { id: 'chain',      name: '연쇄 번개', tag: '번개', color: '#ffd866',
     desc: '공격 시 30% 확률로 번개가 근처 적에게 튄다 (2 피해 + 감전)', flag: 'chain' },
@@ -101,6 +101,19 @@ const TRAITS = [
     desc: '기본 마탄이 관통 화염구가 되어 착탄 시 폭발한다', flag: 'mg_fireball' },
   { id: 'mg_ash', name: '잿불 지대', tag: '마도사', color: '#8a5ac2', cls: 'mage',
     desc: '메테오 자리에 불타는 지대가 남는다 (적 지속 피해)', flag: 'mg_ash' },
+  // ── 직업 심화 (P4): 직업당 5종 — 검사/궁수/마도사 런이 서로 다른 빌드가 되도록 ──
+  { id: 'kn_slam', name: '강철 파쇄', tag: '검사', color: '#4a6ede', cls: 'knight',
+    desc: '벽 충돌 강타 피해 2→5, 더 약한 넉백에도 발동', flag: 'slammaster' },
+  { id: 'kn_guardcrit', name: '기사도', tag: '검사', color: '#4a6ede', cls: 'knight',
+    desc: '보호막이 피해를 막으면 다음 일격이 확정 크리티컬', flag: 'guardcrit' },
+  { id: 'ar_focus', name: '사냥꾼의 호흡', tag: '궁수', color: '#38b764', cls: 'archer',
+    desc: '대시 후 1.5초간 공격 속도 +30%', flag: 'hunterstep' },
+  { id: 'ar_power', name: '중력 시위', tag: '궁수', color: '#38b764', cls: 'archer',
+    desc: '3발째 강화 화살의 위력이 한 단계 더 강해진다', flag: 'bowmaster' },
+  { id: 'mg_cdr', name: '과부하 회로', tag: '마도사', color: '#8a5ac2', cls: 'mage', stack: true, max: 2,
+    desc: '스킬 쿨다운 -15%', apply: (p) => { p.skillCdMul *= 0.85; } },
+  { id: 'mg_ward', name: '마력 장막', tag: '마도사', color: '#8a5ac2', cls: 'mage',
+    desc: '스킬 시전 순간 0.6초 무적', flag: 'mgward' },
 
   // ── 전설 (극저확률 — 규칙을 부수는 카드. "미쳐 날뛰는 런"의 씨앗) ──
   { id: 'unbound',   name: '무한의 갈망', tag: '전설', color: '#ffd866', legend: true,
@@ -124,6 +137,7 @@ function rollTraitCards(player, n = 3) {
   // 직업 전용 특성은 해당 직업에게만, 상한(max) 도달한 특성은 제외
   const countOf = (id) => player.traits.filter((x) => x === id).length;
   const pool = TRAITS.filter((t) =>
+    Meta.isUnlocked(t) &&
     (!t.flag || !player.flags[t.flag]) &&
     (!t.cls || t.cls === player.classId) &&
     // 무한의 갈망: 중첩 상한 해제

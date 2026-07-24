@@ -39,24 +39,24 @@ const RELICS = [
     desc: '공격 속도 +20%', apply: (p) => { p.atkCdMul *= 0.80; } },
 
   // ── 에픽 ──
-  { id: 'berserkhelm', rarity: 'epic', name: '광전사의 투구',
+  { id: 'berserkhelm', rarity: 'epic', unlock: { stat: 'totalKills', n: 1500, label: '누적 1500킬' }, name: '광전사의 투구',
     desc: 'HP 3 이하일 때 공격력 +4', flag: 'berserkhelm' },
   { id: 'timesand',  rarity: 'epic', name: '시간의 모래',
     desc: '대시를 2회 연속 사용할 수 있다', apply: (p) => { p.dashMax = 2; } },
-  { id: 'phoenix',   rarity: 'epic', name: '불사조 깃털',
+  { id: 'phoenix',   rarity: 'epic', unlock: { stat: 'wins', n: 1, label: '첫 등정' }, name: '불사조 깃털',
     desc: '죽음에 이르는 피해를 받으면 1회 부활 (HP 3)', flag: 'revive' },
   { id: 'magnetglove', rarity: 'epic', name: '자석 장갑',
     desc: 'XP와 하트를 방 전체에서 끌어당긴다', flag: 'magnetall' },
 
   // ── 레전더리 (규칙 변경) ──
-  { id: 'glasssword', rarity: 'legendary', name: '유리 대검',
+  { id: 'glasssword', rarity: 'legendary', unlock: { stat: 'bestFloor', n: 7, label: '7층 도달' }, name: '유리 대검',
     desc: '모든 공격이 크리티컬. 대신 최대 HP -2',
     apply: (p) => { p.maxHp = Math.max(1, p.maxHp - 2); p.hp = Math.min(p.hp, p.maxHp); },
     flag: 'allcrit' },
   { id: 'engine',    rarity: 'legendary', name: '폭주 기관',
     desc: '대시 충전이 극한까지 빨라진다 (0.45초). 대신 이동 속도 -25%',
     apply: (p) => { p.speed *= 0.75; }, flag: 'engine' },
-  { id: 'kingseal',  rarity: 'legendary', name: '왕의 인장',
+  { id: 'kingseal',  rarity: 'legendary', unlock: { stat: 'wins', n: 2, label: '2회 등정' }, name: '왕의 인장',
     desc: '레벨업 선택지가 4장이 되고, 즉시 특성 1개를 얻는다', flag: 'kingseal' },
 ];
 
@@ -78,7 +78,7 @@ function rollRelicRarity(bossRoll = false) {
 // 미보유 유물 중에서 뽑기. 원하는 등급이 소진되면 아래 등급으로 대체.
 function rollRelics(player, n, bossRoll = false) {
   const owned = new Set(player.relics);
-  const pool = RELICS.filter((r) => !owned.has(r.id));
+  const pool = RELICS.filter((r) => !owned.has(r.id) && Meta.isUnlocked(r));
   const out = [];
   const order = ['legendary', 'epic', 'rare', 'common'];
   for (let i = 0; i < n && pool.length > 0; i++) {

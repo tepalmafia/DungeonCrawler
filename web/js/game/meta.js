@@ -232,6 +232,32 @@ const Meta = {
   },
 
   // 열기(고난이도)는 탑을 한 번 정복해야 해금된다
+  // ── 해금 파이프라인 (P3): 일부 특성·유물은 전적으로 연다 — "다음 런엔 새 게 나온다" ──
+  isUnlocked(def) {
+    if (!def || !def.unlock) return true;
+    return (this.data[def.unlock.stat] || 0) >= def.unlock.n;
+  },
+
+  checkUnlocks() {
+    if (!this.data.unlocksSeen) this.data.unlocksSeen = {};
+    const fresh = [];
+    for (const def of [...TRAITS, ...RELICS]) {
+      if (!def.unlock || this.data.unlocksSeen[def.id]) continue;
+      if (this.isUnlocked(def)) {
+        this.data.unlocksSeen[def.id] = true;
+        fresh.push(def.name);
+      }
+    }
+    if (fresh.length) {
+      this.save();
+      if (typeof Game !== 'undefined') {
+        Game.banner = { text: `해금! ${fresh.join(' · ')} — 다음 런부터 등장`, life: 3.0, maxLife: 3.0, color: '#f7b32b' };
+        AudioSys.buy();
+      }
+    }
+    return fresh;
+  },
+
   heatUnlocked() {
     return this.data.wins > 0 || this.data.bestFloor >= 5;
   },
@@ -257,6 +283,7 @@ const Meta = {
     this.data.runs++;
     this.data.totalKills += kills;
     if (victory) this.data.wins++;
+    setTimeout(() => this.checkUnlocks(), 0); // 정산 직후 새 해금 배너 (스탯 반영 뒤)
     this.data.bestFloor = Math.max(this.data.bestFloor, victory ? 10 : floor);
     this.save();
     return earned;
