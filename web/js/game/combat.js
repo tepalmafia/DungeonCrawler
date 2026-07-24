@@ -34,7 +34,12 @@ const GameCombat = {
         Particles.ring(e.x, e.y, { r0: 2, r1: 22, life: 0.18, color: '#ffffff', width: 2 });
         Particles.star(e.x, e.y, { size: 30, color: '#fff7c0' });
       }
-      if (crit) AudioSys.crit(); else AudioSys.hit();
+      if (crit) {
+        AudioSys.crit();
+        this.critFlash = 0.09; // 화면 전체가 한순간 번쩍 — 크리의 손맛
+      } else {
+        AudioSys.hit();
+      }
 
       const p = this.player;
       if (crit && p.flags.lifesteal && p.lifestealCd <= 0 && p.hp < p.maxHp) {
@@ -63,7 +68,7 @@ const GameCombat = {
     Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : (e.codexType || e.type));
     this.hitstop = Math.max(this.hitstop, 0.08);
     Renderer.shake(3, 0.15);
-    AudioSys.die();
+    AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');
 
     const palettes = {
       slime: ['#38b764', '#a7f070', '#257179'],
@@ -197,9 +202,10 @@ const GameCombat = {
     p.invuln = 0.9;
     p.kbx = dir.x * kb;
     p.kby = dir.y * kb;
-    this.hitstop = Math.max(this.hitstop, 0.065);
-    this.vignette = 0.6;
-    Renderer.shake(6, 0.3);
+    this.hitstop = Math.max(this.hitstop, 0.09); // 얻어맞는 순간은 세계가 함께 멈춘다
+    this.vignette = 0.8;
+    this.hurtFlash = 0.22; // 화면 전체 적색 섬광 + HUD 하트 흔들림
+    Renderer.shake(7, 0.35);
     AudioSys.hurt();
     Particles.burst(p.x, p.y, {
       count: 13, colors: ['#e43b44', '#8a1c2c'], speed: 160, life: 0.4, size: 3,

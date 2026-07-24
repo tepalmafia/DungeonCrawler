@@ -351,6 +351,7 @@ function createPlayer(x, y, classId = 'knight') {
 
     attack(dir, game) {
       const finisher = this.combo === 2;
+      const comboStep = this.combo; // 사운드용: 0/1/2타
       this.comboTimer = 0.9;
       this.combo = (this.combo + 1) % 3;
 
@@ -365,9 +366,9 @@ function createPlayer(x, y, classId = 'knight') {
       if (dir.x !== 0) this.flip = dir.x < 0; // 공격 방향을 바라본다
 
       if (this.classId === 'knight') {
-        this._meleeAttack(dir, game, finisher);
+        this._meleeAttack(dir, game, finisher, comboStep);
       } else if (this.classId === 'archer') {
-        AudioSys.bow();
+        AudioSys.bow(finisher);
         World.moveEntity(this, -dir.x * 5, -dir.y * 5); // 반동
         // 이중 사격: 부채꼴 2발
         const angles = this.flags.ar_double ? [-0.11, 0.11] : [0];
@@ -384,7 +385,7 @@ function createPlayer(x, y, classId = 'knight') {
           count: 3, colors: ['#d9cbb8', '#38b764'], speed: 50, life: 0.2, size: 2,
         });
       } else {
-        AudioSys.bolt();
+        AudioSys.bolt(finisher);
         // 파이어볼: 관통 + 상시 착탄 폭발
         const fireball = this.flags.mg_fireball;
         game.pbolts.push({
@@ -401,11 +402,16 @@ function createPlayer(x, y, classId = 'knight') {
       }
     },
 
-    _meleeAttack(dir, game, finisher) {
+    _meleeAttack(dir, game, finisher, comboStep = 0) {
       const range = (finisher ? 86 : 70) * this.rangeMul; // 밸런스: 근접 리스크 보상
       const arc = finisher ? 2.4 : 1.9;
       const angle = Math.atan2(dir.y, dir.x);
-      AudioSys.slash();
+      AudioSys.slash(comboStep);
+      if (finisher) {
+        // 마무리 일격: 살짝 파고들며 화면이 함께 울린다
+        World.moveEntity(this, dir.x * 6, dir.y * 6);
+        Renderer.shake(2.5, 0.12);
+      }
 
       this.slashes.push({
         angle, range, arc,
