@@ -209,6 +209,12 @@ const GameCombat = {
 
     if (e.noDrops) return; // 폭탄벌레 자폭 등 — 보상 없는 죽음
 
+    // 지름길 층 (R3): 정예가 파편을 떨군다 — 위험을 감수한 만큼의 수당
+    if (e.elite && Dungeon.shortcutHot) {
+      Meta.data.shards += 4;
+      Particles.text(e.x, e.y - 34, '◆ +4', { color: '#2ec4b6', size: 13 });
+    }
+
     // 중간보스(우두머리) 처치 보상: 하트 확정 + 영혼 파편 즉시 지급
     if (e.isMini) {
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
@@ -229,7 +235,8 @@ const GameCombat = {
     }
     // 하트: 기본 4.5% (개체수 +30% 보정) + 층이 깊을수록 감소 (최저 50%)
     // 보스전 중에는 절반 — 부하가 회복 셔틀이 되지 않게 (긴장 유지)
-    const floorDecay = Math.max(0.5, 1 - 0.04 * (Dungeon.floor - 1));
+    // R1: 심층(7층+) 하트 추가 감쇠 — 후반 순항 방지 (회복이 귀할수록 긴장이 살아있다)
+    const floorDecay = Math.max(0.4, 1 - 0.04 * (Dungeon.floor - 1) - (Dungeon.floor >= 7 ? 0.12 : 0));
     const bossFight = this.enemies.some((b) => b.isBoss && !b.dead) ? 0.5 : 1;
     // 행운(×2 중첩)·클로버(×1.8)가 겹치면 ×7.2까지 폭주 — 총 배율 상한 ×3
     const luckMul = Math.min(3, p.luckMul);

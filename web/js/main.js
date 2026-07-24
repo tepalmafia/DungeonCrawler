@@ -187,9 +187,11 @@ const Game = {
       Dungeon.combatComp(depth).forEach((s, i) => {
         this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini });
       });
-      // 층 첫 방이면 층 이름 배너
+      // 층 첫 방이면 층 이름 배너 (지름길 도착이면 경고)
       if (depth === 1) {
-        this.banner = { text: `${Dungeon.floor}층 — ${Dungeon.floorName()}`, life: 2.0, maxLife: 2.0 };
+        this.banner = Dungeon.shortcutHot
+          ? { text: `지름길 — ${Dungeon.floor}층 ${Dungeon.floorName()} (정예가 들끓는다)`, life: 2.5, maxLife: 2.5, color: '#e43b44' }
+          : { text: `${Dungeon.floor}층 — ${Dungeon.floorName()}`, life: 2.0, maxLife: 2.0 };
       }
     } else if (type === 'elite') {
       Dungeon.eliteComp(depth).forEach((s, i) => {

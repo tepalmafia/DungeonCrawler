@@ -156,6 +156,10 @@ const Bot = {
         this._exploreT = 2.0;
         Bot.stats.stalls++;
         Bot.stats.explores++;
+        // 같은 방 교착 누적 추적 — 3회부터는 스킬 강제 + 밀착 강행으로 판을 깬다
+        const roomKey = Dungeon.floor * 100 + Dungeon.roomIndex;
+        if (this._stallRoom === roomKey) this._roomStalls = (this._roomStalls || 0) + 1;
+        else { this._stallRoom = roomKey; this._roomStalls = 1; }
         if (p.dashCharges >= 1) this._dash();
       }
     }
@@ -221,7 +225,10 @@ const Bot = {
       const d = Math.hypot(target.x - p.x, target.y - p.y) || 1;
       // 스킬: 적이 몰려있거나 보스전이면 쿨마다
       // (KeyK는 테스트 모드에서 '전멸' 치트와 겹치므로 직접 호출한다)
-      if (this._skillT > 1 && p.skillCd <= 0 && p.dashTimer <= 0 && (near >= 2 || target.isBoss) && d < 320) {
+      // 스킬 사용: 무리/보스 + 방패병(정면 막기는 스킬·광역이 정답) + 교착 3회 이상이면 무조건
+      const blocker = !!target.blocksFrom;
+      if (this._skillT > 1 && p.skillCd <= 0 && p.dashTimer <= 0 &&
+          (near >= 2 || target.isBoss || blocker || this._roomStalls >= 3) && d < 320) {
         p.useSkill(game);
         Bot.stats.skills++;
         this._skillT = 0;
@@ -232,6 +239,8 @@ const Bot = {
         if (!los) {
           // 장애물이 조준선을 막고 있다 — 옆으로 돌아 시야를 연다
           this._strafeForLoS(p, target, dt);
+        } else if (this._roomStalls >= 3 && d > 110) {
+          this._move(p, target.x, target.y); // 교착 강행 돌파: 밀착해서 스킬·근접 판정으로 끝낸다
         } else if (d < 160) this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
         else if (d > 340) { this._move(p, target.x, target.y); this._watchGoal(target, d, dt, p); }
         else this._releaseKeys();
@@ -297,6 +306,7 @@ const Bot = {
           else if (opt.type === 'camp') s = p.hp < p.maxHp * 0.7 ? 4.5 : 1.5;
           else if (opt.type === 'event') s = 4;
           else if (opt.type === 'elite') s = 3;
+          else if (opt.type === 'shortcut') s = p.hp >= p.maxHp * 0.7 ? 3.5 : 1; // 건강할 때만 지름길
           else s = 2;
           // 문 수식어: 체력이 넉넉하면 위험-보상 문을 선호
           if (opt.mod && p.hp >= p.maxHp * 0.6) s += opt.mod.id === 'guarded' ? 1.5 : 0.8;

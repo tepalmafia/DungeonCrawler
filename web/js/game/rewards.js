@@ -153,7 +153,13 @@ const GameRewards = {
   },
 
   _afterBossReward() {
-    World.openDoors([{ type: 'nextfloor', ...ROOM_META.nextfloor }]);
+    // 지름길 (R3): 3·6층 보스 처치 후 갈림길 — 한 층을 건너뛰되 도착 층은 정예가 들끓는다.
+    // 런 중반의 '큰 결정'을 만든다 (9층은 제외 — 최종 보스를 건너뛸 수는 없다)
+    const opts = [{ type: 'nextfloor', ...ROOM_META.nextfloor }];
+    if ((Dungeon.floor === 3 || Dungeon.floor === 6) && !this.endless) {
+      opts.push({ type: 'shortcut', ...ROOM_META.shortcut });
+    }
+    World.openDoors(opts);
     // 왕의 인장 즉시 특성
     if (this.pendingChoices > 0) this.openTraitChoice('levelup');
   },

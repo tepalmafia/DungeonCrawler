@@ -56,6 +56,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       if (this.hitCd > 0 || p.invuln > 0) return;
       if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
         this.hitCd = 0.8;
+        // 심층 압박 (R1): 7층+ 정예·우두머리의 접촉은 2 — 후반에도 죽음이 가깝다
+        if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);
         const d = Math.hypot(p.x - this.x, p.y - this.y) || 1;
         game.hurtPlayer(dmg, { x: (p.x - this.x) / d, y: (p.y - this.y) / d });
       }

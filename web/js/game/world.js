@@ -985,6 +985,15 @@ const World = {
         ctx.lineTo(x - 4 * s, y + 8);
         ctx.stroke();
       }
+    } else if (type === 'shortcut') {
+      // 이중 화살촉 (아래로) — 두 층을 한 번에 내려간다
+      for (const oy of [-5, 3]) {
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y + oy - 4);
+        ctx.lineTo(x, y + oy + 4);
+        ctx.lineTo(x + 8, y + oy - 4);
+        ctx.stroke();
+      }
     } else if (type === 'elite') {
       // 왕관
       ctx.beginPath();
