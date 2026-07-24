@@ -152,22 +152,20 @@ function applyTrait(player, trait) {
   if (trait.flag) player.flags[trait.flag] = true;
   player.traits.push(trait.id);
 
-  // 스킬 진화 — 직업 특성 3장을 모으면 스킬의 '형태'가 바뀐다 (상한이 끝이 아니라 완성이 되도록)
-  if (trait.cls && !player.skillEvolved) {
+  // 스킬 진화 준비 — 직업 특성 3장을 모으면 '개화 대기' 상태가 된다.
+  // 실제 진화는 Lv.12부터 (Game.checkEvolution) — 봇 계측 결과 3장만으로는 평균 1.7층에
+  // 진화해버려서, 완성의 순간이 중반(4~5층)에 오도록 레벨 게이트를 건다.
+  if (trait.cls && !player.skillEvolved && !player.evoReady) {
     const clsCount = player.traits.filter((id) => {
       const t = TRAITS.find((x) => x.id === id);
       return t && t.cls;
     }).length;
     if (clsCount >= 3) {
-      player.skillEvolved = true;
-      if (typeof Game !== 'undefined' && Game.banner !== undefined) {
-        Game.banner = { text: '⚡ 스킬 진화 — ' + player.skillName() + '!', life: 3, maxLife: 3, color: '#f7b32b' };
-        AudioSys.levelup();
-        Particles.burst(player.x, player.y, {
-          count: 26, colors: ['#f7b32b', '#ffd866', '#fff7c0'], speed: 200, life: 0.8, size: 4, gravity: -120,
-        });
-        Particles.ring(player.x, player.y, { r0: 10, r1: 90, life: 0.5, color: '#f7b32b', width: 4 });
+      player.evoReady = true;
+      if (typeof Game !== 'undefined' && Game.banner !== undefined && Game.level < 12) {
+        Game.banner = { text: '힘이 무르익는다... (Lv.12에 스킬 개화)', life: 2.5, maxLife: 2.5, color: '#f7b32b' };
       }
     }
   }
+  if (typeof Game !== 'undefined' && Game.checkEvolution) Game.checkEvolution();
 }

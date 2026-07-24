@@ -283,7 +283,7 @@ const HUD = {
           ctx.fillText(`보유 ${owned}/${c.max}`, cx, r.y + lift + r.h - 36);
         }
       }
-      // 직업 특성: 스킬 진화 진행도 힌트 (3장 모으면 스킬의 형태가 바뀐다)
+      // 직업 특성: 스킬 진화 진행도 힌트 (직업 특성 3장 + Lv.12 → 스킬의 형태가 바뀐다)
       if (c.cls && game.player && !game.player.skillEvolved) {
         const clsOwned = game.player.traits.filter((id) => {
           const t = TRAITS.find((x) => x.id === id);
@@ -291,7 +291,11 @@ const HUD = {
         }).length;
         ctx.font = 'bold 10px monospace';
         ctx.fillStyle = '#f7b32b';
-        ctx.fillText(`⚡ 스킬 진화 ${clsOwned}/3`, cx, r.y + lift + r.h - 50);
+        ctx.fillText(
+          game.player.evoReady
+            ? `⚡ 개화 대기 — Lv.12 (현재 ${game.level})`
+            : `⚡ 스킬 진화 ${clsOwned}/3 · Lv.12`,
+          cx, r.y + lift + r.h - 50);
       }
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = hover ? color : '#4a4a5c';
