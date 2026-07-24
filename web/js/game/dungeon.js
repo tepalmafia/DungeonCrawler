@@ -12,32 +12,44 @@ const ROOM_META = {
 
 // ── 설계된 위협 세트 (R2) — 무리가 '물량'이 아니라 '퍼즐'이 되도록.
 // 방 구성의 45%는 랜덤 샘플 대신 손제작 조합에서 뽑는다: 우선순위 판단이 생긴다.
+// 위협 세트 — 층 귀속 (min~max): 층 전용 로스터와 함께 순환. 같은 세트가 다른 층에 안 나온다
 const THREAT_SETS = [
-  { min: 1, units: ['skeleton', 'skeleton', 'archer', 'archer'] },              // 근접 압박 + 후방 화살
-  { min: 2, units: ['frog', 'frog', 'bat', 'bat', 'bat'] },                     // 독 장판 위 급강하
-  { min: 3, units: ['shieldSkeleton', 'shieldSkeleton', 'sniper', 'sniper'] },  // 방패벽 뒤 저격수 — 우회 퍼즐
-  { min: 3, units: ['golem', 'archer', 'archer', 'archer'] },                   // 탱커가 몸으로 막는 화력선
-  { min: 4, units: ['berserker', 'berserker', 'wisp', 'wisp'] },                // 돌격 + 원거리 견제
-  { min: 5, units: ['shaman', 'brute', 'brute'] },                              // 힐러 컷 퍼즐
-  { min: 5, units: ['necro', 'necro', 'shieldSkeleton', 'shieldSkeleton'] },    // 이중 소환 + 방패벽
-  { min: 6, units: ['bomber', 'bomber', 'boar', 'boar'] },                      // 자폭 유도 + 돌진 교차
-  { min: 7, units: ['turret', 'turret', 'stalker', 'stalker'] },                // 고정 화망 + 은신 기습
-  { min: 8, units: ['executioner', 'frostArcher', 'frostArcher', 'leech', 'leech'] }, // 처형 구역+빙결+흡혈
+  { min: 1, max: 1, units: ['skeleton', 'skeleton', 'archer', 'archer'] },         // 근접 압박 + 후방 화살
+  { min: 1, max: 1, units: ['boar', 'boar', 'swarm'] },                            // 교차 돌진 + 벌레 떼
+  { min: 2, max: 2, units: ['sporePuff', 'sporePuff', 'frog', 'frog'] },           // 독구름 지뢰밭 위 개구리
+  { min: 2, max: 2, units: ['acidSnail', 'acidSnail', 'spider', 'spider'] },       // 산성 지형 + 거미줄 감속
+  { min: 3, max: 3, units: ['shieldSkeleton', 'shieldSkeleton', 'sniper', 'sniper'] }, // 방패벽 뒤 저격수
+  { min: 3, max: 3, units: ['golem', 'jailer', 'frostMage', 'frostMage'] },        // 탱커+사슬 끌기+감속탄
+  { min: 4, max: 4, units: ['ashWalker', 'ashWalker', 'emberMoth', 'emberMoth'] }, // 불길 잠식 + 급강하
+  { min: 4, max: 4, units: ['lavaHound', 'lavaHound', 'cinder', 'cinder', 'cinder'] }, // 화염 물량 러시
+  { min: 5, max: 5, units: ['shaman', 'shade', 'shade', 'acolyte'] },              // 힐러 컷 + 그림자 습격
+  { min: 5, max: 5, units: ['necro', 'necro', 'gazer', 'crystal'] },               // 이중 소환 + 탄막
+  { min: 6, max: 6, units: ['bomber', 'bomber', 'charger', 'charger'] },           // 자폭 유도 + 돌진 교차
+  { min: 6, max: 6, units: ['bloodBat', 'bloodBat', 'bloodBat', 'ghoul', 'ghoul'] }, // 흡혈 무리
+  { min: 7, max: 7, units: ['turret', 'turret', 'venomLasher', 'venomLasher'] },   // 고정 화망 + 채찍 근접
+  { min: 7, max: 7, units: ['sporeMother', 'acidSlug', 'acidSlug'] },              // 포자 생산 + 산성 포격
+  { min: 8, max: 8, units: ['executioner', 'chainWraith', 'chainWraith', 'frostArcher'] }, // 처형 구역+속박
+  { min: 8, max: 8, units: ['warden', 'stalker', 'stalker', 'frostGolem'] },       // 방패벽 + 은신 기습
+  { min: 9, max: 9, units: ['lavaBurster', 'flameJuggler', 'flameJuggler', 'imp'] }, // 장판 포화
+  { min: 9, max: 9, units: ['obsidianBeast', 'obsidianBeast', 'magmaSlime', 'magmaSlime'] }, // 중장갑 전선
+  { min: 10, max: 10, units: ['mirrorKnight', 'riftCaster', 'riftCaster', 'voidSpawn', 'voidSpawn'] }, // 반격 기사 + 균열
+  { min: 10, max: 10, units: ['voidEye', 'voidSpawn', 'voidSpawn', 'voidSpawn', 'riftCaster'] }, // 공허 무리
 ];
 
 // 층별 데이터 (기획안 §8.2)
 const FLOOR_DATA = {
-  1: { name: '지하 묘지',   enemies: ['slime', 'slime', 'skeleton', 'archer', 'boar', 'swarm'], rule: null },
-  2: { name: '곰팡이 동굴', enemies: ['mushroom', 'bat', 'toxicSlime', 'spider', 'frog', 'leech'], rule: '독 안개를 피하라' },
-  3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'archer', 'shieldSkeleton', 'iceSlime', 'sniper'], rule: '골렘은 등 뒤가 약점' },
-  4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'boar', 'wisp', 'berserker', 'golem'], rule: '용암을 밟지 마라' },
-  5: { name: '심연의 옥좌', enemies: ['wraith', 'fireSpirit', 'necro', 'shaman', 'crystal', 'archer', 'golem'], rule: '어둠이 시야를 가린다' },
+  // 층 전용 로스터 (2026-07 재편): 모든 몹은 정확히 한 층에만 산다 — 층마다 새 얼굴, 새 기믹
+  1: { name: '지하 묘지',   enemies: ['slime', 'slime', 'skeleton', 'archer', 'boar', 'swarm', 'bat'], rule: null },
+  2: { name: '곰팡이 동굴', enemies: ['mushroom', 'toxicSlime', 'spider', 'frog', 'leech', 'sporePuff', 'acidSnail'], rule: '독 안개를 피하라' },
+  3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'shieldSkeleton', 'iceSlime', 'sniper', 'jailer', 'frostMage'], rule: '간수의 사슬 궤도에서 비켜서라' },
+  4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'wisp', 'berserker', 'cinder', 'ashWalker', 'emberMoth'], rule: '용암을 밟지 마라' },
+  5: { name: '심연의 옥좌', enemies: ['necro', 'shaman', 'crystal', 'acolyte', 'shade', 'gazer'], rule: '그림자는 실체화됐을 때만 벨 수 있다' },
   // 6~10층: 심층 — 층마다 전용 신규 몬스터가 등장한다
-  6: { name: '피의 묘지',   enemies: ['bomber', 'bomber', 'ghoul', 'charger', 'skeleton', 'wraith', 'necro', 'swarm', 'brute'], rule: '폭탄벌레가 붉게 빛나면 도망쳐라' },
-  7: { name: '맹독 심연',   enemies: ['thornPlant', 'thornPlant', 'turret', 'mimic', 'frog', 'toxicSlime', 'spider', 'necro'], rule: '가시덩굴은 움직이지 않는다 — 각도를 노려라' },
-  8: { name: '절망의 감옥', enemies: ['executioner', 'executioner', 'stalker', 'brute', 'sniper', 'shieldSkeleton', 'iceSlime'], rule: '처형자의 붉은 구역에서 벗어나라' },
-  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'wisp', 'berserker', 'lavaHound', 'fireSpirit', 'golem'], rule: '마그마 슬라임은 죽어도 끝이 아니다' },
-  10: { name: '심연의 왕좌', enemies: ['voidEye', 'voidEye', 'glutton', 'frostArcher', 'stalker', 'crystal', 'shaman', 'necro'], rule: '공허의 눈은 추적탄을 쏜다 — 직각으로 대시하라' },
+  6: { name: '피의 묘지',   enemies: ['bomber', 'ghoul', 'charger', 'brute', 'bloodBat', 'boneHeap', 'boneHeap'], rule: '뼈 더미를 부수지 않으면 되살아난다' },
+  7: { name: '맹독 심연',   enemies: ['thornPlant', 'turret', 'mimic', 'venomLasher', 'sporeMother', 'acidSlug'], rule: '포자 어미부터 끊어라 — 새끼는 무한하다' },
+  8: { name: '절망의 감옥', enemies: ['executioner', 'stalker', 'frostArcher', 'warden', 'chainWraith', 'frostGolem'], rule: '처형자의 붉은 구역에서 벗어나라' },
+  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'obsidianBeast', 'flameJuggler', 'lavaBurster'], rule: '착탄 예고 원을 읽어라 — 장판이 겹치면 도망칠 곳이 없다' },
+  10: { name: '심연의 왕좌', enemies: ['voidEye', 'glutton', 'voidSpawn', 'voidSpawn', 'riftCaster', 'mirrorKnight'], rule: '거울 기사의 반격 자세가 끝나기 전에 물러나라' },
 };
 
 // 11층+ (무한 모드 '심연 회랑'): 6~10층 구성을 순환하며 끝없이 강해진다
@@ -157,12 +169,15 @@ const Dungeon = {
     // 물량감: 로그라이크다운 무리 전투. 곡선 뒤집기(R1): 1~2층은 -2 — 사망의 90%가
     // 1~2층에 몰리는 역전 곡선 보정 (신규 이탈 구간 완화)
     const earlyEase = this.floor <= 2 ? 2 : 0;
-    const n = Math.max(3, Math.min(16, 3 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 0.9) + heatBonus - earlyEase));
+    // 물량 상향 (2026-07 몬스터 확장): 기본 +1, 층 기울기 0.9→1.0, 상한 16→18
+    const n = Math.max(3, Math.min(18, 4 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 1.0) + heatBonus - earlyEase));
     let eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
     if (this.shortcutHot) eliteChance = Math.min(0.5, eliteChance * 2); // 지름길 층: 정예 2배
 
     // 설계된 위협 세트 (R2): 45% 확률로 손제작 조합이 무리의 뼈대가 된다
-    const sets = THREAT_SETS.filter((s) => this.floor >= s.min);
+    // 층 귀속 (min~max) — 무한 모드는 순환 테마의 유효 층으로 매칭
+    const ef = this.floor <= 10 ? this.floor : ((this.floor - 11) % 5) + 6;
+    const sets = THREAT_SETS.filter((s) => ef >= s.min && ef <= (s.max || 99));
     if (sets.length && RNG.chance(0.45)) {
       const set = RNG.pick(sets);
       for (const t of set.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
@@ -183,11 +198,15 @@ const Dungeon = {
     if (this.floor >= 2) {
       const roomsLeft = this.totalRooms - 1 - this.roomIndex; // 보스방 전까지 남은 방 수
       const force = !this.miniSeen && roomsLeft <= 4 && this.floor >= 3;
+      // 심층 2번째 우두머리 12→20% (2026-07 몬스터 확장 — 중간보스 조우 상향)
       let chance = this.miniSeen
-        ? ((this.floor >= 6 || this.shortcutHot) ? 0.12 : 0)
+        ? ((this.floor >= 6 || this.shortcutHot) ? 0.2 : 0)
         : (this.shortcutHot ? 0.25 : this.floor === 2 ? 0.08 : 0.14);
       if (force || RNG.chance(chance)) {
-        comp.push({ type: RNG.pick(data.enemies.filter((t) => t !== 'swarm')), elite: false, mini: true });
+        // 소형 쫄은 우두머리 감이 아니다 (거대화해도 위협 패턴이 빈약)
+        const MINI_EXCLUDE = ['swarm', 'sporePuff', 'cinder', 'voidSpawn', 'bat', 'bloodBat'];
+        const pool = data.enemies.filter((t) => !MINI_EXCLUDE.includes(t));
+        comp.push({ type: RNG.pick(pool.length ? pool : data.enemies), elite: false, mini: true });
         this.miniSeen = true;
       }
     }

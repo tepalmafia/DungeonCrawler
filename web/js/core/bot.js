@@ -380,13 +380,17 @@ const Bot = {
         this._noProgressT = 0;
         this._bestD = Infinity;
         this._goalFails = (this._goalFails || 0) + 1;
-        // 같은 목표에 6회 연속 실패 = 도달 불가로 판정 — 덤프 남기고 포기 (소크가 게임 버그에 인질로 잡히지 않게)
-        if (this._goalFails >= 6 && ref && ref.kind) {
-          ref._botSkip = true;
+        // 같은 목표에 6회 연속 실패 = 도달 불가로 판정 — 덤프 남기고 상호작용물은 포기
+        // (문은 포기 불가 — 덤프만 남긴다. 소크가 게임 버그에 인질로 잡히지 않게)
+        if (this._goalFails >= 6 && ref) {
+          if (ref.kind) ref._botSkip = true;
           console.log('[BOT-GOALSTUCK]', JSON.stringify({
-            kind: ref.kind, x: Math.round(ref.x), y: Math.round(ref.y),
+            kind: ref.kind || (ref.opt ? 'door:' + ref.opt.type : 'obj'),
+            x: Math.round(ref.x), y: Math.round(ref.y),
             floor: Dungeon.floor, room: Dungeon.roomIndex, tpl: World.lastTemplate || null,
+            fog: World.inFog(p.x, p.y), cleared: !!Game.roomCleared,
           }));
+          this._goalFails = 0;
         }
         if (p.dashCharges >= 1) this._dash();
       }
@@ -444,7 +448,9 @@ const Bot = {
     }
     // 서 있는 자리가 위험 지대(용암/독 안개/불길)면 이탈
     // 8방향을 샘플링해 가장 가까운 안전한 방향으로 — 맵 중앙으로 무작정 걷다 더 깊이 빠지지 않게
-    if (World.isLavaAt(p.x, p.y + 10) || World.inFog(p.x, p.y)) {
+    // 단, 방 클리어 후 안개는 그냥 걸어서 통과한다 — 문 앞 안개 웅덩이에서 회피가
+    // 이동을 영원히 가로막는 진동 스톨(대시 2000회 계측)의 범인이었다. 독 틱은 감수
+    if (World.isLavaAt(p.x, p.y + 10) || (!game.roomCleared && World.inFog(p.x, p.y))) {
       for (const dist of [70, 130]) {
         for (let k = 0; k < 8; k++) {
           const a = (k / 8) * Math.PI * 2;

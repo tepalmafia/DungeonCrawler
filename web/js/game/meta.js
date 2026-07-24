@@ -20,7 +20,7 @@ const CLASSES = {
   },
 };
 
-// 도감 — 몬스터 목록 (일반 37종 + 보스 5종). 처치하면 발견된다.
+// 도감 — 몬스터 목록 (일반 61종 + 보스 5종). 처치하면 발견된다.
 const CODEX_ENEMIES = [
   { id: 'slime',      name: '슬라임',       sprite: 'slime',      desc: '던전에서 가장 흔한 주민. 통통 튀며 다가온다.' },
   { id: 'toxicSlime', name: '독 슬라임',    sprite: 'toxicSlime', desc: '죽으면 독구름을 남긴다. 시체 위를 밟지 마라.' },
@@ -59,6 +59,31 @@ const CODEX_ENEMIES = [
   { id: 'brute',       name: '덩치',         sprite: 'brute',       desc: '넓은 부채꼴로 몽둥이를 휘두른다. 품 안쪽이나 등 뒤가 안전하다.' },
   { id: 'imp',         name: '임프',         sprite: 'imp',         desc: '깜빡이며 순간이동하고 화염구를 던진다. 성가심의 화신.' },
   { id: 'glutton',     name: '식탐귀',       sprite: 'glutton',     desc: '숨을 들이쉬며 끌어당긴 뒤 깨문다. 흡입 중엔 반대로 달리거나 대시로 끊어라.' },
+  // ── 2026-07 확장 24종 — 층 전용 로스터 ──
+  { id: 'sporePuff',    name: '포자 방울',     sprite: 'sporePuff',    desc: '떠다니는 지뢰. 터지기 전에 멀리서 처리하라.' },
+  { id: 'acidSnail',    name: '산성 달팽이',   sprite: 'acidSnail',    desc: '느리지만 단단하고, 지나간 자리가 산성 늪이 된다.' },
+  { id: 'jailer',       name: '간수',          sprite: 'jailer',       desc: '사슬 갈고리로 끌어당긴다. 조준선이 빛나면 궤도에서 비켜라.' },
+  { id: 'frostMage',    name: '서리 술사',     sprite: 'frostMage',    desc: '3갈래 감속탄을 뿌리고, 다가가면 도약한다 — 두 번뿐이지만.' },
+  { id: 'cinder',       name: '불씨',          sprite: 'cinder',       desc: '작고 빠르다. 죽는 자리에 불길이 남으니 발밑을 조심하라.' },
+  { id: 'ashWalker',    name: '재의 보행자',   sprite: 'ashWalker',    desc: '걸음마다 불길을 남긴다. 오래 두면 방 전체가 타오른다.' },
+  { id: 'emberMoth',    name: '불나방',        sprite: 'emberMoth',    desc: '맴돌다 예고 후 급강하한다. 느낌표가 뜨면 옆으로.' },
+  { id: 'acolyte',      name: '어둠 사제',     sprite: 'acolyte',      desc: '보라 조준선이 굵어지는 순간 어둠탄이 날아온다.' },
+  { id: 'shade',        name: '그림자',        sprite: 'shade',        desc: '흐릿할 땐 벨 수 없다. 실체화 주기를 읽고 반격하라.' },
+  { id: 'gazer',        name: '응시자',        sprite: 'gazer',        desc: '6방향 탄막을 두른다. 탄과 탄 사이 틈이 살 길이다.' },
+  { id: 'bloodBat',     name: '피의 박쥐',     sprite: 'bloodBat',     desc: '물어뜯을 때마다 제 피를 채운다. 방치가 곧 회복이다.' },
+  { id: 'boneHeap',     name: '뼈무더기',      sprite: 'boneHeap',     desc: '쓰러뜨려도 뼈 더미가 남는다. 더미까지 부숴야 끝난다.' },
+  { id: 'venomLasher',  name: '독채찍',        sprite: 'venomLasher',  desc: '전방 부채꼴로 채찍을 휘두른다. 맞으면 발이 굳는다.' },
+  { id: 'sporeMother',  name: '포자 어미',     sprite: 'sporeMother',  desc: '포자 방울을 계속 낳는다. 어미부터 끊는 게 순리다.' },
+  { id: 'acidSlug',     name: '산성 민달팽이', sprite: 'acidSlug',     desc: '포물선 산탄. 착탄 예고 원이 보이면 그 자리를 떠나라.' },
+  { id: 'warden',       name: '옥지기',        sprite: 'warden',       desc: '정면은 방패가 막는다. 등을 잡거나, 돌진을 흘려보내라.' },
+  { id: 'chainWraith',  name: '사슬 원혼',     sprite: 'chainWraith',  desc: '발밑에 사슬 올가미를 던진다. 원 밖이면 안전하다.' },
+  { id: 'frostGolem',   name: '서리 골렘',     sprite: 'frostGolem',   desc: '내려찍기 충격파와 빙판. 링은 대시로 통과할 수 있다.' },
+  { id: 'obsidianBeast', name: '흑요암수',     sprite: 'obsidianBeast', desc: '중장갑 돌진수. 죽는 순간 사방으로 파편이 튄다.' },
+  { id: 'flameJuggler', name: '불꽃 곡예사',   sprite: 'flameJuggler', desc: '화염탄을 저글링하듯 던진다. 착탄 원을 읽어라.' },
+  { id: 'lavaBurster',  name: '용암 분출자',   sprite: 'lavaBurster',  desc: '발밑에서 간헐천이 솟는다. 예고 원에서 비켜서라.' },
+  { id: 'voidSpawn',    name: '공허 유충',     sprite: 'voidSpawn',    desc: '죽는 순간 공허탄을 뱉는다. 마지막까지 방심 금물.' },
+  { id: 'riftCaster',   name: '균열 술사',     sprite: 'riftCaster',   desc: '주위에 균열을 열고 유도탄을 쏜다. 균열부터 피하라.' },
+  { id: 'mirrorKnight', name: '거울 기사',     sprite: 'mirrorKnight', desc: '은빛으로 빛나는 반격 자세가 끝나면 찌르기가 온다. 물러나라.' },
   { id: 'boss1', boss: true, name: '무덤지기 카론',     sprite: 'boss',      desc: '1층의 주인. 낫 연격과 영혼 부채꼴, 그리고 저주 지대.' },
   { id: 'boss2', boss: true, name: '포자왕 믹서스',     sprite: 'bossSpore', desc: '2층의 주인. 부하가 살아있는 동안 재생한다 — 부하를 한꺼번에 쓸어담을 수단을 연구하라.' },
   { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 중장갑이 강한 일격을 경감한다 — 갑옷을 무시하고 스며드는 피해가 열쇠.' },
@@ -175,7 +200,7 @@ const Meta = {
       const key = e.boss ? 'boss' + e.id.slice(4) : e.id;
       return this.data.codex.kills[key] > 0;
     }).length;
-    const milestones = [[10, 100], [20, 150], [30, 200], [42, 400]];
+    const milestones = [[10, 100], [25, 150], [40, 250], [55, 350], [66, 500]]; // 확장 66종 기준
     if (!this.data.codexRewarded) this.data.codexRewarded = {};
     for (const [need, reward] of milestones) {
       if (found >= need && !this.data.codexRewarded[need]) {
