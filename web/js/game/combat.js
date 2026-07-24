@@ -89,6 +89,26 @@ const GameCombat = {
       magmaSlime: ['#4a1f1a', '#ff7043', '#ffd866'],
       magmaSmall: ['#4a1f1a', '#ff7043'],
       voidEye: ['#241832', '#b13ae0', '#c9b8e8'],
+      skeleton: ['#d8d3c5', '#8a8074'],
+      shieldSkeleton: ['#d8d3c5', '#3a7ca5'],
+      sniper: ['#3d3d52', '#d8d3c5', '#e43b44'],
+      swarm: ['#5c3a5c', '#8a5a8a'],
+      frog: ['#4a7a3f', '#7ab04c'],
+      leech: ['#6a1c2c', '#a43a4a'],
+      iceSlime: ['#7ab8d8', '#b8e0f0'],
+      frostArcher: ['#3a6a9a', '#5ce0e6'],
+      berserker: ['#a43a3a', '#ffd866'],
+      wisp: ['#3a8ac0', '#7ac0e8'],
+      shaman: ['#6a4a8a', '#38b764'],
+      crystal: ['#7a5ac2', '#b89ae8', '#f0e8ff'],
+      ghoul: ['#6a7a5a', '#e43b44'],
+      charger: ['#5a3a2a', '#8a5a3a', '#d8d3c5'],
+      turret: ['#8a5ac2', '#5d6b84'],
+      mimic: ['#c09a4a', '#6a1020'],
+      stalker: ['#241832', '#b13ae0'],
+      brute: ['#7a5a4a', '#5e3a26'],
+      imp: ['#c04a3a', '#ffd866'],
+      glutton: ['#8a6a9a', '#4a1020'],
       boss: e.def ? e.def.deathPalette : ['#b13ae0'],
     };
     Particles.burst(e.x, e.y, {
@@ -149,6 +169,17 @@ const GameCombat = {
     }
 
     if (e.noDrops) return; // 폭탄벌레 자폭 등 — 보상 없는 죽음
+
+    // 중간보스(우두머리) 처치 보상: 하트 확정 + 영혼 파편 즉시 지급
+    if (e.isMini) {
+      this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
+      const bonus = 6 + Dungeon.floor * 2;
+      Meta.data.shards += bonus;
+      Meta.save();
+      Particles.text(e.x, e.y - 40, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
+      this.banner = { text: `${e.miniName} 격파!`, life: 1.5, maxLife: 1.5, color: '#2ec4b6' };
+      Renderer.shake(5, 0.3);
+    }
 
     let val = e.xpVal;
     while (val > 0) {

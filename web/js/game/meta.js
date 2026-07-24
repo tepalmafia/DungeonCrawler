@@ -20,7 +20,7 @@ const CLASSES = {
   },
 };
 
-// 도감 — 몬스터 목록 (일반 17종 + 보스 5종). 처치하면 발견된다.
+// 도감 — 몬스터 목록 (일반 37종 + 보스 5종). 처치하면 발견된다.
 const CODEX_ENEMIES = [
   { id: 'slime',      name: '슬라임',       sprite: 'slime',      desc: '던전에서 가장 흔한 주민. 통통 튀며 다가온다.' },
   { id: 'toxicSlime', name: '독 슬라임',    sprite: 'toxicSlime', desc: '죽으면 독구름을 남긴다. 시체 위를 밟지 마라.' },
@@ -39,6 +39,26 @@ const CODEX_ENEMIES = [
   { id: 'executioner', name: '처형자',       sprite: 'executioner', desc: '바닥에 붉은 처형 구역을 그린 뒤 도끼를 내려찍는다. 구역 밖이면 안전하다.' },
   { id: 'magmaSlime',  name: '마그마 슬라임', sprite: 'magmaSlime', desc: '죽으면 불길을 남기고 작은 마그마 둘로 갈라진다. 광역기로 한꺼번에 정리하라.' },
   { id: 'voidEye',     name: '공허의 눈',    sprite: 'voidEye',     desc: '다가가면 순간이동으로 도망치며 추적탄을 쏜다. 추적탄은 직각 대시로 뿌리쳐라.' },
+  { id: 'skeleton',    name: '해골 병사',    sprite: 'skeleton',    desc: '자세를 잡은 뒤 검을 앞세워 찌르며 돌진한다. 옆으로 흘려라.' },
+  { id: 'shieldSkeleton', name: '방패 해골', sprite: 'shieldSkeleton', desc: '정면은 방패가 막는다. 골렘보다 빨리 도니 등을 잡으려면 대시가 필요하다.' },
+  { id: 'sniper',      name: '저격 해골',    sprite: 'sniper',      desc: '아주 먼 곳에서 긴 점선 조준 후 강한 한 발. 조준선이 붉어지기 전에 끊어라.' },
+  { id: 'swarm',       name: '벌레 떼',      sprite: 'swarm',       desc: '하나하나는 약하지만 넷씩 몰려온다. 광역기의 밥.' },
+  { id: 'frog',        name: '독두꺼비',     sprite: 'frog',        desc: '포물선 도약으로 넘어오고, 착지 자리에 독 웅덩이를 남긴다.' },
+  { id: 'leech',       name: '흡혈 거머리',  sprite: 'leech',       desc: '한 번 붙으면 짧은 간격으로 계속 문다. 넉백으로 떼어내라.' },
+  { id: 'iceSlime',    name: '서리 슬라임',  sprite: 'iceSlime',    desc: '죽으면 빙판을 남긴다. 빙판 위에선 발이 미끄러진다.' },
+  { id: 'frostArcher', name: '서리 궁수',    sprite: 'frostArcher', desc: '감속 얼음 화살을 부채꼴 2연발로 쏜다. 맞으면 도망이 늦어진다.' },
+  { id: 'berserker',   name: '광전사',       sprite: 'berserker',   desc: '체력이 절반 아래로 떨어지면 격노 — 두 배로 빨라지고 아파진다. 한 번에 끝내라.' },
+  { id: 'wisp',        name: '도깨비불',     sprite: 'wisp',        desc: '나선을 그리며 벽을 통과해 접근한다. 궤도를 읽어라.' },
+  { id: 'shaman',      name: '주술사',       sprite: 'shaman',      desc: '다친 아군을 계속 치유한다. 최우선 처치 대상.' },
+  { id: 'crystal',     name: '수정 정령',    sprite: 'crystal',     desc: '죽는 순간 파편을 사방으로 쏜다. 죽인 뒤에도 방심 금지.' },
+  { id: 'ghoul',       name: '구울',         sprite: 'ghoul',       desc: '전장의 시체를 먹고 강해진다. 시체가 쌓이기 전에 잡아라.' },
+  { id: 'charger',     name: '뿔벌레',       sprite: 'charger',     desc: '짧은 돌진을 세 번 연속, 매번 다시 조준한다. 세 번째까지 방심하지 마라.' },
+  { id: 'turret',      name: '마력 포탑',    sprite: 'turret',      desc: '8방향 탄막을 회전시키며 쏜다. 같은 자리는 두 번 안전하지 않다.' },
+  { id: 'mimic',       name: '미믹',         sprite: 'mimic',       desc: '보물상자로 위장한다. 진짜 상자는 방 한가운데, 가짜는... 글쎄.' },
+  { id: 'stalker',     name: '그림자 추적자', sprite: 'stalker',    desc: '사라졌다가 등 뒤에서 나타난다. 그림자가 비치면 몸을 굴려라.' },
+  { id: 'brute',       name: '덩치',         sprite: 'brute',       desc: '넓은 부채꼴로 몽둥이를 휘두른다. 품 안쪽이나 등 뒤가 안전하다.' },
+  { id: 'imp',         name: '임프',         sprite: 'imp',         desc: '깜빡이며 순간이동하고 화염구를 던진다. 성가심의 화신.' },
+  { id: 'glutton',     name: '식탐귀',       sprite: 'glutton',     desc: '숨을 들이쉬며 끌어당긴 뒤 깨문다. 흡입 중엔 반대로 달리거나 대시로 끊어라.' },
   { id: 'boss1', boss: true, name: '무덤지기 카론',     sprite: 'boss',      desc: '1층의 주인. 낫 연격과 영혼 부채꼴, 그리고 저주 지대.' },
   { id: 'boss2', boss: true, name: '포자왕 믹서스',     sprite: 'bossSpore', desc: '2층의 주인. 부하가 살아있는 동안 재생한다 — 부하를 한꺼번에 쓸어담을 수단을 연구하라.' },
   { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 중장갑이 강한 일격을 경감한다 — 갑옷을 무시하고 스며드는 피해가 열쇠.' },
