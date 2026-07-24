@@ -6,7 +6,7 @@ const CLASSES = {
   knight: {
     id: 'knight', name: '검사', sprite: 'player', color: '#3b5dc9',
     hp: 6, speed: 195, unlock: 0,
-    desc: '3연격 근접 베기. 3타째는 강한 마무리. 단단한 몸 — 피격 후 무적이 길다.',
+    desc: '3연격 근접 베기, 단단한 몸. 전투 본능 — 마무리 일격 적중 시 HP 회복 (6초마다).',
   },
   archer: {
     id: 'archer', name: '궁수', sprite: 'playerArcher', color: '#38b764',

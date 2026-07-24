@@ -154,9 +154,9 @@ const GameCombat = {
       const a = Math.random() * Math.PI * 2;
       this.orbs.push({ x: e.x, y: e.y, val: v, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90 });
     }
-    // 하트: 기본 6% + 층이 깊을수록 감소 (최저 50%) — 심층일수록 회복이 귀하다
+    // 하트: 기본 4.5% (개체수 +30% 보정) + 층이 깊을수록 감소 (최저 50%)
     const floorDecay = Math.max(0.5, 1 - 0.04 * (Dungeon.floor - 1));
-    let heartChance = 0.06 * floorDecay * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
+    let heartChance = 0.045 * floorDecay * p.luckMul * (this.heat >= 4 ? 0.5 : 1);
     if (p.flags.bloodlust) heartChance += 0.12;
     if (Math.random() < heartChance) {
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });

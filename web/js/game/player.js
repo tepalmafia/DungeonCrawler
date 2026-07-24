@@ -27,6 +27,7 @@ function createPlayer(x, y, classId = 'knight') {
     traits: [],
     relics: [],
     lifestealCd: 0,
+    finisherHealCd: 0, // 전투 본능 (검사): 마무리 적중 회복 쿨다운
     reviveUsed: false,
 
     shield: false,
@@ -156,6 +157,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.comboTimer > 0) this.comboTimer -= dt; else this.combo = 0;
       if (this.invuln > 0) this.invuln -= dt;
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
+      if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
 
       if (this.dashCharges < this.dashMax) {
@@ -448,7 +450,17 @@ function createPlayer(x, y, classId = 'knight') {
         this.strike(game, e, hitDir, { finisher, kb: finisher ? 320 : 190 });
         hitAny = true;
       }
-      if (hitAny && finisher) Renderer.shake(3, 0.15);
+      if (hitAny && finisher) {
+        Renderer.shake(3, 0.15);
+        // 전투 본능 (검사 고유): 마무리 일격이 적중하면 HP 1 회복 (6초에 한 번)
+        // — 근접의 리스크를 "잘 싸우면 버틴다"로 보상한다
+        if (this.finisherHealCd <= 0 && this.hp < this.maxHp) {
+          this.hp++;
+          this.finisherHealCd = 6;
+          Particles.text(this.x, this.y - 26, '전투 본능 +1', { color: '#e43b44', size: 13 });
+          AudioSys.pickup();
+        }
+      }
     },
 
     draw(ctx) {
