@@ -66,14 +66,25 @@ const AudioSys = {
   // 피치 변주 — 같은 효과음이 반복돼도 기계적으로 들리지 않게 ±spread 만큼 흔든다
   _v(f, spread = 0.08) { return f * (1 - spread + Math.random() * spread * 2); },
 
+  // 스로틀 — 광역기가 물량방을 쓸 때 같은 효과음이 한 프레임에 수십 개 겹치면
+  // 오디오 노드 폭주로 프레임 히치 + 클리핑이 생긴다. 짧은 창 안 반복 재생을 제한.
+  _gates: {},
+  _gate(name, windowMs = 45, max = 2) {
+    const now = performance.now();
+    const g = this._gates[name] || (this._gates[name] = { t: 0, n: 0 });
+    if (now - g.t > windowMs) { g.t = now; g.n = 0; }
+    return ++g.n <= max;
+  },
+
   // 검격: 콤보 단계(0/1/2)마다 음이 올라가고, 3타(마무리)는 낮은 붕 소리가 겹친다
   slash(step = 0) {
     const base = [2200, 2600, 3100][step] || 2400;
     this._noise({ dur: step === 2 ? 0.1 : 0.07, vol: step === 2 ? 0.3 : 0.22, freq: this._v(base), q: 0.8 });
     if (step === 2) this._tone({ type: 'sine', f0: 140, f1: 50, dur: 0.14, vol: 0.3 });
   },
-  hit()    { this._noise({ dur: 0.06, vol: 0.4, freq: this._v(900) }); this._tone({ f0: this._v(180), f1: 60, dur: 0.08, vol: 0.35 }); },
+  hit()    { if (!this._gate('hit')) return; this._noise({ dur: 0.06, vol: 0.4, freq: this._v(900) }); this._tone({ f0: this._v(180), f1: 60, dur: 0.08, vol: 0.35 }); },
   crit()   {
+    if (!this._gate('crit')) return;
     this._noise({ dur: 0.08, vol: 0.45, freq: this._v(750) });
     this._tone({ f0: this._v(160), f1: 45, dur: 0.12, vol: 0.42 });                     // 묵직한 저음
     this._tone({ f0: this._v(520), f1: 1100, dur: 0.12, vol: 0.3, delay: 0.02 });       // 상승 임팩트
@@ -86,6 +97,7 @@ const AudioSys = {
   },
   // 처치음: 적 급에 따라 무게가 다르다 (정예는 굵게, 보스는 굉음)
   die(grade = 'small') {
+    if (grade === 'small' && !this._gate('die', 60, 2)) return; // 광역 몰살 시 겹침 제한 (정예/보스는 항상)
     if (grade === 'boss') {
       this._tone({ f0: 200, f1: 25, dur: 0.6, vol: 0.55 });
       this._tone({ type: 'sine', f0: 70, f1: 20, dur: 0.7, vol: 0.6, delay: 0.05 });
@@ -100,8 +112,8 @@ const AudioSys = {
   },
   dash()   { this._noise({ dur: 0.12, vol: 0.18, freq: this._v(3000), q: 0.5 }); },
   pickup() { this._tone({ type: 'sine', f0: 660, dur: 0.08, vol: 0.3 }); this._tone({ type: 'sine', f0: 990, dur: 0.12, vol: 0.3, delay: 0.08 }); },
-  thud()   { this._tone({ type: 'sine', f0: this._v(95), f1: 35, dur: 0.18, vol: 0.6 }); this._noise({ dur: 0.1, vol: 0.35, freq: 300 }); },
-  shoot()  { this._noise({ dur: 0.06, vol: 0.2, freq: this._v(1800), q: 2 }); },
+  thud()   { if (!this._gate('thud', 60, 2)) return; this._tone({ type: 'sine', f0: this._v(95), f1: 35, dur: 0.18, vol: 0.6 }); this._noise({ dur: 0.1, vol: 0.35, freq: 300 }); },
+  shoot()  { if (!this._gate('shoot')) return; this._noise({ dur: 0.06, vol: 0.2, freq: this._v(1800), q: 2 }); },
   bow(finisher = false) {
     this._tone({ type: 'square', f0: this._v(320), f1: 150, dur: 0.07, vol: finisher ? 0.26 : 0.2 });
     this._noise({ dur: 0.05, vol: 0.15, freq: this._v(2500), q: 1.5 });

@@ -207,6 +207,51 @@ const GameRender = {
           ctx.arc(it.x, it.y, 70, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 1;
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ff7043';
+          ctx.fillText('모닥불', it.x, it.y - 44);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText(`휴식 — HP +${this.heat >= 4 ? 1 : 2}`, it.x, it.y - 30);
+          // 숫돌과 공존 중이면 양자택일 안내 (두 오브젝트 중간 지점)
+          if (this.interactables.some((o) => o.kind === 'whetstone' && !o.used)) {
+            ctx.fillStyle = '#6a7086';
+            ctx.fillText('둘 중 하나만 고를 수 있다', it.x + 78, it.y + 40);
+          }
+        }
+      } else if (it.kind === 'whetstone') {
+        // 숫돌: 나무 받침 + 비스듬한 회색 숫돌, 담금질 스파크
+        ctx.fillStyle = '#5e3a26';
+        ctx.fillRect(it.x - 12, it.y + 4, 24, 8);
+        ctx.save();
+        ctx.translate(it.x, it.y);
+        ctx.rotate(-0.35);
+        ctx.fillStyle = it.used ? '#4a4a5c' : '#8b8ba0';
+        ctx.fillRect(-14, -8, 28, 12);
+        ctx.fillStyle = it.used ? '#5a5a6e' : '#b8b8cc';
+        ctx.fillRect(-14, -8, 28, 4);
+        ctx.restore();
+        if (!it.used) {
+          if (Math.random() < 0.35) {
+            Particles.burst(it.x + 8, it.y - 8, {
+              count: 1, colors: ['#ffd866', '#fff3c4'], speed: 70, life: 0.35, size: 2, gravity: 180,
+            });
+          }
+          const glow = 0.1 + Math.sin(it.t * 6 + 1.5) * 0.04;
+          ctx.globalAlpha = glow;
+          ctx.fillStyle = '#ffd866';
+          ctx.beginPath();
+          ctx.arc(it.x, it.y, 46, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ffd866';
+          ctx.fillText('숫돌', it.x, it.y - 44);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('담금질 — 이번 층 공격력 +1', it.x, it.y - 30);
         }
       }
     }

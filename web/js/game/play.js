@@ -459,6 +459,15 @@ const GamePlay = {
           p.hp = Math.min(p.maxHp, p.hp + heal);
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
+          for (const o of this.interactables) if (o.kind === 'whetstone') o.used = true; // 양자택일
+        } else if (it.kind === 'whetstone') {
+          // 담금질: 이번 층 동안 공격력 +1 (풀피일 때 모닥불의 가치)
+          p.floorAtk = (p.floorAtk || 0) + 1;
+          this.banner = { text: '담금질 — 이번 층 공격력 +1', life: 1.8, maxLife: 1.8, color: '#ffd866' };
+          AudioSys.crit();
+          Particles.burst(it.x, it.y, { count: 14, colors: ['#ffd866', '#c8d4e4'], speed: 110, life: 0.5, size: 3 });
+          Particles.text(p.x, p.y - 30, '공격력 +1', { color: '#ffd866', size: 15 });
+          for (const o of this.interactables) if (o.kind === 'camp') o.used = true; // 양자택일
         } else if (it.kind === 'mystery') {
           // 미지의 기연: 수락하는 순간 정체가 드러난다 (60% 순이익 / 25% 대가 있는 이익 / 15% 손해)
           const roll = Math.random();

@@ -127,6 +127,9 @@ const Game = {
   },
 
   onRoomBuilt(type) {
+    // 층 첫 방: 담금질(층 한정 공격력) 만료
+    if (Dungeon.roomIndex === 1 && this.player) this.player.floorAtk = 0;
+    this._roomHearts = 0; // 방당 하트 소프트캡 카운터 리셋
     this.enemies = [];
     this.arrows = [];
     this.pbolts = [];
@@ -169,8 +172,10 @@ const Game = {
       const c = World.center();
       this.interactables.push({ kind: 'chest', x: c.x, y: c.y, r: 24, used: false, t: 0 });
     } else if (type === 'camp') {
+      // 모닥불: 휴식(회복) vs 담금질(이번 층 공격력) — 하나를 고르면 다른 쪽은 사라진다
       const c = World.center();
-      this.interactables.push({ kind: 'camp', x: c.x, y: c.y, r: 30, used: false, t: 0 });
+      this.interactables.push({ kind: 'camp', x: c.x - 78, y: c.y, r: 28, used: false, t: 0 });
+      this.interactables.push({ kind: 'whetstone', x: c.x + 78, y: c.y, r: 28, used: false, t: 0 });
     } else if (type === 'event') {
       // 기연: 받아들이기 전엔 무엇인지 모른다 — 다가가면 수락(도박), 문으로 나가면 거절
       const c = World.center();
