@@ -88,6 +88,16 @@ const GameScreens = {
   _tickHub() {
     if (Input.pressed('KeyM')) { AudioSys.toggleMute(); Meta.data.muted = AudioSys.muted; Meta.save(); }
 
+    // 매뉴얼 (H 또는 /) — 거점에서도 열람 가능
+    if (Input.pressed('KeyH', 'Slash')) {
+      this.showManual = ((this.showManual || 0) + 1) % 3;
+      AudioSys.pickup();
+    }
+    if (this.showManual) {
+      if (Input.pressed('Escape')) this.showManual = 0;
+      return; // 매뉴얼이 열려 있는 동안 거점 입력 잠금
+    }
+
     // 테스트 모드 토글 (T)
     if (Input.pressed('KeyT')) {
       this.testMode = !this.testMode;

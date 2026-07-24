@@ -168,7 +168,7 @@ const HUD = {
       ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       ctx.fillStyle = '#666a80';
-      ctx.fillText('음소거 (M)', 14, Renderer.H - 44);
+      ctx.fillText('매뉴얼 (H) · 음소거 (M)', 14, Renderer.H - 44);
     }
 
     // ── 봇 모드 표시 + 층별 사망 리포트 ──
@@ -983,5 +983,86 @@ const HUD = {
     ctx.font = 'bold 16px monospace';
     ctx.fillStyle = '#b13ae0';
     ctx.fillText('C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)', Renderer.W / 2, 462);
+  },
+
+  // ── 전체 매뉴얼 (H 또는 /) — 게임 중·거점 어디서나. 1p 조작·전투 / 2p 던전·성장 ──
+  drawManual(ctx, game, page) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(8,8,15,0.9)';
+    ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 26px monospace';
+    ctx.fillStyle = '#e8e0cf';
+    ctx.fillText(page === 1 ? '매뉴얼 1/2 — 조작과 전투' : '매뉴얼 2/2 — 던전과 성장', Renderer.W / 2, 60);
+
+    const drawCol = (x, title, color, rows) => {
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillStyle = color;
+      ctx.fillText(title, x, 104);
+      let y = 132;
+      for (const r of rows) {
+        if (r.h) { // 항목 제목
+          ctx.font = 'bold 13px monospace';
+          ctx.fillStyle = r.c || '#ffd866';
+          ctx.fillText(r.h, x, y);
+          y += 18;
+        }
+        if (r.t) {
+          ctx.font = '12px monospace';
+          ctx.fillStyle = r.dim ? '#8a90a4' : '#c8d4e4';
+          ctx.fillText(r.t, x + (r.h === undefined ? 0 : 12), y);
+          y += 18;
+        }
+        y += r.gap || 6;
+      }
+    };
+
+    if (page === 1) {
+      drawCol(Renderer.W / 2 - 396, '기본 조작', '#5ce0e6', [
+        { h: 'WASD / 방향키', t: '이동' },
+        { h: '클릭 / J', t: '공격 — 3연격, 3타째(마무리)가 강하고 넓다' },
+        { h: 'Space / Shift', t: '대시 — 짧은 무적, 벽 너머는 못 간다' },
+        { h: 'K / 우클릭', t: '직업 스킬 (처치할 때마다 쿨다운 감소)' },
+        { h: 'Tab', t: '획득 목록 · 현재 스탯' },
+        { h: '1 2 3 / E', t: '카드 선택 / 다시 뽑기 (환생 각인)' },
+        { h: 'ESC · M · H(/)', t: '일시정지 · 음소거 · 이 매뉴얼' },
+      ]);
+      drawCol(Renderer.W / 2 + 16, '전투의 정수', '#f7b32b', [
+        { h: '완벽 회피', t: '적 공격이 닿기 직전 대시로 회피하면' },
+        { t: '시간이 느려지고 다음 일격이 확정 크리티컬', dim: true },
+        { h: '대시 파생기', t: '대시 중 공격 — 직업별 특수기가 나간다' },
+        { t: '검사 돌진 찌르기 / 궁수 후퇴 사격 / 마도사 점멸 폭발', dim: true },
+        { h: '벽 충돌', t: '마무리 일격·회전 베기로 적을 벽에 처박으면 추가 피해' },
+        { h: '스킬 진화', t: '직업 특성 3장 + Lv.12 — 스킬의 형태가 바뀐다' },
+        { h: '보스 기믹', t: '체력바 아래 기믹을 읽어라 — 정답 특성 트리가 있다' },
+      ]);
+    } else {
+      drawCol(Renderer.W / 2 - 396, '던전', '#5ce0e6', [
+        { h: '문 선택', t: '전투 / 정예(카드 보상) / 보물 / 모닥불 / 기연(?)' },
+        { t: '⚠ 수식어가 붙은 문은 위험하지만 보상이 크다', dim: true },
+        { h: '모닥불 방', t: '휴식(HP +2) vs 담금질(이번 층 공격력 +1) — 하나만' },
+        { h: '미지의 기연', t: '받아들이기 전엔 정체를 모른다 — 대체로 이득, 가끔 함정' },
+        { h: '우두머리', t: '층마다 나타나는 거대 변종 — 처치 시 하트 + 파편 확정' },
+        { h: '지름길', t: '3·6층 보스 후 — 한 층을 건너뛰지만 도착 층이 험하다' },
+        { t: '(대신 그 층의 정예가 파편을 떨군다)', dim: true },
+        { h: '균열 벽 · 항아리', t: '금 간 벽과 항아리는 부술 수 있다 — 보상이 숨어 있다' },
+      ]);
+      drawCol(Renderer.W / 2 + 16, '성장', '#f7b32b', [
+        { h: '특성 카드', t: '같은 태그를 모으면 시너지 — 트리를 파라' },
+        { t: '중첩 상한은 카드에 표시 (보유 n/상한)', dim: true },
+        { h: '전설 특성', t: '황금 카드 — 게임 규칙을 바꾼다 (극저확률)' },
+        { h: '유물', t: '커먼~레전더리 — 보물상자와 보스가 준다' },
+        { h: '도감', t: '몬스터 수집이 파편 보상으로 돌아온다 (거점 4번)' },
+        { h: '기억의 제단', t: '영혼 파편으로 영구 강화 (거점 2번)' },
+        { h: '열기 · 오늘의 탑', t: '정복 후 고난이도 해금(←→) · 거점 D 일일 도전' },
+        { h: '무한 모드', t: '10층 정복 후 C — 빌드 유지, 끝없는 하강' },
+      ]);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = '#5ce0e6';
+    ctx.fillText(page === 1 ? 'H / — 다음 페이지   ·   ESC — 닫기' : 'H / — 닫기   ·   ESC — 닫기', Renderer.W / 2, Renderer.H - 24);
   },
 };

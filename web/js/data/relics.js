@@ -15,8 +15,8 @@ const RELICS = [
     desc: '이동 속도 +10%', apply: (p) => { p.speed *= 1.10; } },
   { id: 'heartbit',  rarity: 'common', name: '심장 조각',
     desc: '최대 HP +1, 즉시 1 회복', apply: (p) => { p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); } },
-  { id: 'whetstone', rarity: 'common', name: '숫돌',
-    desc: '크리티컬 확률 +10%', apply: (p) => { p.critChance += 0.10; } },
+  { id: 'whetstone', rarity: 'common', name: '연마석',
+    desc: '크리티컬 확률 +10%', apply: (p) => { p.critChance += 0.10; } }, // 밸런스 점검: 모닥불 방 '숫돌'과 이름 중복 해소
   { id: 'feather',   rarity: 'common', name: '깃털 장식',
     desc: '대시 충전 속도 +15%', apply: (p) => { p.dashRegenMul *= 0.85; } },
   { id: 'crystal',   rarity: 'common', name: '수정 조각',
