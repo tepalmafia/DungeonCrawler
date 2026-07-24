@@ -1,15 +1,16 @@
 // 전투 판정 허브 — 피해/처치/폭발/피격/투사체 생성.
 // main.js에서 Object.assign(Game, GameCombat)으로 Game에 합쳐진다.
 const GameCombat = {
-  // 히트스톱 과열 방지 — 고공속·광역 물량전에서 매 타격마다 최대치로 멈추면
-  // 게임이 끊기는 것처럼 느껴진다(타격 렉). 0.3초 창 안에서는 첫 타만 온전히, 이후는 35%.
+  // 히트스톱 완화 — '탁탁' 끊기는 멈춤이 렉처럼 보인다는 피드백.
+  // 0.35초 창 안에서는 첫 방만 짧게 멈추고, 나머지는 아예 멈추지 않는다 (초당 최대 ~3회).
+  // 적용 여부를 돌려줘서 크리 섬광도 같은 리듬으로만 터지게 한다 (연속 번쩍임 방지).
   _applyHitstop(v) {
-    if (this.time - (this._lastStopT ?? -9) > 0.3) {
+    if (this.time - (this._lastStopT ?? -9) > 0.35) {
       this.hitstop = Math.max(this.hitstop, v);
       this._lastStopT = this.time;
-    } else {
-      this.hitstop = Math.max(this.hitstop, v * 0.35);
+      return true;
     }
+    return false;
   },
 
   damageEnemy(e, dmg, dir, { feel = true, crit = false, kb = 190, color } = {}) {
@@ -20,6 +21,11 @@ const GameCombat = {
       crit = false;
       Particles.text(e.x, e.y - 38, '경감!', { color: '#9aa0b4', size: 11 });
     }
+    // 보스 버스트 상한 — 특성이 쌓인 빌드가 기믹·페이즈를 보기도 전에 녹이지 못하게.
+    // 타격당 최대 피해 = 최대 HP의 1.5% (최소 2) — 어떤 빌드라도 보스는 ~67타를 버틴다.
+    // 기준: 유일하게 "보스답다"는 평가를 받은 골렘(중장갑 flat 2, 강빌드 TTK 29s)과 같은 체급.
+    // 약한 빌드에는 상한이 걸리지 않으므로 저점 난이도는 그대로다.
+    if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.015)));
     e.hp -= dmg;
     e.flash = 0.1;
     if (kb && !e.isBoss) {
@@ -31,8 +37,10 @@ const GameCombat = {
     }
 
     if (feel) {
-      this._applyHitstop(crit ? 0.1 : 0.045);
-      Renderer.shake(crit ? 5 : 2.5, 0.13);
+      // 히트스톱은 크리티컬에만, 그것도 짧게 — 일반 연타마다 멈추면 '탁탁' 끊기는 스터터가 된다.
+      // 일반 타격의 손맛은 흔들림 + 파티클 + 사운드가 담당한다.
+      const stopped = crit ? this._applyHitstop(0.055) : false;
+      Renderer.shake(crit ? 4 : 2.5, 0.13);
       Particles.burst(e.x, e.y, {
         count: crit ? 16 : 9,
         colors: ['#ffffff', '#f7b32b', '#ffd866'],
@@ -47,7 +55,8 @@ const GameCombat = {
       }
       if (crit) {
         AudioSys.crit();
-        this.critFlash = 0.09; // 화면 전체가 한순간 번쩍 — 크리의 손맛
+        // 화면 섬광은 히트스톱과 같은 리듬으로만 — 고크리 빌드에서 연속 번쩍임(눈 아픔) 방지
+        if (stopped) this.critFlash = 0.07;
       } else {
         AudioSys.hit();
       }
@@ -78,7 +87,7 @@ const GameCombat = {
     this.kills++;
     Meta.codexKill(e.isBoss ? 'boss' + ((Dungeon.floor - 1) % 5 + 1) : (e.codexType || e.type));
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
-    else this._applyHitstop(0.08);
+    else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
     Renderer.shake(3, 0.15);
     AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');
 

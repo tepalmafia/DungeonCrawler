@@ -160,7 +160,7 @@ const HUD = {
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
     if (game.critFlash > 0) {
-      ctx.fillStyle = `rgba(255,247,192,${Math.min(0.12, game.critFlash * 1.2)})`;
+      ctx.fillStyle = `rgba(255,247,192,${Math.min(0.08, game.critFlash * 1.0)})`; // 완화 — 번쩍임이 눈 아프지 않게
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
 
