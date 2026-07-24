@@ -314,7 +314,7 @@ Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
   window.BotReport = () => ({
     floor: Dungeon.floor, room: Dungeon.roomIndex, time: Math.round(Game.time),
     level: Game.level, kills: Game.kills, runs: Bot.runs, wins: Bot.wins,
-    deaths: { ...Bot.deaths }, ...Bot.deathReport(),
+    deaths: { ...Bot.deaths }, ...Bot.deathReport(), stats: { ...Bot.stats },
   });
   if (qs.has('botloop')) { Bot.enabled = true; Bot.loop = true; Game.testMode = true; }
   if (qs.has('ff')) Bot.ff = Math.min(8, Math.max(1, parseInt(qs.get('ff'), 10) || 1));
