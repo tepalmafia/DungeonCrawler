@@ -79,26 +79,57 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   };
 
   const defs = {
-    // ── 슬라임: 통통 튀며 추적 ──
+    // ── 슬라임: 통통 튀며 추적 + 가까우면 웅크렸다가 도약 공격 ──
     slime: () => ({
       hp: 3, r: 14, speed: 62, xpVal: 5, sprite: 'slime',
+      state: 'chase', stateT: 0, leapCd: 1.2, leapDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt);
         this.applyKnockback(dt);
+        this.stateT += dt;
+        if (this.leapCd > 0) this.leapCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y;
         const d = Math.hypot(dx, dy) || 1;
-        const hop = Math.max(0, Math.sin(this.animT * 6));
-        const spd = this.effSpeed() * hop;
-        World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
         this.flip = dx < 0;
+
+        if (this.state === 'chase') {
+          const hop = Math.max(0, Math.sin(this.animT * 6));
+          const spd = this.effSpeed() * hop;
+          World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+          if (d < 130 && this.leapCd <= 0) { this.state = 'crouch'; this.stateT = 0; }
+        } else if (this.state === 'crouch') {
+          // 텔레그래프: 납작하게 웅크림 (0.45초)
+          if (this.stateT > 0.45) {
+            this.state = 'leap';
+            this.stateT = 0;
+            this.leapDir = { x: dx / d, y: dy / d };
+            AudioSys.shoot();
+          }
+        } else if (this.state === 'leap') {
+          const spd = 390 * (this.status.shock > 0 ? 0.6 : 1);
+          World.moveEntity(this, this.leapDir.x * spd * dt, this.leapDir.y * spd * dt);
+          if (this.stateT > 0.32) {
+            this.state = 'chase';
+            this.leapCd = 2.4;
+            Particles.burst(this.x, this.y + 8, { count: 6, colors: ['#a7f070', '#38b764'], speed: 70, life: 0.3, size: 2 });
+          }
+        }
         this.touchPlayer(game, 1);
       },
       draw(ctx) {
-        const squash = 1 + Math.sin(this.animT * 6) * 0.15;
+        let squash = 1 + Math.sin(this.animT * 6) * 0.15;
+        if (this.state === 'crouch') squash = 0.55 + this.stateT * 0.2;      // 납작
+        if (this.state === 'leap') squash = 1.45;                            // 쭉 늘어남
         Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y, {
           flip: this.flip, squashX: 2 - squash, squashY: squash, shadow: true,
         });
+        if (this.state === 'crouch') {
+          ctx.fillStyle = '#ff4757';
+          ctx.font = 'bold 14px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 24);
+        }
         this.drawStatus(ctx);
       },
     }),
@@ -303,30 +334,59 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
     }),
 
-    // ── 박쥐: 빠르고 궤도가 어지러움 ──
+    // ── 박쥐: 어지럽게 접근 + 정지 후 관통 급강하 ──
     bat: () => ({
       hp: 2, r: 11, speed: 150, xpVal: 6, sprite: 'bat',
+      state: 'flit', stateT: 0, diveCd: 1.5, diveDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt);
         this.applyKnockback(dt);
+        this.stateT += dt;
+        if (this.diveCd > 0) this.diveCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y;
         const d = Math.hypot(dx, dy) || 1;
-        // 좌우로 크게 흔들리며 접근
-        const swerve = Math.sin(this.animT * 5) * 0.9;
-        const vx = dx / d + (-dy / d) * swerve;
-        const vy = dy / d + (dx / d) * swerve;
-        const vlen = Math.hypot(vx, vy) || 1;
-        const spd = this.effSpeed();
-        World.moveEntity(this, (vx / vlen) * spd * dt, (vy / vlen) * spd * dt);
         this.flip = dx < 0;
+
+        if (this.state === 'flit') {
+          // 좌우로 크게 흔들리며 접근
+          const swerve = Math.sin(this.animT * 5) * 0.9;
+          const vx = dx / d + (-dy / d) * swerve;
+          const vy = dy / d + (dx / d) * swerve;
+          const vlen = Math.hypot(vx, vy) || 1;
+          const spd = this.effSpeed();
+          World.moveEntity(this, (vx / vlen) * spd * dt, (vy / vlen) * spd * dt);
+          if (d < 200 && d > 70 && this.diveCd <= 0) { this.state = 'aim'; this.stateT = 0; }
+        } else if (this.state === 'aim') {
+          // 텔레그래프: 공중 정지 + 파르르 (0.4초) 후 급강하
+          if (this.stateT > 0.4) {
+            this.state = 'dive';
+            this.stateT = 0;
+            this.diveDir = { x: dx / d, y: dy / d };
+            AudioSys.shoot();
+          }
+        } else if (this.state === 'dive') {
+          const spd = 430 * (this.status.shock > 0 ? 0.6 : 1);
+          World.moveEntity(this, this.diveDir.x * spd * dt, this.diveDir.y * spd * dt);
+          if (Math.random() < 0.4) {
+            Particles.burst(this.x, this.y, { count: 1, colors: ['#5c5c74'], speed: 20, life: 0.2, size: 2 });
+          }
+          if (this.stateT > 0.42) { this.state = 'flit'; this.diveCd = 3.0; }
+        }
         this.touchPlayer(game, 1);
       },
       draw(ctx) {
-        const flap = 1 + Math.sin(this.animT * 18) * 0.25;
-        Renderer.drawSprite(this.skin(Sprites.bat), this.x, this.y + Math.sin(this.animT * 9) * 3, {
+        const flap = this.state === 'dive' ? 1.4 : 1 + Math.sin(this.animT * 18) * 0.25;
+        const jitter = this.state === 'aim' ? (Math.random() - 0.5) * 3 : 0;
+        Renderer.drawSprite(this.skin(Sprites.bat), this.x + jitter, this.y + Math.sin(this.animT * 9) * 3, {
           flip: this.flip, squashX: flap, squashY: 2 - flap, shadow: true,
         });
+        if (this.state === 'aim') {
+          ctx.fillStyle = '#ff4757';
+          ctx.font = 'bold 14px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 22);
+        }
         this.drawStatus(ctx);
       },
     }),
@@ -776,7 +836,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       ...defs.slime(),
       hp: 2, r: 10, speed: 95, xpVal: 4, sprite: 'magmaSlime', codexType: 'magmaSlime',
       draw(ctx) {
-        const squash = 1 + Math.sin(this.animT * 8) * 0.18;
+        let squash = 1 + Math.sin(this.animT * 8) * 0.18;
+        if (this.state === 'crouch') squash = 0.55;
+        if (this.state === 'leap') squash = 1.45;
         Renderer.drawSprite(this.skin(Sprites.magmaSlime), this.x, this.y, {
           flip: this.flip, squashX: (2 - squash) * 0.62, squashY: squash * 0.62, shadow: true,
         });
@@ -866,8 +928,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   if (!def) throw new Error('알 수 없는 적 타입: ' + type);
   const e = Object.assign(base, def());
   e.hp = Math.ceil(e.hp * floorScale);
-  // 깊은 층일수록 XP도 증가 (레벨 커브 유지)
-  e.xpVal = Math.round(e.xpVal * (0.7 + 0.3 * floorScale));
+  // 깊은 층일수록 XP도 증가 (레벨 커브 유지) — ×0.68은 개체수 +30% 보정 (BALANCE.md 커브 목표)
+  e.xpVal = Math.max(1, Math.round(e.xpVal * (0.7 + 0.3 * floorScale) * 0.68));
 
   if (elite) {
     e.hp = Math.ceil(e.hp * 2.5);

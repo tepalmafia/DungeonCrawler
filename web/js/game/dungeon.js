@@ -103,7 +103,8 @@ const Dungeon = {
     const data = floorData(this.floor);
     const comp = [];
     const heatBonus = Game.heat >= 2 ? 2 : 0; // 열기 2: 적 수 증가
-    const n = Math.min(12, 2 + Math.ceil(depth * 0.7) + Math.floor((this.floor - 1) * 0.8) + heatBonus);
+    // 물량감: 로그라이크다운 무리 전투 — 기존보다 +30% 수준 (XP·하트는 마리당 하향으로 보정)
+    const n = Math.min(16, 3 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 0.9) + heatBonus);
     const eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
     for (let i = 0; i < n; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: RNG.chance(eliteChance) });
@@ -118,6 +119,8 @@ const Dungeon = {
     for (let i = 0; i < nElites; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: true });
     }
+    comp.push({ type: RNG.pick(data.enemies), elite: false });
+    comp.push({ type: RNG.pick(data.enemies), elite: false });
     comp.push({ type: RNG.pick(data.enemies), elite: false });
     comp.push({ type: RNG.pick(data.enemies), elite: false });
     return comp;
