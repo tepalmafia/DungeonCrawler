@@ -54,7 +54,7 @@ const RELICS = [
     apply: (p) => { p.maxHp = Math.max(1, p.maxHp - 2); p.hp = Math.min(p.hp, p.maxHp); },
     flag: 'allcrit' },
   { id: 'engine',    rarity: 'legendary', name: '폭주 기관',
-    desc: '대시 쿨다운이 사라진다. 대신 이동 속도 -25%',
+    desc: '대시 충전이 극한까지 빨라진다 (0.45초). 대신 이동 속도 -25%',
     apply: (p) => { p.speed *= 0.75; }, flag: 'engine' },
   { id: 'kingseal',  rarity: 'legendary', name: '왕의 인장',
     desc: '레벨업 선택지가 4장이 되고, 즉시 특성 1개를 얻는다', flag: 'kingseal' },

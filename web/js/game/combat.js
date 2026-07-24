@@ -179,9 +179,11 @@ const GameCombat = {
     if (p.rflags.bomb && Math.random() < 0.15) {
       this._explode(e.x, e.y, 70, 2, ['#f7b32b', '#ff7043'], '#f7b32b');
     }
-    if (p.flags.overcharge && e.status.shock > 0 && p.dashCharges < p.dashMax) {
+    // 과충전: 물량방에서 처치가 초당 수 회 일어나면 사실상 무한 대시가 되므로 2초에 1회로 제한
+    if (p.flags.overcharge && e.status.shock > 0 && p.dashCharges < p.dashMax && !(p._overchargeCd > 0)) {
       p.dashCharges = p.dashMax;
       p.dashRegenT = 0;
+      p._overchargeCd = 2;
       Particles.text(p.x, p.y - 26, '충전!', { color: '#ffd866', size: 13 });
     }
     if (p.rflags.fang && Math.random() < 0.08 && p.hp < p.maxHp) {

@@ -68,7 +68,10 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     dashRegenTime() {
-      return this.rflags.engine ? 0.05 : 1.5 * this.dashRegenMul;
+      // 무한 대시 차단 — 어떤 조합(제단 강화 × 바람걸음 × 깃털 × 폭주 기관)이라도 충전 하한을 지킨다.
+      // 대시 무적(0.22s)이 상시 유지되면 회피가 아니라 면역이 된다.
+      if (this.rflags.engine) return 0.45; // 폭주 기관: 최속 고정 (기존 '쿨다운 소멸'은 무한 대시라 재설계)
+      return Math.max(0.6, 1.5 * this.dashRegenMul);
     },
 
     skillMaxCd() {
@@ -197,6 +200,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.comboTimer > 0) this.comboTimer -= dt; else this.combo = 0;
       if (this.invuln > 0) this.invuln -= dt;
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
+      if (this._overchargeCd > 0) this._overchargeCd -= dt;
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
 

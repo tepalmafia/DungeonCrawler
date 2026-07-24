@@ -43,7 +43,7 @@ const TRAITS = [
   { id: 'shocktrail', name: '잔전류',   tag: '번개', color: '#ffd866',
     desc: '대시 경로에 감전 장판을 남긴다 (피해 + 감속)', flag: 'shocktrail' },
   { id: 'overcharge', name: '과충전',   tag: '번개', color: '#ffd866',
-    desc: '감전된 적을 처치하면 대시 충전 즉시 회복', flag: 'overcharge' },
+    desc: '감전된 적을 처치하면 대시 충전 즉시 회복 (2초에 1회)', flag: 'overcharge' },
   { id: 'chain',      name: '연쇄 번개', tag: '번개', color: '#ffd866',
     desc: '공격 시 30% 확률로 번개가 근처 적에게 튄다 (2 피해 + 감전)', flag: 'chain' },
   { id: 'static',     name: '정전기',   tag: '번개', color: '#ffd866',

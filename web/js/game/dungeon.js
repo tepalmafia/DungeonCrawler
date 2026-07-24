@@ -43,6 +43,7 @@ const Dungeon = {
     this.tookTreasure = false;
     this.tookCamp = false;
     this.tookEvent = false;
+    this.miniSeen = false;
     this.build('combat');
   },
 
@@ -52,6 +53,7 @@ const Dungeon = {
     this.tookTreasure = false;
     this.tookCamp = false;
     this.tookEvent = false;
+    this.miniSeen = false;
     this.build('combat');
   },
 
@@ -119,9 +121,16 @@ const Dungeon = {
         for (let k = 0; k < 3; k++) comp.push({ type: 'swarm', elite: false });
       }
     }
-    // 중간보스 (우두머리): 2층부터 방마다 12% 확률로 난입 — 그 방의 난이도가 확 뛴다
-    if (this.floor >= 2 && RNG.chance(0.12)) {
-      comp.push({ type: RNG.pick(data.enemies.filter((t) => t !== 'swarm')), elite: false, mini: true });
+    // 중간보스 (우두머리): 층당 최소 1회 보장 — 12% 운빨로는 절반의 층을 그냥 지나쳤다 (기대 0.6회/층)
+    // 방마다 14%, 층 후반(보스 전 4방)까지 안 나왔으면 확정 난입. 심층(6층+)은 두 번째 우두머리 12%.
+    if (this.floor >= 2) {
+      const roomsLeft = this.totalRooms - 1 - this.roomIndex; // 보스방 전까지 남은 방 수
+      const force = !this.miniSeen && roomsLeft <= 4;
+      const chance = this.miniSeen ? (this.floor >= 6 ? 0.12 : 0) : 0.14;
+      if (force || RNG.chance(chance)) {
+        comp.push({ type: RNG.pick(data.enemies.filter((t) => t !== 'swarm')), elite: false, mini: true });
+        this.miniSeen = true;
+      }
     }
     return comp;
   },
