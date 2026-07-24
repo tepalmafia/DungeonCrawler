@@ -171,7 +171,7 @@ const HUD = {
       ctx.fillText('음소거 (M)', 14, Renderer.H - 44);
     }
 
-    // ── 봇 모드 표시 ──
+    // ── 봇 모드 표시 + 층별 사망 리포트 ──
     if (Bot.enabled) {
       ctx.textAlign = 'right';
       ctx.font = 'bold 12px monospace';
@@ -180,6 +180,12 @@ const HUD = {
       if (Bot.ff > 1) botLabel += ` ×${Bot.ff}`;
       if (Bot.loop) botLabel += ` (런 ${Bot.runs}·승 ${Bot.wins})`;
       ctx.fillText(botLabel, Renderer.W - 16, 30);
+      const rep = Bot.deathReport();
+      if (rep.total > 0) {
+        ctx.font = '11px monospace';
+        ctx.fillStyle = '#e43b44';
+        ctx.fillText(`사망 ${rep.total}회 — ${rep.byFloor}`, Renderer.W - 16, Renderer.H - 60);
+      }
     }
 
     // ── 테스트 모드 표시 + 단축키 도움말 ──

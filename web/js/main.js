@@ -308,8 +308,14 @@ Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
   }
   if (qs.has('bot')) {
     Bot.enabled = true;
-    Game.testMode = true; // 봇 모드는 테스트 도구 — 단축키도 함께 켠다
+    Game.testMode = true;   // 봇 모드는 테스트 도구 — 단축키도 함께 켠다
+    Game.reviveMode = true; // 기본 무한 부활: 층별 사망 수를 세며 끝까지 진행 (F로 끄기)
   }
+  window.BotReport = () => ({
+    floor: Dungeon.floor, room: Dungeon.roomIndex, time: Math.round(Game.time),
+    level: Game.level, kills: Game.kills, runs: Bot.runs, wins: Bot.wins,
+    deaths: { ...Bot.deaths }, ...Bot.deathReport(),
+  });
   if (qs.has('botloop')) { Bot.enabled = true; Bot.loop = true; Game.testMode = true; }
   if (qs.has('ff')) Bot.ff = Math.min(8, Math.max(1, parseInt(qs.get('ff'), 10) || 1));
   if (qs.has('autostart') || qs.has('demo') || Bot.enabled) Game.restart();

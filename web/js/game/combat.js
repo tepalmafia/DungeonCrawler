@@ -269,6 +269,7 @@ const GameCombat = {
     if (p.hp <= 0) {
       // 테스트 모드 무한 부활 (F 토글): 죽음 직전 상황을 계속 테스트할 수 있다
       if (this.testMode && this.reviveMode) {
+        if (Bot.enabled) Bot.onDeath(Dungeon.floor); // 층별 사망 집계
         p.hp = p.maxHp;
         p.invuln = 2;
         this.banner = { text: '♻ 부활 (테스트 모드)', life: 1.2, maxLife: 1.2, color: '#5ce0e6' };
@@ -289,6 +290,7 @@ const GameCombat = {
         return;
       }
       p.hp = 0;
+      if (Bot.enabled) Bot.onDeath(Dungeon.floor); // 실사망도 집계
       this.endRun(false);
       this.state = 'over';
       AudioSys.gameover();
