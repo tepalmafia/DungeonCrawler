@@ -9,6 +9,8 @@ const Bot = {
   runs: 0,       // loop 모드에서 끝낸 런 수
   wins: 0,
   deaths: {},    // 층별 사망 횟수 {층: 회수} — 무한 부활 모드에서 난이도 리포트
+  // 자가 진단 카운터 — 봇이 '제대로 싸우고 있는지' 검증하는 계기판
+  stats: { attacks: 0, skills: 0, dashes: 0, explores: 0, stalls: 0 },
 
   _lastX: 0, _lastY: 0, _stuckT: 0,
   _detourT: 0, _detour: { x: 1, y: 0 },
@@ -31,6 +33,11 @@ const Bot = {
     const keys = Object.keys(this.deaths).map(Number).sort((a, b) => a - b);
     const total = keys.reduce((s, k) => s + this.deaths[k], 0);
     return { total, byFloor: keys.map((k) => `${k}층:${this.deaths[k]}`).join(' ') };
+  },
+
+  _dash() {
+    Bot.stats.dashes++;
+    Input.justPressed['Space'] = true;
   },
 
   _releaseKeys() {
@@ -88,7 +95,7 @@ const Bot = {
       this._restartT += dt;
       if (this._restartT > 0.8) {
         this._restartT = 0;
-        Input.justPressed['Space'] = true;
+        this._dash();
       }
       return;
     }
@@ -109,7 +116,7 @@ const Bot = {
       this._detour = { x: Math.cos(a), y: Math.sin(a) };
       this._detourT = 1.0;
       this._stuckT = 0;
-      if (p.dashCharges >= 1) Input.justPressed['Space'] = true;
+      if (p.dashCharges >= 1) this._dash();
     }
     if (this._detourT > 0) {
       this._detourT -= dt;
@@ -122,6 +129,26 @@ const Bot = {
       this._exploreT -= dt;
       if (this._explorePt) this._move(p, this._explorePt.x, this._explorePt.y);
       return;
+    }
+
+    // ── 킬 진행 감시: 적이 살아있는데 10초간 처치가 없으면 교착 — 위치를 크게 바꾼다 ──
+    // (원거리 직업이 벽 너머 적과 대치하는 경우: 거리 감시로는 안 잡힌다)
+    // (보스·우두머리전은 제외 — 킬 없이 오래 싸우는 게 정상이라 오탐이 난다)
+    if (!this._killWatch) this._killWatch = { kills: -1, t: 0 };
+    const inLongFight = game.enemies.some((e) => (e.isBoss || e.isMini) && !e.dead);
+    if (game.kills !== this._killWatch.kills || inLongFight) {
+      this._killWatch.kills = game.kills;
+      this._killWatch.t = 0;
+    } else if (game.enemies.some((e) => !e.dead && e.spawnT <= 0)) {
+      this._killWatch.t += dt;
+      if (this._killWatch.t > 7) {
+        this._killWatch.t = 0;
+        this._explorePt = World.randomSpawnPos(p, 160);
+        this._exploreT = 2.0;
+        Bot.stats.stalls++;
+        Bot.stats.explores++;
+        if (p.dashCharges >= 1) this._dash();
+      }
     }
 
     // ── 부활 직후: 무적이 남아있는 동안 적 무리에서 물러나 전열을 정비 ──
@@ -139,7 +166,7 @@ const Bot = {
     const dodge = this._threat(game, p);
     if (dodge) {
       this._move(p, p.x + dodge.x * 120, p.y + dodge.y * 120);
-      if (dodge.dash && p.dashCharges >= 1) Input.justPressed['Space'] = true;
+      if (dodge.dash && p.dashCharges >= 1) this._dash();
       return;
     }
 
@@ -176,6 +203,7 @@ const Bot = {
       // (KeyK는 테스트 모드에서 '전멸' 치트와 겹치므로 직접 호출한다)
       if (this._skillT > 1 && p.skillCd <= 0 && p.dashTimer <= 0 && (near >= 2 || target.isBoss) && d < 320) {
         p.useSkill(game);
+        Bot.stats.skills++;
         this._skillT = 0;
       }
       if (p.classId !== 'knight') {
@@ -183,8 +211,8 @@ const Bot = {
         if (d < 160) this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
         else if (d > 340) { this._move(p, target.x, target.y); this._watchGoal(target, d, dt, p); }
         else this._releaseKeys();
-        if (p.attackCd <= 0 && d < 500) Input.justPressed['KeyJ'] = true;
-        if (d < 90 && p.dashCharges >= 1) Input.justPressed['Space'] = true;
+        if (p.attackCd <= 0 && d < 500) { Input.justPressed['KeyJ'] = true; Bot.stats.attacks++; }
+        if (d < 90 && p.dashCharges >= 1) this._dash();
       } else {
         // 근접: 히트&런 — 준비되면 파고들어 베고, 쿨 중엔 몸을 뺀다
         this._watchGoal(target, d, dt, p);
@@ -192,7 +220,7 @@ const Bot = {
           this._move(p, target.x, target.y);
           if (d < 80) {
             p.facing = { x: (target.x - p.x) / d, y: (target.y - p.y) / d };
-            Input.justPressed['KeyJ'] = true;
+            Input.justPressed['KeyJ'] = true; Bot.stats.attacks++;
           }
         } else if (d < 62) {
           this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
@@ -200,7 +228,7 @@ const Bot = {
           this._releaseKeys();
         }
         // 몸이 겹치면 대시로 이탈
-        if (d < 32 && p.dashCharges >= 1) Input.justPressed['Space'] = true;
+        if (d < 32 && p.dashCharges >= 1) this._dash();
       }
     } else {
       // 적 없음: 상호작용(상자/모닥불) → 문
@@ -233,9 +261,10 @@ const Bot = {
       if (this._noProgressT > 3) {
         this._explorePt = World.randomSpawnPos(p, 140);
         this._exploreT = 1.8;
+        Bot.stats.explores++;
         this._noProgressT = 0;
         this._bestD = Infinity;
-        if (p.dashCharges >= 1) Input.justPressed['Space'] = true;
+        if (p.dashCharges >= 1) this._dash();
       }
     }
   },
