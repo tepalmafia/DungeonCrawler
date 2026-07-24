@@ -53,6 +53,8 @@ const META_UPGRADES = [
   { id: 'dash',   name: '바람', desc: '대시 충전 속도 +10%',     max: 3, costs: [50, 110, 220] },
   { id: 'choice', name: '기회', desc: '레벨업 선택지 3장 → 4장', max: 1, costs: [250] },
   { id: 'greed',  name: '수확', desc: '영혼 파편 획득 +15%',     max: 3, costs: [60, 130, 260] },
+  { id: 'reroll', name: '환생', desc: '레벨업 카드 다시 뽑기 +1회/런 (E)', max: 3, costs: [150, 300, 500] },
+  { id: 'legacy', name: '유산', desc: '런 시작 시 커먼 유물 3택1',  max: 1, costs: [400] },
 ];
 
 const Meta = {

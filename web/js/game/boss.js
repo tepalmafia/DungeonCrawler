@@ -131,6 +131,7 @@ function createBoss(floor, x, y) {
     veilsDone: 0,
     phased: false,    // 어둠 장막 중 무적
     _regenTick: 0,
+    _regenPause: 0,
     swingCount: 0,
     aimDir: { x: -1, y: 0 },
     curses: [],
@@ -167,14 +168,22 @@ function createBoss(floor, x, y) {
       }
 
       // ── 기믹: 포자 갑피 (부하 생존 시 재생) ──
+      // 컨트롤 해법: 부하를 처치하면 재생이 5초 멈춘다 — 광역 트리가 없어도
+      // 부하를 빠르게 끊으면서 보스를 때리면 뚫을 수 있다.
       if (this.def.mechanic?.type === 'regen' && this.state !== 'enter') {
-        const hasMinion = game.enemies.some((o) => !o.isBoss && !o.dead);
-        if (hasMinion && this.hp < this.maxHp) {
-          this.hp = Math.min(this.maxHp, this.hp + 8 * dt);
+        const minionCount = game.enemies.filter((o) => !o.isBoss && !o.dead).length;
+        if (this._lastMinions !== undefined && minionCount < this._lastMinions) {
+          this._regenPause = 5;
+          Particles.text(this.x, this.y - 40, '재생 정지!', { color: '#ffd866', size: 13 });
+        }
+        this._lastMinions = minionCount;
+        if (this._regenPause > 0) this._regenPause -= dt;
+        if (minionCount > 0 && this._regenPause <= 0 && this.hp < this.maxHp) {
+          this.hp = Math.min(this.maxHp, this.hp + 6 * dt);
           this._regenTick += dt;
           if (this._regenTick >= 1.0) {
             this._regenTick = 0;
-            Particles.text(this.x, this.y - 40, '재생 +8', { color: '#38b764', size: 12 });
+            Particles.text(this.x, this.y - 40, '재생 +6', { color: '#38b764', size: 12 });
           }
         }
       }

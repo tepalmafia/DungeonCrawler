@@ -38,7 +38,7 @@ const Game = {
 
   xp: 0,
   level: 1,
-  xpNext: 18,
+  xpNext: 36,
   pendingChoices: 0,
   traitCards: [],
   relicCards: [],
@@ -71,6 +71,7 @@ const Game = {
     RNG.seed(this.runSeed);
     this.heat = Meta.heat();
     this.player = createPlayer(0, 0, Meta.data.cls);
+    this.player.rerolls = Meta.lvl('reroll'); // 환생 각인: 런당 카드 리롤 횟수
     if (this.heat >= 5) {
       this.player.maxHp = Math.max(1, this.player.maxHp - 1);
       this.player.hp = this.player.maxHp;
@@ -88,7 +89,7 @@ const Game = {
     this.vignette = 0;
     this.xp = 0;
     this.level = 1;
-    this.xpNext = 18;
+    this.xpNext = 36;
     this.pendingChoices = 0;
     this.traitCards = [];
     this.relicCards = [];
@@ -96,6 +97,22 @@ const Game = {
     Particles.clear();
     this.state = 'play';
     Dungeon.newRun();
+
+    // 유산 각인: 런 시작 시 커먼 유물 3택1 (기존 유물 선택 UI 재사용)
+    if (Meta.lvl('legacy') > 0) {
+      const commons = RELICS.filter((r) => r.rarity === 'common');
+      const picks = [];
+      const pool = [...commons];
+      while (picks.length < 3 && pool.length > 0) {
+        picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      }
+      if (picks.length > 0) {
+        this.relicCards = picks;
+        this._relicSource = 'legacy'; // 보스 보상 흐름(다음 층 문)을 타지 않는다
+        this.state = 'relic';
+        this.choiceLockT = 0.4;
+      }
+    }
   },
 
   onRoomBuilt(type) {
@@ -437,7 +454,8 @@ const Game = {
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level++;
-      this.xpNext = Math.round(this.xpNext * 1.38);
+      // 완만한 커브: 초반 과속을 막고 심층(6~10층)에서도 성장이 이어지게 한다
+      this.xpNext = Math.round(this.xpNext * 1.24);
       this.pendingChoices++;
     }
     if (this.pendingChoices > 0 && this.state === 'play') {
@@ -495,6 +513,10 @@ const Game = {
     if (!r) return;
     this.acquireRelic(r);
     this.state = 'play';
+    if (this._relicSource === 'legacy') {
+      this._relicSource = null; // 시작 유물(유산 각인)은 보상 흐름 없이 바로 시작
+      return;
+    }
     this._afterBossReward();
   },
 
@@ -567,6 +589,13 @@ const Game = {
     }
     if (this.state === 'levelup') {
       this.choiceLockT -= dt;
+      // 환생 각인: E — 카드 다시 뽑기
+      if (Input.pressed('KeyE') && this.player.rerolls > 0) {
+        this.player.rerolls--;
+        this.traitCards = rollTraitCards(this.player, this.traitCards.length);
+        this.choiceLockT = 0.3;
+        AudioSys.chest();
+      }
       this._handleCardInput(this.traitCards, (i) => this.pickTrait(i));
       return;
     }

@@ -110,9 +110,25 @@ const Bot = {
       return;
     }
 
-    // ── 타겟 선정: 영혼 구슬(장막) > 강령술사 > 최근접 ──
+    // ── 체력이 낮으면 하트부터 줍는다 ──
+    if (p.hp <= Math.max(2, p.maxHp * 0.4) && game.pickups.length > 0) {
+      let heart = null, hd = 420;
+      for (const pk of game.pickups) {
+        const dd = Math.hypot(pk.x - p.x, pk.y - p.y);
+        if (dd < hd) { hd = dd; heart = pk; }
+      }
+      if (heart) { this._move(p, heart.x, heart.y); return; }
+    }
+
+    // ── 타겟 선정: 영혼 구슬(장막) > 강령술사 > 보스전 부하 > 최근접 ──
+    // 보스전에서 부하를 먼저 끊는 건 정석 플레이 (재생 기믹의 컨트롤 해법이기도 하다)
     let target = null, best = Infinity, near = 0;
-    const prio = (e) => (e.type === 'soulOrb' ? 0 : e.type === 'necro' ? 1 : 2);
+    const bossFight = game.enemies.some((e) => e.isBoss && !e.dead);
+    const prio = (e) =>
+      e.type === 'soulOrb' ? 0 :
+      e.type === 'necro' ? 1 :
+      (bossFight && !e.isBoss) ? 2 :
+      e.isBoss ? 3 : 2;
     for (const e of game.enemies) {
       if (e.dead || e.phased) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -124,8 +140,9 @@ const Bot = {
     if (target) {
       const d = Math.hypot(target.x - p.x, target.y - p.y) || 1;
       // 스킬: 적이 몰려있거나 보스전이면 쿨마다
-      if (this._skillT > 1 && p.skillCd <= 0 && (near >= 2 || target.isBoss) && d < 320) {
-        Input.justPressed['KeyK'] = true;
+      // (KeyK는 테스트 모드에서 '전멸' 치트와 겹치므로 직접 호출한다)
+      if (this._skillT > 1 && p.skillCd <= 0 && p.dashTimer <= 0 && (near >= 2 || target.isBoss) && d < 320) {
+        p.useSkill(game);
         this._skillT = 0;
       }
       if (p.classId !== 'knight') {
@@ -136,12 +153,20 @@ const Bot = {
         if (p.attackCd <= 0 && d < 500) Input.justPressed['KeyJ'] = true;
         if (d < 90 && p.dashCharges >= 1) Input.justPressed['Space'] = true;
       } else {
-        // 근접: 접근 + 콤보
-        this._move(p, target.x, target.y);
-        if (d < 80 && p.attackCd <= 0) {
-          p.facing = { x: (target.x - p.x) / d, y: (target.y - p.y) / d };
-          Input.justPressed['KeyJ'] = true;
+        // 근접: 히트&런 — 준비되면 파고들어 베고, 쿨 중엔 몸을 뺀다
+        if (p.attackCd <= 0) {
+          this._move(p, target.x, target.y);
+          if (d < 80) {
+            p.facing = { x: (target.x - p.x) / d, y: (target.y - p.y) / d };
+            Input.justPressed['KeyJ'] = true;
+          }
+        } else if (d < 62) {
+          this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
+        } else {
+          this._releaseKeys();
         }
+        // 몸이 겹치면 대시로 이탈
+        if (d < 32 && p.dashCharges >= 1) Input.justPressed['Space'] = true;
       }
     } else {
       // 적 없음: 상호작용(상자/모닥불) → 문
