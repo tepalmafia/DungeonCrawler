@@ -181,6 +181,19 @@ const AudioSys = {
   chest() { this._tone({ type: 'triangle', f0: 392, dur: 0.1, vol: 0.3 }); this._tone({ type: 'triangle', f0: 587, dur: 0.12, vol: 0.3, delay: 0.09 }); this._tone({ type: 'triangle', f0: 784, dur: 0.16, vol: 0.3, delay: 0.18 }); },
   roar()  { this._tone({ type: 'sawtooth', f0: 70, f1: 38, dur: 0.7, vol: 0.55 }); this._noise({ dur: 0.5, vol: 0.3, freq: 250, q: 0.6 }); },
 
+  // 보스 등장 — 위압감: 초저음 낙하 + 불협 클러스터 + 차오르는 노이즈 + 전쟁 나팔
+  bossAppear() {
+    this._tone({ type: 'sine', f0: 60, f1: 22, dur: 1.3, vol: 0.75 });                       // 바닥이 꺼지는 서브베이스
+    this._tone({ type: 'sawtooth', f0: 98, f1: 49, dur: 1.0, vol: 0.3 });                     // 불협 클러스터 (단2도)
+    this._tone({ type: 'sawtooth', f0: 104, f1: 52, dur: 1.0, vol: 0.3 });
+    for (let i = 0; i < 4; i++) {                                                             // 차오르는 노이즈 스웰
+      this._noise({ dur: 0.3, vol: 0.1 + i * 0.06, freq: 300 + i * 500, q: 0.6, delay: i * 0.18 });
+    }
+    this._tone({ type: 'square', f0: 82, f1: 78, dur: 0.5, vol: 0.28, delay: 0.55 });         // 전쟁 나팔 2연
+    this._tone({ type: 'square', f0: 62, f1: 58, dur: 0.9, vol: 0.34, delay: 0.95 });
+    this._tone({ type: 'sine', f0: 45, f1: 28, dur: 0.8, vol: 0.5, delay: 1.0 });             // 마지막 쿵
+  },
+
   gameover() {
     [392, 311, 233, 155].forEach((f, i) =>
       this._tone({ type: 'triangle', f0: f, dur: 0.3, vol: 0.3, delay: i * 0.22 }));
@@ -193,11 +206,18 @@ const AudioSys = {
 const Music = {
   themes: {
     hub:  { bpm: 66,  roots: [45, 41, 43, 45], scale: [0, 3, 7, 10], drums: false, calm: true },
-    f1:   { bpm: 92,  roots: [38, 38, 41, 36], scale: [0, 3, 5, 7],  drums: false },
-    f2:   { bpm: 86,  roots: [40, 40, 43, 45], scale: [0, 2, 3, 7],  drums: false },
-    f3:   { bpm: 102, roots: [36, 36, 39, 41], scale: [0, 1, 5, 7],  drums: true },
-    f4:   { bpm: 118, roots: [38, 38, 36, 34], scale: [0, 3, 6, 7],  drums: true },
-    f5:   { bpm: 82,  roots: [33, 33, 36, 32], scale: [0, 1, 3, 7],  drums: true },
+    // 1~5층: 층 배경에 맞춘 고유 진행
+    f1:   { bpm: 92,  roots: [38, 38, 41, 36], scale: [0, 3, 5, 7],  drums: false },            // 지하 묘지: 느린 단조
+    f2:   { bpm: 86,  roots: [40, 40, 43, 45], scale: [0, 2, 3, 7],  drums: false },            // 곰팡이 동굴: 눅눅한 도리안
+    f3:   { bpm: 102, roots: [36, 36, 39, 41], scale: [0, 1, 5, 7],  drums: true },             // 잊힌 감옥: 반음 긴장
+    f4:   { bpm: 118, roots: [38, 38, 36, 34], scale: [0, 3, 6, 7],  drums: true },             // 용암 심층: 빠르고 뜨겁게
+    f5:   { bpm: 82,  roots: [33, 33, 36, 32], scale: [0, 1, 3, 7],  drums: true },             // 심연의 옥좌: 낮고 무겁게
+    // 6~10층 (각성 심층): 같은 배경의 어두운 변주 — 더 낮고, 더 빠르고, 더 불협하게
+    f6:   { bpm: 100, roots: [36, 36, 39, 34], scale: [0, 3, 5, 6],  drums: true,  pad: true }, // 피의 묘지: 삼온음 그림자
+    f7:   { bpm: 94,  roots: [38, 38, 41, 43], scale: [0, 1, 3, 7],  drums: true,  pad: true }, // 맹독 심연: 프리지안 독기
+    f8:   { bpm: 110, roots: [34, 34, 37, 39], scale: [0, 1, 4, 7],  drums: true,  pad: true }, // 절망의 감옥: b9의 불안
+    f9:   { bpm: 126, roots: [36, 36, 34, 32], scale: [0, 3, 6, 10], drums: true,  pad: true }, // 겁화의 핵: 질주하는 화염
+    f10:  { bpm: 76,  roots: [31, 31, 34, 30], scale: [0, 1, 6, 7],  drums: true,  pad: true }, // 심연의 왕좌: 가장 낮은 어둠
     boss: { bpm: 132, roots: [36, 36, 34, 39], scale: [0, 1, 6, 7],  drums: true },
   },
   current: null,
@@ -284,6 +304,11 @@ const Music = {
         f0: this._freq(root + 12 + deg + octave),
         dur: 0.14, vol: th.calm ? 0.035 : 0.042, delay,
       });
+    }
+    // 패드 (심층 전용): 마디마다 낮게 깔리는 5도 지속음 — 공간의 위압감
+    if (th.pad && s === 0) {
+      AudioSys._tone({ type: 'sine', f0: this._freq(root + 7), dur: 1.4, vol: 0.035, delay });
+      AudioSys._tone({ type: 'sine', f0: this._freq(root - 5), dur: 1.4, vol: 0.03, delay });
     }
     // 드럼 (긴장감 있는 층/보스)
     if (th.drums) {

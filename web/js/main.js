@@ -175,7 +175,8 @@ const Game = {
       }
       this.enemies.push(boss);
       this.banner = { text: boss.def.banner, life: 2.0, maxLife: 2.0 };
-      AudioSys.roar();
+      AudioSys.bossAppear();
+      Renderer.shake(5, 0.5);
     }
   },
 
@@ -189,7 +190,9 @@ const Game = {
     if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') return 'hub';
     if (this.state === 'over' || this.state === 'victory') return null;
     if (Dungeon.roomType === 'boss' && this.enemies.some((e) => e.isBoss && !e.dead)) return 'boss';
-    return 'f' + Math.min(5, Dungeon.floor);
+    // 층별 고유 테마 (1~10층), 무한 모드(11층+)는 심층 테마 순환
+    const f = Dungeon.floor <= 10 ? Dungeon.floor : ((Dungeon.floor - 11) % 5) + 6;
+    return 'f' + f;
   },
 
   // ── 메인 틱 ──
