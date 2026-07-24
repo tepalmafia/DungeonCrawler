@@ -198,14 +198,15 @@ const World = {
       }
     }
 
-    // 독 안개 지대
+    // 독 안개 지대 — 2층(입문)은 작고 적게, 7층(심층)은 본래 규모
     if (this.hazard === 'fog' && combatRoom) {
-      const n = RNG.int(2, 3);
+      const deep = floor >= 6;
+      const n = deep ? RNG.int(2, 3) : 2;
       for (let i = 0; i < n; i++) {
         this.fogZones.push({
           x: RNG.range(TS * 4, TS * (this.cols - 4)),
           y: RNG.range(TS * 2.5, TS * (this.rows - 2.5)) + this.offsetY,
-          r: RNG.range(48, 72),
+          r: deep ? RNG.range(48, 72) : RNG.range(40, 56),
         });
       }
     }

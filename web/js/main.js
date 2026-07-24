@@ -172,10 +172,9 @@ const Game = {
       const c = World.center();
       this.interactables.push({ kind: 'camp', x: c.x, y: c.y, r: 30, used: false, t: 0 });
     } else if (type === 'event') {
-      // 기연: 받을까 말까 — 다가가면 수락, 문으로 나가면 거절
+      // 기연: 받아들이기 전엔 무엇인지 모른다 — 다가가면 수락(도박), 문으로 나가면 거절
       const c = World.center();
-      const kind = RNG.chance(0.5) ? 'cursedChest' : 'bloodAltar';
-      this.interactables.push({ kind, x: c.x, y: c.y, r: 26, used: false, t: 0 });
+      this.interactables.push({ kind: 'mystery', x: c.x, y: c.y, r: 26, used: false, t: 0 });
       this.banner = { text: '기이한 기운이 감돈다...', life: 1.8, maxLife: 1.8, color: '#b13ae0' };
     } else if (type === 'boss') {
       const c = World.center();
