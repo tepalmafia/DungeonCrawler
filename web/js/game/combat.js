@@ -247,10 +247,33 @@ const GameCombat = {
   },
 
 
-  hurtPlayer(dmg, dir, kb = 260) {
+  // 사망 리포트용 — 방금 나를 때린 것의 이름 (가장 가까운 살아있는 적 추정)
+  _nearestFoeName() {
+    const p = this.player;
+    let best = 170, name = null;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < best) {
+        best = d;
+        if (e.isBoss) name = e.name;
+        else if (e.isMini) name = e.miniName || '우두머리';
+        else {
+          const c = typeof CODEX_ENEMIES !== 'undefined' && CODEX_ENEMIES.find((x) => x.id === (e.codexType || e.type));
+          name = c ? c.name : e.type;
+        }
+        if (e.elite && !e.isBoss && !e.isMini) name = '정예 ' + name;
+      }
+    }
+    return name;
+  },
+
+  hurtPlayer(dmg, dir, kb = 260, src = null) {
     const p = this.player;
     if (p.god) return; // 테스트 모드 무적
     if (p.invuln > 0 || this.state !== 'play') return;
+    // 사인 기록: 명시된 출처(용암 등) > 최근접 적 추정
+    this._lastHurtBy = src || this._nearestFoeName() || '심연의 어둠';
 
     // 보호막: 피해 1회 무효
     if (p.shield) {
@@ -317,6 +340,8 @@ const GameCombat = {
       }
       p.hp = 0;
       if (Bot.enabled) Bot.onDeath(Dungeon.floor); // 실사망도 집계
+      // 사망 리포트 — 죽음을 다음 런의 지식으로 (무엇에게, 어디서)
+      this.deathInfo = { src: this._lastHurtBy || '심연의 어둠', floor: Dungeon.floor, room: Dungeon.roomIndex };
       this.endRun(false);
       this.state = 'over';
       AudioSys.gameover();

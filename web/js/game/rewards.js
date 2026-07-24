@@ -5,6 +5,23 @@ const GameRewards = {
   endRun(victory) {
     if (this.runEnded) return;
     this.runEnded = true;
+    // 사망 리포트: 직전 런과의 비교 기준 저장 (덮어쓰기 전에 백업)
+    this.prevRun = Meta.data.lastRun || null;
+    Meta.data.lastRun = { floor: Dungeon.floor, level: this.level, kills: this.kills, victory: !!victory };
+    // 오늘의 탑 기록 (최고 층 갱신 + 도전 횟수)
+    if (this.dailyRun) {
+      const rec = Meta.data.daily;
+      if (!rec || rec.key !== this.dailyKey) {
+        Meta.data.daily = { key: this.dailyKey, floor: Dungeon.floor, kills: this.kills, victory: !!victory, runs: 1 };
+      } else {
+        rec.runs++;
+        if (Dungeon.floor > rec.floor || (Dungeon.floor === rec.floor && this.kills > rec.kills)) {
+          rec.floor = Dungeon.floor;
+          rec.kills = this.kills;
+        }
+        rec.victory = rec.victory || !!victory;
+      }
+    }
     if (this.endless) {
       // 무한 모드: 10층 정산에서 이미 받은 몫을 뺀 초과분만 지급
       this.shardsEarned = Meta.endlessRun(

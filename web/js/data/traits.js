@@ -151,4 +151,23 @@ function applyTrait(player, trait) {
   if (trait.apply) trait.apply(player);
   if (trait.flag) player.flags[trait.flag] = true;
   player.traits.push(trait.id);
+
+  // 스킬 진화 — 직업 특성 3장을 모으면 스킬의 '형태'가 바뀐다 (상한이 끝이 아니라 완성이 되도록)
+  if (trait.cls && !player.skillEvolved) {
+    const clsCount = player.traits.filter((id) => {
+      const t = TRAITS.find((x) => x.id === id);
+      return t && t.cls;
+    }).length;
+    if (clsCount >= 3) {
+      player.skillEvolved = true;
+      if (typeof Game !== 'undefined' && Game.banner !== undefined) {
+        Game.banner = { text: '⚡ 스킬 진화 — ' + player.skillName() + '!', life: 3, maxLife: 3, color: '#f7b32b' };
+        AudioSys.levelup();
+        Particles.burst(player.x, player.y, {
+          count: 26, colors: ['#f7b32b', '#ffd866', '#fff7c0'], speed: 200, life: 0.8, size: 4, gravity: -120,
+        });
+        Particles.ring(player.x, player.y, { r0: 10, r1: 90, life: 0.5, color: '#f7b32b', width: 4 });
+      }
+    }
+  }
 }

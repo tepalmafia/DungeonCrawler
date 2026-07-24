@@ -127,6 +127,22 @@ const GameScreens = {
     else if (act === 1) { AudioSys.pickup(); this.state = 'altar'; }
     else if (act === 2) { AudioSys.pickup(); this.state = 'classes'; }
     else if (act === 3) { AudioSys.pickup(); this.state = 'codex'; }
+
+    // 오늘의 탑 (D): 날짜 기반 고정 시드 — 오늘은 모두가 같은 던전에 도전한다
+    if (Input.pressed('KeyD')) this.startDaily();
+  },
+
+  startDaily() {
+    const now = new Date();
+    const key = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    this.restart(key);
+    this.dailyRun = true;
+    this.dailyKey = key;
+    AudioSys.buy();
+    this.banner = {
+      text: `오늘의 탑 ${String(key).slice(4, 6)}/${String(key).slice(6)} — 모두에게 같은 던전`,
+      life: 3, maxLife: 3, color: '#f7b32b',
+    };
   },
 
   _tickCodex() {

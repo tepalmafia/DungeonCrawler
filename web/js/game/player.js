@@ -43,6 +43,8 @@ function createPlayer(x, y, classId = 'knight') {
     skillCd: 0,
     skillCdMul: 1,
     spinT: 0, // 회전 베기 연출
+    skillEvolved: false, // 직업 특성 3장 → 스킬 진화 (회오리 베기/화살 폭풍/쌍둥이 메테오)
+    _spinPulseT: 0,      // [진화] 회오리 베기 추가 타격 주기
 
     dashMax: 1,
     dashCharges: 1,
@@ -74,6 +76,9 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     skillName() {
+      if (this.skillEvolved) {
+        return { knight: '회오리 베기', archer: '화살 폭풍', mage: '쌍둥이 메테오' }[this.classId];
+      }
       return { knight: '회전 베기', archer: '화살비', mage: '메테오' }[this.classId];
     },
 
@@ -89,8 +94,10 @@ function createPlayer(x, y, classId = 'knight') {
 
       if (this.classId === 'knight') {
         // 회전 베기: 360° 강타 + 강넉백 + 시전 중 무적 — 포위당했을 때의 탈출 버튼
-        this.spinT = 0.35;
-        this.invuln = Math.max(this.invuln, 0.4);
+        // [진화] 회오리 베기: 1.1초간 이동하며 회전 — 0.35초마다 추가 타격 펄스
+        this.spinT = this.skillEvolved ? 1.1 : 0.35;
+        this._spinPulseT = this.skillEvolved ? 0.35 : 0;
+        this.invuln = Math.max(this.invuln, this.skillEvolved ? 0.5 : 0.4);
         AudioSys.spin();
         Renderer.shake(4, 0.2);
         Particles.ring(this.x, this.y, { r0: 20, r1: 100, life: 0.3, color: '#4a6ede', width: 5 });
@@ -124,19 +131,23 @@ function createPlayer(x, y, classId = 'knight') {
           Particles.text(this.x, this.y - 28, '+1', { color: '#e43b44', size: 15 });
         }
       } else if (this.classId === 'archer') {
-        // 화살비: 지점 광역 폭격
+        // 화살비: 지점 광역 폭격 — [진화] 화살 폭풍: 범위·화살 수 대폭 증가
         const t = this._skillTarget(game);
         AudioSys.rainCast();
         game.rains.push({
-          x: t.x, y: t.y, r: 110, t: 0, next: 0.25,
-          shots: 14, fired: 0,
+          x: t.x, y: t.y, r: this.skillEvolved ? 140 : 110, t: 0, next: 0.25,
+          shots: this.skillEvolved ? 24 : 14, fired: 0,
           explo: this.flags.ar_explo,
         });
       } else {
-        // 메테오: 예고 후 대광역 낙하
+        // 메테오: 예고 후 대광역 낙하 — [진화] 쌍둥이 메테오: 두 번째 낙하가 뒤따른다
         const t = this._skillTarget(game);
         AudioSys.meteorCast();
         game.meteors.push({ x: t.x, y: t.y, t: 0.7, r: 105 });
+        if (this.skillEvolved) {
+          const side = Math.random() < 0.5 ? -1 : 1;
+          game.meteors.push({ x: t.x + side * 120, y: t.y + (Math.random() - 0.5) * 90, t: 1.0, r: 105 });
+        }
         if (this.flags.mg_meteor3) {
           for (let i = 0; i < 2; i++) {
             game.meteors.push({
@@ -161,7 +172,27 @@ function createPlayer(x, y, classId = 'knight') {
           Particles.text(this.x, this.y - 36, this.skillName() + ' 준비!', { color: '#5ce0e6', size: 12 });
         }
       }
-      if (this.spinT > 0) this.spinT -= dt;
+      if (this.spinT > 0) {
+        this.spinT -= dt;
+        // [진화] 회오리 베기: 회전이 유지되는 동안 주기적 추가 타격 (이동하며 썰어낸다)
+        if (this.skillEvolved && this.classId === 'knight' && this._spinPulseT > 0) {
+          this._spinPulseT -= dt;
+          if (this._spinPulseT <= 0 && this.spinT > 0.05) {
+            this._spinPulseT = 0.35;
+            Particles.ring(this.x, this.y, { r0: 14, r1: 96, life: 0.25, color: '#4a6ede', width: 4 });
+            for (const e of game.enemies) {
+              if (e.dead || e.phased) continue;
+              const dx = e.x - this.x, dy = e.y - this.y;
+              const d = Math.hypot(dx, dy);
+              if (d > 96 + e.r) continue;
+              const dir = { x: dx / (d || 1), y: dy / (d || 1) };
+              const dmg = Math.max(1, Math.round(this.currentAtk() * 1.5));
+              const crit = this.rflags.allcrit || Math.random() < this.critChance;
+              game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, dir, { crit, kb: 260 });
+            }
+          }
+        }
+      }
       if (this.comboTimer > 0) this.comboTimer -= dt; else this.combo = 0;
       if (this.invuln > 0) this.invuln -= dt;
       if (this.lifestealCd > 0) this.lifestealCd -= dt;
@@ -489,7 +520,7 @@ function createPlayer(x, y, classId = 'knight') {
       else img = frames[0];
       const bob = this.moving ? Math.abs(Math.sin(this.animT * 11)) * 1.5 : Math.sin(this.animT * 3) * 1;
       let rot = this.moving ? Math.sin(this.animT * 11) * 0.04 : 0;
-      if (this.spinT > 0) rot = (0.35 - this.spinT) * 18; // 회전 베기: 한 바퀴 돌기
+      if (this.spinT > 0) rot = ((this.skillEvolved && this.classId === 'knight' ? 1.1 : 0.35) - this.spinT) * 18; // 회전 베기: 계속 돌기
       const flash = this.invuln > 0 && Math.floor(this.invuln * 18) % 2 === 0;
 
       Renderer.drawSprite(flash ? Sprites.white(img) : img,
@@ -507,6 +538,50 @@ function createPlayer(x, y, classId = 'knight') {
         ctx.arc(this.x, this.y, this.r + 9, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
+      }
+
+      // ── 유물 시각 흔적 — 레어 이상 유물은 캐릭터에 보이는 표식을 남긴다 (런마다 다른 모습) ──
+      {
+        const notable = this.relics.filter((id) => {
+          const r = RELICS.find((x) => x.id === id);
+          return r && r.rarity !== 'common';
+        });
+        // 궤도를 도는 유물 문장 (등급색 점)
+        for (let i = 0; i < Math.min(notable.length, 8); i++) {
+          const r = RELICS.find((x) => x.id === notable[i]);
+          const a = this.animT * 1.4 + (i / Math.min(notable.length, 8)) * Math.PI * 2;
+          const ox = this.x + Math.cos(a) * 21;
+          const oy = this.y - 6 + Math.sin(a) * 8 - Math.abs(Math.cos(a)) * 2;
+          ctx.save();
+          ctx.globalAlpha = 0.75;
+          ctx.fillStyle = RARITY[r.rarity].color;
+          ctx.fillRect(Math.round(ox) - 1.5, Math.round(oy) - 1.5, 3, 3);
+          ctx.globalAlpha = 0.25;
+          ctx.fillRect(Math.round(ox) - 3, Math.round(oy) - 3, 6, 6);
+          ctx.restore();
+        }
+        // 광전사의 투구: 위기(HP≤3)에 붉은 아우라가 타오른다
+        if (this.rflags.berserkhelm && this.hp <= 3) {
+          ctx.save();
+          ctx.globalAlpha = 0.16 + Math.sin(this.animT * 8) * 0.06;
+          ctx.fillStyle = '#e43b44';
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r + 14, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        // 불사조 깃털(미사용): 이따금 불씨가 피어오른다
+        if (this.rflags.revive && !this.reviveUsed && Math.random() < 0.06) {
+          Particles.burst(this.x + (Math.random() - 0.5) * 14, this.y - 14, {
+            count: 1, colors: ['#ff7043', '#ffd866'], speed: 26, life: 0.5, size: 2, gravity: -90,
+          });
+        }
+        // 유리 대검: 서릿발 같은 흰 섬광이 반짝인다
+        if (this.rflags.allcrit && Math.random() < 0.08) {
+          Particles.burst(this.x + (Math.random() - 0.5) * 18, this.y - 8 + (Math.random() - 0.5) * 14, {
+            count: 1, colors: ['#ffffff', '#fff7c0'], speed: 8, life: 0.35, size: 2,
+          });
+        }
       }
 
       for (const s of this.slashes) {
