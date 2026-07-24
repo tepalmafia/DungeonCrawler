@@ -620,6 +620,29 @@ const World = {
     return this.map[ty][tx] === 1;
   },
 
+  // 배치 안전 지점: 원하는 좌표가 벽/용암/봉인 벽감이면 가장 가까운 열린 타일 중앙으로 밀어낸다
+  // (계측: '경비' 수식어 상자가 템플릿 중앙 기둥 안에 박혀 열 수 없는 방이 나왔다 — 하드 스톨의 범인)
+  safeSpot(x, y) {
+    const ok = (tx, ty) => {
+      if (tx <= 0 || ty <= 0 || tx >= this.cols - 1 || ty >= this.rows - 1) return false;
+      if (this.map[ty][tx] !== 0) return false;
+      return !(this._noSpawn && this._noSpawn[ty] && this._noSpawn[ty][tx]);
+    };
+    const tx0 = Math.floor(x / TS), ty0 = Math.floor((y - this.offsetY) / TS);
+    if (ok(tx0, ty0)) return { x, y };
+    for (let r = 1; r < 8; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (ok(tx0 + dx, ty0 + dy)) {
+            return { x: (tx0 + dx) * TS + TS / 2, y: (ty0 + dy) * TS + TS / 2 + this.offsetY };
+          }
+        }
+      }
+    }
+    return { x, y };
+  },
+
   isSolidAt(x, y) {
     return this.isSolidTile(Math.floor(x / TS), Math.floor((y - this.offsetY) / TS));
   },

@@ -304,7 +304,7 @@ function createBoss(floor, x, y) {
             });
             const pdx = p.x - this.x, pdy = p.y - this.y;
             const pd = Math.hypot(pdx, pdy);
-            if (pd < 95 + p.r && p.invuln <= 0) {
+            if (pd < 95 + p.r) { // 무적 게이트 제거 — 대시 관통 시 완벽 회피 판정 (hurtPlayer가 무적 처리)
               let diff = Math.atan2(pdy, pdx) - Math.atan2(this.aimDir.y, this.aimDir.x);
               while (diff > Math.PI) diff -= Math.PI * 2;
               while (diff < -Math.PI) diff += Math.PI * 2;
@@ -325,7 +325,7 @@ function createBoss(floor, x, y) {
           if (trail && Math.random() < 0.6) {
             game.firePatches.push({ x: this.x, y: this.y, r: 26, life: 1.6, kind: 'fire' });
           }
-          if (p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
+          if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
             game.hurtPlayer(1, this.aimDir, 420);
           }
           if (hit.x || hit.y || this.stateT > 1.4) {
@@ -388,7 +388,7 @@ function createBoss(floor, x, y) {
             count: 16, colors: this.def.deathPalette, speed: 160, life: 0.45, size: 4,
           });
           AudioSys.thud();
-          if (p.invuln <= 0 && Math.hypot(p.x - c.x, p.y - c.y) < 48 + p.r) {
+          if (Math.hypot(p.x - c.x, p.y - c.y) < 48 + p.r) {
             const ddx = p.x - c.x, ddy = p.y - c.y;
             const dd = Math.hypot(ddx, ddy) || 1;
             game.hurtPlayer(1, { x: ddx / dd, y: ddy / dd });
@@ -401,7 +401,7 @@ function createBoss(floor, x, y) {
       }
 
       // 접촉 데미지 (장막 중 제외) — 2페이즈부터는 몸 자체가 흉기다
-      if (this.state !== 'veil' && this.hitCd <= 0 && p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
+      if (this.state !== 'veil' && this.hitCd <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
         this.hitCd = 0.8;
         game.hurtPlayer(this.phase === 2 ? 2 : 1, { x: dx / d, y: dy / d });
       }

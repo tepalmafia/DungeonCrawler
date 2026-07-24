@@ -71,7 +71,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (p.invuln > 0) {
           // 무적 중 접촉은 피해가 없지만 — 대시 무적이라면 '완벽 회피' 판정 기회다
           // (hurtPlayer의 무적 분기가 처리. 기존엔 여기서 끊겨 근접 몹 상대 완벽 회피가 불가능했다)
-          if (p.dashTimer > 0) game.hurtPlayer(dmg, dir);
+          if (p._dashWin > 0) game.hurtPlayer(dmg, dir);
           return;
         }
         this.hitCd = 0.8;
@@ -279,7 +279,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (this.trail && Math.random() < 0.5) {
             game.firePatches.push({ x: this.x, y: this.y, r: 22, life: 1.4, kind: 'fire' });
           }
-          if (p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r + 2) {
+          if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r + 2) { // 완벽 회피 판정 연결 (무적은 hurtPlayer가 처리)
             game.hurtPlayer(1, this.chargeDir, 420);
           }
           if (hit.x || hit.y) {
@@ -713,7 +713,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this.noDrops = true; // 자폭은 처치 보상이 없다 (직접 잡으면 보상)
             game.killEnemy(this, { x: 0, y: -1 });
             game._explode(this.x, this.y, 70, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
-            if (p.invuln <= 0 && d < 70 + p.r) {
+            if (d < 70 + p.r) {
               game.hurtPlayer(2, { x: dx / d, y: dy / d }, 340);
             }
             return;
@@ -819,7 +819,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             const rx = p.x - this.x, ry = p.y - this.y;
             const along = rx * this.slamDir.x + ry * this.slamDir.y;
             const perp = Math.abs(-rx * this.slamDir.y + ry * this.slamDir.x);
-            if (p.invuln <= 0 && along > -10 && along < this.slamLen && perp < this.slamHalfW + p.r) {
+            if (along > -10 && along < this.slamLen && perp < this.slamHalfW + p.r) {
               game.hurtPlayer(2, this.slamDir, 380);
             }
             for (let i = 0; i < 8; i++) {
@@ -900,15 +900,21 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.flip = dx < 0;
 
         // 플레이어가 다가오면 도약 (쿨다운 2초)
-        if (d < 140 && this.blinkCd <= 0) {
+        // 단, 도망자들만 남으면 도약 2회 후 탈진 — "마지막 도망자 추격전"은 지루함만 남긴다
+        // (계측: 10층에서 voidEye 1~2마리만 남은 방이 60~90초 추격전이 됐다. 1마리 조건으론 2마리 방이 그대로라 확장)
+        const isLast = !game.enemies.some((e) => e !== this && !e.dead && !e.neutral && e.type !== 'voidEye');
+        if (isLast) this._soloBlinks = this._soloBlinks || 0;
+        const canBlink = !isLast || this._soloBlinks < 2;
+        if (d < 140 && this.blinkCd <= 0 && canBlink) {
           this.blinkCd = 2.0;
+          if (isLast) this._soloBlinks++;
           Particles.burst(this.x, this.y, { count: 12, colors: ['#b13ae0', '#241832'], speed: 100, life: 0.35, size: 3 });
           const pos = World.randomSpawnPos(p, 200);
           this.x = pos.x;
           this.y = pos.y;
           Particles.burst(this.x, this.y, { count: 12, colors: ['#b13ae0', '#c9b8e8'], speed: 100, life: 0.35, size: 3 });
           AudioSys.dash();
-        } else if (d < 220) {
+        } else if (d < 220 && canBlink) {
           // 거리 유지
           const spd = this.effSpeed();
           World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
@@ -986,7 +992,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         } else if (this.state === 'bash') {
           if (this.stateT > 0.45) {
             this.state = 'walk'; this.stateT = 0;
-            if (p.invuln <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < 60) {
+            if (Math.hypot(p.x - this.x, p.y - this.y) < 60) {
               game.hurtPlayer(1, this.faceDir, 430); // 강넉백 밀치기
             }
           }
@@ -1109,7 +1115,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
         this.flip = dx < 0;
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
-        if (this.hitCd <= 0 && p.invuln <= 0 && d < p.r + this.r) {
+        if (this.hitCd <= 0 && d < p.r + this.r) {
           this.hitCd = 0.7; // 2층 절벽 완화
           game.hurtPlayer(1, { x: dx / d, y: dy / d }, 120);
         }
