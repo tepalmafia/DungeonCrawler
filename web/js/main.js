@@ -228,12 +228,11 @@ const Game = {
       this.interactables.push({ kind: 'mystery', x: c.x, y: c.y, r: 26, used: false, t: 0 });
       this.banner = { text: '기이한 기운이 감돈다...', life: 1.8, maxLife: 1.8, color: '#b13ae0' };
     } else if (type === 'vault') {
-      // 비밀 금고 (맵 M3): 진행을 소모하지 않는 순수 보너스 — 상자 2개 + 진귀한 항아리
+      // 비밀 금고 (맵 M3): 진행을 소모하지 않는 순수 보너스 — 상자 1 + 진귀한 항아리 2
+      // (보상 감사: 상자 2개 = 유물 2개는 무위험 대비 과함 — 보물방(유물 1)의 상위 호환이 되어버린다)
       const c = World.center();
-      const s1 = World.safeSpot(c.x - 70, c.y);
-      const s2 = World.safeSpot(c.x + 70, c.y);
+      const s1 = World.safeSpot(c.x, c.y);
       this.interactables.push({ kind: 'chest', x: s1.x, y: s1.y, r: 24, used: false, t: 0 });
-      this.interactables.push({ kind: 'chest', x: s2.x, y: s2.y, r: 24, used: false, t: 0 });
       const p1 = World.safeSpot(c.x - 150, c.y - 70);
       const p2 = World.safeSpot(c.x + 150, c.y - 70);
       this.enemies.push(createPot(p1.x, p1.y, true), createPot(p2.x, p2.y, true));
