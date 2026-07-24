@@ -89,6 +89,8 @@ const Game = {
     this.dailyRun = false; // 오늘의 탑은 startDaily()로만 (R 재도전은 일반 런)
     this.deathInfo = null;
     this._lastHurtBy = null;
+    this.slowmoT = 0; // 완벽 회피 슬로모
+    this._roomMod = null;
     this.endless = false;
     this.shardsPaid = 0;
     this.killsPaid = 0;
@@ -161,6 +163,25 @@ const Game = {
     // 방 템플릿 오브젝트 (M2·M3): 항아리·균열 벽 — 방 클리어 판정에서 제외되는 중립 개체
     for (const s of (World.potSpots || [])) this.enemies.push(createPot(s.x, s.y, s.rare));
     for (const s of (World.crackSpots || [])) this.enemies.push(createCrack(s.tx, s.ty, s.x, s.y));
+
+    // 문 수식어 (P4): 위험-보상 트레이드오프 적용
+    this._roomMod = (type === 'combat' || type === 'elite') ? (Dungeon.pendingMod || null) : null;
+    Dungeon.pendingMod = null;
+    if (this._roomMod) {
+      const data = floorData(Dungeon.floor);
+      if (this._roomMod.id === 'horde') {
+        for (let i = 0; i < 4; i++) {
+          this.pendingSpawns.push({ delay: 1.0 + i * 0.3, type: RNG.pick(data.enemies), elite: false });
+        }
+      } else if (this._roomMod.id === 'guarded') {
+        for (let i = 0; i < 2; i++) {
+          this.pendingSpawns.push({ delay: 0.8 + i * 0.4, type: RNG.pick(data.enemies), elite: true });
+        }
+        const gc = World.center();
+        this.interactables.push({ kind: 'chest', x: gc.x, y: gc.y - 60, r: 24, used: false, t: 0 });
+      }
+      this.banner = { text: `⚠ ${this._roomMod.label}`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
+    }
 
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {
@@ -289,6 +310,7 @@ const Game = {
       const tr = this.transition;
       tr.t += dt * 3;
       if (tr.phase === 'out' && tr.t >= 1) {
+        Dungeon.pendingMod = tr.mod || null; // 문 수식어를 다음 방에 전달
         Dungeon.advance(tr.type);
         tr.phase = 'in';
         tr.t = 0;

@@ -31,6 +31,12 @@ function floorData(floor) {
   return { name: `심연 회랑 ${floor}층`, enemies: base.enemies, rule: base.rule };
 }
 
+// 문 수식어 — 위험을 감수하면 보상이 커진다 (문 선택이 고정 순위표가 되지 않게)
+const DOOR_MODS = [
+  { id: 'horde', label: '사나운 무리', desc: '적 증원 — 클리어 시 파편 보너스' },
+  { id: 'guarded', label: '보물 지킴이', desc: '정예 2기가 상자를 지킨다' },
+];
+
 const Dungeon = {
   floor: 1,
   roomIndex: 1,
@@ -102,7 +108,15 @@ const Dungeon = {
       const j = Math.floor(RNG.next() * (i + 1));
       [options[i], options[j]] = [options[j], options[i]];
     }
-    return options.map((t) => ({ type: t, ...ROOM_META[t] }));
+    return options.map((t) => {
+      const opt = { type: t, ...ROOM_META[t] };
+      // 문 수식어 (P4): 전투/정예 문에 35% 확률로 위험-보상 트레이드오프가 붙는다 —
+      // "안전한 전투 vs 위험하지만 보상 큰 전투"가 상태(체력/빌드)에 따라 다른 답이 되도록
+      if ((t === 'combat' || t === 'elite') && RNG.chance(0.35)) {
+        opt.mod = RNG.pick(DOOR_MODS);
+      }
+      return opt;
+    });
   },
 
   // 전투방 적 구성 — 깊이·층에 따라 수와 정예 확률 증가

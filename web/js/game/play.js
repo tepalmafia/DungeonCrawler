@@ -2,6 +2,11 @@
 // Game.tick(main.js)이 상태 분기 후 매 프레임 호출한다.
 const GamePlay = {
   _tickPlay(dt) {
+    // 완벽 회피 슬로모 — 세계가 0.35배로 늘어진다 (보상의 손맛)
+    if (this.slowmoT > 0) {
+      this.slowmoT -= dt;
+      dt *= 0.35;
+    }
     if (Input.pressed('KeyM')) {
       AudioSys.toggleMute();
       Meta.data.muted = AudioSys.muted;
@@ -297,6 +302,20 @@ const GamePlay = {
       }
 
       let remove = b.life <= 0 || World.isSolidAt(b.x, b.y);
+      // 도탄 (특성): 벽에서 한 번 튕긴다 — 막힌 축만 반사
+      if (remove && b.life > 0 && b.bounces > 0) {
+        b.bounces--;
+        const hitX = World.isSolidAt(b.x, b.y - b.dir.y * 9);
+        const hitY = World.isSolidAt(b.x - b.dir.x * 9, b.y);
+        if (hitX) b.dir.x *= -1;
+        if (hitY) b.dir.y *= -1;
+        if (!hitX && !hitY) { b.dir.x *= -1; b.dir.y *= -1; }
+        b.x += b.dir.x * 12;
+        b.y += b.dir.y * 12;
+        b.hit = new Set(); // 튕긴 화살은 같은 적을 다시 맞힐 수 있다
+        Particles.burst(b.x, b.y, { count: 3, colors: ['#ffd866', '#ffffff'], speed: 70, life: 0.2, size: 2 });
+        remove = false;
+      }
       // 벽에 맞은 투사체가 균열 벽이면 균열에 피해 — 원거리 직업도 비밀 벽감을 열 수 있다
       if (remove && b.life > 0) {
         const crack = this.enemies.find((e) => e.type === 'crack' && !e.dead &&
@@ -562,6 +581,14 @@ const GamePlay = {
         this.bossRewardT <= 0 && this.state === 'play') {
       this.roomCleared = true;
       Meta.save(); // 도감 킬 기록 등 방 단위 저장
+      // 문 수식어 보상: 사나운 무리 — 위험을 감수한 만큼 파편으로 돌려준다
+      if (this._roomMod && this._roomMod.id === 'horde') {
+        const bonus = 10 + Dungeon.floor * 2;
+        Meta.data.shards += bonus;
+        Particles.text(p.x, p.y - 34, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
+        AudioSys.buy();
+      }
+      this._roomMod = null;
       if (p.flags.regen && p.hp < p.maxHp) {
         p.hp++;
         Particles.text(p.x, p.y - 28, '+1', { color: '#e43b44', size: 14 });
@@ -581,7 +608,7 @@ const GamePlay = {
       for (const door of World.doors) {
         if (Math.hypot(p.x - door.x, p.y - door.y) < 30) {
           this.state = 'transition';
-          this.transition = { phase: 'out', t: 0, type: door.opt.type };
+          this.transition = { phase: 'out', t: 0, type: door.opt.type, mod: door.opt.mod || null };
           AudioSys.dash();
           break;
         }

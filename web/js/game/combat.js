@@ -284,7 +284,21 @@ const GameCombat = {
   hurtPlayer(dmg, dir, kb = 260, src = null) {
     const p = this.player;
     if (p.god) return; // 테스트 모드 무적
-    if (p.invuln > 0 || this.state !== 'play') return;
+    if (p.invuln > 0 || this.state !== 'play') {
+      // 완벽 회피 (P1) — 대시 무적 중에 공격이 스쳤다: 시간이 늘어지고 다음 일격이 확정 크리.
+      // 텔레그래프가 '피할 것'에서 '노릴 것'으로 바뀌는 순간 — 실력 표현의 핵심 축
+      if (p.dashTimer > 0 && !p._pdodged && this.state === 'play') {
+        p._pdodged = true;
+        p.pdodgeCrit = true;
+        this.slowmoT = 0.4;
+        Particles.ring(p.x, p.y, { r0: 8, r1: 64, life: 0.4, color: '#5ce0e6', width: 4 });
+        Particles.ring(p.x, p.y, { r0: 4, r1: 34, life: 0.28, color: '#ffffff', width: 2 });
+        Particles.text(p.x, p.y - 32, '완벽 회피!', { color: '#5ce0e6', size: 15 });
+        AudioSys.pdodge();
+        Renderer.shake(2, 0.1);
+      }
+      return;
+    }
     // 사인 기록: 명시된 출처(용암 등) > 최근접 적 추정
     this._lastHurtBy = src || this._nearestFoeName() || '심연의 어둠';
 

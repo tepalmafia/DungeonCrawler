@@ -44,6 +44,13 @@ const TRAITS = [
     desc: '대시 경로에 감전 장판을 남긴다 (피해 + 감속)', flag: 'shocktrail' },
   { id: 'overcharge', name: '과충전',   tag: '번개', color: '#ffd866',
     desc: '감전된 적을 처치하면 대시 충전 즉시 회복 (2초에 1회)', flag: 'overcharge' },
+  // ── 동사 특성 (P3): 숫자가 아니라 행동의 모양을 바꾼다 ──
+  { id: 'quake',    name: '지진파',    tag: '스탯', color: '#c8d4e4',
+    desc: '마무리 일격이 전방으로 관통 충격파를 쏜다', flag: 'quake' },
+  { id: 'rebound',  name: '도탄',      tag: '스탯', color: '#ffd866',
+    desc: '화살과 마탄이 벽에서 한 번 튕긴다', flag: 'rebound' },
+  { id: 'dashfire', name: '불꽃 대시', tag: '화염', color: '#ff7043',
+    desc: '대시가 불타는 자취를 남긴다 (적 지속 피해)', flag: 'dashfire' },
   { id: 'chain',      name: '연쇄 번개', tag: '번개', color: '#ffd866',
     desc: '공격 시 30% 확률로 번개가 근처 적에게 튄다 (2 피해 + 감전)', flag: 'chain' },
   { id: 'static',     name: '정전기',   tag: '번개', color: '#ffd866',
