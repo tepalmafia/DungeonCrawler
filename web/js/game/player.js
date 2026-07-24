@@ -43,7 +43,8 @@ function createPlayer(x, y, classId = 'knight') {
     skillCd: 0,
     skillCdMul: 1,
     spinT: 0, // 회전 베기 연출
-    skillEvolved: false, // 직업 특성 3장 → 스킬 진화 (회오리 베기/화살 폭풍/쌍둥이 메테오)
+    skillEvolved: false, // 스킬 진화 발동됨 (회오리 베기/화살 폭풍/쌍둥이 메테오)
+    evoReady: false,     // 직업 특성 3장 수집 완료 — Lv.12 도달 시 진화 (rewards.checkEvolution)
     _spinPulseT: 0,      // [진화] 회오리 베기 추가 타격 주기
 
     dashMax: 1,

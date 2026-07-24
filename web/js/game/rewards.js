@@ -74,9 +74,25 @@ const GameRewards = {
       this.xpNext = Math.round(this.xpNext * 1.24);
       this.pendingChoices++;
     }
+    this.checkEvolution(); // 개화 대기 중이었다면 Lv.12 도달 순간 진화
     if (this.pendingChoices > 0 && this.state === 'play') {
       this.openTraitChoice('levelup');
     }
+  },
+
+  // 스킬 진화 발동 — 조건: 직업 특성 3장(evoReady) + Lv.12 이상.
+  // 계측 근거: 3장 조건만으로는 평균 1.7층/Lv.5 진화 (봇 9런) — 너무 이르다.
+  // Lv.12는 기대 성장표 기준 4층 보스 전후 = 런 중반의 '완성 순간'.
+  checkEvolution() {
+    const p = this.player;
+    if (!p || p.skillEvolved || !p.evoReady || this.level < 12) return;
+    p.skillEvolved = true;
+    this.banner = { text: '⚡ 스킬 진화 — ' + p.skillName() + '!', life: 3, maxLife: 3, color: '#f7b32b' };
+    AudioSys.levelup();
+    Particles.burst(p.x, p.y, {
+      count: 26, colors: ['#f7b32b', '#ffd866', '#fff7c0'], speed: 200, life: 0.8, size: 4, gravity: -120,
+    });
+    Particles.ring(p.x, p.y, { r0: 10, r1: 90, life: 0.5, color: '#f7b32b', width: 4 });
   },
 
   traitCardCount() {
