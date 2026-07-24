@@ -489,7 +489,7 @@ const GamePlay = {
             const rolled = rollRelics(p, 1, false);
             if (rolled.length > 0) {
               this.acquireRelic(rolled[0]);
-              p.maxHp = Math.max(1, p.maxHp - 1);
+              p.maxHp = Math.max(2, p.maxHp - 1); // 도박 저주는 하한 2 — 선택한 적 없는 1칸 인생 방지
               p.hp = Math.min(p.hp, p.maxHp);
               this.banner = { text: '기연 — 유물을 얻었지만... 저주가 스며든다 (최대 HP -1)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
               AudioSys.hurt();
