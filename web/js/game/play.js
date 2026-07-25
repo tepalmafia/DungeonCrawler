@@ -36,6 +36,21 @@ const GamePlay = {
     }
   },
 
+  // 투사체 착탄 폭발 — 연금술사 플라스크는 상태이상(중독/촉매 랜덤 원소)을 함께 뿌린다
+  _boltExplode(b, p) {
+    const cols = b.venom ? ['#c9d94a', '#6ada8a', '#38b764'] : ['#8a5ac2', '#c56cf0', '#ffd866'];
+    this._explode(b.x, b.y, b.aoe, Math.max(1, Math.ceil(p.currentAtk() * 0.6)), cols, b.venom ? '#c9d94a' : '#c56cf0'); // 파이어볼 폭발 하향 (리그 +79%→목표 ~45%)
+    if (!b.venom) return;
+    const elem = b.catalyst ? ['poison', 'burn', 'shock'][Math.floor(Math.random() * 3)] : 'poison';
+    const dur = elem === 'poison' ? (p.flags.al_acid ? 5 : 3) : elem === 'burn' ? 2.5 : 2;
+    for (const e of this.enemies) {
+      if (e.dead || e.phased || e.neutral) continue;
+      if (Math.hypot(e.x - b.x, e.y - b.y) < b.aoe + e.r) {
+        e.status[elem] = Math.max(e.status[elem] || 0, dur);
+      }
+    }
+  },
+
   _tickPlay(dt) {
     // 완벽 회피 슬로모 — 세계가 0.35배로 늘어진다 (보상의 손맛)
     if (this.slowmoT > 0) {
@@ -254,11 +269,12 @@ const GamePlay = {
           e.status.burn = 0; e.status.shock = 0;
           Particles.text(e.x, e.y - 34, '⚡과부하!', { color: '#ffd866', size: 15 });
           this.teachReaction('overload', '과부하 — 화상×감전 = 번개 폭발');
-          this._explode(e.x, e.y, 80, 4, ['#ffd866', '#ff7043', '#ffffff'], '#ffd866');
+          const rxAmp = this.player.flags.al_react ? 1.3 : 1; // 연쇄 촉진 (연금술사)
+          this._explode(e.x, e.y, 80 * rxAmp, 4, ['#ffd866', '#ff7043', '#ffffff'], '#ffd866');
         } else if (e.status.poison > 0 && e.status.shock > 0 && !e.isBoss && !(e._stunT > 0)) {
           // 마비: 독×감전 = 신경 마비 1.1초 (감전 소비, 중독 유지)
           e.status.shock = 0;
-          e._stunT = 1.1;
+          e._stunT = this.player.flags.al_react ? 1.43 : 1.1; // 연쇄 촉진 (연금술사)
           Particles.text(e.x, e.y - 34, '마비!', { color: '#c9d94a', size: 14 });
           this.teachReaction('stun', '마비 — 독×감전 = 행동 정지');
           Particles.burst(e.x, e.y, { count: 8, colors: ['#c9d94a', '#ffd866'], speed: 90, life: 0.35, size: 3 });
@@ -484,9 +500,7 @@ const GamePlay = {
               finisher: b.finisher,
               kb: b.finisher ? 300 : 170,
             });
-            if (b.aoe) {
-              this._explode(b.x, b.y, b.aoe, Math.max(1, Math.ceil(p.currentAtk() * 0.6)), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0'); // 파이어볼 폭발 하향 (리그 +79%→목표 ~45%)
-            }
+            if (b.aoe) this._boltExplode(b, p);
             if (res === 'blocked' || !b.pierce) remove = true;
             break;
           }
@@ -494,8 +508,8 @@ const GamePlay = {
       }
       if (remove) {
         if (b.aoe && b.hit.size === 0) {
-          // 벽에 맞아도 대마탄은 폭발
-          this._explode(b.x, b.y, b.aoe, Math.max(1, Math.ceil(p.currentAtk() * 0.6)), ['#8a5ac2', '#c56cf0', '#ffd866'], '#c56cf0'); // 파이어볼 폭발 하향 (리그 +79%→목표 ~45%)
+          // 벽에 맞아도 대마탄·플라스크는 폭발
+          this._boltExplode(b, p);
         }
         Particles.burst(b.x, b.y, {
           count: 4,
