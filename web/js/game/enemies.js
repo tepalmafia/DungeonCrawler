@@ -1150,9 +1150,11 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed() * (0.7 + Math.abs(Math.sin(this.animT * 7)) * 0.6); // 꿈틀꿈틀
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 거리 응답: 중거리에선 도약으로 간격을 접는다
-          if (this.springCd <= 0 && d > 90 && d < 190) {
+          if (this.springCd <= 0 && d > 90 && d < 190 &&
+              !game.enemies.some((e) => e !== this && !e.dead && e.type === 'leech' && (e.coilT > 0 || e.springT > 0))) {
+            // 무리 스태거: 동시에 한 마리만 도약한다 — 회피선이 남아있어야 공정하다
             this.coilT = 0.42; this.springCd = 3.0;
-            this.springDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정 — 회피 가능해야 공정하다
+            this.springDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
           }
         }
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
@@ -2105,7 +2107,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const wd = Math.hypot(this.wx, this.wy) || 1;
           World.moveEntity(this, (this.wx / wd) * this.effSpeed() * dt, (this.wy / wd) * this.effSpeed() * dt);
           // 거리 응답: 중거리에서 정지 조준 후 급습
-          if (this.dartCd <= 0 && d > 130 && d < 260) {
+          if (this.dartCd <= 0 && d > 130 && d < 260 &&
+              !game.enemies.some((e) => e !== this && !e.dead && e.type === 'bloodBat' && (e.aimT > 0 || e.dartT > 0))) {
+            // 무리 스태거: 동시에 한 마리만 혈침을 쏜다
             this.aimT = 0.38; this.dartCd = 3.2;
             this.dartDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
           }

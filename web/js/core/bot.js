@@ -398,7 +398,21 @@ const Bot = {
         Bot.stats.skills++;
         this._skillT = 0;
       }
-      if (p.classId !== 'knight') {
+      // 예고 회피: 방향이 굳은 급습 예고(거머리 말기·박쥐 조준·광전사 포효·원혼 실체화)가
+      // 가까이 보이면 궤도에서 옆으로 비켜선다 — 인간이 텔레그래프를 읽는 행동의 근사
+      const tele = game.enemies.find((e) => !e.dead && !e.phased &&
+        ((e.coilT > 0) || (e.aimT > 0) || (e.roarT > 0) || (e.windT > 0)) &&
+        Math.hypot(e.x - p.x, e.y - p.y) < 260);
+      if (!tele) this._sideDir = null;
+      if (tele) {
+        const td = Math.hypot(tele.x - p.x, tele.y - p.y) || 1;
+        if (!this._sideDir) this._sideDir = Math.random() < 0.5 ? 1 : -1;
+        const tnx = (tele.x - p.x) / td, tny = (tele.y - p.y) / td;
+        this._move(p, p.x + -tny * this._sideDir * 80, p.y + tnx * this._sideDir * 80);
+        if (p.attackCd <= 0 && d < 500 && this._hasLoS(p.x, p.y, target.x, target.y)) {
+          Input.justPressed['KeyJ'] = true; Bot.stats.attacks++;
+        }
+      } else if (p.classId !== 'knight') {
         // 원거리: 카이팅 (접근이 필요할 때만 진행 감시 — 카이팅 후퇴는 정상 동작)
         const los = this._hasLoS(p.x, p.y, target.x, target.y);
         if (!los) {
