@@ -135,17 +135,31 @@ const BOSS_DEFS = {
     intro: '여기서부터는 왕도다. 죽은 것은 다리를 건널 수 없다.', outro: '마차 호위는… 명예였다… 안을 보기 전까지는…',
     deathPalette: ['#c9d94a', '#8adf76', '#6a3aa2'],
   },
+  // ── 3막 막보스 (30층): 나를 판결한 자 ──
+  30: {
+    awakened: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', scale: 1.9, r: 33, hp: 2400, speed: 36,
+    mechanic: { type: 'armor', cap: 2, label: '판결의 법복 — 강한 일격을 경감한다' },
+    banner: "대재판관 '발디아 공작'",
+    punish: 'volley', punishProj: 'rock',
+    p1: ['fan:rock:snipe>ring', 'snare>fan:rock', 'charge>ring>fan:rock'],
+    p2: ['snare>charge>fan:rock:snipe', 'ring:gap>fan:rock:cross', 'geyser:poison>snare>ring'],
+    rageText: '법정 모독이다! 전원 처형하라!',
+    intro: '피고, 다시 입정했는가. 판결은 이미 내려졌다 — 두 번 죽어라.',
+    outro: '성배가 마르면… 왕국이 마른다고 했다… 나는… 서명만 했을 뿐…',
+    deathPalette: ['#d9c08a', '#4c3c4c', '#c22030'],
+  },
 };
 
 function createBoss(floor, x, y) {
-  // 11~19층 (2막): 각성 보스(6~9층)가 균사에 물들어 재림, 층당 +15% HP.
-  // 20층: 막보스 균사 여왕. 21층+ (무한 회랑): 각성 5보스 순환.
+  // 11~19층 (2막)·21~29층 (3막): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
+  // 20층 로트가르 / 30층 발디아 = 막보스 (고정 HP). 31층+ (무한 가도): 각성 5보스 순환
   const defKey = floor <= 10 ? floor
     : floor === 20 ? 20
-    : floor <= 19 ? ((floor - 11) % 4) + 6
-    : ((floor - 21) % 5) + 6;
+    : floor === 30 ? 30
+    : floor <= 29 ? ((floor - 11) % 4) + 6
+    : ((floor - 31) % 5) + 6;
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
-  const hpScale = floor === 20 || floor <= 10 ? 1 : 1 + 0.15 * (floor - 10);
+  const hpScale = floor <= 10 || floor === 20 || floor === 30 ? 1 : 1 + 0.15 * (floor - 10);
   const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,

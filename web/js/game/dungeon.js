@@ -66,12 +66,23 @@ const FLOOR_DATA = {
   18: { name: '오물길 막장', enemies: ['rotWalker', 'myceliumBrute', 'ghoul', 'venomLasher', 'sporeMother', 'glowShrieker'], rule: '오물 보행자의 발자국이 땅을 썩게 한다' },
   19: { name: '관문 광장', enemies: ['sporeling', 'sporeling', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'fungalTick'], rule: '사령부의 나팔이 멎지 않는 한 증원은 계속된다' },
   20: { name: '관문 사령부', enemies: ['sporeling', 'fungalTick', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'sporeMother'], rule: '사령부의 나팔이 멎지 않는 한 증원은 계속된다' },
+  // ── 3막: 영지와 재판소 (21~30층) — 나를 판결한 자들의 땅 ──
+  21: { name: '영지 어귀',   enemies: ['berserker', 'boar', 'shaman', 'sniper', 'charger', 'swarm'], rule: '종군 사제를 먼저 끊어라 — 사병이 죽지 않는다' },
+  22: { name: '불탄 포도밭', enemies: ['berserker', 'berserker', 'charger', 'shaman', 'sniper', 'cinder'], rule: '종군 사제를 먼저 끊어라 — 사병이 죽지 않는다' },
+  23: { name: '사병 주둔지', enemies: ['golem', 'bomber', 'frostArcher', 'glowShrieker', 'brute', 'shieldSkeleton'], rule: '척탄병의 심지가 타기 전에 잡아라' },
+  24: { name: '주둔지 심부', enemies: ['golem', 'golem', 'bomber', 'frostArcher', 'glowShrieker', 'warden'], rule: '척탄병의 심지가 타기 전에 잡아라' },
+  25: { name: '재판소 앞뜰', enemies: ['executioner', 'stalker', 'acolyte', 'frostMage', 'shieldSkeleton', 'shade'], rule: '심문관의 붉은 구역에서 벗어나라' },
+  26: { name: '대법정',      enemies: ['executioner', 'executioner', 'stalker', 'acolyte', 'frostMage', 'crystal'], rule: '심문관의 붉은 구역에서 벗어나라' },
+  27: { name: '재판소 지하 감옥', enemies: ['jailer', 'chainWraith', 'wraith', 'warden', 'frostGolem', 'iceSlime'], rule: '간수의 사슬 궤도에서 비켜서라' },
+  28: { name: '고문실 복도', enemies: ['jailer', 'chainWraith', 'chainWraith', 'warden', 'frostGolem', 'stalker'], rule: '간수의 사슬 궤도에서 비켜서라' },
+  29: { name: '공작의 성관', enemies: ['mirrorKnight', 'riftCaster', 'brute', 'executioner', 'imp', 'acolyte'], rule: '거울기사의 반격 자세가 끝나기 전에 물러나라' },
+  30: { name: '판결의 홀',   enemies: ['mirrorKnight', 'riftCaster', 'riftCaster', 'executioner', 'frostMage', 'warden'], rule: '판결봉이 내려치기 전에 — 빨리 끝내라' },
 };
 
-// 21층+ (무한 모드 '심연 회랑'): 2막 심부(16~20층) 구성을 순환하며 끝없이 강해진다
+// 31층+ (무한 모드 '왕도 가도'): 3막 심부(26~30층) 구성을 순환하며 끝없이 강해진다
 function floorData(floor) {
   if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
-  const base = FLOOR_DATA[((floor - 21) % 5) + 16];
+  const base = FLOOR_DATA[((floor - 31) % 5) + 26];
   return { name: `왕도 가도 ${floor}구간`, enemies: base.enemies, rule: base.rule };
 }
 

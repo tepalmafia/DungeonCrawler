@@ -1417,6 +1417,8 @@ const Sprites = (() => {
   sprites.bossInferno = make(BOSSIGNIS_ROWS, { o: '#ffd866', y: '#fff7d0', W: '#ffffff', r: '#d35400', k: '#7a1010' });
   sprites.bossVoid = make(BOSSABYSS_ROWS, { K: '#5c1e5e', c: '#e43b44', k: '#050308', w: '#e8d8f8', r: '#ff4757', m: '#8a1c8c', p: '#0e0716', q: '#c02040' });
   // 2막 막보스: 균사 여왕 스포라 — 보랏빛 왕관 균사 + 산성빛 홀씨
+  // 3막 막보스: 대재판관 발디아 — 잿금빛 법복 + 핏빛 인장
+  sprites.bossValdia = make(BOSSGOLEM_ROWS, { g: '#4c4434', d: '#322c20', G: '#6c6248', k: '#c22030', c: '#d9c08a' });
   sprites.bossQueen = make(BOSSSPORE_ROWS, { m: '#4a5464', M: '#8a94a4', D: '#2e3644', s: '#8a1c2c', S: '#5e1420', k: '#14181e', r: '#c22030' });
 
   // ══════════════ 오브젝트 ══════════════
