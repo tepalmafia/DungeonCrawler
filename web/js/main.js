@@ -341,6 +341,16 @@ const Game = {
       this.banner = { text: '스킬 사당이 빛난다 — 다가가서 보조 스킬을 고르자 (E키로 사용)', life: 3.0, maxLife: 3.0, color: '#c9d94a' };
     }
 
+    // 드라마 AI (M1) — 방 단위 상태 리셋: 경보/전투 시계/전령/전사자 장부/대형 여부
+    this._roomAlert = false;
+    this._roomFightT = 0;
+    this._runnerCalled = false;
+    this._sqDead = 0;
+    this._drama = type === 'combat' || type === 'elite' || type === 'trial';
+    this._formation = this._drama && Dungeon.floor >= 3 && RNG.chance(0.6) &&
+      (World.lastTemplateTag === 'corridor' || World.lastTemplateTag === 'pillars');
+    this._formN = 0;
+
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {
         this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini });

@@ -44,6 +44,8 @@ const GameCombat = {
     }
     e.hp -= dmg;
     e.flash = 0.1;
+    // 드라마 AI: 얻어맞으면 그 순간 침입자를 안다 — 방 전체에 경보
+    if (e._aware === false) { e._aware = true; this._roomAlert = true; }
     if (kb && !e.isBoss) {
       e.kbx += dir.x * kb;
       e.kby += dir.y * kb;
@@ -107,6 +109,13 @@ const GameCombat = {
   killEnemy(e, dir, brutal = false) {
     if (e.dead) return;
     e.dead = true;
+    // 드라마 AI: 항복한 자를 베었다 — 처형. 정상 처치로 취급 (고어·집계·드랍 전부)
+    if (e._surrender != null) {
+      e.neutral = false;
+      e._surrender = null;
+      brutal = true;
+      Particles.text(e.x, e.y - 34, '처형', { color: '#e43b44', size: 13 });
+    }
     // 중립 개체(항아리·균열 벽): 처치 집계·도감·드랍 없이 부서진다
     if (e.neutral) {
       Particles.burst(e.x, e.y, {
@@ -119,6 +128,7 @@ const GameCombat = {
       return;
     }
     this.kills++;
+    this._fearCheck(e, brutal); // 드라마 AI: 동료의 죽음을 본 산 자는 무너질 수 있다
     // 궁극기 게이지 (P2): 처치가 선고를 당긴다 — 잡몹 1 / 정예·우두머리 4 / 보스 10
     {
       const pu = this.player;
