@@ -81,7 +81,7 @@ const Game = {
   // 특성/유물은 id 목록을 재적용해 복원하고, 스칼라(HP·골드·XP)는 그대로 덮어쓴다.
   saveRun() {
     if (this.testMode && !this._forceSave) return; // 봇 계측 오염 방지
-    if (this.runEnded || Dungeon.floor > 40 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
+    if (this.runEnded || Dungeon.floor > 50 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
     const p = this.player;
     try {
       localStorage.setItem('dungeoncrawler_run', JSON.stringify({
@@ -304,6 +304,19 @@ const Game = {
     }
 
 
+    // 왕좌 입장 (기획 §5 복선 회수): 모은 증거 수만큼 왕이 다르게 맞이한다
+    if (Dungeon.floor === 50 && type === 'boss') {
+      const n = Meta.clueCount();
+      this._storyQ = this._storyQ || [];
+      if (n >= 20) {
+        this._storyQ.push({ text: `품 안의 증거 ${n}건 — 전부 왕좌에 못박는다. 하나도 빠짐없이.`, color: '#f7b32b' });
+      } else if (n >= 10) {
+        this._storyQ.push({ text: `품 안의 증거 ${n}건 — 진실의 절반이면 충분하다. 나머지는 이 검이 말한다.`, color: '#c8c0a8' });
+      } else {
+        this._storyQ.push({ text: `증거는 ${n}건뿐 — 상관없다. 내 몸이 증거다.`, color: '#9a9488' });
+      }
+    }
+
     // 단서 오브젝트 (기획 §4): 미획득 탐사 단서가 이 층 범위에 있으면 배치.
     // c1(덧칠된 비석)은 1층 첫 방 확정 — 부활 지점에서 첫 진실을 마주한다
     {
@@ -482,7 +495,7 @@ const Game = {
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도
       if (this.state === 'victory' && Input.pressed('KeyC')) {
-        const MAX_ACT = 4; // 구현된 막 수 — 5막이 열리면 올린다
+        const MAX_ACT = 5; // 전 막 구현 완료 — 50층 왕좌가 끝이다
         if ((this.act || 1) < MAX_ACT && Dungeon.floor <= (this.act || 1) * 10) this.continueNextAct();
         else this.continueEndless();
         return;

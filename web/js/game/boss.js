@@ -161,19 +161,49 @@ const BOSS_DEFS = {
     outro: '성배는… 교회가 왕에게 바쳤다… 신의 이름으로… 우리가… 시작했다…',
     deathPalette: ['#ffd866', '#e8e0cf', '#b13ae0'],
   },
+  // ── 5막 (45층): 근위대장 — 가레스의 옛 친우, 알고도 침묵한 자 ──
+  45: {
+    awakened: true, name: "근위대장 '흰 늑대'", sprite: 'bossWolf', scale: 1.75, r: 30, hp: 3600, speed: 52,
+    mechanic: { type: 'armor', cap: 2, label: '근위 판금 — 강한 일격을 경감한다' },
+    banner: "근위대장 '흰 늑대'",
+    punish: 'charge',
+    p1: ['charge>ring', 'sweep>sweep>fan:rock:snipe', 'snare>charge'],
+    p2: ['charge>snare>fan:rock:snipe', 'sweep>sweep>ring', 'fan:rock:cross>charge'],
+    rageText: '늑대가 이빨을 드러낸다!',
+    intro: '가레스… 아니, 그게 누구였든. 나는 맹세를 지킬 뿐이다. 알면서도.',
+    outro: '알고 있었다… 전부… 미안하다는 말은… 하지 않겠다… 벌을 다오…',
+    deathPalette: ['#e8ecf4', '#5a7a94', '#c22030'],
+  },
+  // ── 최종 보스 (50층): 왕 바르텐 3세 — 3페이즈 (검술 → 성배 폭주 → 분리 발악) ──
+  50: {
+    awakened: true, name: '왕 바르텐 3세', sprite: 'bossKing', scale: 2.0, r: 32, hp: 5000, speed: 50,
+    mechanic: { type: 'rage', label: '성배의 고동 — 시간이 지날수록 왕이 젊어진다' },
+    banner: '왕 바르텐 3세',
+    punish: 'volley', punishProj: 'soul',
+    // 1페이즈: 국왕 검술 — 인간의 격식
+    p1: ['sweep>sweep', 'charge>ring', 'fan:rock:snipe>sweep'],
+    // 2페이즈: 성배 폭주 — 지나온 보스들의 패턴을 역으로 사용 ("네놈들의 원한이 이런 모습이더냐")
+    p2: ['spiral:soul>ring:gap', 'geyser:poison>fan:fire:cross', 'summon:voidSpawn>spiral:soul', 'curse>sweep>fan:soul:snipe'],
+    // 3페이즈 (HP 25%↓ 맹공과 함께): 성배 분리 발악 — 모든 것을 쏟아낸다
+    p3: ['ring:gap>spiral:soul>fan:soul:snipe', 'geyser:poison>summon:voidSpawn>ring', 'curse>charge>fan:fire:cross'],
+    rageText: '성배여! 짐에게 시간을 다오!',
+    rageText2: '이 몸이 곧 왕국이다 — 전부 데려가겠다!',
+    intro: '…그 종이쪼가리들을 여기까지 들고 왔느냐. 짐은 왕국을 지켰을 뿐이다.',
+    outro: '성배가… 식는다… 짐의 시간이… 돌아온다… 전부… 한꺼번에…',
+    deathPalette: ['#ffd866', '#c22030', '#0a0612'],
+  },
 };
 
 function createBoss(floor, x, y) {
   // 중간 층 (11~19·21~29·31~39): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
   // 20 로트가르 / 30 발디아 / 40 이노첸시오 = 막보스 (고정 HP). 41층+ (무한 가도): 각성 5보스 순환
+  const FIXED = { 20: 20, 30: 30, 40: 40, 45: 45, 50: 50 };
   const defKey = floor <= 10 ? floor
-    : floor === 20 ? 20
-    : floor === 30 ? 30
-    : floor === 40 ? 40
-    : floor <= 39 ? ((floor - 11) % 4) + 6
-    : ((floor - 41) % 5) + 6;
+    : FIXED[floor] ? FIXED[floor]
+    : floor <= 49 ? ((floor - 11) % 4) + 6
+    : ((floor - 51) % 5) + 6;
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
-  const hpScale = floor <= 10 || floor === 20 || floor === 30 || floor === 40 ? 1 : 1 + 0.15 * (floor - 10);
+  const hpScale = floor <= 10 || FIXED[floor] ? 1 : 1 + 0.15 * (floor - 10);
   const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,
@@ -232,7 +262,7 @@ function createBoss(floor, x, y) {
     // 거리 편향 (원거리 보스전 피드백 2차): 보스가 플레이어의 포지셔닝을 읽는다 —
     // 멀리 서면 저격·간헐천·나선·소환 초식을, 붙으면 링·휩쓸기·돌진 초식을 우대한다
     _nextPattern(d) {
-      const list = this.phase === 2 ? this.def.p2 : this.def.p1;
+      const list = (this._onslaught && this.def.p3) ? this.def.p3 : this.phase === 2 ? this.def.p2 : this.def.p1;
       let pool = list;
       if (d != null) {
         if (d > 300 && Math.random() < 0.75) {
@@ -372,7 +402,7 @@ function createBoss(floor, x, y) {
       // 패턴 간격 단축 + 시전마다 추적 장판 1개 중첩. 전부 피할 수 있지만 안전한 틈이 좁아진다
       if (!this._onslaught && this.def.awakened && this.phase === 2 && this.hp <= this.maxHp * 0.25 && this.state !== 'veil') {
         this._onslaught = true;
-        game.banner = { text: `${this.name} — 최후의 맹공!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
+        game.banner = { text: this.def.rageText2 || `${this.name} — 최후의 맹공!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
         AudioSys.roar();
         Renderer.shake(6, 0.35);
         Particles.ring(this.x, this.y, { r0: 12, r1: 140, life: 0.6, color: '#e43b44', width: 5 });

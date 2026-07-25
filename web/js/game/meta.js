@@ -44,11 +44,16 @@ const CLUES = [
   { id: 'c16', act: 4, name: '대주교의 자백', how: 'boss', boss: 40,
     text: '"성배는… 교회가 왕에게 바쳤다… 신의 이름으로… 우리가… 시작했다…"' },
   // 5막 — 왕도와 왕좌
-  { id: 'c17', act: 5, name: '왕의 서신', how: 'explore', floors: null, text: null },
-  { id: 'c18', act: 5, name: '성배 의식 일지', how: 'explore', floors: null, text: null },
-  { id: 'c19', act: 5, name: '왕비의 유서', how: 'explore', floors: null, text: null },
-  { id: 'c20', act: 5, name: '근위대장의 자백', how: 'boss', boss: 45, text: null },
-  { id: 'c21', act: 5, name: '피의 성배', how: 'boss', boss: 50, text: null },
+  { id: 'c17', act: 5, name: '왕의 서신', how: 'explore', floors: [41, 44],
+    text: '"명단이 늦어지고 있다. 축일이 다가온다. — B." 필체가 처형 명단과 같다. 왕의 친필이다.' },
+  { id: 'c18', act: 5, name: '성배 의식 일지', how: 'explore', floors: [45, 48],
+    text: '축일마다 반복된 기록 — "죄 없는 피 열둘. 폐하의 안색이 돌아오셨다." 백 년 치가 넘는다.' },
+  { id: 'c19', act: 5, name: '왕비의 유서', how: 'explore', floors: [47, 50],
+    text: '"당신이 무슨 짓을 했는지 안다. 나는 당신보다 먼저 늙어 죽는 쪽을 택한다." — 왕비는 의식을 거부하고 죽었다.' },
+  { id: 'c20', act: 5, name: '근위대장의 자백', how: 'boss', boss: 45,
+    text: '"알고 있었다… 전부… 미안하다는 말은… 하지 않겠다… 벌을 다오…"' },
+  { id: 'c21', act: 5, name: '피의 성배', how: 'boss', boss: 50,
+    text: '왕의 가슴에서 뜯어낸 성배. 안에 담긴 것은 포도주가 아니다. 이제 깨뜨린다 — 전부 끝낸다.' },
 ];
 
 const CLASSES = {
@@ -161,6 +166,8 @@ const CODEX_ENEMIES = [
   { id: 'boss20', boss: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', desc: '2막의 주인. 검은 마차를 호위해온 자 — 군의관이 살아있는 한 상처가 아문다.' },
   { id: 'boss30', boss: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', desc: '3막의 주인. 내 판결문에 서명한 자 — 판결의 법복이 강한 일격을 경감한다.' },
   { id: 'boss40', boss: true, name: "대주교 '이노첸시오'", sprite: 'bossBishop', desc: '4막의 주인. 성배를 왕에게 바친 자 — 성역 결계 중에는 성물만이 약점이다.' },
+  { id: 'boss45', boss: true, name: "근위대장 '흰 늑대'", sprite: 'bossWolf', desc: '왕좌 앞 마지막 검. 알고도 침묵한 자 — 근위 판금이 강한 일격을 경감한다.' },
+  { id: 'boss50', boss: true, name: '왕 바르텐 3세', sprite: 'bossKing', desc: '모든 것의 답. 성배로 백 년을 산 자 — 3번 모습을 바꾼다. 증거를 전부 모아 왕좌에 못박아라.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)

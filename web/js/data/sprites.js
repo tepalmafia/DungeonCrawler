@@ -1421,6 +1421,9 @@ const Sprites = (() => {
   sprites.bossValdia = make(BOSSGOLEM_ROWS, { g: '#4c4434', d: '#322c20', G: '#6c6248', k: '#c22030', c: '#d9c08a' });
   // 4막 막보스: 대주교 이노첸시오 — 상아빛 제의 + 금빛 성화 + 핏빛 눈
   sprites.bossBishop = make(BOSSABYSS_ROWS, { K: '#c8bfa8', c: '#ffd866', k: '#3a3226', w: '#f4efe0', r: '#c22030', m: '#8a7a4a', p: '#241f14', q: '#d9a020' });
+  // 5막: 근위대장 '흰 늑대' — 흰 판금 + 강철 / 왕 바르텐 3세 — 금빛 왕관 + 성배의 핏빛
+  sprites.bossWolf = make(BOSSGOLEM_ROWS, { g: '#c8d0d8', d: '#8a94a4', G: '#e8ecf4', k: '#c22030', c: '#5a7a94' });
+  sprites.bossKing = make(BOSSABYSS_ROWS, { K: '#d9a020', c: '#c22030', k: '#241408', w: '#ffd866', r: '#e43b44', m: '#8a1c2c', p: '#141414', q: '#fff0c0' });
   sprites.bossQueen = make(BOSSSPORE_ROWS, { m: '#4a5464', M: '#8a94a4', D: '#2e3644', s: '#8a1c2c', S: '#5e1420', k: '#14181e', r: '#c22030' });
 
   // ══════════════ 오브젝트 ══════════════
