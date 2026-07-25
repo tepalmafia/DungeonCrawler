@@ -105,6 +105,9 @@ const HEAT_PACTS = [
   { id: 'speed', name: '질주 본능', desc: '적 속도 +15%' },
   { id: 'heal',  name: '메마른 샘', desc: '하트 드랍 절반 · 모닥불 회복 감소' },
   { id: 'boss',  name: '심연의 격노', desc: '보스 HP +50% · 시작 HP -1' },
+  // 확장 서약 (열기 5→7단): 골라담기라 어떤 조합이든 성립한다
+  { id: 'elite', name: '성난 망령', desc: '정예 확률 +10%p' },
+  { id: 'skill', name: '짧은 심지', desc: '스킬 쿨다운 +25%' },
 ];
 
 const META_UPGRADES = [
@@ -297,7 +300,7 @@ const Meta = {
 
   // ←→ 키 호환: 열기 N = canonical 순서 앞에서부터 N개 켠 것과 동치
   setHeat(h) {
-    const n = Math.min(5, Math.max(0, h));
+    const n = Math.min(HEAT_PACTS.length, Math.max(0, h));
     this.data.heatPacts = {};
     HEAT_PACTS.forEach((p, i) => { this.data.heatPacts[p.id] = i < n; });
     this.data.heat = n;

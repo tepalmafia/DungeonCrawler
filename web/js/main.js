@@ -81,7 +81,7 @@ const Game = {
   // 특성/유물은 id 목록을 재적용해 복원하고, 스칼라(HP·골드·XP)는 그대로 덮어쓴다.
   saveRun() {
     if (this.testMode && !this._forceSave) return; // 봇 계측 오염 방지
-    if (this.runEnded || Dungeon.floor > 10) return; // 무한 모드는 저장 없음
+    if (this.runEnded || Dungeon.floor > 10 || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
     const p = this.player;
     try {
       localStorage.setItem('dungeoncrawler_run', JSON.stringify({
@@ -159,6 +159,7 @@ const Game = {
     this.gaveUp = false;
     this.runEnded = false;
     this.dailyRun = false; // 오늘의 탑은 startDaily()로만 (R 재도전은 일반 런)
+    this.bossRush = false; // 보스 러시는 startBossRush()로만
     this.deathInfo = null;
     this._lastHurtBy = null;
     this.slowmoT = 0; // 완벽 회피 슬로모
