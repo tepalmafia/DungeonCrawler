@@ -404,6 +404,13 @@ const Bot = {
         if (!los) {
           // 장애물이 조준선을 막고 있다 — 옆으로 돌아 시야를 연다
           this._strafeForLoS(p, target, dt);
+        } else if (target.blocksFrom && d > 80) {
+          // 방패병 우회 (계측: 궁수 3층 '방패벽+저격수' 방에서 452연속 사망 소프트락) —
+          // 방패 회전은 1.1rad/s로 느리다: 반경 ~130에서 궤도 선회하면 측면이 열린다
+          if (!this._orbitDir) this._orbitDir = Math.random() < 0.5 ? 1 : -1;
+          const nx = (target.x - p.x) / d, ny = (target.y - p.y) / d;
+          const inward = d > 160 ? 0.5 : (d < 105 ? -0.5 : 0);
+          this._move(p, p.x + (-ny * this._orbitDir + nx * inward) * 60, p.y + (nx * this._orbitDir + ny * inward) * 60);
         } else if (this._roomStalls >= 3 && d > 110) {
           this._move(p, target.x, target.y); // 교착 강행 돌파: 밀착해서 스킬·근접 판정으로 끝낸다
         } else if (d < 160) this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);

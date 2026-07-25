@@ -350,7 +350,8 @@ const GameCombat = {
     }
 
     p.hp -= dmg;
-    p.invuln = p.classId === 'knight' ? 1.2 : 0.9; // 검사: 근접 리스크 보상 — 다굴 방지
+    // 검사 1.2(근접 리스크 보상) / 궁수 1.05(밴드 계측: 열기0 사망이 검사의 120% — HP4 연쇄 피격 완화) / 마도사 0.9(밴드 내)
+    p.invuln = p.classId === 'knight' ? 1.2 : p.classId === 'archer' ? 1.05 : 0.9;
     p.kbx = dir.x * kb;
     p.kby = dir.y * kb;
     this.hitstop = Math.max(this.hitstop, 0.09); // 얻어맞는 순간은 세계가 함께 멈춘다
