@@ -20,7 +20,7 @@ const BOSS_DEFS = {
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
-    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 220, speed: 34,
+    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 190, speed: 34, // 계측: 2층 사망이 전체의 절반 — 전투 길이 단축
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '포자왕 믹서스',
     p1: ['fan:spore', 'ring', 'summon:mushroom'],
@@ -439,7 +439,7 @@ function createBoss(floor, x, y) {
       // 접촉 데미지 (장막 중 제외) — 2페이즈부터는 몸 자체가 흉기다
       if (this.state !== 'veil' && this.hitCd <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
         this.hitCd = 0.8;
-        game.hurtPlayer(this.phase === 2 ? 2 : 1, { x: dx / d, y: dy / d });
+        game.hurtPlayer(this.phase === 2 && Dungeon.floor >= 3 ? 2 : 1, { x: dx / d, y: dy / d }); // 접촉 2는 3층부터
       }
     },
 
@@ -534,7 +534,7 @@ function createBoss(floor, x, y) {
         Renderer.shake(4, 0.2);
         AudioSys.thud();
         game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 300, width: 15, dmg: 1 });
-        if (this.phase === 2) {
+        if (this.phase === 2 && Dungeon.floor >= 3) { // 이중 링은 3층부터 — 입문 보스에서 대시 2관리 요구는 과했다
           game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 210, width: 15, dmg: 1 });
         }
         this.state = 'idle';

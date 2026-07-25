@@ -1707,7 +1707,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           // 조준 0.75초 — 0.5초에 조준 고정 (사슬 궤도가 보인다)
           if (this.stateT < 0.5) this.aimDir = { x: dx / d, y: dy / d };
           if (this.stateT > 0.75) {
-            this.state = 'stalk'; this.stateT = 0; this.hookCd = 3.5;
+            this.state = 'stalk'; this.stateT = 0; this.hookCd = 4.2; // 3층 초입 완화
             // 사슬 스냅: 궤도 위에 있으면 끌려온다
             const rx = p.x - this.x, ry = p.y - this.y;
             const along = rx * this.aimDir.x + ry * this.aimDir.y;
@@ -1762,7 +1762,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           World.moveEntity(this, (-dx / d) * this.effSpeed() * dt, (-dy / d) * this.effSpeed() * dt);
         }
         if (this.castCd <= 0 && d < 420) {
-          this.castCd = 2.8;
+          this.castCd = 3.3; // 3층 초입 완화
           const base = Math.atan2(dy, dx);
           for (const off of [-0.32, 0, 0.32]) {
             game.spawnProjectile('ice', this.x, this.y, { x: Math.cos(base + off), y: Math.sin(base + off) }, { speed: 200, dmg: 1, slow: 1.2 });
