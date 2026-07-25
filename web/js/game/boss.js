@@ -148,18 +148,32 @@ const BOSS_DEFS = {
     outro: '성배가 마르면… 왕국이 마른다고 했다… 나는… 서명만 했을 뿐…',
     deathPalette: ['#d9c08a', '#4c3c4c', '#c22030'],
   },
+  // ── 4막 막보스 (40층): 성배를 왕에게 바친 교회의 수장 ──
+  40: {
+    awakened: true, name: "대주교 '이노첸시오'", sprite: 'bossBishop', scale: 1.9, r: 30, hp: 3200, speed: 44,
+    mechanic: { type: 'veil', label: '성역 결계 — 성물을 파괴하라', veils: [0.7, 0.4] },
+    banner: "대주교 '이노첸시오'",
+    punish: 'volley', punishProj: 'soul',
+    p1: ['fan:soul:snipe>ring', 'curse>spiral:soul', 'summon:acolyte>fan:soul:cross'],
+    p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'curse>summon:acolyte>ring', 'sweep>curse>spiral:soul'],
+    rageText: '신성 모독이다! 성화여, 불태워라!',
+    intro: '죽은 자가 성소에 들다니. 성화의 이름으로 — 재가 되어라.',
+    outro: '성배는… 교회가 왕에게 바쳤다… 신의 이름으로… 우리가… 시작했다…',
+    deathPalette: ['#ffd866', '#e8e0cf', '#b13ae0'],
+  },
 };
 
 function createBoss(floor, x, y) {
-  // 11~19층 (2막)·21~29층 (3막): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
-  // 20층 로트가르 / 30층 발디아 = 막보스 (고정 HP). 31층+ (무한 가도): 각성 5보스 순환
+  // 중간 층 (11~19·21~29·31~39): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
+  // 20 로트가르 / 30 발디아 / 40 이노첸시오 = 막보스 (고정 HP). 41층+ (무한 가도): 각성 5보스 순환
   const defKey = floor <= 10 ? floor
     : floor === 20 ? 20
     : floor === 30 ? 30
-    : floor <= 29 ? ((floor - 11) % 4) + 6
-    : ((floor - 31) % 5) + 6;
+    : floor === 40 ? 40
+    : floor <= 39 ? ((floor - 11) % 4) + 6
+    : ((floor - 41) % 5) + 6;
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
-  const hpScale = floor <= 10 || floor === 20 || floor === 30 ? 1 : 1 + 0.15 * (floor - 10);
+  const hpScale = floor <= 10 || floor === 20 || floor === 30 || floor === 40 ? 1 : 1 + 0.15 * (floor - 10);
   const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,

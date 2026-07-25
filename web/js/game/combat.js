@@ -135,8 +135,9 @@ const GameCombat = {
       ? 'boss' + (Dungeon.floor <= 10 ? Dungeon.floor
         : Dungeon.floor === 20 ? 20
         : Dungeon.floor === 30 ? 30
-        : Dungeon.floor <= 29 ? ((Dungeon.floor - 11) % 4) + 6
-        : ((Dungeon.floor - 31) % 5) + 6)
+        : Dungeon.floor === 40 ? 40
+        : Dungeon.floor <= 39 ? ((Dungeon.floor - 11) % 4) + 6
+        : ((Dungeon.floor - 41) % 5) + 6)
       : (e.codexType || e.type));
     if (e.isBoss && e.def) this._lastBossOutro = e.def.outro; // 마이크로 서사: onBossDead 끝에서 출력
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
@@ -169,6 +170,10 @@ const GameCombat = {
           AudioSys.crit();
         }
       }
+    }
+    // 해방의 속삭임 (기획 §5 4막): 저주로 깨어난 자들은 베어주면 고맙다고 속삭인다
+    if (Dungeon.floor >= 31 && Dungeon.floor <= 40 && ['ghoul', 'skeleton', 'shieldSkeleton', 'wraith', 'shade'].includes(e.type) && Math.random() < 0.12) {
+      Particles.text(e.x, e.y - 30, '…고맙다…', { color: '#9a9488', size: 12 });
     }
     Renderer.shake(3, 0.15);
     AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');

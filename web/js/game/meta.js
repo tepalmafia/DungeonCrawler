@@ -35,10 +35,14 @@ const CLUES = [
   { id: 'c12', act: 3, name: '대재판관의 자백', how: 'boss', boss: 30,
     text: '"성배가 마르면… 왕국이 마른다고 했다… 나는… 서명만 했을 뿐…"' },
   // 4막 — 역병의 마을과 대성당
-  { id: 'c13', act: 4, name: '소각장의 명단', how: 'explore', floors: null, text: null },
-  { id: 'c14', act: 4, name: '고해실 기록', how: 'explore', floors: null, text: null },
-  { id: 'c15', act: 4, name: '납골당의 빈 관', how: 'explore', floors: null, text: null },
-  { id: 'c16', act: 4, name: '대주교의 자백', how: 'boss', boss: 40, text: null },
+  { id: 'c13', act: 4, name: '소각장의 명단', how: 'explore', floors: [31, 34],
+    text: "소각 대상 명단 — '역병 사망자'라 적혀 있다. 대조해보니, 전부 처형자 명단과 일치한다." },
+  { id: 'c14', act: 4, name: '고해실 기록', how: 'explore', floors: [35, 38],
+    text: '어느 사제의 고해 — "죽은 자들이 깨어나는 건 역병이 아닙니다. 성하께서는 아십니다. 알고 계십니다."' },
+  { id: 'c15', act: 4, name: '납골당의 빈 관', how: 'explore', floors: [37, 40],
+    text: '관이 전부 비어 있다. 뚜껑마다 왕실 봉인 — 시신은 성으로 갔다. 피만 뽑히고 버려진 게 아니라면.' },
+  { id: 'c16', act: 4, name: '대주교의 자백', how: 'boss', boss: 40,
+    text: '"성배는… 교회가 왕에게 바쳤다… 신의 이름으로… 우리가… 시작했다…"' },
   // 5막 — 왕도와 왕좌
   { id: 'c17', act: 5, name: '왕의 서신', how: 'explore', floors: null, text: null },
   { id: 'c18', act: 5, name: '성배 의식 일지', how: 'explore', floors: null, text: null },
@@ -156,6 +160,7 @@ const CODEX_ENEMIES = [
   { id: 'boss10', boss: true, name: "왕실 처형인 '무거운 손'", sprite: 'bossVoid',  desc: '탑의 진정한 정점. 세 겹의 어둠 장막과 공허 유충 — 모든 것을 건 최후의 시험.' },
   { id: 'boss20', boss: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', desc: '2막의 주인. 검은 마차를 호위해온 자 — 군의관이 살아있는 한 상처가 아문다.' },
   { id: 'boss30', boss: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', desc: '3막의 주인. 내 판결문에 서명한 자 — 판결의 법복이 강한 일격을 경감한다.' },
+  { id: 'boss40', boss: true, name: "대주교 '이노첸시오'", sprite: 'bossBishop', desc: '4막의 주인. 성배를 왕에게 바친 자 — 성역 결계 중에는 성물만이 약점이다.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
