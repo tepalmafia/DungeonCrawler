@@ -1248,7 +1248,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 거리 응답: 멀리서 얼쩡거리면 포효하고 덮쳐온다
           if (this.rushCd <= 0 && d > 240) {
-            this.roarT = enraged ? 0.35 : 0.55; this.rushCd = 4.2;
+            this.roarT = enraged ? 0.35 : 0.55; this.rushCd = 5.0;
             this.rushDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
           }
           this.touchPlayer(game, enraged ? 2 : 1);
@@ -1863,7 +1863,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         } else {
           const wig = Math.sin(this.animT * 9) * 0.5;
           World.moveEntity(this, (dx / d + -dy / d * wig) * this.effSpeed() * dt, (dy / d + dx / d * wig) * this.effSpeed() * dt);
-          if (this.flareCd <= 0 && d > 190) { this.flareT = 0.38; this.flareCd = 3.8; }
+          if (this.flareCd <= 0 && d > 190) { this.flareT = 0.38; this.flareCd = 4.6; }
         }
         if (Math.random() < 0.15) {
           Particles.burst(this.x, this.y, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 30, life: 0.3, size: 2, gravity: -100 });
@@ -1904,7 +1904,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             game.firePatches.push({ x: this.x, y: this.y + 4, r: 18, life: 1.2, kind: 'fire' });
           }
           // 거리 응답: 느린 걸음을 비웃으며 카이팅하면 잉걸불을 뱉는다
-          if (this.spitCd <= 0 && d > 170 && d < 340) { this.spitT = 0.5; this.spitCd = 4.5; }
+          if (this.spitCd <= 0 && d > 170 && d < 340) { this.spitT = 0.5; this.spitCd = 5.2; }
         }
         this.touchPlayer(game, 1);
       },
