@@ -658,6 +658,17 @@ const Icons = (() => {
     glasssword: ['greatsword', { w: '#a8d8e8', W: '#e0f8ff', h: '#5a7a8a', s: '#7ab8cc' }],
     engine: ['gear', { k: '#8a4a20', K: '#e4903b' }],
     kingseal: ['crown', P.gold],
+    // 확장 10종
+    hunterseye: ['crosshair', { w: '#38b764', R: '#ffd866' }],
+    charm: ['stone', { g: '#5a4480', G: '#8a6ac0', s: '#2ec4b6' }],
+    scale: ['coin', { g: '#1a6a60', G: '#2ec4b6', w: '#7de8dc', r: '#ffd866', s: '#145048' }],
+    stormneedle: ['bolt', { y: '#c8d4e4', Y: '#fff7d0' }],
+    ashcloak: ['embers', { r: '#e43b44', R: '#ff7043', o: '#ffd866' }],
+    butcherhook: ['axe', { r: '#6a1c2c', R: '#a43a4a', h: '#5a5a6e' }],
+    goldenheart: ['heart', { r: '#8a6a20', R: '#ffd866', w: '#fff7d0' }],
+    hungryblade: ['sword', { w: '#a43a4a', W: '#e43b44', h: '#3a3a48', s: '#8a1a2a' }],
+    clockhand: ['hourglass', { g: '#1a6a60', w: '#5ce0e6', s: '#a9fff7' }],
+    crownshard: ['crown', { g: '#5a4480', G: '#b13ae0', r: '#e43b44' }],
   };
 
   // 특성 id → [모티프, 팔레트] (미등록 id는 태그 기본형)

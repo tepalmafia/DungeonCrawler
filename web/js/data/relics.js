@@ -58,6 +58,29 @@ const RELICS = [
     apply: (p) => { p.speed *= 0.75; }, flag: 'engine' },
   { id: 'kingseal',  rarity: 'legendary', unlock: { stat: 'wins', n: 2, label: '2회 등정' }, name: '왕의 인장',
     desc: '레벨업 선택지가 4장이 되고, 즉시 특성 1개를 얻는다', flag: 'kingseal' },
+
+  // ── 확장 10종 (다회차 사이클): 골드·반응·완벽 회피 등 기존 시스템과 맞물린다 ──
+  { id: 'hunterseye', rarity: 'common', name: '사냥꾼의 눈',
+    desc: '크리티컬 확률 +7%', apply: (p) => { p.critChance += 0.07; } },
+  { id: 'charm',      rarity: 'common', name: '낡은 부적',
+    desc: '런 정산 영혼 파편 +15%', flag: 'charm' },
+  { id: 'scale',      rarity: 'rare', unlock: { stat: 'runs', n: 8, label: '8회 도전' }, name: '장사꾼의 저울',
+    desc: '상인 가격 -25%', flag: 'haggle' },
+  { id: 'stormneedle', rarity: 'rare', name: '피뢰침',
+    desc: '크리티컬 시 20% 확률로 감전 (반응의 재료)', flag: 'stormcrit' },
+  { id: 'ashcloak',   rarity: 'rare', unlock: { stat: 'totalKills', n: 600, label: '누적 600킬' }, name: '잿불 망토',
+    desc: '피격 시 주변 적에게 화상', flag: 'ashcloak' },
+  { id: 'butcherhook', rarity: 'epic', unlock: { stat: 'bestFloor', n: 6, label: '6층 도달' }, name: '도살자의 갈고리',
+    desc: '정예·우두머리·보스 처치 시 HP 1 회복', flag: 'butcher' },
+  { id: 'goldenheart', rarity: 'epic', name: '황금 심장',
+    desc: '최대 HP +1, 골드 획득 +30%', flag: 'goldheart',
+    apply: (p) => { p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); } },
+  { id: 'hungryblade', rarity: 'epic', name: '굶주린 검',
+    desc: '40회 처치마다 공격력 +1 (최대 +3)', flag: 'hungry' },
+  { id: 'clockhand',  rarity: 'legendary', unlock: { stat: 'totalKills', n: 3000, label: '누적 3000킬' }, name: '시곗바늘',
+    desc: '완벽 회피 시 스킬 쿨다운 -1.5초', flag: 'clockhand' },
+  { id: 'crownshard', rarity: 'legendary', unlock: { stat: 'bestFloor', n: 9, label: '9층 도달' }, name: '왕관의 파편',
+    desc: '우두머리·보스에게 피해 +15%, 그들의 골드 2배', flag: 'crownshard' },
 ];
 
 // 등급 가중치 추첨. bossRoll=true면 상위 등급 확률 대폭 상승 (보스 보상)

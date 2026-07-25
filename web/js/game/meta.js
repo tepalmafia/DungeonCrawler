@@ -324,8 +324,8 @@ const Meta = {
     return Math.max(1, Math.round(base * (1 + 0.15 * this.lvl('greed')) * (1 + 0.2 * heat)));
   },
 
-  endRun(floor, roomIndex, kills, victory, heat = 0) {
-    const earned = this.runReward(floor, roomIndex, kills, victory, heat);
+  endRun(floor, roomIndex, kills, victory, heat = 0, mul = 1) {
+    const earned = Math.round(this.runReward(floor, roomIndex, kills, victory, heat) * mul);
     this.data.shards += earned;
     this.data.runs++;
     this.data.totalKills += kills;

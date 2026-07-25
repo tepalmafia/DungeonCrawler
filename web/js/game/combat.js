@@ -25,7 +25,14 @@ const GameCombat = {
     // 타격당 최대 피해 = 최대 HP의 1.5% (최소 2) — 어떤 빌드라도 보스는 ~67타를 버틴다.
     // 기준: 유일하게 "보스답다"는 평가를 받은 골렘(중장갑 flat 2, 강빌드 TTK 29s)과 같은 체급.
     // 약한 빌드에는 상한이 걸리지 않으므로 저점 난이도는 그대로다.
+    // 왕관의 파편: 굵직한 표적 특화 — 버스트 상한보다 먼저 곱해 상한 취지 유지
+    if ((e.isBoss || e.isMini) && this.player && this.player.rflags.crownshard) dmg = Math.round(dmg * 1.15);
     if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.015)));
+    // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
+    if (crit && !e.isBoss && this.player && this.player.rflags.stormcrit && Math.random() < 0.2) {
+      e.status.shock = Math.max(e.status.shock || 0, 2);
+      Particles.text(e.x, e.y - 30, '감전', { color: '#ffd866', size: 11 });
+    }
     // 처형 (S1): 상태이상 2종 이상을 품은 적에게 크리티컬 = 피해 ×1.3 — 원소 믹스 빌드의 보상
     if (crit && !e.isBoss) {
       const stCount = (e.status.burn > 0 ? 1 : 0) + (e.status.poison > 0 ? 1 : 0) + (e.status.shock > 0 ? 1 : 0);
@@ -111,14 +118,33 @@ const GameCombat = {
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
     // 골드 (G1): 굵직한 처치에서만 떨어진다 — 상인에게만 쓰는 런 화폐
-    if (e.isBoss) {
-      const g = 20 + Dungeon.floor * 3; // 경제 계측: 10층 누적 ~3,700G(장바구니 20배) → 수입 감쇠
-      this.gold += g;
-      Particles.text(e.x, e.y - 30, `+${g}G`, { color: '#ffd866', size: 16 });
-    } else if (e.elite || e.isMini) {
-      const g = 4 + Dungeon.floor; // 심층 정예율 ~40%가 수입 폭증의 주범 — 층 계수 절반
-      this.gold += g;
-      Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
+    {
+      const pl = this.player;
+      const gmul = (pl && pl.rflags.goldheart ? 1.3 : 1) * (pl && pl.rflags.crownshard && (e.isBoss || e.isMini) ? 2 : 1);
+      if (e.isBoss) {
+        const g = Math.round((20 + Dungeon.floor * 3) * gmul); // 경제 계측: 수입 감쇠 후 기준
+        this.gold += g;
+        Particles.text(e.x, e.y - 30, `+${g}G`, { color: '#ffd866', size: 16 });
+      } else if (e.elite || e.isMini) {
+        const g = Math.round((4 + Dungeon.floor) * gmul);
+        this.gold += g;
+        Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
+      }
+      // 도살자의 갈고리: 굵직한 처치가 곧 회복 — 근접 빌드의 유지력 축
+      if (pl && pl.rflags.butcher && (e.elite || e.isMini || e.isBoss) && pl.hp < pl.maxHp) {
+        pl.hp++;
+        Particles.text(pl.x, pl.y - 28, '+1', { color: '#e43b44', size: 14 });
+      }
+      // 굶주린 검: 40처치마다 공격력 +1 (상한 +3) — 학살이 성장이 된다
+      if (pl && pl.rflags.hungry) {
+        pl._hungryKills = (pl._hungryKills || 0) + 1;
+        if (pl._hungryKills % 40 === 0 && (pl._hungryStacks || 0) < 3) {
+          pl._hungryStacks = (pl._hungryStacks || 0) + 1;
+          pl.bonusAtk += 1;
+          this.banner = { text: `굶주린 검이 깨어난다 — 공격력 +1 (${pl._hungryStacks}/3)`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
+          AudioSys.crit();
+        }
+      }
     }
     Renderer.shake(3, 0.15);
     AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');
@@ -326,6 +352,11 @@ const GameCombat = {
         Particles.text(p.x, p.y - 34, '완벽 회피!', { color: '#5ce0e6', size: 19 });
         AudioSys.pdodge();
         Renderer.shake(3, 0.14);
+        // 시곗바늘: 완벽 회피가 스킬을 당긴다 — 회피 실력이 화력이 되는 레전더리
+        if (p.rflags.clockhand && p.skillCd > 0) {
+          p.skillCd = Math.max(0, p.skillCd - 1.5);
+          Particles.text(p.x, p.y - 52, '스킬 -1.5초', { color: '#f7b32b', size: 13 });
+        }
       }
       return;
     }
@@ -363,6 +394,17 @@ const GameCombat = {
       count: 13, colors: ['#e43b44', '#8a1c2c'], speed: 160, life: 0.4, size: 3,
     });
     Particles.ring(p.x, p.y, { r0: 6, r1: 38, life: 0.25, color: '#e43b44', width: 4 });
+
+    // 잿불 망토: 얻어맞은 대가로 주변을 불태운다 (반응 재료 공급원이기도 하다)
+    if (p.rflags.ashcloak) {
+      for (const e of this.enemies) {
+        if (e.dead || e.phased || e.neutral) continue;
+        if (Math.hypot(e.x - p.x, e.y - p.y) < 80) {
+          e.status.burn = Math.max(e.status.burn || 0, 2.5);
+        }
+      }
+      Particles.burst(p.x, p.y, { count: 10, colors: ['#ff7043', '#ffd866'], speed: 150, life: 0.4, size: 3 });
+    }
 
     // 가시 갑옷 (특성) + 가시 방패 (유물)
     if (p.flags.thorns || p.rflags.spikeshield) {
