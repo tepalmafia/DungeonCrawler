@@ -153,7 +153,7 @@ const TRAITS = [
       p.maxHp = Math.max(1, p.maxHp - 2);
       p.hp = Math.min(p.hp, p.maxHp);
     } },
-  { id: 'monarch', unlock: { stat: 'wins', n: 1, label: '첫 등정' },   name: '왕의 권능',   tag: '전설', color: '#ffd866', legend: true,
+  { id: 'monarch', unlock: { stat: 'wins', n: 1, label: '첫 복수' },   name: '왕의 권능',   tag: '전설', color: '#ffd866', legend: true,
     desc: '처치 시 5% 확률로 영혼 폭발 (주변에 3 피해)', flag: 'monarch' },
 ];
 

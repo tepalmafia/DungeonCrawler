@@ -247,7 +247,7 @@ const Meta = {
     if (typeof Game !== 'undefined' && Game.testMode) return true; // 테스트 모드: 전 직업 개방
     if (this.data.classes[id]) return true; // 구버전(파편 구매) 이관 보호
     const c = CLASSES[id] && CLASSES[id].cond;
-    return !!c && (this.data[c.stat] || 0) >= c.n; // 조건 해금: 궁수 3층 / 마도사 5층 / 연금술사 첫 등정
+    return !!c && (this.data[c.stat] || 0) >= c.n; // 조건 해금: 궁수 3층 / 마도사 5층 / 연금술사 첫 복수
   },
 
   // 조건 해금 전환 (2026-07): 파편 구매 폐지 — 치트(Y)·강제 지급 전용
