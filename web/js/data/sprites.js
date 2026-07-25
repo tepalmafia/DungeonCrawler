@@ -83,153 +83,303 @@ const Sprites = (() => {
     return tints.get(key);
   }
 
-  // ══════════════ 플레이어 (24×24, 걷기 프레임 3장) ══════════════
-  // 직업별 전용 상체 (중세 리디자인) + 다리 프레임 3종 (정지 / 벌림 / 모음)
+  // ══════════════ 플레이어 (28×24, 직업별 전용 픽셀맵) ══════════════
+  // [스프라이트 리워크] 4직업이 각자의 무기를 들고 있다 — 상체 17행 + 다리 7행.
+  // 프레임: [0] 정지 / [1] 걷기-벌림 / [2] 걷기-모음 / [3] 공격(무기 액션) / [4] 피격(젖혀짐)
 
-  // 검사: 깃털 장식 대투구 + 판금 어깨 갑주 + 서코트
-  const KNIGHT_TOP = [
-    '........................',
-    '...........rr...........',
-    '..........rrrr..........',
-    '........hhhhhhhh........',
-    '.......hhhhhhhhhh.......',
-    '.......hHHhhhhHHh.......',
-    '.......hkkkkkkkkh.......',
-    '.......hHHhhhhHHh.......',
-    '........hhhhhhhh........',
-    '......ss.tttttt.ss......',
-    '.....sssttttttttsss.....',
-    '.....ffttttttttttff.....',
-    '.....ffttyyyyyyttff.....',
-    '.....ffttttttttttff.....',
-    '.....FfttttttttttfF.....',
-    '......TttttttttttT......',
-    '.......TTttttttTT.......',
+  const KNIGHT_IDLE = [ // 검사 — 대투구+깃털, 카이트 방패, 장검
+    '..............rr............',
+    '.............rrrr......w....',
+    '...........hhhhhh......wW...',
+    '..........hhhhhhhh.....wW...',
+    '..........hkkkkkkh.....wW...',
+    '..........hkokkokh.....wW...',
+    '..........hHhhhhHh.....wW...',
+    '..........hhhhhhhh.....wW...',
+    '...........hhhhhh......wW...',
+    '.......sss.tttttt.sss.yyyy..',
+    '......ssssttttttttssss.mm...',
+    '...eEEEeffttttttttff..fmmf..',
+    '...eEyEeffttyyyyttff...yy...',
+    '...eEEEeffttttttttff........',
+    '....eEe.FfttttttttfF........',
+    '.....e...TttttttttT.........',
+    '...........TTttttTT.........',
   ];
-  // 궁수: 깊은 후드(그늘진 얼굴 + 빛나는 눈) + 가죽 어깨망토 + 교차 가죽끈
-  const ARCHER_TOP = [
-    '........................',
-    '..........hhhh..........',
-    '.........hhhhhh.........',
-    '........hhhhhhhh........',
-    '.......hhhhhhhhhh.......',
-    '.......hhHkkkkHhh.......',
-    '.......hhkgkkgkhh.......',
-    '.......hhHkkkkHhh.......',
-    '........hhffffhh........',
-    '.......ccttttttcc.......',
-    '......cctxttttxtcc......',
-    '.....ffttxxttxxttff.....',
-    '.....ffttyyyyyyttff.....',
-    '.....ffttttttttttff.....',
-    '.....FfttttttttttfF.....',
-    '......TttttttttttT......',
-    '.......TTttttttTT.......',
+  const KNIGHT_ATK = [
+    '..............rr............',
+    '.............rrrr...........',
+    '...........hhhhhh...........',
+    '..........hhhhhhhh..........',
+    '..........hkkkkkkh..........',
+    '..........hkokkokh..........',
+    '..........hHhhhhHh..........',
+    '..........hhhhhhhh..........',
+    '...........hhhhhh...........',
+    '.......sss.tttttt.sss.......',
+    '......ssssttttttttssss......',
+    '...eEEEeffttttttttffffywwwww',
+    '...eEyEeffttyyyyttff...WWWW.',
+    '...eEEEeffttttttttff........',
+    '....eEe.FfttttttttfF........',
+    '.....e...TttttttttT.........',
+    '...........TTttttTT.........',
   ];
-  // 마도사: 챙 넓은 마법사 모자(금 별 장식) + 백발 수염 + 룬 벨트 로브
-  const MAGE_TOP = [
-    '...........pp...........',
-    '..........pppp..........',
-    '.........ppyppp.........',
-    '........pppppppp........',
-    '.........pppppp.........',
-    '......pppppppppppp......',
-    '....pppppppppppppppp....',
-    '.......hffffffffh.......',
-    '.......hfvffffvfh.......',
-    '........ffwwwwff........',
-    '.........wwwwww.........',
-    '.......tttttttttt.......',
-    '......tttttttttttt......',
-    '.....ffttyyyyyyttff.....',
-    '.....FfttttttttttfF.....',
-    '......TttttttttttT......',
-    '.......TTttttttTT.......',
+  const KNIGHT_HURT = [
+    '.............rr.............',
+    '............rrrr.......w....',
+    '..........hhhhhh.......wW...',
+    '.........hhhhhhhh......wW...',
+    '.........hkkkkkkh......wW...',
+    '.........hkkkkkkh......wW...',
+    '.........hHhhhhHh......wW...',
+    '.........hhhhhhhh......wW...',
+    '..........hhhhhh.......wW...',
+    '.......sss.tttttt.sss.yyyy..',
+    '......ssssttttttttssss.mm...',
+    '...eEEEeffttttttttff..fmmf..',
+    '...eEyEeffttyyyyttff...yy...',
+    '...eEEEeffttttttttff........',
+    '....eEe.FfttttttttfF........',
+    '.....e...TttttttttT.........',
+    '...........TTttttTT.........',
+  ];
+  const ARCHER_IDLE = [ // 궁수 — 깊은 후드, 장궁+시위, 조준 화살
+    '............hhhh............',
+    '...........hhhhhh...........',
+    '..........hhhhhhhh.....mm...',
+    '.........hhhhhhhhhh...s.mM..',
+    '.........hhkkkkkkhh...s.mM..',
+    '.........hhkgkkgkhh...s.Mm..',
+    '.........hhkkkkkkhh...s..mM.',
+    '.........hHhffffhHh...s..mM.',
+    '..........hhffffhh....s..mM.',
+    '........ccttttttttcc..s.Mm..',
+    '.......cctxttttttxtcc.s.mM..',
+    '......ffttxxttxxttff.ffMm...',
+    '......ffttyyyyyyttff..s.mM..',
+    '......ffttttttttttff...mm...',
+    '......FfttttttttttfF........',
+    '........TttttttttttT........',
+    '..........TTttttTT..........',
+  ];
+  const ARCHER_ATK = [
+    '............hhhh............',
+    '...........hhhhhh...........',
+    '..........hhhhhhhh..........',
+    '.........hhhhhhhhhh.........',
+    '.........hhkkkkkkhh.........',
+    '.........hhkgkkgkhh.........',
+    '.........hhkkkkkkhh.........',
+    '.........hHhffffhHh.........',
+    '..........hhffffhh.....mm...',
+    '........ccttttttttcc..s.mM..',
+    '.......cctxttttttxtccs..mM..',
+    '......ffttxxttxxttfffaaaaMw.',
+    '......ffttyyyyyyttff.s..mM..',
+    '......ffttttttttttff..s.mM..',
+    '......FfttttttttttfF...mm...',
+    '........TttttttttttT........',
+    '..........TTttttTT..........',
+  ];
+  const ARCHER_HURT = [
+    '...........hhhh.............',
+    '..........hhhhhh............',
+    '.........hhhhhhhh......mm...',
+    '........hhhhhhhhhh....s.mM..',
+    '........hhkkkkkkhh....s.mM..',
+    '........hhkkkkkkhh....s.Mm..',
+    '........hhkkkkkkhh....s..mM.',
+    '........hHhffffhHh....s..mM.',
+    '.........hhffffhh.....s..mM.',
+    '........ccttttttttcc..s.Mm..',
+    '.......cctxttttttxtcc.s.mM..',
+    '......ffttxxttxxttff.ffMm...',
+    '......ffttyyyyyyttff..s.mM..',
+    '......ffttttttttttff...mm...',
+    '......FfttttttttttfF........',
+    '........TttttttttttT........',
+    '..........TTttttTT..........',
+  ];
+  const MAGE_IDLE = [ // 마도사 — 별 장식 대모자, 수정 지팡이
+    '.............pp........v....',
+    '............pppp......vVv...',
+    '...........ppyppp......v....',
+    '..........pppppppp.....m....',
+    '...........pppppp......m....',
+    '........pppppppppppp...m....',
+    '......pppppppppppppppp.m....',
+    '.........hffffffffh....m....',
+    '.........hfvffffvfh....m....',
+    '..........ffwwwwff.....m....',
+    '...........wwwwww......m....',
+    '.........tttttttttt..ffm....',
+    '........tttttttttttt...m....',
+    '.......ffttyyyyyyttff..m....',
+    '.......FfttttttttttfF..m....',
+    '........TttttttttttT........',
+    '.........TTttttttTT.........',
+  ];
+  const MAGE_ATK = [
+    '.............pp.............',
+    '............pppp............',
+    '...........ppyppp...........',
+    '..........pppppppp..........',
+    '...........pppppp...........',
+    '........pppppppppppp........',
+    '......pppppppppppppppp......',
+    '.........hffffffffh.........',
+    '.........hfvffffvfh.........',
+    '..........ffwwwwff.......V..',
+    '...........wwwwww.......vV..',
+    '.........ttttttttttffmmmvVVv',
+    '........tttttttttttt....Vv..',
+    '.......ffttyyyyyyttff....v..',
+    '.......FfttttttttttfF.......',
+    '........TttttttttttT........',
+    '.........TTttttttTT.........',
+  ];
+  const MAGE_HURT = [
+    '............pp.........v....',
+    '...........pppp.......vVv...',
+    '..........ppyppp.......v....',
+    '.........pppppppp......m....',
+    '..........pppppp.......m....',
+    '.......pppppppppppp....m....',
+    '.....pppppppppppppppp..m....',
+    '........hffffffffh.....m....',
+    '........hffffffffh.....m....',
+    '..........ffwwwwff.....m....',
+    '...........wwwwww......m....',
+    '.........tttttttttt..ffm....',
+    '........tttttttttttt...m....',
+    '.......ffttyyyyyyttff..m....',
+    '.......FfttttttttttfF..m....',
+    '........TttttttttttT........',
+    '.........TTttttttTT.........',
+  ];
+  const ALCH_IDLE = [ // 연금술사 — 황동 고글, 시약 탄띠, 투척 플라스크
+    '...........qqqqqq...........',
+    '..........qqqqqqqq..........',
+    '.........GGGGGGGGGG.........',
+    '.........GLLGGGGLLG.........',
+    '.........GLLGGGGLLG.........',
+    '.........ffffffffff.........',
+    '..........ffffffff..........',
+    '.........tttttttttt.........',
+    '.......ttxttttttttttt.......',
+    '......fftttxtttttttt........',
+    '......ffttttxtttttttff.c....',
+    '......ffxOxOxOxxttttf.vvv...',
+    '......ffttttttttttttf.vOv...',
+    '......Fftttttttttttt..vvv...',
+    '.......FttttttttttttF.......',
+    '........TttttttttttT........',
+    '..........TTttttTT..........',
+  ];
+  const ALCH_ATK = [
+    '...........qqqqqq....vOv....',
+    '..........qqqqqqqq...vvv....',
+    '.........GGGGGGGGGG...c.....',
+    '.........GLLGGGGLLG..ff.....',
+    '.........GLLGGGGLLG.f.......',
+    '.........fffffffffff........',
+    '..........ffffffff.f........',
+    '.........ttttttttttf........',
+    '.......ttxttttttttttt.......',
+    '......fftttxtttttttt........',
+    '......ffttttxttttttt........',
+    '......ffxOxOxOxxtttt........',
+    '......fftttttttttttt........',
+    '......Fftttttttttttt........',
+    '.......FttttttttttttF.......',
+    '........TttttttttttT........',
+    '..........TTttttTT..........',
+  ];
+  const ALCH_HURT = [
+    '..........qqqqqq............',
+    '.........qqqqqqqq...........',
+    '........GGGGGGGGGG..........',
+    '........GGGGGGGGGG..........',
+    '........GGGGGGGGGG..........',
+    '........ffffffffff..........',
+    '.........ffffffff...........',
+    '........tttttttttt..........',
+    '.......ttxttttttttttt.......',
+    '......fftttxtttttttt........',
+    '......ffttttxtttttttff.c....',
+    '......ffxOxOxOxxttttf.vvv...',
+    '......ffttttttttttttf.vOv...',
+    '......Fftttttttttttt..vvv...',
+    '.......FttttttttttttF.......',
+    '........TttttttttttT........',
+    '..........TTttttTT..........',
   ];
   const PLAYER_LEGS_STAND = [
-    '.......dddd..dddd.......',
-    '.......dddd..dddd.......',
-    '.......dddd..dddd.......',
-    '......bbbbb..bbbbb......',
-    '......BbbbB..BbbbB......',
-    '........................',
-    '........................',
+    '.........dddd..dddd.........',
+    '.........dddd..dddd.........',
+    '.........dddd..dddd.........',
+    '........bbbbb..bbbbb........',
+    '........BbbbB..BbbbB........',
+    '............................',
+    '............................',
   ];
   const PLAYER_LEGS_APART = [
-    '......dddd....dddd......',
-    '......dddd....dddd......',
-    '......dddd....dddd......',
-    '.....bbbbb....bbbbb.....',
-    '.....BbbbB....BbbbB.....',
-    '........................',
-    '........................',
+    '........dddd....dddd........',
+    '........dddd....dddd........',
+    '........dddd....dddd........',
+    '.......bbbbb....bbbbb.......',
+    '.......BbbbB....BbbbB.......',
+    '............................',
+    '............................',
   ];
   const PLAYER_LEGS_CROSS = [
-    '........dddddddd........',
-    '........dddddddd........',
-    '........dddddddd........',
-    '.......bbbbbbbbb........',
-    '.......BbbbbbbbB........',
-    '........................',
-    '........................',
+    '..........dddddddd..........',
+    '..........dddddddd..........',
+    '..........dddddddd..........',
+    '.........bbbbbbbbb..........',
+    '.........BbbbbbbbB..........',
+    '............................',
+    '............................',
   ];
+
+  const CLASS_SPRITES = {
+    player: {
+      idle: KNIGHT_IDLE, attack: KNIGHT_ATK, hurt: KNIGHT_HURT,
+      pal: { r: '#e43b44', h: '#c8d4e4', H: '#8a9ab4', k: '#16121f', o: '#ffd866', s: '#a4b0c4', t: '#4a6ede', T: '#2c4a9e', y: '#f7b32b', f: '#9aa6ba', F: '#6a7690', w: '#e8ecf4', W: '#b8c4d8', m: '#7a4a2a', e: '#24407a', E: '#6a8ade', d: '#29366f', b: '#5d6b84', B: '#3d4a5c' },
+    },
+    playerArcher: {
+      idle: ARCHER_IDLE, attack: ARCHER_ATK, hurt: ARCHER_HURT,
+      pal: { h: '#256b42', H: '#1a4a2e', k: '#0d1410', g: '#a7f070', f: '#f0c297', F: '#c99a6e', c: '#5e3a26', x: '#8a5a3a', t: '#38b764', T: '#1d7a42', y: '#d9cbb8', m: '#a06a3a', M: '#6a4426', s: '#e8e0cf', a: '#c9a06a', w: '#e8ecf4', d: '#1d4a33', b: '#5e3a26', B: '#3d2418' },
+    },
+    playerMage: {
+      idle: MAGE_IDLE, attack: MAGE_ATK, hurt: MAGE_HURT,
+      pal: { p: '#6a3aa2', h: '#c8c8d8', f: '#f0c297', F: '#c99a6e', v: '#5ce0e6', V: '#a9fff7', w: '#e8e8f0', t: '#8a5ac2', T: '#5c2e8a', y: '#ffd866', m: '#7a4a2a', d: '#3d1e5c', b: '#29366f', B: '#1a2148' },
+    },
+    playerAlch: {
+      idle: ALCH_IDLE, attack: ALCH_ATK, hurt: ALCH_HURT,
+      pal: { q: '#4a3a2e', G: '#c9a227', L: '#a7f070', f: '#f0c297', F: '#c99a6e', t: '#8a9a40', T: '#5a6a28', x: '#5e3a26', O: '#7ad94a', c: '#8a5a3a', v: '#a7f070', d: '#3a4020', b: '#5e3a26', B: '#3d2418' },
+    },
+  };
+
+  sprites.playerFrames = {};
+  for (const key of Object.keys(CLASS_SPRITES)) {
+    const { idle, attack, hurt, pal } = CLASS_SPRITES[key];
+    sprites.playerFrames[key] = [
+      make([...idle, ...PLAYER_LEGS_STAND], pal),
+      make([...idle, ...PLAYER_LEGS_APART], pal),
+      make([...idle, ...PLAYER_LEGS_CROSS], pal),
+      make([...attack, ...PLAYER_LEGS_STAND], pal),  // [3] 공격 — 무기를 내지른다
+      make([...hurt, ...PLAYER_LEGS_APART], pal),    // [4] 피격 — 뒤로 젖혀진 채 버틴다
+    ];
+    sprites[key] = sprites.playerFrames[key][0]; // 정지 프레임 (거점 미리보기·잔상용)
+  }
 
   // 일부 행만 바꾼 변형 픽셀맵 생성 (걷기/공격 프레임용)
   function withRows(rows, replacements) {
     const out = [...rows];
     for (const [idx, row] of Object.entries(replacements)) out[Number(idx)] = row;
     return out;
-  }
-
-  const CLASS_SPRITES = {
-    player: { // 검사 — 강철 갑주 + 청색 서코트 + 붉은 깃털
-      top: KNIGHT_TOP,
-      attack: withRows(KNIGHT_TOP, { 13: '.....ffttttttttttffff...' }),
-      pal: {
-        h: '#c8d4e4', H: '#8a9ab4', k: '#16121f', r: '#e43b44', s: '#a4b0c4',
-        f: '#9aa6ba', F: '#6a7690', t: '#4a6ede', T: '#2c4a9e', y: '#f7b32b',
-        d: '#29366f', b: '#5d6b84', B: '#3d4a5c',
-      },
-    },
-    playerArcher: { // 궁수 — 짙은 초록 후드 + 가죽 망토, 그늘 속 빛나는 눈
-      top: ARCHER_TOP,
-      attack: withRows(ARCHER_TOP, { 13: '.....ffttttttttttffff...' }),
-      pal: {
-        h: '#256b42', H: '#1a4a2e', k: '#0d1410', g: '#a7f070', f: '#f0c297',
-        F: '#c99a6e', c: '#5e3a26', x: '#8a5a3a', t: '#38b764', T: '#1d7a42',
-        y: '#d9cbb8', d: '#1d4a33', b: '#5e3a26', B: '#3d2418',
-      },
-    },
-    playerAlch: { // 연금술사 — 황동 고글 + 산성빛 로브, 허리춤에 플라스크
-      top: MAGE_TOP,
-      attack: withRows(MAGE_TOP, { 13: '.....ffttyyyyyyttffff...' }),
-      pal: {
-        p: '#2e7a50', h: '#d8e8c0', f: '#f0c297', F: '#c99a6e', v: '#ffd866',
-        w: '#e8f0dc', t: '#2ea06a', T: '#186a42', y: '#c9d94a',
-        d: '#143a26', b: '#5e3a26', B: '#3d2418',
-      },
-    },
-    playerMage: { // 마도사 — 별 장식 보라 대모자 + 백발 수염 + 룬 벨트
-      top: MAGE_TOP,
-      attack: withRows(MAGE_TOP, { 13: '.....ffttyyyyyyttffff...' }),
-      pal: {
-        p: '#6a3aa2', h: '#c8c8d8', f: '#f0c297', F: '#c99a6e', v: '#5ce0e6',
-        w: '#e8e8f0', t: '#8a5ac2', T: '#5c2e8a', y: '#ffd866',
-        d: '#3d1e5c', b: '#29366f', B: '#1a2148',
-      },
-    },
-  };
-
-  sprites.playerFrames = {};
-  for (const key of Object.keys(CLASS_SPRITES)) {
-    const { top, attack, pal } = CLASS_SPRITES[key];
-    sprites.playerFrames[key] = [
-      make([...top, ...PLAYER_LEGS_STAND], pal),
-      make([...top, ...PLAYER_LEGS_APART], pal),
-      make([...top, ...PLAYER_LEGS_CROSS], pal),
-      make([...attack, ...PLAYER_LEGS_STAND], pal), // [3] 공격 자세
-    ];
-    sprites[key] = sprites.playerFrames[key][0]; // 정지 프레임 (거점 미리보기·잔상용)
   }
 
   // ══════════════ 적 픽셀맵 (24×24, 팔레트 스왑 재사용) ══════════════
