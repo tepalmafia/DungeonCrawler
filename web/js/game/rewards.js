@@ -28,7 +28,8 @@ const GameRewards = {
         Dungeon.floor, Dungeon.roomIndex, this.kills, this.heat,
         this.shardsPaid, this.kills - this.killsPaid);
     } else {
-      this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat);
+      this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat,
+        this.player && this.player.rflags.charm ? 1.15 : 1); // 낡은 부적: 정산 +15%
       this.clearRunSave(); // 런이 끝났다 — 이어하기 스냅샷 소멸
     }
     this.shardAnimT = 0;

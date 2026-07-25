@@ -315,10 +315,11 @@ const Game = {
       const s2 = World.safeSpot(c.x - 60, c.y);
       const s3 = World.safeSpot(c.x + 60, c.y);
       const s4 = World.safeSpot(c.x + 180, c.y);
-      this.interactables.push({ kind: 'shopRelic', x: s1.x, y: s1.y, r: 26, used: false, t: 0, price: 40 + f * 8 });
-      this.interactables.push({ kind: 'shopHeal', x: s2.x, y: s2.y, r: 26, used: false, t: 0, price: 12 + f * 3 });
-      this.interactables.push({ kind: 'shopReroll', x: s3.x, y: s3.y, r: 26, used: false, t: 0, price: 18 + f * 3 });
-      this.interactables.push({ kind: 'shopShards', x: s4.x, y: s4.y, r: 26, used: false, t: 0, price: 30 + f * 6, shards: 10 + f * 2 });
+      const disc = this.player.rflags.haggle ? 0.75 : 1; // 장사꾼의 저울: -25%
+      this.interactables.push({ kind: 'shopRelic', x: s1.x, y: s1.y, r: 26, used: false, t: 0, price: Math.round((40 + f * 8) * disc) });
+      this.interactables.push({ kind: 'shopHeal', x: s2.x, y: s2.y, r: 26, used: false, t: 0, price: Math.round((12 + f * 3) * disc) });
+      this.interactables.push({ kind: 'shopReroll', x: s3.x, y: s3.y, r: 26, used: false, t: 0, price: Math.round((18 + f * 3) * disc) });
+      this.interactables.push({ kind: 'shopShards', x: s4.x, y: s4.y, r: 26, used: false, t: 0, price: Math.round((30 + f * 6) * disc), shards: 10 + f * 2 });
       this.banner = { text: '떠돌이 상인 — 골드는 무덤까지 못 가져간다', life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
     } else if (type === 'trial') {
       // 시련 (G5): 다른 층의 악몽이 섞여 몰려온다 — 이기면 확정 상급 유물 + 골드
