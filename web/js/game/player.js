@@ -599,7 +599,7 @@ function createPlayer(x, y, classId = 'knight') {
         // — 근접의 리스크를 "잘 싸우면 버틴다"로 보상한다
         if (this.finisherHealCd <= 0 && this.hp < this.maxHp) {
           this.hp++;
-          this.finisherHealCd = 4;
+          this.finisherHealCd = 6; // 4→6: 검사 유지력 과다 완화 (실플레이 피드백)
           Particles.text(this.x, this.y - 26, '전투 본능 +1', { color: '#e43b44', size: 13 });
           AudioSys.pickup();
         }

@@ -79,7 +79,7 @@ const GameRewards = {
       this.xp -= this.xpNext;
       this.level++;
       // 완만한 커브: 초반 과속을 막고 심층(6~10층)에서도 성장이 이어지게 한다
-      this.xpNext = Math.round(this.xpNext * 1.24);
+      this.xpNext = Math.round(this.xpNext * 1.27); // 1.24→1.27: 중반 이후 레벨 폭주 완화
       this.pendingChoices++;
     }
     this.checkEvolution(); // 개화 대기 중이었다면 Lv.12 도달 순간 진화
