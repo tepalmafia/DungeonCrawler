@@ -26,6 +26,14 @@ const GameCombat = {
     // 기준: 유일하게 "보스답다"는 평가를 받은 골렘(중장갑 flat 2, 강빌드 TTK 29s)과 같은 체급.
     // 약한 빌드에는 상한이 걸리지 않으므로 저점 난이도는 그대로다.
     if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.015)));
+    // 처형 (S1): 상태이상 2종 이상을 품은 적에게 크리티컬 = 피해 ×1.3 — 원소 믹스 빌드의 보상
+    if (crit && !e.isBoss) {
+      const stCount = (e.status.burn > 0 ? 1 : 0) + (e.status.poison > 0 ? 1 : 0) + (e.status.shock > 0 ? 1 : 0);
+      if (stCount >= 2) {
+        dmg = Math.round(dmg * 1.3);
+        Particles.text(e.x, e.y - 38, '처형!', { color: '#e43b44', size: 13 });
+      }
+    }
     e.hp -= dmg;
     e.flash = 0.1;
     if (kb && !e.isBoss) {
@@ -98,6 +106,7 @@ const GameCombat = {
     this.kills++;
     // 보스 도감 키: 1~10층은 층 그대로, 무한 모드는 순환 각성 보스(6~10)로 귀속
     Meta.codexKill(e.isBoss ? 'boss' + (Dungeon.floor <= 10 ? Dungeon.floor : ((Dungeon.floor - 11) % 5) + 6) : (e.codexType || e.type));
+    if (e.isBoss && e.def) this._lastBossOutro = e.def.outro; // 마이크로 서사: onBossDead 끝에서 출력
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
     Renderer.shake(3, 0.15);

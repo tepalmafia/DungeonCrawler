@@ -16,6 +16,7 @@ const BOSS_DEFS = {
     p1: ['sweep', 'fan:soul'],
     p2: ['sweep', 'fan:soul', 'curse'],
     rageText: '카론이 분노한다!',
+    intro: '…또 왔군. 뱃삯은 목숨이다.', outro: '강은… 기다린다…',
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
@@ -25,6 +26,7 @@ const BOSS_DEFS = {
     p1: ['fan:spore', 'ring', 'summon:mushroom'],
     p2: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
     rageText: '포자가 미친 듯이 흩날린다!',
+    intro: '포자는 모든 것을 덮는다.', outro: '흩어지는 것도… 나쁘지 않군…',
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
   },
   3: {
@@ -34,6 +36,7 @@ const BOSS_DEFS = {
     p1: ['charge', 'ring'],
     p2: ['charge', 'fan:rock', 'ring', 'charge'],
     rageText: '바르곤의 사슬이 풀렸다!',
+    intro: '죄수는 이 문을 나갈 수 없다.', outro: '사슬이… 드디어 풀렸군…',
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
@@ -43,6 +46,7 @@ const BOSS_DEFS = {
     p1: ['fan:fire', 'charge:trail'],
     p2: ['fan:fire', 'charge:trail', 'curse:fire', 'ring'],
     rageText: '이그니스가 백열한다!',
+    intro: '타오르는 것만이 진실이다!', outro: '차갑다… 처음으로…',
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
@@ -52,6 +56,7 @@ const BOSS_DEFS = {
     p1: ['sweep', 'fan:soul', 'ring'],
     p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite'],
     rageText: '심연이 깨어난다...!',
+    intro: '빛은 여기서 끝난다.', outro: '어둠은… 반드시 돌아온다…',
     deathPalette: ['#e43b44', '#16101f', '#c9b8e8'],
   },
   // ── 6~10층 각성 보스: 같은 존재의 심층 강화판 (기믹 강화 + 패턴 확장) ──
@@ -61,6 +66,7 @@ const BOSS_DEFS = {
     p1: ['sweep', 'spiral:soul', 'curse'],
     p2: ['sweep', 'spiral:soul', 'curse', 'summon:boneHeap', 'spiral:soul'],
     rageText: '원혼이 울부짖는다!',
+    intro: '죽음조차 나를 놓아주지 않았다…', outro: '이제야… 강을 건너는구나…',
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
   },
   7: {
@@ -70,6 +76,7 @@ const BOSS_DEFS = {
     p1: ['fan:spore', 'ring', 'summon:sporePuff', 'geyser:poison'],
     p2: ['fan:spore', 'geyser:poison', 'summon:sporePuff', 'ring', 'fan:spore'],
     rageText: '역병이 들끓는다!',
+    intro: '썩어라. 모두 썩어라!', outro: '이 몸의 정화는… 없다…',
     deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
   },
   8: {
@@ -79,6 +86,7 @@ const BOSS_DEFS = {
     p1: ['charge', 'snare', 'fan:rock', 'ring'],
     p2: ['snare', 'charge', 'fan:rock', 'ring', 'snare', 'charge'],
     rageText: '절망이 짓누른다!',
+    intro: '희망을 버려라. 여기는 그런 곳이다.', outro: '절망에도… 끝이 있었나…',
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
   },
   9: {
@@ -88,6 +96,7 @@ const BOSS_DEFS = {
     p1: ['fan:fire', 'charge:trail', 'geyser:fire'],
     p2: ['geyser:fire', 'charge:trail', 'fan:fire', 'ring', 'charge:trail', 'geyser:fire'],
     rageText: '겁화가 폭주한다!',
+    intro: '재조차 남기지 않겠다!', outro: '불꽃은… 꺼지지 않아… 어딘가에서…',
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
   },
   10: {
@@ -97,6 +106,7 @@ const BOSS_DEFS = {
     p1: ['sweep', 'spiral:soul', 'ring', 'curse'],
     p2: ['spiral:soul', 'sweep', 'curse', 'summon:voidSpawn', 'ring', 'spiral:soul'],
     rageText: '심연이 모든 것을 삼킨다...!',
+    intro: '네가 심연을 들여다볼 때, 심연도 너를 보고 있었다.', outro: '심연은… 네 안에…',
     deathPalette: ['#e43b44', '#0a0612', '#c9b8e8'],
   },
 };
@@ -268,7 +278,14 @@ function createBoss(floor, x, y) {
 
       switch (this.state) {
         case 'enter':
-          if (this.stateT > 1.2) { this.state = 'idle'; this.stateT = 0; }
+          if (this.stateT > 1.2) {
+            this.state = 'idle'; this.stateT = 0;
+            // 마이크로 서사 (S3): 보스의 첫 마디 — 이름표가 아니라 존재가 되도록
+            if (this.def.intro && !this._spoke) {
+              this._spoke = true;
+              game.banner = { text: `"${this.def.intro}"`, life: 2.4, maxLife: 2.4, color: '#c9b8e8' };
+            }
+          }
           break;
 
         case 'idle': {

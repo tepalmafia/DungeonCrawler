@@ -46,6 +46,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this._slamCd = 0.6;
             this.kbx = this.kby = 0;
             Game.damageEnemy(this, slamMaster ? 5 : 2, { x: 0, y: 0 }, { feel: false, kb: 0, color: '#c8d4e4' });
+            // 상태 파열 (S1): 상태이상을 품은 채 벽에 처박히면 그 원소가 터져 나온다
+            if (!this.dead && this.status.burn > 0) {
+              Game.zones.push({ x: this.x, y: this.y, r: 55, life: 2.0, kind: 'fire', tickT: 0, hit: null });
+              Particles.text(this.x, this.y - 40, '화염 파열!', { color: '#ff7043', size: 13 });
+            } else if (!this.dead && this.status.poison > 0) {
+              Game.zones.push({ x: this.x, y: this.y, r: 55, life: 2.5, kind: 'poison', tickT: 0, hit: null });
+              Particles.text(this.x, this.y - 40, '독 파열!', { color: '#6ab04c', size: 13 });
+            }
             Particles.burst(this.x, this.y, { count: 8, colors: ['#c8d4e4', '#8a8074'], speed: 130, life: 0.3, size: 3 });
             Particles.text(this.x, this.y - 30, '쾅!', { color: '#c8d4e4', size: 13 });
             AudioSys.thud();
