@@ -79,7 +79,7 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     skillMaxCd() {
-      const base = { knight: 5, archer: 6, mage: 7 }[this.classId] || 5;
+      const base = { knight: 5, archer: 6, mage: 7, alch: 6 }[this.classId] || 5;
       // 스킬 쿨 하한 (밸런스 점검): 시간 왜곡 × 직업 쿨감 3중첩 + 처치 시 -0.3s가 겹치면
       // 사실상 상시 스킬이 된다 — 최소 1.5초는 유지
       const pact = (typeof Game !== 'undefined' && Game.pacts && Game.pacts.skill) ? 1.25 : 1; // 서약 '짧은 심지'
@@ -88,9 +88,9 @@ function createPlayer(x, y, classId = 'knight') {
 
     skillName() {
       if (this.skillEvolved) {
-        return { knight: '회오리 베기', archer: '화살 폭풍', mage: '쌍둥이 메테오' }[this.classId];
+        return { knight: '회오리 베기', archer: '화살 폭풍', mage: '쌍둥이 메테오', alch: '대반응 폭탄' }[this.classId];
       }
-      return { knight: '회전 베기', archer: '화살비', mage: '메테오' }[this.classId];
+      return { knight: '회전 베기', archer: '화살비', mage: '메테오', alch: '휘발성 혼합물' }[this.classId];
     },
 
     // 스킬 조준점: 자동 타겟 위치 > 마우스 > 바라보는 방향 앞
@@ -151,6 +151,21 @@ function createPlayer(x, y, classId = 'knight') {
           shots: this.skillEvolved ? 24 : 14, fired: 0,
           explo: this.flags.ar_explo,
         });
+      } else if (this.classId === 'alch') {
+        // 휘발성 혼합물: 지점 대폭발 + 독·화상 동시 부여 — 반응(맹독 연소)을 스스로 만든다.
+        // [진화] 대반응 폭탄: 감전까지 3원소 — 과부하·마비가 연쇄한다
+        const t = this._skillTarget(game);
+        AudioSys.meteorCast();
+        const r = (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1);
+        game._explode(t.x, t.y, r, Math.round(this.currentAtk() * 2.5), ['#c9d94a', '#6ada8a', '#ff7043'], '#c9d94a');
+        for (const e of game.enemies) {
+          if (e.dead || e.phased || e.neutral) continue;
+          if (Math.hypot(e.x - t.x, e.y - t.y) < r + e.r) {
+            e.status.poison = Math.max(e.status.poison || 0, this.flags.al_acid ? 6 : 4);
+            e.status.burn = Math.max(e.status.burn || 0, 3);
+            if (this.skillEvolved) e.status.shock = Math.max(e.status.shock || 0, 2.5);
+          }
+        }
       } else {
         // 메테오: 예고 후 대광역 낙하 — [진화] 쌍둥이 메테오: 두 번째 낙하가 뒤따른다
         const t = this._skillTarget(game);
@@ -436,6 +451,7 @@ function createPlayer(x, y, classId = 'knight') {
       let cdBase;
       if (this.classId === 'knight') cdBase = finisher ? 0.45 : 0.22;
       else if (this.classId === 'archer') cdBase = finisher ? 0.58 : 0.33; // 밸런스: 원거리 저위험 보상
+      else if (this.classId === 'alch') cdBase = finisher ? 0.74 : 0.50; // 밴드 계측: 2·3사망(검사의 34%) — 전탄 광역의 대가로 더 느리게
       else cdBase = finisher ? 0.58 : 0.32;
       let cd = cdBase * this.atkCdMul;
       if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
@@ -465,6 +481,27 @@ function createPlayer(x, y, classId = 'knight') {
         }
         Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
           count: 3, colors: ['#d9cbb8', '#38b764'], speed: 50, life: 0.2, size: 2,
+        });
+      } else if (this.classId === 'alch') {
+        // 플라스크 투척: 모든 착탄이 소형 산성 폭발(중독) — 반응의 밑재료를 상시 뿌린다
+        AudioSys.bolt(finisher);
+        const throwOnce = (off) => {
+          const a = Math.atan2(dir.y, dir.x) + off;
+          const d2 = { x: Math.cos(a), y: Math.sin(a) };
+          game.pbolts.push({
+            kind: 'pflask', x: this.x + d2.x * 14, y: this.y + d2.y * 14,
+            dir: d2, speed: (finisher ? 310 : 360) * (this.flags.al_catalyst ? 0.85 : 1),
+            finisher, pierce: false, homing: 0,
+            aoe: Math.round((finisher ? 56 : 36) * (this.flaskRadMul || 1)), // 밴드 하향: 42/64→36/56
+            venom: true, catalyst: this.flags.al_catalyst,
+            life: 1.4, hit: new Set(),
+            bounces: this.flags.rebound ? 1 : 0,
+          });
+        };
+        throwOnce(0);
+        if (this.flags.al_double && Math.random() < 0.2) throwOnce(0.16); // 쌍병 투척
+        Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
+          count: 4, colors: ['#c9d94a', '#6ada8a'], speed: 60, life: 0.25, size: 3,
         });
       } else {
         AudioSys.bolt(finisher);
@@ -539,6 +576,16 @@ function createPlayer(x, y, classId = 'knight') {
             bounces: this.flags.rebound ? 1 : 0,
           });
         }
+      } else if (this.classId === 'alch') {
+        // 후퇴 투척: 물러나며 큰 플라스크 — 카이팅의 리듬
+        AudioSys.bolt(true);
+        World.moveEntity(this, -dir.x * 26, -dir.y * 26);
+        game.pbolts.push({
+          kind: 'pflask', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
+          dir: { ...dir }, speed: 380, finisher: true, pierce: false, homing: 0,
+          aoe: Math.round(58 * (this.flaskRadMul || 1)), venom: true, catalyst: this.flags.al_catalyst,
+          life: 1.2, hit: new Set(),
+        });
       } else {
         // 점멸 폭발: 대시로 빠져나온 자리가 터진다
         AudioSys.bolt(true);

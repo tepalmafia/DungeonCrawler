@@ -114,6 +114,18 @@ const TRAITS = [
     desc: '스킬 쿨다운 -15%', apply: (p) => { p.skillCdMul *= 0.85; } },
   { id: 'mg_ward', name: '마력 장막', tag: '마도사', color: '#8a5ac2', cls: 'mage',
     desc: '스킬 시전 순간 0.6초 무적', flag: 'mgward' },
+  // ── 연금술사 (4직업 — 반응 특화) ──
+  { id: 'al_cd', name: '증류 가속', tag: '연금', color: '#c9d94a', cls: 'alch', stack: true, max: 3,
+    desc: '휘발성 혼합물 쿨다운 -30%', apply: (p) => { p.skillCdMul *= 0.7; } },
+  { id: 'al_radius', name: '증폭 용액', tag: '연금', color: '#c9d94a', cls: 'alch', stack: true, max: 2,
+    desc: '플라스크·혼합물 폭발 반경 +25%', apply: (p) => { p.flaskRadMul = (p.flaskRadMul || 1) * 1.25; } },
+  { id: 'al_double', name: '쌍병 투척', tag: '연금', color: '#c9d94a', cls: 'alch',
+    desc: '투척 20% 확률로 2연투', flag: 'al_double' },
+  { id: 'al_acid', name: '농축 산', tag: '연금', color: '#c9d94a', cls: 'alch',
+    desc: '중독 지속 +2초 (플라스크·혼합물)', flag: 'al_acid' },
+  { id: 'al_react', name: '연쇄 촉진', tag: '연금', color: '#c9d94a', cls: 'alch',
+    desc: '과부하 폭발 반경·마비 지속 +30%', flag: 'al_react' },
+
   // ── 공격 변형 (S2) — 기본 공격의 리듬 자체를 바꾼다: 런 정체성의 축 ──
   { id: 'kn_greatsword', name: '대검화', tag: '검사', color: '#f7b32b', cls: 'knight',
     unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' },
@@ -126,6 +138,9 @@ const TRAITS = [
   { id: 'mg_snipe', name: '직격 마탄', tag: '마도사', color: '#f7b32b', cls: 'mage',
     unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' },
     desc: '유도를 버리고 직사한다 — 탄속 2배, 모든 마탄이 착탄 폭발', flag: 'mgsnipe' },
+  { id: 'al_catalyst', name: '촉매 폭탄', tag: '연금', color: '#f7b32b', cls: 'alch',
+    unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' },
+    desc: '탄속 -15%, 착탄마다 무작위 원소(화상/중독/감전) — 혼자서 반응을 제조한다', flag: 'al_catalyst' },
 
   // ── 전설 (극저확률 — 규칙을 부수는 카드. "미쳐 날뛰는 런"의 씨앗) ──
   { id: 'unbound',   name: '무한의 갈망', tag: '전설', color: '#ffd866', legend: true,

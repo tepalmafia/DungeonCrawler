@@ -34,7 +34,7 @@ const GameScreens = {
       this.banner = { text: '도감 완성!', life: 1.5, maxLife: 1.5 };
     }
     if (Input.pressed('KeyY')) {
-      Meta.data.classes = { knight: true, archer: true, mage: true };
+      Meta.data.classes = { knight: true, archer: true, mage: true, alch: true };
       Meta.data.wins = Math.max(1, Meta.data.wins);
       Meta.data.bestFloor = 5;
       Meta.save();
@@ -105,25 +105,23 @@ const GameScreens = {
     }
     if (this.testMode) this._tickCheats();
 
-    // 열기(고난이도) 조절 — 첫 정복 후 해금
+    // 열기(고난이도) 조절 — 첫 정복 후 해금 (UI 개편: 칩은 로드아웃 줄 클릭 시에만)
     if (Meta.heatUnlocked()) {
       if (Input.pressed('ArrowLeft')) { Meta.setHeat(Meta.data.heat - 1); AudioSys.orb(); }
       if (Input.pressed('ArrowRight')) { Meta.setHeat(Meta.data.heat + 1); AudioSys.orb(); }
       if (Input.mouse.justDown) {
-        const [minus, plus] = HUD.heatButtonRects();
         const mx = Input.mouse.x, my = Input.mouse.y;
-        if (mx >= minus.x && mx <= minus.x + minus.w && my >= minus.y && my <= minus.y + minus.h) {
-          Meta.setHeat(Meta.data.heat - 1); AudioSys.orb();
+        const lr = HUD.loadoutLineRect();
+        if (mx >= lr.x && mx <= lr.x + lr.w && my >= lr.y && my <= lr.y + lr.h) {
+          this._pactEdit = !this._pactEdit; AudioSys.pickup();
         }
-        if (mx >= plus.x && mx <= plus.x + plus.w && my >= plus.y && my <= plus.y + plus.h) {
-          Meta.setHeat(Meta.data.heat + 1); AudioSys.orb();
+        if (this._pactEdit) {
+          HUD.pactChipRects().forEach((r, i) => {
+            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+              Meta.togglePact(HEAT_PACTS[i].id); AudioSys.orb();
+            }
+          });
         }
-        // 서약 칩 개별 토글 (G3 골라담기)
-        HUD.pactChipRects().forEach((r, i) => {
-          if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-            Meta.togglePact(HEAT_PACTS[i].id); AudioSys.orb();
-          }
-        });
       }
     }
 
@@ -139,11 +137,17 @@ const GameScreens = {
             Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) act = i;
       });
     }
-    // 이어하기 (C): 중단된 런 스냅샷 복원
-    if (Input.pressed('KeyC') && this.loadRunSave()) {
-      AudioSys.buy();
-      this.resumeRun();
-      return;
+    // 이어하기 (C 또는 버튼 클릭): 중단된 런 스냅샷 복원
+    {
+      const rb = HUD.resumeButtonRect();
+      const clickResume = Input.mouse.justDown && !this._pactEdit &&
+        Input.mouse.x >= rb.x && Input.mouse.x <= rb.x + rb.w &&
+        Input.mouse.y >= rb.y && Input.mouse.y <= rb.y + rb.h;
+      if ((Input.pressed('KeyC') || clickResume) && this.loadRunSave()) {
+        AudioSys.buy();
+        this.resumeRun();
+        return;
+      }
     }
     if (act === 0) { AudioSys.buy(); this.clearRunSave(); this.restart(); }
     else if (act === 1) { AudioSys.pickup(); this.state = 'altar'; }
@@ -256,10 +260,8 @@ const GameScreens = {
       if (Meta.classUnlocked(id)) {
         Meta.selectClass(id);
         AudioSys.pickup();
-      } else if (Meta.unlockClass(id)) {
-        AudioSys.relic('epic');
       } else {
-        AudioSys.deny();
+        AudioSys.deny(); // 조건 해금 — 카드에 적힌 조건을 달성하면 자동으로 열린다
       }
     }
   },

@@ -463,6 +463,22 @@ const GameRender = {
           ctx.fill();
           ctx.globalAlpha = 1;
         }
+      } else if (b.kind === 'pflask') {
+        // 연금술사 플라스크: 회전하는 산성 병 + 방울 궤적
+        const r = b.finisher ? 9 : 7;
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate((b.life || 0) * 9);
+        ctx.fillStyle = '#2e7a50';
+        ctx.fillRect(-r * 0.35, -r - 3, r * 0.7, 4); // 병목
+        ctx.fillStyle = b.catalyst ? '#ffd866' : '#c9d94a';
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#eaf8c0';
+        ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        if (Math.random() < 0.3) {
+          Particles.burst(b.x, b.y, { count: 1, colors: ['#c9d94a'], speed: 20, life: 0.25, size: 2, gravity: 120 });
+        }
       } else {
         const r = b.finisher ? 9 : 6;
         ctx.fillStyle = b.fire ? '#ff7043' : '#8a5ac2';

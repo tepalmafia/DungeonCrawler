@@ -6,17 +6,22 @@ const CLASSES = {
   knight: {
     id: 'knight', name: '검사', sprite: 'player', color: '#3b5dc9',
     hp: 6, speed: 195, unlock: 0,
-    desc: '3연격 근접 베기. 철벽 — 11초마다 보호막(피해 1회 무효). 전투 본능 — 마무리 적중 시 HP 회복.',
+    desc: '3연격 근접 베기 · 철벽 보호막 · 전투 본능 회복',
   },
   archer: {
     id: 'archer', name: '궁수', sprite: 'playerArcher', color: '#38b764',
-    hp: 4, speed: 200, unlock: 300,
-    desc: '빠른 화살 연사. 3발째는 관통 강화 화살.',
+    hp: 4, speed: 200, cond: { stat: 'bestFloor', n: 3, label: '3층 도달' },
+    desc: '빠른 화살 연사 — 3발째는 관통 강화 화살',
   },
   mage: {
     id: 'mage', name: '마도사', sprite: 'playerMage', color: '#8a5ac2',
-    hp: 3, speed: 190, unlock: 800,
-    desc: '유도 마탄. 3발째는 폭발하는 대마탄.',
+    hp: 3, speed: 190, cond: { stat: 'bestFloor', n: 5, label: '5층 도달' },
+    desc: '유도 마탄 — 3발째는 폭발 대마탄',
+  },
+  alch: {
+    id: 'alch', name: '연금술사', sprite: 'playerAlch', color: '#c9d94a',
+    hp: 5, speed: 190, cond: { stat: 'wins', n: 1, label: '첫 등정' },
+    desc: '산성 플라스크 투척 — 독+화상 반응 제조기',
   },
 };
 
@@ -186,13 +191,16 @@ const Meta = {
   },
 
   classUnlocked(id) {
-    return !!this.data.classes[id];
+    if (id === 'knight') return true; // 검사는 기본
+    if (typeof Game !== 'undefined' && Game.testMode) return true; // 테스트 모드: 전 직업 개방
+    if (this.data.classes[id]) return true; // 구버전(파편 구매) 이관 보호
+    const c = CLASSES[id] && CLASSES[id].cond;
+    return !!c && (this.data[c.stat] || 0) >= c.n; // 조건 해금: 궁수 3층 / 마도사 5층 / 연금술사 첫 등정
   },
 
+  // 조건 해금 전환 (2026-07): 파편 구매 폐지 — 치트(Y)·강제 지급 전용
   unlockClass(id) {
-    const cls = CLASSES[id];
-    if (!cls || this.classUnlocked(id) || this.data.shards < cls.unlock) return false;
-    this.data.shards -= cls.unlock;
+    if (!CLASSES[id] || this.classUnlocked(id)) return false;
     this.data.classes[id] = true;
     this.data.cls = id;
     this.save();

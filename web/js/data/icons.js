@@ -708,12 +708,19 @@ const Icons = (() => {
     unbound: ['brokenchain', { w: '#ffd866' }],
     timeflux: ['hourglass', { g: '#5a4480', w: '#d88ae8', s: '#b13ae0' }],
     glasssoul: ['shard', { w: '#a8d8e8', W: '#e0f8ff' }],
+    al_cd: ['hourglass', { g: '#186a42', w: '#c9d94a', s: '#eaf8c0' }],
+    al_radius: ['orb', { p: '#186a42', P: '#c9d94a', w: '#eaf8c0' }],
+    al_double: ['doublearrow', { w: '#c9d94a' }],
+    al_acid: ['drop', { r: '#186a42', R: '#6ada8a', w: '#eaf8c0' }],
+    al_react: ['burststar', { w: '#c9d94a', W: '#ffd866' }],
+    al_catalyst: ['bomb', { k: '#186a42', K: '#2ea06a', w: '#eaf8c0', g: '#8a6a3a', h: '#ffd866' }],
     monarch: ['crown', { g: '#5a4480', G: '#b13ae0', r: '#ffd866' }],
   };
 
   const TAG_FALLBACK = {
     '스탯': ['fist', P.steel], '화염': ['flame', P.fire], '번개': ['bolt', P.volt],
     '흡혈': ['drop', P.blood], '수호': ['shield', P.guard], '독': ['skull', { w: '#6ada8a', W: '#d8f8e0', k: '#1a3a24' }],
+    '연금': ['drop', { r: '#186a42', R: '#c9d94a', w: '#eaf8c0' }],
   };
 
   function build(map, id, fallback) {

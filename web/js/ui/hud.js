@@ -394,13 +394,23 @@ const HUD = {
     ];
   },
 
-  // 열기 서약 칩 — 시작 화면에서 개별 클릭 토글 (허브 버튼 y=278 위에 꽉 맞춘다)
+  // 열기 서약 칩 — 서약 편집 패널(로드아웃 줄 클릭)에서만 표시
   pactChipRects() {
     const n = HEAT_PACTS.length;
     const w = n > 5 ? 100 : 108, h = 18, gap = 5;
     const total = n * w + (n - 1) * gap;
     const x0 = (Renderer.W - total) / 2;
-    return HEAT_PACTS.map((_, i) => ({ x: x0 + i * (w + gap), y: 256, w, h }));
+    return HEAT_PACTS.map((_, i) => ({ x: x0 + i * (w + gap), y: 224, w, h }));
+  },
+
+  // 로드아웃 한 줄 (직업 · 열기) — 클릭 영역
+  loadoutLineRect() {
+    return { x: Renderer.W / 2 - 130, y: 192, w: 260, h: 34 };
+  },
+
+  // 이어하기 슬림 버튼
+  resumeButtonRect() {
+    return { x: Renderer.W / 2 - 170, y: 244, w: 340, h: 26 };
   },
 
   backButtonRect() {
@@ -449,15 +459,7 @@ const HUD = {
       ctx.fillText(line, Renderer.W / 2, 176);
     }
 
-    // 이어하기 (①): 중단된 런이 있으면 안내
-    {
-      const rs = Game.loadRunSave && Game.loadRunSave();
-      if (rs) {
-        ctx.font = 'bold 13px monospace';
-        ctx.fillStyle = '#2ec4b6';
-        ctx.fillText(`C — 이어하기 (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 열기 ' + rs.heat : ''})`, Renderer.W / 2, 196);
-      }
-    }
+
 
     this._shardLabel(ctx, Renderer.W - 24, 36);
     if (Meta.data.runs > 0) {
@@ -471,31 +473,32 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = '14px monospace';
     ctx.fillStyle = '#9aa0b4';
-    ctx.fillText(`선택된 직업: `, Renderer.W / 2 - 30, 215);
-    ctx.fillStyle = cls.color;
-    ctx.font = 'bold 14px monospace';
-    ctx.fillText(cls.name, Renderer.W / 2 + 42, 215);
-
-    // 열기(고난이도) 셀렉터 — 첫 정복 후 표시
-    if (Meta.heatUnlocked()) {
-      const heat = Meta.heat();
-      const [minus, plus] = this.heatButtonRects();
-      for (const [r, sym] of [[minus, '◀'], [plus, '▶']]) {
-        const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
-                      Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
-        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.strokeStyle = hover ? '#e43b44' : '#4a4a5c';
-        ctx.strokeRect(r.x, r.y, r.w, r.h);
-        ctx.font = 'bold 13px monospace';
-        ctx.fillStyle = '#e8e0cf';
-        ctx.textAlign = 'center';
-        ctx.fillText(sym, r.x + r.w / 2, r.y + 18);
-      }
+    // 로드아웃 한 줄 (UI 개편): 직업 + 열기 통합 — 클릭하면 서약 편집 패널이 열린다
+    {
+      const heat = Meta.heatUnlocked() ? Meta.heat() : 0;
+      const lr = this.loadoutLineRect();
+      const hover = Input.mouse.x >= lr.x && Input.mouse.x <= lr.x + lr.w &&
+                    Input.mouse.y >= lr.y && Input.mouse.y <= lr.y + lr.h;
       ctx.font = 'bold 15px monospace';
-      ctx.fillStyle = heat > 0 ? '#e43b44' : '#666a80';
-      ctx.fillText(`열기 ${heat}${heat > 0 ? ` · 파편 +${heat * 20}%` : '  (서약을 골라 담아라)'}`, Renderer.W / 2, 248);
-      // 열기 서약 칩 (G3): 골라담기 — 클릭으로 개별 토글, ←→는 앞에서부터 N개
+      ctx.fillStyle = cls.color;
+      const heatStr = Meta.heatUnlocked() ? `  ·  열기 ${heat}` : '';
+      ctx.fillText(cls.name + heatStr, Renderer.W / 2, lr.y + 15);
+      if (Meta.heatUnlocked() && heat > 0) {
+        ctx.fillStyle = '#e43b44';
+        // 열기 숫자만 붉게 덧칠하기엔 폭 계산이 과하다 — 파편 보너스를 옆에 흐리게
+        ctx.font = '11px monospace';
+        ctx.fillStyle = '#666a80';
+        ctx.fillText(`파편 +${heat * 20}%`, Renderer.W / 2 + 130, lr.y + 15);
+      }
+      if (Meta.heatUnlocked()) {
+        ctx.font = '10px monospace';
+        ctx.fillStyle = hover || Game._pactEdit ? '#9aa0b4' : '#4a4a5c';
+        ctx.fillText(Game._pactEdit ? '서약을 골라 담아라 (다시 클릭해 닫기)' : '클릭: 서약 편집 · ←→ 열기 조절', Renderer.W / 2, lr.y + 30);
+      }
+    }
+
+    // 서약 편집 패널 — 로드아웃 줄 클릭 시에만 (UI 개편: 상시 노출 7칩이 거점을 짓눌렀다)
+    if (Meta.heatUnlocked() && Game._pactEdit) {
       const pacts = Meta._pacts();
       this.pactChipRects().forEach((r, i) => {
         const def = HEAT_PACTS[i];
@@ -514,9 +517,28 @@ const HUD = {
         if (hover) {
           ctx.font = '10px monospace';
           ctx.fillStyle = '#9aa0b4';
-          ctx.fillText(def.desc, Renderer.W / 2, 233);
+          ctx.fillText(def.desc, Renderer.W / 2, this.pactChipRects()[0].y + 32);
         }
       });
+    }
+
+    // 이어하기 슬림 버튼 — 중단된 런이 있을 때만
+    {
+      const rs = Game.loadRunSave && Game.loadRunSave();
+      if (rs && !Game._pactEdit) {
+        const r = this.resumeButtonRect();
+        const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                      Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+        ctx.fillStyle = hover ? '#132a28' : '#0f2220';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = '#2ec4b6';
+        ctx.lineWidth = hover ? 2 : 1;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = '#2ec4b6';
+        ctx.textAlign = 'center';
+        ctx.fillText(`C — 이어하기  (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 열기 ' + rs.heat : ''})`, Renderer.W / 2, r.y + 18);
+      }
     }
 
     const disc = Object.keys(Meta.data.codex.kills).length + Object.keys(Meta.data.codex.relics).length +
@@ -545,32 +567,24 @@ const HUD = {
       ctx.fillText(labels[i].sub, r.x + 22, r.y + 37);
     });
 
-    // 보스 러시 — 첫 정복 후 해금되는 두 번째 도전 모드 (좌하단 — 허브 버튼과 안 겹치게)
-    if (Meta.data.wins > 0) {
-      const rec = Meta.data.rushBest;
-      ctx.textAlign = 'left';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillStyle = '#e43b44';
-      ctx.fillText(
-        rec && rec.floor > 0
-          ? `⚔ B — 보스 러시 · ${rec.floor}군주${rec.time ? ` ${(rec.time / 60).toFixed(1)}분` : ''}`
-          : '⚔ B — 보스 러시',
-        24, Renderer.H - 30);
-    }
-
     // 오늘의 탑 — 날짜 시드 도전 안내 + 오늘 기록
     {
       const now = new Date();
       const key = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
       const rec = Meta.data.daily && Meta.data.daily.key === key ? Meta.data.daily : null;
-      ctx.textAlign = 'center';
+      // 도전 모드 통합 한 줄 (UI 개편): 러시 | 오늘의 탑 — 좌우 분산·장문 제거
       ctx.font = 'bold 13px monospace';
+      const rrec = Meta.data.rushBest;
+      if (Meta.data.wins > 0) {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#e43b44';
+        ctx.fillText(`⚔ B 보스 러시${rrec && rrec.floor > 0 ? ` · ${rrec.floor}군주` : ''}`, Renderer.W / 2 - 24, Renderer.H - 30);
+      }
+      ctx.textAlign = Meta.data.wins > 0 ? 'left' : 'center';
       ctx.fillStyle = '#f7b32b';
       ctx.fillText(
-        rec
-          ? `🗼 D — 오늘의 탑 · 오늘 기록: ${rec.floor}층${rec.victory ? ' 정복!' : ''} (${rec.runs}회 도전)`
-          : '🗼 D — 오늘의 탑 (매일 바뀌는 고정 시드, 모두에게 같은 던전)',
-        Renderer.W / 2, Renderer.H - 30);
+        rec ? `🗼 D 오늘의 탑 · 오늘 ${rec.floor}층${rec.victory ? ' 정복!' : ''}` : '🗼 D 오늘의 탑 — 매일 같은 시드',
+        Meta.data.wins > 0 ? Renderer.W / 2 + 24 : Renderer.W / 2, Renderer.H - 30);
     }
 
     ctx.textAlign = 'center';
@@ -662,7 +676,6 @@ const HUD = {
       const cls = CLASSES[id];
       const unlocked = Meta.classUnlocked(id);
       const selected = Meta.data.cls === id;
-      const affordable = Meta.data.shards >= cls.unlock;
       const r = rects[i];
       const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
                     Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
@@ -692,18 +705,19 @@ const HUD = {
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(`HP ${cls.hp} · 속도 ${cls.speed}`, cx, r.y + lift + 112);
       ctx.font = '12px monospace';
-      this._wrapText(ctx, cls.desc, cx, r.y + lift + 134, r.w - 26, 17);
+      this._wrapText(ctx, cls.desc, cx, r.y + lift + 130, r.w - 26, 14); // 3줄까지 라벨(h-14)과 안 겹치게
 
       ctx.font = 'bold 14px monospace';
       if (selected) {
         ctx.fillStyle = '#f7b32b';
-        ctx.fillText('▶ 선택됨', cx, r.y + lift + this.cardRects(ids.length)[0].h - 14);
+        ctx.fillText('▶ 선택됨', cx, r.y + lift + 176); // 직업 카드 h=190 기준 (기본 165 참조 버그 수정)
       } else if (unlocked) {
         ctx.fillStyle = cls.color;
-        ctx.fillText('클릭하여 선택', cx, r.y + lift + this.cardRects(ids.length)[0].h - 14);
+        ctx.fillText('클릭하여 선택', cx, r.y + lift + 176); // 직업 카드 h=190 기준 (기본 165 참조 버그 수정)
       } else {
-        ctx.fillStyle = affordable ? '#2ec4b6' : '#8a4a4a';
-        ctx.fillText(`◆ ${cls.unlock} 해금`, cx, r.y + lift + this.cardRects(ids.length)[0].h - 14);
+        // 조건 해금 (2026-07): 파편 구매 → 도전 과제 — 달성하면 자동으로 열린다
+        ctx.fillStyle = '#8a4a4a';
+        ctx.fillText(`잠김 — ${cls.cond ? cls.cond.label : '?'}`, cx, r.y + lift + 176); // 직업 카드 h=190 기준 (기본 165 참조 버그 수정)
       }
     });
 

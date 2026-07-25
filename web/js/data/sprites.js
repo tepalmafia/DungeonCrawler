@@ -200,6 +200,15 @@ const Sprites = (() => {
         y: '#d9cbb8', d: '#1d4a33', b: '#5e3a26', B: '#3d2418',
       },
     },
+    playerAlch: { // 연금술사 — 황동 고글 + 산성빛 로브, 허리춤에 플라스크
+      top: MAGE_TOP,
+      attack: withRows(MAGE_TOP, { 13: '.....ffttyyyyyyttffff...' }),
+      pal: {
+        p: '#2e7a50', h: '#d8e8c0', f: '#f0c297', F: '#c99a6e', v: '#ffd866',
+        w: '#e8f0dc', t: '#2ea06a', T: '#186a42', y: '#c9d94a',
+        d: '#143a26', b: '#5e3a26', B: '#3d2418',
+      },
+    },
     playerMage: { // 마도사 — 별 장식 보라 대모자 + 백발 수염 + 룬 벨트
       top: MAGE_TOP,
       attack: withRows(MAGE_TOP, { 13: '.....ffttyyyyyyttffff...' }),
