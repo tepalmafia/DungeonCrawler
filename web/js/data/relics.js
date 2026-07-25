@@ -27,13 +27,13 @@ const RELICS = [
   // ── 레어 ──
   { id: 'greaves',   rarity: 'rare', name: '사냥꾼의 각반',
     desc: '대시 직후 첫 공격은 크리티컬 확정', flag: 'dashcrit' },
-  { id: 'greatsword', rarity: 'rare', name: '무거운 대검',
+  { id: 'greatsword', rarity: 'rare', unlock: { stat: 'bestFloor', n: 3, label: '3층 도달' }, name: '무거운 대검',
     desc: '공격력 +2, 공격 속도 -10%', apply: (p) => { p.bonusAtk += 2; p.atkCdMul *= 1.1; } },
   { id: 'fang',      rarity: 'rare', name: '흡혈 송곳니',
     desc: '처치 시 8% 확률로 HP 1 회복', flag: 'fang' },
   { id: 'bombbag',   rarity: 'rare', name: '폭탄 주머니',
     desc: '처치 시 15% 확률로 폭발 (주변 2 피해)', flag: 'bomb' },
-  { id: 'spikeshield', rarity: 'rare', name: '가시 방패',
+  { id: 'spikeshield', rarity: 'rare', unlock: { stat: 'totalKills', n: 400, label: '누적 400킬' }, name: '가시 방패',
     desc: '피격 시 주변 적에게 2 피해', flag: 'spikeshield' },
   { id: 'agirune',   rarity: 'rare', name: '민첩의 룬',
     desc: '공격 속도 +20%', apply: (p) => { p.atkCdMul *= 0.80; } },
@@ -41,11 +41,11 @@ const RELICS = [
   // ── 에픽 ──
   { id: 'berserkhelm', rarity: 'epic', unlock: { stat: 'totalKills', n: 1500, label: '누적 1500킬' }, name: '광전사의 투구',
     desc: 'HP 3 이하일 때 공격력 +4', flag: 'berserkhelm' },
-  { id: 'timesand',  rarity: 'epic', name: '시간의 모래',
+  { id: 'timesand',  rarity: 'epic', unlock: { stat: 'bestFloor', n: 5, label: '5층 도달' }, name: '시간의 모래',
     desc: '대시를 2회 연속 사용할 수 있다', apply: (p) => { p.dashMax = 2; } },
   { id: 'phoenix',   rarity: 'epic', unlock: { stat: 'wins', n: 1, label: '첫 등정' }, name: '불사조 깃털',
     desc: '죽음에 이르는 피해를 받으면 1회 부활 (HP 3)', flag: 'revive' },
-  { id: 'magnetglove', rarity: 'epic', name: '자석 장갑',
+  { id: 'magnetglove', rarity: 'epic', unlock: { stat: 'runs', n: 6, label: '6회 도전' }, name: '자석 장갑',
     desc: 'XP와 하트를 방 전체에서 끌어당긴다', flag: 'magnetall' },
 
   // ── 레전더리 (규칙 변경) ──

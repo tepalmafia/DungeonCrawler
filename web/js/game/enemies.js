@@ -2881,8 +2881,9 @@ function createCrack(tx, ty, x, y, gold = false) {
       });
       if (this.gold) {
         Dungeon.vaultFound = true;
+        Game.gold += 30; // 금맥 (G1): 금빛 균열은 골드도 쏟아낸다
         Game.banner = { text: '비밀 금고를 발견했다! 다음 갈림길에 금빛 문이 나타난다', life: 2.6, maxLife: 2.6, color: '#ffd866' };
-        Particles.text(this.x, this.y - 22, '금고 발견!', { color: '#ffd866', size: 15 });
+        Particles.text(this.x, this.y - 22, '금고 발견! +30G', { color: '#ffd866', size: 15 });
         AudioSys.buy();
       } else {
         Particles.text(this.x, this.y - 22, '벽이 무너졌다!', { color: '#ffd866', size: 13 });

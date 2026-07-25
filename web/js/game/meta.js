@@ -97,6 +97,16 @@ const CODEX_ENEMIES = [
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
+// 열기 서약 (G3): 고정 누적 대신 골라 담는다 — 난이도 올리기가 그 자체로 선택이 되도록.
+// 파편 보너스는 서약 '수'에 비례하므로 어떤 조합이든 보상은 같다.
+const HEAT_PACTS = [
+  { id: 'hp',    name: '강철 갑주', desc: '적 HP 강화 (층 비례)' },
+  { id: 'count', name: '물량 공세', desc: '적 수 +2 (3층부터)' },
+  { id: 'speed', name: '질주 본능', desc: '적 속도 +15%' },
+  { id: 'heal',  name: '메마른 샘', desc: '하트 드랍 절반 · 모닥불 회복 감소' },
+  { id: 'boss',  name: '심연의 격노', desc: '보스 HP +50% · 시작 HP -1' },
+];
+
 const META_UPGRADES = [
   { id: 'vit',    name: '육체', desc: '시작 최대 HP +1',        max: 3, costs: [40, 90, 180] },
   { id: 'pow',    name: '완력', desc: '시작 공격력 +1',          max: 2, costs: [120, 320] },
@@ -120,7 +130,8 @@ const Meta = {
       wins: 0,
       bestFloor: 0,
       totalKills: 0,
-      heat: 0,       // 열기 (고난이도 0~5, 첫 클리어 후 해금)
+      heat: 0,       // 열기 (고난이도 0~5, 첫 클리어 후 해금) — 서약 수의 캐시
+      heatPacts: null, // 열기 서약 골라담기 {hp,count,speed,heal,boss} — null이면 heat 수치에서 이관
       muted: false,
       codex: { kills: {}, relics: {}, traits: {} }, // 도감 기록
       welcomed: false, // 환영 파편 지급 여부
@@ -262,13 +273,49 @@ const Meta = {
     return this.data.wins > 0 || this.data.bestFloor >= 5;
   },
 
-  heat() {
-    return this.heatUnlocked() ? Math.min(5, Math.max(0, this.data.heat)) : 0;
+  // 서약 저장소 — 기존 heat 수치(0~5)에서 1회 이관 (canonical 순서 앞에서부터)
+  _pacts() {
+    if (!this.data.heatPacts) {
+      const h = Math.min(5, Math.max(0, this.data.heat || 0));
+      this.data.heatPacts = {};
+      HEAT_PACTS.forEach((p, i) => { this.data.heatPacts[p.id] = i < h; });
+    }
+    return this.data.heatPacts;
   },
 
-  setHeat(h) {
-    this.data.heat = Math.min(5, Math.max(0, h));
+  heat() {
+    if (!this.heatUnlocked()) return 0;
+    return HEAT_PACTS.reduce((n, p) => n + (this._pacts()[p.id] ? 1 : 0), 0);
+  },
+
+  togglePact(id) {
+    const ps = this._pacts();
+    ps[id] = !ps[id];
+    this.data.heat = HEAT_PACTS.reduce((n, p) => n + (ps[p.id] ? 1 : 0), 0);
     this.save();
+  },
+
+  // ←→ 키 호환: 열기 N = canonical 순서 앞에서부터 N개 켠 것과 동치
+  setHeat(h) {
+    const n = Math.min(5, Math.max(0, h));
+    this.data.heatPacts = {};
+    HEAT_PACTS.forEach((p, i) => { this.data.heatPacts[p.id] = i < n; });
+    this.data.heat = n;
+    this.save();
+  },
+
+  // 런 시작 시 서약 플래그 스냅샷. 계측 리그가 Meta.heat를 함수로 덮어쓰는 경우
+  // (저장된 서약 수와 불일치) canonical 순서 앞 N개로 해석해 하위 호환한다.
+  pactFlags(count) {
+    const ps = this._pacts();
+    const stored = HEAT_PACTS.reduce((n, p) => n + (ps[p.id] ? 1 : 0), 0);
+    const out = {};
+    if (stored === count) {
+      HEAT_PACTS.forEach((p) => { out[p.id] = !!ps[p.id]; });
+    } else {
+      HEAT_PACTS.forEach((p, i) => { out[p.id] = i < count; });
+    }
+    return out;
   },
 
   // 런 정산: 도달 층수·처치 수 비례 + 열기 보너스 (기획안 §2-5)

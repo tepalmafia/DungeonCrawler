@@ -248,7 +248,7 @@ const GameRender = {
           ctx.fillText('모닥불', it.x, it.y - 44);
           ctx.font = '11px monospace';
           ctx.fillStyle = '#9aa0b4';
-          ctx.fillText(`휴식 — HP +${this.heat >= 4 ? 1 : 2}`, it.x, it.y - 30);
+          ctx.fillText(`휴식 — HP +${this.pacts.heal ? 1 : 2}`, it.x, it.y - 30);
           // 숫돌과 공존 중이면 양자택일 안내 (두 오브젝트 중간 지점)
           if (this.interactables.some((o) => o.kind === 'whetstone' && !o.used)) {
             ctx.fillStyle = '#6a7086';
@@ -287,6 +287,52 @@ const GameRender = {
           ctx.font = '11px monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('담금질 — 이번 층 공격력 +1', it.x, it.y - 30);
+        }
+      } else if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll') {
+        // 상인 판매대 (G1): 받침 + 품목 아이콘 + 가격표. 살 수 있으면 금빛, 못 사면 잿빛
+        if (it.used) continue;
+        const afford = this.gold >= it.price;
+        ctx.fillStyle = '#3a2c20';
+        ctx.fillRect(it.x - 16, it.y + 2, 32, 10);
+        ctx.fillStyle = '#5e3a26';
+        ctx.fillRect(it.x - 13, it.y - 2, 26, 6);
+        const glow = 0.16 + Math.sin(it.t * 4) * 0.06;
+        ctx.globalAlpha = afford ? glow : glow * 0.4;
+        ctx.fillStyle = afford ? '#2ec4b6' : '#4a4a5c';
+        ctx.beginPath(); ctx.arc(it.x, it.y - 8, 30, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 15px monospace';
+        ctx.fillStyle = afford ? '#e8e0cf' : '#666a80';
+        const icon = it.kind === 'shopRelic' ? '◆' : it.kind === 'shopHeal' ? '♥' : '↻';
+        ctx.fillText(icon, it.x, it.y - 8);
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = afford ? '#2ec4b6' : '#9aa0b4';
+        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : '리롤 +1';
+        ctx.fillText(name, it.x, it.y - 40);
+        ctx.fillStyle = afford ? '#ffd866' : '#8a6a20';
+        ctx.fillText(`${it.price}G`, it.x, it.y - 27);
+      } else if (it.kind === 'bloodAltar') {
+        // 핏빛 제단 (G2): 검은 단 위에 고동치는 붉은 구슬
+        ctx.fillStyle = '#241018';
+        ctx.fillRect(it.x - 16, it.y, 32, 12);
+        ctx.fillStyle = '#3a1822';
+        ctx.fillRect(it.x - 11, it.y - 8, 22, 10);
+        if (!it.used) {
+          const pulse = 0.5 + Math.sin(it.t * 5) * 0.5;
+          ctx.globalAlpha = 0.2 + pulse * 0.15;
+          ctx.fillStyle = '#e43b44';
+          ctx.beginPath(); ctx.arc(it.x, it.y - 14, 26 + pulse * 6, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#e43b44';
+          ctx.beginPath(); ctx.arc(it.x, it.y - 14, 6 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+          ctx.textAlign = 'center';
+          ctx.font = 'bold 12px monospace';
+          ctx.fillStyle = '#e43b44';
+          ctx.fillText('핏빛 제단', it.x, it.y - 44);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('최대 HP 1 → 정예급 특성 선택', it.x, it.y - 31);
         }
       }
     }

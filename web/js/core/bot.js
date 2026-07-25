@@ -473,6 +473,8 @@ const Bot = {
           else if (opt.type === 'event') s = 4;
           else if (opt.type === 'elite') s = 3;
           else if (opt.type === 'siege') s = p.hp >= p.maxHp * 0.6 ? 3 : 1.2; // 습격: 버틸 체력일 때만
+          else if (opt.type === 'merchant') s = 1.6; // 상인: 봇은 흥정을 모른다 — 계측 중립성 유지
+          else if (opt.type === 'trial') s = p.hp >= p.maxHp * 0.7 ? 3.2 : 0.8; // 시련: 건강할 때만 도전
           else if (opt.type === 'shortcut') s = p.hp >= p.maxHp * 0.7 ? 3.5 : 1; // 건강할 때만 지름길
           else s = 2;
           // 문 수식어: 체력이 넉넉하면 위험-보상 문을 선호

@@ -48,6 +48,13 @@ const HUD = {
     ctx.font = '11px monospace';
     ctx.fillText(`Lv.${game.level}`, 104, barY + 32);
 
+    // ── 골드 (G1) — 상인에게만 쓰는 런 화폐 (Lv 옆, 특성 칩과 겹치지 않게) ──
+    if (game.gold > 0) {
+      ctx.fillStyle = '#ffd866';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText(`${game.gold}G`, 158, barY + 32);
+    }
+
     // ── 획득 특성 아이콘 (UI 정리: 최근 8종 + 요약 — 전체는 Tab에서) ──
     const counts = {};
     for (const id of p.traits) counts[id] = (counts[id] || 0) + 1;
@@ -383,9 +390,17 @@ const HUD = {
   heatButtonRects() {
     const cy = 243;
     return [
-      { x: Renderer.W / 2 - 116, y: cy - 15, w: 26, h: 26 },
-      { x: Renderer.W / 2 + 90, y: cy - 15, w: 26, h: 26 },
+      { x: Renderer.W / 2 - 156, y: cy - 15, w: 26, h: 26 },
+      { x: Renderer.W / 2 + 130, y: cy - 15, w: 26, h: 26 },
     ];
+  },
+
+  // 열기 서약 칩 5개 — 시작 화면에서 개별 클릭 토글 (허브 버튼 y=278 위에 꽉 맞춘다)
+  pactChipRects() {
+    const w = 108, h = 18, gap = 6;
+    const total = 5 * w + 4 * gap;
+    const x0 = (Renderer.W - total) / 2;
+    return [0, 1, 2, 3, 4].map((i) => ({ x: x0 + i * (w + gap), y: 256, w, h }));
   },
 
   backButtonRect() {
@@ -453,15 +468,29 @@ const HUD = {
       }
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = heat > 0 ? '#e43b44' : '#666a80';
-      let flames = '';
-      for (let i = 0; i < 5; i++) flames += i < heat ? '♦' : '·';
-      ctx.fillText(`열기 ${heat}  ${flames}`, Renderer.W / 2, 248);
-      ctx.font = '11px monospace';
-      ctx.fillStyle = '#666a80';
-      // 열기 효과는 '누적' — 현재 단계까지의 전체 효과를 한 줄로 (중복 표시 오해 방지)
-      const parts = ['적 HP 강화(층 비례)', '적 수 +2 (3층부터)', '적 속도 +15%', '회복 감소', '보스 +50%·시작 HP -1'];
-      const heatDesc = heat === 0 ? '보통 난이도' : '누적: ' + parts.slice(0, heat).join(' · ');
-      ctx.fillText(`${heatDesc} · 파편 +${heat * 20}%`, Renderer.W / 2, 266);
+      ctx.fillText(`열기 ${heat}${heat > 0 ? ` · 파편 +${heat * 20}%` : '  (서약을 골라 담아라)'}`, Renderer.W / 2, 248);
+      // 열기 서약 칩 (G3): 골라담기 — 클릭으로 개별 토글, ←→는 앞에서부터 N개
+      const pacts = Meta._pacts();
+      this.pactChipRects().forEach((r, i) => {
+        const def = HEAT_PACTS[i];
+        const on = !!pacts[def.id];
+        const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+                      Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
+        ctx.fillStyle = on ? '#2a1418' : '#141420';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.strokeStyle = on ? '#e43b44' : hover ? '#9aa0b4' : '#3a3a48';
+        ctx.lineWidth = hover ? 2 : 1;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = on ? '#e43b44' : '#666a80';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${on ? '♦' : '·'} ${def.name}`, r.x + r.w / 2, r.y + 13);
+        if (hover) {
+          ctx.font = '10px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText(def.desc, Renderer.W / 2, 233);
+        }
+      });
     }
 
     const disc = Object.keys(Meta.data.codex.kills).length + Object.keys(Meta.data.codex.relics).length +

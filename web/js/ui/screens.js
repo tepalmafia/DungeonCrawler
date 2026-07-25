@@ -118,6 +118,12 @@ const GameScreens = {
         if (mx >= plus.x && mx <= plus.x + plus.w && my >= plus.y && my <= plus.y + plus.h) {
           Meta.setHeat(Meta.data.heat + 1); AudioSys.orb();
         }
+        // 서약 칩 개별 토글 (G3 골라담기)
+        HUD.pactChipRects().forEach((r, i) => {
+          if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+            Meta.togglePact(HEAT_PACTS[i].id); AudioSys.orb();
+          }
+        });
       }
     }
 

@@ -109,6 +109,16 @@ const GameCombat = {
     if (e.isBoss && e.def) this._lastBossOutro = e.def.outro; // 마이크로 서사: onBossDead 끝에서 출력
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
+    // 골드 (G1): 굵직한 처치에서만 떨어진다 — 상인에게만 쓰는 런 화폐
+    if (e.isBoss) {
+      const g = 25 + Dungeon.floor * 4;
+      this.gold += g;
+      Particles.text(e.x, e.y - 30, `+${g}G`, { color: '#ffd866', size: 16 });
+    } else if (e.elite || e.isMini) {
+      const g = 6 + Dungeon.floor * 2;
+      this.gold += g;
+      Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
+    }
     Renderer.shake(3, 0.15);
     AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');
 
@@ -250,7 +260,7 @@ const GameCombat = {
     const bossFight = this.enemies.some((b) => b.isBoss && !b.dead) ? 0.5 : 1;
     // 행운(×2 중첩)·클로버(×1.8)가 겹치면 ×7.2까지 폭주 — 총 배율 상한 ×3
     const luckMul = Math.min(3, p.luckMul);
-    let heartChance = 0.045 * floorDecay * bossFight * luckMul * (this.heat >= 4 ? 0.5 : 1);
+    let heartChance = 0.045 * floorDecay * bossFight * luckMul * (this.pacts.heal ? 0.5 : 1);
     if (p.flags.bloodlust) heartChance += 0.12;
     if (p.hp >= p.maxHp) heartChance *= 0.35; // 풀피면 감쇠 — 못 먹는 하트가 바닥에 쌓이는 낭비 방지
     if ((this._roomHearts || 0) >= 2) heartChance *= 0.25; // 방당 2개 이후 급감 (물량 방 인플레 방지)

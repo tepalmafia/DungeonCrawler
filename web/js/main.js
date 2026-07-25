@@ -76,9 +76,11 @@ const Game = {
     this.runSeed = seed != null ? seed : Math.floor(Math.random() * 36 ** 6);
     RNG.seed(this.runSeed);
     this.heat = Meta.heat();
+    this.pacts = Meta.pactFlags(this.heat); // 열기 서약 스냅샷 (골라담기)
+    this.gold = 0; // 런 화폐 — 무덤까지 못 가져간다 (상인에게만 쓴다)
     this.player = createPlayer(0, 0, Meta.data.cls);
     this.player.rerolls = Meta.lvl('reroll'); // 환생 각인: 런당 카드 리롤 횟수
-    if (this.heat >= 5) {
+    if (this.pacts.boss) {
       this.player.maxHp = Math.max(1, this.player.maxHp - 1);
       this.player.hp = this.player.maxHp;
     }
@@ -171,6 +173,7 @@ const Game = {
     // 가시 함정 (맵 M2): 감옥 테마 전투방 — 주기적으로 솟아 편을 가리지 않고 찌른다
     this.traps = [];
     this._siege = null;
+    this._trial = null;
     if (World.hazard === 'prison' && (type === 'combat' || type === 'elite' || type === 'siege')) {
       for (let i = 0; i < 2; i++) {
         const pos = World.safeSpot(RNG.range(TS * 4, TS * 16), RNG.range(TS * 2.5, TS * 8.5) + World.offsetY);
@@ -223,10 +226,34 @@ const Game = {
       this.interactables.push({ kind: 'camp', x: c.x - 78, y: c.y, r: 28, used: false, t: 0 });
       this.interactables.push({ kind: 'whetstone', x: c.x + 78, y: c.y, r: 28, used: false, t: 0 });
     } else if (type === 'event') {
-      // 기연: 받아들이기 전엔 무엇인지 모른다 — 다가가면 수락(도박), 문으로 나가면 거절
       const c = World.center();
-      this.interactables.push({ kind: 'mystery', x: c.x, y: c.y, r: 26, used: false, t: 0 });
-      this.banner = { text: '기이한 기운이 감돈다...', life: 1.8, maxLife: 1.8, color: '#b13ae0' };
+      if (RNG.chance(0.4) && this.player.maxHp > 2) {
+        // 악마 거래 (G2): 대가를 치르는 파워 — 최대 HP 1 ↔ 정예급 특성 선택
+        this.interactables.push({ kind: 'bloodAltar', x: c.x, y: c.y, r: 26, used: false, t: 0 });
+        this.banner = { text: '핏빛 제단이 고동친다... (대가: 최대 HP 1)', life: 2.2, maxLife: 2.2, color: '#e43b44' };
+      } else {
+        // 기연: 받아들이기 전엔 무엇인지 모른다 — 다가가면 수락(도박), 문으로 나가면 거절
+        this.interactables.push({ kind: 'mystery', x: c.x, y: c.y, r: 26, used: false, t: 0 });
+        this.banner = { text: '기이한 기운이 감돈다...', life: 1.8, maxLife: 1.8, color: '#b13ae0' };
+      }
+    } else if (type === 'merchant') {
+      // 상인 (G1): 골드 sink — "지금 쓸까, 아낄까"가 이 방의 콘텐츠다
+      const c = World.center();
+      const f = Dungeon.floor;
+      const s1 = World.safeSpot(c.x - 140, c.y);
+      const s2 = World.safeSpot(c.x, c.y);
+      const s3 = World.safeSpot(c.x + 140, c.y);
+      this.interactables.push({ kind: 'shopRelic', x: s1.x, y: s1.y, r: 26, used: false, t: 0, price: 45 + f * 5 });
+      this.interactables.push({ kind: 'shopHeal', x: s2.x, y: s2.y, r: 26, used: false, t: 0, price: 14 + f * 2 });
+      this.interactables.push({ kind: 'shopReroll', x: s3.x, y: s3.y, r: 26, used: false, t: 0, price: 20 + f * 2 });
+      this.banner = { text: '떠돌이 상인 — 골드는 무덤까지 못 가져간다', life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
+    } else if (type === 'trial') {
+      // 시련 (G5): 다른 층의 악몽이 섞여 몰려온다 — 이기면 확정 상급 유물 + 골드
+      this._trial = true;
+      Dungeon.trialComp().forEach((s, i) => {
+        this.pendingSpawns.push({ delay: 0.5 + i * 0.25, type: s.type, elite: s.elite });
+      });
+      this.banner = { text: '시련 — 다른 층의 악몽이 몰려온다!', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
     } else if (type === 'vault') {
       // 비밀 금고 (맵 M3): 진행을 소모하지 않는 순수 보너스 — 상자 1 + 진귀한 항아리 2
       // (보상 감사: 상자 2개 = 유물 2개는 무위험 대비 과함 — 보물방(유물 1)의 상위 호환이 되어버린다)
@@ -247,7 +274,7 @@ const Game = {
     } else if (type === 'boss') {
       const c = World.center();
       const boss = createBoss(Dungeon.floor, c.x + TS * 4, c.y);
-      if (this.heat >= 5) {
+      if (this.pacts.boss) {
         boss.hp = boss.maxHp = Math.round(boss.maxHp * 1.5);
       }
       this.enemies.push(boss);
@@ -268,6 +295,7 @@ const Game = {
   enemyHpMul() {
     // 열기 재분배 (계측: 열기5 마도사 사망의 80%가 1층) — 평면 ×1.25 대신 층 비례:
     // 1층은 가볍게(×1.06+), 10층은 묵직하게(열기5 기준 ×1.79). 열기가 '후반 도전'이 되도록
+    if (!this.pacts || !this.pacts.hp) return this.floorHpScale();
     return this.floorHpScale() * (1 + 0.012 * this.heat + 0.012 * this.heat * (Dungeon.floor - 1));
   },
 

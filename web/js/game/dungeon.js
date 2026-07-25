@@ -10,6 +10,8 @@ const ROOM_META = {
   shortcut:  { label: '지름길',  color: '#e43b44' },
   vault:     { label: '금고',    color: '#ffd866' },
   siege:     { label: '습격',    color: '#e43b44' },
+  merchant:  { label: '상인',    color: '#2ec4b6' },
+  trial:     { label: '시련',    color: '#b13ae0' },
 };
 
 // ── 설계된 위협 세트 (R2) — 무리가 '물량'이 아니라 '퍼즐'이 되도록.
@@ -80,6 +82,8 @@ const Dungeon = {
     this.tookCamp = false;
     this.tookEvent = false;
     this.tookSiege = false;
+    this.tookMerchant = false;
+    this.trialSeen = false; // 시련의 문은 런당 1회 (층이 아니라)
     this.vaultFound = false;
     this.vaultCrackPlaced = false;
     this.miniSeen = false;
@@ -94,6 +98,7 @@ const Dungeon = {
     this.tookCamp = false;
     this.tookEvent = false;
     this.tookSiege = false;
+    this.tookMerchant = false;
     this.vaultFound = false;
     this.vaultCrackPlaced = false;
     this.miniSeen = false;
@@ -114,6 +119,7 @@ const Dungeon = {
       this.tookCamp = false;
       this.tookEvent = false;
     this.tookSiege = false;
+    this.tookMerchant = false;
     this.vaultFound = false;
     this.vaultCrackPlaced = false;
       this.miniSeen = false;
@@ -135,6 +141,8 @@ const Dungeon = {
     if (type === 'camp') this.tookCamp = true;
     if (type === 'event') this.tookEvent = true;
     if (type === 'siege') this.tookSiege = true;
+    if (type === 'merchant') this.tookMerchant = true;
+    if (type === 'trial') this.trialSeen = true;
     this.roomIndex++;
     this.build(type);
   },
@@ -165,6 +173,21 @@ const Dungeon = {
     return floorData(this.floor).name;
   },
 
+  // 시련 구성 (G5): 이웃 층(±2)의 손제작 위협 세트 2개를 섞는다 — HP 스케일 격차가 너무 벌어지지 않는 범위
+  trialComp() {
+    const lo = Math.max(1, this.floor - 2), hi = Math.min(10, this.floor + 2);
+    const pool = THREAT_SETS.filter((s) => s.min >= lo && s.min <= hi && s.min !== this.floor);
+    const comp = [];
+    const picks = [];
+    while (picks.length < 2 && pool.length > 0) {
+      picks.push(pool.splice(Math.floor(RNG.next() * pool.length), 1)[0]);
+    }
+    for (const set of picks) {
+      for (const u of set.units) comp.push({ type: u, elite: RNG.chance(0.25) });
+    }
+    return comp;
+  },
+
   doorOptions() {
     const next = this.roomIndex + 1;
     if (next >= this.totalRooms) {
@@ -180,6 +203,8 @@ const Dungeon = {
     if (!this.tookCamp && next >= 4) pool.push('camp');
     if (!this.tookEvent && next >= 3) pool.push('event'); // 기연: 리스크-리워드 이벤트
     if (this.floor >= 3 && !this.tookSiege) pool.push('siege'); // 습격 (맵 M4): 3층+ 웨이브 생존 도전
+    if (this.floor >= 2 && !this.tookMerchant && next >= 3) pool.push('merchant'); // 상인 (G1): 층당 1회
+    if (this.floor >= 4 && !this.trialSeen && RNG.chance(0.3)) pool.push('trial'); // 시련 (G5): 런당 1회, 희귀
     pool.push('combat');
 
     // 금고 발견 시: 문 3개 상한을 지키려 일반 문을 2개로 줄이고 금고 문을 끼운다
@@ -208,7 +233,7 @@ const Dungeon = {
   combatComp(depth) {
     const data = floorData(this.floor);
     const comp = [];
-    const heatBonus = (Game.heat >= 2 && this.floor >= 3) ? 2 : 0; // 열기 2: 적 수 증가 (1~2층 제외 — 초반 절벽 방지)
+    const heatBonus = (Game.pacts && Game.pacts.count && this.floor >= 3) ? 2 : 0; // 서약 '물량 공세' (1~2층 제외 — 초반 절벽 방지)
     // 물량감: 로그라이크다운 무리 전투. 곡선 뒤집기(R1): 1~2층은 -2 — 사망의 90%가
     // 1~2층에 몰리는 역전 곡선 보정 (신규 이탈 구간 완화)
     const earlyEase = this.floor <= 2 ? 2 : 0;
