@@ -358,7 +358,7 @@ const Game = {
       this.interactables.push({ kind: 'shopHeal', x: s2.x, y: s2.y, r: 26, used: false, t: 0, price: Math.round((12 + f * 3) * disc) });
       this.interactables.push({ kind: 'shopReroll', x: s3.x, y: s3.y, r: 26, used: false, t: 0, price: Math.round((18 + f * 3) * disc) });
       this.interactables.push({ kind: 'shopShards', x: s4.x, y: s4.y, r: 26, used: false, t: 0, price: Math.round((30 + f * 6) * disc), shards: 10 + f * 2 });
-      this.banner = { text: '떠돌이 상인 — 골드는 무덤까지 못 가져간다', life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
+      this.banner = { text: "장물아비 '까마귀' — 죽은 자의 편. 골드는 왕좌까지 못 가져간다", life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
     } else if (type === 'trial') {
       // 시련 (G5): 다른 층의 악몽이 섞여 몰려온다 — 이기면 확정 상급 유물 + 골드
       this._trial = true;

@@ -1136,17 +1136,17 @@ const HUD = {
       ctx.shadowColor = '#ffd866';
       ctx.shadowBlur = 14 + Math.sin(t * 3) * 8;
     }
-    ctx.fillText(game.act2 ? '2막 정복 — 정원이 시든다!' : '심연의 탑 1막 정복!', cx, ty);
+    ctx.fillText(game.act2 ? '2막 돌파 — 관문이 열렸다!' : '1막 완수 — 변경을 벗어났다', cx, ty);
     ctx.restore();
     if (t > 0.55) {
       ctx.font = 'bold 16px monospace';
       ctx.fillStyle = '#e43b44';
-      ctx.fillText(game.act2 ? '20층 — 균사 여왕 스포라가 뿌리째 시들었다' : '10층 — 진 심연의 군주 눅스가 소멸했다', cx, 208);
+      ctx.fillText(game.act2 ? '20층 — 길을 막던 것이 쓰러졌다' : "10층 — 왕실 처형인 '무거운 손'이 쓰러졌다", cx, 208);
       ctx.font = 'italic 13px monospace';
       ctx.fillStyle = '#9a9ab8';
       ctx.fillText(game.act2
-        ? '정원 아래, 더 깊은 곳에서 열기가 올라온다. 대장간의 망치 소리가 들린다.'
-        : '탑의 뿌리가 드러났다. 지하 깊은 곳, 초록빛 정원이 숨쉬고 있다.', cx, 230);
+        ? '왕도가 가까워진다. 다리 너머, 성벽의 그림자가 보인다.'
+        : '"명단은… 재판소가 아니라… 성에서 내려왔다…" — 첫 번째 자백을 얻었다.', cx, 230);
     }
 
     // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)
