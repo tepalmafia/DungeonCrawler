@@ -1,5 +1,17 @@
 // 플레이 상태 프레임 갱신 — 환경 위험/스폰/적/장판/투사체/스킬 이펙트/픽업/방 클리어.
 // Game.tick(main.js)이 상태 분기 후 매 프레임 호출한다.
+
+// ── 인간 드라마 AI (M1) — 산 자만이 죽음을 두려워한다 ──
+// 왕의 병사는 기계가 아니다: 침입자를 발견하고(!), 동료의 죽음에 무너지고, 도망치고, 항복하고,
+// 때로는 거짓 항복으로 배신한다. 늦게 잡으면 전령이 증원을 부른다. 언데드·광신도·정예는 동요하지 않는다.
+const HUMAN_FEAR = new Set(['sniper', 'berserker', 'brute', 'bomber', 'frostArcher', 'frostMage',
+  'shaman', 'jailer', 'flameJuggler', 'stalker', 'glowShrieker']);
+const FORM_UNITS = new Set([...HUMAN_FEAR, 'skeleton', 'shieldSkeleton', 'warden', 'executioner', 'acolyte', 'mirrorKnight']);
+const ACT_MORALE = { 1: 0.35, 2: 0.25, 3: 0.18, 4: 0.15, 5: 0.06 }; // 왕좌에 가까울수록 도망치지 않는다
+const ROUT_CRY = ['살려줘…!', '도, 도망쳐!', '이건 사람이 아니야!', '괴물이다—!', '왕이고 뭐고…!'];
+const SURR_CRY = ['하, 항복이다! 제발…', '살려주시오…!', '집에 아이가 있소…', '자비를…!'];
+const AMBUSH_TYPES = new Set(['mimic', 'turret', 'thornPlant']); // 매복형은 원래 행동 유지
+
 const GamePlay = {
   // AI 고도화 — 개체 상태 기계를 건드리지 않는 '조향 오버레이'.
   // 역할(돌격/사격/지원)에 따라 이동에 보정을 더한다: 협공 각도 / 측면 재배치 / 후방 유지 / 광역 예고 산개.
@@ -33,6 +45,29 @@ const GamePlay = {
     } else if (role === 'support' && d < 200) {
       // 지원(강령술사·주술사): 플레이어에게서 물러나 아군 뒤에 숨는다
       World.moveEntity(e, (-dx / d) * e.speed * 0.5 * dt, (-dy / d) * e.speed * 0.5 * dt);
+    }
+  },
+
+  // 사기 판정 (드라마 AI) — 동료가 죽는 걸 본 산 자는 무너질 수 있다. killEnemy가 호출.
+  // 잔혹 처치(brutal)와 누적 전사자가 공포를 키운다. 언데드·광신도·정예·보스는 동요하지 않는다.
+  _fearCheck(dead, brutal) {
+    if (!this._drama || !HUMAN_FEAR.has(dead.type)) return;
+    this._sqDead = (this._sqDead || 0) + 1;
+    const act = Math.min(5, Math.ceil((Dungeon.floor <= 50 ? Dungeon.floor : 46) / 10));
+    const base = ACT_MORALE[act] || 0.1;
+    let routed = 0; // 동시 붕괴 상한 2 — 한 번의 처치로 방이 통째로 비지 않게
+    for (const e of this.enemies) {
+      if (routed >= 2) break;
+      if (e.dead || e.neutral || e.elite || e.isMini || e.isBoss || e._rout || e._surrender != null || e._runner) continue;
+      if (!HUMAN_FEAR.has(e.type) || !e.speed) continue;
+      if (Math.hypot(e.x - dead.x, e.y - dead.y) > 190) continue;
+      let c = base * (brutal ? 1.6 : 1) * (this._sqDead >= 3 ? 1.5 : 1);
+      if (e.hp <= e.maxHp * 0.4) c *= 1.6; // 만신창이는 더 쉽게 무너진다
+      if (Math.random() < c) {
+        e._rout = true; e._routT = 0; e._aware = true;
+        routed++;
+        Particles.text(e.x, e.y - 32, ROUT_CRY[Math.floor(Math.random() * ROUT_CRY.length)], { color: '#ffd866', size: 12 });
+      }
     }
   },
 
@@ -187,7 +222,15 @@ const GamePlay = {
       const s = this.pendingSpawns[i];
       s.delay -= dt;
       if (s.delay <= 0) {
-        const pos = World.randomSpawnPos(this.player);
+        let pos;
+        // 대형 스폰 (드라마 AI): 통로·홀 방에서 병사류는 방 안쪽에 3열 방진으로 정렬해 기다린다
+        if (this._formation && !this._roomAlert && !s.mini && !s.elite && FORM_UNITS.has(s.type) && this._formN < 9) {
+          const k = this._formN++;
+          const col = Math.floor(k / 3), row = k % 3;
+          pos = World.safeSpot(TS * (World.cols - 5) + col * 34, TS * 5.5 + World.offsetY + (row - 1) * 56);
+        } else {
+          pos = World.randomSpawnPos(this.player);
+        }
         this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, t: s.mini ? 1.1 : 0.7 });
         this.pendingSpawns.splice(i, 1);
       }
@@ -201,6 +244,9 @@ const GamePlay = {
           : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
         e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
         if (this.pacts.speed) e.speed *= 1.15;
+        // 발견 체계 (드라마 AI): 경보 전이면 비인지 상태로 배치 — 침입자를 아직 모른다.
+        // 매복형·보스방·경보 후 증원은 제외 (=== false 게이트: 소환수 등 직접 push된 개체는 그대로)
+        if (this._drama && !this._roomAlert && !m.mini && !AMBUSH_TYPES.has(m.type) && !e.isBoss) e._aware = false;
         this.enemies.push(e);
         if (m.mini) {
           this.banner = { text: `⚠ ${e.miniName} 출현!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
@@ -244,6 +290,77 @@ const GamePlay = {
       if (e.spawnT > 0) {
         e.spawnT -= dt;
         e.animT += dt;
+        continue;
+      }
+
+      // ── 드라마 AI: 발견 체계 — 아직 침입자를 모르는 병사는 제자리를 지킨다 ──
+      if (e._aware === false) {
+        e.animT += dt * 0.45;
+        const dP = Math.hypot(e.x - p.x, e.y - p.y);
+        if (this._roomAlert || dP < 230) {
+          e._aware = true;
+          e._alertT = dP < 150 ? 0.25 : 0.25 + Math.random() * 0.45; // 전파 스태거
+          if (!this._roomAlert) { this._roomAlert = true; AudioSys.shoot(); }
+          Particles.text(e.x, e.y - 30, '!', { color: '#e43b44', size: 18 });
+        } else {
+          continue;
+        }
+      }
+      if (e._alertT > 0) { e._alertT -= dt; e.animT += dt; continue; }
+
+      // ── 드라마 AI: 전령 — 문으로 달려가 증원을 부른다. 막지 못하면 토벌대가 불어난다 ──
+      if (e._runner && !e.dead) {
+        e.animT += dt;
+        const exitX = e.x < World.cols * TS / 2 ? TS * 1.3 : TS * (World.cols - 1.3);
+        const exitY = TS * 5.5 + World.offsetY;
+        const ddx = exitX - e.x, ddy = exitY - e.y, dd = Math.hypot(ddx, ddy) || 1;
+        World.moveEntity(e, (ddx / dd) * e.speed * 1.3 * dt, (ddy / dd) * e.speed * 1.3 * dt);
+        if (dd < 30) {
+          e.dead = true; // 탈출 — 처치 집계 없음
+          Particles.burst(e.x, e.y, { count: 8, colors: ['#8f8577'], speed: 80, life: 0.3, size: 2 });
+          this.banner = { text: '⚠ 전령이 빠져나갔다 — 증원이 온다!', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+          const data = floorData(Dungeon.floor);
+          for (let k = 0; k < 3; k++) this.pendingSpawns.push({ delay: 1.0 + k * 0.5, type: RNG.pick(data.enemies), elite: false });
+        }
+        continue;
+      }
+
+      // ── 드라마 AI: 항복 — 무릎 꿇은 자. 자비(방치)든 처형(공격)이든 선택은 플레이어의 것 ──
+      if (e._surrender != null) {
+        e._surrender += dt;
+        e.animT += dt * 0.2;
+        const dP = Math.hypot(e.x - p.x, e.y - p.y);
+        if (e._feign && e._surrender > 0.9 && dP < 130) {
+          // 거짓 항복 — 배신. 왕의 밀정은 마지막까지 기만한다
+          e._surrender = null; e.neutral = false; e._feign = false;
+          Particles.text(e.x, e.y - 32, '어리석군!', { color: '#e43b44', size: 13 });
+          Particles.ring(e.x, e.y, { r0: 6, r1: 40, life: 0.3, color: '#e43b44', width: 3 });
+          continue;
+        }
+        if (e._surrender > 3.2) {
+          e.dead = true; // 목숨을 건졌다 — 어둠 속으로 사라진다
+          Particles.burst(e.x, e.y, { count: 6, colors: ['#8f8577', '#5e564b'], speed: 60, life: 0.4, size: 2 });
+        }
+        continue;
+      }
+
+      // ── 드라마 AI: 사기 붕괴 — 도망친다. 구석에 몰리면 항복, 문에 닿으면 탈출 ──
+      if (e._rout && !e.dead) {
+        e._routT = (e._routT || 0) + dt;
+        e.animT += dt * 1.4;
+        const fdx = e.x - p.x, fdy = e.y - p.y, fd = Math.hypot(fdx, fdy) || 1;
+        const px0 = e.x, py0 = e.y;
+        World.moveEntity(e, (fdx / fd) * e.speed * 1.15 * dt, (fdy / fd) * e.speed * 1.15 * dt);
+        e._routStuck = (Math.hypot(e.x - px0, e.y - py0) < e.speed * 0.4 * dt) ? (e._routStuck || 0) + dt : 0;
+        if (e.x < TS * 1.6 || e.x > TS * (World.cols - 1.6)) {
+          e.dead = true; // 문틈으로 탈출 — 놓쳤다
+          Particles.text(e.x, e.y - 26, '…놓쳤다', { color: '#8f8577', size: 11 });
+        } else if (e._routStuck > 0.5 && fd < 200) {
+          // 구석에 몰렸다 — 무기를 버리고 무릎 꿇는다 (12%는 거짓 항복)
+          e._rout = false; e._surrender = 0; e.neutral = true;
+          e._feign = Math.random() < 0.12;
+          Particles.text(e.x, e.y - 32, SURR_CRY[Math.floor(Math.random() * SURR_CRY.length)], { color: '#ffd866', size: 12 });
+        }
         continue;
       }
       if (e.status.burn > 0) {
@@ -310,6 +427,24 @@ const GamePlay = {
       if (!e.dead) this._steer(e, dt, p);
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
+
+    // ── 드라마 AI: 방 전투 시계 — 5초 지나면 무조건 발각, 18초를 끌면 전령이 증원을 부르러 뛴다 ──
+    if (this._drama && !this.roomCleared && this.enemies.some((e) => !e.dead && !e.neutral)) {
+      this._roomFightT = (this._roomFightT || 0) + dt;
+      if (!this._roomAlert && this._roomFightT > 5) this._roomAlert = true;
+      if (!this._runnerCalled && this._roomFightT > 18) {
+        const cand = this.enemies.find((e) => !e.dead && !e.neutral && !e.elite && !e.isMini && !e.isBoss &&
+          !e._rout && e._surrender == null && HUMAN_FEAR.has(e.type) && e.speed > 0);
+        if (cand) {
+          this._runnerCalled = true;
+          cand._runner = true; cand._aware = true;
+          Particles.text(cand.x, cand.y - 32, '증원을 불러라!', { color: '#e43b44', size: 13 });
+          this.banner = { text: '⚠ 전령이 문으로 달린다 — 빠져나가기 전에 잡아라!', life: 2.2, maxLife: 2.2, color: '#e43b44' };
+        } else {
+          this._runnerCalled = true; // 부를 사람이 없다 (언데드·정예뿐)
+        }
+      }
+    }
 
     // ── 장판 (적 피해: 감전/독구름) ──
     for (let i = this.zones.length - 1; i >= 0; i--) {
