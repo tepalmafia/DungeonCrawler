@@ -67,6 +67,76 @@ const Game = {
   heat: 0,
   paused: false,
 
+  // 반응 학습 (완성도 점검 ②): 각 교차 반응의 첫 발동 순간에 1회 설명 —
+  // 계측 결과 반응이 30분에 7회뿐(과부하 0회) = 시스템이 묻혀 있었다. 발견을 가르쳐야 쓴다
+  teachReaction(id, text) {
+    if (!Meta.data.rxSeen) Meta.data.rxSeen = {};
+    if (Meta.data.rxSeen[id]) return;
+    Meta.data.rxSeen[id] = true;
+    Meta.save();
+    this.banner = { text: '✦ 반응 발견! ' + text, life: 3.2, maxLife: 3.2, color: '#ffd866' };
+  },
+
+  // ── 런 중단 저장 (완성도 점검 ①): 방 입장마다 스냅샷 — 브라우저를 닫아도 이어서 ──
+  // 특성/유물은 id 목록을 재적용해 복원하고, 스칼라(HP·골드·XP)는 그대로 덮어쓴다.
+  saveRun() {
+    if (this.testMode && !this._forceSave) return; // 봇 계측 오염 방지
+    if (this.runEnded || Dungeon.floor > 10) return; // 무한 모드는 저장 없음
+    const p = this.player;
+    try {
+      localStorage.setItem('dungeoncrawler_run', JSON.stringify({
+        v: 1, cls: p.classId, heat: this.heat, pacts: this.pacts,
+        floor: Dungeon.floor, roomIndex: Dungeon.roomIndex, roomType: Dungeon.roomType,
+        took: {
+          t: Dungeon.tookTreasure, c: Dungeon.tookCamp, e: Dungeon.tookEvent,
+          s: Dungeon.tookSiege, m: Dungeon.tookMerchant, tr: Dungeon.trialSeen,
+        },
+        level: this.level, xp: this.xp, xpNext: this.xpNext, kills: this.kills,
+        time: this.time, gold: this.gold,
+        traits: [...p.traits], relics: [...p.relics],
+        hp: p.hp, maxHp: p.maxHp, bonusAtk: p.bonusAtk, rerolls: p.rerolls || 0,
+        floorAtk: p.floorAtk || 0, reviveUsed: !!p.reviveUsed,
+      }));
+    } catch (e) { /* 저장 실패는 게임을 막지 않는다 */ }
+  },
+
+  loadRunSave() {
+    try {
+      const raw = localStorage.getItem('dungeoncrawler_run');
+      const s = raw ? JSON.parse(raw) : null;
+      return s && s.v === 1 ? s : null;
+    } catch (e) { return null; }
+  },
+
+  clearRunSave() {
+    try { localStorage.removeItem('dungeoncrawler_run'); } catch (e) {}
+  },
+
+  resumeRun() {
+    const s = this.loadRunSave();
+    if (!s) return false;
+    Meta.data.cls = s.cls;
+    this.restart();
+    // 열기 서약·진행도 복원
+    this.heat = s.heat;
+    this.pacts = s.pacts || Meta.pactFlags(s.heat);
+    this.level = s.level; this.xp = s.xp; this.xpNext = s.xpNext;
+    this.kills = s.kills; this.time = s.time; this.gold = s.gold;
+    const p = this.player;
+    p.traits = []; p.relics = [];
+    for (const id of s.traits) { const t = TRAITS.find((x) => x.id === id); if (t) applyTrait(p, t); }
+    for (const id of s.relics) { const r = RELICS.find((x) => x.id === id); if (r) applyRelic(p, r); }
+    // 스칼라는 저장값이 진실 (기연·제단·상점의 흔적 포함)
+    p.maxHp = s.maxHp; p.hp = s.hp; p.bonusAtk = s.bonusAtk;
+    p.rerolls = s.rerolls; p.floorAtk = s.floorAtk; p.reviveUsed = s.reviveUsed;
+    Dungeon.floor = s.floor; Dungeon.roomIndex = s.roomIndex;
+    Dungeon.tookTreasure = s.took.t; Dungeon.tookCamp = s.took.c; Dungeon.tookEvent = s.took.e;
+    Dungeon.tookSiege = s.took.s; Dungeon.tookMerchant = s.took.m; Dungeon.trialSeen = s.took.tr;
+    Dungeon.build(s.roomType);
+    this.banner = { text: '이어서 도전한다 — ' + s.floor + '층', life: 2.0, maxLife: 2.0, color: '#2ec4b6' };
+    return true;
+  },
+
   restart(seed) {
     // 시드 런: 같은 시드 + 같은 선택 = 같은 던전 (기획안 §8.1)
     if (seed == null && this._urlSeed != null) {
@@ -285,6 +355,8 @@ const Game = {
       AudioSys.bossAppear();
       Renderer.shake(5, 0.5);
     }
+
+    this.saveRun(); // 방 입장 스냅샷 — 브라우저를 닫아도 이 방부터 이어한다
   },
 
   // 층별 적 HP 스케일 — 심층(6층+)은 기울기 상향 (+30%→+40%/층).

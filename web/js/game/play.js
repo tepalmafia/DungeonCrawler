@@ -253,18 +253,21 @@ const GamePlay = {
           // 과부하: 화상×감전 = 번개 폭발 (두 상태 소비)
           e.status.burn = 0; e.status.shock = 0;
           Particles.text(e.x, e.y - 34, '⚡과부하!', { color: '#ffd866', size: 15 });
+          this.teachReaction('overload', '과부하 — 화상×감전 = 번개 폭발');
           this._explode(e.x, e.y, 80, 4, ['#ffd866', '#ff7043', '#ffffff'], '#ffd866');
         } else if (e.status.poison > 0 && e.status.shock > 0 && !e.isBoss && !(e._stunT > 0)) {
           // 마비: 독×감전 = 신경 마비 1.1초 (감전 소비, 중독 유지)
           e.status.shock = 0;
           e._stunT = 1.1;
           Particles.text(e.x, e.y - 34, '마비!', { color: '#c9d94a', size: 14 });
+          this.teachReaction('stun', '마비 — 독×감전 = 행동 정지');
           Particles.burst(e.x, e.y, { count: 8, colors: ['#c9d94a', '#ffd866'], speed: 90, life: 0.35, size: 3 });
         } else if (e.status.burn > 0 && e.status.poison > 0 && !e._venomBurn) {
           // 맹독 연소: 화상×독 = 두 지속 피해의 틱 가속 (표시 1회)
           e._venomBurn = true;
           e.status.burn += 1; e.status.poison += 1;
           Particles.text(e.x, e.y - 34, '맹독 연소!', { color: '#8a3a8c', size: 14 });
+          this.teachReaction('venom', '맹독 연소 — 화상×독 = 지속 피해 2배속');
         }
         // 맹독 연소 지속 효과: 두 상태 공존 동안 틱 2배속
         if (e._venomBurn && e.status.burn > 0 && e.status.poison > 0) {

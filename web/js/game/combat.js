@@ -32,6 +32,7 @@ const GameCombat = {
       if (stCount >= 2) {
         dmg = Math.round(dmg * 1.3);
         Particles.text(e.x, e.y - 38, '처형!', { color: '#e43b44', size: 13 });
+        this.teachReaction('execute', '처형 — 상태 2종 + 크리티컬 = 피해 증폭');
       }
     }
     e.hp -= dmg;

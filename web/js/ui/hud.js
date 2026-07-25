@@ -432,6 +432,30 @@ const HUD = {
     ctx.fillStyle = '#e8e0cf';
     ctx.fillText('― 심연의 탑 ―', Renderer.W / 2, 156);
 
+    // 거점 반응 서사 (④): 기록에 따라 탑이 다르게 말을 건다
+    {
+      const w = Meta.data.wins, bf = Meta.data.bestFloor;
+      const line = w >= 5 ? '탑이 너의 이름을 기억한다.'
+        : w >= 1 ? '한 번 정복당한 탑이 이를 갈고 있다.'
+        : bf >= 8 ? '정상이 가깝다. 탑도 그것을 안다.'
+        : bf >= 5 ? '탑의 중턱 — 심연이 너를 눈치챘다.'
+        : bf >= 2 ? '탑은 아직 너를 시험하는 중이다.'
+        : '탑의 문이 처음으로 열린다.';
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(line, Renderer.W / 2, 176);
+    }
+
+    // 이어하기 (①): 중단된 런이 있으면 안내
+    {
+      const rs = Game.loadRunSave && Game.loadRunSave();
+      if (rs) {
+        ctx.font = 'bold 13px monospace';
+        ctx.fillStyle = '#2ec4b6';
+        ctx.fillText(`C — 이어하기 (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 열기 ' + rs.heat : ''})`, Renderer.W / 2, 196);
+      }
+    }
+
     this._shardLabel(ctx, Renderer.W - 24, 36);
     if (Meta.data.runs > 0) {
       ctx.textAlign = 'left';

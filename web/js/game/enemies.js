@@ -50,6 +50,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             if (!this.dead && this.status.burn > 0) {
               Game.zones.push({ x: this.x, y: this.y, r: 55, life: 2.0, kind: 'fire', tickT: 0, hit: null });
               Particles.text(this.x, this.y - 40, '화염 파열!', { color: '#ff7043', size: 13 });
+              Game.teachReaction('burst', '파열 — 상태 이상을 품은 채 벽에 강타 = 원소 장판');
             } else if (!this.dead && this.status.poison > 0) {
               Game.zones.push({ x: this.x, y: this.y, r: 55, life: 2.5, kind: 'poison', tickT: 0, hit: null });
               Particles.text(this.x, this.y - 40, '독 파열!', { color: '#6ab04c', size: 13 });

@@ -1,17 +1,18 @@
 // 던전 구조: 5개 층 × (방 8개 + 보스방). 층마다 테마·적 구성·환경 기믹이 다르다.
+// desc: 문 아래 한 줄 툴팁 (완성도 점검 ③ — 문 10종의 의미를 배울 곳이 없었다)
 const ROOM_META = {
-  combat:    { label: '전투',    color: '#e8e0cf' },
-  elite:     { label: '정예',    color: '#b13ae0' },
-  treasure:  { label: '보물',    color: '#f7b32b' },
-  camp:      { label: '모닥불',  color: '#ff7043' },
-  event:     { label: '기연',    color: '#b13ae0' },
-  boss:      { label: '보스',    color: '#e43b44' },
-  nextfloor: { label: '다음 층', color: '#38b764' },
-  shortcut:  { label: '지름길',  color: '#e43b44' },
-  vault:     { label: '금고',    color: '#ffd866' },
-  siege:     { label: '습격',    color: '#e43b44' },
-  merchant:  { label: '상인',    color: '#2ec4b6' },
-  trial:     { label: '시련',    color: '#b13ae0' },
+  combat:    { label: '전투',    color: '#e8e0cf', desc: '평범한 전투' },
+  elite:     { label: '정예',    color: '#b13ae0', desc: '강적 — 특성 보상' },
+  treasure:  { label: '보물',    color: '#f7b32b', desc: '유물 상자' },
+  camp:      { label: '모닥불',  color: '#ff7043', desc: '회복 또는 담금질' },
+  event:     { label: '기연',    color: '#b13ae0', desc: '정체불명 — 도박' },
+  boss:      { label: '보스',    color: '#e43b44', desc: '층의 주인' },
+  nextfloor: { label: '다음 층', color: '#38b764', desc: '위로 오른다' },
+  shortcut:  { label: '지름길',  color: '#e43b44', desc: '한 층 스킵 — 위험' },
+  vault:     { label: '금고',    color: '#ffd866', desc: '무위험 보너스' },
+  siege:     { label: '습격',    color: '#e43b44', desc: '3파도 생존 → 보상' },
+  merchant:  { label: '상인',    color: '#2ec4b6', desc: '골드로 구매' },
+  trial:     { label: '시련',    color: '#b13ae0', desc: '강화전 → 확정 유물' },
 };
 
 // ── 설계된 위협 세트 (R2) — 무리가 '물량'이 아니라 '퍼즐'이 되도록.

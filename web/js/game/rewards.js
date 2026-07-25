@@ -29,6 +29,7 @@ const GameRewards = {
         this.shardsPaid, this.kills - this.killsPaid);
     } else {
       this.shardsEarned = Meta.endRun(Dungeon.floor, Dungeon.roomIndex, this.kills, victory, this.heat);
+      this.clearRunSave(); // 런이 끝났다 — 이어하기 스냅샷 소멸
     }
     this.shardAnimT = 0;
     // 오클릭 방지: 전투 중 연타하던 클릭이 정산 화면을 바로 넘기지 않게 잠시 입력 잠금

@@ -139,7 +139,13 @@ const GameScreens = {
             Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) act = i;
       });
     }
-    if (act === 0) { AudioSys.buy(); this.restart(); }
+    // 이어하기 (C): 중단된 런 스냅샷 복원
+    if (Input.pressed('KeyC') && this.loadRunSave()) {
+      AudioSys.buy();
+      this.resumeRun();
+      return;
+    }
+    if (act === 0) { AudioSys.buy(); this.clearRunSave(); this.restart(); }
     else if (act === 1) { AudioSys.pickup(); this.state = 'altar'; }
     else if (act === 2) { AudioSys.pickup(); this.state = 'classes'; }
     else if (act === 3) { AudioSys.pickup(); this.state = 'codex'; }
