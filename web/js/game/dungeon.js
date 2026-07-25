@@ -77,12 +77,23 @@ const FLOOR_DATA = {
   28: { name: '고문실 복도', enemies: ['jailer', 'chainWraith', 'chainWraith', 'warden', 'frostGolem', 'stalker'], rule: '간수의 사슬 궤도에서 비켜서라' },
   29: { name: '공작의 성관', enemies: ['mirrorKnight', 'riftCaster', 'brute', 'executioner', 'imp', 'acolyte'], rule: '거울기사의 반격 자세가 끝나기 전에 물러나라' },
   30: { name: '판결의 홀',   enemies: ['mirrorKnight', 'riftCaster', 'riftCaster', 'executioner', 'frostMage', 'warden'], rule: '판결봉이 내려치기 전에 — 빨리 끝내라' },
+  // ── 4막: 역병의 마을 (31~40층) — 왕이 만든 재앙, '역병'이라 불린 것 ──
+  31: { name: '봉쇄된 마을 어귀', enemies: ['ghoul', 'skeleton', 'swarm', 'bloodBat', 'necro', 'shieldSkeleton'], rule: '깨어난 자들은 그저 걷는다 — 벨 때마다 고맙다고 속삭인다' },
+  32: { name: '썩은 밀밭',       enemies: ['ghoul', 'ghoul', 'skeleton', 'necro', 'sporePuff', 'boneHeap'], rule: '깨어난 자들은 그저 걷는다 — 벨 때마다 고맙다고 속삭인다' },
+  33: { name: '좀비 거리',       enemies: ['ghoul', 'shieldSkeleton', 'boneHeap', 'shade', 'shaman', 'bloodBat'], rule: '뼈 더미를 부수지 않으면 되살아난다' },
+  34: { name: '판자촌 골목',     enemies: ['ghoul', 'ghoul', 'boneHeap', 'boneHeap', 'shade', 'wraith'], rule: '뼈 더미를 부수지 않으면 되살아난다' },
+  35: { name: '소각장',          enemies: ['cinder', 'ashWalker', 'flameJuggler', 'bomber', 'imp', 'lavaHound'], rule: '소각병은 증거와 함께 너도 태우려 한다' },
+  36: { name: '재의 뜰',         enemies: ['ashWalker', 'ashWalker', 'flameJuggler', 'lavaBurster', 'imp', 'cinder'], rule: '소각병은 증거와 함께 너도 태우려 한다' },
+  37: { name: '대성당 앞뜰',     enemies: ['acolyte', 'frostMage', 'warden', 'stalker', 'crystal', 'shieldSkeleton'], rule: '광신 복사의 기도가 끝나기 전에 끊어라' },
+  38: { name: '대성당 회랑',     enemies: ['acolyte', 'acolyte', 'executioner', 'frostMage', 'warden', 'crystal'], rule: '광신 복사의 기도가 끝나기 전에 끊어라' },
+  39: { name: '납골당',          enemies: ['necro', 'chainWraith', 'wraith', 'boneHeap', 'stalker', 'shade'], rule: '빈 관마다 왕실 봉인 — 이들은 어디로 갔나' },
+  40: { name: '지하 성소',       enemies: ['necro', 'chainWraith', 'mirrorKnight', 'riftCaster', 'acolyte', 'wraith'], rule: '성물이 빛나는 동안 대주교는 죽지 않는다' },
 };
 
-// 31층+ (무한 모드 '왕도 가도'): 3막 심부(26~30층) 구성을 순환하며 끝없이 강해진다
+// 41층+ (무한 모드 '왕도 가도'): 4막 심부(36~40층) 구성을 순환하며 끝없이 강해진다
 function floorData(floor) {
   if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
-  const base = FLOOR_DATA[((floor - 31) % 5) + 26];
+  const base = FLOOR_DATA[((floor - 41) % 5) + 36];
   return { name: `왕도 가도 ${floor}구간`, enemies: base.enemies, rule: base.rule };
 }
 

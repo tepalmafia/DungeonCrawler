@@ -81,7 +81,7 @@ const Game = {
   // 특성/유물은 id 목록을 재적용해 복원하고, 스칼라(HP·골드·XP)는 그대로 덮어쓴다.
   saveRun() {
     if (this.testMode && !this._forceSave) return; // 봇 계측 오염 방지
-    if (this.runEnded || Dungeon.floor > 30 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
+    if (this.runEnded || Dungeon.floor > 40 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
     const p = this.player;
     try {
       localStorage.setItem('dungeoncrawler_run', JSON.stringify({
@@ -482,7 +482,7 @@ const Game = {
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도
       if (this.state === 'victory' && Input.pressed('KeyC')) {
-        const MAX_ACT = 3; // 구현된 막 수 — 4·5막이 열리면 올린다
+        const MAX_ACT = 4; // 구현된 막 수 — 5막이 열리면 올린다
         if ((this.act || 1) < MAX_ACT && Dungeon.floor <= (this.act || 1) * 10) this.continueNextAct();
         else this.continueEndless();
         return;

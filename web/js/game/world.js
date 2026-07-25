@@ -128,9 +128,40 @@ const FLOOR_THEMES = {
     grade: 'rgba(170,90,150,0.07)', accent: '#c22030',
     decals: ['skull', 'crack', 'voidspeck'],
   },
+  // ── 4막: 역병의 마을 (31~40층) — 썩은 황록과 소각의 주홍, 그리고 상아빛 위선 ──
+  31: { // 봉쇄된 마을·썩은 밀밭
+    floor: ['#171a12', '#1a1e14', '#141710', '#181c13'],
+    wallBase: '#2a3020', wallFace: '#3c442e', wallDark: '#12160e', roof: '#0e110b',
+    grade: 'rgba(140,180,60,0.06)', accent: '#8adf76',
+    decals: ['moss', 'bones', 'crack', 'puddle'],
+  },
+  33: { // 좀비 거리·판자촌
+    floor: ['#191714', '#1c1a16', '#151311', '#1b1815'],
+    wallBase: '#302a22', wallFace: '#443c30', wallDark: '#14110d', roof: '#100d0a',
+    grade: 'rgba(150,130,80,0.06)', accent: '#c8a068',
+    decals: ['bones', 'skull', 'crack', 'pebbles'],
+  },
+  35: { // 소각장·재의 뜰
+    floor: ['#201412', '#241614', '#1b110f', '#221513'],
+    wallBase: '#3a221a', wallFace: '#523226', wallDark: '#180e0a', roof: '#130b08',
+    grade: 'rgba(230,110,40,0.07)', accent: '#ff7043',
+    decals: ['ember', 'bones', 'crack'],
+  },
+  37: { // 대성당
+    floor: ['#1c1a16', '#201e19', '#181613', '#1e1c18'],
+    wallBase: '#3a362c', wallFace: '#524c3e', wallDark: '#181610', roof: '#13110d',
+    grade: 'rgba(220,200,140,0.07)', accent: '#ffd866',
+    decals: ['crack', 'pebbles'],
+  },
+  39: { // 납골당·지하 성소
+    floor: ['#141220', '#161425', '#11101c', '#151322'],
+    wallBase: '#262238', wallFace: '#36304e', wallDark: '#0f0d16', roof: '#0b0a11',
+    grade: 'rgba(110,90,180,0.07)', accent: '#b13ae0',
+    decals: ['skull', 'bones', 'voidspeck', 'chain'],
+  },
 };
-// 짝수 층은 앞 층 테마를 공유한다 (2·3막 공통 규칙)
-for (const f of [12, 14, 16, 18, 20, 22, 24, 26, 28, 30]) FLOOR_THEMES[f] = FLOOR_THEMES[f - 1];
+// 짝수 층은 앞 층 테마를 공유한다 (2~4막 공통 규칙)
+for (const f of [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40]) FLOOR_THEMES[f] = FLOOR_THEMES[f - 1];
 
 // ── 다크 패스 (기획 §7 '아주 어두운 디아블로식'): 전 테마 명도 하향 — 낮이 없는 세계 ──
 // 광원(횃불·accent·grade)만 색을 가진다. 별칭 층(12→11 등)은 같은 객체라 중복 적용 방지
@@ -160,6 +191,8 @@ const FLOOR_HAZARDS = {
   11: 'fog', 12: 'fog', 13: 'dark', 14: 'dark', 15: 'prison', 16: 'prison', 17: 'fog', 18: 'fog',
   // 3막: 포도밭 안개 / 주둔지 창살 / 재판소 어둠 / 지하 감옥 창살, 29~30(성관·판결)은 전투 집중
   21: 'fog', 22: 'fog', 23: 'prison', 24: 'prison', 25: 'dark', 26: 'dark', 27: 'prison', 28: 'prison',
+  // 4막: 역병 안개 / 골목 어둠 / 소각 용암 / 성당 창살, 39~40(성소)은 전투 집중
+  31: 'fog', 32: 'fog', 33: 'dark', 34: 'dark', 35: 'lava', 36: 'lava', 37: 'prison', 38: 'prison',
 };
 
 // ── 손제작 방 템플릿 (맵 다양화 M1) — Spelunky/Isaac 방식: 랜덤은 '조각의 선택'에만, 조각은 손제작 ──
@@ -519,8 +552,8 @@ const World = {
 
   buildRoom(depth, type, floor = 1) {
     this.floor = floor;
-    // 1~30층은 고유 테마, 31층+(무한 가도)은 3막 테마를 순환
-    const themeKey = floor <= 30 ? floor : ((floor - 31) % 5) + 26;
+    // 1~40층은 고유 테마, 41층+(무한 가도)은 4막 테마를 순환
+    const themeKey = floor <= 40 ? floor : ((floor - 41) % 5) + 36;
     this.theme = FLOOR_THEMES[themeKey] || FLOOR_THEMES[1];
     this.hazard = floor <= 10 ? (FLOOR_HAZARDS[floor] || null) : (FLOOR_HAZARDS[themeKey] || null);
     this.fogZones = [];

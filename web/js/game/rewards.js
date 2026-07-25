@@ -74,6 +74,7 @@ const GameRewards = {
     const banners = {
       2: '2막 — 다리와 관문. 안개 너머로 성벽이 보인다',
       3: '3막 — 영지와 재판소. 나를 판결한 자들이 저 안에 있다',
+      4: '4막 — 역병의 마을. 왕이 만든 재앙이 이곳을 걷는다',
     };
     this.banner = { text: banners[this.act] || `${this.act}막 — 왕좌가 가까워진다`, life: 2.8, maxLife: 2.8, color: '#8a1c2c' };
     AudioSys.roar();
