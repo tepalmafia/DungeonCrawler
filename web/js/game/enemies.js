@@ -1655,7 +1655,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.touchPlayer(game, 1);
       },
       onDeath(game) {
-        game.firePatches.push({ x: this.x, y: this.y, r: 44, life: 2.2, kind: 'poison' });
+        game.firePatches.push({ x: this.x, y: this.y, r: 32, life: 1.5, kind: 'poison' }); // 계측: 2층 절벽 완화 (r44/2.2s → 지뢰밭이 통행 불가였다)
       },
       draw(ctx) {
         const bob = Math.sin(this.animT * 3) * 4;
@@ -1676,8 +1676,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.flip = dx < 0;
         World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
         if (this.trailCd <= 0) {
-          this.trailCd = 0.55;
-          game.firePatches.push({ x: this.x, y: this.y + 4, r: 16, life: 2.4, kind: 'poison' });
+          this.trailCd = 0.85;
+          game.firePatches.push({ x: this.x, y: this.y + 4, r: 16, life: 1.6, kind: 'poison' }); // 계측: 2층 절벽 완화
         }
         this.touchPlayer(game, 1);
       },

@@ -5,6 +5,7 @@
 const Bot = {
   enabled: false,
   loop: false,
+  human: false, // 휴먼 모드 (?human=1): 반응 지연 150ms + 회피 실수 12% + 카드 실수 20% — 사람 근사 계측용
   ff: 1,
   runs: 0,       // loop 모드에서 끝낸 런 수
   wins: 0,
@@ -12,7 +13,7 @@ const Bot = {
   // 자가 진단 카운터 — 봇이 '제대로 싸우고 있는지' 검증하는 계기판
   stats: { attacks: 0, skills: 0, dashes: 0, explores: 0, stalls: 0 },
 
-  _lastX: 0, _lastY: 0, _stuckT: 0,
+  _lastX: 0, _lastY: 0, _stuckT: 0, _hThreatT: 0, _hMiss: false,
   _detourT: 0, _detour: { x: 1, y: 0 },
   _skillT: 0, _restartT: 0,
   // 목표 진행 감시: 목표에 3초간 가까워지지 못하면 탐색 모드로 우회
@@ -164,7 +165,11 @@ const Bot = {
     }
     // ── 카드/보상 화면: 자동 선택 ──
     if (game.state === 'levelup') {
-      Input.justPressed['Digit' + (this._bestCard(game) + 1)] = true;
+      // 휴먼 모드: 20%는 최적이 아닌 카드를 집는다 (사람의 빌드 실수)
+      const idx = this.human && Math.random() < 0.2
+        ? Math.floor(Math.random() * game.traitCards.length)
+        : this._bestCard(game);
+      Input.justPressed['Digit' + (idx + 1)] = true;
       return;
     }
     if (game.state === 'relic') {
@@ -325,7 +330,18 @@ const Bot = {
     // ── 위협 회피 (텔레그래프 읽기) — 이동보다 우선. 원거리는 회피 중에도 무빙샷 ──
     // 회피 방향이 벽이면 열린 각도로 회전 (벽 인지) — 구석으로 밀려 들어가지 않는다
     const dodgeRaw = this._threat(game, p);
-    const dodge = dodgeRaw ? this._freeDir(p, dodgeRaw, 100) : null;
+    let dodge = dodgeRaw ? this._freeDir(p, dodgeRaw, 100) : null;
+    // 휴먼 모드: 위협을 봐도 150ms 늦게 반응하고, 12%는 아예 놓친다 (위협 단위로 판정)
+    if (this.human) {
+      if (dodge) {
+        if (this._hThreatT === 0) this._hMiss = Math.random() < 0.12;
+        this._hThreatT += dt;
+        if (this._hMiss || this._hThreatT < 0.15) dodge = null;
+      } else {
+        this._hThreatT = 0;
+        this._hMiss = false;
+      }
+    }
     if (dodge) {
       this._move(p, p.x + dodge.x * 120, p.y + dodge.y * 120);
       if (dodge.dash && p.dashCharges >= 1) this._dash();
