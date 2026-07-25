@@ -55,12 +55,23 @@ const FLOOR_DATA = {
   8: { name: '절망의 감옥', enemies: ['executioner', 'stalker', 'frostArcher', 'warden', 'chainWraith', 'frostGolem'], rule: '처형자의 붉은 구역에서 벗어나라' },
   9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'obsidianBeast', 'flameJuggler', 'lavaBurster'], rule: '착탄 예고 원을 읽어라 — 장판이 겹치면 도망칠 곳이 없다' },
   10: { name: '심연의 왕좌', enemies: ['voidEye', 'glutton', 'voidSpawn', 'voidSpawn', 'riftCaster', 'mirrorKnight'], rule: '거울 기사의 반격 자세가 끝나기 전에 물러나라' },
+  // ── 2막: 균사 정원 (11~20층) — 탑 아래에 뿌리내린 거대 균사체의 영역 ──
+  11: { name: '홀씨 들판',     enemies: ['sporeling', 'sporeling', 'mushroom', 'sporePuff', 'fungalTick', 'frog'], rule: '홀씨 새끼의 시체 구름을 밟지 마라' },
+  12: { name: '홀씨 들판 심부', enemies: ['sporeling', 'fungalTick', 'fungalTick', 'mushroom', 'sporeMother', 'acidSnail'], rule: '홀씨 새끼의 시체 구름을 밟지 마라' },
+  13: { name: '발광 습지',     enemies: ['frog', 'toxicSlime', 'glowShrieker', 'fungalTick', 'acidSlug', 'sporeling'], rule: '절규자의 함성이 무리를 가속시킨다 — 먼저 끊어라' },
+  14: { name: '발광 습지 심부', enemies: ['glowShrieker', 'toxicSlime', 'acidSlug', 'sporeling', 'sporeMother', 'spider'], rule: '절규자의 함성이 무리를 가속시킨다 — 먼저 끊어라' },
+  15: { name: '곰팡이 회랑',   enemies: ['myceliumBrute', 'venomLasher', 'sporePuff', 'fungalTick', 'glowShrieker', 'sporeling'], rule: '거한의 내려찍기 자리가 독으로 물든다' },
+  16: { name: '곰팡이 회랑 심부', enemies: ['myceliumBrute', 'myceliumBrute', 'venomLasher', 'thornPlant', 'glowShrieker', 'fungalTick'], rule: '거한의 내려찍기 자리가 독으로 물든다' },
+  17: { name: '부패의 온상',   enemies: ['rotWalker', 'rotWalker', 'ghoul', 'toxicSlime', 'sporeMother', 'acidSlug'], rule: '보행자의 발자국이 땅을 썩게 한다' },
+  18: { name: '부패의 온상 심부', enemies: ['rotWalker', 'myceliumBrute', 'ghoul', 'venomLasher', 'sporeMother', 'glowShrieker'], rule: '보행자의 발자국이 땅을 썩게 한다' },
+  19: { name: '여왕의 안뜰',   enemies: ['sporeling', 'sporeling', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'fungalTick'], rule: '여왕의 정원에서는 모든 것이 자란다 — 빨리 베어라' },
+  20: { name: '균사 여왕의 옥좌', enemies: ['sporeling', 'fungalTick', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'sporeMother'], rule: '여왕의 정원에서는 모든 것이 자란다 — 빨리 베어라' },
 };
 
-// 11층+ (무한 모드 '심연 회랑'): 6~10층 구성을 순환하며 끝없이 강해진다
+// 21층+ (무한 모드 '심연 회랑'): 2막 심부(16~20층) 구성을 순환하며 끝없이 강해진다
 function floorData(floor) {
   if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
-  const base = FLOOR_DATA[((floor - 11) % 5) + 6];
+  const base = FLOOR_DATA[((floor - 21) % 5) + 16];
   return { name: `심연 회랑 ${floor}층`, enemies: base.enemies, rule: base.rule };
 }
 

@@ -81,11 +81,12 @@ const Game = {
   // 특성/유물은 id 목록을 재적용해 복원하고, 스칼라(HP·골드·XP)는 그대로 덮어쓴다.
   saveRun() {
     if (this.testMode && !this._forceSave) return; // 봇 계측 오염 방지
-    if (this.runEnded || Dungeon.floor > 10 || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
+    if (this.runEnded || Dungeon.floor > 20 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
     const p = this.player;
     try {
       localStorage.setItem('dungeoncrawler_run', JSON.stringify({
         v: 1, cls: p.classId, heat: this.heat, pacts: this.pacts,
+        act2: !!this.act2, sp: this.shardsPaid || 0, kp: this.killsPaid || 0,
         floor: Dungeon.floor, roomIndex: Dungeon.roomIndex, roomType: Dungeon.roomType,
         took: {
           t: Dungeon.tookTreasure, c: Dungeon.tookCamp, e: Dungeon.tookEvent,
@@ -127,6 +128,8 @@ const Game = {
     this.pacts = s.pacts || Meta.pactFlags(s.heat);
     this.level = s.level; this.xp = s.xp; this.xpNext = s.xpNext;
     this.kills = s.kills; this.time = s.time; this.gold = s.gold;
+    // 2막 진행 복원 — 정산 이중 지급 방지 장부까지
+    this.act2 = !!s.act2; this.shardsPaid = s.sp || 0; this.killsPaid = s.kp || 0;
     const p = this.player;
     p.traits = []; p.relics = [];
     for (const id of s.traits) { const t = TRAITS.find((x) => x.id === id); if (t) applyTrait(p, t); }
@@ -170,6 +173,7 @@ const Game = {
     this.slowmoT = 0; // 완벽 회피 슬로모
     this._roomMod = null;
     this.endless = false;
+    this.act2 = false;
     this.shardsPaid = 0;
     this.killsPaid = 0;
     this.shardsEarned = 0;
@@ -425,9 +429,10 @@ const Game = {
       if (this.overLockT > 0) { this.overLockT -= dt; return; }
 
       if (Input.pressed('KeyR')) { this.restart(); return; }
-      // 무한 모드: 승리 화면에서 C — 심연 회랑으로 계속
+      // 승리 화면에서 C — 1막 정복 후엔 2막(균사 정원), 2막 정복 후엔 심연 회랑
       if (this.state === 'victory' && Input.pressed('KeyC')) {
-        this.continueEndless();
+        if (Dungeon.floor <= 10 && !this.act2) this.continueAct2();
+        else this.continueEndless();
         return;
       }
       if (Input.mouse.justDown || Input.pressed('Space', 'Enter')) {

@@ -28,7 +28,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
 
     effSpeed() {
-      return this.speed * (this.status.shock > 0 ? 0.55 : 1);
+      return this.speed * (this.status.shock > 0 ? 0.55 : 1) * (this.hasteT > 0 ? 1.4 : 1);
     },
 
     applyKnockback(dt) {
@@ -72,6 +72,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       if (this.flash > 0) this.flash -= dt;
       if (this.hitCd > 0) this.hitCd -= dt;
       if (this._slamCd > 0) this._slamCd -= dt;
+      if (this.hasteT > 0) this.hasteT -= dt; // 절규자의 가속 함성 (2막)
     },
 
     touchPlayer(game, dmg) {
@@ -1167,7 +1168,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const wig = 1 + Math.sin(this.animT * 10) * 0.25;
         const sqx = this.coilT > 0 ? 0.55 : this.springT > 0 ? 1.6 : wig;
         const sqy = this.coilT > 0 ? 1.5 : this.springT > 0 ? 0.7 : 2 - wig;
-        Renderer.drawSprite(this.skin(Sprites.leech), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true });
         this.drawStatus(ctx);
       },
     }),
@@ -2696,6 +2697,128 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
     }),
   };
+
+  // ══════════════ 2막 (11~20층, 균사 정원) 전용 몬스터 ══════════════
+
+  // ── 홀씨 새끼: 통통 튀는 균사 슬라임 — 죽으면 홀씨 구름 (독) ──
+  defs.sporeling = () => ({
+    ...defs.slime(),
+    hp: 4, speed: 72, xpVal: 8, sprite: 'sporeling',
+    onDeath(game) {
+      game.firePatches.push({ x: this.x, y: this.y, r: 34, life: 1.6, kind: 'poison' });
+    },
+  });
+
+  // ── 균사 진드기: 빠른 흡혈 벌레 — 거머리의 도약을 물려받았다 ──
+  defs.fungalTick = () => ({
+    ...defs.leech(),
+    hp: 4, speed: 138, xpVal: 10, sprite: 'fungalTick',
+  });
+
+  // ── 균사 거한: 골렘의 뼈대에 균사가 피었다 — 내려찍기가 독 웅덩이를 남긴다 ──
+  defs.myceliumBrute = () => {
+    const base = defs.golem();
+    const origUpdate = base.update;
+    return {
+      ...base,
+      hp: 14, speed: 32, xpVal: 20, sprite: 'myceliumBrute',
+      update(dt, game) {
+        const wasSlam = this.state === 'slam';
+        origUpdate.call(this, dt, game);
+        // 내려찍기 종료 순간(slam→walk 전환)에 발밑 독 웅덩이
+        if (wasSlam && this.state === 'walk') {
+          game.firePatches.push({ x: this.x, y: this.y, r: 44, life: 2.2, kind: 'poison' });
+        }
+      },
+    };
+  };
+
+  // ── 부패 보행자: 걸음마다 부패를 남기고, 카이팅하면 홀씨를 뱉는다 ──
+  defs.rotWalker = () => ({
+    hp: 10, r: 16, speed: 42, xpVal: 16, sprite: 'rotWalker',
+    trailCd: 0, spitT: 0, spitCd: 2,
+    update(dt, game) {
+      this.tickTimers(dt); this.applyKnockback(dt);
+      if (this.trailCd > 0) this.trailCd -= dt;
+      if (this.spitCd > 0) this.spitCd -= dt;
+      const p = game.player;
+      const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+      this.flip = dx < 0;
+      if (this.spitT > 0) {
+        this.spitT -= dt;
+        if (this.spitT <= 0) {
+          game.spawnProjectile('spore', this.x, this.y - 6, { x: dx / d, y: dy / d }, { speed: 165, dmg: 1 });
+          AudioSys.shoot();
+        }
+      } else {
+        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+        if (this.trailCd <= 0) {
+          this.trailCd = 0.7;
+          game.firePatches.push({ x: this.x, y: this.y + 4, r: 18, life: 1.4, kind: 'poison' });
+        }
+        if (this.spitCd <= 0 && d > 170 && d < 340) { this.spitT = 0.5; this.spitCd = 5.0; }
+      }
+      this.touchPlayer(game, 1);
+    },
+    draw(ctx) {
+      const heat = this.spitT > 0 ? 1 + (0.5 - this.spitT) * 0.3 : 1;
+      Renderer.drawSprite(this.skin(Sprites.rotWalker), this.x, this.y, {
+        flip: this.flip, shadow: true, squashX: heat, squashY: heat,
+      });
+      if (this.spitT > 0 && Math.random() < 0.5) {
+        Particles.burst(this.x, this.y - 8, { count: 1, colors: ['#c9d94a', '#8adf76'], speed: 40, life: 0.3, size: 3, gravity: -80 });
+      }
+      this.drawStatus(ctx);
+    },
+  });
+
+  // ── 발광 절규자: 도망다니며 함성으로 아군을 가속시킨다 — 먼저 끊어야 할 목 ──
+  defs.glowShrieker = () => ({
+    hp: 5, r: 13, speed: 80, xpVal: 16, sprite: 'glowShrieker',
+    screamT: 0, screamCd: 2.5,
+    update(dt, game) {
+      this.tickTimers(dt); this.applyKnockback(dt);
+      if (this.screamCd > 0) this.screamCd -= dt;
+      const p = game.player;
+      const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
+      this.flip = dx < 0;
+      if (this.screamT > 0) {
+        this.screamT -= dt; // 몸을 부풀리는 예고 — 끊을 마지막 기회
+        if (this.screamT <= 0) {
+          let buffed = 0;
+          for (const e of game.enemies) {
+            if (e === this || e.dead || e.isBoss || e.neutral) continue;
+            if (Math.hypot(e.x - this.x, e.y - this.y) < 240) { e.hasteT = 3; buffed++; }
+          }
+          if (buffed > 0) {
+            Particles.ring(this.x, this.y, { r0: 10, r1: 90, life: 0.4, color: '#8adf76', width: 3 });
+            Particles.text(this.x, this.y - 26, '가속 함성!', { color: '#8adf76', size: 13 });
+            AudioSys.roar();
+          }
+          this.screamCd = 6.0;
+        }
+      } else {
+        if (d < 240) {
+          World.moveEntity(this, (-dx / d) * this.effSpeed() * dt, (-dy / d) * this.effSpeed() * dt);
+        }
+        if (this.screamCd <= 0 && game.enemies.some((e) => e !== this && !e.dead && !e.neutral && !e.isBoss)) {
+          this.screamT = 0.6;
+        }
+      }
+      this.touchPlayer(game, 1);
+    },
+    draw(ctx) {
+      const puff = this.screamT > 0 ? 1 + (0.6 - this.screamT) * 0.5 : 1;
+      Renderer.drawSprite(this.skin(Sprites.glowShrieker), this.x, this.y - Math.sin(this.animT * 4) * 2, {
+        flip: this.flip, shadow: true, squashX: puff, squashY: puff,
+      });
+      if (this.screamT > 0) {
+        ctx.fillStyle = '#8adf76'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('!', this.x, this.y - 30);
+      }
+      this.drawStatus(ctx);
+    },
+  });
 
   // ── 영혼 구슬 (눅스 '어둠 장막' 기믹 표적): 공격 안 함, 제한시간 내 파괴 대상 ──
   defs.soulOrb = () => ({

@@ -123,13 +123,29 @@ const BOSS_DEFS = {
     intro: '네가 심연을 들여다볼 때, 심연도 너를 보고 있었다.', outro: '심연은… 네 안에…',
     deathPalette: ['#e43b44', '#0a0612', '#c9b8e8'],
   },
+  // ── 2막 막보스 (20층): 균사 정원의 주인 ──
+  20: {
+    awakened: true, name: '균사 여왕 스포라', sprite: 'bossQueen', scale: 1.9, r: 32, hp: 1800, speed: 40,
+    mechanic: { type: 'regen', label: '균사 심장 — 부하가 살아있는 동안 재생한다' },
+    banner: '균사 여왕 스포라',
+    punish: 'volley', punishProj: 'spore',
+    p1: ['fan:spore:gap>ring', 'summon:sporeling>spiral:spore', 'geyser:poison>fan:spore'],
+    p2: ['ring:gap>spiral:spore', 'summon:glowShrieker>fan:spore:cross', 'geyser:poison>ring>fan:spore'],
+    rageText: '정원 전체가 일어선다!',
+    intro: '나의 정원에 뿌리내려라. 너도 곧 자양분이 된다.', outro: '정원은… 다시 자란다… 언제나…',
+    deathPalette: ['#c9d94a', '#8adf76', '#6a3aa2'],
+  },
 };
 
 function createBoss(floor, x, y) {
-  // 11층+ (무한 모드): 각성 보스(6~10층)를 순환하며 층당 +15% HP로 강해진다
-  const defKey = floor <= 10 ? floor : ((floor - 11) % 5) + 6;
+  // 11~19층 (2막): 각성 보스(6~9층)가 균사에 물들어 재림, 층당 +15% HP.
+  // 20층: 막보스 균사 여왕. 21층+ (무한 회랑): 각성 5보스 순환.
+  const defKey = floor <= 10 ? floor
+    : floor === 20 ? 20
+    : floor <= 19 ? ((floor - 11) % 4) + 6
+    : ((floor - 21) % 5) + 6;
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
-  const hpScale = floor > 10 ? 1 + 0.15 * (floor - 10) : 1;
+  const hpScale = floor === 20 || floor <= 10 ? 1 : 1 + 0.15 * (floor - 10);
   const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,
