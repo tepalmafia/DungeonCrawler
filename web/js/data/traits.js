@@ -36,7 +36,7 @@ const TRAITS = [
     desc: '화상 중인 적이 죽으면 폭발해 주변에 2 피해', flag: 'burnboom' },
   { id: 'firecrit', name: '발화점',    tag: '화염', color: '#ff7043',
     desc: '화상 중인 적에게는 크리티컬 확정', flag: 'firecrit' },
-  { id: 'inferno',  name: '겁화',      tag: '화염', color: '#ff7043',
+  { id: 'inferno', unlock: { stat: 'bestFloor', n: 2, label: '2층 도달' },  name: '겁화',      tag: '화염', color: '#ff7043',
     desc: '화상 지속시간과 피해 간격이 2배 빨라진다', flag: 'inferno' },
 
   // ── 번개 시너지 ──
@@ -53,7 +53,7 @@ const TRAITS = [
     desc: '대시가 불타는 자취를 남긴다 (적 지속 피해)', flag: 'dashfire' },
   { id: 'chain',      name: '연쇄 번개', tag: '번개', color: '#ffd866',
     desc: '공격 시 30% 확률로 번개가 근처 적에게 튄다 (2 피해 + 감전)', flag: 'chain' },
-  { id: 'static',     name: '정전기',   tag: '번개', color: '#ffd866',
+  { id: 'static', unlock: { stat: 'totalKills', n: 300, label: '누적 300킬' },     name: '정전기',   tag: '번개', color: '#ffd866',
     desc: '감전된 적에게 주는 피해 +2', flag: 'static' },
 
   // ── 흡혈 시너지 ──
@@ -61,7 +61,7 @@ const TRAITS = [
     desc: '크리티컬 시 HP 1 회복 (4초에 한 번)', flag: 'lifesteal' },
   { id: 'bloodpact', name: '피의 계약', tag: '흡혈', color: '#e43b44',
     desc: 'HP가 가득 찼을 때 공격력 +1', flag: 'bloodpact' },
-  { id: 'bloodlust', name: '피의 갈증', tag: '흡혈', color: '#e43b44',
+  { id: 'bloodlust', unlock: { stat: 'totalKills', n: 800, label: '누적 800킬' }, name: '피의 갈증', tag: '흡혈', color: '#e43b44',
     desc: '처치 시 12% 확률로 하트가 떨어진다', flag: 'bloodlust' },
 
   // ── 수호 시너지 ──
@@ -77,7 +77,7 @@ const TRAITS = [
     desc: '공격 시 30% 확률로 중독 (4초간 지속 피해)', flag: 'poison' },
   { id: 'corrode', name: '부식',   tag: '독', color: '#6ab04c',
     desc: '중독된 적에게 주는 피해 +1', flag: 'corrode' },
-  { id: 'plague',  name: '역병',   tag: '독', color: '#6ab04c',
+  { id: 'plague', unlock: { stat: 'runs', n: 3, label: '3회 도전' },  name: '역병',   tag: '독', color: '#6ab04c',
     desc: '중독된 적이 죽으면 독구름을 남긴다 (적에게 지속 피해)', flag: 'plague' },
 
   // ── 직업 전용 (해당 직업에게만 카드로 등장) ──
@@ -130,15 +130,15 @@ const TRAITS = [
   // ── 전설 (극저확률 — 규칙을 부수는 카드. "미쳐 날뛰는 런"의 씨앗) ──
   { id: 'unbound',   name: '무한의 갈망', tag: '전설', color: '#ffd866', legend: true,
     desc: '스탯 특성의 중첩 상한이 사라진다', flag: 'unbound' },
-  { id: 'timeflux',  name: '시간 왜곡',   tag: '전설', color: '#ffd866', legend: true,
+  { id: 'timeflux', unlock: { stat: 'bestFloor', n: 6, label: '6층 도달' },  name: '시간 왜곡',   tag: '전설', color: '#ffd866', legend: true,
     desc: '스킬 쿨다운이 60% 짧아진다', apply: (p) => { p.skillCdMul *= 0.4; } },
-  { id: 'glasssoul', name: '유리 영혼',   tag: '전설', color: '#ffd866', legend: true,
+  { id: 'glasssoul', unlock: { stat: 'totalKills', n: 2000, label: '누적 2000킬' }, name: '유리 영혼',   tag: '전설', color: '#ffd866', legend: true,
     desc: '공격력 +3, 최대 HP -2', apply: (p) => {
       p.bonusAtk += 3;
       p.maxHp = Math.max(1, p.maxHp - 2);
       p.hp = Math.min(p.hp, p.maxHp);
     } },
-  { id: 'monarch',   name: '왕의 권능',   tag: '전설', color: '#ffd866', legend: true,
+  { id: 'monarch', unlock: { stat: 'wins', n: 1, label: '첫 등정' },   name: '왕의 권능',   tag: '전설', color: '#ffd866', legend: true,
     desc: '처치 시 5% 확률로 영혼 폭발 (주변에 3 피해)', flag: 'monarch' },
 ];
 

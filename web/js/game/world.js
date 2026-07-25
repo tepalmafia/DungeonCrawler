@@ -1098,6 +1098,16 @@ const World = {
       ctx.font = 'bold 18px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('?', x, y + 6);
+    } else if (type === 'merchant') {
+      // 골드 주머니 — 장사꾼의 표식
+      ctx.font = 'bold 17px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('$', x, y + 6);
+    } else if (type === 'trial') {
+      // 느낌표 — 위험하지만 확실한 보상
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('!', x, y + 6);
     } else if (type === 'nextfloor') {
       // 아래로 향하는 계단 화살표
       ctx.beginPath();

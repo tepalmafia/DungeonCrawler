@@ -182,7 +182,7 @@ const GamePlay = {
           ? createMiniboss(m.type, m.x, m.y, this.enemyHpMul())
           : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
         e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
-        if (this.heat >= 3) e.speed *= 1.15;
+        if (this.pacts.speed) e.speed *= 1.15;
         this.enemies.push(e);
         if (m.mini) {
           this.banner = { text: `⚠ ${e.miniName} 출현!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
@@ -613,6 +613,60 @@ const GamePlay = {
       it.t += dt;
       if (it.used) continue;
       if (Math.hypot(p.x - it.x, p.y - it.y) < p.r + it.r) {
+        // ── 상인 판매대 (G1): 골드가 모자라면 사지 못한다 — 소비되지 않고 남는다 ──
+        if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll') {
+          if (this.gold < it.price) {
+            if (!it._hintT || it.t > it._hintT) {
+              it._hintT = it.t + 1.2;
+              Particles.text(it.x, it.y - 32, `골드 부족 (${it.price}G)`, { color: '#e43b44', size: 12 });
+            }
+            continue;
+          }
+          if (it.kind === 'shopHeal' && p.hp >= p.maxHp) {
+            if (!it._hintT || it.t > it._hintT) {
+              it._hintT = it.t + 1.2;
+              Particles.text(it.x, it.y - 32, '이미 체력이 가득하다', { color: '#666a80', size: 12 });
+            }
+            continue;
+          }
+          this.gold -= it.price;
+          it.used = true;
+          AudioSys.buy();
+          Particles.burst(it.x, it.y - 8, { count: 10, colors: ['#ffd866', '#2ec4b6'], speed: 120, life: 0.4, size: 3 });
+          if (it.kind === 'shopRelic') {
+            const rolled = rollRelics(p, 1, true);
+            if (rolled.length > 0) this.acquireRelic(rolled[0]);
+            else { this.gold += Math.round(it.price / 2); Particles.text(it.x, it.y - 30, '매물 소진 — 절반 환불', { color: '#ffd866', size: 12 }); }
+          } else if (it.kind === 'shopHeal') {
+            p.hp = Math.min(p.maxHp, p.hp + 2);
+            Particles.text(p.x, p.y - 28, '+2', { color: '#e43b44', size: 18 });
+          } else if (it.kind === 'shopReroll') {
+            p.rerolls = (p.rerolls || 0) + 1;
+            Particles.text(p.x, p.y - 28, '리롤 +1 (E)', { color: '#2ec4b6', size: 14 });
+          }
+          continue;
+        }
+        // ── 핏빛 제단 (G2): 최대 HP 1을 바치면 정예급 특성을 고른다 ──
+        if (it.kind === 'bloodAltar') {
+          if (p.maxHp <= 2) {
+            if (!it._hintT || it.t > it._hintT) {
+              it._hintT = it.t + 1.2;
+              Particles.text(it.x, it.y - 32, '바칠 피가 모자라다...', { color: '#666a80', size: 12 });
+            }
+            continue;
+          }
+          it.used = true;
+          p.maxHp -= 1;
+          p.hp = Math.min(p.hp, p.maxHp);
+          this.hurtFlash = 0.2;
+          Renderer.shake(5, 0.3);
+          AudioSys.hurt();
+          Particles.burst(it.x, it.y, { count: 22, colors: ['#e43b44', '#8a1a2a', '#241832'], speed: 170, life: 0.6, size: 3 });
+          this.banner = { text: '피의 대가 — 힘을 골라라 (최대 HP -1)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+          this.pendingChoices++;
+          this.openTraitChoice('elite');
+          continue;
+        }
         it.used = true;
         if (it.kind === 'chest') {
           Renderer.shake(2, 0.1);
@@ -630,7 +684,7 @@ const GamePlay = {
           Particles.burst(it.x, it.y - 10, { count: 14, colors: ['#f7b32b', '#ffd866'], speed: 150, life: 0.5, size: 3, gravity: 200 });
         } else if (it.kind === 'camp') {
           AudioSys.pickup();
-          const heal = this.heat >= 4 ? 1 : 2; // 열기 4: 모닥불 회복 감소
+          const heal = this.pacts.heal ? 1 : 2; // 서약 '메마른 샘': 모닥불 회복 감소
           p.hp = Math.min(p.maxHp, p.hp + heal);
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
@@ -750,6 +804,23 @@ const GamePlay = {
         this.banner = { text: '습격을 버텨냈다!', life: 1.8, maxLife: 1.8, color: '#ffd866' };
         this.pendingChoices++;
         this.openTraitChoice('elite');
+        AudioSys.buy();
+      }
+      // 시련 완주 보상 (G5): 확정 에픽+ 유물 + 골드 뭉치
+      if (this._trial) {
+        this._trial = null;
+        const g = 40 + Dungeon.floor * 5;
+        this.gold += g;
+        Particles.text(p.x, p.y - 34, `+${g}G`, { color: '#ffd866', size: 16 });
+        const owned = new Set(p.relics);
+        const highPool = RELICS.filter((r) => !owned.has(r.id) && Meta.isUnlocked(r) && (r.rarity === 'epic' || r.rarity === 'legendary'));
+        if (highPool.length > 0) {
+          this.acquireRelic(highPool[Math.floor(RNG.next() * highPool.length)]);
+        } else {
+          const rolled = rollRelics(p, 1, true);
+          if (rolled.length > 0) this.acquireRelic(rolled[0]);
+        }
+        this.banner = { text: '시련을 이겨냈다!', life: 2.0, maxLife: 2.0, color: '#b13ae0' };
         AudioSys.buy();
       }
       // 문 수식어 보상: 사나운 무리 — 위험을 감수한 만큼 파편으로 돌려준다
