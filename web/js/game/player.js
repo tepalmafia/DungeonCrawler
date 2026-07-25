@@ -222,8 +222,9 @@ function createPlayer(x, y, classId = 'knight') {
         }
       }
 
-      // 보호막 충전: 수호의 문장 특성(8초) 또는 검사 고유 '철벽'(11초)
-      const shieldCd = this.flags.shield ? 8 : (this.classId === 'knight' ? 11 : 0);
+      // 보호막 충전: 수호의 문장 특성(8초) 또는 검사 고유 '철벽'(9초)
+      // 매트릭스 계측: 검사 사망이 심층(8~10층) 접촉 피해에 집중 — 철벽 11→9로 근접 리스크 보상
+      const shieldCd = this.flags.shield ? 8 : (this.classId === 'knight' ? 9 : 0);
       if (shieldCd > 0 && !this.shield) {
         this.shieldT += dt;
         if (this.shieldT >= shieldCd) {
@@ -599,7 +600,7 @@ function createPlayer(x, y, classId = 'knight') {
         // — 근접의 리스크를 "잘 싸우면 버틴다"로 보상한다
         if (this.finisherHealCd <= 0 && this.hp < this.maxHp) {
           this.hp++;
-          this.finisherHealCd = 6; // 4→6: 검사 유지력 과다 완화 (실플레이 피드백)
+          this.finisherHealCd = 5; // 매트릭스 계측: 검사만 전 열기 목표 초과 — 6은 과했다, 4는 부족했다 (중간값)
           Particles.text(this.x, this.y - 26, '전투 본능 +1', { color: '#e43b44', size: 13 });
           AudioSys.pickup();
         }

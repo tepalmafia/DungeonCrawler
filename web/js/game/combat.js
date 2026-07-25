@@ -111,11 +111,11 @@ const GameCombat = {
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
     // 골드 (G1): 굵직한 처치에서만 떨어진다 — 상인에게만 쓰는 런 화폐
     if (e.isBoss) {
-      const g = 25 + Dungeon.floor * 4;
+      const g = 20 + Dungeon.floor * 3; // 경제 계측: 10층 누적 ~3,700G(장바구니 20배) → 수입 감쇠
       this.gold += g;
       Particles.text(e.x, e.y - 30, `+${g}G`, { color: '#ffd866', size: 16 });
     } else if (e.elite || e.isMini) {
-      const g = 6 + Dungeon.floor * 2;
+      const g = 4 + Dungeon.floor; // 심층 정예율 ~40%가 수입 폭증의 주범 — 층 계수 절반
       this.gold += g;
       Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
     }
@@ -379,6 +379,16 @@ const GameCombat = {
       // 테스트 모드 무한 부활 (F 토글): 죽음 직전 상황을 계속 테스트할 수 있다
       if (this.testMode && this.reviveMode) {
         if (Bot.enabled) Bot.onDeath(Dungeon.floor); // 층별 사망 집계
+        // 루프 가드: 같은 방에서 10연속 사망(계측: 궁수 3층 452연속 소프트락) → 방 강제 클리어.
+        // 실측치를 왜곡하는 병적 루프 차단 — 10회까지는 정상 집계되므로 난이도 신호는 남는다
+        const rk = Dungeon.floor + ':' + Dungeon.roomIndex;
+        this._loopGuard = this._loopGuard && this._loopGuard.rk === rk ? this._loopGuard : { rk, n: 0 };
+        if (++this._loopGuard.n >= 10) {
+          this._loopGuard.n = 0;
+          for (const e of this.enemies) if (!e.neutral && !e.dead && !e.isBoss) { e.hp = 0; this.killEnemy(e, { x: 1, y: 0 }); }
+          this.pendingSpawns = [];
+          console.warn('[루프 가드] ' + rk + ' 강제 클리어');
+        }
         p.hp = p.maxHp;
         p.invuln = 2;
         // 제자리 부활은 용암 호수 한복판 등에서 즉사 루프를 만든다 (계측: 998연속 사망) — 방 입구에서 재기

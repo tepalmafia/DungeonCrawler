@@ -288,7 +288,7 @@ const GameRender = {
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('담금질 — 이번 층 공격력 +1', it.x, it.y - 30);
         }
-      } else if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll') {
+      } else if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll' || it.kind === 'shopShards') {
         // 상인 판매대 (G1): 받침 + 품목 아이콘 + 가격표. 살 수 있으면 금빛, 못 사면 잿빛
         if (it.used) continue;
         const afford = this.gold >= it.price;
@@ -304,11 +304,11 @@ const GameRender = {
         ctx.textAlign = 'center';
         ctx.font = 'bold 15px monospace';
         ctx.fillStyle = afford ? '#e8e0cf' : '#666a80';
-        const icon = it.kind === 'shopRelic' ? '◆' : it.kind === 'shopHeal' ? '♥' : '↻';
+        const icon = it.kind === 'shopRelic' ? '◆' : it.kind === 'shopHeal' ? '♥' : it.kind === 'shopShards' ? '◈' : '↻';
         ctx.fillText(icon, it.x, it.y - 8);
         ctx.font = 'bold 11px monospace';
         ctx.fillStyle = afford ? '#2ec4b6' : '#9aa0b4';
-        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : '리롤 +1';
+        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : it.kind === 'shopShards' ? `파편 ${it.shards}` : '리롤 +1';
         ctx.fillText(name, it.x, it.y - 40);
         ctx.fillStyle = afford ? '#ffd866' : '#8a6a20';
         ctx.fillText(`${it.price}G`, it.x, it.y - 27);
