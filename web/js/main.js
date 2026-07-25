@@ -302,6 +302,22 @@ const Game = {
     }
 
 
+    // 단서 오브젝트 (기획 §4): 미획득 탐사 단서가 이 층 범위에 있으면 배치.
+    // c1(덧칠된 비석)은 1층 첫 방 확정 — 부활 지점에서 첫 진실을 마주한다
+    {
+      const cand = CLUES.filter((c) => c.how === 'explore' && c.floors && !Meta.clueOwned(c.id) &&
+        Dungeon.floor >= c.floors[0] && Dungeon.floor <= c.floors[1]);
+      for (const c of cand) {
+        const sure = c.guaranteed && Dungeon.roomIndex === 1;
+        if (sure || (Dungeon.roomIndex > 1 && type !== 'boss' && RNG.chance(0.16))) {
+          const spot = World.safeSpot(World.center().x + 140, World.center().y + 60);
+          this.interactables.push({ kind: 'clue', clueId: c.id, x: spot.x, y: spot.y, r: 26, used: false, t: 0 });
+          if (sure) this.banner = { text: '낯익은 비석이 보인다…', life: 2.2, maxLife: 2.2, color: '#c8c0a8' };
+          break; // 방당 1개
+        }
+      }
+    }
+
     // 스킬 사당 (P1): 5·15·25층의 첫 방에 무조건 선다 — 문 선택과 무관하게 킷이 자란다
     if ([5, 15, 25].includes(Dungeon.floor) && Dungeon.roomIndex === 1 && this._shrineSeen !== Dungeon.floor) {
       this._shrineSeen = Dungeon.floor;

@@ -31,8 +31,8 @@ function createPlayer(x, y, classId = 'knight') {
     x, y,
     r: 13,
     classId: cls.id,
-    maxHp: cls.hp + Meta.lvl('vit'),
-    hp: cls.hp + Meta.lvl('vit'),
+    maxHp: cls.hp + Meta.lvl('vit') + Meta.grudgeHp(), // 사무친 원한: 막의 진실 완성마다 +1
+    hp: cls.hp + Meta.lvl('vit') + Meta.grudgeHp(),
     speed: cls.speed,
     facing: { x: 1, y: 0 },
     flip: false,

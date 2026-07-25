@@ -225,6 +225,24 @@ const GameRender = {
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('HP 2 → 공격력 +1', it.x, it.y - 30);
         }
+      } else if (it.kind === 'clue') {
+        // 증거: 어둠 속에서 홀로 빛나는 흔적
+        if (!it.used) {
+          ctx.save();
+          ctx.globalAlpha = 0.25 + Math.sin(it.t * 3) * 0.12;
+          ctx.fillStyle = '#f7b32b';
+          ctx.beginPath(); ctx.arc(it.x, it.y - 6, 26, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+          ctx.fillStyle = '#3d3d46';
+          ctx.fillRect(it.x - 9, it.y - 12, 18, 20); // 비석/문서함
+          ctx.fillStyle = '#c8c0a8';
+          ctx.fillRect(it.x - 6, it.y - 9, 12, 3);
+          ctx.fillRect(it.x - 6, it.y - 3, 12, 2);
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#f7b32b';
+          ctx.fillText('증거', it.x, it.y - 26);
+        }
       } else if (it.kind === 'skillShrine') {
         // 스킬 사당: 세 갈래 빛기둥 제단 — 보조 스킬 3택1
         ctx.fillStyle = '#3d3d52';

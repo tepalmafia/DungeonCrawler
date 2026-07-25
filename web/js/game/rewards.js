@@ -79,6 +79,15 @@ const GameRewards = {
   onBossDead() {
     this.arrows = [];
     this.rings = [];
+    // 보스 자백 (기획 §4): 막보스의 마지막 말이 고정 단서가 된다
+    {
+      const cc = CLUES.find((c) => c.how === 'boss' && c.boss === Dungeon.floor && c.text && !Meta.clueOwned(c.id));
+      if (cc) {
+        Meta.gainClue(cc.id);
+        this._storyQ = this._storyQ || [];
+        this._storyQ.push({ text: `자백 확보 — 「${cc.name}」 (수집록 ${Meta.clueCount()}/${CLUES.length})`, color: '#f7b32b' });
+      }
+    }
     // 1막 정점(10층, 2막 미진입 시)과 2막 정점(20층+)에서 승리 정산
     if (((Dungeon.floor === 10 && !this.act2) || Dungeon.floor >= 20) && !this.endless) {
       this.endRun(true);

@@ -3,6 +3,46 @@
 
 // 직업 3종 (기획안 §5) — 조작 감각 자체가 다르다
 // 왕에게 죽은 네 사람 — 같은 밤, 같은 묘지에서 눈을 떴다 (기획 SCENARIO.md §3)
+// ── 증거 수집록 (기획 §4): 막당 4개 — 탐사 3 + 보스 자백 1. 모으면 진실이 형태를 갖춘다 ──
+// how: 'explore'(단서 방 오브젝트) / 'boss'(막보스 자백 — 처치 시 자동)
+// floors: 탐사 단서가 등장할 수 있는 층 범위 [min, max]. guaranteed: 해당 층 첫 방 확정
+const CLUES = [
+  // 1막 — 변경
+  { id: 'c1', act: 1, name: '덧칠로 고쳐진 비석', how: 'explore', floors: [1, 1], guaranteed: true,
+    text: '내 무덤의 비석. 죄목이 덧칠로 고쳐져 있다 — 원래 적혀 있던 글자는 "무죄".' },
+  { id: 'c2', act: 1, name: '서명 없는 밀고장', how: 'explore', floors: [2, 4],
+    text: '죽은 이웃의 품에서 나온 밀고장 초안. 내 이름이 적혀 있다. 서명란은… 비어 있다. 그는 끝내 서명하지 않았던 것이다.' },
+  { id: 'c3', act: 1, name: '불탄 농가의 장부', how: 'explore', floors: [5, 8],
+    text: '세금 장부. 마지막 줄 — "금납 불가 시 인납(人納)으로 대신한다." 사람을 세금으로 바쳤다.' },
+  { id: 'c4', act: 1, name: "처형인의 자백", how: 'boss', boss: 10,
+    text: '"명단은… 재판소가 아니라… 성에서 내려왔다…" — 왕실 처형인 \'무거운 손\'의 마지막 말.' },
+  // 2막 — 다리와 관문
+  { id: 'c5', act: 2, name: '다리 밑 밀서', how: 'explore', floors: [11, 14],
+    text: '같은 필체의 처형 명단 여러 장. 날짜가 전부 왕실 축일 사흘 전이다.' },
+  { id: 'c6', act: 2, name: '관문 통행 기록', how: 'explore', floors: [15, 18],
+    text: '"검은 마차 — 검문 면제, 왕실 인장." 한 달에 한 번, 축일마다.' },
+  { id: 'c7', act: 2, name: '익사한 배달부의 가방', how: 'explore', floors: [12, 19],
+    text: '방수포에 싸인 항아리 파편. 안쪽에 눌어붙은 검붉은 얼룩 — 피다. 아주 많은.' },
+  { id: 'c8', act: 2, name: '관문 사령관의 자백', how: 'boss', boss: 20,
+    text: '"마차 호위는 명예였다… 안을 보기 전까지는…"' },
+  // 3막 — 영지와 재판소 (3막 콘텐츠와 함께 열린다)
+  { id: 'c9', act: 3, name: '내 재판 기록', how: 'explore', floors: null, text: null },
+  { id: 'c10', act: 3, name: '재판관의 왕실 친서', how: 'explore', floors: null, text: null },
+  { id: 'c11', act: 3, name: '지하 감옥의 손톱 글씨', how: 'explore', floors: null, text: null },
+  { id: 'c12', act: 3, name: '대재판관의 자백', how: 'boss', boss: 30, text: null },
+  // 4막 — 역병의 마을과 대성당
+  { id: 'c13', act: 4, name: '소각장의 명단', how: 'explore', floors: null, text: null },
+  { id: 'c14', act: 4, name: '고해실 기록', how: 'explore', floors: null, text: null },
+  { id: 'c15', act: 4, name: '납골당의 빈 관', how: 'explore', floors: null, text: null },
+  { id: 'c16', act: 4, name: '대주교의 자백', how: 'boss', boss: 40, text: null },
+  // 5막 — 왕도와 왕좌
+  { id: 'c17', act: 5, name: '왕의 서신', how: 'explore', floors: null, text: null },
+  { id: 'c18', act: 5, name: '성배 의식 일지', how: 'explore', floors: null, text: null },
+  { id: 'c19', act: 5, name: '왕비의 유서', how: 'explore', floors: null, text: null },
+  { id: 'c20', act: 5, name: '근위대장의 자백', how: 'boss', boss: 45, text: null },
+  { id: 'c21', act: 5, name: '피의 성배', how: 'boss', boss: 50, text: null },
+];
+
 const CLASSES = {
   knight: {
     id: 'knight', name: '가레스', title: '목 잘린 근위기사', sprite: 'player', color: '#5a7a94',
@@ -358,6 +398,30 @@ const Meta = {
     this.save();
     return earned;
   },
+
+  // ── 증거 수집록 (기획 §4) ──
+  clueOwned(id) { return !!(this.data.clues && this.data.clues[id]); },
+  gainClue(id) {
+    const c = CLUES.find((x) => x.id === id);
+    if (!c || this.clueOwned(id)) return null;
+    if (!this.data.clues) this.data.clues = {};
+    this.data.clues[id] = true;
+    // 막 완성 체크: 같은 막 4개(5막은 5개)를 모으면 '사무친 원한' 영구 보너스
+    const actClues = CLUES.filter((x) => x.act === c.act);
+    if (actClues.every((x) => this.data.clues[x.id])) {
+      if (!this.data.grudges) this.data.grudges = {};
+      if (!this.data.grudges[c.act]) {
+        this.data.grudges[c.act] = true;
+        if (typeof Game !== 'undefined') {
+          Game.banner = { text: `${c.act}막의 진실이 완성됐다 — 사무친 원한: 최대 HP +1 (영구)`, life: 3.4, maxLife: 3.4, color: '#e43b44' };
+        }
+      }
+    }
+    this.save();
+    return c;
+  },
+  clueCount() { return this.data.clues ? Object.keys(this.data.clues).length : 0; },
+  grudgeHp() { return this.data.grudges ? Object.keys(this.data.grudges).length : 0; },
 
   // 무한 모드 정산: 전체 보상에서 10층 정산 때 이미 받은 몫(paid)을 뺀 차액만 지급.
   // runs/wins는 10층 정산에서 이미 집계됐으므로 다시 세지 않는다.
