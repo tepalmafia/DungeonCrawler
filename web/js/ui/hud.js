@@ -452,23 +452,23 @@ const HUD = {
     ctx.textAlign = 'center';
 
     ctx.font = 'bold 46px monospace';
-    ctx.fillStyle = '#f7b32b';
-    ctx.fillText('던전 크롤러', Renderer.W / 2, 120);
-    ctx.font = 'bold 22px monospace';
-    ctx.fillStyle = '#e8e0cf';
-    ctx.fillText('― 심연의 탑 ―', Renderer.W / 2, 156);
+    ctx.fillStyle = '#8a1c2c';
+    ctx.fillText('무덤에서 왕좌까지', Renderer.W / 2, 120);
+    ctx.font = 'bold 20px monospace';
+    ctx.fillStyle = '#9a9488';
+    ctx.fillText('― 죄인의 묘지 ―', Renderer.W / 2, 156);
 
     // 거점 반응 서사 (④): 기록에 따라 탑이 다르게 말을 건다
     {
       const w = Meta.data.wins, bf = Meta.data.bestFloor;
-      const line = w >= 10 ? '심연이 너를 두려워하기 시작했다.'
-        : w >= 5 ? '탑이 너의 이름을 기억한다.'
-        : w >= 2 ? '탑은 패배를 인정하지 않는다 — 더 깊은 어둠을 준비했다.'
-        : w >= 1 ? '한 번 정복당한 탑이 이를 갈고 있다.'
-        : bf >= 8 ? '정상이 가깝다. 탑도 그것을 안다.'
-        : bf >= 5 ? '탑의 중턱 — 심연이 너를 눈치챘다.'
-        : bf >= 2 ? '탑은 아직 너를 시험하는 중이다.'
-        : '탑의 문이 처음으로 열린다.';
+      const line = w >= 10 ? '왕은 이제 잠들지 못한다. 너의 이름이 저주가 되었다.'
+        : w >= 5 ? '왕도의 벽마다 네 목의 값이 새로 붙는다 — 값은 오르기만 한다.'
+        : w >= 2 ? '왕이 토벌대를 두 배로 늘렸다. 두려움의 크기다.'
+        : w >= 1 ? '처형인이 죽었다는 소문이 왕성에 닿았다. 왕이 잔을 떨어뜨렸다.'
+        : bf >= 8 ? '단서가 모이고 있다. 진실이 형태를 갖추기 시작한다.'
+        : bf >= 5 ? '토벌대가 묘지 쪽을 흘끔거린다 — 무언가 걸어나온 걸 아는 눈치다.'
+        : bf >= 2 ? '흙을 털고 일어섰다. 무덤은 너를 붙잡지 못했다.'
+        : '그날 밤, 죄인의 묘지에서 눈이 떠졌다.';
       ctx.font = '12px monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(line, Renderer.W / 2, 176);
@@ -560,9 +560,9 @@ const HUD = {
                  Object.keys(Meta.data.codex.traits).length;
     const total = CODEX_ENEMIES.length + RELICS.length + TRAITS.length;
     const labels = [
-      { text: '출발', sub: '심연의 탑에 도전한다', color: '#38b764' },
-      { text: '기억의 제단', sub: '영혼 파편으로 영구 강화', color: '#2ec4b6' },
-      { text: '직업 선택', sub: '검사 · 궁수 · 마도사', color: '#b13ae0' },
+      { text: '출발', sub: '왕좌를 향해 걷는다', color: '#8a1c2c' },
+      { text: '비석의 맹세', sub: '한(恨) 조각으로 영구 강화', color: '#2ec4b6' },
+      { text: '망자 선택', sub: '가레스 · 레나 · 오르빈 · 이졸데', color: '#b13ae0' },
       { text: '도감', sub: `수집 기록 ${disc}/${total}`, color: '#f7b32b' },
     ];
     this.hubButtonRects().forEach((r, i) => {
@@ -682,7 +682,7 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = 'bold 30px monospace';
     ctx.fillStyle = '#b13ae0';
-    ctx.fillText('직업 선택', Renderer.W / 2, 70);
+    ctx.fillText('망자 선택 — 왕에게 죽은 네 사람', Renderer.W / 2, 70);
     this._shardLabel(ctx, Renderer.W - 24, 36);
 
     const ids = Object.keys(CLASSES);
@@ -715,10 +715,15 @@ const HUD = {
 
       ctx.font = 'bold 20px monospace';
       ctx.fillStyle = unlocked ? '#e8e0cf' : '#666a80';
-      ctx.fillText(cls.name, cx, r.y + lift + 92);
+      ctx.fillText(cls.name, cx, r.y + lift + 90);
+      if (cls.title) {
+        ctx.font = '11px monospace';
+        ctx.fillStyle = '#8a1c2c';
+        ctx.fillText(cls.title, cx, r.y + lift + 104);
+      }
       ctx.font = '12px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText(`HP ${cls.hp} · 속도 ${cls.speed}`, cx, r.y + lift + 112);
+      ctx.fillText(`HP ${cls.hp} · 속도 ${cls.speed}`, cx, r.y + lift + 117);
       ctx.font = '12px monospace';
       this._wrapText(ctx, cls.desc, cx, r.y + lift + 130, r.w - 26, 14); // 3줄까지 라벨(h-14)과 안 겹치게
 
@@ -1069,7 +1074,7 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = 'bold 26px monospace';
     ctx.fillStyle = '#2ec4b6';
-    ctx.fillText(`◆ 영혼 파편 +${shown}`, Renderer.W / 2, y);
+    ctx.fillText(`◆ 한(恨) 조각 +${shown}`, Renderer.W / 2, y);
     if (shown >= game.shardsEarned) {
       ctx.font = '13px monospace';
       ctx.fillStyle = '#666a80';
@@ -1248,7 +1253,7 @@ const HUD = {
         { h: '전설 특성', t: '황금 카드 — 게임 규칙을 바꾼다 (극저확률)' },
         { h: '유물', t: '커먼~레전더리 — 보물상자와 보스가 준다' },
         { h: '도감', t: '몬스터 수집이 파편 보상으로 돌아온다 (거점 4번)' },
-        { h: '기억의 제단', t: '영혼 파편으로 영구 강화 (거점 2번)' },
+        { h: '비석의 맹세', t: '한(恨) 조각으로 영구 강화 (거점 2번)' },
         { h: '열기 · 오늘의 탑', t: '정복 후 고난이도 해금(←→) · 거점 D 일일 도전' },
         { h: '2막 · 무한 모드', t: '10층 정복 후 C — 2막 균사 정원(11~20층), 20층 정복 후 C — 심연 회랑' },
         { h: '보조 스킬', t: '5·15·25층 스킬 사당에서 3택1 획득 — E키로 사용' },

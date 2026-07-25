@@ -44,17 +44,17 @@ const THREAT_SETS = [
 // 층별 데이터 (기획안 §8.2)
 const FLOOR_DATA = {
   // 층 전용 로스터 (2026-07 재편): 모든 몹은 정확히 한 층에만 산다 — 층마다 새 얼굴, 새 기믹
-  1: { name: '지하 묘지',   enemies: ['slime', 'slime', 'skeleton', 'archer', 'boar', 'swarm', 'bat'], rule: null },
-  2: { name: '곰팡이 동굴', enemies: ['mushroom', 'toxicSlime', 'spider', 'frog', 'leech', 'sporePuff', 'acidSnail'], rule: '독 안개를 피하라' },
-  3: { name: '잊힌 감옥',   enemies: ['golem', 'wraith', 'shieldSkeleton', 'iceSlime', 'sniper', 'jailer', 'frostMage'], rule: '간수의 사슬 궤도에서 비켜서라' },
-  4: { name: '용암 심층',   enemies: ['fireSpirit', 'lavaHound', 'wisp', 'berserker', 'cinder', 'ashWalker', 'emberMoth'], rule: '용암을 밟지 마라' },
-  5: { name: '심연의 옥좌', enemies: ['necro', 'shaman', 'crystal', 'acolyte', 'shade', 'gazer'], rule: '그림자는 실체화됐을 때만 벨 수 있다' },
+  1: { name: '죄인의 묘지', enemies: ['slime', 'slime', 'skeleton', 'archer', 'boar', 'swarm', 'bat'], rule: null },
+  2: { name: '안개 낀 습지', enemies: ['mushroom', 'toxicSlime', 'spider', 'frog', 'leech', 'sporePuff', 'acidSnail'], rule: '독 안개를 피하라' },
+  3: { name: '버려진 지하 감옥', enemies: ['golem', 'wraith', 'shieldSkeleton', 'iceSlime', 'sniper', 'jailer', 'frostMage'], rule: '간수의 사슬 궤도에서 비켜서라' },
+  4: { name: '불타는 폐가', enemies: ['fireSpirit', 'lavaHound', 'wisp', 'berserker', 'cinder', 'ashWalker', 'emberMoth'], rule: '용암을 밟지 마라' },
+  5: { name: '교수대 언덕', enemies: ['necro', 'shaman', 'crystal', 'acolyte', 'shade', 'gazer'], rule: '그림자는 실체화됐을 때만 벨 수 있다' },
   // 6~10층: 심층 — 층마다 전용 신규 몬스터가 등장한다
-  6: { name: '피의 묘지',   enemies: ['bomber', 'ghoul', 'charger', 'brute', 'bloodBat', 'boneHeap', 'boneHeap'], rule: '뼈 더미를 부수지 않으면 되살아난다' },
-  7: { name: '맹독 심연',   enemies: ['thornPlant', 'turret', 'mimic', 'venomLasher', 'sporeMother', 'acidSlug'], rule: '포자 어미부터 끊어라 — 새끼는 무한하다' },
-  8: { name: '절망의 감옥', enemies: ['executioner', 'stalker', 'frostArcher', 'warden', 'chainWraith', 'frostGolem'], rule: '처형자의 붉은 구역에서 벗어나라' },
-  9: { name: '겁화의 핵',   enemies: ['magmaSlime', 'magmaSlime', 'imp', 'obsidianBeast', 'flameJuggler', 'lavaBurster'], rule: '착탄 예고 원을 읽어라 — 장판이 겹치면 도망칠 곳이 없다' },
-  10: { name: '심연의 왕좌', enemies: ['voidEye', 'glutton', 'voidSpawn', 'voidSpawn', 'riftCaster', 'mirrorKnight'], rule: '거울 기사의 반격 자세가 끝나기 전에 물러나라' },
+  6: { name: '파헤쳐진 묘역', enemies: ['bomber', 'ghoul', 'charger', 'brute', 'bloodBat', 'boneHeap', 'boneHeap'], rule: '뼈 더미를 부수지 않으면 되살아난다' },
+  7: { name: '독초 늪', enemies: ['thornPlant', 'turret', 'mimic', 'venomLasher', 'sporeMother', 'acidSlug'], rule: '포자 어미부터 끊어라 — 새끼는 무한하다' },
+  8: { name: '지하 심문실', enemies: ['executioner', 'stalker', 'frostArcher', 'warden', 'chainWraith', 'frostGolem'], rule: '처형자의 붉은 구역에서 벗어나라' },
+  9: { name: '화형장', enemies: ['magmaSlime', 'magmaSlime', 'imp', 'obsidianBeast', 'flameJuggler', 'lavaBurster'], rule: '착탄 예고 원을 읽어라 — 장판이 겹치면 도망칠 곳이 없다' },
+  10: { name: '처형인의 홀', enemies: ['voidEye', 'glutton', 'voidSpawn', 'voidSpawn', 'riftCaster', 'mirrorKnight'], rule: '거울 기사의 반격 자세가 끝나기 전에 물러나라' },
   // ── 2막: 균사 정원 (11~20층) — 탑 아래에 뿌리내린 거대 균사체의 영역 ──
   11: { name: '홀씨 들판',     enemies: ['sporeling', 'sporeling', 'mushroom', 'sporePuff', 'fungalTick', 'frog'], rule: '홀씨 새끼의 시체 구름을 밟지 마라' },
   12: { name: '홀씨 들판 심부', enemies: ['sporeling', 'fungalTick', 'fungalTick', 'mushroom', 'sporeMother', 'acidSnail'], rule: '홀씨 새끼의 시체 구름을 밟지 마라' },

@@ -200,6 +200,21 @@ const Game = {
     this.state = 'play';
     Dungeon.newRun();
 
+    // 오프닝 — 부활 연출 (기획 §2): 첫 런은 풀 시퀀스, 이후엔 한 줄만
+    {
+      const cls = CLASSES[Meta.data.cls] || CLASSES.knight;
+      if (!Meta.data.introSeen) {
+        Meta.data.introSeen = true; Meta.save();
+        this._storyQ = [
+          { text: '그날 밤, 죄인의 묘지에서 눈이 떠졌다.', color: '#9a9488' },
+          { text: `"${cls.grudge}"`, color: '#c8c0a8' },
+          { text: '기억은 온전하다. 이유만 모른다 — 단서를 모아, 왕좌로.', color: '#8a1c2c' },
+        ];
+      } else if (!this.bossRush && !this.dailyRun) {
+        this._storyQ = [{ text: `${cls.name} — 흙을 털고 다시 일어선다. 왕좌는 아직 멀다.`, color: '#9a9488' }];
+      }
+    }
+
     // 유산 각인: 런 시작 시 커먼 유물 3택1 (기존 유물 선택 UI 재사용)
     if (Meta.lvl('legacy') > 0) {
       const commons = RELICS.filter((r) => r.rarity === 'common');
@@ -411,6 +426,11 @@ const Game = {
   // ── 메인 틱 ──
   tick(dt) {
     this.blinkT += dt;
+    // 오프닝/서사 배너 큐 — 현재 배너가 끝나면 다음 줄
+    if (this._storyQ && this._storyQ.length && this.state === 'play' && (!this.banner || this.banner.life <= 0)) {
+      const line = this._storyQ.shift();
+      this.banner = { text: line.text, life: 2.8, maxLife: 2.8, color: line.color };
+    }
     Music.ensure(this._musicKey());
     if (Bot.enabled) Bot.update(this, dt);
 

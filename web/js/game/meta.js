@@ -2,26 +2,31 @@
 // 영혼 파편으로 영구 업그레이드·직업 해금. localStorage에 저장된다.
 
 // 직업 3종 (기획안 §5) — 조작 감각 자체가 다르다
+// 왕에게 죽은 네 사람 — 같은 밤, 같은 묘지에서 눈을 떴다 (기획 SCENARIO.md §3)
 const CLASSES = {
   knight: {
-    id: 'knight', name: '검사', sprite: 'player', color: '#3b5dc9',
+    id: 'knight', name: '가레스', title: '목 잘린 근위기사', sprite: 'player', color: '#5a7a94',
     hp: 6, speed: 195, unlock: 0,
-    desc: '3연격 근접 베기 · 철벽 보호막 · 전투 본능 회복',
+    desc: '3연격 처형검 · 철벽 보호막 · 전투 본능 회복',
+    grudge: '왕의 침전에서 봐선 안 될 의식을 보았다 — 죄목: 반역.',
   },
   archer: {
-    id: 'archer', name: '궁수', sprite: 'playerArcher', color: '#38b764',
+    id: 'archer', name: '레나', title: '교수형당한 밀렵꾼', sprite: 'playerArcher', color: '#4a8a5e',
     hp: 4, speed: 200, cond: { stat: 'bestFloor', n: 3, label: '3층 도달' },
-    desc: '빠른 화살 연사 — 3발째는 관통 강화 화살',
+    desc: '빠른 뼈활 연사 — 3발째는 관통 강화 화살',
+    grudge: '왕의 사냥터에서 피를 담는 마차를 보았다 — 죄목: 밀렵.',
   },
   mage: {
-    id: 'mage', name: '마도사', sprite: 'playerMage', color: '#8a5ac2',
+    id: 'mage', name: '오르빈', title: '화형당한 점성술사', sprite: 'playerMage', color: '#8a5ac2',
     hp: 3, speed: 190, cond: { stat: 'bestFloor', n: 5, label: '5층 도달' },
-    desc: '유도 마탄 — 3발째는 폭발 대마탄',
+    desc: '유도 원혼탄 — 3발째는 폭발 대원혼탄',
+    grudge: '왕의 별점에서 이미 끝난 수명을 읽었다 — 죄목: 요술.',
   },
   alch: {
-    id: 'alch', name: '연금술사', sprite: 'playerAlch', color: '#c9d94a',
-    hp: 5, speed: 190, cond: { stat: 'wins', n: 1, label: '첫 등정' },
-    desc: '산성 플라스크 투척 — 독+화상 반응 제조기',
+    id: 'alch', name: '이졸데', title: '독살당한 약제사', sprite: 'playerAlch', color: '#7a9a5e',
+    hp: 5, speed: 190, cond: { stat: 'wins', n: 1, label: '첫 복수' },
+    desc: '맹독 플라스크 투척 — 독+화상 반응 제조기',
+    grudge: "'성배의 약' 조제를 거부했다 — 재료가 사람의 피였으니까.",
   },
 };
 
