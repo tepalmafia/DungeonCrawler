@@ -1199,17 +1199,27 @@ const HUD = {
       ctx.shadowColor = '#ffd866';
       ctx.shadowBlur = 14 + Math.sin(t * 3) * 8;
     }
-    ctx.fillText(game.act2 ? '2막 돌파 — 관문이 열렸다!' : '1막 완수 — 변경을 벗어났다', cx, ty);
+    const act = game.act || 1;
+    const vTitle = { 1: '1막 완수 — 변경을 벗어났다', 2: '2막 돌파 — 관문이 열렸다!', 3: '3막 심판 — 재판소가 무너졌다!' };
+    const vLine = {
+      1: "10층 — 왕실 처형인 '무거운 손'이 쓰러졌다",
+      2: "20층 — 관문 사령관 '철벽 로트가르'가 쓰러졌다",
+      3: "30층 — 대재판관 '발디아 공작'이 쓰러졌다",
+    };
+    const vSub = {
+      1: '"명단은… 재판소가 아니라… 성에서 내려왔다…" — 첫 번째 자백을 얻었다.',
+      2: '"마차 호위는… 명예였다… 안을 보기 전까지는…" — 왕도가 가까워진다.',
+      3: '"성배가 마르면… 왕국이 마른다고 했다…" — 이제 교회다.',
+    };
+    ctx.fillText(vTitle[act] || `${act}막 완수`, cx, ty);
     ctx.restore();
     if (t > 0.55) {
       ctx.font = 'bold 16px monospace';
       ctx.fillStyle = '#e43b44';
-      ctx.fillText(game.act2 ? '20층 — 길을 막던 것이 쓰러졌다' : "10층 — 왕실 처형인 '무거운 손'이 쓰러졌다", cx, 208);
+      ctx.fillText(vLine[act] || `${act * 10}층 — 길이 열렸다`, cx, 208);
       ctx.font = 'italic 13px monospace';
       ctx.fillStyle = '#9a9ab8';
-      ctx.fillText(game.act2
-        ? '왕도가 가까워진다. 다리 너머, 성벽의 그림자가 보인다.'
-        : '"명단은… 재판소가 아니라… 성에서 내려왔다…" — 첫 번째 자백을 얻었다.', cx, 230);
+      ctx.fillText(vSub[act] || '', cx, 230);
     }
 
     // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)
@@ -1240,10 +1250,12 @@ const HUD = {
     }
     if (t > 1.6) {
       ctx.font = 'bold 16px monospace';
-      ctx.fillStyle = game.act2 ? '#b13ae0' : '#c9d94a';
-      ctx.fillText(game.act2
-        ? 'C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)'
-        : 'C — 2막 다리와 관문으로 (빌드 유지, 11~20층: 왕도로 가는 길)', cx, 462);
+      const cNext = {
+        1: 'C — 2막 다리와 관문으로 (빌드 유지, 11~20층: 왕도로 가는 길)',
+        2: 'C — 3막 영지와 재판소로 (빌드 유지, 21~30층: 판결한 자들에게)',
+      };
+      ctx.fillStyle = cNext[act] ? '#c9d94a' : '#b13ae0';
+      ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 462);
     }
   },
 

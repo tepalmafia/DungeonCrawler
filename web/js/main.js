@@ -81,12 +81,12 @@ const Game = {
   // 특성/유물은 id 목록을 재적용해 복원하고, 스칼라(HP·골드·XP)는 그대로 덮어쓴다.
   saveRun() {
     if (this.testMode && !this._forceSave) return; // 봇 계측 오염 방지
-    if (this.runEnded || Dungeon.floor > 20 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
+    if (this.runEnded || Dungeon.floor > 30 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
     const p = this.player;
     try {
       localStorage.setItem('dungeoncrawler_run', JSON.stringify({
         v: 1, cls: p.classId, heat: this.heat, pacts: this.pacts,
-        act2: !!this.act2, sp: this.shardsPaid || 0, kp: this.killsPaid || 0,
+        act: this.act || 1, sp: this.shardsPaid || 0, kp: this.killsPaid || 0,
         floor: Dungeon.floor, roomIndex: Dungeon.roomIndex, roomType: Dungeon.roomType,
         took: {
           t: Dungeon.tookTreasure, c: Dungeon.tookCamp, e: Dungeon.tookEvent,
@@ -131,7 +131,7 @@ const Game = {
     this.level = s.level; this.xp = s.xp; this.xpNext = s.xpNext;
     this.kills = s.kills; this.time = s.time; this.gold = s.gold;
     // 2막 진행 복원 — 정산 이중 지급 방지 장부까지
-    this.act2 = !!s.act2; this.shardsPaid = s.sp || 0; this.killsPaid = s.kp || 0;
+    this.act = s.act || (s.act2 ? 2 : 1); this.shardsPaid = s.sp || 0; this.killsPaid = s.kp || 0;
     const p = this.player;
     p.traits = []; p.relics = [];
     for (const id of s.traits) { const t = TRAITS.find((x) => x.id === id); if (t) applyTrait(p, t); }
@@ -177,7 +177,7 @@ const Game = {
     this.slowmoT = 0; // 완벽 회피 슬로모
     this._roomMod = null;
     this.endless = false;
-    this.act2 = false;
+    this.act = 1;
     this._shrineSeen = 0;
     this._subChoice = false;
     this.shardsPaid = 0;
@@ -482,7 +482,8 @@ const Game = {
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도
       if (this.state === 'victory' && Input.pressed('KeyC')) {
-        if (Dungeon.floor <= 10 && !this.act2) this.continueAct2();
+        const MAX_ACT = 3; // 구현된 막 수 — 4·5막이 열리면 올린다
+        if ((this.act || 1) < MAX_ACT && Dungeon.floor <= (this.act || 1) * 10) this.continueNextAct();
         else this.continueEndless();
         return;
       }

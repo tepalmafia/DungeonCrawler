@@ -26,10 +26,14 @@ const CLUES = [
   { id: 'c8', act: 2, name: '관문 사령관의 자백', how: 'boss', boss: 20,
     text: '"마차 호위는 명예였다… 안을 보기 전까지는…"' },
   // 3막 — 영지와 재판소 (3막 콘텐츠와 함께 열린다)
-  { id: 'c9', act: 3, name: '내 재판 기록', how: 'explore', floors: null, text: null },
-  { id: 'c10', act: 3, name: '재판관의 왕실 친서', how: 'explore', floors: null, text: null },
-  { id: 'c11', act: 3, name: '지하 감옥의 손톱 글씨', how: 'explore', floors: null, text: null },
-  { id: 'c12', act: 3, name: '대재판관의 자백', how: 'boss', boss: 30, text: null },
+  { id: 'c9', act: 3, name: '내 재판 기록', how: 'explore', floors: [21, 24],
+    text: '기록고에서 찾은 내 재판. 배심 전원이 판결 사흘 뒤 같은 날, 영지를 하사받았다.' },
+  { id: 'c10', act: 3, name: '재판관의 왕실 친서', how: 'explore', floors: [25, 28],
+    text: "발디아의 서재, 금고 안 친서. \"명단대로 판결하라. 성배는 기다리지 않는다.\" — 왕의 인장." },
+  { id: 'c11', act: 3, name: '지하 감옥의 손톱 글씨', how: 'explore', floors: [27, 30],
+    text: '감방 벽마다 손톱으로 긁은 글씨. "우리는 죄가 없다" — 수십 명의 다른 필체. 전부 같은 말.' },
+  { id: 'c12', act: 3, name: '대재판관의 자백', how: 'boss', boss: 30,
+    text: '"성배가 마르면… 왕국이 마른다고 했다… 나는… 서명만 했을 뿐…"' },
   // 4막 — 역병의 마을과 대성당
   { id: 'c13', act: 4, name: '소각장의 명단', how: 'explore', floors: null, text: null },
   { id: 'c14', act: 4, name: '고해실 기록', how: 'explore', floors: null, text: null },
@@ -151,6 +155,7 @@ const CODEX_ENEMIES = [
   { id: 'boss9', boss: true, name: '화형 집행관 이그니스', sprite: 'bossInferno', desc: '9층의 주인. 백열하는 간헐천 연쇄 — 멈추는 순간 타오른다.' },
   { id: 'boss10', boss: true, name: "왕실 처형인 '무거운 손'", sprite: 'bossVoid',  desc: '탑의 진정한 정점. 세 겹의 어둠 장막과 공허 유충 — 모든 것을 건 최후의 시험.' },
   { id: 'boss20', boss: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', desc: '2막의 주인. 검은 마차를 호위해온 자 — 군의관이 살아있는 한 상처가 아문다.' },
+  { id: 'boss30', boss: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', desc: '3막의 주인. 내 판결문에 서명한 자 — 판결의 법복이 강한 일격을 경감한다.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)

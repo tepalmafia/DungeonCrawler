@@ -29,13 +29,14 @@ const GameRewards = {
         rec.victory = rec.victory || !!victory;
       }
     }
-    if (this.endless || this.act2) {
+    if (this.endless || this.act > 1) {
       // 무한 모드·2막: 1막(10층) 정산에서 이미 받은 몫을 뺀 초과분만 지급 (승수 이중 집계 방지)
       this.shardsEarned = Meta.endlessRun(
         Dungeon.floor, Dungeon.roomIndex, this.kills, this.heat,
         this.shardsPaid, this.kills - this.killsPaid);
-      if (victory && this.act2 && Dungeon.floor >= 20) {
-        Meta.data.act2Wins = (Meta.data.act2Wins || 0) + 1; // 2막 정복 별도 집계
+      if (victory && this.act > 1 && Dungeon.floor >= this.act * 10) {
+        const k = 'act' + this.act + 'Wins';
+        Meta.data[k] = (Meta.data[k] || 0) + 1; // 막별 완수 집계
         Meta.save();
       }
       this.clearRunSave(); // 2막 포함 — 런이 끝났다
@@ -62,18 +63,22 @@ const GameRewards = {
     Dungeon.nextFloor();
   },
 
-  // 2막 진입 — 1막(10층) 승리 화면에서 C: 정산은 유지하고 다리와 관문(11층)으로 나아간다
-  continueAct2() {
-    this.act2 = true;
+  // 다음 막 진입 — 막 승리 화면에서 C: 정산은 유지하고 다음 구역으로 나아간다
+  continueNextAct() {
+    this.act = (this.act || 1) + 1;
     this.runEnded = false;
     this.shardsPaid = (this.shardsPaid || 0) + this.shardsEarned;
     this.killsPaid = this.kills;
     this.shardsEarned = 0;
     this.state = 'play';
-    this.banner = { text: '2막 — 다리와 관문. 안개 너머로 성벽이 보인다', life: 2.8, maxLife: 2.8, color: '#8a1c2c' };
+    const banners = {
+      2: '2막 — 다리와 관문. 안개 너머로 성벽이 보인다',
+      3: '3막 — 영지와 재판소. 나를 판결한 자들이 저 안에 있다',
+    };
+    this.banner = { text: banners[this.act] || `${this.act}막 — 왕좌가 가까워진다`, life: 2.8, maxLife: 2.8, color: '#8a1c2c' };
     AudioSys.roar();
     Dungeon.nextFloor();
-    this.saveRun(); // 2막도 이어하기 지원 — 진입 즉시 스냅샷
+    this.saveRun(); // 진입 즉시 스냅샷 — 이어하기 지원
   },
 
   onBossDead() {
@@ -103,10 +108,10 @@ const GameRewards = {
       }
     }
     // 1막 정점(10층, 2막 미진입 시)과 2막 정점(20층+)에서 승리 정산
-    if (((Dungeon.floor === 10 && !this.act2) || Dungeon.floor >= 20) && !this.endless) {
+    if (Dungeon.floor >= (this.act || 1) * 10 && !this.endless) {
       this.endRun(true);
       // 최속 클리어 기록 (P5): 승리 화면 '신기록!' 표시용 — 1막/2막 기록 분리
-      const recKey = this.act2 ? 'bestWinTime2' : 'bestWinTime';
+      const recKey = 'bestWinTime' + (this.act > 1 ? this.act : '');
       this._newRecord = !Meta.data[recKey] || this.time < Meta.data[recKey];
       if (this._newRecord) { Meta.data[recKey] = this.time; Meta.save(); }
       this._vicStart = undefined; // 승리 연출 타이머 리셋
