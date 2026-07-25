@@ -391,7 +391,7 @@ const GameCombat = {
       return;
     }
     // 사인 기록: 명시된 출처(용암 등) > 최근접 적 추정
-    this._lastHurtBy = src || this._nearestFoeName() || '심연의 어둠';
+    this._lastHurtBy = src || this._nearestFoeName() || '이름 모를 어둠';
 
     // 보호막: 피해 1회 무효
     if (p.shield) {
@@ -500,7 +500,7 @@ const GameCombat = {
         const ga = Math.random() * Math.PI * 2, gd = 12 + Math.random() * 30;
         World.stampBlood(p.x + Math.cos(ga) * gd, p.y + Math.sin(ga) * gd, 3 + Math.random() * 5, 0.45);
       }
-      this.deathInfo = { src: this._lastHurtBy || '심연의 어둠', floor: Dungeon.floor, room: Dungeon.roomIndex };
+      this.deathInfo = { src: this._lastHurtBy || '이름 모를 어둠', floor: Dungeon.floor, room: Dungeon.roomIndex };
       this.endRun(false);
       this.state = 'over';
       AudioSys.gameover();
