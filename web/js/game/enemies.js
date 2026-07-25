@@ -578,13 +578,13 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this.phased = false;
             this.stateT = 0;
             this.windT = 0.45; // 실체화 예고 — 이 사이에 벗어날 수 있다
+            this.lungeDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
             Particles.burst(this.x, this.y, { count: 8, colors: ['#a9c1d8', '#5d6b84'], speed: 70, life: 0.35, size: 3 });
           }
         } else if (this.windT > 0) {
-          this.windT -= dt; // 형체가 굳는 순간 — 움직이지 않는다
+          this.windT -= dt; // 형체가 굳는 순간 — 움직이지 않는다 (조준은 이미 굳었다)
           if (this.windT <= 0 && d < 220) {
             this.lungeT = 0.24; // 손톱 급습
-            this.lungeDir = { x: dx / d, y: dy / d };
           }
         } else if (this.lungeT > 0) {
           this.lungeT -= dt;
@@ -1141,19 +1141,19 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
         this.flip = dx < 0;
         if (this.coilT > 0) {
-          this.coilT -= dt; // 몸을 말아 조준 — 그 자리에 멈춘다 (지금이 벗어날 틈)
-          if (this.coilT <= 0) {
-            this.springT = 0.3;
-            this.springDir = { x: dx / d, y: dy / d };
-          }
+          this.coilT -= dt; // 몸을 말아 조준 — 그 자리에 멈춘다 (예고 중 옆으로 비키면 빗나간다)
+          if (this.coilT <= 0) this.springT = 0.3;
         } else if (this.springT > 0) {
-          this.springT -= dt; // 용수철처럼 튕겨 날아간다
-          World.moveEntity(this, this.springDir.x * 360 * dt, this.springDir.y * 360 * dt);
+          this.springT -= dt; // 용수철처럼 튕겨 날아간다 — 방향은 말기 시작에 이미 굳었다
+          World.moveEntity(this, this.springDir.x * 320 * dt, this.springDir.y * 320 * dt);
         } else {
           const spd = this.effSpeed() * (0.7 + Math.abs(Math.sin(this.animT * 7)) * 0.6); // 꿈틀꿈틀
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 거리 응답: 중거리에선 도약으로 간격을 접는다
-          if (this.springCd <= 0 && d > 90 && d < 190) { this.coilT = 0.42; this.springCd = 3.0; }
+          if (this.springCd <= 0 && d > 90 && d < 190) {
+            this.coilT = 0.42; this.springCd = 3.0;
+            this.springDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정 — 회피 가능해야 공정하다
+          }
         }
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
         if (this.hitCd <= 0 && d < p.r + this.r) {
@@ -1234,11 +1234,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const enraged = this.hp <= this.maxHp * 0.5;
         this.flip = dx < 0;
         if (this.roarT > 0) {
-          this.roarT -= dt; // 도끼를 치켜들고 포효 — 달려올 직선이 보인다
-          if (this.roarT <= 0) {
-            this.rushT = 0.85;
-            this.rushDir = { x: dx / d, y: dy / d };
-          }
+          this.roarT -= dt; // 도끼를 치켜들고 포효 — 달려올 직선은 포효 순간 정해졌다
+          if (this.roarT <= 0) this.rushT = 0.85;
         } else if (this.rushT > 0) {
           this.rushT -= dt;
           const hit = World.moveEntity(this, this.rushDir.x * 250 * dt, this.rushDir.y * 250 * dt);
@@ -1248,7 +1245,10 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed() * (enraged ? 1.9 : 1);
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 거리 응답: 멀리서 얼쩡거리면 포효하고 덮쳐온다
-          if (this.rushCd <= 0 && d > 240) { this.roarT = enraged ? 0.35 : 0.55; this.rushCd = 4.2; }
+          if (this.rushCd <= 0 && d > 240) {
+            this.roarT = enraged ? 0.35 : 0.55; this.rushCd = 4.2;
+            this.rushDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
+          }
           this.touchPlayer(game, enraged ? 2 : 1);
         }
         if (enraged && Math.random() < 0.15) {
@@ -2090,11 +2090,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
         this.flip = dx < 0;
         if (this.aimT > 0) {
-          this.aimT -= dt; // 공중에 딱 멈춰 목덜미를 조준한다
-          if (this.aimT <= 0) {
-            this.dartT = 0.32;
-            this.dartDir = { x: dx / d, y: dy / d };
-          }
+          this.aimT -= dt; // 공중에 딱 멈춰 노려본다 — 안광이 켜진 곳이 곧 궤도다
+          if (this.aimT <= 0) this.dartT = 0.32;
         } else if (this.dartT > 0) {
           this.dartT -= dt; // 혈침 돌격 — 직선이라 옆걸음이면 빗나간다
           World.moveEntity(this, this.dartDir.x * 300 * dt, this.dartDir.y * 300 * dt);
@@ -2108,7 +2105,10 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const wd = Math.hypot(this.wx, this.wy) || 1;
           World.moveEntity(this, (this.wx / wd) * this.effSpeed() * dt, (this.wy / wd) * this.effSpeed() * dt);
           // 거리 응답: 중거리에서 정지 조준 후 급습
-          if (this.dartCd <= 0 && d > 130 && d < 260) { this.aimT = 0.38; this.dartCd = 3.2; }
+          if (this.dartCd <= 0 && d > 130 && d < 260) {
+            this.aimT = 0.38; this.dartCd = 3.2;
+            this.dartDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
+          }
         }
         const ph = p.hp;
         this.touchPlayer(game, 1);
