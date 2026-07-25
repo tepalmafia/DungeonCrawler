@@ -210,11 +210,11 @@ function createBoss(floor, x, y) {
         if (minionCount > 0 && this._regenPause <= 0 && this.hp < this.maxHp) {
           // 계측 (검사·열기5): 2층 피해 110+ = 전층 최대 — 근접 단일딜은 부하 정리가 느려
           // 재생을 뚫는 데 오래 걸린다. 6→4/s (재생 정지 컨트롤 해법은 그대로 유효)
-          this.hp = Math.min(this.maxHp, this.hp + 4 * dt);
+          this.hp = Math.min(this.maxHp, this.hp + 3 * dt); // 클린 계측: 1목숨 첫 사망 95%가 1~2층 — 2층 벽 완화 2차
           this._regenTick += dt;
           if (this._regenTick >= 1.0) {
             this._regenTick = 0;
-            Particles.text(this.x, this.y - 40, '재생 +4', { color: '#38b764', size: 12 });
+            Particles.text(this.x, this.y - 40, '재생 +3', { color: '#38b764', size: 12 });
           }
         }
       }
@@ -456,11 +456,14 @@ function createBoss(floor, x, y) {
         this.swingCount = 0;
       } else if (kind === 'fan') {
         const projKind = opt[0] || 'soul';
-        const n = this.phase === 2 ? 9 : 7;
+        // 포자 부채꼴 완화 (클린 계측: 열기0 검사 1목숨 사망 1위 = 2층 보스전 —
+        // 근접이 파고들 틈이 없었다): 스포어만 발수 -2·간격 +23%·탄속 -10%
+        const n = this.phase === 2 ? (projKind === 'spore' ? 7 : 9) : (projKind === 'spore' ? 6 : 7);
         const baseAngle = Math.atan2(dy, dx);
-        const speeds = { soul: 195, spore: 150, fire: 210, rock: 250 };
+        const speeds = { soul: 195, spore: 135, fire: 210, rock: 250 };
+        const spread = projKind === 'spore' ? 0.27 : 0.22;
         for (let i = 0; i < n; i++) {
-          const a = baseAngle + (i - (n - 1) / 2) * 0.22;
+          const a = baseAngle + (i - (n - 1) / 2) * spread;
           game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, {
             speed: speeds[projKind] || 200, dmg: 1,
           });
