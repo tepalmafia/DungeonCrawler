@@ -114,6 +114,18 @@ const TRAITS = [
     desc: '스킬 쿨다운 -15%', apply: (p) => { p.skillCdMul *= 0.85; } },
   { id: 'mg_ward', name: '마력 장막', tag: '마도사', color: '#8a5ac2', cls: 'mage',
     desc: '스킬 시전 순간 0.6초 무적', flag: 'mgward' },
+  // ── 공격 변형 (S2) — 기본 공격의 리듬 자체를 바꾼다: 런 정체성의 축 ──
+  { id: 'kn_greatsword', name: '대검화', tag: '검사', color: '#f7b32b', cls: 'knight',
+    unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' },
+    desc: '공격이 무거워진다 — 속도 ×0.55, 피해 ×2.2, 범위 +45%', flag: 'greatsword',
+    apply: (p) => { p.rangeMul *= 1.45; p.atkCdMul *= 1.8; } },
+  { id: 'ar_twinbow', name: '쌍궁', tag: '궁수', color: '#f7b32b', cls: 'archer',
+    unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' },
+    desc: '화살을 2발 부채꼴로 — 공격 속도 -35% (이중 사격과 중첩 시 4발)', flag: 'twinbow',
+    apply: (p) => { p.atkCdMul *= 1.55; } },
+  { id: 'mg_snipe', name: '직격 마탄', tag: '마도사', color: '#f7b32b', cls: 'mage',
+    unlock: { stat: 'bestFloor', n: 4, label: '4층 도달' },
+    desc: '유도를 버리고 직사한다 — 탄속 2배, 모든 마탄이 착탄 폭발', flag: 'mgsnipe' },
 
   // ── 전설 (극저확률 — 규칙을 부수는 카드. "미쳐 날뛰는 런"의 씨앗) ──
   { id: 'unbound',   name: '무한의 갈망', tag: '전설', color: '#ffd866', legend: true,

@@ -390,7 +390,8 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.flags.static && e.status.shock > 0) bonus += 2; // 번개 트리 상향
 
       const baseDmg = this.currentAtk();
-      const dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv + (this.flags.bowmaster ? 1 : 0))) : baseDmg;
+      let dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv + (this.flags.bowmaster ? 1 : 0))) : baseDmg;
+      if (this.flags.greatsword) dmg = Math.round(dmg * 2.2); // 대검화: 느리고 무겁게
       const finalDmg = (crit ? Math.round(dmg * this.critMul) : dmg) + bonus;
       game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
 
@@ -448,7 +449,8 @@ function createPlayer(x, y, classId = 'knight') {
         AudioSys.bow(finisher);
         World.moveEntity(this, -dir.x * 5, -dir.y * 5); // 반동
         // 이중 사격: 부채꼴 2발
-        const angles = this.flags.ar_double ? [-0.11, 0.11] : [0];
+        let angles = this.flags.ar_double ? [-0.11, 0.11] : [0];
+        if (this.flags.twinbow) angles = angles.length === 2 ? [-0.2, -0.07, 0.07, 0.2] : [-0.13, 0.13]; // 쌍궁
         for (const off of angles) {
           const a = Math.atan2(dir.y, dir.x) + off;
           const d2 = { x: Math.cos(a), y: Math.sin(a) };
@@ -468,9 +470,9 @@ function createPlayer(x, y, classId = 'knight') {
         const fireball = this.flags.mg_fireball;
         game.pbolts.push({
           kind: 'pbolt', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
-          dir: { ...dir }, speed: finisher ? 260 : 300,
-          finisher, pierce: fireball, homing: 5.0,
-          aoe: finisher ? 70 : (fireball ? 40 : 0),
+          dir: { ...dir }, speed: (finisher ? 260 : 300) * (this.flags.mgsnipe ? 1.9 : 1),
+          finisher, pierce: fireball, homing: this.flags.mgsnipe ? 0 : 5.0,
+          aoe: finisher ? 70 : (fireball ? 40 : (this.flags.mgsnipe ? 35 : 0)),
           fire: fireball,
           life: 2.0, hit: new Set(),
           bounces: this.flags.rebound ? 1 : 0, // 도탄 특성

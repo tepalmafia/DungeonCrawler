@@ -909,6 +909,17 @@ const HUD = {
       ctx.font = '15px monospace';
       ctx.fillStyle = '#c46a6a';
       ctx.fillText(`☠ 사인: ${game.deathInfo.src}`, Renderer.W / 2, 210);
+      // 마이크로 서사 (S3): 탑의 목소리 — 죽음마다 세계가 한 줄 말을 건다
+      const EPITAPHS = [
+        '탑은 또 하나의 영혼을 삼켰다. 그리고 기억한다.',
+        '심연은 서두르지 않는다. 너는 다시 올 테니까.',
+        '뱃사공이 노를 젓는 소리가 들린다… 아직은 아니다.',
+        '네가 흘린 파편은 어둠 속에서도 빛난다.',
+        '탑의 계단은 오늘도 하나 늘었다.',
+      ];
+      ctx.font = 'italic 12px monospace';
+      ctx.fillStyle = '#8a8aa0';
+      ctx.fillText(EPITAPHS[(Dungeon.floor + game.kills) % EPITAPHS.length], Renderer.W / 2, 232);
     }
 
     ctx.font = '18px monospace';
@@ -1029,6 +1040,9 @@ const HUD = {
       ctx.font = 'bold 16px monospace';
       ctx.fillStyle = '#e43b44';
       ctx.fillText('10층 — 진 심연의 군주 눅스가 소멸했다', cx, 208);
+      ctx.font = 'italic 13px monospace';
+      ctx.fillStyle = '#9a9ab8';
+      ctx.fillText('탑 꼭대기에 처음으로 빛이 스며든다. 심연은 침묵하지만 — 끝난 것은 아니다.', cx, 230);
     }
 
     // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)

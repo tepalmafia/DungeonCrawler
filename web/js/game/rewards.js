@@ -63,7 +63,11 @@ const GameRewards = {
       setTimeout(() => AudioSys.levelup(), 500);
       return;
     }
-    this.banner = { text: `${Dungeon.floor}층 클리어!`, life: 2.0, maxLife: 2.0 };
+    // 마이크로 서사 (S3): 보스의 마지막 한마디가 우선 — '층 클리어'는 유물 화면이 대신 말해준다
+    this.banner = this._lastBossOutro
+      ? { text: `"${this._lastBossOutro}"`, life: 2.6, maxLife: 2.6, color: '#c9b8e8' }
+      : { text: `${Dungeon.floor}층 클리어!`, life: 2.0, maxLife: 2.0 };
+    this._lastBossOutro = null;
     Renderer.shake(8, 0.6);
     AudioSys.chest();
     this.bossRewardT = 1.2; // 잠시 후 유물 선택
