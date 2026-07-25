@@ -610,9 +610,32 @@ const Bot = {
       return { x: Math.sign(cx - p.x) || 1, y: Math.sign(cy - p.y) || 1 };
     }
     for (const fp of game.firePatches) {
+      if (fp.kind === 'ice') continue; // 빙판은 감속뿐 — 피하느라 동선 낭비 금지
       const d = Math.hypot(p.x - fp.x, p.y - fp.y);
       if (d < fp.r + 8) {
         return { x: (p.x - fp.x) / (d || 1), y: (p.y - fp.y) / (d || 1) };
+      }
+    }
+    // 가시 함정 (맵 M2): 예열(붉은 링)~가시 솟음 중엔 반경 밖으로 — 봇이 함정 위에서
+    // 얼쩡대다 죽으면 계측이 오염된다 (실플레이어라면 당연히 비키는 위험)
+    for (const tr of (game.traps || [])) {
+      if (tr.state === 'idle') continue;
+      const d = Math.hypot(p.x - tr.x, p.y - tr.y);
+      if (d < 22 + p.r + 16) {
+        return { x: (p.x - tr.x) / (d || 1), y: (p.y - tr.y) / (d || 1), dash: tr.state === 'up' && p.dashCharges >= 1 };
+      }
+    }
+    // 적의 착탄 예고 원 (산성 글롭·간헐천·사슬 올가미·균열): 터지기 전에 원 밖으로
+    for (const e of game.enemies) {
+      if (e.dead) continue;
+      for (const arr of [e.globs, e.geysers, e.snares, e.rifts]) {
+        if (!arr) continue;
+        for (const g of arr) {
+          const dd = Math.hypot(p.x - g.x, p.y - g.y);
+          if (dd < 55 + p.r) {
+            return { x: (p.x - g.x) / (dd || 1), y: (p.y - g.y) / (dd || 1), dash: g.t < 0.35 && p.dashCharges >= 1 };
+          }
+        }
       }
     }
     // 근접한 적 투사체: 대시 회피
