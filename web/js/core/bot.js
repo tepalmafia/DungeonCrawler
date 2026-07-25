@@ -398,6 +398,13 @@ const Bot = {
         Bot.stats.skills++;
         this._skillT = 0;
       }
+      // 보조 스킬 (E): 쿨이 돌면 교전 중 아무 때나 — 응급 조제만 다쳤을 때
+      if (p.subSkill && p.subCd <= 0 && p.dashTimer <= 0 && d < 280) {
+        if (p.subSkill !== 'al_tonic' || p.hp < p.maxHp) {
+          p.facing = { x: (target.x - p.x) / d, y: (target.y - p.y) / d };
+          p.useSubSkill(game);
+        }
+      }
       // 예고 회피: 방향이 굳은 급습 예고(거머리 말기·박쥐 조준·광전사 포효·원혼 실체화)가
       // 가까이 보이면 궤도에서 옆으로 비켜선다 — 인간이 텔레그래프를 읽는 행동의 근사
       const tele = game.enemies.find((e) => !e.dead && !e.phased &&
@@ -455,6 +462,7 @@ const Bot = {
       const it = game.interactables.find((i) => {
         if (i.used || i._botSkip) return false;
         if (i.kind === 'chest') return true;
+        if (i.kind === 'skillShrine') return true;
         if (i.kind === 'camp') {
           // 숫돌이 살아 있으면 다쳤을 때만 휴식, 아니면 담금질 쪽으로
           const ws = game.interactables.some((o) => o.kind === 'whetstone' && !o.used);

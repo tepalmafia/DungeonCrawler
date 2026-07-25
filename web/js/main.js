@@ -96,6 +96,7 @@ const Game = {
         time: this.time, gold: this.gold,
         traits: [...p.traits], relics: [...p.relics],
         hp: p.hp, maxHp: p.maxHp, bonusAtk: p.bonusAtk, rerolls: p.rerolls || 0,
+        sub: p.subSkill || null, shrineSeen: this._shrineSeen || 0,
         floorAtk: p.floorAtk || 0, reviveUsed: !!p.reviveUsed,
       }));
     } catch (e) { /* 저장 실패는 게임을 막지 않는다 */ }
@@ -137,6 +138,7 @@ const Game = {
     // 스칼라는 저장값이 진실 (기연·제단·상점의 흔적 포함)
     p.maxHp = s.maxHp; p.hp = s.hp; p.bonusAtk = s.bonusAtk;
     p.rerolls = s.rerolls; p.floorAtk = s.floorAtk; p.reviveUsed = s.reviveUsed;
+    p.subSkill = s.sub || null; this._shrineSeen = s.shrineSeen || 0;
     Dungeon.floor = s.floor; Dungeon.roomIndex = s.roomIndex;
     Dungeon.tookTreasure = s.took.t; Dungeon.tookCamp = s.took.c; Dungeon.tookEvent = s.took.e;
     Dungeon.tookSiege = s.took.s; Dungeon.tookMerchant = s.took.m; Dungeon.trialSeen = s.took.tr;
@@ -174,6 +176,8 @@ const Game = {
     this._roomMod = null;
     this.endless = false;
     this.act2 = false;
+    this._shrineSeen = 0;
+    this._subChoice = false;
     this.shardsPaid = 0;
     this.killsPaid = 0;
     this.shardsEarned = 0;
@@ -280,6 +284,15 @@ const Game = {
         this.interactables.push({ kind: 'chest', x: gs.x, y: gs.y, r: 24, used: false, t: 0 });
       }
       this.banner = { text: `⚠ ${this._roomMod.label}`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
+    }
+
+
+    // 스킬 사당 (P1): 5·15·25층의 첫 방에 무조건 선다 — 문 선택과 무관하게 킷이 자란다
+    if ([5, 15, 25].includes(Dungeon.floor) && Dungeon.roomIndex === 1 && this._shrineSeen !== Dungeon.floor) {
+      this._shrineSeen = Dungeon.floor;
+      const sc = World.safeSpot(World.center().x, World.center().y - 90);
+      this.interactables.push({ kind: 'skillShrine', x: sc.x, y: sc.y, r: 30, used: false, t: 0 });
+      this.banner = { text: '스킬 사당이 빛난다 — 다가가서 보조 스킬을 고르자 (E키로 사용)', life: 3.0, maxLife: 3.0, color: '#c9d94a' };
     }
 
     if (type === 'combat') {
@@ -444,7 +457,7 @@ const Game = {
     if (this.state === 'levelup') {
       this.choiceLockT -= dt;
       // 환생 각인: E — 카드 다시 뽑기
-      if (Input.pressed('KeyE') && this.player.rerolls > 0) {
+      if (Input.pressed('KeyE') && this.player.rerolls > 0 && !this._subChoice) {
         this.player.rerolls--;
         this.traitCards = rollTraitCards(this.player, this.traitCards.length);
         this.choiceLockT = 0.3;

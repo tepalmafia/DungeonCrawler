@@ -316,7 +316,19 @@ const GamePlay = {
       const z = this.zones[i];
       z.life -= dt;
       if (z.life <= 0) { this.zones.splice(i, 1); continue; }
-      if (z.kind === 'poison' || z.kind === 'fire') {
+      if (z.kind === 'smoke') {
+        // 연막 (연금 보조 스킬): 피해 없음 — 안의 적을 크게 둔화 (지속 갱신)
+        z.tickT -= dt;
+        if (z.tickT <= 0) {
+          z.tickT = 0.4;
+          for (const e of this.enemies) {
+            if (e.dead || e.phased) continue;
+            if (Math.hypot(e.x - z.x, e.y - z.y) < z.r + e.r) {
+              e.status.shock = Math.max(e.status.shock, 1.0);
+            }
+          }
+        }
+      } else if (z.kind === 'poison' || z.kind === 'fire') {
         z.tickT -= dt;
         if (z.tickT <= 0) {
           z.tickT = 0.8;
@@ -721,6 +733,11 @@ const GamePlay = {
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
           for (const o of this.interactables) if (o.kind === 'whetstone') o.used = true; // 양자택일
+        } else if (it.kind === 'skillShrine') {
+          // 스킬 사당 (P1): 보조 스킬 3택1 — 액티브 킷이 런 중간에 자란다
+          AudioSys.levelup();
+          Particles.burst(it.x, it.y - 10, { count: 16, colors: ['#c9d94a', '#5ce0e6', '#ffd866'], speed: 130, life: 0.5, size: 3 });
+          this.openSubSkillChoice();
         } else if (it.kind === 'whetstone') {
           // 담금질: 이번 층 동안 공격력 +1 (풀피일 때 모닥불의 가치)
           p.floorAtk = (p.floorAtk || 0) + 1;

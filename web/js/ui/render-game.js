@@ -225,6 +225,32 @@ const GameRender = {
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('HP 2 → 공격력 +1', it.x, it.y - 30);
         }
+      } else if (it.kind === 'skillShrine') {
+        // 스킬 사당: 세 갈래 빛기둥 제단 — 보조 스킬 3택1
+        ctx.fillStyle = '#3d3d52';
+        ctx.fillRect(it.x - 18, it.y - 2, 36, 14);
+        ctx.fillStyle = '#5e5e74';
+        ctx.fillRect(it.x - 13, it.y - 12, 26, 12);
+        if (!it.used) {
+          for (let k = -1; k <= 1; k++) {
+            ctx.globalAlpha = 0.5 + Math.sin(it.t * 3 + k) * 0.25;
+            ctx.fillStyle = ['#c9d94a', '#5ce0e6', '#ffd866'][k + 1];
+            ctx.fillRect(it.x + k * 9 - 1.5, it.y - 34 + Math.sin(it.t * 2 + k * 2) * 3, 3, 20);
+          }
+          ctx.globalAlpha = 1;
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#c9d94a';
+          ctx.fillText('스킬 사당', it.x, it.y - 46);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('보조 스킬 3택1 (E키 사용)', it.x, it.y - 32);
+        } else {
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#5e5e74';
+          ctx.fillRect(it.x - 1.5, it.y - 28, 3, 16);
+          ctx.globalAlpha = 1;
+        }
       } else if (it.kind === 'camp') {
         ctx.fillStyle = '#5e3a26';
         ctx.save();

@@ -1,5 +1,30 @@
 // 플레이어 — 직업 3종 (검사: 근접 3연격 / 궁수: 화살 / 마도사: 유도 마탄).
 // 타격 판정(strike)은 공용: 크리·상태이상·시너지가 모든 직업에서 동일하게 작동한다.
+// 보조 스킬 (P1 슬롯 확장): 5·15·25층 '스킬 사당'에서 3택1 — E키.
+// "10층만 가도 할 게 없다" 해결의 1축: 액티브 킷이 런 중간에 자란다
+const SUBSKILLS = {
+  knight: [
+    { id: 'sh_bash', name: '방패 올려치기', cd: 5, desc: '전방의 적을 방패로 쳐올린다 — 피해 + 강넉백' },
+    { id: 'sh_execute', name: '처형 찌르기', cd: 8, desc: '돌진 찌르기 — 체력 30% 이하의 적은 그 자리에서 처형 (보스 제외)' },
+    { id: 'sh_warcry', name: '전장의 포효', cd: 10, desc: '주변 적을 밀쳐내며 위축시킨다(둔화) — 자신은 잠시 무적' },
+  ],
+  archer: [
+    { id: 'ar_trap', name: '올가미 덫', cd: 6, desc: '발밑에 덫 — 밟은 적은 감전 + 피해 (8초 유지)' },
+    { id: 'ar_tumble', name: '텀블링 사격', cd: 5, desc: '뒤로 구르며(무적) 전방 3연발 부채꼴 사격' },
+    { id: 'ar_volley', name: '관통 일제사', cd: 7, desc: '일직선을 꿰뚫는 강력한 관통 화살' },
+  ],
+  mage: [
+    { id: 'mg_blink', name: '점멸', cd: 6, desc: '조준 방향으로 순간이동 — 출발점이 폭발한다' },
+    { id: 'mg_nova', name: '서리 고리', cd: 7, desc: '주변을 얼려 피해 + 둔화' },
+    { id: 'mg_lance', name: '마력 창', cd: 6, desc: '전방 일직선 관통 창 — 큰 피해 + 감전' },
+  ],
+  alch: [
+    { id: 'al_smoke', name: '연막 플라스크', cd: 8, desc: '연막 지대 — 안의 적이 크게 둔화된다 (3초)' },
+    { id: 'al_spray', name: '강산 살포', cd: 6, desc: '전방 부채꼴 산성 — 피해 + 중독 + 장갑 부식' },
+    { id: 'al_tonic', name: '응급 조제', cd: 12, desc: 'HP 1 회복 + 3초간 이동 가속' },
+  ],
+};
+
 function createPlayer(x, y, classId = 'knight') {
   const cls = CLASSES[classId] || CLASSES.knight;
   return {
@@ -46,6 +71,9 @@ function createPlayer(x, y, classId = 'knight') {
     // 직업 스킬 (K / 우클릭): 검사 회전 베기 / 궁수 화살비 / 마도사 메테오
     skillCd: 0,
     skillCdMul: 1,
+    subSkill: null, // 보조 스킬 id (스킬 사당에서 획득)
+    subCd: 0,
+    tonicT: 0, // 응급 조제 이속 버프
     spinT: 0, // 회전 베기 연출
     skillEvolved: false, // 스킬 진화 발동됨 (회오리 베기/화살 폭풍/쌍둥이 메테오)
     evoReady: false,     // 직업 특성 3장 수집 완료 — Lv.12 도달 시 진화 (rewards.checkEvolution)
@@ -99,6 +127,180 @@ function createPlayer(x, y, classId = 'knight') {
       const t = this.autoTarget(game);
       if (t) return { x: t.x, y: t.y };
       return { x: this.x + this.facing.x * 180, y: this.y + this.facing.y * 180 };
+    },
+
+    subSkillDef() {
+      return (SUBSKILLS[this.classId] || []).find((x) => x.id === this.subSkill) || null;
+    },
+
+    useSubSkill(game) {
+      const def = this.subSkillDef();
+      if (!def) return;
+      this.subCd = def.cd;
+      this.attackPoseT = 0.18;
+      const dir = { ...this.facing };
+      const atk = this.currentAtk();
+      const cone = (r, arc, fn) => {
+        const base = Math.atan2(dir.y, dir.x);
+        for (const e of game.enemies) {
+          if (e.dead || e.phased) continue;
+          const dx = e.x - this.x, dy = e.y - this.y;
+          const d = Math.hypot(dx, dy);
+          if (d > r + e.r) continue;
+          let diff = Math.atan2(dy, dx) - base;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          if (Math.abs(diff) > arc / 2) continue;
+          fn(e, { x: dx / (d || 1), y: dy / (d || 1) }, d);
+        }
+      };
+      switch (def.id) {
+        case 'sh_bash': { // 방패 올려치기 — 전방 강넉백
+          cone(110, 1.9, (e, hd) => game.hitEnemy(e, atk * 2, hd, { kb: 430 }));
+          Renderer.shake(4, 0.18);
+          Particles.ring(this.x + dir.x * 40, this.y + dir.y * 40, { r0: 12, r1: 70, life: 0.25, color: '#c8d4e4', width: 4 });
+          AudioSys.clank();
+          break;
+        }
+        case 'sh_execute': { // 처형 찌르기 — 돌진 경로의 적을 꿰뚫는다 (캡슐 판정)
+          this.invuln = Math.max(this.invuln, 0.3);
+          const ox = this.x, oy = this.y;
+          World.moveEntity(this, dir.x * 110, dir.y * 110);
+          for (const e of game.enemies) {
+            if (e.dead || e.phased) continue;
+            const dx = e.x - ox, dy = e.y - oy;
+            const t = dx * dir.x + dy * dir.y;
+            if (t < -20 || t > 150) continue;
+            const perp = Math.abs(dx * -dir.y + dy * dir.x);
+            if (perp > 42 + e.r) continue;
+            if (!e.isBoss && !e.isMini && e.hp <= e.maxHp * 0.3) {
+              game.hitEnemy(e, 9999, dir, { kb: 0, crit: true });
+              Particles.text(e.x, e.y - 24, '처형!', { color: '#e43b44', size: 15 });
+            } else {
+              game.hitEnemy(e, atk * 2, dir, { kb: 220 });
+            }
+          }
+          Particles.burst(this.x, this.y, { count: 10, colors: ['#c8d4e4', '#e43b44'], speed: 140, life: 0.3, size: 3 });
+          AudioSys.slash();
+          break;
+        }
+        case 'sh_warcry': { // 전장의 포효 — 밀쳐내기 + 위축
+          this.invuln = Math.max(this.invuln, 0.8);
+          for (const e of game.enemies) {
+            if (e.dead || e.phased || e.neutral) continue;
+            const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy) || 1;
+            if (d > 150 + e.r) continue;
+            e.kbx = (dx / d) * 320; e.kby = (dy / d) * 320;
+            e.status.shock = Math.max(e.status.shock, 2);
+          }
+          Particles.ring(this.x, this.y, { r0: 16, r1: 150, life: 0.4, color: '#e43b44', width: 5 });
+          Renderer.shake(5, 0.25);
+          AudioSys.roar();
+          break;
+        }
+        case 'ar_trap': { // 올가미 덫 — 기본 존(1회 감전+피해) 재사용
+          game.zones.push({ x: this.x, y: this.y, r: 30, life: 8, hit: new Set() });
+          Particles.ring(this.x, this.y, { r0: 6, r1: 30, life: 0.3, color: '#8a5a3a', width: 3 });
+          AudioSys.pickup();
+          break;
+        }
+        case 'ar_tumble': { // 텀블링 사격 — 후방 구르기 + 3연발
+          this.invuln = Math.max(this.invuln, 0.45);
+          World.moveEntity(this, -dir.x * 95, -dir.y * 95);
+          const base = Math.atan2(dir.y, dir.x);
+          for (const off of [-0.18, 0, 0.18]) {
+            const d2 = { x: Math.cos(base + off), y: Math.sin(base + off) };
+            game.pbolts.push({
+              kind: 'parrow', x: this.x + d2.x * 14, y: this.y + d2.y * 14,
+              dir: d2, speed: 500, finisher: false, pierce: false, life: 1.1, hit: new Set(), bounces: 0,
+            });
+          }
+          AudioSys.bow(true);
+          break;
+        }
+        case 'ar_volley': { // 관통 일제사 — 마무리급 관통 화살
+          game.pbolts.push({
+            kind: 'parrow', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
+            dir, speed: 620, finisher: true, pierce: true, life: 1.3, hit: new Set(), bounces: 0,
+          });
+          Renderer.shake(2, 0.1);
+          AudioSys.bow(true);
+          break;
+        }
+        case 'mg_blink': { // 점멸 — 출발점 폭발
+          const ox = this.x, oy = this.y;
+          const nx = this.x + dir.x * 150, ny = this.y + dir.y * 150;
+          if (!World.isSolidAt(nx, ny)) { this.x = nx; this.y = ny; }
+          this.invuln = Math.max(this.invuln, 0.35);
+          for (const e of game.enemies) {
+            if (e.dead || e.phased) continue;
+            const dx = e.x - ox, dy = e.y - oy, d = Math.hypot(dx, dy);
+            if (d < 75 + e.r) game.hitEnemy(e, atk * 2, { x: dx / (d || 1), y: dy / (d || 1) }, { kb: 200 });
+          }
+          Particles.burst(ox, oy, { count: 14, colors: ['#c56cf0', '#8a5ac2'], speed: 170, life: 0.35, size: 3 });
+          Particles.burst(this.x, this.y, { count: 8, colors: ['#c56cf0', '#e8e8f0'], speed: 90, life: 0.3, size: 3 });
+          AudioSys.dash();
+          break;
+        }
+        case 'mg_nova': { // 서리 고리
+          for (const e of game.enemies) {
+            if (e.dead || e.phased) continue;
+            const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy);
+            if (d > 130 + e.r) continue;
+            game.hitEnemy(e, atk * 2, { x: dx / (d || 1), y: dy / (d || 1) }, { kb: 180 });
+            e.status.shock = Math.max(e.status.shock, 2.5);
+          }
+          Particles.ring(this.x, this.y, { r0: 14, r1: 130, life: 0.35, color: '#a8d8ee', width: 5 });
+          AudioSys.clank();
+          break;
+        }
+        case 'mg_lance': { // 마력 창 — 일직선 관통
+          const len = 270, wid = 36;
+          for (const e of game.enemies) {
+            if (e.dead || e.phased) continue;
+            const dx = e.x - this.x, dy = e.y - this.y;
+            const t = dx * dir.x + dy * dir.y;
+            if (t < 0 || t > len) continue;
+            const perp = Math.abs(dx * -dir.y + dy * dir.x);
+            if (perp > wid + e.r) continue;
+            game.hitEnemy(e, atk * 3, dir, { kb: 170 });
+            e.status.shock = Math.max(e.status.shock, 1.5);
+          }
+          for (let i = 0; i < 9; i++) {
+            Particles.burst(this.x + dir.x * (20 + i * 28), this.y + dir.y * (20 + i * 28), {
+              count: 2, colors: ['#c56cf0', '#5ce0e6'], speed: 40, life: 0.25, size: 3,
+            });
+          }
+          Renderer.shake(3, 0.12);
+          AudioSys.bolt(true);
+          break;
+        }
+        case 'al_smoke': { // 연막 플라스크
+          game.zones.push({ x: this.x + dir.x * 60, y: this.y + dir.y * 60, r: 90, life: 3.2, kind: 'smoke', tickT: 0 });
+          AudioSys.bolt(false);
+          break;
+        }
+        case 'al_spray': { // 강산 살포 — 중독 + 장갑 부식
+          cone(120, 1.8, (e, hd) => {
+            game.hitEnemy(e, atk, hd, { kb: 120 });
+            e.status.poison = Math.max(e.status.poison, 4);
+            if (e.armorCap) { e.armorCap = 0; Particles.text(e.x, e.y - 22, '부식!', { color: '#c9d94a', size: 12 }); }
+          });
+          Particles.burst(this.x + dir.x * 50, this.y + dir.y * 50, { count: 16, colors: ['#c9d94a', '#6ada8a'], speed: 150, life: 0.4, size: 3 });
+          AudioSys.shoot();
+          break;
+        }
+        case 'al_tonic': { // 응급 조제
+          if (this.hp < this.maxHp) {
+            this.hp++;
+            Particles.text(this.x, this.y - 26, '+1', { color: '#e43b44', size: 15 });
+          }
+          this.tonicT = 3;
+          Particles.burst(this.x, this.y - 10, { count: 10, colors: ['#c9d94a', '#a7f070'], speed: 80, life: 0.4, size: 3, gravity: -100 });
+          AudioSys.pickup();
+          break;
+        }
+      }
     },
 
     useSkill(game) {
@@ -193,6 +395,8 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.attackCd > 0) this.attackCd -= dt;
       if (this.attackPoseT > 0) this.attackPoseT -= dt;
       if (this.hurtPoseT > 0) this.hurtPoseT -= dt;
+      if (this.subCd > 0) this.subCd -= dt;
+      if (this.tonicT > 0) this.tonicT -= dt;
       if (this.skillCd > 0) {
         this.skillCd -= dt;
         if (this.skillCd <= 0) {
@@ -315,7 +519,7 @@ function createPlayer(x, y, classId = 'knight') {
           }
         }
       } else if (len > 0) {
-        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1);
+        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1);
         World.moveEntity(this, mx * spd * dt, my * spd * dt);
       }
 
@@ -331,6 +535,9 @@ function createPlayer(x, y, classId = 'knight') {
       }
 
       // 스킬 (K / 우클릭)
+      if (Input.pressed('KeyE') && this.subSkill && this.subCd <= 0 && this.dashTimer <= 0) {
+        this.useSubSkill(game);
+      }
       if ((Input.pressed('KeyK') || Input.mouse.rightJustDown) && this.skillCd <= 0 && this.dashTimer <= 0) {
         this.useSkill(game);
       }
