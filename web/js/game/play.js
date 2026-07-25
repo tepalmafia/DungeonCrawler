@@ -614,7 +614,7 @@ const GamePlay = {
       if (it.used) continue;
       if (Math.hypot(p.x - it.x, p.y - it.y) < p.r + it.r) {
         // ── 상인 판매대 (G1): 골드가 모자라면 사지 못한다 — 소비되지 않고 남는다 ──
-        if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll') {
+        if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll' || it.kind === 'shopShards') {
           if (this.gold < it.price) {
             if (!it._hintT || it.t > it._hintT) {
               it._hintT = it.t + 1.2;
@@ -643,6 +643,10 @@ const GamePlay = {
           } else if (it.kind === 'shopReroll') {
             p.rerolls = (p.rerolls || 0) + 1;
             Particles.text(p.x, p.y - 28, '리롤 +1 (E)', { color: '#2ec4b6', size: 14 });
+          } else if (it.kind === 'shopShards') {
+            // 파편 주머니: 잉여 골드 → 메타 화폐 (죽으면 사라질 골드에 마지막 쓸모)
+            Meta.data.shards += it.shards; Meta.save();
+            Particles.text(p.x, p.y - 28, `◆ +${it.shards}`, { color: '#2ec4b6', size: 15 });
           }
           continue;
         }

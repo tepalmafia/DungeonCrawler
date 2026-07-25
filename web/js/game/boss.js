@@ -37,7 +37,9 @@ const BOSS_DEFS = {
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
     p1: ['charge', 'ring'],
-    p2: ['charge', 'fan:rock', 'ring', 'charge'],
+    // 매트릭스 계측: 열기0 3층 사망 스파이크(9·8·11회, 검사·궁수 공통)가 바르곤전 귀속 —
+    // 2페이즈 이중 돌진이 링과 겹쳐 저HP 직업 연쇄 사망. 이중 돌진은 8층 절망의 바르곤부터
+    p2: ['charge', 'fan:rock', 'ring'],
     rageText: '바르곤의 사슬이 풀렸다!',
     intro: '죄수는 이 문을 나갈 수 없다.', outro: '사슬이… 드디어 풀렸군…',
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
