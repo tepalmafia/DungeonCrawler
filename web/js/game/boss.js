@@ -11,7 +11,7 @@
 
 const BOSS_DEFS = {
   1: {
-    name: '무덤지기 카론', sprite: 'boss', scale: 1, r: 26, hp: 95, speed: 42,
+    name: '무덤지기 카론', sprite: 'boss', scale: 1.35, r: 26, hp: 95, speed: 42,
     banner: '무덤지기 카론',
     p1: ['sweep', 'fan:soul'],
     p2: ['sweep', 'fan:soul', 'curse'],
@@ -20,7 +20,7 @@ const BOSS_DEFS = {
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
-    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 190, speed: 34, // 계측: 2층 사망이 전체의 절반 — 전투 길이 단축
+    name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.45, r: 32, hp: 190, speed: 34, // 계측: 2층 사망이 전체의 절반 — 전투 길이 단축
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '포자왕 믹서스',
     // 분산 귀속 (열기5): 보스방 사망의 60%가 소환수(독슬라임 독구름 r52 + 버섯 근접 포자) —
@@ -33,7 +33,7 @@ const BOSS_DEFS = {
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
   },
   3: {
-    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.1, r: 33, hp: 190, speed: 30,
+    name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.5, r: 33, hp: 190, speed: 30,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
     p1: ['charge', 'ring'],
@@ -43,7 +43,7 @@ const BOSS_DEFS = {
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
-    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.2, r: 30, hp: 430, speed: 44,
+    name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.55, r: 30, hp: 430, speed: 44,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '용암 심장 이그니스',
     p1: ['fan:fire', 'charge:trail'],
@@ -53,7 +53,7 @@ const BOSS_DEFS = {
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
-    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.4, r: 28, hp: 700, speed: 50,
+    name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.75, r: 28, hp: 700, speed: 50,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라' },
     banner: '심연의 군주 눅스',
     p1: ['sweep', 'fan:soul', 'ring'],
@@ -64,7 +64,7 @@ const BOSS_DEFS = {
   },
   // ── 6~10층 각성 보스: 같은 존재의 심층 강화판 (기믹 강화 + 패턴 확장) ──
   6: {
-    awakened: true, name: '원혼 카론', sprite: 'bossWraith', scale: 1.2, r: 26, hp: 550, speed: 48,
+    awakened: true, name: '원혼 카론', sprite: 'bossWraith', scale: 1.6, r: 26, hp: 550, speed: 48,
     banner: '원혼 카론',
     p1: ['sweep', 'spiral:soul', 'curse'],
     p2: ['sweep', 'spiral:soul', 'curse', 'summon:boneHeap', 'spiral:soul'],
@@ -73,7 +73,7 @@ const BOSS_DEFS = {
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
   },
   7: {
-    awakened: true, name: '역병왕 믹서스', sprite: 'bossPlague', scale: 1.2, r: 32, hp: 680, speed: 38,
+    awakened: true, name: '역병왕 믹서스', sprite: 'bossPlague', scale: 1.6, r: 32, hp: 680, speed: 38,
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '역병왕 믹서스',
     p1: ['fan:spore', 'ring', 'summon:sporePuff', 'geyser:poison'],
@@ -83,7 +83,7 @@ const BOSS_DEFS = {
     deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
   },
   8: {
-    awakened: true, name: '절망의 바르곤', sprite: 'bossDespair', scale: 1.2, r: 33, hp: 650, speed: 34,
+    awakened: true, name: '절망의 바르곤', sprite: 'bossDespair', scale: 1.65, r: 33, hp: 650, speed: 34,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '절망의 바르곤',
     p1: ['charge', 'snare', 'fan:rock', 'ring'],
@@ -93,7 +93,7 @@ const BOSS_DEFS = {
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
   },
   9: {
-    awakened: true, name: '겁화의 이그니스', sprite: 'bossInferno', scale: 1.3, r: 30, hp: 850, speed: 48,
+    awakened: true, name: '겁화의 이그니스', sprite: 'bossInferno', scale: 1.7, r: 30, hp: 850, speed: 48,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '겁화의 이그니스',
     p1: ['fan:fire', 'charge:trail', 'geyser:fire'],
@@ -103,7 +103,7 @@ const BOSS_DEFS = {
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
   },
   10: {
-    awakened: true, name: '진 심연의 군주 눅스', sprite: 'bossVoid', scale: 1.6, r: 30, hp: 1300, speed: 54,
+    awakened: true, name: '진 심연의 군주 눅스', sprite: 'bossVoid', scale: 1.95, r: 30, hp: 1300, speed: 54,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라', veils: [0.75, 0.5, 0.25] },
     banner: '진 심연의 군주 눅스',
     p1: ['sweep', 'spiral:soul', 'ring', 'curse'],
@@ -593,16 +593,46 @@ function createBoss(floor, x, y) {
 
       const bob = Math.sin(this.animT * 2.2) * 4;
       const img = this.flash > 0 ? Sprites.white(Sprites[this.def.sprite]) : Sprites[this.def.sprite];
+
+      // ── 위압감 연출: 고동치는 오라 (2페이즈·맹공에서 격화) ──
+      {
+        const rage = (this.phase >= 2 ? 1 : 0) + (this._onslaught ? 1 : 0);
+        const auraC = (this.def.deathPalette && this.def.deathPalette[0]) || '#e43b44';
+        const pulse = 0.5 + Math.sin(this.animT * (2.5 + rage * 2)) * 0.5;
+        ctx.save();
+        // 바깥 어둠 — 보스 주변이 한 톤 가라앉는다
+        ctx.globalAlpha = 0.16 + rage * 0.05;
+        const rg = ctx.createRadialGradient(this.x, this.y, this.r * 0.6, this.x, this.y, this.r * (2.6 + pulse * 0.4));
+        rg.addColorStop(0, 'rgba(0,0,0,0)');
+        rg.addColorStop(0.55, 'rgba(0,0,0,0.5)');
+        rg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.r * 3.1, 0, Math.PI * 2); ctx.fill();
+        // 안쪽 위협색 링
+        ctx.globalAlpha = (0.14 + pulse * 0.1) * (1 + rage * 0.6);
+        ctx.strokeStyle = auraC;
+        ctx.lineWidth = 2 + pulse * 2 + rage;
+        ctx.beginPath(); ctx.arc(this.x, this.y + 4, this.r * (1.5 + pulse * 0.18), 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        // 피어오르는 기운 입자 (파티클 상한 배려해 낮은 빈도)
+        if (Math.random() < 0.10 + rage * 0.10) {
+          Particles.burst(this.x + (Math.random() - 0.5) * this.r * 2, this.y + this.r * 0.5, {
+            count: 1, colors: this.def.deathPalette || [auraC], speed: 30, life: 0.7, size: 3, gravity: -110,
+          });
+        }
+      }
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
-      ctx.ellipse(this.x, this.y + this.r + 8, this.r * 1.05, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(this.x, this.y + this.r + 8, this.r * 1.3, 9, 0, 0, Math.PI * 2);
       ctx.fill();
       const shakeX = this.state === 'windup' && this.attack?.kind === 'charge' ? (Math.random() - 0.5) * 5 : 0;
+      // 호흡 애니메이션 — 거대한 것이 숨쉬는 리듬 (2페이즈는 가쁘게)
+      const breath = Math.sin(this.animT * (this.phase >= 2 ? 3.6 : 1.8)) * 0.035;
       Renderer.drawSprite(img, this.x + shakeX, this.y - bob, {
         flip: this.flip,
         alpha: this.phased ? 0.35 : 1,
-        squashX: this.def.scale,
-        squashY: this.def.scale,
+        squashX: this.def.scale * (1 - breath),
+        squashY: this.def.scale * (1 + breath),
       });
     },
   };
