@@ -577,7 +577,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if ((this.stateT > 1.6 && d < 150) || this.stateT > 3.4) {
             this.phased = false;
             this.stateT = 0;
-            this.windT = 0.38; // 실체화 예고 — 이 사이에 벗어날 수 있다
+            this.windT = 0.45; // 실체화 예고 — 이 사이에 벗어날 수 있다
             Particles.burst(this.x, this.y, { count: 8, colors: ['#a9c1d8', '#5d6b84'], speed: 70, life: 0.35, size: 3 });
           }
         } else if (this.windT > 0) {
@@ -1153,7 +1153,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed() * (0.7 + Math.abs(Math.sin(this.animT * 7)) * 0.6); // 꿈틀꿈틀
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 거리 응답: 중거리에선 도약으로 간격을 접는다
-          if (this.springCd <= 0 && d > 90 && d < 190) { this.coilT = 0.35; this.springCd = 2.6; }
+          if (this.springCd <= 0 && d > 90 && d < 190) { this.coilT = 0.42; this.springCd = 3.0; }
         }
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
         if (this.hitCd <= 0 && d < p.r + this.r) {
@@ -1861,7 +1861,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         } else {
           const wig = Math.sin(this.animT * 9) * 0.5;
           World.moveEntity(this, (dx / d + -dy / d * wig) * this.effSpeed() * dt, (dy / d + dx / d * wig) * this.effSpeed() * dt);
-          if (this.flareCd <= 0 && d > 190) { this.flareT = 0.3; this.flareCd = 3.8; }
+          if (this.flareCd <= 0 && d > 190) { this.flareT = 0.38; this.flareCd = 3.8; }
         }
         if (Math.random() < 0.15) {
           Particles.burst(this.x, this.y, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 30, life: 0.3, size: 2, gravity: -100 });
@@ -2108,7 +2108,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const wd = Math.hypot(this.wx, this.wy) || 1;
           World.moveEntity(this, (this.wx / wd) * this.effSpeed() * dt, (this.wy / wd) * this.effSpeed() * dt);
           // 거리 응답: 중거리에서 정지 조준 후 급습
-          if (this.dartCd <= 0 && d > 130 && d < 260) { this.aimT = 0.3; this.dartCd = 3.2; }
+          if (this.dartCd <= 0 && d > 130 && d < 260) { this.aimT = 0.38; this.dartCd = 3.2; }
         }
         const ph = p.hp;
         this.touchPlayer(game, 1);
