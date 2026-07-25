@@ -496,7 +496,7 @@ const HUD = {
                     Input.mouse.y >= lr.y && Input.mouse.y <= lr.y + lr.h;
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = cls.color;
-      const heatStr = Meta.heatUnlocked() ? `  ·  열기 ${heat}` : '';
+      const heatStr = Meta.heatUnlocked() ? `  ·  현상금 ${heat}단계` : '';
       ctx.fillText(cls.name + heatStr, Renderer.W / 2, lr.y + 15);
       if (Meta.heatUnlocked() && heat > 0) {
         ctx.fillStyle = '#e43b44';
@@ -508,7 +508,7 @@ const HUD = {
       if (Meta.heatUnlocked()) {
         ctx.font = '10px monospace';
         ctx.fillStyle = hover || Game._pactEdit ? '#9aa0b4' : '#4a4a5c';
-        ctx.fillText(Game._pactEdit ? '서약을 골라 담아라 (다시 클릭해 닫기)' : '클릭: 서약 편집 · ←→ 열기 조절', Renderer.W / 2, lr.y + 30);
+        ctx.fillText(Game._pactEdit ? '현상금 조건을 골라 담아라 (다시 클릭해 닫기)' : '클릭: 현상금 편집 · ←→ 단계 조절', Renderer.W / 2, lr.y + 30);
       }
     }
 
@@ -552,7 +552,7 @@ const HUD = {
         ctx.font = 'bold 13px monospace';
         ctx.fillStyle = '#2ec4b6';
         ctx.textAlign = 'center';
-        ctx.fillText(`C — 이어하기  (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 열기 ' + rs.heat : ''})`, Renderer.W / 2, r.y + 18);
+        ctx.fillText(`C — 이어하기  (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 현상금 ' + rs.heat : ''})`, Renderer.W / 2, r.y + 18);
       }
     }
 
@@ -1114,7 +1114,7 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = '12px monospace';
     ctx.fillStyle = '#4a4a5c';
-    const heatStr = game.heat > 0 ? ` · 열기 ${game.heat}` : '';
+    const heatStr = game.heat > 0 ? ` · 현상금 ${game.heat}` : '';
     ctx.fillText(`시드 ${game.runSeed.toString(36).toUpperCase()}${heatStr} — ?seed=${game.runSeed.toString(36).toUpperCase()} 로 같은 던전 도전`, Renderer.W / 2, y);
   },
 
@@ -1202,7 +1202,7 @@ const HUD = {
     // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)
     const rows = [];
     rows.push({ f: '17px monospace', c: '#e8e0cf', y: 262, s: `Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · 특성 ${game.player.traits.length}장` });
-    const timeStr = `클리어 시간 ${(game.time / 60).toFixed(1)}분` + (game.heat > 0 ? ` · 열기 ${game.heat}` : '');
+    const timeStr = `클리어 시간 ${(game.time / 60).toFixed(1)}분` + (game.heat > 0 ? ` · 현상금 ${game.heat}` : '');
     rows.push({ f: '15px monospace', c: '#9aa0b4', y: 290, s: timeStr });
     if (game._newRecord) rows.push({ f: 'bold 15px monospace', c: '#5ce0e6', y: 314, s: '★ 최속 클리어 신기록!' });
     if (game.dailyRun) rows.push({ f: 'bold 14px monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '🗼 오늘의 탑 정복!' });
@@ -1304,7 +1304,7 @@ const HUD = {
         { h: '유물', t: '커먼~레전더리 — 보물상자와 보스가 준다' },
         { h: '도감', t: '몬스터 수집이 파편 보상으로 돌아온다 (거점 4번)' },
         { h: '비석의 맹세', t: '한(恨) 조각으로 영구 강화 (거점 2번)' },
-        { h: '열기 · 오늘의 탑', t: '정복 후 고난이도 해금(←→) · 거점 D 일일 도전' },
+        { h: '현상금 · 오늘의 탑', t: '1막 완수 후 해금(←→) — 왕이 네 목에 값을 건다 · 거점 D 일일 도전' },
         { h: '2막 · 무한 모드', t: '10층 정복 후 C — 2막 균사 정원(11~20층), 20층 정복 후 C — 심연 회랑' },
         { h: '보조 스킬', t: '5·15·25층 스킬 사당에서 3택1 획득 — E키로 사용' },
       ]);

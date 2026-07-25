@@ -39,7 +39,7 @@ const GameScreens = {
       Meta.data.bestFloor = 5;
       Meta.save();
       AudioSys.relic('epic');
-      this.banner = { text: '직업·열기 모드 해금!', life: 1.5, maxLife: 1.5 };
+      this.banner = { text: '망자·현상금 해금!', life: 1.5, maxLife: 1.5 };
     }
 
     if (this.state !== 'play') return;
