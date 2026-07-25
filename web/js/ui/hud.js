@@ -38,6 +38,19 @@ const HUD = {
     ctx.textAlign = 'left';
     ctx.fillText(`${p.skillName()} K`, 104, barY + 19);
 
+    // ── 궁극기 게이지 (R) — 10층 전리품 '처형 선고' ──
+    if (p.ult > 0) {
+      const ur = Math.max(0, Math.min(1, p.ultGauge / p.ultMax));
+      ctx.fillStyle = '#1c1c28';
+      ctx.fillRect(210, barY, 56, 6);
+      ctx.fillStyle = ur >= 1 ? '#e43b44' : '#5e1420';
+      ctx.fillRect(210, barY, 56 * ur, 6);
+      ctx.fillStyle = ur >= 1 ? '#e43b44' : '#666a80';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`처형 선고 R${p.ult >= 2 ? '+' : ''}`, 272, barY + 7);
+    }
+
     // ── 보조 스킬 쿨다운 (E) — 스킬 사당에서 획득 ──
     if (p.subSkill) {
       const sd = p.subSkillDef();
@@ -1307,6 +1320,7 @@ const HUD = {
         { h: '현상금 · 오늘의 탑', t: '1막 완수 후 해금(←→) — 왕이 네 목에 값을 건다 · 거점 D 일일 도전' },
         { h: '2막 · 왕도 가도', t: '1막 완수 후 C — 2막 다리와 관문(11~20층), 2막 완수 후 C — 왕도 가도' },
         { h: '보조 스킬', t: '5·15·25층 스킬 사당에서 3택1 획득 — E키로 사용' },
+        { h: '처형 선고', t: '10층 보스의 도끼를 빼앗아 획득 — 처치로 충전, R키로 집행 (20층에서 강화)' },
       ]);
     }
 

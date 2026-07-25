@@ -398,6 +398,10 @@ const Bot = {
         Bot.stats.skills++;
         this._skillT = 0;
       }
+      // 궁극기 (R): 가득 찼고 보스전이거나 3마리 이상 몰렸을 때
+      if (p.ult > 0 && p.ultGauge >= p.ultMax && (target.isBoss || near >= 3)) {
+        p.useUltimate(game);
+      }
       // 보조 스킬 (E): 쿨이 돌면 교전 중 아무 때나 — 응급 조제만 다쳤을 때
       if (p.subSkill && p.subCd <= 0 && p.dashTimer <= 0 && d < 280) {
         if (p.subSkill !== 'al_tonic' || p.hp < p.maxHp) {
