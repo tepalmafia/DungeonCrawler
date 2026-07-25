@@ -75,7 +75,7 @@ const GameScreens = {
       this.transition = { phase: 'out', t: 0, type: 'boss' };
     }
     if (Input.pressed('KeyN')) {
-      if (Dungeon.floor >= 10 && !this.endless) {
+      if (((Dungeon.floor === 10 && !this.act2) || Dungeon.floor >= 20) && !this.endless) {
         this.endRun(true);
         this.state = 'victory';
       } else {

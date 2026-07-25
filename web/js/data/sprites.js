@@ -1231,6 +1231,12 @@ const Sprites = (() => {
   sprites.venomLasher = make(GHOUL_ROWS, { g: '#3f6a35', G: '#6a9a48', d: '#2a4a24', r: '#c9d94a', m: '#1d3318', b: '#55702a' });
   sprites.sporeMother = make(MUSHROOM_ROWS, { m: '#a04a7a', M: '#e8b8d0', D: '#702a52', s: '#c9b89a', k: '#1a1c2c' });
   sprites.acidSlug = make(LEECH_ROWS, { r: '#6a7a1a', R: '#9aa82a', W: '#d8e858', k: '#141a06' });
+  // ── 2막 (11~20층, 균사 정원) 팔레트 스왑 ──
+  sprites.sporeling = make(SLIME_ROWS, { g: '#7ab848', a: '#c9d94a', G: '#4a7a2a', W: '#f0f8d0', k: '#1a1c2c' });
+  sprites.fungalTick = make(LEECH_ROWS, { r: '#4a6a2a', R: '#7a9a3a', W: '#c9d94a', k: '#141a06' });
+  sprites.myceliumBrute = make(GOLEM_ROWS, { g: '#5a7a4a', d: '#3a5230', k: '#c9d94a' });
+  sprites.rotWalker = make(GOLEM_ROWS, { g: '#6a5a3a', d: '#463a24', k: '#8adf76' });
+  sprites.glowShrieker = make(SHAMAN_ROWS, { t: '#3a7a5a', w: '#d0f0c0', k: '#8adf76', m: '#1d4a33', g: '#c9d94a' });
   sprites.warden = make(BRUTE_ROWS, { b: '#4a5a74', k: '#5ce0e6', m: '#2c3850', g: '#1d2836' });
   sprites.chainWraith = make(WRAITH_ROWS, { w: '#8a8a9a', k: '#16121f', m: '#4a3a3a', W: '#c05060' });
   sprites.frostGolem = make(GOLEM_ROWS, { g: '#5a9ac8', d: '#3a6a94', k: '#f0faff' });
@@ -1410,6 +1416,8 @@ const Sprites = (() => {
   sprites.bossDespair = make(BOSSGOLEM_ROWS, { g: '#383850', d: '#242438', G: '#5a5a7c', k: '#5ce0e6', c: '#6a6a8a' });
   sprites.bossInferno = make(BOSSIGNIS_ROWS, { o: '#ffd866', y: '#fff7d0', W: '#ffffff', r: '#d35400', k: '#7a1010' });
   sprites.bossVoid = make(BOSSABYSS_ROWS, { K: '#5c1e5e', c: '#e43b44', k: '#050308', w: '#e8d8f8', r: '#ff4757', m: '#8a1c8c', p: '#0e0716', q: '#c02040' });
+  // 2막 막보스: 균사 여왕 스포라 — 보랏빛 왕관 균사 + 산성빛 홀씨
+  sprites.bossQueen = make(BOSSSPORE_ROWS, { m: '#6a3aa2', M: '#c9b8e8', D: '#41246a', s: '#c9d94a', S: '#8aa832', k: '#132408', r: '#8adf76' });
 
   // ══════════════ 오브젝트 ══════════════
 

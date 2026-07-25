@@ -1116,15 +1116,17 @@ const HUD = {
       ctx.shadowColor = '#ffd866';
       ctx.shadowBlur = 14 + Math.sin(t * 3) * 8;
     }
-    ctx.fillText('심연의 탑 정복!', cx, ty);
+    ctx.fillText(game.act2 ? '2막 정복 — 정원이 시든다!' : '심연의 탑 1막 정복!', cx, ty);
     ctx.restore();
     if (t > 0.55) {
       ctx.font = 'bold 16px monospace';
       ctx.fillStyle = '#e43b44';
-      ctx.fillText('10층 — 진 심연의 군주 눅스가 소멸했다', cx, 208);
+      ctx.fillText(game.act2 ? '20층 — 균사 여왕 스포라가 뿌리째 시들었다' : '10층 — 진 심연의 군주 눅스가 소멸했다', cx, 208);
       ctx.font = 'italic 13px monospace';
       ctx.fillStyle = '#9a9ab8';
-      ctx.fillText('탑 꼭대기에 처음으로 빛이 스며든다. 심연은 침묵하지만 — 끝난 것은 아니다.', cx, 230);
+      ctx.fillText(game.act2
+        ? '정원 아래, 더 깊은 곳에서 열기가 올라온다. 대장간의 망치 소리가 들린다.'
+        : '탑의 뿌리가 드러났다. 지하 깊은 곳, 초록빛 정원이 숨쉬고 있다.', cx, 230);
     }
 
     // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)
@@ -1155,8 +1157,10 @@ const HUD = {
     }
     if (t > 1.6) {
       ctx.font = 'bold 16px monospace';
-      ctx.fillStyle = '#b13ae0';
-      ctx.fillText('C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)', cx, 462);
+      ctx.fillStyle = game.act2 ? '#b13ae0' : '#c9d94a';
+      ctx.fillText(game.act2
+        ? 'C — 심연 회랑으로 계속 (무한 모드: 빌드 유지, 끝없는 하강)'
+        : 'C — 2막 균사 정원으로 (빌드 유지, 11~20층: 새 몬스터와 여왕이 기다린다)', cx, 462);
     }
   },
 
@@ -1231,7 +1235,7 @@ const HUD = {
         { h: '도감', t: '몬스터 수집이 파편 보상으로 돌아온다 (거점 4번)' },
         { h: '기억의 제단', t: '영혼 파편으로 영구 강화 (거점 2번)' },
         { h: '열기 · 오늘의 탑', t: '정복 후 고난이도 해금(←→) · 거점 D 일일 도전' },
-        { h: '무한 모드', t: '10층 정복 후 C — 빌드 유지, 끝없는 하강' },
+        { h: '2막 · 무한 모드', t: '10층 정복 후 C — 2막 균사 정원(11~20층), 20층 정복 후 C — 심연 회랑' },
       ]);
     }
 
