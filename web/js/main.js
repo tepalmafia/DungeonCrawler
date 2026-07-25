@@ -97,6 +97,7 @@ const Game = {
         traits: [...p.traits], relics: [...p.relics],
         hp: p.hp, maxHp: p.maxHp, bonusAtk: p.bonusAtk, rerolls: p.rerolls || 0,
         sub: p.subSkill || null, shrineSeen: this._shrineSeen || 0,
+        ult: p.ult || 0, ultG: p.ultGauge || 0,
         floorAtk: p.floorAtk || 0, reviveUsed: !!p.reviveUsed,
       }));
     } catch (e) { /* 저장 실패는 게임을 막지 않는다 */ }
@@ -139,6 +140,7 @@ const Game = {
     p.maxHp = s.maxHp; p.hp = s.hp; p.bonusAtk = s.bonusAtk;
     p.rerolls = s.rerolls; p.floorAtk = s.floorAtk; p.reviveUsed = s.reviveUsed;
     p.subSkill = s.sub || null; this._shrineSeen = s.shrineSeen || 0;
+    p.ult = s.ult || 0; p.ultGauge = s.ultG || 0;
     Dungeon.floor = s.floor; Dungeon.roomIndex = s.roomIndex;
     Dungeon.tookTreasure = s.took.t; Dungeon.tookCamp = s.took.c; Dungeon.tookEvent = s.took.e;
     Dungeon.tookSiege = s.took.s; Dungeon.tookMerchant = s.took.m; Dungeon.trialSeen = s.took.tr;

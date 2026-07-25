@@ -88,6 +88,20 @@ const GameRewards = {
         this._storyQ.push({ text: `자백 확보 — 「${cc.name}」 (수집록 ${Meta.clueCount()}/${CLUES.length})`, color: '#f7b32b' });
       }
     }
+    // 궁극기 전리품 (P2): 처형인의 도끼를 빼앗는다 — 이제 선고는 내가 내린다
+    {
+      const p = this.player;
+      if (Dungeon.floor === 10 && p && p.ult < 1) {
+        p.ult = 1;
+        p.ultGauge = Math.round(p.ultMax * 0.6); // 첫 획득은 곧 써볼 수 있게 60% 충전
+        this._storyQ = this._storyQ || [];
+        this._storyQ.push({ text: '전리품 — 처형인의 도끼. 이제 선고는 내가 내린다 (R키: 처형 선고, 처치로 충전)', color: '#e43b44' });
+      } else if (Dungeon.floor === 20 && p && p.ult === 1) {
+        p.ult = 2;
+        this._storyQ = this._storyQ || [];
+        this._storyQ.push({ text: '사령관의 힘이 도끼에 스민다 — 처형 선고 강화 (피해 ↑, 집행 기준 40%)', color: '#e43b44' });
+      }
+    }
     // 1막 정점(10층, 2막 미진입 시)과 2막 정점(20층+)에서 승리 정산
     if (((Dungeon.floor === 10 && !this.act2) || Dungeon.floor >= 20) && !this.endless) {
       this.endRun(true);

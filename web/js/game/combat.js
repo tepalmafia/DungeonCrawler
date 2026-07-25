@@ -119,6 +119,17 @@ const GameCombat = {
       return;
     }
     this.kills++;
+    // 궁극기 게이지 (P2): 처치가 선고를 당긴다 — 잡몹 1 / 정예·우두머리 4 / 보스 10
+    {
+      const pu = this.player;
+      if (pu && pu.ult > 0 && pu.ultGauge < pu.ultMax) {
+        pu.ultGauge = Math.min(pu.ultMax, pu.ultGauge + (e.isBoss ? 10 : (e.elite || e.isMini) ? 4 : 1));
+        if (pu.ultGauge >= pu.ultMax) {
+          Particles.text(pu.x, pu.y - 34, '처형 선고 준비! (R)', { color: '#e43b44', size: 14 });
+          AudioSys.levelup();
+        }
+      }
+    }
     // 보스 도감 키: 1~10층은 층 그대로, 무한 모드는 순환 각성 보스(6~10)로 귀속
     Meta.codexKill(e.isBoss
       ? 'boss' + (Dungeon.floor <= 10 ? Dungeon.floor

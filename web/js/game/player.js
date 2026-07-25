@@ -74,6 +74,9 @@ function createPlayer(x, y, classId = 'knight') {
     subSkill: null, // 보조 스킬 id (스킬 사당에서 획득)
     subCd: 0,
     tonicT: 0, // 응급 조제 이속 버프
+    ult: 0,       // 궁극기 (P2): 0=없음 / 1=처형 선고(10층 보스 전리품) / 2=강화(20층)
+    ultGauge: 0,  // 처치로 충전 (잡몹 1 / 정예·우두머리 4 / 보스 10)
+    ultMax: 45,
     spinT: 0, // 회전 베기 연출
     skillEvolved: false, // 스킬 진화 발동됨 (회오리 베기/화살 폭풍/쌍둥이 메테오)
     evoReady: false,     // 직업 특성 3장 수집 완료 — Lv.12 도달 시 진화 (rewards.checkEvolution)
@@ -131,6 +134,39 @@ function createPlayer(x, y, classId = 'knight') {
 
     subSkillDef() {
       return (SUBSKILLS[this.classId] || []).find((x) => x.id === this.subSkill) || null;
+    },
+
+    // ── 궁극기 (P2): '처형 선고' — 무거운 손의 도끼를 빼앗아 그의 일을 대신한다.
+    // 게이지형(처치 충전): 쿨다운이 아니라 "잘 싸우면 빨리 온다". 2단(20층 로트가르)은 위력 강화
+    useUltimate(game) {
+      if (this.ult <= 0 || this.ultGauge < this.ultMax) return;
+      this.ultGauge = 0;
+      this.invuln = Math.max(this.invuln, 1.0);
+      this.attackPoseT = 0.3;
+      const mul = this.ult >= 2 ? 8 : 6;
+      const execTh = this.ult >= 2 ? 0.4 : 0.3;
+      const atk = this.currentAtk();
+      let executed = 0;
+      for (const e of game.enemies) {
+        if (e.dead || e.neutral) continue;
+        e.phased = false; // 선고 앞에서는 숨을 곳이 없다
+        const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy) || 1;
+        const dir = { x: dx / d, y: dy / d };
+        game.hitEnemy(e, atk * mul, dir, { kb: 300, crit: true });
+        if (!e.dead && !e.isBoss && !e.isMini && e.hp <= e.maxHp * execTh) {
+          game.hitEnemy(e, 9999, dir, { kb: 0 });
+          executed++;
+        }
+      }
+      // 연출: 처형의 종이 울린다 — 화면 전체가 핏빛으로
+      game.hurtFlash = 0.3;
+      Renderer.shake(9, 0.5);
+      Particles.ring(this.x, this.y, { r0: 20, r1: 320, life: 0.6, color: '#8a1c2c', width: 8 });
+      Particles.ring(this.x, this.y, { r0: 10, r1: 200, life: 0.45, color: '#e43b44', width: 5 });
+      Particles.text(this.x, this.y - 40, '처형 선고!', { color: '#e43b44', size: 22 });
+      if (executed > 0) Particles.text(this.x, this.y - 60, `${executed}명 집행`, { color: '#8a1c2c', size: 14 });
+      AudioSys.roar();
+      AudioSys.gameover?.();
     },
 
     useSubSkill(game) {
@@ -537,6 +573,9 @@ function createPlayer(x, y, classId = 'knight') {
       // 스킬 (K / 우클릭)
       if (Input.pressed('KeyE') && this.subSkill && this.subCd <= 0 && this.dashTimer <= 0) {
         this.useSubSkill(game);
+      }
+      if (Input.pressed('KeyR') && this.ult > 0 && this.ultGauge >= this.ultMax && this.dashTimer <= 0) {
+        this.useUltimate(game);
       }
       if ((Input.pressed('KeyK') || Input.mouse.rightJustDown) && this.skillCd <= 0 && this.dashTimer <= 0) {
         this.useSkill(game);
