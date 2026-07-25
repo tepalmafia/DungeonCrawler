@@ -67,31 +67,31 @@ const FLOOR_THEMES = {
     decals: ['skull', 'voidspeck', 'crack'],
   },
   // ── 2막: 균사 정원 (11~20층) — 초록·보랏빛 균사가 탑을 삼켰다 ──
-  11: { // 홀씨 들판
+  11: { // 안개 낀 강둑
     floor: ['#18241a', '#1a271c', '#152016', '#17231b'],
     wallBase: '#28422e', wallFace: '#39583e', wallDark: '#121e15', roof: '#0e1810',
     grade: 'rgba(120,200,80,0.07)', accent: '#c9d94a',
     decals: ['moss', 'spore', 'pebbles', 'puddle'],
   },
-  13: { // 발광 습지
+  13: { // 하수 수문
     floor: ['#12221e', '#142521', '#101e1a', '#132320'],
     wallBase: '#1e3a34', wallFace: '#2c5248', wallDark: '#0c1a16', roof: '#091411',
     grade: 'rgba(80,220,160,0.08)', accent: '#8adf76',
     decals: ['puddle', 'moss', 'spore'],
   },
-  15: { // 곰팡이 회랑
+  15: { // 관문 회랑
     floor: ['#1c2014', '#1f2316', '#181c11', '#1b1f15'],
     wallBase: '#303a22', wallFace: '#445230', wallDark: '#161a0e', roof: '#11140b',
     grade: 'rgba(160,180,60,0.07)', accent: '#c9d94a',
     decals: ['moss', 'crack', 'spore', 'pebbles'],
   },
-  17: { // 부패의 온상
+  17: { // 성벽 아래 오물길
     floor: ['#201a14', '#241d16', '#1c1711', '#221b15'],
     wallBase: '#38301e', wallFace: '#4e442c', wallDark: '#1a160d', roof: '#14110a'
     , grade: 'rgba(180,140,50,0.08)', accent: '#8adf76',
     decals: ['moss', 'bones', 'puddle', 'crack'],
   },
-  19: { // 여왕의 정원
+  19: { // 관문 광장
     floor: ['#1a1422', '#1d1626', '#16111d', '#191524'],
     wallBase: '#302246', wallFace: '#443264', wallDark: '#150e20', roof: '#100a19',
     grade: 'rgba(160,80,200,0.08)', accent: '#c9d94a',

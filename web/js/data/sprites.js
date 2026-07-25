@@ -1417,7 +1417,7 @@ const Sprites = (() => {
   sprites.bossInferno = make(BOSSIGNIS_ROWS, { o: '#ffd866', y: '#fff7d0', W: '#ffffff', r: '#d35400', k: '#7a1010' });
   sprites.bossVoid = make(BOSSABYSS_ROWS, { K: '#5c1e5e', c: '#e43b44', k: '#050308', w: '#e8d8f8', r: '#ff4757', m: '#8a1c8c', p: '#0e0716', q: '#c02040' });
   // 2막 막보스: 균사 여왕 스포라 — 보랏빛 왕관 균사 + 산성빛 홀씨
-  sprites.bossQueen = make(BOSSSPORE_ROWS, { m: '#6a3aa2', M: '#c9b8e8', D: '#41246a', s: '#c9d94a', S: '#8aa832', k: '#132408', r: '#8adf76' });
+  sprites.bossQueen = make(BOSSSPORE_ROWS, { m: '#4a5464', M: '#8a94a4', D: '#2e3644', s: '#8a1c2c', S: '#5e1420', k: '#14181e', r: '#c22030' });
 
   // ══════════════ 오브젝트 ══════════════
 

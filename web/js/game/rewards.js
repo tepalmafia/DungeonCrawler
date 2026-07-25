@@ -62,7 +62,7 @@ const GameRewards = {
     Dungeon.nextFloor();
   },
 
-  // 2막 진입 — 1막(10층) 승리 화면에서 C: 정산은 유지하고 균사 정원(11층)으로 내려간다
+  // 2막 진입 — 1막(10층) 승리 화면에서 C: 정산은 유지하고 다리와 관문(11층)으로 나아간다
   continueAct2() {
     this.act2 = true;
     this.runEnded = false;
@@ -70,7 +70,7 @@ const GameRewards = {
     this.killsPaid = this.kills;
     this.shardsEarned = 0;
     this.state = 'play';
-    this.banner = { text: '2막 — 균사 정원. 탑의 뿌리가 살아 숨쉰다', life: 2.8, maxLife: 2.8, color: '#c9d94a' };
+    this.banner = { text: '2막 — 다리와 관문. 안개 너머로 성벽이 보인다', life: 2.8, maxLife: 2.8, color: '#8a1c2c' };
     AudioSys.roar();
     Dungeon.nextFloor();
     this.saveRun(); // 2막도 이어하기 지원 — 진입 즉시 스냅샷

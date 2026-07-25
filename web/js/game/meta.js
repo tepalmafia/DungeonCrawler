@@ -135,11 +135,11 @@ const CODEX_ENEMIES = [
   { id: 'riftCaster',   name: '균열 심문관',     sprite: 'riftCaster',   desc: '주위에 균열을 열고 유도탄을 쏜다. 균열부터 피하라.' },
   { id: 'mirrorKnight', name: '왕실 거울기사',     sprite: 'mirrorKnight', desc: '은빛으로 빛나는 반격 자세가 끝나면 찌르기가 온다. 물러나라.' },
   // ── 2막: 균사 정원 (11~20층) ──
-  { id: 'sporeling',     name: '홀씨 새끼',     sprite: 'sporeling',     desc: '균사 정원의 파수꾼. 죽으면 홀씨 구름을 남긴다 — 시체 위를 걷지 마라.' },
-  { id: 'fungalTick',    name: '균사 진드기',   sprite: 'fungalTick',    desc: '몸을 말았다가 튕겨 날아든다. 말리는 순간 옆으로 비켜라.' },
-  { id: 'myceliumBrute', name: '균사 거한',     sprite: 'myceliumBrute', desc: '골렘의 뼈대에 균사가 피었다. 내려찍은 자리가 독으로 물든다.' },
-  { id: 'rotWalker',     name: '부패 보행자',   sprite: 'rotWalker',     desc: '걸음마다 땅이 썩는다. 멀리서 농성하면 홀씨를 뱉는다.' },
-  { id: 'glowShrieker',  name: '발광 절규자',   sprite: 'glowShrieker',  desc: '함성으로 무리를 가속시킨다. 부풀어 오르기 전에 목을 끊어라.' },
+  { id: 'sporeling',     name: '물에 불은 시체',     sprite: 'sporeling',     desc: '강에 버려진 처형자들이다. 죽으면 썩은 독기를 터뜨린다 — 시체 위를 걷지 마라.' },
+  { id: 'fungalTick',    name: '강거머리',   sprite: 'fungalTick',    desc: '다리 밑에서 배를 채워온 것. 몸을 말았다가 튕겨 날아든다.' },
+  { id: 'myceliumBrute', name: '관문 골렘',     sprite: 'myceliumBrute', desc: '관문을 지키던 골렘에 오물이 눌어붙었다. 내려찍은 자리가 썩는다.' },
+  { id: 'rotWalker',     name: '오물 보행자',   sprite: 'rotWalker',     desc: '하수구를 걸어온 자 — 걸음마다 땅이 썩고, 멀리서 농성하면 오물을 뱉는다.' },
+  { id: 'glowShrieker',  name: '관문 나팔수',   sprite: 'glowShrieker',  desc: '나팔로 토벌대를 가속시킨다. 나팔이 울리기 전에 목을 끊어라.' },
   { id: 'boss1', boss: true, name: '무덤지기 오스문드', sprite: 'boss',      desc: '죄인 묘지의 관리인 — 왕명으로 시체를 팔아왔다. 낫 연격과 원혼 부채꼴.' },
   { id: 'boss2', boss: true, name: '늪지기 몰귀',       sprite: 'bossSpore', desc: '2층의 주인. 부하가 살아있는 동안 재생한다 — 부하를 한꺼번에 쓸어담을 수단을 연구하라.' },
   { id: 'boss3', boss: true, name: '간수장 바르곤',     sprite: 'bossGolem', desc: '3층의 주인. 중장갑이 강한 일격을 경감한다 — 갑옷을 무시하고 스며드는 피해가 열쇠.' },
@@ -150,7 +150,7 @@ const CODEX_ENEMIES = [
   { id: 'boss8', boss: true, name: '절망의 바르곤',     sprite: 'bossDespair', desc: '8층의 주인. 사슬 올가미가 발을 묶는다 — 예고 원 밖으로.' },
   { id: 'boss9', boss: true, name: '화형 집행관 이그니스', sprite: 'bossInferno', desc: '9층의 주인. 백열하는 간헐천 연쇄 — 멈추는 순간 타오른다.' },
   { id: 'boss10', boss: true, name: "왕실 처형인 '무거운 손'", sprite: 'bossVoid',  desc: '탑의 진정한 정점. 세 겹의 어둠 장막과 공허 유충 — 모든 것을 건 최후의 시험.' },
-  { id: 'boss20', boss: true, name: '균사 여왕 스포라', sprite: 'bossQueen', desc: '2막의 주인. 정원 전체가 그녀의 몸이다 — 부하를 끊지 않으면 상처가 아문다.' },
+  { id: 'boss20', boss: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', desc: '2막의 주인. 검은 마차를 호위해온 자 — 군의관이 살아있는 한 상처가 아문다.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
