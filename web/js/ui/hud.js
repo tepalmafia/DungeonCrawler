@@ -1200,18 +1200,20 @@ const HUD = {
       ctx.shadowBlur = 14 + Math.sin(t * 3) * 8;
     }
     const act = game.act || 1;
-    const vTitle = { 1: '1막 완수 — 변경을 벗어났다', 2: '2막 돌파 — 관문이 열렸다!', 3: '3막 심판 — 재판소가 무너졌다!', 4: '4막 폭로 — 교회가 침묵을 잃었다!' };
+    const vTitle = { 1: '1막 완수 — 변경을 벗어났다', 2: '2막 돌파 — 관문이 열렸다!', 3: '3막 심판 — 재판소가 무너졌다!', 4: '4막 폭로 — 교회가 침묵을 잃었다!', 5: '복수 완수 — 왕좌가 비었다' };
     const vLine = {
       1: "10층 — 왕실 처형인 '무거운 손'이 쓰러졌다",
       2: "20층 — 관문 사령관 '철벽 로트가르'가 쓰러졌다",
       3: "30층 — 대재판관 '발디아 공작'이 쓰러졌다",
       4: "40층 — 대주교 '이노첸시오'가 쓰러졌다",
+      5: '50층 — 왕 바르텐 3세. 성배가 깨졌다',
     };
     const vSub = {
       1: '"명단은… 재판소가 아니라… 성에서 내려왔다…" — 첫 번째 자백을 얻었다.',
       2: '"마차 호위는… 명예였다… 안을 보기 전까지는…" — 왕도가 가까워진다.',
       3: '"성배가 마르면… 왕국이 마른다고 했다…" — 이제 교회다.',
       4: '"신의 이름으로… 우리가… 시작했다…" — 남은 것은 왕좌뿐.',
+      5: '성배가 깨지자 저주도 풀렸다. 깨어났던 자들이 하나둘, 편히 잠든다.',
     };
     ctx.fillText(vTitle[act] || `${act}막 완수`, cx, ty);
     ctx.restore();
@@ -1226,9 +1228,18 @@ const HUD = {
 
     // 기록 요약: 순차 등장 (0.8s부터 0.15s 간격)
     const rows = [];
+    if (act >= 5) {
+      // 엔딩 (기획 §2): 복수 + 진실 공표 + 안식 — 롱테이크 세 줄
+      const n = Meta.clueCount();
+      rows.push({ f: 'italic 13px monospace', c: '#c8c0a8', y: 252, s: '광장 벽에 증거를 전부 붙였다. 백성들이 하나둘 멈춰 서서 읽는다.' });
+      rows.push({ f: 'italic 13px monospace', c: '#c8c0a8', y: 270, s: `수집한 진실 ${n}/${CLUES.length}건${n >= CLUES.length ? ' — 빠짐없이. 왕국은 이제 전부 안다.' : ' — 나머지는 소문이 채울 것이다.'}` });
+      rows.push({ f: 'italic 13px monospace', c: '#9a9488', y: 288, s: '그리고 처음으로 — 묘지가 평온하다. 이제 누워도 된다.' });
+      rows.push({ f: '15px monospace', c: '#666a80', y: 314, s: `Lv.${game.level} · 처치 ${game.kills} · ${(game.time / 60).toFixed(1)}분의 복수` });
+    } else {
     rows.push({ f: '17px monospace', c: '#e8e0cf', y: 262, s: `Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · 특성 ${game.player.traits.length}장` });
     const timeStr = `클리어 시간 ${(game.time / 60).toFixed(1)}분` + (game.heat > 0 ? ` · 현상금 ${game.heat}` : '');
     rows.push({ f: '15px monospace', c: '#9aa0b4', y: 290, s: timeStr });
+    }
     if (game._newRecord) rows.push({ f: 'bold 15px monospace', c: '#5ce0e6', y: 314, s: '★ 최속 클리어 신기록!' });
     if (game.dailyRun) rows.push({ f: 'bold 14px monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '🗼 오늘의 탑 정복!' });
     rows.forEach((r, i) => {
@@ -1256,6 +1267,7 @@ const HUD = {
         1: 'C — 2막 다리와 관문으로 (빌드 유지, 11~20층: 왕도로 가는 길)',
         2: 'C — 3막 영지와 재판소로 (빌드 유지, 21~30층: 판결한 자들에게)',
         3: 'C — 4막 역병의 마을로 (빌드 유지, 31~40층: 왕이 만든 재앙 속으로)',
+        4: 'C — 5막 왕도로 (빌드 유지, 41~50층: 마지막 열 층)',
       };
       ctx.fillStyle = cNext[act] ? '#c9d94a' : '#b13ae0';
       ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 462);

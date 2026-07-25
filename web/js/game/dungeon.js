@@ -88,13 +88,24 @@ const FLOOR_DATA = {
   38: { name: '대성당 회랑',     enemies: ['acolyte', 'acolyte', 'executioner', 'frostMage', 'warden', 'crystal'], rule: '광신 복사의 기도가 끝나기 전에 끊어라' },
   39: { name: '납골당',          enemies: ['necro', 'chainWraith', 'wraith', 'boneHeap', 'stalker', 'shade'], rule: '빈 관마다 왕실 봉인 — 이들은 어디로 갔나' },
   40: { name: '지하 성소',       enemies: ['necro', 'chainWraith', 'mirrorKnight', 'riftCaster', 'acolyte', 'wraith'], rule: '성물이 빛나는 동안 대주교는 죽지 않는다' },
+  // ── 5막: 왕도 (41~50층) — 끝. 왕좌까지 열 층 ──
+  41: { name: '왕도 뒷골목',   enemies: ['stalker', 'brute', 'berserker', 'bloodBat', 'sniper', 'shade'], rule: '밀정은 어둠 속에서만 칼을 꺼낸다' },
+  42: { name: '빈민가 시장',   enemies: ['stalker', 'stalker', 'brute', 'sniper', 'bomber', 'shade'], rule: '밀정은 어둠 속에서만 칼을 꺼낸다' },
+  43: { name: '대광장',       enemies: ['executioner', 'warden', 'frostArcher', 'acolyte', 'glowShrieker', 'shieldSkeleton'], rule: '처형대가 늘어선 광장 — 저 위에서 내가 죽었다' },
+  44: { name: '처형대로',     enemies: ['executioner', 'executioner', 'warden', 'frostArcher', 'glowShrieker', 'crystal'], rule: '처형대가 늘어선 광장 — 저 위에서 내가 죽었다' },
+  45: { name: '근위 관문',    enemies: ['mirrorKnight', 'warden', 'frostGolem', 'frostMage', 'jailer', 'golem'], rule: '근위대장은 알고도 침묵한 자다' },
+  46: { name: '근위 병영',    enemies: ['mirrorKnight', 'warden', 'warden', 'frostGolem', 'frostMage', 'brute'], rule: '근위의 방패는 등이 비어 있다' },
+  47: { name: '왕성 회랑',    enemies: ['mirrorKnight', 'riftCaster', 'crystal', 'acolyte', 'executioner', 'imp'], rule: '스테인드글라스 뒤마다 균열 심문관이 숨어 있다' },
+  48: { name: '알현 복도',    enemies: ['mirrorKnight', 'mirrorKnight', 'riftCaster', 'crystal', 'acolyte', 'frostMage'], rule: '스테인드글라스 뒤마다 균열 심문관이 숨어 있다' },
+  49: { name: '성배의 방',    enemies: ['riftCaster', 'chainWraith', 'necro', 'voidEye', 'glutton', 'wraith'], rule: '성배가 가깝다 — 저주가 짙어 죽은 것들이 끓는다' },
+  50: { name: '왕좌',         enemies: ['riftCaster', 'mirrorKnight', 'chainWraith', 'voidEye', 'necro', 'glutton'], rule: '증거를 전부 품고 왔는가 — 왕이 기다린다' },
 };
 
-// 41층+ (무한 모드 '왕도 가도'): 4막 심부(36~40층) 구성을 순환하며 끝없이 강해진다
+// 51층+ (무한 모드 '무너진 왕국'): 5막 심부(46~50층) 구성을 순환하며 끝없이 강해진다
 function floorData(floor) {
   if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
-  const base = FLOOR_DATA[((floor - 41) % 5) + 36];
-  return { name: `왕도 가도 ${floor}구간`, enemies: base.enemies, rule: base.rule };
+  const base = FLOOR_DATA[((floor - 51) % 5) + 46];
+  return { name: `무너진 왕국 ${floor}구역`, enemies: base.enemies, rule: base.rule };
 }
 
 // 문 수식어 — 위험을 감수하면 보상이 커진다 (문 선택이 고정 순위표가 되지 않게)

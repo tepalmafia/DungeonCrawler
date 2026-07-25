@@ -136,8 +136,10 @@ const GameCombat = {
         : Dungeon.floor === 20 ? 20
         : Dungeon.floor === 30 ? 30
         : Dungeon.floor === 40 ? 40
-        : Dungeon.floor <= 39 ? ((Dungeon.floor - 11) % 4) + 6
-        : ((Dungeon.floor - 41) % 5) + 6)
+        : Dungeon.floor === 45 ? 45
+        : Dungeon.floor >= 50 && Dungeon.floor === 50 ? 50
+        : Dungeon.floor <= 49 ? ((Dungeon.floor - 11) % 4) + 6
+        : ((Dungeon.floor - 51) % 5) + 6)
       : (e.codexType || e.type));
     if (e.isBoss && e.def) this._lastBossOutro = e.def.outro; // 마이크로 서사: onBossDead 끝에서 출력
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
