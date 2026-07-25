@@ -38,6 +38,21 @@ const HUD = {
     ctx.textAlign = 'left';
     ctx.fillText(`${p.skillName()} K`, 104, barY + 19);
 
+    // ── 보조 스킬 쿨다운 (E) — 스킬 사당에서 획득 ──
+    if (p.subSkill) {
+      const sd = p.subSkillDef();
+      if (sd) {
+        const subR = Math.max(0, Math.min(1, 1 - p.subCd / sd.cd));
+        ctx.fillStyle = '#1c1c28';
+        ctx.fillRect(210, barY + 12, 56, 6);
+        ctx.fillStyle = subR >= 1 ? '#c9d94a' : '#6a7a2a';
+        ctx.fillRect(210, barY + 12, 56 * subR, 6);
+        ctx.fillStyle = subR >= 1 ? '#c9d94a' : '#666a80';
+        ctx.font = '10px monospace';
+        ctx.fillText(`${sd.name} E`, 272, barY + 19);
+      }
+    }
+
     // ── XP 바 + 레벨 ──
     const xpRatio = Math.min(1, game.xp / game.xpNext);
     ctx.fillStyle = '#1c1c28';
@@ -1236,6 +1251,7 @@ const HUD = {
         { h: '기억의 제단', t: '영혼 파편으로 영구 강화 (거점 2번)' },
         { h: '열기 · 오늘의 탑', t: '정복 후 고난이도 해금(←→) · 거점 D 일일 도전' },
         { h: '2막 · 무한 모드', t: '10층 정복 후 C — 2막 균사 정원(11~20층), 20층 정복 후 C — 심연 회랑' },
+        { h: '보조 스킬', t: '5·15·25층 스킬 사당에서 3택1 획득 — E키로 사용' },
       ]);
     }
 

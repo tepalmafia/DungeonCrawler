@@ -150,9 +150,37 @@ const GameRewards = {
     });
   },
 
+  // 스킬 사당 3택1 — 특성 카드 파이프라인 재사용 (가짜 카드 + _subChoice 플래그)
+  openSubSkillChoice() {
+    const pool = SUBSKILLS[this.player.classId] || [];
+    if (!pool.length) return;
+    this._subChoice = true;
+    this.traitCards = pool.map((sk) => ({
+      id: 'sub_' + sk.id,
+      name: sk.name,
+      desc: sk.desc + ` (쿨 ${sk.cd}초)` + (this.player.subSkill === sk.id ? ' — 보유 중' : ''),
+      tags: ['스킬'], rarity: 'epic', color: '#c9d94a',
+    }));
+    this.state = 'levelup';
+    this.choiceLockT = 0.35;
+  },
+
   pickTrait(i) {
     const t = this.traitCards[i];
     if (!t) return;
+    if (this._subChoice) {
+      // 보조 스킬 선택 — 특성이 아니다
+      this._subChoice = false;
+      this.player.subSkill = t.id.slice(4);
+      this.player.subCd = 0;
+      this.banner = { text: `보조 스킬 습득 — ${t.name} (E키)`, life: 2.6, maxLife: 2.6, color: '#c9d94a' };
+      Particles.text(this.player.x, this.player.y - 30, t.name + '!', { color: '#c9d94a', size: 16 });
+      AudioSys.levelup();
+      if (this.pendingChoices > 0) this.openTraitChoice('levelup');
+      else this.state = 'play';
+      this.saveRun();
+      return;
+    }
     applyTrait(this.player, t);
     Meta.codexTrait(t.id);
     Particles.text(this.player.x, this.player.y - 30, t.name + '!', { color: t.color, size: 16 });
