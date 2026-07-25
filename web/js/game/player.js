@@ -66,6 +66,7 @@ function createPlayer(x, y, classId = 'knight') {
     animT: 0,
     moving: false,
     attackPoseT: 0, // 공격 자세 프레임 유지 시간
+    hurtPoseT: 0, // 피격 자세 프레임 유지 시간 (공격 자세보다 우선)
 
     sprImg() {
       return Sprites[cls.sprite];
@@ -191,6 +192,7 @@ function createPlayer(x, y, classId = 'knight') {
       this.animT += dt;
       if (this.attackCd > 0) this.attackCd -= dt;
       if (this.attackPoseT > 0) this.attackPoseT -= dt;
+      if (this.hurtPoseT > 0) this.hurtPoseT -= dt;
       if (this.skillCd > 0) {
         this.skillCd -= dt;
         if (this.skillCd <= 0) {
@@ -662,11 +664,12 @@ function createPlayer(x, y, classId = 'knight') {
         });
       }
 
-      // 애니메이션: 공격 자세 > 걷기 사이클(벌림-정지-모음-정지) > 정지
+      // 애니메이션: 피격 자세 > 공격 자세 > 걷기 사이클(벌림-정지-모음-정지) > 정지
       const frames = Sprites.playerFrames[cls.sprite];
       const cycle = [1, 0, 2, 0];
       let img;
-      if (this.attackPoseT > 0) img = frames[3];
+      if (this.hurtPoseT > 0) img = frames[4];
+      else if (this.attackPoseT > 0) img = frames[3];
       else if (this.moving) img = frames[cycle[Math.floor(this.animT * 9) % 4]];
       else img = frames[0];
       const bob = this.moving ? Math.abs(Math.sin(this.animT * 11)) * 1.5 : Math.sin(this.animT * 3) * 1;
