@@ -117,6 +117,11 @@ const Game = {
     if (!s) return false;
     Meta.data.cls = s.cls;
     this.restart();
+    // 버그 수정: 유산 각인(시작 유물 3택1)이 이어하기마다 다시 열리던 문제 —
+    // 시작 보상은 원래 런에서 이미 받았다. restart가 연 선택창을 닫는다
+    this.relicCards = [];
+    this._relicSource = null;
+    this.state = 'play';
     // 열기 서약·진행도 복원
     this.heat = s.heat;
     this.pacts = s.pacts || Meta.pactFlags(s.heat);
