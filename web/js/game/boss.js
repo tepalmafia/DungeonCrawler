@@ -352,7 +352,7 @@ function createBoss(floor, x, y) {
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1);
           if (this.stateT >= wait) {
-            if (this._farT > 3.5 && this.def.punish) {
+            if (this._farT > 4.5 && this.def.punish) { // 계측: 궁수 열기3 6→15 과냉각 — 게이지 3.5→4.5
               // 응징: 카이팅 거리를 부수는 초식 — 돌진형은 추격, 시전형은 속사 저격
               this._farT = 0;
               this._comboQueue = [];
@@ -379,7 +379,7 @@ function createBoss(floor, x, y) {
               count: 1, colors: this.def.deathPalette, speed: -60, life: 0.3, size: 3,
             });
           }
-          if (this.stateT >= (windups[k] || 0.6) * (this._comboWind ? 0.55 : 1)) {
+          if (this.stateT >= (windups[k] || 0.6) * (this._comboWind ? 0.65 : 1)) { // 연계 예고 0.55→0.65
             this._comboWind = false;
             this.stateT = 0;
             this._execute(game, dx, dy, d);
@@ -540,8 +540,8 @@ function createBoss(floor, x, y) {
         };
         if (variant === 'snipe') {
           // 응징 속사: 좁고 빠른 3발 ×2연 — 서 있으면 맞고, 옆 대시면 피한다
-          volley(3, 0.09, baseAngle, 1.9);
-          this._delayed.push({ t: 0.28, projKind, n: 3, spread: 0.09, aim: true, speed: baseSpeed * 1.9 });
+          volley(3, 0.09, baseAngle, 1.65); // 1.9→1.65: 휴먼 반응(150ms)으로 옆 대시가 가능한 속도
+          this._delayed.push({ t: 0.36, projKind, n: 3, spread: 0.09, aim: true, speed: baseSpeed * 1.65 });
         } else if (variant === 'cross') {
           // 교차 2연: 두 번째 부채꼴이 반각 어긋나 틈이 이동한다
           const n = this.phase === 2 ? (projKind === 'spore' ? 7 : 9) : (projKind === 'spore' ? 6 : 7);
