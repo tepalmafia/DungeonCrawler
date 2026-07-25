@@ -159,9 +159,15 @@ function rollTraitCards(player, n = 3) {
     const tr = TRAITS.find((x) => x.id === id);
     if (tr) tagCount[tr.tag] = (tagCount[tr.tag] || 0) + 1;
   }
+  const ELEM_TAGS = ['화염', '번개', '독']; // 교차 반응의 재료 원소
+  const hasElemTree = ELEM_TAGS.some((el) => (tagCount[el] || 0) >= 2);
   const weightOf = (t) => {
     if (t.legend) return 0.08; // 전설: 극저확률 — 나오면 런이 특별해진다
-    return (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
+    let w = (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
+    // 교차 원소 유도 (반응 노출 계측: 30분에 7회 발동 — 믹스가 안 나와서 반응이 묻혔다):
+    // 원소 트리 하나를 2픽 이상 팠으면, 아직 안 판 다른 원소 카드가 더 자주 보인다
+    if (hasElemTree && ELEM_TAGS.includes(t.tag) && (tagCount[t.tag] || 0) <= 1) w += 0.6;
+    return w;
   };
 
   const cards = [];

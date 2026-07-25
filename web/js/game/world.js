@@ -998,6 +998,13 @@ const World = {
       ctx.fillStyle = c;
       ctx.fillText(d.opt.label, d.x, d.y - 53);
 
+      // 한 줄 툴팁 — 문의 의미를 그 자리에서 배운다 (신규 유저 학습 부하 대응)
+      if (d.opt.desc) {
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#9aa0b4';
+        ctx.fillText(d.opt.desc, d.x, d.y + 46);
+      }
+
       // 문 수식어 (위험-보상): 명판 위에 경고 라벨 + 설명
       if (d.opt.mod) {
         ctx.font = 'bold 11px monospace';
