@@ -562,6 +562,17 @@ const GameRender = {
 
     Particles.draw(ctx);
 
+    // 상시 횃불 시야 (기획 §7 다크 패스): 플레이어 주변만 밝다 — 어둠 기믹 층은 아래의 더 강한 것을 쓴다
+    if (World.hazard !== 'dark' && this.state !== 'over' && this.state !== 'victory' && this.player) {
+      const p = this.player;
+      const g = ctx.createRadialGradient(p.x, p.y, 150, p.x, p.y, 520);
+      g.addColorStop(0, 'rgba(4,2,8,0)');
+      g.addColorStop(0.7, 'rgba(4,2,8,0.28)');
+      g.addColorStop(1, 'rgba(4,2,8,0.62)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-60, World.offsetY - 60, World.cols * TS + 120, World.rows * TS + 120);
+    }
+
     // 어둠 기믹 층: 시야 제한 — HUD보다 아래에
     if (World.hazard === 'dark' && this.state !== 'over' && this.state !== 'victory') {
       const p = this.player;

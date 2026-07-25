@@ -57,6 +57,13 @@ const GameCombat = {
       // 일반 타격의 손맛은 흔들림 + 파티클 + 사운드가 담당한다.
       const stopped = crit ? this._applyHitstop(0.055) : false;
       Renderer.shake(crit ? 4 : 2.5, 0.13);
+      // 고어 (기획 §7): 방향성 피 분무 + 바닥 혈흔 — 벨 때마다 피가 남는다
+      Particles.burst(e.x, e.y, {
+        count: crit ? 7 : 4, colors: ['#8a1c2c', '#5a1016', '#c22030'],
+        speed: 200, life: 0.42, size: 3, gravity: 280, dir: Math.atan2(dir.y, dir.x), spread: 0.9,
+      });
+      World.stampBlood(e.x + dir.x * 10 + (Math.random() - 0.5) * 12, e.y + dir.y * 10 + (Math.random() - 0.5) * 12,
+        2.5 + Math.random() * 3, 0.32);
       Particles.burst(e.x, e.y, {
         count: crit ? 16 : 9,
         colors: ['#ffffff', '#f7b32b', '#ffd866'],
@@ -90,14 +97,14 @@ const GameCombat = {
       size: crit ? 22 : feel ? 15 : 12,
     });
 
-    if (e.hp <= 0) this.killEnemy(e, dir);
+    if (e.hp <= 0) this.killEnemy(e, dir, crit);
   },
 
   hitEnemy(e, dmg, dir, opts = {}) {
     this.damageEnemy(e, dmg, dir, { ...opts, feel: true });
   },
 
-  killEnemy(e, dir) {
+  killEnemy(e, dir, brutal = false) {
     if (e.dead) return;
     e.dead = true;
     // 중립 개체(항아리·균열 벽): 처치 집계·도감·드랍 없이 부서진다
@@ -207,6 +214,24 @@ const GameCombat = {
     if (e.isBoss) {
       Particles.ring(e.x, e.y, { r0: 4, r1: 140, life: 0.6, color: '#ffffff', width: 3 });
       Particles.ring(e.x, e.y, { r0: 2, r1: 60, life: 0.35, color: killPal[1] || killPal[0], width: 5 });
+    }
+
+    // 고어 (기획 §7): 육편 + 피 웅덩이 — 크리티컬 처치는 더 격렬하게 터진다
+    if (!e.neutral) {
+      const big = brutal || e.isBoss || e.isMini;
+      World.stampBlood(e.x, e.y, big ? 16 : 10, 0.55);
+      const nDrop = big ? 8 : 5;
+      for (let gi = 0; gi < nDrop; gi++) {
+        const ga = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 2.4;
+        const gd = 10 + Math.random() * (big ? 40 : 24);
+        World.stampBlood(e.x + Math.cos(ga) * gd, e.y + Math.sin(ga) * gd, 2 + Math.random() * 4, 0.42);
+      }
+      // 육편: 어두운 핏덩이가 포물선으로 튄다
+      Particles.burst(e.x, e.y, {
+        count: big ? 14 : 8, colors: ['#8a1c2c', '#c22030', '#3a0a0e', '#66131b'],
+        speed: 250, life: 0.6, size: 4, gravity: 340, dir: Math.atan2(dir.y, dir.x), spread: 1.7,
+      });
+      if (big) Renderer.shake(5, 0.2);
     }
 
     // 사망 연출: 무너져 내리는 잔상
@@ -388,6 +413,8 @@ const GameCombat = {
 
     p.hp -= dmg;
     p.hurtPoseT = 0.32; // 피격 스프라이트 — 젖혀진 자세로 "맞았다"를 몸으로 보여준다
+    // 고어 (기획 §7): 나도 피를 흘린다 — 후퇴선이 핏자국으로 남는다
+    World.stampBlood(p.x + (Math.random() - 0.5) * 10, p.y + (Math.random() - 0.5) * 10, 3 + Math.random() * 3, 0.4);
     // 검사 1.2(근접 리스크 보상) / 궁수 1.05(밴드 계측: 열기0 사망이 검사의 120% — HP4 연쇄 피격 완화) / 마도사 0.9(밴드 내)
     p.invuln = p.classId === 'knight' ? 1.2 : p.classId === 'archer' ? 1.05 : 0.9;
     p.kbx = dir.x * kb;
@@ -467,6 +494,12 @@ const GameCombat = {
       p.hp = 0;
       if (Bot.enabled) Bot.onDeath(Dungeon.floor); // 실사망도 집계
       // 사망 리포트 — 죽음을 다음 런의 지식으로 (무엇에게, 어디서)
+      // 고어 (기획 §7): 쓰러진 자리에 퍼지는 웅덩이
+      World.stampBlood(p.x, p.y, 20, 0.6);
+      for (let gi = 0; gi < 7; gi++) {
+        const ga = Math.random() * Math.PI * 2, gd = 12 + Math.random() * 30;
+        World.stampBlood(p.x + Math.cos(ga) * gd, p.y + Math.sin(ga) * gd, 3 + Math.random() * 5, 0.45);
+      }
       this.deathInfo = { src: this._lastHurtBy || '심연의 어둠', floor: Dungeon.floor, room: Dungeon.roomIndex };
       this.endRun(false);
       this.state = 'over';

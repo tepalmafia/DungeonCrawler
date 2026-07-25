@@ -101,6 +101,27 @@ const FLOOR_THEMES = {
 // 2막 짝수 층은 앞 층 테마를 공유한다 (11-12 / 13-14 / 15-16 / 17-18 / 19-20)
 for (const f of [12, 14, 16, 18, 20]) FLOOR_THEMES[f] = FLOOR_THEMES[f - 1];
 
+// ── 다크 패스 (기획 §7 '아주 어두운 디아블로식'): 전 테마 명도 하향 — 낮이 없는 세계 ──
+// 광원(횃불·accent·grade)만 색을 가진다. 별칭 층(12→11 등)은 같은 객체라 중복 적용 방지
+(() => {
+  const dk = (hex, f) => {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b2 = Math.round((n & 255) * f);
+    return '#' + ((r << 16) | (g << 8) | b2).toString(16).padStart(6, '0');
+  };
+  const done = new Set();
+  for (const k of Object.keys(FLOOR_THEMES)) {
+    const t = FLOOR_THEMES[k];
+    if (done.has(t)) continue;
+    done.add(t);
+    t.floor = t.floor.map((c) => dk(c, 0.72));
+    t.wallBase = dk(t.wallBase, 0.76);
+    t.wallFace = dk(t.wallFace, 0.8);
+    t.wallDark = dk(t.wallDark, 0.7);
+    t.roof = dk(t.roof, 0.65);
+  }
+})();
+
 // 층별 환경 기믹 (테마 순환)
 const FLOOR_HAZARDS = {
   2: 'fog', 3: 'prison', 4: 'lava', 5: 'dark', 7: 'fog', 8: 'prison', 9: 'lava', 10: 'dark',
@@ -906,6 +927,30 @@ const World = {
     }
 
     this._floorCanvas = c;
+  },
+
+  // ── 혈흔 스탬프 (고어, 기획 §7): 바닥 프리렌더에 직접 굽는다 — 프레임 비용 0.
+  // 방을 나갈 때까지 지워지지 않는다: 전투가 끝난 방은 학살의 기록이 된다
+  stampBlood(x, y, r = 8, alpha = 0.5) {
+    if (!this._floorCanvas) return;
+    if (this.isSolidAt(x, y)) return; // 벽 위에는 안 굽는다
+    const ctx = this._floorCanvas.getContext('2d');
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const shades = ['#4a0d12', '#5a1016', '#3a0a0e', '#66131b'];
+    ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
+    ctx.beginPath();
+    ctx.ellipse(x, y - this.offsetY + 6, r, r * 0.62, (Math.random() - 0.5) * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 3; i++) {
+      const a2 = Math.random() * Math.PI * 2, d2 = r * (0.9 + Math.random() * 0.9);
+      ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
+      ctx.beginPath();
+      ctx.ellipse(x + Math.cos(a2) * d2, y - this.offsetY + 6 + Math.sin(a2) * d2 * 0.62,
+        1.2 + Math.random() * 2.2, 1 + Math.random() * 1.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   },
 
   draw(ctx, animT = 0) {
