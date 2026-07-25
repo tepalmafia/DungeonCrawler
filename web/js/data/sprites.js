@@ -153,7 +153,7 @@ const Sprites = (() => {
     '.........hhkgkkgkhh...s.Mm..',
     '.........hhkkkkkkhh...s..mM.',
     '.........hHhffffhHh...s..mM.',
-    '..........hhffffhh....s..mM.',
+    '..........hRRRRRRh....s..mM.',
     '........ccttttttttcc..s.Mm..',
     '.......cctxttttttxtcc.s.mM..',
     '......ffttxxttxxttff.ffMm...',
@@ -172,7 +172,7 @@ const Sprites = (() => {
     '.........hhkgkkgkhh.........',
     '.........hhkkkkkkhh.........',
     '.........hHhffffhHh.........',
-    '..........hhffffhh.....mm...',
+    '..........hRRRRRRh.....mm...',
     '........ccttttttttcc..s.mM..',
     '.......cctxttttttxtccs..mM..',
     '......ffttxxttxxttfffaaaaMw.',
@@ -191,7 +191,7 @@ const Sprites = (() => {
     '........hhkkkkkkhh....s.Mm..',
     '........hhkkkkkkhh....s..mM.',
     '........hHhffffhHh....s..mM.',
-    '.........hhffffhh.....s..mM.',
+    '.........hRRRRRRh.....s..mM.',
     '........ccttttttttcc..s.Mm..',
     '.......cctxttttttxtcc.s.mM..',
     '......ffttxxttxxttff.ffMm...',
@@ -346,19 +346,19 @@ const Sprites = (() => {
   const CLASS_SPRITES = {
     player: {
       idle: KNIGHT_IDLE, attack: KNIGHT_ATK, hurt: KNIGHT_HURT,
-      pal: { r: '#e43b44', h: '#c8d4e4', H: '#8a9ab4', k: '#16121f', o: '#ffd866', s: '#a4b0c4', t: '#4a6ede', T: '#2c4a9e', y: '#f7b32b', f: '#9aa6ba', F: '#6a7690', w: '#e8ecf4', W: '#b8c4d8', m: '#7a4a2a', e: '#24407a', E: '#6a8ade', d: '#29366f', b: '#5d6b84', B: '#3d4a5c' },
+      pal: { r: '#3a3a44', h: '#8a9484', H: '#5a6454', k: '#16121f', o: '#e43b44', s: '#6a7464', t: '#3a4a5e', T: '#242f3e', y: '#8a7a3a', f: '#707a6a', F: '#4a544a', w: '#c8ccc0', W: '#8a9488', m: '#5a4a3a', e: '#2a3a34', E: '#4a5e54', d: '#242f3e', b: '#3d4438', B: '#282e24' },
     },
     playerArcher: {
       idle: ARCHER_IDLE, attack: ARCHER_ATK, hurt: ARCHER_HURT,
-      pal: { h: '#256b42', H: '#1a4a2e', k: '#0d1410', g: '#a7f070', f: '#f0c297', F: '#c99a6e', c: '#5e3a26', x: '#8a5a3a', t: '#38b764', T: '#1d7a42', y: '#d9cbb8', m: '#a06a3a', M: '#6a4426', s: '#e8e0cf', a: '#c9a06a', w: '#e8ecf4', d: '#1d4a33', b: '#5e3a26', B: '#3d2418' },
+      pal: { h: '#2e3a2e', H: '#1e281e', k: '#0d1410', g: '#ff6a5a', f: '#9aa88a', F: '#6a7a5e', c: '#4a3220', x: '#6a4a2e', t: '#2e4a3a', T: '#1a3226', y: '#8a8474', m: '#8a5e34', M: '#5a3c20', s: '#c8c0a8', a: '#a8845a', w: '#c8ccc0', R: '#7a5a2e', d: '#182a20', b: '#4a3220', B: '#2e2014' },
     },
     playerMage: {
       idle: MAGE_IDLE, attack: MAGE_ATK, hurt: MAGE_HURT,
-      pal: { p: '#6a3aa2', h: '#c8c8d8', f: '#f0c297', F: '#c99a6e', v: '#5ce0e6', V: '#a9fff7', w: '#e8e8f0', t: '#8a5ac2', T: '#5c2e8a', y: '#ffd866', m: '#7a4a2a', d: '#3d1e5c', b: '#29366f', B: '#1a2148' },
+      pal: { p: '#3a2e4a', h: '#7a7a72', f: '#9aa88a', F: '#6a7a5e', v: '#b13ae0', V: '#e0c8f8', w: '#8a8a82', t: '#4a3a5e', T: '#302644', y: '#8a7a3a', m: '#4a3c2e', d: '#241c30', b: '#2a2438', B: '#181420' },
     },
     playerAlch: {
       idle: ALCH_IDLE, attack: ALCH_ATK, hurt: ALCH_HURT,
-      pal: { q: '#4a3a2e', G: '#c9a227', L: '#a7f070', f: '#f0c297', F: '#c99a6e', t: '#8a9a40', T: '#5a6a28', x: '#5e3a26', O: '#7ad94a', c: '#8a5a3a', v: '#a7f070', d: '#3a4020', b: '#5e3a26', B: '#3d2418' },
+      pal: { q: '#2e2e38', G: '#8a7a4a', L: '#a7f070', f: '#8a9a94', F: '#5e6e68', t: '#4a5a44', T: '#2e3a2a', x: '#443020', O: '#7ad94a', c: '#6a4a30', v: '#a7f070', d: '#242e20', b: '#443020', B: '#2a1e12' },
     },
   };
 
