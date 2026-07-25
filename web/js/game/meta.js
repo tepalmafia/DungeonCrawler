@@ -157,14 +157,14 @@ const CODEX_ENEMIES = [
 // 열기 서약 (G3): 고정 누적 대신 골라 담는다 — 난이도 올리기가 그 자체로 선택이 되도록.
 // 파편 보너스는 서약 '수'에 비례하므로 어떤 조합이든 보상은 같다.
 const HEAT_PACTS = [
-  { id: 'hp',    name: '강철 갑주', desc: '적 HP 강화 (층 비례)' },
-  { id: 'count', name: '물량 공세', desc: '적 수 +2 (3층부터)' },
-  { id: 'speed', name: '질주 본능', desc: '적 속도 +15%' },
-  { id: 'heal',  name: '메마른 샘', desc: '하트 드랍 절반 · 모닥불 회복 감소' },
-  { id: 'boss',  name: '심연의 격노', desc: '보스 HP +50% · 시작 HP -1' },
+  { id: 'hp',    name: '왕실 무구 지급', desc: '토벌대 HP 강화 (층 비례)' },
+  { id: 'count', name: '토벌대 증원', desc: '적 수 +2 (3층부터)' },
+  { id: 'speed', name: '사냥개 방목', desc: '적 속도 +15%' },
+  { id: 'heal',  name: '우물 봉쇄령', desc: '생혈 드랍 절반 · 모닥불 회복 감소' },
+  { id: 'boss',  name: '친위 강화령', desc: '보스 HP +50% · 시작 HP -1' },
   // 확장 서약 (열기 5→7단): 골라담기라 어떤 조합이든 성립한다
-  { id: 'elite', name: '성난 망령', desc: '정예 확률 +10%p' },
-  { id: 'skill', name: '짧은 심지', desc: '스킬 쿨다운 +25%' },
+  { id: 'elite', name: '정예 소집령', desc: '정예 확률 +10%p' },
+  { id: 'skill', name: '성수 살포', desc: '망자의 스킬 쿨다운 +25%' },
 ];
 
 const META_UPGRADES = [
