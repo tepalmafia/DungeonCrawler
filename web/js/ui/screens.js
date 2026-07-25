@@ -192,6 +192,7 @@ const GameScreens = {
     if (Input.pressed('Digit1')) this.codexTab = 0;
     if (Input.pressed('Digit2')) this.codexTab = 1;
     if (Input.pressed('Digit3')) this.codexTab = 2;
+    if (Input.pressed('Digit4')) this.codexTab = 3;
     if (Input.mouse.justDown) {
       const back = HUD.backButtonRect();
       if (Input.mouse.x >= back.x && Input.mouse.x <= back.x + back.w &&

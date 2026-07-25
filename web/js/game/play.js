@@ -733,6 +733,19 @@ const GamePlay = {
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });
           for (const o of this.interactables) if (o.kind === 'whetstone') o.used = true; // 양자택일
+        } else if (it.kind === 'clue') {
+          // 증거 획득 (기획 §4): 서사 + 파편 — 수집이 성장으로 이어진다
+          const c = Meta.gainClue(it.clueId);
+          if (c) {
+            const reward = 15 + c.act * 10;
+            Meta.data.shards += reward; Meta.save();
+            this._storyQ = this._storyQ || [];
+            this._storyQ.push({ text: `증거 확보 — 「${c.name}」 (수집록 ${Meta.clueCount()}/${CLUES.length})`, color: '#f7b32b' });
+            this._storyQ.push({ text: c.text, color: '#c8c0a8' });
+            Particles.text(p.x, p.y - 30, `◆ +${reward}`, { color: '#2ec4b6', size: 15 });
+            Particles.burst(it.x, it.y - 8, { count: 14, colors: ['#f7b32b', '#c8c0a8'], speed: 110, life: 0.5, size: 3, gravity: -60 });
+            AudioSys.chest();
+          }
         } else if (it.kind === 'skillShrine') {
           // 스킬 사당 (P1): 보조 스킬 3택1 — 액티브 킷이 런 중간에 자란다
           AudioSys.levelup();

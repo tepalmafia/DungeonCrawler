@@ -840,9 +840,9 @@ const HUD = {
   // ══════════════ 도감 ══════════════
 
   codexTabRects() {
-    const w = 130, h = 34, gap = 10;
-    const x0 = (Renderer.W - (3 * w + 2 * gap)) / 2;
-    return [0, 1, 2].map((i) => ({ x: x0 + i * (w + gap), y: 84, w, h }));
+    const w = 124, h = 34, gap = 10;
+    const x0 = (Renderer.W - (4 * w + 3 * gap)) / 2;
+    return [0, 1, 2, 3].map((i) => ({ x: x0 + i * (w + gap), y: 84, w, h }));
   },
 
   // 스프라이트를 지정한 상자 안에 픽셀 퍼펙트로 맞춰 그린다
@@ -862,7 +862,7 @@ const HUD = {
     ctx.fillText('도감', Renderer.W / 2, 56);
 
     const codex = Meta.data.codex;
-    const tabs = ['몬스터', '유물', '특성'];
+    const tabs = ['몬스터', '유물', '특성', '증거'];
     const mx = Input.mouse.x, my = Input.mouse.y;
 
     // 탭
@@ -942,7 +942,7 @@ const HUD = {
           ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 8);
         }
       });
-    } else {
+    } else if (game.codexTab === 2) {
       // 특성: 획득 횟수 표시
       const found = TRAITS.filter((t) => codex.traits[t.id] > 0).length;
       this._codexHeader(ctx, found, TRAITS.length);
@@ -973,6 +973,56 @@ const HUD = {
           ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 6);
         }
       });
+    } else {
+      // 증거 수집록 (기획 §4): 모은 진실의 목록 — 막별 구분, 미획득은 ???
+      this._codexHeader(ctx, Meta.clueCount(), CLUES.length);
+      const x0 = Renderer.W / 2 - 380;
+      let y = 142;
+      let lastAct = 0;
+      for (const c of CLUES) {
+        // 미도달 막(콘텐츠 없음)은 한 줄 요약 — 화면을 넘치지 않게
+        if (c.text === null) {
+          if (c.act !== lastAct) {
+            lastAct = c.act;
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 13px monospace';
+            ctx.fillStyle = '#3a3a46';
+            const actNames = { 3: '3막 — 영지와 재판소', 4: '4막 — 역병의 마을', 5: '5막 — 왕도와 왕좌' };
+            ctx.fillText(`${actNames[c.act] || '?'} — 아직 닿을 수 없는 곳 (단서 ${CLUES.filter((x) => x.act === c.act).length}개)`, x0, y);
+            y += 20;
+          }
+          continue;
+        }
+        if (c.act !== lastAct) {
+          lastAct = c.act;
+          ctx.textAlign = 'left';
+          ctx.font = 'bold 13px monospace';
+          const actDone = CLUES.filter((x) => x.act === c.act).every((x) => Meta.clueOwned(x.id));
+          ctx.fillStyle = actDone ? '#e43b44' : '#666a80';
+          const actNames = { 1: '1막 — 변경', 2: '2막 — 다리와 관문', 3: '3막 — 영지와 재판소', 4: '4막 — 역병의 마을', 5: '5막 — 왕도와 왕좌' };
+          ctx.fillText(actNames[c.act] + (actDone ? '  ✦ 사무친 원한 (+1 HP)' : ''), x0, y);
+          y += 20;
+        }
+        const owned = Meta.clueOwned(c.id);
+        const reachable = c.text !== null;
+        ctx.font = '12px monospace';
+        ctx.fillStyle = owned ? '#f7b32b' : reachable ? '#9aa0b4' : '#3a3a46';
+        ctx.fillText(owned ? `■ ${c.name}` : reachable ? `□ ${c.name} — ${c.how === 'boss' ? '막보스의 자백' : '탐사로 발견'}` : '□ ??? — 아직 닿을 수 없는 곳', x0 + 14, y);
+        y += 17;
+        if (owned && c.text) {
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#7a7468';
+          const words = c.text;
+          // 2줄 래핑 (간단)
+          if (words.length > 62) {
+            ctx.fillText(words.slice(0, 62), x0 + 28, y); y += 15;
+            ctx.fillText(words.slice(62), x0 + 28, y); y += 17;
+          } else {
+            ctx.fillText(words, x0 + 28, y); y += 17;
+          }
+        }
+      }
+      ctx.textAlign = 'center';
     }
 
     // 하단 상세 정보

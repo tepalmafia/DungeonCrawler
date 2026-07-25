@@ -463,6 +463,7 @@ const Bot = {
         if (i.used || i._botSkip) return false;
         if (i.kind === 'chest') return true;
         if (i.kind === 'skillShrine') return true;
+        if (i.kind === 'clue') return true;
         if (i.kind === 'camp') {
           // 숫돌이 살아 있으면 다쳤을 때만 휴식, 아니면 담금질 쪽으로
           const ws = game.interactables.some((o) => o.kind === 'whetstone' && !o.used);
