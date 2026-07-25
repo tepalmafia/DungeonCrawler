@@ -13,8 +13,9 @@ const BOSS_DEFS = {
   1: {
     name: '무덤지기 카론', sprite: 'boss', scale: 1.35, r: 26, hp: 95, speed: 42,
     banner: '무덤지기 카론',
-    p1: ['sweep', 'fan:soul'],
-    p2: ['sweep', 'fan:soul', 'curse'],
+    punish: 'volley', punishProj: 'soul',
+    p1: ['sweep>sweep', 'fan:soul'],
+    p2: ['sweep>fan:soul', 'curse', 'fan:soul:cross'],
     rageText: '카론이 분노한다!',
     intro: '…또 왔군. 뱃삯은 목숨이다.', outro: '강은… 기다린다…',
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
@@ -26,8 +27,9 @@ const BOSS_DEFS = {
     // 분산 귀속 (열기5): 보스방 사망의 60%가 소환수(독슬라임 독구름 r52 + 버섯 근접 포자) —
     // 재생 정지를 위해 부하를 근접 처치해야 하는 검사가 독구름 루프에 갇혔다.
     // 소환수를 경량 포자 방울(독구름 r32/1.5s)로 교체 — 기믹(부하 처치=재생 정지)은 유지
-    p1: ['fan:spore', 'ring', 'summon:sporePuff'],
-    p2: ['fan:spore', 'ring', 'summon:sporePuff', 'curse'],
+    punish: 'volley', punishProj: 'spore',
+    p1: ['fan:spore', 'ring>summon:sporePuff'],
+    p2: ['fan:spore:cross', 'ring>summon:sporePuff', 'curse>fan:spore'],
     rageText: '포자가 미친 듯이 흩날린다!',
     intro: '포자는 모든 것을 덮는다.', outro: '흩어지는 것도… 나쁘지 않군…',
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
@@ -36,10 +38,10 @@ const BOSS_DEFS = {
     name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.5, r: 33, hp: 190, speed: 30,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
-    p1: ['charge', 'ring'],
-    // 매트릭스 계측: 열기0 3층 사망 스파이크(9·8·11회, 검사·궁수 공통)가 바르곤전 귀속 —
-    // 2페이즈 이중 돌진이 링과 겹쳐 저HP 직업 연쇄 사망. 이중 돌진은 8층 절망의 바르곤부터
-    p2: ['charge', 'fan:rock', 'ring'],
+    punish: 'charge',
+    p1: ['charge>ring', 'fan:rock'],
+    // 매트릭스 계측: 이중 돌진 금지 유지 (열기0 3층 스파이크 귀속) — 연계는 돌진 1회까지만
+    p2: ['charge>fan:rock', 'ring>fan:rock', 'fan:rock:gap'],
     rageText: '바르곤의 사슬이 풀렸다!',
     intro: '죄수는 이 문을 나갈 수 없다.', outro: '사슬이… 드디어 풀렸군…',
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
@@ -48,8 +50,9 @@ const BOSS_DEFS = {
     name: '용암 심장 이그니스', sprite: 'bossIgnis', scale: 1.55, r: 30, hp: 430, speed: 44,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '용암 심장 이그니스',
-    p1: ['fan:fire', 'charge:trail'],
-    p2: ['fan:fire', 'charge:trail', 'curse:fire', 'ring'],
+    punish: 'charge', punishTrail: true,
+    p1: ['fan:fire>charge:trail', 'curse:fire'],
+    p2: ['charge:trail>fan:fire', 'curse:fire>ring', 'fan:fire:cross'],
     rageText: '이그니스가 백열한다!',
     intro: '타오르는 것만이 진실이다!', outro: '차갑다… 처음으로…',
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
@@ -58,8 +61,9 @@ const BOSS_DEFS = {
     name: '심연의 군주 눅스', sprite: 'bossAbyss', scale: 1.75, r: 28, hp: 700, speed: 50,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라' },
     banner: '심연의 군주 눅스',
-    p1: ['sweep', 'fan:soul', 'ring'],
-    p2: ['sweep', 'fan:soul', 'curse', 'summon:wraith:elite'],
+    punish: 'volley', punishProj: 'soul',
+    p1: ['sweep>fan:soul', 'ring:gap'],
+    p2: ['sweep>curse', 'fan:soul:cross>ring', 'summon:wraith:elite'],
     rageText: '심연이 깨어난다...!',
     intro: '빛은 여기서 끝난다.', outro: '어둠은… 반드시 돌아온다…',
     deathPalette: ['#e43b44', '#16101f', '#c9b8e8'],
@@ -68,8 +72,9 @@ const BOSS_DEFS = {
   6: {
     awakened: true, name: '원혼 카론', sprite: 'bossWraith', scale: 1.6, r: 26, hp: 550, speed: 48,
     banner: '원혼 카론',
-    p1: ['sweep', 'spiral:soul', 'curse'],
-    p2: ['sweep', 'spiral:soul', 'curse', 'summon:boneHeap', 'spiral:soul'],
+    punish: 'volley', punishProj: 'soul',
+    p1: ['sweep>spiral:soul', 'curse'],
+    p2: ['spiral:soul>curse', 'sweep>sweep', 'summon:boneHeap>spiral:soul'],
     rageText: '원혼이 울부짖는다!',
     intro: '죽음조차 나를 놓아주지 않았다…', outro: '이제야… 강을 건너는구나…',
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
@@ -78,8 +83,9 @@ const BOSS_DEFS = {
     awakened: true, name: '역병왕 믹서스', sprite: 'bossPlague', scale: 1.6, r: 32, hp: 680, speed: 38,
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '역병왕 믹서스',
-    p1: ['fan:spore', 'ring', 'summon:sporePuff', 'geyser:poison'],
-    p2: ['fan:spore', 'geyser:poison', 'summon:sporePuff', 'ring', 'fan:spore'],
+    punish: 'volley', punishProj: 'spore',
+    p1: ['fan:spore:cross', 'ring>summon:sporePuff', 'geyser:poison'],
+    p2: ['geyser:poison>fan:spore', 'summon:sporePuff>ring', 'fan:spore:gap'],
     rageText: '역병이 들끓는다!',
     intro: '썩어라. 모두 썩어라!', outro: '이 몸의 정화는… 없다…',
     deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
@@ -88,8 +94,9 @@ const BOSS_DEFS = {
     awakened: true, name: '절망의 바르곤', sprite: 'bossDespair', scale: 1.65, r: 33, hp: 650, speed: 34,
     mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
     banner: '절망의 바르곤',
-    p1: ['charge', 'snare', 'fan:rock', 'ring'],
-    p2: ['snare', 'charge', 'fan:rock', 'ring', 'snare', 'charge'],
+    punish: 'charge',
+    p1: ['charge>snare', 'fan:rock>ring'],
+    p2: ['snare>charge', 'fan:rock:gap>ring', 'snare>fan:rock'],
     rageText: '절망이 짓누른다!',
     intro: '희망을 버려라. 여기는 그런 곳이다.', outro: '절망에도… 끝이 있었나…',
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
@@ -98,8 +105,9 @@ const BOSS_DEFS = {
     awakened: true, name: '겁화의 이그니스', sprite: 'bossInferno', scale: 1.7, r: 30, hp: 850, speed: 48,
     mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
     banner: '겁화의 이그니스',
-    p1: ['fan:fire', 'charge:trail', 'geyser:fire'],
-    p2: ['geyser:fire', 'charge:trail', 'fan:fire', 'ring', 'charge:trail', 'geyser:fire'],
+    punish: 'charge', punishTrail: true,
+    p1: ['fan:fire>geyser:fire', 'charge:trail>ring'],
+    p2: ['geyser:fire>charge:trail', 'fan:fire:cross', 'charge:trail>geyser:fire'],
     rageText: '겁화가 폭주한다!',
     intro: '재조차 남기지 않겠다!', outro: '불꽃은… 꺼지지 않아… 어딘가에서…',
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
@@ -108,8 +116,9 @@ const BOSS_DEFS = {
     awakened: true, name: '진 심연의 군주 눅스', sprite: 'bossVoid', scale: 1.95, r: 30, hp: 1300, speed: 54,
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라', veils: [0.75, 0.5, 0.25] },
     banner: '진 심연의 군주 눅스',
-    p1: ['sweep', 'spiral:soul', 'ring', 'curse'],
-    p2: ['spiral:soul', 'sweep', 'curse', 'summon:voidSpawn', 'ring', 'spiral:soul'],
+    punish: 'volley', punishProj: 'soul',
+    p1: ['sweep>spiral:soul', 'ring:gap>curse'],
+    p2: ['spiral:soul>ring', 'sweep>curse>fan:soul', 'summon:voidSpawn>spiral:soul'],
     rageText: '심연이 모든 것을 삼킨다...!',
     intro: '네가 심연을 들여다볼 때, 심연도 너를 보고 있었다.', outro: '심연은… 네 안에…',
     deathPalette: ['#e43b44', '#0a0612', '#c9b8e8'],
@@ -156,6 +165,11 @@ function createBoss(floor, x, y) {
     swingCount: 0,
     aimDir: { x: -1, y: 0 },
     curses: [],
+    _comboQueue: [],   // 초식 연계 큐 (P1)
+    _delayed: [],      // 지연 탄막 (P2 변주)
+    _farT: 0,          // 카이팅 응징 게이지
+    _comboWind: false,
+    _lastPatIdx: -1,
 
     effSpeed() { return this.speed * (this.status.shock > 0 ? 0.7 : 1) * (this.phase === 2 ? 1.15 : 1); },
 
@@ -165,12 +179,32 @@ function createBoss(floor, x, y) {
       if (this.hitCd > 0) this.hitCd -= dt;
     },
 
+    _parseStep(step) {
+      const [kind, ...opts] = step.split(':');
+      return { kind, opt: opts };
+    },
+
+    // 초식 시스템 (P1): 'a>b' 콤보 문자열 + 랜덤 선택(직전 반복 회피) — 순서 암기가 안 통한다
     _nextPattern() {
       const list = this.phase === 2 ? this.def.p2 : this.def.p1;
-      const raw = list[this.patternIdx % list.length];
-      this.patternIdx++;
-      const [kind, ...opts] = raw.split(':');
-      return { kind, opt: opts };
+      let idx = Math.floor(Math.random() * list.length);
+      if (list.length > 1 && idx === this._lastPatIdx) idx = (idx + 1) % list.length;
+      this._lastPatIdx = idx;
+      const steps = list[idx].split('>');
+      this._comboQueue = steps.slice(1);
+      return this._parseStep(steps[0]);
+    },
+
+    // 초식의 다음 연계로 — 남은 연계가 없으면 idle
+    _endMove() {
+      if (this._comboQueue && this._comboQueue.length > 0) {
+        this.attack = this._parseStep(this._comboQueue.shift());
+        this._comboWind = true; // 연계는 짧은 예고 (그래도 예고는 있다)
+        this.state = 'windup';
+        this.stateT = 0;
+      } else {
+        this.state = 'idle';
+      }
     },
 
     update(dt, game) {
@@ -180,6 +214,26 @@ function createBoss(floor, x, y) {
       const dx = p.x - this.x, dy = p.y - this.y;
       const d = Math.hypot(dx, dy) || 1;
       if (this.state !== 'charge') this.flip = dx < 0;
+
+      // 지연 탄막 (P2 변주: 교차 부채꼴·속사 2연) — 첫 발사 후 잠깐 뒤 두 번째 사격
+      if (this._delayed.length > 0) {
+        for (let i = this._delayed.length - 1; i >= 0; i--) {
+          const v = this._delayed[i];
+          v.t -= dt;
+          if (v.t <= 0) {
+            const ang = v.aim ? Math.atan2(p.y - this.y, p.x - this.x) : v.baseAngle + (v.offset || 0);
+            for (let j = 0; j < v.n; j++) {
+              const a = ang + (j - (v.n - 1) / 2) * v.spread;
+              game.spawnProjectile(v.projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: v.speed, dmg: 1 });
+            }
+            AudioSys.shoot();
+            this._delayed.splice(i, 1);
+          }
+        }
+      }
+      // 카이팅 응징 (원거리 보스전 피드백): 멀리서 계속 쏘면 응징 초식이 날아온다
+      if (d > 320 && this.state === 'idle') this._farT += dt;
+      else if (d < 240) this._farT = 0;
 
       // 넉백 저항
       if (Math.abs(this.kbx) > 1 || Math.abs(this.kby) > 1) {
@@ -298,7 +352,16 @@ function createBoss(floor, x, y) {
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1);
           if (this.stateT >= wait) {
-            this.attack = this._nextPattern();
+            if (this._farT > 4.5 && this.def.punish) { // 계측: 궁수 열기3 6→15 과냉각 — 게이지 3.5→4.5
+              // 응징: 카이팅 거리를 부수는 초식 — 돌진형은 추격, 시전형은 속사 저격
+              this._farT = 0;
+              this._comboQueue = [];
+              this.attack = this.def.punish === 'charge'
+                ? { kind: 'charge', opt: this.def.punishTrail ? ['trail'] : [] }
+                : { kind: 'fan', opt: [this.def.punishProj || 'soul', 'snipe'] };
+            } else {
+              this.attack = this._nextPattern();
+            }
             this.state = 'windup';
             this.stateT = 0;
             this.aimDir = { x: dx / d, y: dy / d };
@@ -316,7 +379,8 @@ function createBoss(floor, x, y) {
               count: 1, colors: this.def.deathPalette, speed: -60, life: 0.3, size: 3,
             });
           }
-          if (this.stateT >= (windups[k] || 0.6)) {
+          if (this.stateT >= (windups[k] || 0.6) * (this._comboWind ? 0.65 : 1)) { // 연계 예고 0.55→0.65
+            this._comboWind = false;
             this.stateT = 0;
             this._execute(game, dx, dy, d);
           }
@@ -347,7 +411,7 @@ function createBoss(floor, x, y) {
               }
             }
             const maxSwings = this.phase === 2 ? 4 : 3;
-            if (this.swingCount >= maxSwings) { this.state = 'idle'; this.stateT = 0; }
+            if (this.swingCount >= maxSwings) { this._endMove(); this.stateT = 0; }
           }
           break;
         }
@@ -376,7 +440,7 @@ function createBoss(floor, x, y) {
         }
 
         case 'stunned':
-          if (this.stateT > (this.phase === 2 ? 0.6 : 1.0)) { this.state = 'idle'; this.stateT = 0; }
+          if (this.stateT > (this.phase === 2 ? 0.6 : 1.0)) { this._endMove(); this.stateT = 0; } // 그로기(딜 타임)는 온전히 — 연계는 그 후에
           break;
 
         case 'veil': {
@@ -461,20 +525,41 @@ function createBoss(floor, x, y) {
         this.swingCount = 0;
       } else if (kind === 'fan') {
         const projKind = opt[0] || 'soul';
-        // 포자 부채꼴 완화 (클린 계측: 열기0 검사 1목숨 사망 1위 = 2층 보스전 —
-        // 근접이 파고들 틈이 없었다): 스포어만 발수 -2·간격 +23%·탄속 -10%
-        const n = this.phase === 2 ? (projKind === 'spore' ? 7 : 9) : (projKind === 'spore' ? 6 : 7);
+        const variant = opt[1] || null; // P2 변주: cross(교차 2연) / gap(간극 탄막) / snipe(속사 저격 — 응징)
         const baseAngle = Math.atan2(dy, dx);
         const speeds = { soul: 195, spore: 135, fire: 210, rock: 250 };
-        const spread = projKind === 'spore' ? 0.27 : 0.22;
-        for (let i = 0; i < n; i++) {
-          const a = baseAngle + (i - (n - 1) / 2) * spread;
-          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, {
-            speed: speeds[projKind] || 200, dmg: 1,
-          });
+        const baseSpeed = speeds[projKind] || 200;
+        const volley = (n, spread, ang, spdMul = 1, gapIdx = -1) => {
+          for (let i = 0; i < n; i++) {
+            if (gapIdx >= 0 && (i === gapIdx || i === gapIdx + 1)) continue; // 의도된 안전 틈
+            const a = ang + (i - (n - 1) / 2) * spread;
+            game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, {
+              speed: baseSpeed * spdMul, dmg: 1,
+            });
+          }
+        };
+        if (variant === 'snipe') {
+          // 응징 속사: 좁고 빠른 3발 ×2연 — 서 있으면 맞고, 옆 대시면 피한다
+          volley(3, 0.09, baseAngle, 1.65); // 1.9→1.65: 휴먼 반응(150ms)으로 옆 대시가 가능한 속도
+          this._delayed.push({ t: 0.36, projKind, n: 3, spread: 0.09, aim: true, speed: baseSpeed * 1.65 });
+        } else if (variant === 'cross') {
+          // 교차 2연: 두 번째 부채꼴이 반각 어긋나 틈이 이동한다
+          const n = this.phase === 2 ? (projKind === 'spore' ? 7 : 9) : (projKind === 'spore' ? 6 : 7);
+          const spread = projKind === 'spore' ? 0.27 : 0.22;
+          volley(n, spread, baseAngle);
+          this._delayed.push({ t: 0.4, projKind, n, spread, baseAngle, offset: spread / 2, speed: baseSpeed });
+        } else if (variant === 'gap') {
+          // 간극 탄막: 넓지만 안전 틈 1곳 — 틈을 찾는 것이 플레이
+          const n = 13;
+          volley(n, 0.17, baseAngle, 0.95, 1 + Math.floor(Math.random() * (n - 4)));
+        } else {
+          // 기본 조준 부채꼴 (포자 완화 수치 유지 — 클린 계측 근거)
+          const n = this.phase === 2 ? (projKind === 'spore' ? 7 : 9) : (projKind === 'spore' ? 6 : 7);
+          const spread = projKind === 'spore' ? 0.27 : 0.22;
+          volley(n, spread, baseAngle);
         }
         AudioSys.shoot();
-        this.state = 'idle';
+        this._endMove();
       } else if (kind === 'curse') {
         const fire = opt.includes('fire');
         this.curses.push({ x: p.x, y: p.y, t: 0.9, fire });
@@ -486,7 +571,7 @@ function createBoss(floor, x, y) {
             fire,
           });
         }
-        this.state = 'idle';
+        this._endMove();
       } else if (kind === 'summon') {
         const mType = opt[0] || 'slime';
         const isElite = opt.includes('elite');
@@ -496,7 +581,7 @@ function createBoss(floor, x, y) {
           game.markers.push({ x: pos.x, y: pos.y, type: mType, elite: isElite, t: 0.7 });
         }
         AudioSys.roar();
-        this.state = 'idle';
+        this._endMove();
       } else if (kind === 'spiral') {
         // 나선 탄막 (심층 시그니처): 시전마다 회전하는 2겹 8방 탄 — 겹 사이 속도차가 나선을 그린다
         const projKind = opt[0] || 'soul';
@@ -508,7 +593,7 @@ function createBoss(floor, x, y) {
           game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a2), y: Math.sin(a2) }, { speed: 130, dmg: 1 });
         }
         AudioSys.shoot();
-        this.state = 'idle';
+        this._endMove();
       } else if (kind === 'snare') {
         // 사슬 속박 (감옥 계열 시그니처): 예고 원 → 안에 있으면 피해 + 속박
         this.curses.push({ x: p.x, y: p.y, t: 0.85, snare: true });
@@ -520,7 +605,7 @@ function createBoss(floor, x, y) {
           });
         }
         AudioSys.shoot();
-        this.state = 'idle';
+        this._endMove();
       } else if (kind === 'geyser') {
         // 간헐천 (화염/맹독 시그니처): 플레이어를 쫓는 4연속 분출 — 계속 움직여야 산다
         const flag = opt[0] === 'poison' ? { poison: true } : { fire: true };
@@ -532,19 +617,21 @@ function createBoss(floor, x, y) {
           });
         }
         AudioSys.shoot();
-        this.state = 'idle';
+        this._endMove();
       } else if (kind === 'charge') {
         this.state = 'charge';
       } else if (kind === 'ring') {
         Renderer.shake(4, 0.2);
         AudioSys.thud();
-        game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 300, width: 15, dmg: 1 });
+        // 간극 링 (P2): 안전 부채꼴 1곳 — 대시 없이도 읽으면 피할 길이 있다
+        const gap = opt.includes('gap') ? { gapA: Math.random() * Math.PI * 2, gapW: 1.0 } : {};
+        game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 300, width: 15, dmg: 1, ...gap });
         if (this.phase === 2 && Dungeon.floor >= 3) { // 이중 링은 3층부터 — 입문 보스에서 대시 2관리 요구는 과했다
-          game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 210, width: 15, dmg: 1 });
+          game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 210, width: 15, dmg: 1, ...gap });
         }
-        this.state = 'idle';
+        this._endMove();
       } else {
-        this.state = 'idle';
+        this._endMove();
       }
       this.stateT = 0;
     },

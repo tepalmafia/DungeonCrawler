@@ -124,7 +124,12 @@ const GameRender = {
       ctx.strokeStyle = '#e8e0cf';
       ctx.lineWidth = ring.width * 0.6;
       ctx.beginPath();
-      ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+      if (ring.gapW) {
+        // 간극 링: 안전 틈이 눈에 보인다 — 읽고 걸어 들어가면 산다
+        ctx.arc(ring.x, ring.y, ring.r, ring.gapA + ring.gapW / 2, ring.gapA - ring.gapW / 2 + Math.PI * 2);
+      } else {
+        ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+      }
       ctx.stroke();
       ctx.restore();
     }

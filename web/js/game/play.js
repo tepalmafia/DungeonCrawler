@@ -41,6 +41,9 @@ const GamePlay = {
     const cols = b.venom ? ['#c9d94a', '#6ada8a', '#38b764'] : ['#8a5ac2', '#c56cf0', '#ffd866'];
     this._explode(b.x, b.y, b.aoe, Math.max(1, Math.ceil(p.currentAtk() * 0.6)), cols, b.venom ? '#c9d94a' : '#c56cf0'); // 파이어볼 폭발 하향 (리그 +79%→목표 ~45%)
     if (!b.venom) return;
+    // 직업 분화 (실플레이 "마도사와 구분 안 됨"): 플라스크는 자리에 산성 웅덩이를 남긴다 —
+    // 마도사 = 순간 폭발 누커, 연금술사 = 바닥을 장악하는 지역전
+    this.zones.push({ x: b.x, y: b.y, r: Math.max(30, Math.round(b.aoe * 0.9)), life: 2.2, kind: 'poison', tickT: 0.4 });
     const elem = b.catalyst ? ['poison', 'burn', 'shock'][Math.floor(Math.random() * 3)] : 'poison';
     const dur = elem === 'poison' ? (p.flags.al_acid ? 5 : 3) : elem === 'burn' ? 2.5 : 2;
     for (const e of this.enemies) {
@@ -375,7 +378,15 @@ const GamePlay = {
       const ring = this.rings[i];
       ring.r += ring.speed * dt;
       const pd = Math.hypot(p.x - ring.x, p.y - ring.y);
-      if (Math.abs(pd - ring.r) < ring.width) {
+      // 간극 링 (P2): 안전 부채꼴 안에 있으면 통과
+      let inGap = false;
+      if (ring.gapW) {
+        let da = Math.atan2(p.y - ring.y, p.x - ring.x) - ring.gapA;
+        while (da > Math.PI) da -= Math.PI * 2;
+        while (da < -Math.PI) da += Math.PI * 2;
+        inGap = Math.abs(da) < ring.gapW / 2;
+      }
+      if (!inGap && Math.abs(pd - ring.r) < ring.width) {
         // 무적 중이어도 hurtPlayer로 — 대시 관통 시 완벽 회피 판정이 살아난다
         const dir = { x: (p.x - ring.x) / (pd || 1), y: (p.y - ring.y) / (pd || 1) };
         this.hurtPlayer(ring.dmg, dir, 300);
