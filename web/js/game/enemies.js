@@ -562,7 +562,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     wraith: () => ({
       hp: 3, r: 13, speed: 95, xpVal: 11, sprite: 'wraith',
       phased: true, // 비물질 상태로 시작
-      stateT: 0,
+      stateT: 0, windT: 0, lungeT: 0, lungeDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt);
         this.stateT += dt;
@@ -572,19 +572,31 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.flip = dx < 0;
 
         if (this.phased) {
-          // 벽 통과로 접근, 공격 불가·피격 무효
+          // 벽 통과로 접근 — 사냥감이 가까울 때만 실체화한다 (거리 응답: 기습형)
           World.moveGhost(this, (dx / d) * this.speed * 1.2 * dt, (dy / d) * this.speed * 1.2 * dt);
-          if (this.stateT > 1.6) {
+          if ((this.stateT > 1.6 && d < 150) || this.stateT > 3.4) {
             this.phased = false;
             this.stateT = 0;
+            this.windT = 0.45; // 실체화 예고 — 이 사이에 벗어날 수 있다
+            this.lungeDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
             Particles.burst(this.x, this.y, { count: 8, colors: ['#a9c1d8', '#5d6b84'], speed: 70, life: 0.35, size: 3 });
           }
+        } else if (this.windT > 0) {
+          this.windT -= dt; // 형체가 굳는 순간 — 움직이지 않는다 (조준은 이미 굳었다)
+          if (this.windT <= 0 && d < 220) {
+            this.lungeT = 0.24; // 손톱 급습
+          }
+        } else if (this.lungeT > 0) {
+          this.lungeT -= dt;
+          World.moveEntity(this, this.lungeDir.x * 330 * dt, this.lungeDir.y * 330 * dt);
+          this.touchPlayer(game, 1);
         } else {
           this.applyKnockback(dt);
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           this.touchPlayer(game, 1);
-          if (this.stateT > 2.2) {
+          // 멀어지면 다시 흩어져 벽 너머로 쫓는다
+          if (this.stateT > 2.2 || (d > 230 && this.stateT > 0.8)) {
             this.phased = true;
             this.stateT = 0;
           }
@@ -592,8 +604,10 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const bob = Math.sin(this.animT * 3) * 4;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, {
-          flip: this.flip, alpha: this.phased ? 0.35 : 0.95, shadow: !this.phased,
+        const wind = this.windT > 0;
+        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x + (wind ? (Math.random() - 0.5) * 3 : 0), this.y - bob, {
+          flip: this.flip, alpha: this.phased ? 0.35 : wind ? 0.6 : 0.95, shadow: !this.phased,
+          squashX: this.lungeT > 0 ? 1.35 : 1,
         });
         this.drawStatus(ctx);
       },
@@ -1119,13 +1133,30 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     // ── 흡혈 거머리: 끈질기게 붙는다 (짧은 접촉 쿨) ──
     leech: () => ({
       hp: 3, r: 11, speed: 132, xpVal: 7, sprite: 'leech',
+      coilT: 0, springT: 0, springCd: 1.2, springDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.springCd > 0) this.springCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
-        const spd = this.effSpeed() * (0.7 + Math.abs(Math.sin(this.animT * 7)) * 0.6); // 꿈틀꿈틀
-        World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
         this.flip = dx < 0;
+        if (this.coilT > 0) {
+          this.coilT -= dt; // 몸을 말아 조준 — 그 자리에 멈춘다 (예고 중 옆으로 비키면 빗나간다)
+          if (this.coilT <= 0) this.springT = 0.3;
+        } else if (this.springT > 0) {
+          this.springT -= dt; // 용수철처럼 튕겨 날아간다 — 방향은 말기 시작에 이미 굳었다
+          World.moveEntity(this, this.springDir.x * 320 * dt, this.springDir.y * 320 * dt);
+        } else {
+          const spd = this.effSpeed() * (0.7 + Math.abs(Math.sin(this.animT * 7)) * 0.6); // 꿈틀꿈틀
+          World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+          // 거리 응답: 중거리에선 도약으로 간격을 접는다
+          if (this.springCd <= 0 && d > 90 && d < 190 &&
+              !game.enemies.some((e) => e !== this && !e.dead && e.type === 'leech' && (e.coilT > 0 || e.springT > 0))) {
+            // 무리 스태거: 동시에 한 마리만 도약한다 — 회피선이 남아있어야 공정하다
+            this.coilT = 0.42; this.springCd = 3.0;
+            this.springDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
+          }
+        }
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
         if (this.hitCd <= 0 && d < p.r + this.r) {
           this.hitCd = 0.7; // 2층 절벽 완화
@@ -1134,7 +1165,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const wig = 1 + Math.sin(this.animT * 10) * 0.25;
-        Renderer.drawSprite(this.skin(Sprites.leech), this.x, this.y, { flip: this.flip, squashX: wig, squashY: 2 - wig, shadow: true });
+        const sqx = this.coilT > 0 ? 0.55 : this.springT > 0 ? 1.6 : wig;
+        const sqy = this.coilT > 0 ? 1.5 : this.springT > 0 ? 0.7 : 2 - wig;
+        Renderer.drawSprite(this.skin(Sprites.leech), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true });
         this.drawStatus(ctx);
       },
     }),
@@ -1194,26 +1227,46 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     // ── 광전사: HP 절반 이하에서 격노 (속도·공세 급증) ──
     berserker: () => ({
       hp: 8, r: 15, speed: 66, xpVal: 13, sprite: 'berserker',
+      roarT: 0, rushT: 0, rushCd: 2.5, rushDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.rushCd > 0) this.rushCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
         const enraged = this.hp <= this.maxHp * 0.5;
-        const spd = this.effSpeed() * (enraged ? 1.9 : 1);
-        World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
         this.flip = dx < 0;
+        if (this.roarT > 0) {
+          this.roarT -= dt; // 도끼를 치켜들고 포효 — 달려올 직선은 포효 순간 정해졌다
+          if (this.roarT <= 0) this.rushT = 0.85;
+        } else if (this.rushT > 0) {
+          this.rushT -= dt;
+          const hit = World.moveEntity(this, this.rushDir.x * 250 * dt, this.rushDir.y * 250 * dt);
+          if (hit.x || hit.y) this.rushT = 0; // 벽에 막히면 돌진이 끊긴다
+          this.touchPlayer(game, enraged ? 2 : 1);
+        } else {
+          const spd = this.effSpeed() * (enraged ? 1.9 : 1);
+          World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
+          // 거리 응답: 멀리서 얼쩡거리면 포효하고 덮쳐온다
+          if (this.rushCd <= 0 && d > 240) {
+            this.roarT = enraged ? 0.35 : 0.55; this.rushCd = 5.0;
+            this.rushDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
+          }
+          this.touchPlayer(game, enraged ? 2 : 1);
+        }
         if (enraged && Math.random() < 0.15) {
           Particles.burst(this.x, this.y - 14, { count: 1, colors: ['#e43b44'], speed: 30, life: 0.3, size: 2, gravity: -100 });
         }
-        this.touchPlayer(game, enraged ? 2 : 1);
       },
       draw(ctx) {
         const enraged = this.hp <= this.maxHp * 0.5;
-        const shakeX = enraged ? (Math.random() - 0.5) * 2.5 : 0;
-        Renderer.drawSprite(this.skin(Sprites.berserker), this.x + shakeX, this.y, { flip: this.flip, shadow: true });
-        if (enraged) {
+        const roaring = this.roarT > 0;
+        const shakeX = roaring ? (Math.random() - 0.5) * 4 : enraged ? (Math.random() - 0.5) * 2.5 : 0;
+        Renderer.drawSprite(this.skin(Sprites.berserker), this.x + shakeX, this.y, {
+          flip: this.flip, shadow: true, squashY: roaring ? 1.12 : 1, rot: this.rushT > 0 ? (this.flip ? -0.1 : 0.1) : 0,
+        });
+        if (roaring || enraged) {
           ctx.fillStyle = '#e43b44'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
-          ctx.fillText('격노!', this.x, this.y - 28);
+          ctx.fillText(roaring ? '포효!' : '격노!', this.x, this.y - 28);
         }
         this.drawStatus(ctx);
       },
@@ -1786,13 +1839,32 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     // ── [4층] 불씨: 작고 빠른 돌격 — 죽으면 그 자리에 불길 ──
     cinder: () => ({
       hp: 2, r: 10, speed: 100, xpVal: 5, sprite: 'cinder',
+      flareT: 0, burstT: 0, flareCd: 1.5, emberCd: 0,
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
+        if (this.flareCd > 0) this.flareCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
         this.flip = dx < 0;
-        const wig = Math.sin(this.animT * 9) * 0.5;
-        World.moveEntity(this, (dx / d + -dy / d * wig) * this.effSpeed() * dt, (dy / d + dx / d * wig) * this.effSpeed() * dt);
+        if (this.flareT > 0) {
+          this.flareT -= dt; // 확 타오르며 멈춘다 — 가속의 전조
+          if (Math.random() < 0.5) {
+            Particles.burst(this.x, this.y, { count: 2, colors: ['#ffd866', '#fff7c0'], speed: 60, life: 0.25, size: 2 });
+          }
+          if (this.flareT <= 0) this.burstT = 0.9;
+        } else if (this.burstT > 0) {
+          this.burstT -= dt; // 거리 응답: 불꽃 가속 — 지나간 자리에 불씨가 흩어진다
+          this.emberCd -= dt;
+          World.moveEntity(this, (dx / d) * this.effSpeed() * 1.9 * dt, (dy / d) * this.effSpeed() * 1.9 * dt);
+          if (this.emberCd <= 0) {
+            this.emberCd = 0.16;
+            game.firePatches.push({ x: this.x, y: this.y, r: 10, life: 0.5, kind: 'fire' });
+          }
+        } else {
+          const wig = Math.sin(this.animT * 9) * 0.5;
+          World.moveEntity(this, (dx / d + -dy / d * wig) * this.effSpeed() * dt, (dy / d + dx / d * wig) * this.effSpeed() * dt);
+          if (this.flareCd <= 0 && d > 190) { this.flareT = 0.38; this.flareCd = 4.6; }
+        }
         if (Math.random() < 0.15) {
           Particles.burst(this.x, this.y, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 30, life: 0.3, size: 2, gravity: -100 });
         }
@@ -1811,22 +1883,39 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     // ── [4층] 재의 보행자: 느린 탱커 — 걸음마다 불길을 남겨 지형을 잠식한다 ──
     ashWalker: () => ({
       hp: 8, r: 16, speed: 40, xpVal: 13, sprite: 'ashWalker',
-      trailCd: 0,
+      trailCd: 0, spitT: 0, spitCd: 2,
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
         if (this.trailCd > 0) this.trailCd -= dt;
+        if (this.spitCd > 0) this.spitCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
         this.flip = dx < 0;
-        World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
-        if (this.trailCd <= 0) {
-          this.trailCd = 0.6;
-          game.firePatches.push({ x: this.x, y: this.y + 4, r: 18, life: 1.2, kind: 'fire' });
+        if (this.spitT > 0) {
+          this.spitT -= dt; // 멈춰서 가슴의 잉걸불을 그러모은다
+          if (this.spitT <= 0) {
+            game.spawnProjectile('fire', this.x, this.y - 6, { x: dx / d, y: dy / d }, { speed: 170, dmg: 1 });
+            AudioSys.shoot();
+          }
+        } else {
+          World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
+          if (this.trailCd <= 0) {
+            this.trailCd = 0.6;
+            game.firePatches.push({ x: this.x, y: this.y + 4, r: 18, life: 1.2, kind: 'fire' });
+          }
+          // 거리 응답: 느린 걸음을 비웃으며 카이팅하면 잉걸불을 뱉는다
+          if (this.spitCd <= 0 && d > 170 && d < 340) { this.spitT = 0.5; this.spitCd = 5.2; }
         }
         this.touchPlayer(game, 1);
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(Sprites.ashWalker), this.x, this.y, { flip: this.flip, shadow: true });
+        const heat = this.spitT > 0 ? 1 + (0.5 - this.spitT) * 0.3 : 1;
+        Renderer.drawSprite(this.skin(Sprites.ashWalker), this.x, this.y, {
+          flip: this.flip, shadow: true, squashX: heat, squashY: heat,
+        });
+        if (this.spitT > 0 && Math.random() < 0.5) {
+          Particles.burst(this.x, this.y - 8, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 40, life: 0.3, size: 3, gravity: -80 });
+        }
         this.drawStatus(ctx);
       },
     }),
@@ -1994,21 +2083,37 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     // ── [6층] 피의 박쥐: 급강하로 물면 제 피를 채운다 — 방치하면 계속 회복 ──
     bloodBat: () => ({
       hp: 4, r: 11, speed: 95, xpVal: 10, sprite: 'bloodBat',
-      wanderT: 0, wx: 0, wy: 0,
+      wanderT: 0, wx: 0, wy: 0, aimT: 0, dartT: 0, dartCd: 2, dartDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
         this.wanderT -= dt;
+        if (this.dartCd > 0) this.dartCd -= dt;
         const p = game.player;
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
         this.flip = dx < 0;
-        if (this.wanderT <= 0) {
-          this.wanderT = 0.5 + Math.random() * 0.5;
-          const jitter = (Math.random() - 0.5) * 1.6;
-          this.wx = dx / d + -dy / d * jitter;
-          this.wy = dy / d + dx / d * jitter;
+        if (this.aimT > 0) {
+          this.aimT -= dt; // 공중에 딱 멈춰 노려본다 — 안광이 켜진 곳이 곧 궤도다
+          if (this.aimT <= 0) this.dartT = 0.32;
+        } else if (this.dartT > 0) {
+          this.dartT -= dt; // 혈침 돌격 — 직선이라 옆걸음이면 빗나간다
+          World.moveEntity(this, this.dartDir.x * 300 * dt, this.dartDir.y * 300 * dt);
+        } else {
+          if (this.wanderT <= 0) {
+            this.wanderT = 0.5 + Math.random() * 0.5;
+            const jitter = (Math.random() - 0.5) * 1.6;
+            this.wx = dx / d + -dy / d * jitter;
+            this.wy = dy / d + dx / d * jitter;
+          }
+          const wd = Math.hypot(this.wx, this.wy) || 1;
+          World.moveEntity(this, (this.wx / wd) * this.effSpeed() * dt, (this.wy / wd) * this.effSpeed() * dt);
+          // 거리 응답: 중거리에서 정지 조준 후 급습
+          if (this.dartCd <= 0 && d > 130 && d < 260 &&
+              !game.enemies.some((e) => e !== this && !e.dead && e.type === 'bloodBat' && (e.aimT > 0 || e.dartT > 0))) {
+            // 무리 스태거: 동시에 한 마리만 혈침을 쏜다
+            this.aimT = 0.38; this.dartCd = 3.2;
+            this.dartDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
+          }
         }
-        const wd = Math.hypot(this.wx, this.wy) || 1;
-        World.moveEntity(this, (this.wx / wd) * this.effSpeed() * dt, (this.wy / wd) * this.effSpeed() * dt);
         const ph = p.hp;
         this.touchPlayer(game, 1);
         if (p.hp < ph) {
@@ -2017,8 +2122,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
       },
       draw(ctx) {
-        const bob = Math.sin(this.animT * 10) * 5;
-        Renderer.drawSprite(this.skin(Sprites.bloodBat), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        const bob = this.aimT > 0 ? 0 : Math.sin(this.animT * 10) * 5; // 조준 중엔 날갯짓이 멎는다
+        Renderer.drawSprite(this.skin(Sprites.bloodBat), this.x, this.y - bob, {
+          flip: this.flip, shadow: true, squashX: this.dartT > 0 ? 1.3 : 1,
+        });
+        if (this.aimT > 0) {
+          ctx.fillStyle = '#ff4757';
+          ctx.fillRect(this.x - 1, this.y - 16, 2, 2); // 핏빛 안광
+        }
         this.drawStatus(ctx);
       },
     }),
