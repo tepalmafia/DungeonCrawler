@@ -8,6 +8,13 @@ const GameRewards = {
     // 사망 리포트: 직전 런과의 비교 기준 저장 (덮어쓰기 전에 백업)
     this.prevRun = Meta.data.lastRun || null;
     Meta.data.lastRun = { floor: Dungeon.floor, level: this.level, kills: this.kills, victory: !!victory };
+    // 보스 러시 기록: 도달 군주 수 + 최속 완주
+    if (this.bossRush) {
+      const rec = Meta.data.rushBest || { floor: 0, time: 0 };
+      rec.floor = Math.max(rec.floor, Dungeon.floor - (victory ? 0 : 1));
+      if (victory && (!rec.time || this.time < rec.time)) rec.time = this.time;
+      Meta.data.rushBest = rec;
+    }
     // 오늘의 탑 기록 (최고 층 갱신 + 도전 횟수)
     if (this.dailyRun) {
       const rec = Meta.data.daily;
@@ -163,6 +170,17 @@ const GameRewards = {
   },
 
   _afterBossReward() {
+    // 보스 러시: 문 없이 곧장 다음 군주 — 회복 2 + 특성 2장이 막간의 숨
+    if (this.bossRush) {
+      const p = this.player;
+      p.hp = Math.min(p.maxHp, p.hp + 2);
+      Dungeon.floor++;
+      Dungeon.roomIndex = Dungeon.totalRooms;
+      Dungeon.build('boss');
+      this.pendingChoices += 2;
+      this.openTraitChoice('elite');
+      return;
+    }
     // 지름길 (R3): 3·6층 보스 처치 후 갈림길 — 한 층을 건너뛰되 도착 층은 정예가 들끓는다.
     // 런 중반의 '큰 결정'을 만든다 (9층은 제외 — 최종 보스를 건너뛸 수는 없다)
     const opts = [{ type: 'nextfloor', ...ROOM_META.nextfloor }];

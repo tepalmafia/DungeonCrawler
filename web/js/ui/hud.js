@@ -394,12 +394,13 @@ const HUD = {
     ];
   },
 
-  // 열기 서약 칩 5개 — 시작 화면에서 개별 클릭 토글 (허브 버튼 y=278 위에 꽉 맞춘다)
+  // 열기 서약 칩 — 시작 화면에서 개별 클릭 토글 (허브 버튼 y=278 위에 꽉 맞춘다)
   pactChipRects() {
-    const w = 108, h = 18, gap = 6;
-    const total = 5 * w + 4 * gap;
+    const n = HEAT_PACTS.length;
+    const w = n > 5 ? 100 : 108, h = 18, gap = 5;
+    const total = n * w + (n - 1) * gap;
     const x0 = (Renderer.W - total) / 2;
-    return [0, 1, 2, 3, 4].map((i) => ({ x: x0 + i * (w + gap), y: 256, w, h }));
+    return HEAT_PACTS.map((_, i) => ({ x: x0 + i * (w + gap), y: 256, w, h }));
   },
 
   backButtonRect() {
@@ -543,6 +544,19 @@ const HUD = {
       ctx.fillStyle = '#666a80';
       ctx.fillText(labels[i].sub, r.x + 22, r.y + 37);
     });
+
+    // 보스 러시 — 첫 정복 후 해금되는 두 번째 도전 모드 (좌하단 — 허브 버튼과 안 겹치게)
+    if (Meta.data.wins > 0) {
+      const rec = Meta.data.rushBest;
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText(
+        rec && rec.floor > 0
+          ? `⚔ B — 보스 러시 · ${rec.floor}군주${rec.time ? ` ${(rec.time / 60).toFixed(1)}분` : ''}`
+          : '⚔ B — 보스 러시',
+        24, Renderer.H - 30);
+    }
 
     // 오늘의 탑 — 날짜 시드 도전 안내 + 오늘 기록
     {

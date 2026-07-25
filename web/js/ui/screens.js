@@ -152,6 +152,22 @@ const GameScreens = {
 
     // 오늘의 탑 (D): 날짜 기반 고정 시드 — 오늘은 모두가 같은 던전에 도전한다
     if (Input.pressed('KeyD')) this.startDaily();
+    // 보스 러시 (B): 첫 정복 후 해금
+    if (Input.pressed('KeyB') && Meta.data.wins > 0) { this.clearRunSave(); this.startBossRush(); }
+  },
+
+  // 보스 러시 (B): 10보스 연속전 — 방·탐색 없이 보스전만. 시작 특성 4장, 보스마다 특성 2장 + 유물
+  startBossRush() {
+    this.restart();
+    this.bossRush = true;
+    this.clearRunSave();
+    Dungeon.floor = 1;
+    Dungeon.roomIndex = Dungeon.totalRooms; // 문 로직이 곧장 보스로 향하도록
+    Dungeon.build('boss');
+    this.pendingChoices = 4; // 시작 빌드 — 맨몸으로 카론과 싸울 수는 없다
+    this.openTraitChoice('elite');
+    AudioSys.roar();
+    this.banner = { text: '보스 러시 — 열 군주가 연이어 온다', life: 3, maxLife: 3, color: '#e43b44' };
   },
 
   startDaily() {

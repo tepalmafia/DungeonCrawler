@@ -82,7 +82,8 @@ function createPlayer(x, y, classId = 'knight') {
       const base = { knight: 5, archer: 6, mage: 7 }[this.classId] || 5;
       // 스킬 쿨 하한 (밸런스 점검): 시간 왜곡 × 직업 쿨감 3중첩 + 처치 시 -0.3s가 겹치면
       // 사실상 상시 스킬이 된다 — 최소 1.5초는 유지
-      return Math.max(1.5, base * this.skillCdMul);
+      const pact = (typeof Game !== 'undefined' && Game.pacts && Game.pacts.skill) ? 1.25 : 1; // 서약 '짧은 심지'
+      return Math.max(1.5, base * this.skillCdMul * pact);
     },
 
     skillName() {

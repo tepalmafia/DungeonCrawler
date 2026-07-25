@@ -241,6 +241,7 @@ const Dungeon = {
     // 물량 상향 (2026-07 몬스터 확장): 기본 +1, 층 기울기 0.9→1.0, 상한 16→18
     const n = Math.max(3, Math.min(18, 4 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 1.0) + heatBonus - earlyEase));
     let eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
+    if (Game.pacts && Game.pacts.elite) eliteChance = Math.min(0.55, eliteChance + 0.10); // 서약 '성난 망령'
     if (this.shortcutHot) eliteChance = Math.min(0.5, eliteChance * 2); // 지름길 층: 정예 2배
 
     // 설계된 위협 세트 (R2): 45% 확률로 손제작 조합이 무리의 뼈대가 된다
