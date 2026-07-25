@@ -181,7 +181,7 @@ const GameCombat = {
     const p = this.player;
 
     // 처치 시 스킬 쿨다운 0.3초 감소 — 무리를 잘 쓸수록 스킬이 자주 돈다
-    if (p.skillCd > 0) p.skillCd = Math.max(0, p.skillCd - 0.3);
+    if (p.skillCd > 0) p.skillCd = Math.max(0, p.skillCd - 0.15); // 0.3→0.15: 물량방 '무한 스킬' 체감 완화 (실플레이 피드백)
 
     // 사망 시 발동 효과 (적 고유 + 특성 + 유물)
     if (e.onDeath) e.onDeath(this);

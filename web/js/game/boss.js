@@ -23,8 +23,11 @@ const BOSS_DEFS = {
     name: '포자왕 믹서스', sprite: 'bossSpore', scale: 1.1, r: 32, hp: 190, speed: 34, // 계측: 2층 사망이 전체의 절반 — 전투 길이 단축
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '포자왕 믹서스',
-    p1: ['fan:spore', 'ring', 'summon:mushroom'],
-    p2: ['fan:spore', 'ring', 'summon:toxicSlime', 'curse'],
+    // 분산 귀속 (열기5): 보스방 사망의 60%가 소환수(독슬라임 독구름 r52 + 버섯 근접 포자) —
+    // 재생 정지를 위해 부하를 근접 처치해야 하는 검사가 독구름 루프에 갇혔다.
+    // 소환수를 경량 포자 방울(독구름 r32/1.5s)로 교체 — 기믹(부하 처치=재생 정지)은 유지
+    p1: ['fan:spore', 'ring', 'summon:sporePuff'],
+    p2: ['fan:spore', 'ring', 'summon:sporePuff', 'curse'],
     rageText: '포자가 미친 듯이 흩날린다!',
     intro: '포자는 모든 것을 덮는다.', outro: '흩어지는 것도… 나쁘지 않군…',
     deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],

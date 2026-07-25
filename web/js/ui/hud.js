@@ -458,7 +458,9 @@ const HUD = {
       ctx.fillText(`열기 ${heat}  ${flames}`, Renderer.W / 2, 248);
       ctx.font = '11px monospace';
       ctx.fillStyle = '#666a80';
-      const heatDesc = ['보통 난이도', '적 HP +25%', '+ 적 수 증가', '+ 적 속도 +15%', '+ 회복 감소', '+ 보스 강화, 시작 HP -1'][heat];
+      // 열기 효과는 '누적' — 현재 단계까지의 전체 효과를 한 줄로 (중복 표시 오해 방지)
+      const parts = ['적 HP 강화(층 비례)', '적 수 +2 (3층부터)', '적 속도 +15%', '회복 감소', '보스 +50%·시작 HP -1'];
+      const heatDesc = heat === 0 ? '보통 난이도' : '누적: ' + parts.slice(0, heat).join(' · ');
       ctx.fillText(`${heatDesc} · 파편 +${heat * 20}%`, Renderer.W / 2, 266);
     }
 
@@ -516,7 +518,7 @@ const HUD = {
       ctx.fillText('⚙ 테스트 모드 ON (T로 끄기)', 24, Renderer.H - 20);
       ctx.font = '11px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText('O 파편+500 · I 도감 완성 · Y 직업/열기 해금 · V 봇 모드 · 게임 중 G무적 K전멸 N다음층...', 24, Renderer.H - 40);
+      ctx.fillText('O 파편+500 · I 도감 완성 · Y 직업/열기 해금 · V 봇 모드 · 게임 중 G무적 X전멸 N다음층...', 24, Renderer.H - 40);
     }
   },
 
