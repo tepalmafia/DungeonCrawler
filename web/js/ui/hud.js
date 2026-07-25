@@ -69,10 +69,7 @@ const HUD = {
       ctx.strokeStyle = trait.color;
       ctx.lineWidth = 1;
       ctx.strokeRect(14.5, y + 0.5, 17, 17);
-      ctx.fillStyle = trait.color;
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(trait.name[0], 23, y + 13);
+      ctx.drawImage(Icons.trait(id), 15, y + 1, 16, 16);
       if (counts[id] > 1) {
         ctx.fillStyle = '#e8e0cf';
         ctx.font = '10px monospace';
@@ -100,10 +97,7 @@ const HUD = {
       ctx.strokeStyle = RARITY[relic.rarity].color;
       ctx.lineWidth = relic.rarity === 'legendary' ? 2 : 1;
       ctx.strokeRect(x + 0.5, y + 0.5, 19, 19);
-      ctx.fillStyle = RARITY[relic.rarity].color;
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(relic.name[0], x + 10, y + 15);
+      ctx.drawImage(Icons.relic(id), x + 1, y + 1, 18, 18);
     });
     if (p.relics.length > maxRelicChips) {
       ctx.fillStyle = '#666a80';
@@ -298,6 +292,11 @@ const HUD = {
       ctx.font = 'bold 11px monospace';
       ctx.fillStyle = color;
       ctx.fillText(tagFn(c), cx, r.y + lift + 26);
+      // 픽셀 아이콘 (우상단 장식) — 유물은 rarity, 특성은 tag로 구분
+      if (c.id) {
+        const ic = c.rarity ? Icons.relic(c.id) : Icons.trait(c.id);
+        if (ic) ctx.drawImage(ic, r.x + r.w - 32, r.y + lift + 8, 24, 24);
+      }
       ctx.font = 'bold 18px monospace';
       ctx.fillStyle = '#e8e0cf';
       ctx.fillText(c.name, cx, r.y + lift + 52);
@@ -858,9 +857,8 @@ const HUD = {
         ctx.strokeRect(r.x, r.y, r.w, r.h);
         ctx.textAlign = 'center';
         if (owned) {
-          ctx.font = 'bold 22px monospace';
-          ctx.fillStyle = rar.color;
-          ctx.fillText(rl.name[0], r.x + r.w / 2, r.y + 40);
+          const ic = Icons.relic(rl.id);
+          ctx.drawImage(ic, r.x + r.w / 2 - 21, r.y + 12, 42, 42);
           ctx.font = '11px monospace';
           ctx.fillStyle = '#e8e0cf';
           ctx.fillText(rl.name, r.x + r.w / 2, r.y + r.h - 12);
@@ -888,9 +886,8 @@ const HUD = {
         ctx.strokeRect(r.x, r.y, r.w, r.h);
         ctx.textAlign = 'center';
         if (picks > 0) {
-          ctx.font = 'bold 18px monospace';
-          ctx.fillStyle = t.color;
-          ctx.fillText(t.name[0], r.x + r.w / 2, r.y + 30);
+          const ic = Icons.trait(t.id);
+          ctx.drawImage(ic, r.x + r.w / 2 - 16, r.y + 7, 32, 32);
           ctx.font = '10px monospace';
           ctx.fillStyle = '#e8e0cf';
           ctx.fillText(t.name, r.x + r.w / 2, r.y + r.h - 20);
