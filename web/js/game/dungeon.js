@@ -56,23 +56,23 @@ const FLOOR_DATA = {
   9: { name: '화형장', enemies: ['magmaSlime', 'magmaSlime', 'imp', 'obsidianBeast', 'flameJuggler', 'lavaBurster'], rule: '착탄 예고 원을 읽어라 — 장판이 겹치면 도망칠 곳이 없다' },
   10: { name: '처형인의 홀', enemies: ['voidEye', 'glutton', 'voidSpawn', 'voidSpawn', 'riftCaster', 'mirrorKnight'], rule: '거울 기사의 반격 자세가 끝나기 전에 물러나라' },
   // ── 2막: 균사 정원 (11~20층) — 탑 아래에 뿌리내린 거대 균사체의 영역 ──
-  11: { name: '홀씨 들판',     enemies: ['sporeling', 'sporeling', 'mushroom', 'sporePuff', 'fungalTick', 'frog'], rule: '홀씨 새끼의 시체 구름을 밟지 마라' },
-  12: { name: '홀씨 들판 심부', enemies: ['sporeling', 'fungalTick', 'fungalTick', 'mushroom', 'sporeMother', 'acidSnail'], rule: '홀씨 새끼의 시체 구름을 밟지 마라' },
-  13: { name: '발광 습지',     enemies: ['frog', 'toxicSlime', 'glowShrieker', 'fungalTick', 'acidSlug', 'sporeling'], rule: '절규자의 함성이 무리를 가속시킨다 — 먼저 끊어라' },
-  14: { name: '발광 습지 심부', enemies: ['glowShrieker', 'toxicSlime', 'acidSlug', 'sporeling', 'sporeMother', 'spider'], rule: '절규자의 함성이 무리를 가속시킨다 — 먼저 끊어라' },
-  15: { name: '곰팡이 회랑',   enemies: ['myceliumBrute', 'venomLasher', 'sporePuff', 'fungalTick', 'glowShrieker', 'sporeling'], rule: '거한의 내려찍기 자리가 독으로 물든다' },
-  16: { name: '곰팡이 회랑 심부', enemies: ['myceliumBrute', 'myceliumBrute', 'venomLasher', 'thornPlant', 'glowShrieker', 'fungalTick'], rule: '거한의 내려찍기 자리가 독으로 물든다' },
-  17: { name: '부패의 온상',   enemies: ['rotWalker', 'rotWalker', 'ghoul', 'toxicSlime', 'sporeMother', 'acidSlug'], rule: '보행자의 발자국이 땅을 썩게 한다' },
-  18: { name: '부패의 온상 심부', enemies: ['rotWalker', 'myceliumBrute', 'ghoul', 'venomLasher', 'sporeMother', 'glowShrieker'], rule: '보행자의 발자국이 땅을 썩게 한다' },
-  19: { name: '여왕의 안뜰',   enemies: ['sporeling', 'sporeling', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'fungalTick'], rule: '여왕의 정원에서는 모든 것이 자란다 — 빨리 베어라' },
-  20: { name: '균사 여왕의 옥좌', enemies: ['sporeling', 'fungalTick', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'sporeMother'], rule: '여왕의 정원에서는 모든 것이 자란다 — 빨리 베어라' },
+  11: { name: '안개 낀 강둑', enemies: ['sporeling', 'sporeling', 'mushroom', 'sporePuff', 'fungalTick', 'frog'], rule: '물에 불은 시체가 터뜨리는 독기를 밟지 마라' },
+  12: { name: '강둑 하류', enemies: ['sporeling', 'fungalTick', 'fungalTick', 'mushroom', 'sporeMother', 'acidSnail'], rule: '물에 불은 시체가 터뜨리는 독기를 밟지 마라' },
+  13: { name: '하수 수문', enemies: ['frog', 'toxicSlime', 'glowShrieker', 'fungalTick', 'acidSlug', 'sporeling'], rule: '나팔수의 나팔이 토벌대를 가속시킨다 — 먼저 끊어라' },
+  14: { name: '수문 안쪽', enemies: ['glowShrieker', 'toxicSlime', 'acidSlug', 'sporeling', 'sporeMother', 'spider'], rule: '나팔수의 나팔이 토벌대를 가속시킨다 — 먼저 끊어라' },
+  15: { name: '관문 회랑', enemies: ['myceliumBrute', 'venomLasher', 'sporePuff', 'fungalTick', 'glowShrieker', 'sporeling'], rule: '관문 골렘의 내려찍기 자리가 오물로 물든다' },
+  16: { name: '관문 내성벽', enemies: ['myceliumBrute', 'myceliumBrute', 'venomLasher', 'thornPlant', 'glowShrieker', 'fungalTick'], rule: '관문 골렘의 내려찍기 자리가 오물로 물든다' },
+  17: { name: '성벽 아래 오물길', enemies: ['rotWalker', 'rotWalker', 'ghoul', 'toxicSlime', 'sporeMother', 'acidSlug'], rule: '오물 보행자의 발자국이 땅을 썩게 한다' },
+  18: { name: '오물길 막장', enemies: ['rotWalker', 'myceliumBrute', 'ghoul', 'venomLasher', 'sporeMother', 'glowShrieker'], rule: '오물 보행자의 발자국이 땅을 썩게 한다' },
+  19: { name: '관문 광장', enemies: ['sporeling', 'sporeling', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'fungalTick'], rule: '사령부의 나팔이 멎지 않는 한 증원은 계속된다' },
+  20: { name: '관문 사령부', enemies: ['sporeling', 'fungalTick', 'myceliumBrute', 'rotWalker', 'glowShrieker', 'sporeMother'], rule: '사령부의 나팔이 멎지 않는 한 증원은 계속된다' },
 };
 
 // 21층+ (무한 모드 '심연 회랑'): 2막 심부(16~20층) 구성을 순환하며 끝없이 강해진다
 function floorData(floor) {
   if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
   const base = FLOOR_DATA[((floor - 21) % 5) + 16];
-  return { name: `심연 회랑 ${floor}층`, enemies: base.enemies, rule: base.rule };
+  return { name: `왕도 가도 ${floor}구간`, enemies: base.enemies, rule: base.rule };
 }
 
 // 문 수식어 — 위험을 감수하면 보상이 커진다 (문 선택이 고정 순위표가 되지 않게)

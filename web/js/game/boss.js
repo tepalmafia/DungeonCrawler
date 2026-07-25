@@ -125,14 +125,14 @@ const BOSS_DEFS = {
   },
   // ── 2막 막보스 (20층): 균사 정원의 주인 ──
   20: {
-    awakened: true, name: '균사 여왕 스포라', sprite: 'bossQueen', scale: 1.9, r: 32, hp: 1800, speed: 40,
-    mechanic: { type: 'regen', label: '균사 심장 — 부하가 살아있는 동안 재생한다' },
-    banner: '균사 여왕 스포라',
+    awakened: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', scale: 1.9, r: 32, hp: 1800, speed: 40,
+    mechanic: { type: 'regen', label: '군의관 지원 — 부하가 살아있는 동안 재생한다' },
+    banner: "관문 사령관 '철벽 로트가르'",
     punish: 'volley', punishProj: 'spore',
     p1: ['fan:spore:gap>ring', 'summon:sporeling>spiral:spore', 'geyser:poison>fan:spore'],
     p2: ['ring:gap>spiral:spore', 'summon:glowShrieker>fan:spore:cross', 'fan:spore:snipe>geyser:poison>ring'],
-    rageText: '정원 전체가 일어선다!',
-    intro: '나의 정원에 뿌리내려라. 너도 곧 자양분이 된다.', outro: '정원은… 다시 자란다… 언제나…',
+    rageText: '관문 수비대 전원, 응전하라!',
+    intro: '여기서부터는 왕도다. 죽은 것은 다리를 건널 수 없다.', outro: '마차 호위는… 명예였다… 안을 보기 전까지는…',
     deathPalette: ['#c9d94a', '#8adf76', '#6a3aa2'],
   },
 };

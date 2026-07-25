@@ -478,7 +478,7 @@ const Game = {
       if (this.overLockT > 0) { this.overLockT -= dt; return; }
 
       if (Input.pressed('KeyR')) { this.restart(); return; }
-      // 승리 화면에서 C — 1막 정복 후엔 2막(균사 정원), 2막 정복 후엔 심연 회랑
+      // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도
       if (this.state === 'victory' && Input.pressed('KeyC')) {
         if (Dungeon.floor <= 10 && !this.act2) this.continueAct2();
         else this.continueEndless();
