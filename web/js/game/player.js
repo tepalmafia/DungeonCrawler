@@ -429,7 +429,7 @@ function createPlayer(x, y, classId = 'knight') {
         // [진화] 대반응 폭탄: 감전까지 3원소 — 과부하·마비가 연쇄한다
         const t = this._skillTarget(game);
         AudioSys.meteorCast();
-        const r = (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1) * (mod && mod.rMul ? mod.rMul : 1);
+        const r = Math.min(240, (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1) * (mod && mod.rMul ? mod.rMul : 1)); // 반경 상한 240px
         game._explode(t.x, t.y, r, Math.max(1, Math.round(this.currentAtk() * 2.5 * (mod && mod.dMul ? mod.dMul : 1))), ['#c9d94a', '#6ada8a', '#ff7043'], '#c9d94a');
         if (mod && mod.flag === 'pool') game.zones.push({ x: t.x, y: t.y, r: r * 1.15, life: 4.5, kind: 'poison', tickT: 0.4 });
         for (const e of game.enemies) {
@@ -800,7 +800,7 @@ function createPlayer(x, y, classId = 'knight') {
             kind: 'pflask', x: this.x + d2.x * 14, y: this.y + d2.y * 14,
             dir: d2, speed: (finisher ? 310 : 360) * (this.flags.al_catalyst ? 0.85 : 1),
             finisher, pierce: false, homing: 0,
-            aoe: Math.round((finisher ? 56 : 36) * (this.flaskRadMul || 1)), // 밴드 하향: 42/64→36/56
+            aoe: Math.min(140, Math.round((finisher ? 56 : 36) * (this.flaskRadMul || 1))), // 밴드 하향: 42/64→36/56
             venom: true, catalyst: this.flags.al_catalyst,
             life: 1.4, hit: new Set(),
             bounces: this.flags.rebound ? 1 : 0,
@@ -891,7 +891,7 @@ function createPlayer(x, y, classId = 'knight') {
         game.pbolts.push({
           kind: 'pflask', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
           dir: { ...dir }, speed: 380, finisher: true, pierce: false, homing: 0,
-          aoe: Math.round(58 * (this.flaskRadMul || 1)), venom: true, catalyst: this.flags.al_catalyst,
+          aoe: Math.min(150, Math.round(58 * (this.flaskRadMul || 1))), venom: true, catalyst: this.flags.al_catalyst,
           life: 1.2, hit: new Set(),
         });
       } else {
