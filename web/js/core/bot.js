@@ -90,7 +90,8 @@ const Bot = {
           if (nx < 0 || ny < 0 || nx >= World.cols || ny >= World.rows) continue;
           const k = nx + ',' + ny;
           const tile = World.map[ny] ? World.map[ny][nx] : 1;
-          if (prev.has(k) || tile === 1 || (avoidLava && tile === 2)) continue;
+          // 허공(3)도 벽 — 비정형 맵에서 경로가 강물/절벽을 가로지르면 가장자리에 대고 걷게 된다
+          if (prev.has(k) || tile === 1 || tile === 3 || (avoidLava && tile === 2)) continue;
           prev.set(k, cx + ',' + cy);
           q.push([nx, ny]);
         }
@@ -116,8 +117,13 @@ const Bot = {
         step = { x: nx * TS + TS / 2, y: ny * TS + TS / 2 + oy };
       }
     }
-    this._pc = { key, step, at: now };
+    this._pc = { key, step, at: now, noPath: !found };
     return step;
+  },
+
+  // 직전 BFS가 '경로 없음'이었나 — 도달 불가 목표를 3초씩 기다리지 않고 빠르게 포기하는 데 쓴다
+  _pathBlocked() {
+    return !!(this._pc && this._pc.noPath && performance.now() - this._pc.at < 600);
   },
 
   _move(p, tx, ty) {
@@ -500,11 +506,11 @@ const Bot = {
       if (it) {
         this._move(p, it.x, it.y);
         this._watchGoal(it, Math.hypot(it.x - p.x, it.y - p.y), dt, p);
-      } else if (game.enemies.some((e) => !e.dead && e.neutral)) {
-        // 항아리·균열 벽 부수기 — 방을 떠나기 전 파괴 가능 오브젝트 회수
+      } else if (game.enemies.some((e) => !e.dead && e.neutral && !e._botSkip)) {
+        // 항아리·균열 벽 부수기 — 방을 떠나기 전 파괴 가능 오브젝트 회수 (도달 불가 판정된 것은 제외)
         let brk = null, bd = Infinity;
         for (const e of game.enemies) {
-          if (e.dead || !e.neutral) continue;
+          if (e.dead || !e.neutral || e._botSkip) continue;
           const dd = Math.hypot(e.x - p.x, e.y - p.y);
           if (dd < bd) { bd = dd; brk = e; }
         }
@@ -588,7 +594,10 @@ const Bot = {
       this._bestD = dist;
       this._noProgressT = 0;
     } else {
-      this._noProgressT += dt;
+      // BFS가 '경로 없음'을 이미 아는 목표(봉인 벽감 속 항아리 등)는 4배속으로 포기 —
+      // 18초 방황이 아니라 몇 초 안에 다음 목표로 넘어간다
+      const blocked = ref && ref.x != null && !this._hasLoSFat(p.x, p.y, ref.x, ref.y) && this._pathBlocked();
+      this._noProgressT += blocked ? dt * 4 : dt;
       if (this._noProgressT > 3) {
         this._explorePt = World.randomSpawnPos(p, 140);
         this._exploreT = 1.8;
@@ -599,7 +608,7 @@ const Bot = {
         // 같은 목표에 6회 연속 실패 = 도달 불가로 판정 — 덤프 남기고 상호작용물은 포기
         // (문은 포기 불가 — 덤프만 남긴다. 소크가 게임 버그에 인질로 잡히지 않게)
         if (this._goalFails >= 6 && ref) {
-          if (ref.kind) ref._botSkip = true;
+          if (ref.kind || ref.neutral) ref._botSkip = true; // 상호작용물·파괴 오브젝트(항아리/균열) 모두 포기 가능
           console.log('[BOT-GOALSTUCK]', JSON.stringify({
             kind: ref.kind || (ref.opt ? 'door:' + ref.opt.type : 'obj'),
             x: Math.round(ref.x), y: Math.round(ref.y),

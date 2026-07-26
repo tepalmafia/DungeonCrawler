@@ -139,7 +139,9 @@ const BOSS_DEFS = {
   },
   // ── 3막 막보스 (30층): 나를 판결한 자 ──
   30: {
-    awakened: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', scale: 1.9, r: 33, hp: 2400, speed: 36,
+    // 관통 v3: 발디아 15회 — 흰 늑대(11)·왕(5)을 웃도는 서열 역전. hp 2400→2100로 TTK 단축
+    // (armor cap은 유지 — 막보스의 '판결의 법복' 정체성. 2100 < 이노첸시오 3200 서열 보존)
+    awakened: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', scale: 1.9, r: 33, hp: 2100, speed: 36,
     mechanic: { type: 'armor', cap: 2, label: '판결의 법복 — 강한 일격을 경감한다' },
     banner: "대재판관 '발디아 공작'",
     punish: 'volley', punishProj: 'rock',
@@ -236,8 +238,10 @@ const BOSS_DEFS = {
     deathPalette: ['#b8ae96', '#7a1c28', '#3a2c1a'],
   },
   63: {
+    // 관통 v3: 3막 홀수층 5조우 × 사망 ~10 = 구간 최다 군집 (짝수층 퀼른은 0) — 중갑 cap 2로
+    // TTK가 극단적으로 길어 링 연쇄 노출이 누적됐다. cap 2→3: 강타 경감은 유지하되 TTK 단축
     awakened: true, name: "사병대장 '철퇴 가로크'", sprite: 'bossGarok', scale: 1.9, r: 32, hp: 760, speed: 38,
-    mechanic: { type: 'armor', cap: 2, label: '영주의 중갑 — 강한 일격을 경감한다' },
+    mechanic: { type: 'armor', cap: 3, label: '영주의 중갑 — 강한 일격을 경감한다' },
     banner: "사병대장 '철퇴 가로크'",
     punish: 'charge', sig: 'miniSig',
     p1: ['charge>ring', 'ring>fan:rock', 'sweep>sweep>ring'],
@@ -467,11 +471,24 @@ function createBoss(floor, x, y) {
         if (minionCount > 0 && this._regenPause <= 0 && this.hp < this.maxHp) {
           // 계측 (검사·열기5): 2층 피해 110+ = 전층 최대 — 근접 단일딜은 부하 정리가 느려
           // 재생을 뚫는 데 오래 걸린다. 6→4/s (재생 정지 컨트롤 해법은 그대로 유효)
-          this.hp = Math.min(this.maxHp, this.hp + 3 * dt); // 클린 계측: 1목숨 첫 사망 95%가 1~2층 — 2층 벽 완화 2차
-          this._regenTick += dt;
-          if (this._regenTick >= 1.0) {
-            this._regenTick = 0;
-            Particles.text(this.x, this.y - 40, '재생 +3', { color: '#38b764', size: 12 });
+          // 재생 총량 예산 (관통 v3): 딜이 재생을 못 이기는 약체 빌드에게 재생전은 '어려움'이 아니라
+          // 수학적으로 끝나지 않는 소모전이었다 (몰귀 7연사·로트가르 33연사). 한 전투에서 최대체력의
+          // 100%까지만 재생 — 예산이 마르면 갑피가 말라붙고, 오래 버티면 반드시 끝나는 싸움이 된다.
+          // 정상 빌드는 예산 근처에도 못 가므로 중앙값 난이도는 불변.
+          if (this._regenBudget == null) this._regenBudget = this.maxHp;
+          if (this._regenBudget > 0) {
+            const add = Math.min(3 * dt, this._regenBudget, this.maxHp - this.hp);
+            this.hp += add;
+            this._regenBudget -= add;
+            if (this._regenBudget <= 0) {
+              game.banner = { text: '재생의 힘이 다했다 — 갑피가 말라붙는다!', life: 2.0, maxLife: 2.0, color: '#ffd866' };
+              AudioSys.roar();
+            }
+            this._regenTick += dt;
+            if (this._regenTick >= 1.0) {
+              this._regenTick = 0;
+              Particles.text(this.x, this.y - 40, '재생 +3', { color: '#38b764', size: 12 });
+            }
           }
         }
       }
