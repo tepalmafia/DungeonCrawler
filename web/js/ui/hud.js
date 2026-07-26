@@ -976,8 +976,10 @@ const HUD = {
       }
       ctx.textAlign = Meta.data.wins > 0 ? 'left' : 'center';
       ctx.fillStyle = '#f7b32b';
+      const stk = Meta.dailyStreak(); // 기록판 (v132): 연속 도전은 허브에서 바로 보인다
+      const stkStr = stk >= 2 ? ` · 연속 ${stk}일` : '';
       ctx.fillText(
-        rec ? `📜 D 오늘의 수배령 · 오늘 ${rec.floor}층${rec.victory ? ' 완수!' : ''}` : '📜 D 오늘의 수배령 — 매일 같은 시드',
+        rec ? `📜 D 오늘의 수배령 · 오늘 ${rec.floor}층${rec.victory ? ' 완수!' : ''}${stkStr}` : `📜 D 오늘의 수배령 — 매일 같은 시드${stkStr}`,
         Meta.data.wins > 0 ? Renderer.W / 2 + 24 : Renderer.W / 2, Renderer.H - 30);
       // 왕도 직행 — 왕좌 정복자에게만 열리는 지름길
       if (Meta.data.epilogueSeen || Meta.data.bestFloor >= 50) {
@@ -1747,6 +1749,7 @@ const HUD = {
     if (game.dailyRun && Meta.data.daily) {
       ctx.fillStyle = '#f7b32b';
       ctx.fillText(`📜 오늘의 수배령 최고 기록: ${Meta.data.daily.floor}층 (${Meta.data.daily.runs}회 도전)`, Renderer.W / 2, game.prevRun ? 316 : 298);
+      this._drawDailyBoard(ctx, Renderer.W - 150, 240); // 기록판 (v132): 우측 여백에 최근 7일
     }
 
     this._drawShardReward(ctx, game, 330);
@@ -1757,6 +1760,35 @@ const HUD = {
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('R — 즉시 재도전   ·   클릭/Space — 거점으로', Renderer.W / 2, 415);
     }
+  },
+
+  // 일일 수배령 기록판 (v132): 최근 7일 미니 바 — 층수가 높이, 완수는 금빛과 별
+  _drawDailyBoard(ctx, cx, top) {
+    const log = (Meta.data.dailyLog || []).slice(-7);
+    if (!log.length) return;
+    const bw = 20, gap = 6, W = log.length * (bw + gap) - gap;
+    const x0 = cx - W / 2;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 12px Galmuri11, monospace';
+    ctx.fillStyle = '#f7b32b';
+    const stk = Meta.dailyStreak();
+    ctx.fillText(`기록판${stk >= 2 ? ` · 연속 ${stk}일` : ''}`, cx, top);
+    const maxF = Math.max(10, ...log.map((l) => l.floor));
+    const bh = 44, base = top + 16 + bh;
+    log.forEach((l, i) => {
+      const x = x0 + i * (bw + gap);
+      const h = Math.max(3, Math.round(bh * l.floor / maxF));
+      ctx.fillStyle = 'rgba(154,160,180,0.22)';
+      ctx.fillRect(x, base - bh, bw, bh);
+      ctx.fillStyle = l.victory ? '#ffd866' : '#5ca4cc';
+      ctx.fillRect(x, base - h, bw, h);
+      ctx.font = '10px Galmuri11, monospace';
+      ctx.fillStyle = '#9aa0b4';
+      ctx.fillText(String(l.key % 100), x + bw / 2, base + 12); // 일(日)
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText(String(l.floor), x + bw / 2, base - h - 4); // 층
+      if (l.victory) { ctx.fillStyle = '#ffd866'; ctx.fillText('★', x + bw / 2, base - bh - 6); }
+    });
   },
 
   // 시드·열기 표기 (시드 공유용)
@@ -1948,6 +1980,7 @@ const HUD = {
     });
 
     if (t > 1.3) this._drawShardReward(ctx, game, 352);
+    if (game.dailyRun && t > 1.3) this._drawDailyBoard(ctx, Renderer.W - 150, 240); // 기록판 (v132)
     this._drawRunTag(ctx, game, 497);
 
     if (t > 1.6 && Math.floor(blinkT * 1.6) % 2 === 0) {

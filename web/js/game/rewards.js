@@ -81,6 +81,19 @@ const GameRewards = {
         }
         rec.victory = rec.victory || !!victory;
       }
+      // 일일 수배령 기록판 (v132): 최근 14일 로그 — 하루 1행, 그날의 최고 기록만 남긴다
+      const log = Meta.data.dailyLog = Meta.data.dailyLog || [];
+      let row = log.find((l) => l.key === this.dailyKey);
+      if (!row) { row = { key: this.dailyKey, floor: 0, kills: 0, victory: false, runs: 0, cls: this.player.classId }; log.push(row); }
+      row.runs++;
+      if (Dungeon.floor > row.floor || (Dungeon.floor === row.floor && this.kills > row.kills)) {
+        row.floor = Dungeon.floor;
+        row.kills = this.kills;
+        row.cls = this.player.classId;
+      }
+      row.victory = row.victory || !!victory;
+      log.sort((a, b) => a.key - b.key);
+      while (log.length > 14) log.shift();
     }
     if (this.endless || this.act > 1) {
       // 무한 모드·2막: 1막(10층) 정산에서 이미 받은 몫을 뺀 초과분만 지급 (승수 이중 집계 방지)

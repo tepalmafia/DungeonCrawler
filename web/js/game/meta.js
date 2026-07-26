@@ -499,6 +499,19 @@ const Meta = {
   clueCount() { return this.data.clues ? Object.keys(this.data.clues).length : 0; },
   grudgeHp() { return this.data.grudges ? Object.keys(this.data.grudges).length : 0; },
 
+  // 일일 수배령 연속 도전 일수 (v132) — 오늘 미도전이면 어제까지의 연속을 '이어지는 중'으로 인정
+  _dayKey(d) { return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); },
+  dailyStreak() {
+    const log = this.data.dailyLog || [];
+    if (!log.length) return 0;
+    const keys = new Set(log.map((l) => l.key));
+    const d = new Date();
+    if (!keys.has(this._dayKey(d))) d.setDate(d.getDate() - 1);
+    let n = 0;
+    while (keys.has(this._dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  },
+
   // 무한 모드 정산: 전체 보상에서 10층 정산 때 이미 받은 몫(paid)을 뺀 차액만 지급.
   // runs/wins는 10층 정산에서 이미 집계됐으므로 다시 세지 않는다.
   endlessRun(floor, roomIndex, kills, heat, paid, killsDelta) {
