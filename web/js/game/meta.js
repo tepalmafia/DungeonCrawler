@@ -203,6 +203,15 @@ const META_UPGRADES = [
   { id: 'legacy', name: '유산', desc: '런 시작 시 커먼 유물 3택1',  max: 1, costs: [400] },
 ];
 
+// ── 깨어진 비석 — 왕좌를 정복한 자에게만 열리는 상위 열 (파편 싱크의 꼬리 연장) ──
+const BROKEN_STONES = [
+  { id: 'b_gold',  name: '노획의 눈',   desc: '시작 골드 +80',                          max: 2, costs: [400, 800] },
+  { id: 'b_heir',  name: '유품의 부름', desc: '유물 카드에 유품 등장 가중 (단계당 2배)', max: 2, costs: [500, 1000] },
+  { id: 'b_feast', name: '전승의 포식', desc: '우두머리 처치 시 하트 1 회복',            max: 1, costs: [800] },
+  { id: 'b_mod',   name: '세공의 기억', desc: '런 시작 시 스킬 개조 1개를 지니고 부활',  max: 1, costs: [900] },
+  { id: 'b_brand', name: '낙인 무딤',   desc: '왕의 낙인 지속 5초 → 3초',                max: 1, costs: [1200] },
+];
+
 const Meta = {
   data: null,
 
@@ -260,7 +269,12 @@ const Meta = {
   },
 
   upgradeDef(id) {
-    return META_UPGRADES.find((u) => u.id === id);
+    return META_UPGRADES.find((u) => u.id === id) || BROKEN_STONES.find((u) => u.id === id);
+  },
+
+  // 깨어진 비석 해금 — 왕좌 정복의 증표
+  brokenUnlocked() {
+    return this.data.epilogueSeen || this.data.bestFloor >= 50;
   },
 
   cost(id) {

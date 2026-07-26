@@ -216,7 +216,7 @@ const GameScreens = {
     // 특성 14장 + 유물 4(레어+ 2 보장, 유품 1 포함) + 심장 +5 + 레벨 보정 + 노잣돈
     p.maxHp += 5; p.hp = p.maxHp;
     p.bonusAtk = (p.bonusAtk || 0) + 3; // 계측 2차 보정: 첫 보스(가로크) 8사망 — 특성 운에 안 맡기는 기본 딜
-    this.level = 15; this.xpNext = Math.round(this.xpNext * 6); // 레벨 커브 이어붙임 (21층 XP가 저레벨을 폭주시키지 않게)
+    this.level = 18; this.xpNext = Math.round(this.xpNext * 7); // 레벨 커브 이어붙임 (21층 XP가 저레벨을 폭주시키지 않게)
     this.gold = 200;
     const pool = RELICS.filter((r) => Meta.isUnlocked(r) && (!r.heir || r.heir === p.classId));
     const rares = pool.filter((r) => r.rarity !== 'common');
@@ -230,7 +230,7 @@ const GameScreens = {
     const rest = pool.filter((r) => !p.relics.includes(r.id));
     const last = rest[Math.floor(Math.random() * rest.length)];
     if (last) this.acquireRelic(last);
-    this.pendingChoices = 14;
+    this.pendingChoices = 16;
     this.openTraitChoice('elite');
     AudioSys.roar();
     this.banner = { text: '왕도 직행 — 영지의 문턱에서 시작한다. 왕좌까지 세 막.', life: 3, maxLife: 3, color: '#ffd866' };
@@ -279,8 +279,9 @@ const GameScreens = {
 
   _tickAltar() {
     if (Input.pressed('Escape', 'Digit0', 'Backspace')) { this.state = 'hub'; return; }
+    const list = HUD.altarList(); // 원한의 비석 + (정복 후) 깨어진 비석
     let act = -1;
-    for (let i = 0; i < META_UPGRADES.length; i++) {
+    for (let i = 0; i < Math.min(9, list.length); i++) {
       if (Input.pressed('Digit' + (i + 1))) act = i;
     }
     const rects = HUD.altarRowRects();
@@ -296,9 +297,8 @@ const GameScreens = {
             Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) act = i;
       });
     }
-    if (act >= 0) {
-      const up = META_UPGRADES[act];
-      if (Meta.buy(up.id)) AudioSys.buy();
+    if (act >= 0 && list[act]) {
+      if (Meta.buy(list[act].id)) AudioSys.buy();
       else AudioSys.deny();
     }
   },

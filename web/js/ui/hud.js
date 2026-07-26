@@ -755,11 +755,23 @@ const HUD = {
     }
   },
 
+  // 제단 목록 — 정복자에게는 깨어진 비석(상위 열)이 함께 열린다
+  altarList() {
+    return Meta.brokenUnlocked() ? META_UPGRADES.concat(BROKEN_STONES) : META_UPGRADES;
+  },
+
   altarRowRects() {
-    const w = 620, h = 44, gap = 8;
-    const x = (Renderer.W - w) / 2;
-    const y0 = 108;
-    return META_UPGRADES.map((_, i) => ({ x, y: y0 + i * (h + gap), w, h }));
+    const broken = Meta.brokenUnlocked();
+    const h = 44, gap = 8;
+    if (!broken) {
+      const w = 620, x = (Renderer.W - w) / 2, y0 = 108;
+      return META_UPGRADES.map((_, i) => ({ x, y: y0 + i * (h + gap), w, h }));
+    }
+    // 2열: 좌 원한의 비석 7 / 우 깨어진 비석 5
+    const w = 460, y0 = 130;
+    const rects = META_UPGRADES.map((_, i) => ({ x: Renderer.W / 2 - w - 10, y: y0 + i * (h + gap), w, h }));
+    BROKEN_STONES.forEach((_, i) => rects.push({ x: Renderer.W / 2 + 10, y: y0 + i * (h + gap), w, h }));
+    return rects;
   },
 
   drawAltar(ctx, blinkT) {
@@ -770,8 +782,20 @@ const HUD = {
     ctx.fillText('원한의 비석', Renderer.W / 2, 70);
     this._shardLabel(ctx, Renderer.W - 24, 36);
 
+    const list = this.altarList();
+    const broken = Meta.brokenUnlocked();
+    if (broken) {
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#2ec4b6';
+      ctx.fillText('원한의 비석', Renderer.W / 2 - 240, 118);
+      ctx.fillStyle = '#ffd866';
+      ctx.fillText('👑 깨어진 비석 — 정복의 증표', Renderer.W / 2 + 240, 118);
+    }
     this.altarRowRects().forEach((r, i) => {
-      const up = META_UPGRADES[i];
+      const up = list[i];
+      const isBroken = i >= META_UPGRADES.length;
+      const accent = isBroken ? '#ffd866' : '#2ec4b6';
       const lv = Meta.lvl(up.id);
       const cost = Meta.cost(up.id);
       const maxed = cost === null;
@@ -781,22 +805,23 @@ const HUD = {
 
       ctx.fillStyle = hover && !maxed ? '#1d1d2e' : '#141420';
       ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = maxed ? '#4a4a5c' : affordable ? '#2ec4b6' : '#3a3a4a';
+      ctx.strokeStyle = maxed ? '#4a4a5c' : affordable ? accent : '#3a3a4a';
       ctx.lineWidth = hover && affordable ? 3 : 1.5;
       ctx.strokeRect(r.x, r.y, r.w, r.h);
 
       ctx.textAlign = 'left';
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = '#e8e0cf';
-      ctx.fillText(`${i + 1}. ${up.name}`, r.x + 16, r.y + 19);
+      ctx.fillText(`${isBroken ? '👑' : (i + 1) + '.'} ${up.name}`, r.x + 16, r.y + 19);
       ctx.font = '12px monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(up.desc, r.x + 16, r.y + 36);
 
       // 레벨 핍
+      const pipX = r.x + r.w - 150;
       for (let l = 0; l < up.max; l++) {
-        ctx.fillStyle = l < lv ? '#2ec4b6' : '#2a2a3a';
-        ctx.fillRect(r.x + 400 + l * 16, r.y + 17, 10, 10);
+        ctx.fillStyle = l < lv ? accent : '#2a2a3a';
+        ctx.fillRect(pipX + l * 16, r.y + 17, 10, 10);
       }
 
       ctx.textAlign = 'right';
@@ -805,7 +830,7 @@ const HUD = {
         ctx.fillStyle = '#666a80';
         ctx.fillText('완성', r.x + r.w - 16, r.y + 28);
       } else {
-        ctx.fillStyle = affordable ? '#2ec4b6' : '#8a4a4a';
+        ctx.fillStyle = affordable ? accent : '#8a4a4a';
         ctx.fillText(`◆ ${cost}`, r.x + r.w - 16, r.y + 28);
       }
     });

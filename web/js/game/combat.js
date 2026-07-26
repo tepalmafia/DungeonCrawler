@@ -327,6 +327,12 @@ const GameCombat = {
     // 중간보스(우두머리) 처치 보상: 하트 확정 + 영혼 파편 즉시 지급
     if (e.isMini) {
       this.pickups.push({ x: e.x, y: e.y, t: 0, r: 12 });
+      // 깨어진 비석 「전승의 포식」: 우두머리를 삼킨 힘 — 하트 1 즉시 회복 (낙인 중엔 봉인)
+      const pl = this.player;
+      if (Meta.lvl('b_feast') > 0 && pl && pl.hp < pl.maxHp && !(pl.brandT > 0)) {
+        pl.hp++;
+        Particles.text(pl.x, pl.y - 34, '전승의 포식 +1', { color: '#e43b44', size: 13 });
+      }
       const bonus = 6 + Dungeon.floor * 2;
       Meta.data.shards += bonus;
       Meta.save();

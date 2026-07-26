@@ -118,7 +118,7 @@ const GamePlay = {
   _sigHit(sig, dmg = 2) {
     const p = this.player;
     if (p.invuln > 0 || p.god) return; // 회피 성공
-    p.brandT = 5;
+    p.brandT = Meta.lvl('b_brand') > 0 ? 3 : 5; // 깨어진 비석 「낙인 무딤」
     const hadShield = p.shield;
     p.shield = false; // 보호막 관통
     this.hurtPlayer(dmg, { x: 0, y: -0.6 }, 320, (sig.boss && sig.boss.name) || '인장기');
