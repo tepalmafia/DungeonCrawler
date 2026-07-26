@@ -680,6 +680,138 @@ const ROOM_TEMPLATES = [
   ] },
 ];
 
+// ── 막 실루엣 (맵 2단계) — 방의 "윤곽"을 막마다 다르게: 액자를 부순다 ──
+// V = 허공(타일 3): 충돌은 벽과 같고, 그림은 낭떠러지/강물/어둠. 낙사는 없다 (계측 자산 보존).
+// 불변 규칙: 5행(중앙 통로)과 우측 문 접근로(2·5·8행의 오른쪽 4열)는 절대 침식하지 않는다
+const SILHOUETTES = {
+  1: [[ // 묘지 언덕 — 모서리가 어둠에 잠긴다
+    'VVVV............VVVV',
+    'VV................VV',
+    'V...................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VV................VV',
+    'VVVV............VVVV',
+  ], [
+    'VVVVVV........VVVVVV',
+    'VVV..............VVV',
+    'VV..................',
+    'V...................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VV..................',
+    'VVV..............VVV',
+    'VVVVVV........VVVVVV',
+  ]],
+  2: [[ // 다리 — 위아래는 전부 썩은 강물이다
+    'VVVVVVVVVVVVVVVVVVVV',
+    'VVVVVVVVVVVVVVVVVVVV',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    'VVVVVVVVVVVVVVVVVVVV',
+    'VVVVVVVVVVVVVVVVVVVV',
+  ]],
+  3: [[ // 법정 — 모따기된 대칭 홀
+    'VVVVV..........VVVVV',
+    'VVV..............VVV',
+    'VV..................',
+    'V...................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VV..................',
+    'VVV..............VVV',
+    'VVVVV..........VVVVV',
+  ], [
+    'VVVVVV........VVVVVV',
+    'VVVV............VVVV',
+    'VV..................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    'VV..................',
+    'VVVV............VVVV',
+    'VVVVVV........VVVVVV',
+  ]],
+  4: [[ // 무너진 골목 — 삐뚤빼뚤한 잔해 가장자리
+    'VVVVVVV.....VVVVVVVV',
+    'VVV...........VVVVVV',
+    'V...................',
+    'VV..................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VVV.................',
+    'V................VVV',
+    'VVVVVV.......VVVVVVV',
+  ], [
+    'VVVV.......VVVVVVVVV',
+    'VV..............VVVV',
+    '....................',
+    'V...................',
+    '....................',
+    '....................',
+    '....................',
+    'VV..................',
+    'V...................',
+    'VVV..............VVV',
+    'VVVVVVVV......VVVVVV',
+  ]],
+  5: [[ // 대성당 — 위가 크게 둥근 알현 홀
+    'VVVVVV........VVVVVV',
+    'VVVV............VVVV',
+    'VV..................',
+    'V...................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VV................VV',
+    'VVVV............VVVV',
+  ], [
+    'VVVVVVV......VVVVVVV',
+    'VVVV............VVVV',
+    'VVV.................',
+    'VV..................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VV..................',
+    'VVVV............VVVV',
+    'VVVVVVV......VVVVVVV',
+  ]],
+  boss: [[ // 결전장 — 모서리만 둥글게, 초식 공간은 온전히
+    'VVVVVV........VVVVVV',
+    'VVV..............VVV',
+    'V...................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    '....................',
+    'V...................',
+    'VVV..............VVV',
+    'VVVVVV........VVVVVV',
+  ]],
+};
+
 // 막별 태그 가중 — 막의 "발밑 문법"을 확률로 밀어준다 (2막 통로전 / 3막 대칭 홀 / 4막 골목 / 5막 대회랑)
 const ACT_TAG_BOOST = {
   2: { corridor: 2.2 },
@@ -800,6 +932,19 @@ const World = {
     this.act = floor <= 50 ? Math.min(5, Math.ceil(floor / 10)) : 5;
     // 왕좌 카펫: 45·50층 보스방 (무한 모드의 왕좌 순환층 포함)
     this._bossCarpet = type === 'boss' && (floor === 45 || floor === 50 || (floor > 50 && (floor - 51) % 5 === 4));
+
+    // 막 실루엣 적용 — 금고방(보너스)만 제외. 템플릿·스폰·용암보다 먼저 깔린다
+    if (type !== 'vault') {
+      const pool = type === 'boss' ? SILHOUETTES.boss : SILHOUETTES[this.act];
+      if (pool && pool.length) {
+        const mask = pool[Math.floor(RNG.next() * pool.length)];
+        for (let ty = 0; ty < this.rows; ty++) {
+          for (let tx = 0; tx < this.cols; tx++) {
+            if (mask[ty][tx] === 'V') this.map[ty][tx] = 3;
+          }
+        }
+      }
+    }
 
     this.lastTemplateTag = 'open'; // 지형 태그 (M-커플링): 위협 세트가 지형에 맞는 무리를 고르는 데 쓴다
     if (combatRoom) {
@@ -925,6 +1070,7 @@ const World = {
         const ch = row[flip ? 17 - c : c];
         if (ch === '.') continue;
         const tx = 1 + c, ty = 1 + r;
+        if (this.map[ty][tx] === 3) continue; // 실루엣 허공 위에는 놓지 않는다
         const cx = tx * TS + TS / 2, cy = ty * TS + TS / 2 + this.offsetY;
         if (ch === '#') {
           this.map[ty][tx] = 1;
@@ -960,7 +1106,9 @@ const World = {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = tx + dx, ny = ty + dy;
         if (nx <= 0 || ny <= 0 || nx >= this.cols - 1 || ny >= this.rows - 1 || seen[ny][nx]) continue;
-        if (this.map[ny][nx] === 1 && !(passCracks && cracks.has(ny * 100 + nx))) continue;
+        const nt = this.map[ny][nx];
+        if (nt === 3) continue; // 허공은 못 건넌다
+        if (nt === 1 && !(passCracks && cracks.has(ny * 100 + nx))) continue;
         seen[ny][nx] = true;
         q.push([nx, ny]);
       }
@@ -976,7 +1124,7 @@ const World = {
     this._noSpawn = Array.from({ length: this.rows }, () => new Array(this.cols).fill(false));
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        if (this.map[ty][tx] === 1) continue;
+        if (this.map[ty][tx] === 1 || this.map[ty][tx] === 3) continue;
         if (!ever[ty][tx]) this.map[ty][tx] = 1;
         else if (!now[ty][tx]) this._noSpawn[ty][tx] = true;
       }
@@ -1004,7 +1152,8 @@ const World = {
 
   isSolidTile(tx, ty) {
     if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
-    return this.map[ty][tx] === 1;
+    const t = this.map[ty][tx];
+    return t === 1 || t === 3; // 허공(3)도 벽처럼 막는다 — 낙사 없음
   },
 
   // 배치 안전 지점: 원하는 좌표가 벽/용암/봉인 벽감이면 가장 가까운 열린 타일 중앙으로 밀어낸다
@@ -1115,6 +1264,35 @@ const World = {
         const y = ty * TS;
         const tile = this.map[ty][tx];
         if (tile === 1) continue;
+        if (tile === 3) {
+          // 허공 — 낭떠러지 어둠. 2막은 썩은 강물, 나머지는 막 기운이 밴 심연
+          ctx.fillStyle = this.act === 2 ? '#122a28' : '#0a080e';
+          ctx.fillRect(x, y, TS, TS);
+          if (this.act === 2) {
+            ctx.fillStyle = 'rgba(64,140,130,0.5)';
+            ctx.fillRect(x, y + ((ty * 7 + tx * 3) % 4) * 10, TS, 5);
+            ctx.fillRect(x, y + 26 + ((tx * 5) % 3) * 6, TS, 3);
+            if ((tx * 13 + ty * 7) % 3 === 0) {
+              ctx.fillStyle = 'rgba(92,224,230,0.22)';
+              ctx.fillRect(x + ((tx * 11) % 30) + 6, y + ((ty * 17) % 30) + 8, 3, 2);
+            }
+          } else {
+            ctx.fillStyle = 'rgba(90,60,90,0.05)';
+            ctx.fillRect(x + ((tx * 7) % 20), y + ((ty * 11) % 26), 14, 9);
+          }
+          // 절벽 립: 위가 걷는 바닥이면 낙차 그림자 + 모서리 명암
+          const above = ty > 0 ? this.map[ty - 1][tx] : 3;
+          if (above === 0 || above === 2) {
+            const g = ctx.createLinearGradient(0, y, 0, y + 18);
+            g.addColorStop(0, 'rgba(0,0,0,0.55)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(x, y, TS, 18);
+            ctx.fillStyle = th.wallDark;
+            ctx.fillRect(x, y, TS, 4);
+          }
+          continue;
+        }
         if (tile === 2) {
           ctx.fillStyle = '#7a1010';
           ctx.fillRect(x, y, TS, TS);
@@ -1146,12 +1324,12 @@ const World = {
     // 1.5) 왕좌 카펫 (45·50층 보스방, 무한 왕좌 순환 포함) — 좌우 문을 잇는 핏빛 융단 + 금테
     if (this._bossCarpet) {
       const cy0 = 4 * TS + this.offsetY, ch2 = 3 * TS - this.offsetY;
-      ctx.fillStyle = 'rgba(122,16,24,0.55)';
+      ctx.fillStyle = 'rgba(122,16,24,0.32)';
       ctx.fillRect(TS, cy0, (this.cols - 2) * TS, ch2);
       ctx.fillStyle = 'rgba(56,6,10,0.5)';
       ctx.fillRect(TS, cy0, (this.cols - 2) * TS, 3);
       ctx.fillRect(TS, cy0 + ch2 - 3, (this.cols - 2) * TS, 3);
-      ctx.fillStyle = 'rgba(176,141,74,0.8)';
+      ctx.fillStyle = 'rgba(176,141,74,0.5)';
       ctx.fillRect(TS, cy0 + 4, (this.cols - 2) * TS, 2);
       ctx.fillRect(TS, cy0 + ch2 - 6, (this.cols - 2) * TS, 2);
       for (let tx = 2; tx < this.cols - 2; tx += 3) {
