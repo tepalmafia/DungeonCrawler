@@ -51,7 +51,7 @@ const FLOOR_DATA = {
   5: { name: '교수대 언덕', enemies: ['necro', 'shaman', 'crystal', 'acolyte', 'shade', 'gazer'], rule: '그림자는 실체화됐을 때만 벨 수 있다' },
   // 6~10층: 심층 — 층마다 전용 신규 몬스터가 등장한다
   6: { name: '파헤쳐진 묘역', enemies: ['bomber', 'ghoul', 'charger', 'brute', 'bloodBat', 'boneHeap', 'boneHeap'], rule: '뼈 더미를 부수지 않으면 되살아난다' },
-  7: { name: '독초 늪', enemies: ['thornPlant', 'turret', 'mimic', 'venomLasher', 'sporeMother', 'acidSlug'], rule: '포자 어미부터 끊어라 — 새끼는 무한하다' },
+  7: { name: '독초 늪', enemies: ['thornPlant', 'turret', 'mimic', 'venomLasher', 'sporeMother', 'acidSlug'], rule: '시체꽃 모주부터 끊어라 — 봉오리는 무한하다' },
   8: { name: '지하 심문실', enemies: ['executioner', 'stalker', 'frostArcher', 'warden', 'chainWraith', 'frostGolem'], rule: '처형자의 붉은 구역에서 벗어나라' },
   9: { name: '화형장', enemies: ['magmaSlime', 'magmaSlime', 'imp', 'obsidianBeast', 'flameJuggler', 'lavaBurster'], rule: '착탄 예고 원을 읽어라 — 장판이 겹치면 도망칠 곳이 없다' },
   10: { name: '처형인의 홀', enemies: ['voidEye', 'glutton', 'voidSpawn', 'voidSpawn', 'riftCaster', 'mirrorKnight'], rule: '거울 기사의 반격 자세가 끝나기 전에 물러나라' },
