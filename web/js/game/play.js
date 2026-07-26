@@ -1185,7 +1185,8 @@ const GamePlay = {
       }
       if (Math.hypot(p.x - pk.x, p.y - pk.y) < p.r + pk.r) {
         // 마시다 만 해독제 (이졸데 유품): 하트 회복량 +1 — 낙인 중에는 회복이 막힌다
-        const heal = 1 + (p.heartBonus || 0);
+        const heal = 1 + (p.heartBonus || 0) + (p.form === 'chalice' ? 1 : 0);
+        if (p.form === 'chalice') { p._chaliceT = 4; Particles.text(p.x, p.y - 42, '성배의 힘 +1', { color: '#ffd866', size: 12 }); }
         if (p.brandT > 0) Particles.text(p.x, p.y - 30, '낙인 — 회복 불가', { color: '#e43b44', size: 12 });
         else if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + heal);
         AudioSys.pickup();

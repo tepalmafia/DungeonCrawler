@@ -368,6 +368,15 @@ const GameScreens = {
 
   _tickClasses() {
     if (Input.pressed('Escape', 'Digit0', 'Backspace')) { this.state = 'hub'; return; }
+    // 계승 (v127): 첫 정복 후 ←→로 선택 직업의 형상을 고른다 — 기본 / 형상 1 / 형상 2
+    if (Meta.data.wins > 0 && (Input.pressed('ArrowLeft', 'KeyQ') || Input.pressed('ArrowRight', 'KeyE'))) {
+      const dir = Input.pressed('ArrowLeft', 'KeyQ') ? -1 : 1;
+      const cid = Meta.data.cls;
+      const n = (FORMS[cid] || []).length + 1;
+      Meta.data.forms[cid] = (((Meta.data.forms[cid] || 0) + dir) % n + n) % n;
+      Meta.save();
+      AudioSys.orb();
+    }
     let act = -1;
     const ids = Object.keys(CLASSES);
     for (let i = 0; i < ids.length; i++) {

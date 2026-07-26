@@ -56,6 +56,26 @@ const CLUES = [
     text: '왕의 가슴에서 뜯어낸 성배. 안에 담긴 것은 포도주가 아니다. 이제 깨뜨린다 — 전부 끝낸다.' },
 ];
 
+// ── 계승 「원한의 형상화」 (v127) — 첫 정복 후 해금: 원한이 형태를 고른다 (직업당 2형상) ──
+const FORMS = {
+  knight: [
+    { id: 'venge', name: '복수귀', desc: '처치마다 원한 중첩 (+0.4 공격, 최대 8) — 피격 시 절반을 잃는다' },
+    { id: 'guard', name: '수호망령', desc: '철벽 충전 40% 단축 · 보호막이 깨질 때 주위를 밀쳐낸다' },
+  ],
+  archer: [
+    { id: 'hunt', name: '사냥의 원혼', desc: '크리티컬이 사냥 표식을 남긴다 — 표식된 적 받는 피해 +25% (2.5초)' },
+    { id: 'noose', name: '밧줄의 망령', desc: '화살 12% 확률로 올가미 — 적을 감속시킨다 (1.2초)' },
+  ],
+  mage: [
+    { id: 'ash', name: '재의 현자', desc: '원혼탄 명중마다 불이 붙는다 (화상 1.5초) — 화염 시너지의 기점' },
+    { id: 'star', name: '별의 인도자', desc: '대원혼탄 폭발 반경 +40% — 별은 더 넓게 태운다' },
+  ],
+  alch: [
+    { id: 'plague', name: '역병 의사', desc: '중독된 적이 죽으면 독구름이 번진다' },
+    { id: 'chalice', name: '성배를 삼킨 자', desc: '하트 회복 +1 · 하트마다 4초간 공격 +1 — 대신 최대 HP -1' },
+  ],
+};
+
 const CLASSES = {
   knight: {
     id: 'knight', name: '가레스', title: '목 잘린 근위기사', sprite: 'player', color: '#5a7a94',
@@ -249,6 +269,7 @@ const Meta = {
       this.data = this._default();
     }
     this.data.opts = { ...this._defaultOpts(), ...(this.data.opts || {}) };
+    this.data.forms = this.data.forms || {}; // 계승 선택 {classId: 0(기본)|1|2}
     this.data.fifthHand = { stage: 0, ...(this.data.fifthHand || {}) };
     // 환영 선물: 처음부터 다른 직업을 해금해 볼 수 있도록 파편 지급 (1회)
     if (!this.data.welcomed) {
