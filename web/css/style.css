@@ -15,3 +15,9 @@ canvas {
   aspect-ratio: 16 / 9;
   cursor: crosshair;
 }
+
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('../fonts/Galmuri11.woff2?v=113') format('woff2');
+  font-display: swap;
+}

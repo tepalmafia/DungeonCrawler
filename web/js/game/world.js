@@ -1450,13 +1450,27 @@ const World = {
     }
 
     // 2) 바닥 데코 (테마별, 스폰 위치 회피 불필요 — 순수 장식)
-    const nDecals = RNG.int(9, 15);
+    // 첫인상 스프린트 ③: 9~15 → 18~26 — 넓은 검은 바닥이 그대로 노출되던 밀도를 상향
+    const nDecals = RNG.int(18, 26);
     for (let i = 0; i < nDecals; i++) {
       const tx = RNG.int(1, this.cols - 2);
       const ty = RNG.int(1, this.rows - 2);
       if (this.map[ty][tx] !== 0) continue;
       const painter = DECAL_PAINTERS[RNG.pick(th.decals)];
       if (painter) painter(ctx, tx * TS + RNG.int(6, TS - 22), ty * TS + RNG.int(6, TS - 18));
+    }
+    // 미세 흙때 — 타일 4칸당 1개꼴의 아주 옅은 점무늬: 바닥이 '비어 있음'에서 '낡음'으로
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    for (let i = 0; i < 60; i++) {
+      const tx = RNG.int(1, this.cols - 2), ty = RNG.int(1, this.rows - 2);
+      if (this.map[ty][tx] !== 0) continue;
+      ctx.fillRect(tx * TS + RNG.int(2, TS - 6), ty * TS + RNG.int(2, TS - 6), RNG.int(2, 5), RNG.int(2, 4));
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    for (let i = 0; i < 40; i++) {
+      const tx = RNG.int(1, this.cols - 2), ty = RNG.int(1, this.rows - 2);
+      if (this.map[ty][tx] !== 0) continue;
+      ctx.fillRect(tx * TS + RNG.int(2, TS - 8), ty * TS + RNG.int(2, TS - 6), RNG.int(3, 7), RNG.int(2, 5));
     }
 
     // 3) 벽 (오토타일: 아래가 바닥이면 정면, 아니면 윗면)
@@ -1711,24 +1725,24 @@ const World = {
       ctx.strokeStyle = c;
       ctx.lineWidth = 1;
       ctx.strokeRect(d.x - w / 2, d.y - 66, w, 18);
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 12px Galmuri11, monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = c;
       ctx.fillText(d.opt.label, d.x, d.y - 53);
 
       // 한 줄 툴팁 — 문의 의미를 그 자리에서 배운다 (신규 유저 학습 부하 대응)
       if (d.opt.desc) {
-        ctx.font = '10px monospace';
+        ctx.font = '10px Galmuri11, monospace';
         ctx.fillStyle = '#9aa0b4';
         ctx.fillText(d.opt.desc, d.x, d.y + 46);
       }
 
       // 문 수식어 (위험-보상): 명판 위에 경고 라벨 + 설명
       if (d.opt.mod) {
-        ctx.font = 'bold 11px monospace';
+        ctx.font = 'bold 11px Galmuri11, monospace';
         ctx.fillStyle = '#e43b44';
         ctx.fillText(`⚠ ${d.opt.mod.label}`, d.x, d.y - 72);
-        ctx.font = '10px monospace';
+        ctx.font = '10px Galmuri11, monospace';
         ctx.fillStyle = '#9aa0b4';
         ctx.fillText(d.opt.mod.desc, d.x, d.y - 84);
       }
@@ -1820,17 +1834,17 @@ const World = {
       ctx.fill();
     } else if (type === 'event') {
       // 물음표 — 무엇이 기다릴까
-      ctx.font = 'bold 18px monospace';
+      ctx.font = 'bold 18px Galmuri11, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('?', x, y + 6);
     } else if (type === 'merchant') {
       // 골드 주머니 — 장사꾼의 표식
-      ctx.font = 'bold 17px monospace';
+      ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('$', x, y + 6);
     } else if (type === 'trial') {
       // 느낌표 — 위험하지만 확실한 보상
-      ctx.font = 'bold 18px monospace';
+      ctx.font = 'bold 18px Galmuri11, monospace';
       ctx.textAlign = 'center';
       ctx.fillText('!', x, y + 6);
     } else if (type === 'nextfloor') {

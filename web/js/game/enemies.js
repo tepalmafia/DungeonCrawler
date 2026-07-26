@@ -182,7 +182,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         });
         if (this.state === 'crouch') {
           ctx.fillStyle = '#ff4757';
-          ctx.font = 'bold 14px monospace';
+          ctx.font = 'bold 14px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 24);
         }
@@ -334,7 +334,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
         if (this.state === 'windup') {
           ctx.fillStyle = '#ff4757';
-          ctx.font = 'bold 18px monospace';
+          ctx.font = 'bold 18px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 30);
         }
@@ -439,7 +439,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         });
         if (this.state === 'aim') {
           ctx.fillStyle = '#ff4757';
-          ctx.font = 'bold 14px monospace';
+          ctx.font = 'bold 14px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 22);
         }
@@ -486,7 +486,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         });
         if (this.state === 'spin') {
           ctx.fillStyle = '#ff4757';
-          ctx.font = 'bold 16px monospace';
+          ctx.font = 'bold 16px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 26);
         }
@@ -555,7 +555,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         ctx.restore();
         if (this.state === 'slam') {
           ctx.fillStyle = '#ff4757';
-          ctx.font = 'bold 18px monospace';
+          ctx.font = 'bold 18px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 34);
         }
@@ -811,7 +811,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         });
         if (this.state === 'windup') {
           ctx.fillStyle = '#ff4757';
-          ctx.font = 'bold 16px monospace';
+          ctx.font = 'bold 16px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 30);
         }
@@ -994,7 +994,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const lean = this.state === 'ready' ? -3 : this.state === 'stab' ? 4 : 0;
         Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x + (this.flip ? -lean : lean), this.y, { flip: this.flip, shadow: true });
-        if (this.state === 'ready') { ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.fillText('!', this.x, this.y - 26); }
+        if (this.state === 'ready') { ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center'; ctx.fillText('!', this.x, this.y - 26); }
         this.drawStatus(ctx);
       },
     }),
@@ -1270,7 +1270,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           flip: this.flip, shadow: true, squashY: roaring ? 1.12 : 1, rot: this.rushT > 0 ? (this.flip ? -0.1 : 0.1) : 0,
         });
         if (roaring || enraged) {
-          ctx.fillStyle = '#e43b44'; ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#e43b44'; ctx.font = 'bold 12px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText(roaring ? '포효!' : '격노!', this.x, this.y - 28);
         }
         this.drawStatus(ctx);
@@ -1407,7 +1407,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const hunch = 1 + Math.sin(this.animT * 8) * 0.06;
         Renderer.drawSprite(this.skin(Sprites.ghoul), this.x, this.y, { flip: this.flip, squashY: hunch, shadow: true });
         if (this.eaten > 0) {
-          ctx.fillStyle = '#e43b44'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#e43b44'; ctx.font = 'bold 10px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('▲'.repeat(this.eaten), this.x, this.y - 26);
         }
         this.drawStatus(ctx);
@@ -1446,7 +1446,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const shakeX = this.state === 'windup' ? (Math.random() - 0.5) * 3 : 0;
         Renderer.drawSprite(this.skin(Sprites.charger), this.x + shakeX, this.y, { flip: this.flip, shadow: true });
-        if (this.state === 'windup') { ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.fillText('!', this.x, this.y - 22); }
+        if (this.state === 'windup') { ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center'; ctx.fillText('!', this.x, this.y - 22); }
         this.drawStatus(ctx);
       },
     }),
@@ -1960,7 +1960,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = Math.sin(this.animT * 9) * 5;
         if (this.state === 'tele') {
-          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 22);
         }
         Renderer.drawSprite(this.skin(Sprites.emberMoth), this.x, this.y - bob, { flip: this.flip, shadow: true });
@@ -2041,7 +2041,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         ctx.save();
         if (this.phased) ctx.globalAlpha = 0.35;
         if (this.state === 'crouch') {
-          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 24);
         }
         Renderer.drawSprite(this.skin(Sprites.shade), this.x, this.y, { flip: this.flip, shadow: !this.phased });
@@ -2357,7 +2357,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         if (this.state === 'raise') {
-          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 15px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 28);
         }
         Renderer.drawSprite(this.skin(Sprites.warden), this.x, this.y, { flip: this.flip, shadow: true });
@@ -2445,7 +2445,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'raise') sq = 1.12 + this.stateT * 0.1;
         Renderer.drawSprite(this.skin(Sprites.frostGolem), this.x, this.y, { flip: this.flip, squashX: 2 - sq, squashY: sq, shadow: true });
         if (this.state === 'raise') {
-          ctx.fillStyle = '#5ce0e6'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = '#5ce0e6'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 30);
         }
         this.drawStatus(ctx);
@@ -2817,7 +2817,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         flip: this.flip, shadow: true, squashX: puff, squashY: puff,
       });
       if (this.screamT > 0) {
-        ctx.fillStyle = '#8adf76'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#8adf76'; ctx.font = 'bold 16px Galmuri11, monospace'; ctx.textAlign = 'center';
         ctx.fillText('!', this.x, this.y - 30);
       }
       this.drawStatus(ctx);
@@ -2988,7 +2988,7 @@ function createMiniboss(type, x, y, floorScale) {
     origDraw(ctx);
     ctx.restore();
     // 이름표 + 체력바
-    ctx.font = 'bold 11px monospace';
+    ctx.font = 'bold 11px Galmuri11, monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#08080f';
     ctx.fillText(e.miniName, e.x + 1, e.y - e.r - 21);

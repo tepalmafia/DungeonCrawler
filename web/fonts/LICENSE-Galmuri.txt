@@ -1,0 +1,7 @@
+Galmuri (갈무리) 픽셀 폰트
+Copyright (c) 2019-2024 quiple (Lee Minseo)
+https://github.com/quiple/galmuri
+
+SIL Open Font License 1.1 (OFL-1.1)로 배포됩니다.
+전문: https://openfontlicense.org/open-font-license-official-text/
+이 게임은 Galmuri11을 UI 서체로 사용합니다.
