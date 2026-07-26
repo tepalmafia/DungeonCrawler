@@ -535,6 +535,9 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
       if (this._chaliceT > 0) this._chaliceT -= dt;
+      if (this._hornT > 0) this._hornT -= dt;
+      if (this._panicT > 0) this._panicT -= dt;
+      if (this._peltCd > 0) this._peltCd -= dt;
 
       if (this.dashCharges < this.dashMax) {
         this.dashRegenT += dt;
@@ -577,7 +580,7 @@ function createPlayer(x, y, classId = 'knight') {
         this._trailDist = 0;
         this.dashHit = new Set();
         this._pdodged = false; // 완벽 회피: 대시당 1회
-        this._dashWin = 0.24; // 완벽 회피 판정 창 — 대시 무적(0.22s) 전체를 커버 (기존 0.16s는 무적보다 짧았다)
+        this._dashWin = this.rflags.bell ? 0.38 : 0.24; // 완벽 회피 판정 창 — 무덤의 종은 창을 넓힌다
         this.dashAtkT = 0.35; // 대시 파생기 입력 창: 대시 중 + 직후 0.19초 (0.16초는 너무 빡빡했다)
         if (this.flags.hunterstep) this._huntT = 1.5; // 사냥꾼의 호흡: 대시 후 공속 창
         if (this.rflags.dashcrit) this.dashCritReady = true;
@@ -619,7 +622,7 @@ function createPlayer(x, y, classId = 'knight') {
           }
         }
       } else if (len > 0) {
-        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1);
+        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1);
         World.moveEntity(this, mx * spd * dt, my * spd * dt);
       }
 
@@ -695,6 +698,11 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 1; // DPS 리그: +2는 +59%로 과함
       if (this.flags.berserk && this.hp <= 2) atk += 1;
       if (this.rflags.berserkhelm && this.hp <= 3) atk += 4; // 에픽 가치 밴드 보정
+      if (this._hornT > 0) atk += 1; // 뿔나팔: 파생기의 여세
+      if (this.rflags.blackcandle && typeof Game !== 'undefined') atk += (Game.heat || 0) * 0.5; // 검은 초: 저주가 힘이 된다
+      if (this.rflags.debt && typeof Game !== 'undefined') atk += Math.min(5, Math.floor((Game.gold || 0) / 60)); // 차용증: 빚이 무기가 된다
+      if (this.rflags.nail) atk += (this.maxHp - this.hp) * 0.7; // 관의 못: 상처가 힘이다
+      if (this.rflags.lastwill && typeof Meta !== 'undefined') atk += Meta.clueCount() * 0.15; // 유언장: 진실의 무게
       return atk;
     },
 
@@ -722,6 +730,7 @@ function createPlayer(x, y, classId = 'knight') {
 
       const baseDmg = this.currentAtk();
       let dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv + (this.flags.bowmaster ? 1 : 0))) : baseDmg;
+      if (finisher && this.rflags.knell) dmg = Math.round(dmg * 1.3); // 세 번째 타종: 마지막 울림이 가장 크다
       if (this.flags.greatsword) dmg = Math.round(dmg * 2.2); // 대검화: 느리고 무겁게
       const finalDmg = Math.max(1, Math.round(((crit ? Math.round(dmg * this.critMul) : dmg) + bonus) * dmgMul));
       game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
@@ -862,6 +871,7 @@ function createPlayer(x, y, classId = 'knight') {
       Renderer.shake(3, 0.14);
       Particles.text(this.x, this.y - 34, '파생기!', { color: '#5ce0e6', size: 13 });
       this.ghosts.push({ x: this.x, y: this.y, flip: this.flip, life: 0.3 });
+      if (this.rflags.horn) this._hornT = 2; // 뿔나팔: 파생기가 사냥의 여세를 연다
 
       if (this.classId === 'knight') {
         // 돌진 찌르기: 좁고 긴 관통 일격 (대시 방향으로 꿰뚫는다)

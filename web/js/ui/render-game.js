@@ -881,7 +881,8 @@ const GameRender = {
       const dc = dk.getContext('2d');
       dc.globalCompositeOperation = 'source-over';
       dc.clearRect(0, 0, dk.width, dk.height);
-      const g = dc.createRadialGradient(p.x, p.y, 150, p.x, p.y, 520);
+      const cm = p.rflags.candle ? 1.35 : 1; // 밤샘 초 (v128): 죽은 자의 곁을 밝힌다
+      const g = dc.createRadialGradient(p.x, p.y, 150 * cm, p.x, p.y, 520 * cm);
       g.addColorStop(0, `rgba(${SH},0)`);
       g.addColorStop(0.7, `rgba(${SH},0.28)`);
       g.addColorStop(1, `rgba(${SH},0.62)`);
@@ -904,7 +905,8 @@ const GameRender = {
     // 어둠 기믹 층: 시야 제한 — HUD보다 아래에
     if (World.hazard === 'dark' && this.state !== 'over' && this.state !== 'victory') {
       const p = this.player;
-      const g = ctx.createRadialGradient(p.x, p.y, 130, p.x, p.y, 300);
+      const cm2 = p.rflags.candle ? 1.35 : 1; // 밤샘 초: 어둠 기믹 층에서도 유효
+      const g = ctx.createRadialGradient(p.x, p.y, 130 * cm2, p.x, p.y, 300 * cm2);
       g.addColorStop(0, 'rgba(5,3,10,0)');
       g.addColorStop(1, 'rgba(5,3,10,0.88)');
       ctx.fillStyle = g;
