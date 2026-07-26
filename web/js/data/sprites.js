@@ -2218,5 +2218,174 @@ const Sprites = (() => {
     '.....rr..........rr.........',
   ]), { f: '#dcb68c', F: '#c09468', e: '#1a1c2c', m: '#6e7383', M: '#9aa1b0', s: '#c8ccd8', d: '#262033', k: '#23202c', w: '#5e4226', l: '#6a4a2e', L: '#8a653f', r: '#7a1c28', R: '#a03040', g: '#b08d4a', C: '#ffd866' });
 
+
+  // ══════════════ 잡몹 시나리오 정합 (2026-07) — 저주는 시체를 뒤튼다: 부적합 20종 리드로우 ══════════════
+  sprites.slime = make(pad([
+    '...ggggg.....',
+    '..gggggggg...',
+    '.ggsSsgggg.h.',
+    'gggsssggggghh',
+    'ggggggggggg..',
+    '.ggggggggg...',
+  ]), { g: '#4a5a3e', s: '#c9c2b2', S: '#1a1c2c', h: '#a99e8c' });
+  sprites.toxicSlime = make(pad([
+    '...ggggg.....',
+    '..gggggggg...',
+    '.ggsSsgggg.h.',
+    'gggsssggggghh',
+    'ggggggggggg..',
+    '.ggggggggg...',
+  ]), { g: '#3f6a35', s: '#c9c2b2', S: '#1a1c2c', h: '#a99e8c' });
+  sprites.iceSlime = make(pad([
+    '...ggggg.....',
+    '..gggggggg...',
+    '.ggsSsgggg.h.',
+    'gggsssggggghh',
+    'ggggggggggg..',
+    '.ggggggggg...',
+  ]), { g: '#3a5a74', s: '#d8e4ec', S: '#1a1c2c', h: '#a9c3d3' });
+  sprites.magmaSlime = make(pad([
+    '...ggggg.....',
+    '..gggggggg...',
+    '.ggsSsgggg.h.',
+    'gggsssggggghh',
+    'ggggggggggg..',
+    '.ggggggggg...',
+  ]), { g: '#7a3018', s: '#e8d0b0', S: '#1a1c2c', h: '#e25822' });
+  sprites.mushroom = make(pad([
+    '....ppp.....',
+    '...pPrPp....',
+    '....ppp.....',
+    '.....t......',
+    '.....t......',
+    '..mmmmmmm...',
+    '.mmmmmmmmm..',
+    'mmmsmmmmmmm.',
+  ]), { p: '#d8cfc0', P: '#e8e0d8', r: '#a03040', t: '#4a5a3e', m: '#3a2c1a', s: '#c9c2b2' });
+  sprites.sporePuff = make(pad([
+    '..pp..',
+    '.pPrp.',
+    '..pp..',
+    '...t..',
+  ]), { p: '#d8cfc0', P: '#e8e0d8', r: '#a03040', t: '#4a5a3e' });
+  sprites.sporeMother = make(pad([
+    '..ppp...ppp...',
+    '.pPrPp.pPrPp..',
+    '..ppp...ppp...',
+    '...t..pp.t....',
+    '...t.pPrp.....',
+    '.mmmmmppmmmm..',
+    'mmmmmmmtmmmmm.',
+    'mmsmmmmmmmsmm.',
+  ]), { p: '#d8cfc0', P: '#e8e0d8', r: '#a03040', t: '#4a5a3e', m: '#3a2c1a', s: '#c9c2b2' });
+  sprites.acidSnail = make(pad([
+    '...mmmmm....',
+    '..mMMMMmm...',
+    '..mmemmemm..',
+    '.rmmmmmmmr..',
+    '.rrmmmmmrr..',
+    '..rr...rr...',
+  ]), { m: '#5a5a48', M: '#7a7a64', e: '#c9d94a', r: '#6a4a2e' });
+  sprites.acidSlug = make(pad([
+    '..rrrr....',
+    '.rrRRrr...',
+    'rrRmmRrr..',
+    '.rrrrrrr..',
+  ]), { r: '#6a4a2e', R: '#8a653f', m: '#5a5a48' });
+  sprites.frog = make(pad([
+    '...bbbbbb.....',
+    '..bbBBBBbb....',
+    '.bbBeBBeBbb...',
+    '.bbBBBBBBbb...',
+    '.obbBBBBbbo...',
+    '..bbbbbbbb....',
+    '...bb..bb.....',
+  ]), { b: '#8a94a0', B: '#a8b4c0', e: '#1a1c2c', o: '#6a5a40' });
+  sprites.spider = make(pad([
+    '...cccc.....',
+    '..cceecc....',
+    '..cccccc....',
+    't.cccccc.t..',
+    '.t.cccc.t...',
+    't...cc...t..',
+  ]), { c: '#d8d3c5', e: '#1a1c2c', t: '#8a8272' });
+  sprites.leech = make(pad([
+    'rrRr........',
+    '.rrRrrr.....',
+    '...rrRrrrr..',
+    '......rrRrr.',
+  ]), { r: '#7a1c28', R: '#a03040' });
+  sprites.bat = make(pad([
+    '..k...k...',
+    '.kkk.kkk..',
+    '..kkkkkb..',
+    '...kkkk...',
+    '....sk....',
+  ]), { k: '#16141e', b: '#b8ae96', s: '#c9c2b2' });
+  sprites.bloodBat = make(pad([
+    '..k...k...',
+    '.kkk.kkk..',
+    '..kkkkkb..',
+    '...kkkk...',
+    '....sk....',
+  ]), { k: '#2a1418', b: '#e43b44', s: '#c9c2b2' });
+  sprites.emberMoth = make(pad([
+    '..oi...',
+    '.oiio..',
+    'oiIIio.',
+    '.oiio..',
+    '..o....',
+  ]), { o: '#e25822', i: '#ffd866', I: '#fff7c0' });
+  sprites.wisp = make(pad([
+    '..bb...',
+    '.bBBb..',
+    '.bBIb..',
+    '.bBBb..',
+    '..bb...',
+    '...b...',
+  ]), { b: '#3a5a8a', B: '#5ce0e6', I: '#e8f0f8' });
+  sprites.boar = make(pad([
+    '.....hh.......',
+    '....hehh......',
+    '....hhh.......',
+    '.hhhhhhhhhh...',
+    'hhhhhhhhhhhh..',
+    'Shhhhhhhhhhh..',
+    '.hh.hh..hh.hh.',
+    '.hh.hh..hh.hh.',
+  ]), { h: '#6a4a2e', e: '#e43b44', S: '#8a653f' });
+  sprites.charger = make(pad([
+    '.....mm.......',
+    '....mkmm......',
+    '....mmm.......',
+    '.mmhhhhhmmm...',
+    'mmhhhhhhhmmm..',
+    'Smhhhhhhhhmm..',
+    '.mm.mm..mm.mm.',
+    '.mm.mm..mm.mm.',
+  ]), { m: '#5a5a68', k: '#16141e', h: '#4a4a58', S: '#7a7a8c' });
+  sprites.gazer = make(pad([
+    '...ggg.....',
+    '..gwwwg....',
+    '.gwweewwg..',
+    '.gwwerewwg.',
+    '.gwweewwg..',
+    '..gwwwg....',
+    '...ggg.....',
+  ]), { g: '#b08d4a', w: '#d8d3c5', e: '#1a1c2c', r: '#e43b44' });
+  sprites.obsidianBeast = make(pad([
+    '..g.g.g......',
+    '..ggggg......',
+    '..mssssm.....',
+    '..msesem.....',
+    '..mssssm.....',
+    '.mmmmmmmm....',
+    'mmmMMMMmmm...',
+    'mmMMMMMMmm...',
+    'mmmmmmmmmm...',
+    '.mmm..mmm....',
+    '.mmm..mmm....',
+  ]), { g: '#8a8272', m: '#5a5a68', M: '#7a7a8c', s: '#9aa1b0', e: '#1a1c2c' });
+
   return { ...sprites, white: whiteOf, tint: tintOf };
 })();

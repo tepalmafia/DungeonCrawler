@@ -734,6 +734,7 @@ const GamePlay = {
     // ── 장판 (적 피해: 감전/독구름) ──
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const z = this.zones[i];
+      if (z.r > 300) z.r = 300; // 전역 하드 클램프 — 어떤 생성 경로도 화면을 뒤덮을 수 없다
       z.life -= dt;
       if (z.life <= 0) { this.zones.splice(i, 1); continue; }
       if (z.kind === 'smoke') {
