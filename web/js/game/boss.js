@@ -318,6 +318,7 @@ function createBoss(floor, x, y) {
   return {
     type: 'boss', isBoss: true,
     name: def.name,
+    defId: defKey, // 도감 귀속 — 층 산식 대신 실제 킷으로
     def,
     x, y,
     hp, maxHp: hp,
@@ -711,10 +712,12 @@ function createBoss(floor, x, y) {
             game.hurtPlayer(1, { x: ddx / dd, y: ddy / dd });
           }
           if (c.fire) {
-            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire' });
+            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire', by: this.name });
           }
           if (c.poison) {
-            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 3.0, kind: 'poison' });
+            // 계측 (관통 v3): 20층 사망 18회 중 13회가 독 웅덩이 — 재생 기믹 장기전에서 융단이 됐다.
+            // 지속 3.0→2.2s: 화염(2.4s) 밴드에 정렬, 웅덩이가 '피할 것'에서 '기다릴 것'으로 격하되지 않는 선
+            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.2, kind: 'poison', by: this.name });
           }
           if (c.snare && Math.hypot(p.x - c.x, p.y - c.y) < 55 + p.r) {
             p.slowT = Math.max(p.slowT, 1.6);

@@ -148,6 +148,42 @@ const HUD = {
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`처치 ${game.kills}`, Renderer.W - 16, 26);
 
+    // ── 미니맵: 이 층의 여정 — 지나온 방(색 마름모) · 남은 방(점) · 보스(☠) ──
+    if (Dungeon.roomLog && Dungeon.roomLog.length && Dungeon.roomType !== 'boss') {
+      const cells = Dungeon.roomLog.map((t, i) => ({ t, seen: true, cur: i === Dungeon.roomLog.length - 1 }));
+      for (let i = 0, n = Math.max(0, Dungeon.totalRooms - Dungeon.roomIndex - 1); i < n; i++) cells.push({ t: null });
+      cells.push({ t: 'boss' });
+      const cw = 15;
+      let mx = Renderer.W / 2 - (cells.length * cw) / 2 + cw / 2;
+      const my = 40;
+      for (const c of cells) {
+        if (c.t === 'boss') {
+          ctx.textAlign = 'center';
+          ctx.font = '12px monospace';
+          ctx.fillStyle = '#e43b44';
+          ctx.fillText('☠', mx, my + 4);
+        } else if (!c.t) {
+          ctx.fillStyle = '#3a3a4c'; // 아직 모르는 방
+          ctx.fillRect(mx - 2, my - 2, 4, 4);
+        } else {
+          ctx.save();
+          ctx.translate(mx, my);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillStyle = (ROOM_META[c.t] || ROOM_META.combat).color;
+          ctx.globalAlpha = c.cur ? 1 : 0.55;
+          const s = c.cur ? 5 : 4;
+          ctx.fillRect(-s / 2, -s / 2, s, s);
+          if (c.cur) {
+            ctx.strokeStyle = '#e8e0cf';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-4.5, -4.5, 9, 9);
+          }
+          ctx.restore();
+        }
+        mx += cw;
+      }
+    }
+
     // ── 보스 체력바 ──
     const boss = game.enemies.find((e) => e.isBoss && !e.dead);
     if (boss) {
@@ -197,17 +233,18 @@ const HUD = {
     }
 
     // ── 피격 적색 섬광 / 크리티컬 백색 섬광 (한 프레임의 손맛) ──
-    if (game.hurtFlash > 0) {
-      ctx.fillStyle = `rgba(228,59,68,${Math.min(0.14, game.hurtFlash * 0.6)})`;
+    const fl = Meta.data.opts?.flash ?? 1; // 설정: 섬광 강도 (광과민성 배려 — 0이면 끔)
+    if (game.hurtFlash > 0 && fl > 0) {
+      ctx.fillStyle = `rgba(228,59,68,${Math.min(0.14, game.hurtFlash * 0.6) * fl})`;
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
-    if (game.critFlash > 0) {
-      ctx.fillStyle = `rgba(255,247,192,${Math.min(0.08, game.critFlash * 1.0)})`; // 완화 — 번쩍임이 눈 아프지 않게
+    if (game.critFlash > 0 && fl > 0) {
+      ctx.fillStyle = `rgba(255,247,192,${Math.min(0.08, game.critFlash * 1.0) * fl})`; // 완화 — 번쩍임이 눈 아프지 않게
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
-    if (game.pdodgeFlash > 0) {
+    if (game.pdodgeFlash > 0 && fl > 0) {
       // 완벽 회피: 청록 섬광 — 슬로모와 함께 '해냈다'는 확실한 신호
-      ctx.fillStyle = `rgba(92,224,230,${Math.min(0.14, game.pdodgeFlash * 0.5)})`;
+      ctx.fillStyle = `rgba(92,224,230,${Math.min(0.14, game.pdodgeFlash * 0.5) * fl})`;
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     }
 
@@ -698,7 +735,7 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = '12px monospace';
     ctx.fillStyle = '#4a4a5c';
-    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거', Renderer.W / 2, Renderer.H - 12);
+    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거 · O 설정', Renderer.W / 2, Renderer.H - 12);
 
     // 테스트 모드 상태 (T로 토글)
     if (Game.testMode) {
@@ -1352,6 +1389,56 @@ const HUD = {
       ctx.fillStyle = cNext[act] ? '#c9d94a' : '#b13ae0';
       ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 462);
     }
+  },
+
+  // ── 설정 패널 (O) — 거점·일시정지 공용 오버레이 ──
+  drawSettings(ctx, game) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(8,8,15,0.86)';
+    ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+    const o = Meta.data.opts;
+    const cx = Renderer.W / 2;
+    const px = cx - 250, pw = 500, py = 92, ph = 330;
+    ctx.fillStyle = '#14101e';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = '#6a5a40';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, py, pw, ph);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px monospace';
+    ctx.fillStyle = '#e8e0cf';
+    ctx.fillText('설 정', cx, py + 44);
+
+    const volBar = (v) => '■'.repeat(Math.round((v ?? 0.8) * 10)).padEnd(10, '·') + `  ${Math.round((v ?? 0.8) * 100)}%`;
+    const triLbl = (v) => (v ?? 1) <= 0 ? '끔' : (v ?? 1) < 1 ? '약하게' : '보통';
+    const rows = [
+      ['음악 음량', volBar(o.bgm)],
+      ['효과음 음량', volBar(o.sfx)],
+      ['화면 흔들림', triLbl(o.shake)],
+      ['피해 숫자 표시', o.dmgNum ? '켬' : '끔'],
+      ['화면 섬광', triLbl(o.flash) + '  (광과민성 배려)'],
+    ];
+    const ry0 = py + 92, rh = 40;
+    rows.forEach(([name, val], i) => {
+      const sel = (game._setRow || 0) === i;
+      const y = ry0 + i * rh;
+      if (sel) {
+        ctx.fillStyle = 'rgba(177,58,224,0.14)';
+        ctx.fillRect(px + 14, y - 24, pw - 28, 34);
+      }
+      ctx.textAlign = 'left';
+      ctx.font = sel ? 'bold 16px monospace' : '15px monospace';
+      ctx.fillStyle = sel ? '#e8e0cf' : '#9a917e';
+      ctx.fillText((sel ? '▶ ' : '  ') + name, px + 28, y);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = sel ? '#ffd866' : '#8f8577';
+      ctx.fillText(val, px + pw - 28, y);
+    });
+
+    ctx.textAlign = 'center';
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#8f8577';
+    ctx.fillText('↑↓ 항목 이동 · ←→ 조절 · O/Esc 닫기 (자동 저장)', cx, py + ph - 22);
   },
 
   // ── 전체 매뉴얼 (H 또는 /) — 게임 중·거점 어디서나. 1p 조작·전투 / 2p 던전·성장 ──

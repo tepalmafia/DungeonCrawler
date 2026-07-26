@@ -85,6 +85,33 @@ const GameScreens = {
     }
   },
 
+  // ── 설정 패널 (O) — 음량/화면 흔들림/대미지 숫자/섬광. 거점·일시정지 공용 ──
+  _tickSettings() {
+    const o = Meta.data.opts;
+    const ROWS = 5;
+    this._setRow = this._setRow || 0;
+    if (Input.pressed('Escape', 'KeyO')) {
+      this.showSettings = false;
+      Meta.save();
+      AudioSys.pickup();
+      return;
+    }
+    if (Input.pressed('ArrowUp', 'KeyW')) { this._setRow = (this._setRow + ROWS - 1) % ROWS; AudioSys.shard(); }
+    if (Input.pressed('ArrowDown', 'KeyS')) { this._setRow = (this._setRow + 1) % ROWS; AudioSys.shard(); }
+    const dir = (Input.pressed('ArrowLeft', 'KeyA') ? -1 : 0) + (Input.pressed('ArrowRight', 'KeyD') ? 1 : 0);
+    if (!dir) return;
+    const vol = (v) => Math.round(Math.min(1, Math.max(0, v + dir * 0.1)) * 10) / 10;
+    const tri = (v) => Math.min(1, Math.max(0, (v ?? 1) + dir * 0.5)); // 0 / 0.5 / 1 세 단계
+    if (this._setRow === 0) o.bgm = vol(o.bgm ?? 0.8);
+    else if (this._setRow === 1) o.sfx = vol(o.sfx ?? 0.8);
+    else if (this._setRow === 2) o.shake = tri(o.shake);
+    else if (this._setRow === 3) o.dmgNum = o.dmgNum ? 0 : 1;
+    else if (this._setRow === 4) o.flash = tri(o.flash);
+    AudioSys.applyOpts();
+    AudioSys.pickup(); // 새 음량이 곧장 귀로 확인된다
+    Meta.save();
+  },
+
   _tickHub() {
     if (Input.pressed('KeyM')) { AudioSys.toggleMute(); Meta.data.muted = AudioSys.muted; Meta.save(); }
 
@@ -96,6 +123,15 @@ const GameScreens = {
     if (this.showManual) {
       if (Input.pressed('Escape')) this.showManual = 0;
       return; // 매뉴얼이 열려 있는 동안 거점 입력 잠금
+    }
+
+    // 설정 (O) — 열려 있는 동안 거점 입력 잠금 (좌우 키가 열기 조절과 겹치지 않게)
+    if (this.showSettings) { this._tickSettings(); return; }
+    if (Input.pressed('KeyO')) {
+      this.showSettings = true;
+      this._setRow = 0;
+      AudioSys.pickup();
+      return;
     }
 
     // 테스트 모드 토글 (T)

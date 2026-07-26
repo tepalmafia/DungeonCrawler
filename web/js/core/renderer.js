@@ -18,6 +18,10 @@ const Renderer = {
   },
 
   shake(mag, dur = 0.2) {
+    // 설정: 화면 흔들림 강도 (0이면 완전 끔)
+    const s = (typeof Meta !== 'undefined' && Meta.data && Meta.data.opts) ? (Meta.data.opts.shake ?? 1) : 1;
+    if (s <= 0) return;
+    mag *= s;
     // 더 강한 셰이크가 이미 진행 중이면 유지
     if (mag >= this._shakeMag) {
       this._shakeMag = mag;

@@ -14,6 +14,12 @@ const AudioSys = {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : 0.35;
       this.master.connect(this.ctx.destination);
+      // 설정 패널용 2버스: 효과음 / 음악 — 개별 음량은 Meta.data.opts에서
+      this.sfxBus = this.ctx.createGain();
+      this.musicBus = this.ctx.createGain();
+      this.sfxBus.connect(this.master);
+      this.musicBus.connect(this.master);
+      this.applyOpts();
 
       const len = this.ctx.sampleRate;
       this._noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
@@ -32,7 +38,14 @@ const AudioSys = {
     if (this.master) this.master.gain.value = this.muted ? 0 : 0.35;
   },
 
-  _tone({ type = 'square', f0 = 440, f1 = null, dur = 0.1, vol = 0.4, delay = 0 }) {
+  // 설정 반영 — 버스 음량 (설정 패널에서 조절할 때마다 호출)
+  applyOpts() {
+    const o = (typeof Meta !== 'undefined' && Meta.data && Meta.data.opts) || {};
+    if (this.sfxBus) this.sfxBus.gain.value = o.sfx ?? 0.8;
+    if (this.musicBus) this.musicBus.gain.value = o.bgm ?? 0.8;
+  },
+
+  _tone({ type = 'square', f0 = 440, f1 = null, dur = 0.1, vol = 0.4, delay = 0, bus = 'sfx' }) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
@@ -42,12 +55,12 @@ const AudioSys = {
     osc.frequency.exponentialRampToValueAtTime(Math.max(f1 ?? f0, 1), t + dur);
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(gain).connect(this.master);
+    osc.connect(gain).connect((bus === 'music' && this.musicBus) || this.sfxBus || this.master);
     osc.start(t);
     osc.stop(t + dur + 0.05);
   },
 
-  _noise({ dur = 0.08, vol = 0.3, freq = 1200, q = 1, delay = 0 }) {
+  _noise({ dur = 0.08, vol = 0.3, freq = 1200, q = 1, delay = 0, bus = 'sfx' }) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime + delay;
     const src = this.ctx.createBufferSource();
@@ -59,7 +72,7 @@ const AudioSys = {
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(vol, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(filter).connect(gain).connect(this.master);
+    src.connect(filter).connect(gain).connect((bus === 'music' && this.musicBus) || this.sfxBus || this.master);
     src.start(t, Math.random() * 0.5, dur + 0.05);
   },
 
@@ -315,8 +328,8 @@ const Music = {
 
     // 베이스 (마디 첫 박 + 뒤 박)
     if (s === 0 || s === 8) {
-      AudioSys._tone({ type: 'sawtooth', f0: this._freq(root), dur: 0.28, vol: th.calm ? 0.055 : 0.075, delay });
-      AudioSys._tone({ type: 'sine', f0: this._freq(root - 12), dur: 0.3, vol: 0.06, delay });
+      AudioSys._tone({ type: 'sawtooth', f0: this._freq(root), dur: 0.28, vol: th.calm ? 0.055 : 0.075, delay, bus: 'music' });
+      AudioSys._tone({ type: 'sine', f0: this._freq(root - 12), dur: 0.3, vol: 0.06, delay, bus: 'music' });
     }
     // 아르페지오 (8분음표, 스케일 순환)
     if (s % 2 === 0) {
@@ -325,21 +338,21 @@ const Music = {
       AudioSys._tone({
         type: 'triangle',
         f0: this._freq(root + 12 + deg + octave),
-        dur: 0.14, vol: th.calm ? 0.035 : 0.042, delay,
+        dur: 0.14, vol: th.calm ? 0.035 : 0.042, delay, bus: 'music',
       });
     }
     // 패드 (심층 전용): 마디마다 낮게 깔리는 5도 지속음 — 공간의 위압감
     if (th.pad && s === 0) {
-      AudioSys._tone({ type: 'sine', f0: this._freq(root + 7), dur: 1.4, vol: 0.035, delay });
-      AudioSys._tone({ type: 'sine', f0: this._freq(root - 5), dur: 1.4, vol: 0.03, delay });
+      AudioSys._tone({ type: 'sine', f0: this._freq(root + 7), dur: 1.4, vol: 0.035, delay, bus: 'music' });
+      AudioSys._tone({ type: 'sine', f0: this._freq(root - 5), dur: 1.4, vol: 0.03, delay, bus: 'music' });
     }
     // 드럼 (긴장감 있는 층/보스)
     if (th.drums) {
       if (s % 4 === 0) {
-        AudioSys._tone({ type: 'sine', f0: 105, f1: 38, dur: 0.1, vol: 0.16, delay });
+        AudioSys._tone({ type: 'sine', f0: 105, f1: 38, dur: 0.1, vol: 0.16, delay, bus: 'music' });
       }
       if (s % 4 === 2) {
-        AudioSys._noise({ dur: 0.03, vol: 0.05, freq: 6000, q: 1, delay });
+        AudioSys._noise({ dur: 0.03, vol: 0.05, freq: 6000, q: 1, delay, bus: 'music' });
       }
     }
   },
