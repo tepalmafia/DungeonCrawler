@@ -2867,6 +2867,13 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     e.speed *= 1.15;
     e.r *= 1.15;
     e.xpVal *= 3;
+    // 왕장(王章) 정예 (v130): 현상금 5단부터 — 왕실 각인을 받은 정예. 수치가 아니라 죽음의 방식이 다르다:
+    // 쓰러지는 순간 왕의 저주가 4방 원혼탄으로 발화한다 (질적 변주 — 처치 순간까지 긴장 유지)
+    const ht = (typeof Game !== 'undefined' && Game.heat) || 0;
+    if (ht >= 5 && Math.random() < (ht >= 7 ? 0.4 : 0.25)) {
+      e.royal = true;
+      e.hp = Math.ceil(e.hp * 1.2);
+    }
   }
   e.maxHp = e.hp;
   return e;

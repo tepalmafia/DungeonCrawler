@@ -270,7 +270,7 @@ const GameCombat = {
         this.gold += g;
         Particles.text(e.x, e.y - 30, `+${g}G`, { color: '#ffd866', size: 16 });
       } else if (e.elite || e.isMini) {
-        const g = Math.round((4 + Dungeon.floor) * gmul);
+        const g = Math.round((4 + Dungeon.floor) * gmul) + (e.royal ? 5 : 0); // 왕장 정예: 위험 수당
         this.gold += g;
         Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
       }
@@ -451,6 +451,17 @@ const GameCombat = {
     if (p.rflags.fang && Math.random() < 0.08 && p.hp < p.maxHp && !(p.brandT > 0)) {
       p.hp++;
       Particles.text(p.x, p.y - 26, '+1', { color: '#e43b44', size: 14 });
+    }
+
+    // 왕장 정예 (v130): 왕의 각인은 죽음으로 발화한다 — 대각 4방 원혼탄 (읽고 피할 수 있는 예고된 위협)
+    if (e.royal) {
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI / 4 + i * Math.PI / 2;
+        this.spawnProjectile('soul', e.x, e.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 170, dmg: 1 });
+      }
+      Particles.ring(e.x, e.y, { r0: 6, r1: 44, life: 0.35, color: '#f7b32b', width: 3 });
+      Particles.text(e.x, e.y - 34, '왕의 각인!', { color: '#f7b32b', size: 12 });
+      AudioSys.shoot();
     }
 
     if (e.isBoss) {
