@@ -365,6 +365,7 @@ const Meta = {
 
   heat() {
     if (!this.heatUnlocked()) return 0;
+    if (this.data.heat >= HEAT_PACTS.length + 1) return HEAT_PACTS.length + 1; // 왕의 진노
     return HEAT_PACTS.reduce((n, p) => n + (this._pacts()[p.id] ? 1 : 0), 0);
   },
 
@@ -377,7 +378,8 @@ const Meta = {
 
   // ←→ 키 호환: 열기 N = canonical 순서 앞에서부터 N개 켠 것과 동치
   setHeat(h) {
-    const n = Math.min(HEAT_PACTS.length, Math.max(0, h));
+    // 8단계 = 왕의 진노: 전 서약 + 전역 강화 (풀업·최상급 기준 통과선 — 계측 기반)
+    const n = Math.min(HEAT_PACTS.length + 1, Math.max(0, h));
     this.data.heatPacts = {};
     HEAT_PACTS.forEach((p, i) => { this.data.heatPacts[p.id] = i < n; });
     this.data.heat = n;
@@ -390,7 +392,10 @@ const Meta = {
     const ps = this._pacts();
     const stored = HEAT_PACTS.reduce((n, p) => n + (ps[p.id] ? 1 : 0), 0);
     const out = {};
-    if (stored === count) {
+    if (count >= HEAT_PACTS.length + 1) {
+      HEAT_PACTS.forEach((p) => { out[p.id] = true; });
+      out.wrath = true; // 왕의 진노: 전역 강화
+    } else if (stored === count) {
       HEAT_PACTS.forEach((p) => { out[p.id] = !!ps[p.id]; });
     } else {
       HEAT_PACTS.forEach((p, i) => { out[p.id] = i < count; });

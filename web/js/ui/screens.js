@@ -109,20 +109,7 @@ const GameScreens = {
     if (Meta.heatUnlocked()) {
       if (Input.pressed('ArrowLeft')) { Meta.setHeat(Meta.data.heat - 1); AudioSys.orb(); }
       if (Input.pressed('ArrowRight')) { Meta.setHeat(Meta.data.heat + 1); AudioSys.orb(); }
-      if (Input.mouse.justDown) {
-        const mx = Input.mouse.x, my = Input.mouse.y;
-        const lr = HUD.loadoutLineRect();
-        if (mx >= lr.x && mx <= lr.x + lr.w && my >= lr.y && my <= lr.y + lr.h) {
-          this._pactEdit = !this._pactEdit; AudioSys.pickup();
-        }
-        if (this._pactEdit) {
-          HUD.pactChipRects().forEach((r, i) => {
-            if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-              Meta.togglePact(HEAT_PACTS[i].id); AudioSys.orb();
-            }
-          });
-        }
-      }
+      // 세부 은닉 (난이도 개편): 골라담기 폐지 — 단계만 고른다. 무엇이 강해지는지는 몸으로 알게 된다
     }
 
     const rects = HUD.hubButtonRects();

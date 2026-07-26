@@ -605,7 +605,7 @@ const HUD = {
                     Input.mouse.y >= lr.y && Input.mouse.y <= lr.y + lr.h;
       ctx.font = 'bold 15px monospace';
       ctx.fillStyle = cls.color;
-      const heatStr = Meta.heatUnlocked() ? `  ·  현상금 ${heat}단계` : '';
+      const heatStr = Meta.heatUnlocked() ? (heat >= 8 ? '  ·  ☠ 왕의 진노' : `  ·  현상금 ${heat}단계`) : '';
       ctx.fillText(cls.name + heatStr, Renderer.W / 2, lr.y + 15);
       if (Meta.heatUnlocked() && heat > 0) {
         ctx.fillStyle = '#e43b44';
@@ -615,36 +615,20 @@ const HUD = {
         ctx.fillText(`한 조각 +${heat * 20}%`, Renderer.W / 2 + 130, lr.y + 15);
       }
       if (Meta.heatUnlocked()) {
+        const FLAVOR = [
+          '수배 없음 — 왕은 아직 너를 모른다',
+          '방이 붙었다', '토벌대가 소집된다', '현상금이 두 배로 뛰었다',
+          '정예가 움직인다', '왕실 밀정이 붙었다', '토벌령이 전 영지에 내렸다',
+          '왕이 네 이름을 기억했다',
+          '왕이 직접 토벌을 명했다 — 살아서 왕좌에 닿은 자는 없다',
+        ];
         ctx.font = '10px monospace';
-        ctx.fillStyle = hover || Game._pactEdit ? '#9aa0b4' : '#4a4a5c';
-        ctx.fillText(Game._pactEdit ? '현상금 조건을 골라 담아라 (다시 클릭해 닫기)' : '클릭: 현상금 편집 · ←→ 단계 조절', Renderer.W / 2, lr.y + 30);
+        ctx.fillStyle = heat >= 8 ? '#e43b44' : hover ? '#9aa0b4' : '#4a4a5c';
+        ctx.fillText(`${FLAVOR[Math.min(8, heat)]} · ←→ 조절`, Renderer.W / 2, lr.y + 30);
       }
     }
 
-    // 서약 편집 패널 — 로드아웃 줄 클릭 시에만 (UI 개편: 상시 노출 7칩이 거점을 짓눌렀다)
-    if (Meta.heatUnlocked() && Game._pactEdit) {
-      const pacts = Meta._pacts();
-      this.pactChipRects().forEach((r, i) => {
-        const def = HEAT_PACTS[i];
-        const on = !!pacts[def.id];
-        const hover = Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
-                      Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h;
-        ctx.fillStyle = on ? '#2a1418' : '#141420';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.strokeStyle = on ? '#e43b44' : hover ? '#9aa0b4' : '#3a3a48';
-        ctx.lineWidth = hover ? 2 : 1;
-        ctx.strokeRect(r.x, r.y, r.w, r.h);
-        ctx.font = 'bold 11px monospace';
-        ctx.fillStyle = on ? '#e43b44' : '#666a80';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${on ? '♦' : '·'} ${def.name}`, r.x + r.w / 2, r.y + 13);
-        if (hover) {
-          ctx.font = '10px monospace';
-          ctx.fillStyle = '#9aa0b4';
-          ctx.fillText(def.desc, Renderer.W / 2, this.pactChipRects()[0].y + 32);
-        }
-      });
-    }
+    // (난이도 개편) 서약 편집 패널 제거 — 세부는 은닉, 단계만 남는다
 
     // 이어하기 슬림 버튼 — 중단된 런이 있을 때만
     {
