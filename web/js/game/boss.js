@@ -198,16 +198,116 @@ const BOSS_DEFS = {
     outro: '성배가… 식는다… 짐의 시간이… 돌아온다… 전부… 한꺼번에…',
     deathPalette: ['#ffd866', '#c22030', '#0a0612'],
   },
+  // ══ 왕의 공범들 — 막별 순환 보스 8종 (재림 4인방 해체): 기믹·콤보·인장기 전부 개별 ══
+  // 2막 「다리와 관문」
+  60: {
+    awakened: true, name: "수문장 '갈고리 브람'", sprite: 'bossBram', scale: 1.8, r: 30, hp: 620, speed: 46,
+    banner: "수문장 '갈고리 브람'",
+    punish: 'charge', sig: 'shieldCharge',
+    p1: ['snare>charge', 'fan:rock:snipe>snare', 'charge>ring'],
+    p2: ['snare>charge>fan:rock', 'ring>snare>charge', 'charge>snare>charge'],
+    rageText: '갈고리에 걸리면 끝이다!',
+    intro: '강에 버린 것들이 기어 올라오는군. 다시 가라앉혀주마.',
+    outro: '건진 게… 아니라… 버린 거였나… 나는…',
+    deathPalette: ['#5c9ded', '#8a653f', '#c8ccd8'],
+  },
+  61: {
+    awakened: true, name: "뱃사공 '침묵의 요른'", sprite: 'bossJorn', scale: 1.8, r: 30, hp: 700, speed: 34,
+    banner: "뱃사공 '침묵의 요른'",
+    punish: 'volley', punishProj: 'soul', sig: 'halfSweep',
+    p1: ['sweep>spiral:soul', 'spiral:soul>ring', 'fan:soul:snipe>sweep'],
+    p2: ['spiral:soul>sweep>ring', 'ring:gap>spiral:soul', 'sweep>fan:soul:cross'],
+    rageText: '…….',
+    intro: '……. (노를 든다)',
+    outro: '…축일마다… 실어 날랐다… 산 사람을…',
+    deathPalette: ['#3a5a8a', '#8f8577', '#c8d4e4'],
+  },
+  // 3막 「영지와 재판소」
+  62: {
+    awakened: true, name: "위증 서기장 '퀼른'", sprite: 'bossQuill', scale: 1.7, r: 28, hp: 560, speed: 52,
+    mechanic: { type: 'regen', label: '위증의 가호 — 부하가 살아있는 동안 기록이 그를 지킨다' },
+    banner: "위증 서기장 '퀼른'",
+    punish: 'volley', punishProj: 'soul', sig: 'brandZone',
+    p1: ['summon:acolyte>fan:soul', 'curse>fan:soul:snipe', 'fan:soul:cross>curse'],
+    p2: ['summon:shade>curse>fan:soul', 'fan:soul:snipe>summon:acolyte', 'curse>fan:soul:cross'],
+    rageText: '기록은 조작하면 그만이다!',
+    intro: '네 죄목? 내가 썼다. 잉크 값은 영지로 받았지.',
+    outro: '고쳐 쓸 수… 없는 기록도… 있었군…',
+    deathPalette: ['#b8ae96', '#7a1c28', '#3a2c1a'],
+  },
+  63: {
+    awakened: true, name: "사병대장 '철퇴 가로크'", sprite: 'bossGarok', scale: 1.9, r: 32, hp: 760, speed: 38,
+    mechanic: { type: 'armor', cap: 2, label: '영주의 중갑 — 강한 일격을 경감한다' },
+    banner: "사병대장 '철퇴 가로크'",
+    punish: 'charge', sig: 'miniSig',
+    p1: ['charge>ring', 'ring>fan:rock', 'sweep>sweep>ring'],
+    p2: ['charge>ring>fan:rock', 'ring>ring', 'sweep>charge>ring'],
+    rageText: '뼈째로 갈아주마!',
+    intro: '공작님 포도밭에 거름이 필요하던 참이다.',
+    outro: '월급은… 좋았는데… 말이지…',
+    deathPalette: ['#6e7383', '#8a653f', '#c22030'],
+  },
+  // 4막 「역병의 마을」
+  64: {
+    awakened: true, name: "역병 의사 '부리가면 코르부스'", sprite: 'bossCorvus', scale: 1.8, r: 29, hp: 640, speed: 44,
+    mechanic: { type: 'regen', label: '검은 처방 — 부하가 살아있는 동안 스스로를 치료한다' },
+    banner: "역병 의사 '부리가면 코르부스'",
+    punish: 'volley', punishProj: 'spore', sig: 'sanctPulse',
+    p1: ['geyser:poison>fan:spore', 'summon:sporePuff>ring', 'fan:spore:snipe>geyser:poison'],
+    p2: ['curse>geyser:poison>fan:spore', 'fan:spore:cross>summon:sporePuff', 'geyser:poison>ring:gap'],
+    rageText: '진단: 전원 소각 대상!',
+    intro: "'역병'의 정체를 아는 자는 둘 뿐이다. 왕과, 나.",
+    outro: '역병 같은 건… 처음부터… 없었어…',
+    deathPalette: ['#6ab04c', '#23202c', '#d8d3c5'],
+  },
+  65: {
+    awakened: true, name: "소각로장 '재의 우르쉬'", sprite: 'bossUrsh', scale: 1.9, r: 31, hp: 720, speed: 40,
+    mechanic: { type: 'rage', label: '소각로의 열기 — 시간이 지날수록 백열한다' },
+    banner: "소각로장 '재의 우르쉬'",
+    punish: 'charge', punishTrail: true, sig: 'halfSweep',
+    p1: ['charge:trail>geyser:fire', 'fan:fire>charge:trail', 'geyser:fire>ring'],
+    p2: ['geyser:fire>charge:trail>fan:fire', 'fan:fire:cross>geyser:fire', 'charge:trail>ring>fan:fire'],
+    rageText: '소각로는 식지 않는다!',
+    intro: '명단도 태우고, 시신도 태우고… 너도 태우면 완벽하군.',
+    outro: '재는… 말이 없을 줄… 알았는데…',
+    deathPalette: ['#e25822', '#5e564b', '#23202c'],
+  },
+  // 5막 「왕도와 왕좌」
+  66: {
+    awakened: true, name: "왕실 마법장 '별지기 오벨'", sprite: 'bossObel', scale: 1.8, r: 29, hp: 660, speed: 42,
+    mechanic: { type: 'veil', hits: [0.5], label: '성좌 장막 — 별이 도는 동안 구슬만이 약점이다' },
+    banner: "왕실 마법장 '별지기 오벨'",
+    punish: 'volley', punishProj: 'soul', sig: 'brandZone',
+    p1: ['spiral:soul>curse', 'fan:soul:cross>ring:gap', 'ring:gap>fan:soul:snipe'],
+    p2: ['curse>spiral:soul>fan:soul', 'summon:voidSpawn>ring:gap', 'spiral:soul>fan:soul:cross'],
+    rageText: '별은 거짓을 말하지 않는다 — 내가 대신 말했을 뿐!',
+    intro: '오르빈은 별을 읽고 죽었다. 나는 읽고도 입을 다물었지.',
+    outro: '별점은… 옳았다… 전부… 오르빈… 미안…',
+    deathPalette: ['#8a5ac2', '#a9e3ff', '#2e4a74'],
+  },
+  67: {
+    awakened: true, name: "검은 창기병 '무언의 기수'", sprite: 'bossLancer', scale: 1.8, r: 30, hp: 740, speed: 50,
+    banner: "검은 창기병 '무언의 기수'",
+    punish: 'charge', sig: 'triCharge',
+    p1: ['charge>charge', 'sweep>charge', 'fan:rock:snipe>charge'],
+    p2: ['charge>charge>charge', 'sweep>charge>ring', 'charge>fan:rock:snipe>charge'],
+    rageText: '(창끝이 낮아진다)',
+    intro: '(아무 말 없이 창을 겨눈다)',
+    outro: '(투구 속에서, 아주 오래된 한숨이 새어 나온다)',
+    deathPalette: ['#23202c', '#7a1c28', '#c8ccd8'],
+  },
 };
 
 function createBoss(floor, x, y) {
   // 중간 층 (11~19·21~29·31~39): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
   // 20 로트가르 / 30 발디아 / 40 이노첸시오 = 막보스 (고정 HP). 41층+ (무한 가도): 각성 5보스 순환
   const FIXED = { 20: 20, 30: 30, 40: 40, 45: 45, 50: 50 };
+  // 왕의 공범들: 막별 전용 순환 보스 (재림 4인방 해체) — 51층+ 무한은 8인 전원 순환
+  const CYCLE_POOL = { 2: [60, 61], 3: [62, 63], 4: [64, 65], 5: [66, 67] };
   const defKey = floor <= 10 ? floor
     : FIXED[floor] ? FIXED[floor]
-    : floor <= 49 ? ((floor - 11) % 4) + 6
-    : ((floor - 51) % 5) + 6;
+    : floor <= 50 ? CYCLE_POOL[Math.min(5, Math.ceil(floor / 10))][floor % 2]
+    : [60, 61, 62, 63, 64, 65, 66, 67][(floor - 51) % 8];
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
   // 계측 조정 (관통 v2): 배율 무제한이라 49층 절망의 바르곤 hp 4450 > 흰 늑대 3600 —
   // 필러 보스가 랜드마크 보스를 넘어섰고, 3런 사망의 절반이 이 한 킷에 몰렸다 (49층 17회 군집).
