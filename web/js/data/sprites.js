@@ -510,58 +510,41 @@ const Sprites = (() => {
 
   // ══════════════ 적 픽셀맵 (24×24, 팔레트 스왑 재사용) ══════════════
 
-  const SLIME_ROWS = [
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '.........gggggg.........',
-    '.......gggggggggg.......',
-    '......agggggggggggg.....',
-    '.....aaggggggggggggg....',
-    '....ggggWWkggggWWkggg...',
-    '....gggggggggggggggg....',
-    '...gggggggggggggggggg...',
-    '...gggggggggggggggggg...',
-    '...GggggggggggggggggGG..',
-    '....GGGGGGGGGGGGGGGG....',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
+  const SLIME_ROWS = [ // 기어오는 부패 (v121 A안) — 반쯤 잠긴 두개골과 끌리는 팔
+    '.........offo...........',
+    '........ofefo...........',
+    '........offfo...........',
+    '......oomffmoo..........',
+    '....oommmmmmmmoo........',
+    '...ommmMMmmmmmmoo..aa...',
+    '..ommmmmmmmmmmmmmoaaao..',
+    '..odmmmmmMMmmmmmmoaao...',
+    '..odmmmmmmmmmmdmmmoo....',
+    '...oddmmmmddmmmmdo......',
+    '....ooddddddddddoo......',
+    '......oooooooooo........',
   ];
 
-  const ARCHER_ROWS = [
-    '........................',
-    '.........wwwwww.........',
-    '........wwwwwwww........',
-    '.......wwwwwwwwww.......',
-    '.......wwkkwwkkww.......',
-    '.......wwkkwwkkww.......',
-    '.......wwwwwwwwww.......',
-    '........wmwmwmww........',
-    '..........wwww..........',
-    '.......wwwwwwwwww.......',
-    '......ww.wwwwww.ww......',
-    '......ww.w.ww.w.ww......',
-    '......ww.wwwwww.ww......',
-    '.........w.ww.w.........',
-    '..........wwww..........',
-    '.........ww..ww.........',
-    '.........ww..ww.........',
-    '.........ww..ww.........',
-    '........www..www........',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
+  const ARCHER_ROWS = [ // 백골 궁수 (v121 A안) — 후드 + 뼈활 (레나와 같은 활 언어)
+    '.....ohhhhhho.......',
+    '....ohhhhhhhho......',
+    '....ohBeBBeBho......',
+    '....ohBBBBBBho......',
+    '.....oBbbbbBo.......',
+    '..BBooBBBBBBoo......',
+    '.oBboWhhhhhhho......',
+    '.oBo.oWhhhhhho......',
+    '.oBoBBoWhhhhho......',
+    '.oBo.oWhhhhhho......',
+    '.oBbo.oWhhhhho......',
+    '..BBooWhhhhhoo......',
+    '.....ohhhhhho.......',
+    '.....oBb..bBo.......',
+    '.....oB....Bo.......',
+    '....ooBo..oBoo......',
+    '....obbo..obbo......',
+    '...oobboo.oobboo....',
+    '...ooooo...ooooo....',
   ];
 
   const BOAR_ROWS = [
@@ -591,6 +574,25 @@ const Sprites = (() => {
     '........................',
   ];
 
+  const HORSE_ROWS = [ // 미친 군마 (v121 A안) — 찢긴 마갑, 핏빛 눈. 무너진 왕의 석상(기마상)과 공유
+    '............oHHo..............',
+    '...........oHHHHo.............',
+    '..........oHHeHo..............',
+    '..........oHHHHoo.............',
+    '...........oHHHo..............',
+    '......oooooHHHoo..............',
+    '....ooHHHHHHHHHo..............',
+    '...oHHHHHHHHHHHHoo............',
+    '..oHHppHHHHHHppHHHo...........',
+    '..oHHppHHHHHHHHHHHo...........',
+    '..oHHHHHHHHHHHppHHo...........',
+    '...oHHHHHHHHHHHHHo............',
+    '...oHHo..oHHo..oHHo...........',
+    '...oHHo..oHHo..oHHo...........',
+    '...oGko..oGko..oGko...........',
+    '...oooo..oooo..oooo...........',
+  ];
+
   const MUSHROOM_ROWS = [
     '........................',
     '........................',
@@ -618,31 +620,18 @@ const Sprites = (() => {
     '........................',
   ];
 
-  const BAT_ROWS = [
-    '........................',
-    '........................',
-    '........................',
-    '..ww................ww..',
-    '..wwww............wwww..',
-    '..wwwwww........wwwwww..',
-    '...wwwwwww....wwwwwww...',
-    '....wwwwbbbbbbbbwwww....',
-    '.....wwbbkbbbbkbbww.....',
-    '......bbbbbbbbbbbb......',
-    '.......bbbffbbbb........',
-    '........b..bb..b........',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
-    '........................',
+  const BAT_ROWS = [ // 유골 까마귀 (v121 A안) — 유골을 물고 나는 묘지의 까마귀
+    '..ww..........ww..',
+    '.wwww........wwww.',
+    '.wwwww......wwwww.',
+    '..wwwwwwwwwwwwww..',
+    '...wwwbbbbbbwww...',
+    '....bbkbbbbbb.....',
+    '.....bbbbbbbb.....',
+    '......bbbbbb......',
+    '.......bffb.......',
+    '......ffffff......',
+    '.......f..f.......',
   ];
 
   const SPIDER_ROWS = [
@@ -783,16 +772,16 @@ const Sprites = (() => {
   // ══════════════ 스프라이트 생성 (팔레트 스왑 변종 포함) ══════════════
 
   sprites.slime = make(SLIME_ROWS, {
-    g: '#38b764', a: '#a7f070', G: '#257179', W: '#f4f4f4', k: '#1a1c2c',
+    o: '#16141e', m: '#5a6a4a', M: '#7a8a5a', d: '#3a4634', f: '#d4d8c4', e: '#e43b44', a: '#b8c0a8',
   });
   sprites.toxicSlime = make(SLIME_ROWS, {
-    g: '#8a3a8c', a: '#c56cf0', G: '#5c1e5e', W: '#d8f070', k: '#1a1c2c',
+    o: '#16141e', m: '#5a3a6a', M: '#8a5a9a', d: '#3a2444', f: '#d8c8f0', e: '#c56cf0', a: '#b09ac0',
   });
   sprites.archer = make(ARCHER_ROWS, {
-    w: '#e8e0cf', m: '#8a8074', k: '#5c1e1e',
+    o: '#16121f', h: '#2e3a2e', B: '#e8dfc8', b: '#b8ae96', e: '#e43b44', W: '#e8f0f4',
   });
-  sprites.boar = make(BOAR_ROWS, {
-    b: '#8d5a3b', B: '#a4714e', d: '#5e3a26', k: '#1a1c2c', w: '#f4f4f4',
+  sprites.boar = make(HORSE_ROWS, {
+    o: '#16141e', H: '#3a3230', G: '#5a4a44', p: '#7a1c28', e: '#e43b44', k: '#23202c',
   });
   sprites.lavaHound = make(BOAR_ROWS, {
     b: '#d35400', B: '#f07a2a', d: '#7a1010', k: '#ffd866', w: '#ffd866',
@@ -821,19 +810,27 @@ const Sprites = (() => {
 
   // ══════════════ 적 걷기·공격 프레임 (행 치환 변형) ══════════════
 
-  const ARCHER_WALK2 = withRows(ARCHER_ROWS, {
-    15: '........ww....ww........',
-    16: '........ww....ww........',
-    17: '.......ww......ww.......',
-    18: '......www......www......',
+  const ARCHER_WALK2 = withRows(ARCHER_ROWS, { // v121 신 맵 기준 — 다리 모음
+    13: '.....oBb.bBo........',
+    14: '......oB..Bo........',
+    15: '.....ooBooBoo.......',
+    16: '.....obbobbo........',
+    17: '....oobbobboo.......',
+    18: '....ooooooooo.......',
   });
-  const ARCHER_AIM = withRows(ARCHER_ROWS, { // 팔을 앞으로 뻗은 조준 자세
-    10: '......ww.wwwwwwwwww.....',
+  const ARCHER_AIM = withRows(ARCHER_ROWS, { // 시위를 당긴 조준 자세
+    8: '.oBoBBWWhhhhho......',
   });
 
-  const BOAR_WALK2 = withRows(BOAR_ROWS, {
+  const BOAR_WALK2 = withRows(BOAR_ROWS, { // 불탄 사냥개 전용 (구 실루엣 유지)
     13: '..dbb.dbbb...dbb.dbbb...',
     14: '...db..db.....db..db....',
+  });
+  const HORSE_WALK2 = withRows(HORSE_ROWS, { // 미친 군마 — 질주 보폭
+    12: '..oHHo....oHHo...oHHo.........',
+    13: '..oHHo...oHHo.....oHHo........',
+    14: '..oGko...oGko.....oGko........',
+    15: '..oooo...oooo.....oooo........',
   });
 
   const GOLEM_WALK2 = withRows(GOLEM_ROWS, {
@@ -879,8 +876,8 @@ const Sprites = (() => {
   });
 
   const PAL = {
-    archer: { w: '#e8e0cf', m: '#8a8074', k: '#5c1e1e' },
-    boar: { b: '#8d5a3b', B: '#a4714e', d: '#5e3a26', k: '#1a1c2c', w: '#f4f4f4' },
+    archer: { o: '#16121f', h: '#2e3a2e', B: '#e8dfc8', b: '#b8ae96', e: '#e43b44', W: '#e8f0f4' },
+    boar: { o: '#16141e', H: '#3a3230', G: '#5a4a44', p: '#7a1c28', e: '#e43b44', k: '#23202c' },
     lavaHound: { b: '#d35400', B: '#f07a2a', d: '#7a1010', k: '#ffd866', w: '#ffd866' },
     golem: { g: '#5d6b84', d: '#3d4a5c', k: '#5ce0e6' },
     spider: { b: '#2a1c3d', r: '#e43b44', l: '#4a4a5c' },
@@ -890,7 +887,7 @@ const Sprites = (() => {
 
   sprites.enemyFrames = {
     archer:    { walk: [sprites.archer, make(ARCHER_WALK2, PAL.archer)], attack: make(ARCHER_AIM, PAL.archer) },
-    boar:      { walk: [sprites.boar, make(BOAR_WALK2, PAL.boar)] },
+    boar:      { walk: [sprites.boar, make(HORSE_WALK2, PAL.boar)] },
     lavaHound: { walk: [sprites.lavaHound, make(BOAR_WALK2, PAL.lavaHound)] },
     golem:     { walk: [sprites.golem, make(GOLEM_WALK2, PAL.golem)], attack: make(GOLEM_SLAM, PAL.golem) },
     spider:    { walk: [sprites.spider, make(SPIDER_WALK2, PAL.spider)] },
@@ -1000,26 +997,29 @@ const Sprites = (() => {
   // ══════════════ 확장 몬스터 20종 (신규 원화 + 신규 행동) ══════════════
 
   // 해골 병사: 녹슨 검 — 찌르기 돌진
-  const SKELETON_ROWS = pad([
-    '......WWWWW',
-    '.....WWwwwwW',
-    '.....Wwkwwkw',
-    '.....Wwwwwww',
-    '.....wwsmmsw',
-    '......wwww.......rr',
-    '...AAwwwwwwAA...rrr',
-    '..AAs.wwwww.sA..rrr',
-    '..As..wswsw..s..rr',
-    '..ws..wwsww..ssrr',
-    '..w...wswsw...gg',
-    '......swwws...g',
-    '.....sww.wws',
-    '....sww...wws',
-    '....Www...wwW',
+  const SKELETON_ROWS = pad([ // 깨어난 백골 (v121 A안) — 붉은 눈·갈비뼈 틈·녹슨 검
+    '......oBBBBo........',
+    '.....oBBBBBBo.......',
+    '....oBBeBBeBBo......',
+    '....oBBBBBBBBo......',
+    '.....oBbbbbBo.......',
+    '......oBBBBo........',
+    '....oBBbBBbBBo..oRo.',
+    '...oBoBBBBBBoBo.oro.',
+    '..oBooBbBBbBooBooro.',
+    '..oBo.oBBBBo..oBro..',
+    '..oo..oBbbBo...oo...',
+    '......oBBBBo........',
+    '.....oBb..bBo.......',
+    '.....oB....Bo.......',
+    '.....oBb..bBo.......',
+    '....ooBo..oBoo......',
+    '....obbo..obbo......',
+    '...oobboo.oobboo....',
+    '...ooooo...ooooo....',
   ]);
   sprites.skeleton = make(SKELETON_ROWS, {
-    W: '#f0ece0', w: '#d8d3c5', s: '#a09a8a', m: '#6a665a', k: '#16121f',
-    r: '#8a5a3a', g: '#5e3a26', A: '#5d6b84',
+    o: '#16121f', B: '#e8dfc8', b: '#b8ae96', e: '#e43b44', r: '#8a6a4a', R: '#a88a5a',
   });
 
   // 방패 해골: 전면 대형 방패
@@ -1058,12 +1058,13 @@ const Sprites = (() => {
   ]), { h: '#3d3d52', k: '#e43b44', w: '#d8d3c5', l: '#8a6a3a' });
 
   // 벌레 떼: 아주 작은 벌레 (4마리씩 몰려온다)
-  const SWARM_ROWS = pad([
-    '..k..k',
-    '.kbbbbk',
-    '.bBBBBb',
-    '.bbbbbb',
-    '..l..l',
+  const SWARM_ROWS = pad([ // 시체 파리떼 (v121 A안)
+    '..ll....ll..',
+    '.llll..llll.',
+    '..lkbbbbkl..',
+    '...bBBBBb...',
+    '...bbbbbb...',
+    '....bkkb....',
   ]);
   sprites.swarm = make(SWARM_ROWS, { k: '#1a1c2c', b: '#5c3a5c', B: '#8a5a8a', l: '#2a1c2c' });
 
@@ -1343,7 +1344,7 @@ const Sprites = (() => {
   // ══════════════ 신규 24종 — 팔레트 스왑 변종 (층 전용 로스터 확장) ══════════════
   // 같은 실루엣이라도 층이 달라 마주치지 않고, 팔레트·기믹이 완전히 다르다
   sprites.sporePuff = make(MUSHROOM_ROWS, { m: '#b8a0d0', M: '#ece4f8', D: '#8a6aa8', s: '#c9d94a', k: '#1a1c2c' });
-  sprites.acidSnail = make(SLIME_ROWS, { g: '#8a8a3a', a: '#c9d94a', G: '#55561f', W: '#f0f0c0', k: '#1a1c2c' });
+  sprites.acidSnail = make(SLIME_ROWS, { o: '#16141e', m: '#6a5a3a', M: '#8a7a4a', d: '#4a3e24', f: '#c8ccd8', e: '#c9d94a', a: '#8a8a6a' });
   sprites.jailer = make(EXEC_ROWS, { h: '#3a5a7c', r: '#5ce0e6', a: '#2c3c50', d: '#1d2836', x: '#8a6a3a', X: '#a9c1d8' });
   sprites.frostMage = make(SHAMAN_ROWS, { t: '#3a6a9a', w: '#e8f4fa', k: '#5ce0e6', m: '#24455e', g: '#a9c1d8' });
   sprites.cinder = make(SWARM_ROWS, { k: '#2a1208', b: '#d35400', B: '#ff9a3c', l: '#7a1010' });
@@ -1353,12 +1354,12 @@ const Sprites = (() => {
   sprites.shade = make(STALKER_ROWS, { k: '#101018', r: '#5c7cff', s: '#2a2a44' });
   sprites.gazer = make(VOIDEYE_ROWS, { k: '#182448', w: '#a8c0f0', R: '#4a6ede', r: '#080c1e', t: '#2c3c6e' });
   sprites.bloodBat = make(BAT_ROWS, { w: '#8a2430', b: '#5a1424', k: '#ffd866', f: '#ff4757' });
-  sprites.boneHeap = make(SKELETON_ROWS, { W: '#e8dfc8', w: '#c8bfa8', s: '#948a72', m: '#5e564a', k: '#16121f', r: '#6a4a2a', g: '#4a3020', A: '#7a5a3a' });
+  sprites.boneHeap = make(SKELETON_ROWS, { o: '#16121f', B: '#d8cfb8', b: '#a89e86', e: '#ffd866', r: '#6a4a2a', R: '#7a5a3a' });
   sprites.venomLasher = make(GHOUL_ROWS, { g: '#3f6a35', G: '#6a9a48', d: '#2a4a24', r: '#c9d94a', m: '#1d3318', b: '#55702a' });
   sprites.sporeMother = make(MUSHROOM_ROWS, { m: '#a04a7a', M: '#e8b8d0', D: '#702a52', s: '#c9b89a', k: '#1a1c2c' });
   sprites.acidSlug = make(LEECH_ROWS, { r: '#6a7a1a', R: '#9aa82a', W: '#d8e858', k: '#141a06' });
   // ── 2막 (11~20층, 균사 정원) 팔레트 스왑 ──
-  sprites.sporeling = make(SLIME_ROWS, { g: '#7ab848', a: '#c9d94a', G: '#4a7a2a', W: '#f0f8d0', k: '#1a1c2c' });
+  sprites.sporeling = make(SLIME_ROWS, { o: '#16141e', m: '#5a8a4a', M: '#7ab848', d: '#3a6a2a', f: '#f0f8d0', e: '#c9d94a', a: '#9ac878' });
   sprites.fungalTick = make(LEECH_ROWS, { r: '#4a6a2a', R: '#7a9a3a', W: '#c9d94a', k: '#141a06' });
   sprites.myceliumBrute = make(GOLEM_ROWS, { g: '#5a7a4a', d: '#3a5230', k: '#c9d94a' });
   sprites.rotWalker = make(GOLEM_ROWS, { g: '#6a5a3a', d: '#463a24', k: '#8adf76' });
@@ -1366,7 +1367,7 @@ const Sprites = (() => {
   sprites.warden = make(BRUTE_ROWS, { b: '#4a5a74', k: '#5ce0e6', m: '#2c3850', g: '#1d2836' });
   sprites.chainWraith = make(WRAITH_ROWS, { w: '#8a8a9a', k: '#16121f', m: '#4a3a3a', W: '#c05060' });
   sprites.frostGolem = make(GOLEM_ROWS, { g: '#5a9ac8', d: '#3a6a94', k: '#f0faff' });
-  sprites.obsidianBeast = make(BOAR_ROWS, { b: '#2c2434', B: '#443a54', d: '#181220', k: '#b13ae0', w: '#b13ae0' });
+  sprites.obsidianBeast = make(HORSE_ROWS, { o: '#16141e', H: '#2c2434', G: '#443a54', p: '#b13ae0', e: '#b13ae0', k: '#181220' });
   sprites.flameJuggler = make(SHAMAN_ROWS, { t: '#c04a3a', w: '#ffd866', k: '#ff9a3c', m: '#7a1010', g: '#ffd866' });
   sprites.lavaBurster = make(CRYSTAL_ROWS, { c: '#a83a1a', C: '#e06030', w: '#ffd866', W: '#fff0c0', d: '#701d0a' });
   sprites.voidSpawn = make(SWARM_ROWS, { k: '#12081e', b: '#3d2c5c', B: '#7a5ac2', l: '#241838' });
@@ -2358,22 +2359,8 @@ const Sprites = (() => {
 
 
   // ══════════════ 잡몹 시나리오 정합 (2026-07) — 저주는 시체를 뒤튼다: 부적합 20종 리드로우 ══════════════
-  sprites.slime = make(pad([
-    '...ggggg.....',
-    '..gggggggg...',
-    '.ggsSsgggg.h.',
-    'gggsssggggghh',
-    'ggggggggggg..',
-    '.ggggggggg...',
-  ]), { g: '#4a5a3e', s: '#c9c2b2', S: '#1a1c2c', h: '#a99e8c' });
-  sprites.toxicSlime = make(pad([
-    '...ggggg.....',
-    '..gggggggg...',
-    '.ggsSsgggg.h.',
-    'gggsssggggghh',
-    'ggggggggggg..',
-    '.ggggggggg...',
-  ]), { g: '#3f6a35', s: '#c9c2b2', S: '#1a1c2c', h: '#a99e8c' });
+  // v121: slime는 상단 A안 신규 맵 사용 (v102 소형판 대체)
+  // v121: toxicSlime는 상단 A안 신규 맵 사용 (v102 소형판 대체)
   sprites.iceSlime = make(pad([
     '...ggggg.....',
     '..gggggggg...',
@@ -2453,20 +2440,8 @@ const Sprites = (() => {
     '...rrRrrrr..',
     '......rrRrr.',
   ]), { r: '#7a1c28', R: '#a03040' });
-  sprites.bat = make(pad([
-    '..k...k...',
-    '.kkk.kkk..',
-    '..kkkkkb..',
-    '...kkkk...',
-    '....sk....',
-  ]), { k: '#16141e', b: '#b8ae96', s: '#c9c2b2' });
-  sprites.bloodBat = make(pad([
-    '..k...k...',
-    '.kkk.kkk..',
-    '..kkkkkb..',
-    '...kkkk...',
-    '....sk....',
-  ]), { k: '#2a1418', b: '#e43b44', s: '#c9c2b2' });
+  // v121: bat는 상단 A안 신규 맵 사용 (v102 소형판 대체)
+  sprites.bloodBat = make(BAT_ROWS, { w: '#5a1424', b: '#8a2430', k: '#ffd866', f: '#ff4757' }); // v121: 신규 까마귀 맵 승격
   sprites.emberMoth = make(pad([
     '..oi...',
     '.oiio..',
@@ -2482,16 +2457,7 @@ const Sprites = (() => {
     '..bb...',
     '...b...',
   ]), { b: '#3a5a8a', B: '#5ce0e6', I: '#e8f0f8' });
-  sprites.boar = make(pad([
-    '.....hh.......',
-    '....hehh......',
-    '....hhh.......',
-    '.hhhhhhhhhh...',
-    'hhhhhhhhhhhh..',
-    'Shhhhhhhhhhh..',
-    '.hh.hh..hh.hh.',
-    '.hh.hh..hh.hh.',
-  ]), { h: '#6a4a2e', e: '#e43b44', S: '#8a653f' });
+  // v121: boar는 상단 A안 신규 맵 사용 (v102 소형판 대체)
   sprites.charger = make(pad([
     '.....mm.......',
     '....mkmm......',
@@ -2511,19 +2477,7 @@ const Sprites = (() => {
     '..gwwwg....',
     '...ggg.....',
   ]), { g: '#b08d4a', w: '#d8d3c5', e: '#1a1c2c', r: '#e43b44' });
-  sprites.obsidianBeast = make(pad([
-    '..g.g.g......',
-    '..ggggg......',
-    '..mssssm.....',
-    '..msesem.....',
-    '..mssssm.....',
-    '.mmmmmmmm....',
-    'mmmMMMMmmm...',
-    'mmMMMMMMmm...',
-    'mmmmmmmmmm...',
-    '.mmm..mmm....',
-    '.mmm..mmm....',
-  ]), { g: '#8a8272', m: '#5a5a68', M: '#7a7a8c', s: '#9aa1b0', e: '#1a1c2c' });
+  sprites.obsidianBeast = make(HORSE_ROWS, { o: '#16141e', H: '#2c2434', G: '#443a54', p: '#b13ae0', e: '#b13ae0', k: '#181220' }); // v121: 무너진 왕의 기마상
 
   return { ...sprites, white: whiteOf, tint: tintOf };
 })();
