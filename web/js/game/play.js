@@ -11,6 +11,37 @@ const ACT_MORALE = { 1: 0.35, 2: 0.25, 3: 0.18, 4: 0.15, 5: 0.06 }; // 왕좌에
 const ROUT_CRY = ['살려줘…!', '도, 도망쳐!', '이건 사람이 아니야!', '괴물이다—!', '왕이고 뭐고…!'];
 const SURR_CRY = ['하, 항복이다! 제발…', '살려주시오…!', '집에 아이가 있소…', '자비를…!'];
 const AMBUSH_TYPES = new Set(['mimic', 'turret', 'thornPlant']); // 매복형은 원래 행동 유지
+// M2: 장교 — 도망치는 부하를 왕법으로 처형한다. 왕의 군대엔 의리가 없다
+const OFFICERS = new Set(['executioner', 'warden', 'mirrorKnight']);
+const DESERT_CRY = ['난 처음부터 반대였어… 이걸 받아.', '명단을 봤어… 전부 조작이야. 받아 둬.', '너희에게 빚이 있다… 이거라도.'];
+
+// 목표 지향 이동 + 벽 우회 — 탈영병/전령처럼 update()를 쓰지 않는 연출 이동용.
+// 직선이 막히면 0.5초간 수직 우회를 섞는다 (진행률로 감지)
+function dramaMove(e, tx, ty, spd, dt) {
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 1;
+  const x0 = e.x, y0 = e.y;
+  if (e._detourT > 0) {
+    e._detourT -= dt;
+    World.moveEntity(e, e._detourX * spd * dt, e._detourY * spd * dt);
+  } else {
+    World.moveEntity(e, (dx / d) * spd * dt, (dy / d) * spd * dt);
+  }
+  const moved = Math.hypot(e.x - x0, e.y - y0);
+  if (moved < spd * dt * 0.35) {
+    e._dStuckT = (e._dStuckT || 0) + dt;
+    if (e._dStuckT > 0.2) {
+      e._dStuckT = 0;
+      e._detourT = 0.5;
+      const sgn = Math.random() < 0.5 ? 1 : -1;
+      e._detourX = (-dy / d) * sgn;
+      e._detourY = (dx / d) * sgn;
+    }
+  } else {
+    e._dStuckT = 0;
+  }
+  e.flip = dx < 0;
+  return d;
+}
 
 const GamePlay = {
   // AI 고도화 — 개체 상태 기계를 건드리지 않는 '조향 오버레이'.
@@ -67,6 +98,15 @@ const GamePlay = {
         e._rout = true; e._routT = 0; e._aware = true;
         routed++;
         Particles.text(e.x, e.y - 32, ROUT_CRY[Math.floor(Math.random() * ROUT_CRY.length)], { color: '#ffd866', size: 12 });
+        // M2: 장교가 보고 있었다면 40% — 도망병 처형 추격 (왕의 군대엔 의리가 없다)
+        if (Math.random() < 0.4) {
+          const officer = this.enemies.find((o) => !o.dead && !o.neutral && OFFICERS.has(o.type) &&
+            !o._executeTarget && o._aware !== false && Math.hypot(o.x - e.x, o.y - e.y) < 300);
+          if (officer) {
+            officer._executeTarget = e;
+            Particles.text(officer.x, officer.y - 34, '탈영은 반역이다!', { color: '#e43b44', size: 12 });
+          }
+        }
       }
     }
   },
@@ -307,14 +347,66 @@ const GamePlay = {
         }
       }
       if (e._alertT > 0) { e._alertT -= dt; e.animT += dt; continue; }
+      if (e._dodgeCd > 0) e._dodgeCd -= dt;
+
+      // ── M2: 탈영병 — 싸우지 않는다. 다가와 건네고, 사라진다 ──
+      if (e._deserter) {
+        e.animT += dt;
+        const ddx = p.x - e.x, ddy = p.y - e.y, ddd = Math.hypot(ddx, ddy) || 1;
+        if (e._deserter === 'approach') {
+          dramaMove(e, p.x, p.y, e.speed * 0.55, dt);
+          if (ddd < 110) {
+            e._deserter = 'give'; e._giveT = 1.4;
+            Particles.text(e.x, e.y - 34, DESERT_CRY[Math.floor(Math.random() * DESERT_CRY.length)], { color: '#c8c0ac', size: 12 });
+          }
+        } else if (e._deserter === 'give') {
+          e._giveT -= dt;
+          if (e._giveT <= 0) {
+            this.pickups.push({ x: e.x, y: e.y - 6, t: 0, r: 12 }); // 품에서 꺼낸 것 — 하트
+            Particles.text(e.x, e.y - 30, '무사하길…', { color: '#c8c0ac', size: 11 });
+            e._deserter = 'flee';
+          }
+        } else {
+          const fx = e.x < World.cols * TS / 2 ? TS : TS * (World.cols - 1);
+          dramaMove(e, fx, TS * 5.5 + World.offsetY, e.speed * 1.1, dt);
+          if (e.x < TS * 1.5 || e.x > TS * (World.cols - 1.5)) {
+            e.dead = true;
+            Particles.burst(e.x, e.y, { count: 6, colors: ['#8f8577'], speed: 60, life: 0.3, size: 2 });
+          }
+        }
+        continue;
+      }
+
+      // ── M2: 처형 목격 — 장교가 도망병을 뒤쫓아 벤다. 그 광경이 더 큰 공포를 부른다 ──
+      if (e._executeTarget) {
+        const t = e._executeTarget;
+        e._huntT = (e._huntT || 0) + dt;
+        if (t.dead || t._surrender != null || e._huntT > 4.5) {
+          e._executeTarget = null; e._huntT = 0;
+        } else {
+          e.animT += dt;
+          const hx = t.x - e.x, hy = t.y - e.y, hd = Math.hypot(hx, hy) || 1;
+          e.flip = hx < 0;
+          World.moveEntity(e, (hx / hd) * e.speed * 1.5 * dt, (hy / hd) * e.speed * 1.5 * dt);
+          if (hd < 36) {
+            t.dead = true; // 왕법 집행 — 처치 집계·전리품 없음 (플레이어의 손이 아니다)
+            Particles.burst(t.x, t.y, { count: 14, colors: ['#8a1c2c', '#5a1016', '#c22030'], speed: 190, life: 0.5, size: 3, gravity: 260, dir: Math.atan2(hy, hx), spread: 1.2 });
+            World.stampBlood(t.x, t.y, 9, 0.5);
+            Particles.text(t.x, t.y - 32, '처형', { color: '#e43b44', size: 13 });
+            Particles.text(e.x, e.y - 34, '겁쟁이는 왕법으로 다스린다.', { color: '#e43b44', size: 12 });
+            e._executeTarget = null; e._huntT = 0;
+            this._fearCheck(t, true); // 목격 연쇄
+          }
+          continue;
+        }
+      }
 
       // ── 드라마 AI: 전령 — 문으로 달려가 증원을 부른다. 막지 못하면 토벌대가 불어난다 ──
       if (e._runner && !e.dead) {
         e.animT += dt;
         const exitX = e.x < World.cols * TS / 2 ? TS * 1.3 : TS * (World.cols - 1.3);
         const exitY = TS * 5.5 + World.offsetY;
-        const ddx = exitX - e.x, ddy = exitY - e.y, dd = Math.hypot(ddx, ddy) || 1;
-        World.moveEntity(e, (ddx / dd) * e.speed * 1.3 * dt, (ddy / dd) * e.speed * 1.3 * dt);
+        const dd = dramaMove(e, exitX, exitY, e.speed * 1.3, dt);
         if (dd < 30) {
           e.dead = true; // 탈출 — 처치 집계 없음
           Particles.burst(e.x, e.y, { count: 8, colors: ['#8f8577'], speed: 80, life: 0.3, size: 2 });
@@ -653,6 +745,17 @@ const GamePlay = {
         for (const e of this.enemies) {
           if (e.dead || e.phased || b.hit.has(e)) continue;
           if (Math.hypot(e.x - b.x, e.y - b.y) < e.r + 7) {
+            // M2: 산 자의 몸놀림 — 인간 병사는 가끔 화살을 옆걸음으로 흘린다 (18%, 쿨 3초)
+            if (HUMAN_FEAR.has(e.type) && !e.elite && !e.isMini && !e._rout && e._surrender == null &&
+                e._aware !== false && !(e._dodgeCd > 0) && Math.random() < 0.18) {
+              e._dodgeCd = 3;
+              b.hit.add(e); // 이 화살은 다시 못 맞힌다
+              const sgn = Math.random() < 0.5 ? 1 : -1;
+              e.kbx += -b.dir.y * sgn * 260;
+              e.kby += b.dir.x * sgn * 260;
+              Particles.text(e.x, e.y - 26, '휙', { color: '#9aa0b4', size: 11 });
+              continue;
+            }
             b.hit.add(e);
             const res = p.strike(this, e, { ...b.dir }, {
               finisher: b.finisher,

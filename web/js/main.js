@@ -355,6 +355,17 @@ const Game = {
       Dungeon.combatComp(depth).forEach((s, i) => {
         this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini });
       });
+      // M2: 탈영병 (선함) — 1~4막 7%: 싸우지 않는 병사가 다가와 무언가를 건네고 사라진다
+      if (Dungeon.floor >= 2 && Dungeon.floor <= 40 && RNG.chance(0.07)) {
+        const dp = World.safeSpot(TS * (World.cols - 4), TS * 3 + World.offsetY);
+        const des = createEnemy('berserker', dp.x, dp.y, false, 1);
+        des.neutral = true; des._deserter = 'approach'; des.spawnT = 0;
+        des.hp = des.maxHp = 3;
+        des.onDeath = function () {
+          Particles.text(this.x, this.y - 30, '…왜…', { color: '#c8c0ac', size: 12 });
+        };
+        this.enemies.push(des);
+      }
       // 층 첫 방이면 층 이름 배너 (지름길 도착이면 경고)
       if (depth === 1) {
         this.banner = Dungeon.shortcutHot
