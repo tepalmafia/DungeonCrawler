@@ -295,6 +295,7 @@ const Dungeon = {
     let eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
     if (typeof Game !== 'undefined' && Game.route === 'war') eliteChance = Math.min(0.6, eliteChance + 0.08); // 전화의 길
     if (Game.pacts && Game.pacts.elite) eliteChance = Math.min(0.55, eliteChance + 0.10); // 서약 '성난 망령'
+    if (Game.pacts && Game.pacts.wrath) eliteChance = Math.min(0.65, eliteChance + 0.10); // 왕의 진노
     if (this.shortcutHot) eliteChance = Math.min(0.5, eliteChance * 2); // 지름길 층: 정예 2배
 
     // 설계된 위협 세트 (R2): 45% 확률로 손제작 조합이 무리의 뼈대가 된다

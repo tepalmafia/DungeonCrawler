@@ -293,6 +293,7 @@ const GamePlay = {
           : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
         e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
         if (this.pacts.speed) e.speed *= 1.15;
+        if (this.pacts.wrath) e.speed *= 1.08; // 왕의 진노
         if (m.omen) { e._aware = true; e.speed *= 1.1; e.flash = 0.5; } // 어둠의 눈이 되살린 것 — 이미 깨어 있다
         // 발견 체계 (드라마 AI): 경보 전이면 비인지 상태로 배치 — 침입자를 아직 모른다.
         // 매복형·보스방·경보 후 증원은 제외 (=== false 게이트: 소환수 등 직접 push된 개체는 그대로)

@@ -496,8 +496,10 @@ const Game = {
   enemyHpMul() {
     // 열기 재분배 (계측: 열기5 마도사 사망의 80%가 1층) — 평면 ×1.25 대신 층 비례:
     // 1층은 가볍게(×1.06+), 10층은 묵직하게(열기5 기준 ×1.79). 열기가 '후반 도전'이 되도록
-    if (!this.pacts || !this.pacts.hp) return this.floorHpScale();
-    return this.floorHpScale() * (1 + 0.012 * this.heat + 0.012 * this.heat * (Dungeon.floor - 1));
+    let m = this.floorHpScale();
+    if (this.pacts && this.pacts.hp) m *= (1 + 0.012 * this.heat + 0.012 * this.heat * (Dungeon.floor - 1));
+    if (this.pacts && this.pacts.wrath) m *= 1.25; // 왕의 진노: 전역 HP +25%
+    return m;
   },
 
   // 현재 상태에 맞는 BGM 테마 결정
