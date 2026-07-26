@@ -58,7 +58,7 @@ const GameRewards = {
     this.killsPaid = this.kills;
     this.shardsEarned = 0;
     this.state = 'play';
-    this.banner = { text: '심연 회랑 — 끝없는 하강이 시작된다', life: 2.5, maxLife: 2.5, color: '#b13ae0' };
+    this.banner = { text: '무너진 왕국 — 저주는 아직 끝나지 않았다', life: 2.5, maxLife: 2.5, color: '#b13ae0' };
     AudioSys.roar();
     Dungeon.nextFloor();
   },

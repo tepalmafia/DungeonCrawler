@@ -120,9 +120,9 @@ function createPlayer(x, y, classId = 'knight') {
 
     skillName() {
       if (this.skillEvolved) {
-        return { knight: '회오리 베기', archer: '화살 폭풍', mage: '쌍둥이 메테오', alch: '대반응 폭탄' }[this.classId];
+        return { knight: '망자의 회오리', archer: '뼈화살 폭풍', mage: '쌍성의 심판', alch: '넘치는 독배' }[this.classId];
       }
-      return { knight: '회전 베기', archer: '화살비', mage: '메테오', alch: '휘발성 혼합물' }[this.classId];
+      return { knight: '참수 선회', archer: '뼈화살 비', mage: '별의 심판', alch: '독배' }[this.classId];
     },
 
     // 스킬 조준점: 자동 타겟 위치 > 마우스 > 바라보는 방향 앞
