@@ -129,6 +129,11 @@ const GameCombat = {
     }
     this.kills++;
     this._fearCheck(e, brutal); // 드라마 AI: 동료의 죽음을 본 산 자는 무너질 수 있다
+    // 징조: 최근 시체 기록 — 어둠의 눈이 뜨면 이 자리에서 다시 일어난다
+    if (this._omenKills && !e.isBoss && !e.isMini) {
+      this._omenKills.push({ type: e.type, x: e.x, y: e.y });
+      if (this._omenKills.length > 4) this._omenKills.shift();
+    }
     // 궁극기 게이지 (P2): 처치가 선고를 당긴다 — 잡몹 1 / 정예·우두머리 4 / 보스 10
     {
       const pu = this.player;

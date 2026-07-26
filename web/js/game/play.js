@@ -79,6 +79,15 @@ const GamePlay = {
     }
   },
 
+  // 징조: 무너진 길 — 세 갈래 중 하나가 잔해에 막혀 있다 (선택지 2개는 항상 보장)
+  _maybeCollapseDoor(opts) {
+    if (opts.length >= 3 && Math.random() < 0.08) {
+      const cut = opts.splice(1 + Math.floor(Math.random() * (opts.length - 1)), 1)[0];
+      this.banner = { text: `길이 무너져 있다 — [${cut.label}] 쪽으로는 갈 수 없다`, life: 2.4, maxLife: 2.4, color: '#8f8577' };
+    }
+    return opts;
+  },
+
   // 사기 판정 (드라마 AI) — 동료가 죽는 걸 본 산 자는 무너질 수 있다. killEnemy가 호출.
   // 잔혹 처치(brutal)와 누적 전사자가 공포를 키운다. 언데드·광신도·정예·보스는 동요하지 않는다.
   _fearCheck(dead, brutal) {
@@ -271,7 +280,7 @@ const GamePlay = {
         } else {
           pos = World.randomSpawnPos(this.player);
         }
-        this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, t: s.mini ? 1.1 : 0.7 });
+        this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, omen: s.omen, t: s.mini ? 1.1 : 0.7 });
         this.pendingSpawns.splice(i, 1);
       }
     }
@@ -284,6 +293,7 @@ const GamePlay = {
           : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
         e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
         if (this.pacts.speed) e.speed *= 1.15;
+        if (m.omen) { e._aware = true; e.speed *= 1.1; e.flash = 0.5; } // 어둠의 눈이 되살린 것 — 이미 깨어 있다
         // 발견 체계 (드라마 AI): 경보 전이면 비인지 상태로 배치 — 침입자를 아직 모른다.
         // 매복형·보스방·경보 후 증원은 제외 (=== false 게이트: 소환수 등 직접 push된 개체는 그대로)
         if (this._drama && !this._roomAlert && !m.mini && !AMBUSH_TYPES.has(m.type) && !e.isBoss) e._aware = false;
@@ -519,6 +529,49 @@ const GamePlay = {
       if (!e.dead) this._steer(e, dt, p);
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
+
+    // ── 왕국의 징조 발동 ──
+    if (this._omen && !this._omen.fired && !this.roomCleared && this.enemies.some((e) => !e.dead && !e.neutral)) {
+      this._omen.delay -= dt;
+      if (this._omen.delay <= 0) {
+        const o = this._omen;
+        o.fired = true;
+        if (o.type === 'eye') {
+          o.pale = Math.random() < 0.12; // 창백한 눈 — 적의가 없다 (…무엇이지?)
+          o.eyeT = 6;
+          if (o.pale) {
+            this.banner = { text: '…하늘의 눈이 나를 본다. 이 시선은… 적의가 없다…?', life: 3, maxLife: 3, color: '#c8d4e4' };
+            Meta.data.paleEyeSeen = (Meta.data.paleEyeSeen || 0) + 1;
+            Meta.save();
+          } else {
+            this.banner = { text: '어둠의 눈이 내려다본다 — 죽은 것들이 꿈틀거린다!', life: 2.6, maxLife: 2.6, color: '#b13ae0' };
+            const rev = (this._omenKills || []).slice(-2);
+            if (rev.length) {
+              for (const k of rev) this.pendingSpawns.push({ delay: 0.6, type: k.type, elite: false, omen: true });
+            } else {
+              for (const e of this.enemies) if (!e.dead && !e.neutral && !e.isBoss) { e.speed *= 1.15; e.flash = 0.4; }
+            }
+            AudioSys.roar();
+            Renderer.shake(3, 0.3);
+          }
+        } else if (o.type === 'moon') {
+          this._moonT = 10;
+          p.bonusAtk += 1;
+          p.speed *= 1.1;
+          this.banner = { text: '달이 핏빛으로 물든다 — 원한이 끓어오른다 (공격 +1 · 10초)', life: 2.6, maxLife: 2.6, color: '#e43b44' };
+          AudioSys.levelup();
+        } else if (o.type === 'horn') {
+          for (const e of this.enemies) if (!e.dead && !e.neutral && !e.isBoss) { e.speed *= 1.12; e.flash = 0.35; }
+          this.banner = { text: '먼 곳에서 왕의 나팔이 울린다 — 토벌대가 사기를 얻는다', life: 2.4, maxLife: 2.4, color: '#e43b44' };
+          AudioSys.roar();
+        }
+      }
+    }
+    if (this._omen && this._omen.eyeT > 0) this._omen.eyeT -= dt;
+    if (this._moonT > 0) {
+      this._moonT -= dt;
+      if (this._moonT <= 0) { p.bonusAtk -= 1; p.speed /= 1.1; }
+    }
 
     // ── 드라마 AI: 방 전투 시계 — 5초 지나면 무조건 발각, 18초를 끌면 전령이 증원을 부르러 뛴다 ──
     if (this._drama && !this.roomCleared && this.enemies.some((e) => !e.dead && !e.neutral)) {
@@ -1138,7 +1191,7 @@ const GamePlay = {
         Particles.text(p.x, p.y - 28, '+1', { color: '#e43b44', size: 14 });
       }
       if (Dungeon.roomType !== 'boss') {
-        World.openDoors(Dungeon.doorOptions());
+        World.openDoors(this._maybeCollapseDoor(Dungeon.doorOptions()));
         if (Dungeon.roomType === 'elite') {
           this.pendingChoices++;
           this.openTraitChoice('elite');
