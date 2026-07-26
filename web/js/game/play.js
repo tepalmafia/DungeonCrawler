@@ -506,6 +506,18 @@ const GamePlay = {
       this.corpses[i].t += dt;
       if (this.corpses[i].t >= this.corpses[i].dur) this.corpses.splice(i, 1);
     }
+    // 절단 조각 (v126): 미끄러지며 회전 — 멈추면 바닥에 구워진다
+    for (let i = this.gibs.length - 1; i >= 0; i--) {
+      const g = this.gibs[i];
+      g.t += dt;
+      g.x += g.vx * dt; g.y += g.vy * dt;
+      g.vx *= Math.pow(0.004, dt); g.vy *= Math.pow(0.004, dt);
+      g.rot += g.vr * dt; g.vr *= Math.pow(0.02, dt);
+      if (g.t >= g.life || (g.vx * g.vx + g.vy * g.vy) < 160) {
+        World.stampImage(g.img, g.x, g.y, g.rot, 0.85);
+        this.gibs.splice(i, 1);
+      }
+    }
 
     // ── 전장 정보(blackboard) — 개체 AI가 읽는 공용 데이터 (AI 고도화) ──
     // 플레이어 이동 속도 추정(스무딩·대시 스파이크 클램프): 예측 사격이 읽는다

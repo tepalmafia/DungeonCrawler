@@ -1,9 +1,87 @@
 // 전투 판정 허브 — 피해/처치/폭발/피격/투사체 생성.
 // main.js에서 Object.assign(Game, GameCombat)으로 Game에 합쳐진다.
+
+// ══ 죽음의 흔적 (v126) — 종족별 절단·체액·잔존물: 무엇을 베었는지 잔해가 말해준다 ══
+// kind: human(참수 대상)/beast(붉은 피 짐승)/bone(뼈 파편)/rot(썩은 피)/venom(독록)/stone(돌 파편)/spirit(소산)
+const GORE_FLUIDS = {
+  human:  { stamp: null, burst: ['#8a1c2c', '#c22030', '#3a0a0e', '#66131b'] }, // stamp null = 기본 붉은 셰이드
+  beast:  { stamp: null, burst: ['#8a1c2c', '#c22030', '#66131b'] },
+  bone:   { stamp: ['#8a8272', '#9a927e', '#6e6858'], burst: ['#e8dfc8', '#b8ae96', '#948a72'] },
+  rot:    { stamp: ['#2e1a1e', '#3a2024', '#26161c'], burst: ['#6a1420', '#4a6a2a', '#3a2024'] },
+  venom:  { stamp: ['#22301a', '#2c3c20', '#1a2814'], burst: ['#6ab04c', '#c9d94a', '#2c3c20'] },
+  stone:  { stamp: ['#26262e', '#32323c'], burst: ['#6e7383', '#9aa1b0', '#44444f'] },
+  spirit: { stamp: null, burst: ['#c9b8e8', '#b13ae0', '#7a5ac2'] },
+};
+const GORE_KINDS = {
+  human: new Set(['berserker', 'shaman', 'sniper', 'jailer', 'executioner', 'warden', 'frostMage', 'frostArcher',
+    'stalker', 'charger', 'flameJuggler', 'riftCaster', 'mirrorKnight', 'necro', 'bomber', 'acolyte']),
+  beast: new Set(['boar', 'lavaHound', 'bloodBat', 'leech', 'swarm']),
+  bone: new Set(['skeleton', 'shieldSkeleton', 'archer', 'boneHeap', 'bonePile', 'bat']),
+  venom: new Set(['toxicSlime', 'sporePuff', 'sporeMother', 'venomLasher', 'acidSlug', 'acidSnail',
+    'thornPlant', 'fungalTick', 'sporeling', 'mushroom']),
+  stone: new Set(['golem', 'crystal', 'obsidianBeast', 'gazer', 'voidEye', 'turret', 'frostGolem', 'mimic']),
+  spirit: new Set(['wisp', 'wraith', 'shade', 'fireSpirit', 'cinder', 'emberMoth', 'chainWraith', 'voidSpawn']),
+};
+// 보스 예외 (기본 = human): 그림자 5 소산 / 몰레·되살아난 손들은 썩은 피 / 재가 된 브란트는 잿돌
+const GORE_BOSS = { 2: 'rot', 5: 'spirit', 6: 'rot', 7: 'rot', 8: 'rot', 9: 'stone' };
 const GameCombat = {
   // 히트스톱 완화 — '탁탁' 끊기는 멈춤이 렉처럼 보인다는 피드백.
   // 0.35초 창 안에서는 첫 방만 짧게 멈추고, 나머지는 아예 멈추지 않는다 (초당 최대 ~3회).
   // 적용 여부를 돌려줘서 크리 섬광도 같은 리듬으로만 터지게 한다 (연속 번쩍임 방지).
+  // 죽음의 흔적 (v126): 종족 → 고어 프로필
+  _goreProf(e) {
+    let kind = 'rot';
+    if (e.isBoss) kind = GORE_BOSS[e.defId] || 'human';
+    else for (const k of Object.keys(GORE_KINDS)) { if (GORE_KINDS[k].has(e.type)) { kind = k; break; } }
+    return { kind, ...GORE_FLUIDS[kind] };
+  },
+
+  // 절단 조각 스폰: 스프라이트를 부위별로 잘라 날린다. 멈추면 바닥에 구워져 방이 끝날 때까지 남는다.
+  // 반환 skipCorpse: 뼈는 통짜 잔상 대신 파편만 남긴다
+  _spawnGibs(e, dir, prof, brutal) {
+    const gore = (Meta.data.opts && Meta.data.opts.gore != null) ? Meta.data.opts.gore : 1;
+    if (gore < 1 || prof.kind === 'spirit') return null;
+    const key = e.isBoss ? e.def.sprite : e.sprite;
+    const img = key && Sprites[key];
+    if (!img || !img.width) return null;
+    const behead = prof.kind === 'human' && brutal;
+    const cache = (this._gibCache = this._gibCache || {});
+    const ck = key + '|' + prof.kind + (behead ? '|b' : '');
+    let cuts = cache[ck];
+    if (!cuts) {
+      const w = img.width, h = img.height;
+      const mk = (sx, sy, sw, sh) => {
+        const c = document.createElement('canvas');
+        c.width = Math.max(3, Math.round(sw)); c.height = Math.max(3, Math.round(sh));
+        c.getContext('2d').drawImage(img, Math.round(sx), Math.round(sy), c.width, c.height, 0, 0, c.width, c.height);
+        return c;
+      };
+      if (prof.kind === 'bone') cuts = [mk(0, 0, w / 2, h / 2), mk(w / 2, 0, w / 2, h / 2), mk(0, h / 2, w / 2, h / 2), mk(w / 2, h / 2, w / 2, h / 2)];
+      else if (behead) cuts = [mk(w * 0.26, 0, w * 0.48, h * 0.36)]; // 머리 — 참수
+      else if (prof.kind === 'human') cuts = [mk(0, h * 0.18, w * 0.4, h * 0.6)]; // 팔쪽 절단
+      else if (prof.kind === 'stone') cuts = [mk(0, 0, w / 2, h * 0.55), mk(w / 2, h * 0.3, w / 2, h * 0.55)];
+      else cuts = [mk(w * 0.5, h * 0.45, w * 0.5, h * 0.55)]; // 짐승/시체: 살덩이
+      cache[ck] = cuts;
+    }
+    const base = Math.atan2(dir.y, dir.x);
+    for (const c of cuts) {
+      if (this.gibs.length >= 24) { // 성능 상한 — 오래된 조각은 즉시 굽는다
+        const old = this.gibs.shift();
+        World.stampImage(old.img, old.x, old.y, old.rot, 0.85);
+      }
+      const a = base + (Math.random() - 0.5) * (prof.kind === 'bone' ? 2.6 : 1.1);
+      const sp = (behead ? 240 : 165) + Math.random() * 90;
+      this.gibs.push({
+        img: c, x: e.x, y: e.y - 6,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * (prof.kind === 'bone' ? 14 : 9),
+        t: 0, life: 0.85 + Math.random() * 0.5,
+      });
+    }
+    if (behead) Particles.text(e.x, e.y - 40, '참수!', { color: '#e43b44', size: 14 });
+    return { skipCorpse: prof.kind === 'bone' };
+  },
+
   _applyHitstop(v) {
     if (this.time - (this._lastStopT ?? -9) > 0.35) {
       this.hitstop = Math.max(this.hitstop, v);
@@ -243,27 +321,40 @@ const GameCombat = {
       Particles.ring(e.x, e.y, { r0: 2, r1: 60, life: 0.35, color: killPal[1] || killPal[0], width: 5 });
     }
 
-    // 고어 (기획 §7): 육편 + 피 웅덩이 — 크리티컬 처치는 더 격렬하게 터진다
-    if (!e.neutral) {
+    // 죽음의 흔적 (v126): 종족별 절단·체액·잔존물 — 크리티컬 처치는 더 격렬하게
+    let gibRes = null;
+    const goreLv = (Meta.data.opts && Meta.data.opts.gore != null) ? Meta.data.opts.gore : 1;
+    // 4막 안식: 같은 저주의 망자는 베는 게 아니라 재운다 — 절단 없이 혼이 흩어진다
+    const resting = Dungeon.floor >= 31 && Dungeon.floor <= 40 &&
+      ['ghoul', 'skeleton', 'shieldSkeleton', 'wraith', 'shade'].includes(e.type);
+    if (!e.neutral && goreLv > 0 && !resting) {
+      const prof = this._goreProf(e);
       const big = brutal || e.isBoss || e.isMini;
-      World.stampBlood(e.x, e.y, big ? 16 : 10, 0.55);
-      const nDrop = big ? 8 : 5;
-      for (let gi = 0; gi < nDrop; gi++) {
-        const ga = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 2.4;
-        const gd = 10 + Math.random() * (big ? 40 : 24);
-        World.stampBlood(e.x + Math.cos(ga) * gd, e.y + Math.sin(ga) * gd, 2 + Math.random() * 4, 0.42);
+      if (prof.kind !== 'spirit') {
+        World.stampBlood(e.x, e.y, big ? 16 : 10, 0.55, prof.stamp);
+        const nDrop = big ? 8 : 5;
+        for (let gi = 0; gi < nDrop; gi++) {
+          const ga = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 2.4;
+          const gd = 10 + Math.random() * (big ? 40 : 24);
+          World.stampBlood(e.x + Math.cos(ga) * gd, e.y + Math.sin(ga) * gd, 2 + Math.random() * 4, 0.42, prof.stamp);
+        }
       }
-      // 육편: 어두운 핏덩이가 포물선으로 튄다
+      // 체액 분출: 종족의 색으로 터진다 (뼈는 골분, 정령은 혼의 입자)
       Particles.burst(e.x, e.y, {
-        count: big ? 14 : 8, colors: ['#8a1c2c', '#c22030', '#3a0a0e', '#66131b'],
-        speed: 250, life: 0.6, size: 4, gravity: 340, dir: Math.atan2(dir.y, dir.x), spread: 1.7,
+        count: big ? 14 : 8, colors: prof.burst,
+        speed: 250, life: 0.6, size: 4, gravity: prof.kind === 'spirit' ? -60 : 340,
+        dir: Math.atan2(dir.y, dir.x), spread: 1.7,
       });
+      gibRes = this._spawnGibs(e, dir, prof, brutal);
       if (big) Renderer.shake(5, 0.2);
+    } else if (resting) {
+      // 안식 — 보랏빛 혼이 천천히 오른다. 잔해는 남기지 않는다
+      Particles.burst(e.x, e.y, { count: 9, colors: ['#c9b8e8', '#9a9488'], speed: 42, life: 1.0, size: 2, gravity: -70 });
     }
 
-    // 사망 연출: 무너져 내리는 잔상
+    // 사망 연출: 무너져 내리는 잔상 (뼈는 파편으로 대신한다)
     const spriteKey = e.isBoss ? e.def.sprite : e.sprite;
-    if (spriteKey && Sprites[spriteKey]) {
+    if (spriteKey && Sprites[spriteKey] && !(gibRes && gibRes.skipCorpse)) {
       this.corpses.push({
         img: e.elite ? Sprites.tint(Sprites[spriteKey]) : Sprites[spriteKey],
         x: e.x, y: e.y, flip: e.flip,
