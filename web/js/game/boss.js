@@ -708,7 +708,7 @@ function createBoss(floor, x, y) {
             this.phased = false;
             this.veilsDone++;
             this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.25); // 실패는 아프게 — 25% 회복
-            game.banner = { text: '눅스가 영혼을 흡수했다...', life: 1.8, maxLife: 1.8, color: '#e43b44' };
+            game.banner = { text: '장막이 영혼을 삼켰다 — 원한이 되살아난다!', life: 1.8, maxLife: 1.8, color: '#e43b44' };
             AudioSys.roar();
             const baseAngle = Math.atan2(p.y - this.y, p.x - this.x);
             for (let i = 0; i < 9; i++) {
