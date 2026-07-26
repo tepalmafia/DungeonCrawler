@@ -687,6 +687,16 @@ const GameRender = {
         }
         continue;
       }
+      // 왕장 정예 (v130): 발밑의 금빛 각인 — 죽음이 저주를 남긴다는 예고
+      if (d.royal && !d.dead) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(247,179,43,${0.45 + 0.25 * Math.sin(this.time * 5)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(d.x, d.y + 12, d.r + 6, (d.r + 6) * 0.45, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       d.draw(ctx);
       // ── 적 공격 모션 (2차): 접촉 타격 순간 무기/발톱 궤적 — 병사는 검격, 짐승·시체는 할퀴기 ──
       if (d._strikeT > 0 && !d.dead) {

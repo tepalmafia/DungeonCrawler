@@ -449,6 +449,27 @@ function createBoss(floor, x, y) {
           }
         }
       }
+      // 왕의 진노 2차 패턴 (v130): 현상금 8단 — 체력 30%에서 '최후의 명령' 각성 (1회).
+      // 즉시 고유기 1회 + 이동 +15% 영구 + 이후 6초마다 고유기 추가 사이클 — 수치가 아니라 패턴 밀도가 바뀐다
+      if (game.pacts && game.pacts.wrath && !this.dead && this.spawnT <= 0) {
+        if (!this._wrathAwake && this.hp <= this.maxHp * 0.3) {
+          this._wrathAwake = true;
+          this.speed *= 1.15;
+          game.banner = { text: `왕의 진노 — ${this.name}이(가) 최후의 명령을 받든다!`, life: 2.0, maxLife: 2.0, color: '#e43b44' };
+          Renderer.shake(6, 0.4);
+          AudioSys.levelup();
+          Particles.ring(this.x, this.y, { r0: 10, r1: 90, life: 0.5, color: '#e43b44', width: 5 });
+          this._uniqMove(game, dx, dy, d);
+        }
+        if (this._wrathAwake) {
+          this._wrathT = (this._wrathT || 0) + dt;
+          if (this._wrathT >= 6) {
+            this._wrathT = 0;
+            this._uniqMove(game, dx, dy, d);
+            Particles.text(this.x, this.y - 46, '진노!', { color: '#e43b44', size: 13 });
+          }
+        }
+      }
       // 카이팅 응징 (원거리 보스전 피드백 2차): 시전 중에도 게이지가 찬다 —
       // idle 한정으로는 실전에서 사실상 발동하지 않았다 (사인 귀속: idle은 사이클당 ~1초뿐)
       if (d > 300 && this.state !== 'enter' && this.state !== 'charge' && this.state !== 'sweep') this._farT += dt;
