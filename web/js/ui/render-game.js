@@ -555,6 +555,47 @@ const GameRender = {
         continue;
       }
       d.draw(ctx);
+      // ── 적 공격 모션 (2차): 접촉 타격 순간 무기/발톱 궤적 — 병사는 검격, 짐승·시체는 할퀴기 ──
+      if (d._strikeT > 0 && !d.dead) {
+        const t = d._strikeT / 0.22;
+        const a0 = d._strikeA || 0;
+        const rr = d.r + 18;
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(a0);
+        const human = typeof HUMAN_FEAR !== 'undefined' && (HUMAN_FEAR.has(d.type) || OFFICERS.has(d.type));
+        if (human) {
+          // 검격: 붉은 쐐기 + 휘둘러지는 칼날 선
+          ctx.globalAlpha = t * 0.4;
+          const g = ctx.createRadialGradient(0, 0, rr * 0.3, 0, 0, rr);
+          g.addColorStop(0, 'rgba(228,59,68,0)');
+          g.addColorStop(1, 'rgba(228,59,68,0.8)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, rr, -0.55, 0.55); ctx.closePath(); ctx.fill();
+          const bladeA = -0.55 + (1 - t) * 1.1;
+          ctx.globalAlpha = t * 0.9;
+          ctx.strokeStyle = '#f0d8d8';
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(bladeA) * rr * 0.35, Math.sin(bladeA) * rr * 0.35);
+          ctx.lineTo(Math.cos(bladeA) * rr, Math.sin(bladeA) * rr);
+          ctx.stroke();
+        } else {
+          // 할퀴기: 3갈래 발톱 자국이 부챗살로 그어진다
+          ctx.globalAlpha = t * 0.8;
+          ctx.strokeStyle = '#e43b44';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          for (let k = -1; k <= 1; k++) {
+            ctx.beginPath();
+            ctx.arc(0, k * 7, rr * 0.9, -0.4 + k * 0.06, 0.4 * (1 - t * 0.5) + k * 0.06);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
     }
 
     // 투사체 — 위험 헤일로: 모든 적 탄환에 공통 붉은 테 (아이템·XP 보석과 즉시 구분되는 위험 색 언어)

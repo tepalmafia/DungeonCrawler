@@ -70,6 +70,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     tickTimers(dt) {
       this.animT += dt;
       if (this.flash > 0) this.flash -= dt;
+      if (this._strikeT > 0) this._strikeT -= dt;
       if (this.hitCd > 0) this.hitCd -= dt;
       if (this._slamCd > 0) this._slamCd -= dt;
       if (this.hasteT > 0) this.hasteT -= dt; // 절규자의 가속 함성 (2막)
@@ -90,6 +91,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.hitCd = 0.8;
         // 심층 압박 (R1): 7층+ 정예·우두머리의 접촉은 2 — 후반에도 죽음이 가깝다
         if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);
+        // 공격 모션: 접촉이 '닿음'이 아니라 '휘두름'으로 보이게 — 렌더가 이 창에서 무기 궤적을 그린다
+        this._strikeT = 0.22;
+        this._strikeA = Math.atan2(dir.y, dir.x);
         game.hurtPlayer(dmg, dir);
       }
     },
