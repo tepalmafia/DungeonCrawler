@@ -1488,8 +1488,10 @@ const HUD = {
   },
 
   // ── v120 스토리 화면 3종 ──────────────────────────────────────────
-  // 한글 줄바꿈 — 글자 단위로 자른다 (공백 우선)
-  _wrapText(ctx, text, maxW) {
+  // 한글 줄바꿈 — 글자 단위로 잘라 줄 배열을 반환 (그리진 않는다).
+  // 주의: 그리기용 _wrapText(503행)와 별개 — 같은 이름으로 정의하면 객체 리터럴 후순위가
+  // 앞의 것을 덮어써 특성·진군 지도·직업 설명이 통째로 사라진다 (v130 실사고)
+  _wrapLines(ctx, text, maxW) {
     const out = [];
     let line = '';
     for (const ch of text) {
@@ -1618,7 +1620,7 @@ const HUD = {
     ctx.fillText(`「${cc.clue.name}」`, W / 2, y0 + 66);
     ctx.font = '14px Galmuri11, monospace';
     ctx.fillStyle = '#c8c0a8';
-    const lines = this._wrapText(ctx, cc.clue.text, cw - 80);
+    const lines = this._wrapLines(ctx, cc.clue.text, cw - 80);
     lines.slice(0, 4).forEach((ln, i) => ctx.fillText(ln, W / 2, y0 + 100 + i * 22));
     // 수집록 게이지 — 진실이 좁혀진다
     const done = Meta.clueCount(), total = CLUES.length;
@@ -1670,7 +1672,7 @@ const HUD = {
     const shown = cf.outro.slice(0, Math.floor(Math.max(0, cf.t - 0.5) * 22));
     ctx.font = '16px Galmuri11, monospace';
     ctx.fillStyle = '#c9b8e8';
-    this._wrapText(ctx, shown, tw).slice(0, 4).forEach((ln, i) => ctx.fillText(ln, tx, H / 2 - 24 + i * 26));
+    this._wrapLines(ctx, shown, tw).slice(0, 4).forEach((ln, i) => ctx.fillText(ln, tx, H / 2 - 24 + i * 26));
     if (shown.length >= cf.outro.length) {
       ctx.globalAlpha = (0.55 + Math.sin(game.blinkT * 4) * 0.25) * a;
       ctx.font = '12px Galmuri11, monospace';
