@@ -141,13 +141,22 @@ const GameRewards = {
   onBossDead() {
     this.arrows = [];
     this.rings = [];
-    // 보스 자백 (기획 §4): 막보스의 마지막 말이 고정 단서가 된다
+    // 보스 자백 (기획 §4 → v120 ③): 막보스의 마지막 말이 고정 단서가 된다.
+    // 첫 처치는 자백 '장면'(암전+초상+타이핑) — 단서는 1회만 나오므로 재회차 축약이 자동으로 보장된다
     {
       const cc = CLUES.find((c) => c.how === 'boss' && c.boss === Dungeon.floor && c.text && !Meta.clueOwned(c.id));
       if (cc) {
         Meta.gainClue(cc.id);
-        this._storyQ = this._storyQ || [];
-        this._storyQ.push({ text: `자백 확보 — 「${cc.name}」 (수집록 ${Meta.clueCount()}/${CLUES.length})`, color: '#f7b32b' });
+        const be = this.enemies.find((e) => e.isBoss);
+        const willVictory = Dungeon.floor >= (this.act || 1) * 10 && !this.endless; // 정산 화면과 겹치면 장면 생략
+        if (!this.bossRush && !this.dailyRun && !willVictory && be && be.def) {
+          this.confession = { t: 0, clue: cc, name: be.name, sprite: be.def.sprite, scale: be.def.scale || 1.6, outro: be.def.outro || '' };
+          this.state = 'confession';
+          this._lastBossOutro = null; // 유언은 장면이 말한다 — 배너 이중 출력 방지
+        } else {
+          this._storyQ = this._storyQ || [];
+          this._storyQ.push({ text: `자백 확보 — 「${cc.name}」 (수집록 ${Meta.clueCount()}/${CLUES.length})`, color: '#f7b32b' });
+        }
       }
     }
     // 궁극기 전리품 (P2): 처형인의 도끼를 빼앗는다 — 이제 선고는 내가 내린다

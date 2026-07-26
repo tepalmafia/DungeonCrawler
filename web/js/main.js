@@ -213,22 +213,34 @@ const Game = {
     this.state = 'play';
     Dungeon.newRun();
 
-    // 오프닝 — 부활 연출 (기획 §2): 첫 런은 풀 시퀀스, 이후엔 한 줄만
+    // 오프닝 (v120 스토리 1차): 첫 런은 인터랙티브 프롤로그(무덤에서 깨어남 → 내 비석 대면),
+    // 이후엔 한 줄만. 황금률: 1회차 풀 연출, 재회차 축약 — 반복 회차의 페이스를 지킨다
     {
       const cls = CLASSES[Meta.data.cls] || CLASSES.knight;
-      if (!Meta.data.introSeen) {
-        Meta.data.introSeen = true; Meta.save();
-        this._storyQ = [
-          { text: '그날 밤, 죄인의 묘지에서 눈이 떠졌다.', color: '#9a9488' },
-          { text: `"${cls.grudge}"`, color: '#c8c0a8' },
-          { text: '기억은 온전하다. 이유만 모른다 — 단서를 모아, 왕좌로.', color: '#8a1c2c' },
-        ];
+      if (!Meta.data.introSeen && !this.bossRush && !this.dailyRun) {
+        this._pro = { step: 0, t: 0 };
+        this.state = 'prologue';
+        return; // 진군 지도는 프롤로그가 끝난 뒤 열린다
       } else if (!this.bossRush && !this.dailyRun) {
         this._storyQ = [{ text: `${cls.name} — 흙을 털고 다시 일어선다. 왕좌는 아직 멀다.`, color: '#9a9488' }];
       }
     }
 
     // 진군로: 1막 진군 지도 — 오프닝 자막과 함께 열린다
+    this.openRouteChoice();
+  },
+
+  // 프롤로그 종료 — 어느 지점에서 끝나든(완주/Esc) 같은 자리로 착지한다
+  _endPrologue() {
+    Meta.data.introSeen = true;
+    Meta.save();
+    this._pro = null;
+    const cls = CLASSES[Meta.data.cls] || CLASSES.knight;
+    this._storyQ = [
+      { text: `"${cls.grudge}"`, color: '#c8c0a8' },
+      { text: '기억은 온전하다. 이유만 모른다 — 단서를 모아, 왕좌로.', color: '#8a1c2c' },
+    ];
+    this.state = 'play';
     this.openRouteChoice();
 
     // 유산 각인: 런 시작 시 커먼 유물 3택1 (기존 유물 선택 UI 재사용)
@@ -607,6 +619,44 @@ const Game = {
       this._handleCardInput(this.modCards, (i) => this.pickSkillMod(i));
       return;
     }
+    // ── v120 스토리 상태: 프롤로그 / 증거 카드 / 자백 장면 — 전부 아무 키 진행, 봇은 자동 통과 ──
+    if (this.state === 'prologue') {
+      const pr = this._pro;
+      pr.t += dt;
+      if (Input.pressed('Escape')) { this._endPrologue(); return; }
+      const adv = Input.pressed('Space', 'Enter', 'KeyJ', 'Digit1', 'KeyE') || Input.mouse.justDown ||
+        (Bot.enabled && pr.t > 0.5);
+      if (adv && pr.t > 0.35) {
+        pr.step++;
+        pr.t = 0;
+        if (pr.step === 1) { Renderer.shake(5, 0.4); AudioSys.thud(); }
+        if (pr.step === 2) { // 내 비석 대면 — 첫 증거를 손에 넣는 순간이 곧 튜토리얼
+          const c = Meta.gainClue('c1');
+          if (c) { Meta.data.shards += 25; Meta.save(); AudioSys.chest(); }
+        }
+        if (pr.step >= 4) this._endPrologue();
+      }
+      return;
+    }
+    if (this.state === 'cluecard') {
+      const cc = this.clueCard;
+      cc.t += dt;
+      if (cc.t > 0.45 && (Input.pressed('Space', 'Enter', 'KeyJ', 'Digit1', 'Escape') || Input.mouse.justDown || Bot.enabled)) {
+        this.clueCard = null;
+        this.state = 'play';
+      }
+      return;
+    }
+    if (this.state === 'confession') {
+      const cf = this.confession;
+      cf.t += dt;
+      if (cf.t > 0.6 && (Input.pressed('Space', 'Enter', 'KeyJ', 'Digit1', 'Escape') || Input.mouse.justDown || Bot.enabled)) {
+        this.confession = null;
+        if (cf.clue) { this.clueCard = { clue: cf.clue, reward: 0, t: 0 }; this.state = 'cluecard'; }
+        else this.state = 'play';
+      }
+      return;
+    }
     if (this.state === 'transition') {
       const tr = this.transition;
       tr.t += dt * 3;
@@ -619,6 +669,8 @@ const Game = {
         this.transition = null;
         this.state = 'play';
         if (this.pendingChoices > 0) this.openTraitChoice('levelup');
+        // 막 시작 독백 (v120 ④): 비차단 하단 텍스트 — 전환 시간은 1초도 늘리지 않는다
+        this._floorMonologue();
       }
       return;
     }
@@ -755,7 +807,8 @@ function installDemoBot() {
   };
   const origTick = Game.tick.bind(Game);
   Game.tick = function (dt) {
-    if (this.state === 'levelup' || this.state === 'relic' || this.state === 'route' || this.state === 'skillmod') Input.justPressed['Digit1'] = true;
+    if (this.state === 'levelup' || this.state === 'relic' || this.state === 'route' || this.state === 'skillmod' ||
+        this.state === 'prologue' || this.state === 'cluecard' || this.state === 'confession') Input.justPressed['Digit1'] = true;
     origTick(dt);
   };
 }

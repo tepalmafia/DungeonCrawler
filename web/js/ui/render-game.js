@@ -1033,12 +1033,33 @@ const GameRender = {
       ctx.globalAlpha = 1;
     }
 
+    // v120 ④ 막 시작 독백 — 속삭임과 같은 자리, 뼛빛 톤 (비차단)
+    if (this.monologue && this.state === 'play') {
+      const m = this.monologue;
+      const a = Math.min(1, m.t / 0.8) * Math.min(1, (m.maxT - m.t) / 0.6);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = a * 0.9;
+      ctx.textAlign = 'center';
+      ctx.font = 'italic 14px Galmuri11, monospace';
+      ctx.fillStyle = '#0a0812';
+      ctx.fillText(m.text, Renderer.W / 2 + 1, Renderer.H - 63);
+      ctx.fillStyle = '#c8c0a8';
+      ctx.fillText(m.text, Renderer.W / 2, Renderer.H - 64);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);
     if (this.state === 'route') HUD.drawRouteChoice(ctx, this);
     if (this.state === 'skillmod') HUD.drawCardChoice(ctx, this, this.modCards, '원한의 세공 — 스킬을 개조하라', () => '[ 개조 ]', () => '#b13ae0');
     if (this.state === 'over') HUD.drawGameOver(ctx, this, this.blinkT);
     if (this.state === 'victory') HUD.drawVictory(ctx, this, this.blinkT);
+    // v120 스토리 화면 3종
+    if (this.state === 'prologue') HUD.drawPrologue(ctx, this);
+    if (this.state === 'cluecard') HUD.drawClueCard(ctx, this);
+    if (this.state === 'confession') HUD.drawConfession(ctx, this);
 
     if (this.transition) {
       const a = this.transition.phase === 'out' ? this.transition.t : 1 - this.transition.t;
