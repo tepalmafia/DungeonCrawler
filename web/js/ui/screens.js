@@ -141,7 +141,7 @@ const GameScreens = {
 
   _tickSettings() {
     const o = Meta.data.opts;
-    const ROWS = 6;
+    const ROWS = 7;
     this._setRow = this._setRow || 0;
     if (Input.pressed('Escape', 'KeyO')) {
       this.showSettings = false;
@@ -161,6 +161,7 @@ const GameScreens = {
     else if (this._setRow === 3) o.dmgNum = o.dmgNum ? 0 : 1;
     else if (this._setRow === 4) o.flash = tri(o.flash);
     else if (this._setRow === 5) { this.toggleFullscreen(); return; }
+    else if (this._setRow === 6) o.gore = tri(o.gore); // 죽음 연출 수위 — 심의·취향 대응
     AudioSys.applyOpts();
     AudioSys.pickup(); // 새 음량이 곧장 귀로 확인된다
     Meta.save();

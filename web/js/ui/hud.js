@@ -1958,7 +1958,7 @@ const HUD = {
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     const o = Meta.data.opts;
     const cx = Renderer.W / 2;
-    const px = cx - 250, pw = 500, py = 78, ph = 386; // 6줄 (전체화면 추가)
+    const px = cx - 250, pw = 500, py = 66, ph = 426; // 7줄 (고어 수위 추가)
     ctx.fillStyle = '#14101e';
     ctx.fillRect(px, py, pw, ph);
     ctx.strokeStyle = '#6a5a40';
@@ -1979,6 +1979,7 @@ const HUD = {
       ['피해 숫자 표시', o.dmgNum ? '켬' : '끔'],
       ['화면 섬광', triLbl(o.flash) + '  (광과민성 배려)'],
       ['전체화면', fsOn ? '켬' : '끔'],
+      ['죽음 연출 (고어)', (o.gore ?? 1) <= 0 ? '끔' : (o.gore ?? 1) < 1 ? '약하게' : '진하게'],
     ];
     const ry0 = py + 92, rh = 40;
     rows.forEach(([name, val], i) => {

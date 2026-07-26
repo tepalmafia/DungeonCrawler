@@ -655,6 +655,14 @@ const GameRender = {
         squashX: (1 + k * 0.45) * c.scale,
       });
     }
+    // 절단 조각 (v126): 날아가는 동안만 엔티티로 — 멈추면 바닥에 구워져 스탬프가 된다
+    for (const g of this.gibs) {
+      ctx.save();
+      ctx.translate(g.x, g.y);
+      ctx.rotate(g.rot);
+      ctx.drawImage(g.img, -g.img.width / 2, -g.img.height / 2);
+      ctx.restore();
+    }
 
     const drawables = [...this.enemies];
     if (this.state !== 'over') drawables.push(this.player);

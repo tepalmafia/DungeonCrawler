@@ -1739,13 +1739,14 @@ const World = {
 
   // ── 혈흔 스탬프 (고어, 기획 §7): 바닥 프리렌더에 직접 굽는다 — 프레임 비용 0.
   // 방을 나갈 때까지 지워지지 않는다: 전투가 끝난 방은 학살의 기록이 된다
-  stampBlood(x, y, r = 8, alpha = 0.5) {
+  stampBlood(x, y, r = 8, alpha = 0.5, shadesIn = null) {
     if (!this._floorCanvas) return;
+    if ((Meta.data.opts && Meta.data.opts.gore) <= 0) return; // 고어 끔 — 흔적을 남기지 않는다
     if (this.isSolidAt(x, y)) return; // 벽 위에는 안 굽는다
     const ctx = this._floorCanvas.getContext('2d');
     ctx.save();
     ctx.globalAlpha = alpha;
-    const shades = ['#4a0d12', '#5a1016', '#3a0a0e', '#66131b'];
+    const shades = shadesIn || ['#4a0d12', '#5a1016', '#3a0a0e', '#66131b'];
     ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
     ctx.beginPath();
     ctx.ellipse(x, y - this.offsetY + 6, r, r * 0.62, (Math.random() - 0.5) * 0.8, 0, Math.PI * 2);
@@ -1758,6 +1759,19 @@ const World = {
         1.2 + Math.random() * 2.2, 1 + Math.random() * 1.6, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+  },
+
+  // 절단 조각 베이크 (v126): 멈춘 조각을 바닥 캔버스에 굽는다 — 프레임 비용 0으로 방에 남는다
+  stampImage(img, x, y, rot = 0, alpha = 0.88) {
+    if (!this._floorCanvas || !img) return;
+    if (this.isSolidAt(x, y)) return;
+    const ctx = this._floorCanvas.getContext('2d');
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y - this.offsetY);
+    ctx.rotate(rot);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
     ctx.restore();
   },
 

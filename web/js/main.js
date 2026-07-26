@@ -32,6 +32,7 @@ const Game = {
   interactables: [],
   bossSlashes: [],
   corpses: [],      // 사망 연출 (무너져 내리는 잔상)
+  gibs: [],         // 죽음의 흔적 (v126): 절단 조각 — 멈추면 바닥에 구워진다
   kills: 0,
   time: 0,
   hitstop: 0,
@@ -279,6 +280,7 @@ const Game = {
     this.interactables = [];
     this.bossSlashes = [];
     this.corpses = [];
+    this.gibs = [];
     this.roomCleared = false;
     Particles.clear();
 
