@@ -357,7 +357,7 @@ const GameRender = {
         ctx.fillText(icon, it.x, it.y - 8);
         ctx.font = 'bold 11px monospace';
         ctx.fillStyle = afford ? '#2ec4b6' : '#9aa0b4';
-        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : it.kind === 'shopShards' ? `파편 ${it.shards}` : '리롤 +1';
+        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : it.kind === 'shopShards' ? `한 조각 ${it.shards}` : '리롤 +1';
         ctx.fillText(name, it.x, it.y - 40);
         ctx.fillStyle = afford ? '#ffd866' : '#8a6a20';
         ctx.fillText(`${it.price}G`, it.x, it.y - 27);
@@ -660,7 +660,7 @@ const GameRender = {
       const tech = [
         ['완벽 회피', '적 공격이 닿기 직전 대시로 회피', '→ 시간이 느려지고 다음 일격이 확정 크리'],
         ['대시 파생기', '대시 중 공격 — 직업별 특수기', '검사 돌진 찌르기 / 궁수 후퇴 사격 / 마도사 점멸 폭발'],
-        ['벽 충돌', '3타 마무리·회전 베기로 적을 벽에 처박으면', '추가 피해 — 지형이 무기다'],
+        ['벽 충돌', '3타 마무리·참수 선회로 적을 벽에 처박으면', '추가 피해 — 지형이 무기다'],
         ['스킬 진화', '직업 특성 3장 + Lv.12', '→ 스킬의 형태가 바뀐다 (회오리 베기 등)'],
         ['균열 벽', '금이 간 벽은 부술 수 있다', '→ 비밀 벽감에 보상이 숨어 있다'],
       ];

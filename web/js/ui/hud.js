@@ -252,7 +252,7 @@ const HUD = {
       }
       const lines = [
         'G 무적  H 회복  K 전멸',
-        'L 레벨업  U 유물  O 파편',
+        'L 레벨업  U 유물  O 한 조각',
         'B 보스방  N 다음층  V 봇  F 부활',
       ];
       if (game.reviveMode) {
@@ -516,7 +516,7 @@ const HUD = {
         // 열기 숫자만 붉게 덧칠하기엔 폭 계산이 과하다 — 파편 보너스를 옆에 흐리게
         ctx.font = '11px monospace';
         ctx.fillStyle = '#666a80';
-        ctx.fillText(`파편 +${heat * 20}%`, Renderer.W / 2 + 130, lr.y + 15);
+        ctx.fillText(`한 조각 +${heat * 20}%`, Renderer.W / 2 + 130, lr.y + 15);
       }
       if (Meta.heatUnlocked()) {
         ctx.font = '10px monospace';
@@ -606,12 +606,12 @@ const HUD = {
       if (Meta.data.wins > 0) {
         ctx.textAlign = 'right';
         ctx.fillStyle = '#e43b44';
-        ctx.fillText(`⚔ B 보스 러시${rrec && rrec.floor > 0 ? ` · ${rrec.floor}군주` : ''}`, Renderer.W / 2 - 24, Renderer.H - 30);
+        ctx.fillText(`⚔ B 원수 연전${rrec && rrec.floor > 0 ? ` · ${rrec.floor}원수` : ''}`, Renderer.W / 2 - 24, Renderer.H - 30);
       }
       ctx.textAlign = Meta.data.wins > 0 ? 'left' : 'center';
       ctx.fillStyle = '#f7b32b';
       ctx.fillText(
-        rec ? `🗼 D 오늘의 탑 · 오늘 ${rec.floor}층${rec.victory ? ' 정복!' : ''}` : '🗼 D 오늘의 탑 — 매일 같은 시드',
+        rec ? `📜 D 오늘의 수배령 · 오늘 ${rec.floor}층${rec.victory ? ' 완수!' : ''}` : '📜 D 오늘의 수배령 — 매일 같은 시드',
         Meta.data.wins > 0 ? Renderer.W / 2 + 24 : Renderer.W / 2, Renderer.H - 30);
     }
 
@@ -628,7 +628,7 @@ const HUD = {
       ctx.fillText('⚙ 테스트 모드 ON (T로 끄기)', 24, Renderer.H - 20);
       ctx.font = '11px monospace';
       ctx.fillStyle = '#9aa0b4';
-      ctx.fillText('O 파편+500 · I 도감 완성 · Y 직업/열기 해금 · V 봇 모드 · 게임 중 G무적 X전멸 N다음층...', 24, Renderer.H - 40);
+      ctx.fillText('O 한 조각+500 · I 도감 완성 · Y 직업/열기 해금 · V 봇 모드 · 게임 중 G무적 X전멸 N다음층...', 24, Renderer.H - 40);
     }
   },
 
@@ -644,7 +644,7 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = 'bold 30px monospace';
     ctx.fillStyle = '#2ec4b6';
-    ctx.fillText('기억의 제단', Renderer.W / 2, 70);
+    ctx.fillText('원한의 비석', Renderer.W / 2, 70);
     this._shardLabel(ctx, Renderer.W - 24, 36);
 
     this.altarRowRects().forEach((r, i) => {
@@ -1074,13 +1074,13 @@ const HUD = {
       ctx.font = '15px monospace';
       ctx.fillStyle = '#c46a6a';
       ctx.fillText(`☠ 사인: ${game.deathInfo.src}`, Renderer.W / 2, 210);
-      // 마이크로 서사 (S3): 탑의 목소리 — 죽음마다 세계가 한 줄 말을 건다
+      // 마이크로 서사 (S3): 왕국의 목소리 — 죽음마다 세계가 한 줄 말을 건다
       const EPITAPHS = [
-        '탑은 또 하나의 영혼을 삼켰다. 그리고 기억한다.',
-        '심연은 서두르지 않는다. 너는 다시 올 테니까.',
+        '왕국은 또 하나의 시체를 묻었다. 묻힌 것이 전부 잠드는 건 아니다.',
+        '왕은 서두르지 않는다. 너는 다시 기어오를 테니까.',
         '뱃사공이 노를 젓는 소리가 들린다… 아직은 아니다.',
-        '네가 흘린 파편은 어둠 속에서도 빛난다.',
-        '탑의 계단은 오늘도 하나 늘었다.',
+        '네가 흘린 한(恨)은 흙 속에서도 식지 않는다.',
+        '교수대의 밧줄이 오늘 하나 더 걸렸다.',
       ];
       ctx.font = 'italic 12px monospace';
       ctx.fillStyle = '#8a8aa0';
@@ -1109,7 +1109,7 @@ const HUD = {
     }
     if (game.dailyRun && Meta.data.daily) {
       ctx.fillStyle = '#f7b32b';
-      ctx.fillText(`🗼 오늘의 탑 최고 기록: ${Meta.data.daily.floor}층 (${Meta.data.daily.runs}회 도전)`, Renderer.W / 2, game.prevRun ? 316 : 298);
+      ctx.fillText(`📜 오늘의 수배령 최고 기록: ${Meta.data.daily.floor}층 (${Meta.data.daily.runs}회 도전)`, Renderer.W / 2, game.prevRun ? 316 : 298);
     }
 
     this._drawShardReward(ctx, game, 330);
@@ -1241,7 +1241,7 @@ const HUD = {
     rows.push({ f: '15px monospace', c: '#9aa0b4', y: 290, s: timeStr });
     }
     if (game._newRecord) rows.push({ f: 'bold 15px monospace', c: '#5ce0e6', y: 314, s: '★ 최속 클리어 신기록!' });
-    if (game.dailyRun) rows.push({ f: 'bold 14px monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '🗼 오늘의 탑 정복!' });
+    if (game.dailyRun) rows.push({ f: 'bold 14px monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '📜 오늘의 수배령 완수!' });
     rows.forEach((r, i) => {
       const rt = (t - 0.8 - i * 0.15) / 0.25;
       if (rt <= 0) return;
@@ -1322,7 +1322,7 @@ const HUD = {
         { t: '시간이 느려지고 다음 일격이 확정 크리티컬', dim: true },
         { h: '대시 파생기', t: '대시 중 공격 — 직업별 특수기가 나간다' },
         { t: '검사 돌진 찌르기 / 궁수 후퇴 사격 / 마도사 점멸 폭발', dim: true },
-        { h: '벽 충돌', t: '마무리 일격·회전 베기로 적을 벽에 처박으면 추가 피해' },
+        { h: '벽 충돌', t: '마무리 일격·참수 선회로 적을 벽에 처박으면 추가 피해' },
         { h: '스킬 진화', t: '직업 특성 3장 + Lv.12 — 스킬의 형태가 바뀐다' },
         { h: '보스 기믹', t: '체력바 아래 기믹을 읽어라 — 정답 특성 트리가 있다' },
       ]);
@@ -1332,9 +1332,9 @@ const HUD = {
         { t: '⚠ 수식어가 붙은 문은 위험하지만 보상이 크다', dim: true },
         { h: '모닥불 방', t: '휴식(HP +2) vs 담금질(이번 층 공격력 +1) — 하나만' },
         { h: '미지의 기연', t: '받아들이기 전엔 정체를 모른다 — 대체로 이득, 가끔 함정' },
-        { h: '우두머리', t: '층마다 나타나는 거대 변종 — 처치 시 하트 + 파편 확정' },
+        { h: '우두머리', t: '층마다 나타나는 거대 변종 — 처치 시 하트 + 한 조각 확정' },
         { h: '지름길', t: '3·6층 보스 후 — 한 층을 건너뛰지만 도착 층이 험하다' },
-        { t: '(대신 그 층의 정예가 파편을 떨군다)', dim: true },
+        { t: '(대신 그 층의 정예가 한 조각을 떨군다)', dim: true },
         { h: '균열 벽 · 항아리', t: '금 간 벽과 항아리는 부술 수 있다 — 보상이 숨어 있다' },
       ]);
       drawCol(Renderer.W / 2 + 16, '성장', '#f7b32b', [
@@ -1342,9 +1342,9 @@ const HUD = {
         { t: '중첩 상한은 카드에 표시 (보유 n/상한)', dim: true },
         { h: '전설 특성', t: '황금 카드 — 게임 규칙을 바꾼다 (극저확률)' },
         { h: '유물', t: '커먼~레전더리 — 보물상자와 보스가 준다' },
-        { h: '도감', t: '몬스터 수집이 파편 보상으로 돌아온다 (거점 4번)' },
+        { h: '도감', t: '침공 기록이 한 조각 보상으로 돌아온다 (거점 4번)' },
         { h: '비석의 맹세', t: '한(恨) 조각으로 영구 강화 (거점 2번)' },
-        { h: '현상금 · 오늘의 탑', t: '1막 완수 후 해금(←→) — 왕이 네 목에 값을 건다 · 거점 D 일일 도전' },
+        { h: '현상금 · 오늘의 수배령', t: '1막 완수 후 해금(←→) — 왕이 네 목에 값을 건다 · 거점 D 오늘의 수배령' },
         { h: '2막 · 왕도 가도', t: '1막 완수 후 C — 2막 다리와 관문(11~20층), 2막 완수 후 C — 왕도 가도' },
         { h: '보조 스킬', t: '5·15·25층 스킬 사당에서 3택1 획득 — E키로 사용' },
         { h: '처형 선고', t: '10층 보스의 도끼를 빼앗아 획득 — 처치로 충전, R키로 집행 (20층에서 강화)' },

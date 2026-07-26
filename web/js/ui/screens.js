@@ -15,7 +15,7 @@ const GameScreens = {
       this.banner = { text: this.reviveMode ? '♻ 무한 부활 ON' : '무한 부활 OFF', life: 1.2, maxLife: 1.2 };
       AudioSys[this.reviveMode ? 'buy' : 'deny']();
     }
-    // 어디서나: O 파편 +500 / I 도감 완성 / Y 직업·열기 해금
+    // 어디서나: O 한 조각 +500 / I 도감 완성 / Y 직업·열기 해금
     if (Input.pressed('KeyO')) {
       Meta.data.shards += 500;
       Meta.save();
@@ -171,7 +171,7 @@ const GameScreens = {
     this.pendingChoices = 4; // 시작 빌드 — 맨몸으로 카론과 싸울 수는 없다
     this.openTraitChoice('elite');
     AudioSys.roar();
-    this.banner = { text: '보스 러시 — 열 군주가 연이어 온다', life: 3, maxLife: 3, color: '#e43b44' };
+    this.banner = { text: '원수 연전 — 열 명의 원수가 연이어 온다', life: 3, maxLife: 3, color: '#e43b44' };
   },
 
   startDaily() {
@@ -182,7 +182,7 @@ const GameScreens = {
     this.dailyKey = key;
     AudioSys.buy();
     this.banner = {
-      text: `오늘의 탑 ${String(key).slice(4, 6)}/${String(key).slice(6)} — 모두에게 같은 던전`,
+      text: `오늘의 수배령 ${String(key).slice(4, 6)}/${String(key).slice(6)} — 모두에게 같은 밤`,
       life: 3, maxLife: 3, color: '#f7b32b',
     };
   },
