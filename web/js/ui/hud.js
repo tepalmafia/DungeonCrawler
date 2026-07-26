@@ -969,6 +969,19 @@ const HUD = {
 
   // ══════════════ 도감 ══════════════
 
+  // 도감 페이지네이션 — 페이지 클램프 + 우하단 표시, 현재 페이지의 시작 인덱스를 돌려준다
+  _codexPager(ctx, game, total, pageSize) {
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    game.codexPage = Math.min(Math.max(0, game.codexPage || 0), pages - 1);
+    if (pages > 1) {
+      ctx.textAlign = 'right';
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#8f8577';
+      ctx.fillText(`◀ ${game.codexPage + 1} / ${pages} ▶  (←→ 페이지)`, Renderer.W - 24, 122);
+    }
+    return game.codexPage * pageSize;
+  },
+
   codexTabRects() {
     const w = 124, h = 34, gap = 10;
     const x0 = (Renderer.W - (4 * w + 3 * gap)) / 2;
@@ -1013,12 +1026,13 @@ const HUD = {
     let hovered = null;
 
     if (game.codexTab === 0) {
-      // 몬스터: 10열 컴팩트 그리드 (42종 = 5행), 처치 수는 호버 설명에 표시
+      // 몬스터: 10열 컴팩트 그리드 — 89종+ 페이지네이션 (한 화면 6행 = 60칸)
       const found = CODEX_ENEMIES.filter((e) => codex.kills[e.id.startsWith('boss') ? 'boss' + e.id.slice(4) : e.id] > 0).length;
       this._codexHeader(ctx, found, CODEX_ENEMIES.length);
       const cols = 10, cw = 94, chh = 59;
       const x0 = (Renderer.W - cols * cw) / 2;
-      CODEX_ENEMIES.forEach((e, i) => {
+      const start = this._codexPager(ctx, game, CODEX_ENEMIES.length, 60);
+      CODEX_ENEMIES.slice(start, start + 60).forEach((e, i) => {
         const killKey = e.boss ? 'boss' + e.id.slice(4) : e.id;
         const kills = codex.kills[killKey] || 0;
         const r = { x: x0 + (i % cols) * cw + 3, y: 132 + Math.floor(i / cols) * chh, w: cw - 6, h: chh - 6 };
@@ -1048,7 +1062,8 @@ const HUD = {
       this._codexHeader(ctx, found, RELICS.length);
       const cols = 7, cw = 128, chh = 96;
       const x0 = (Renderer.W - cols * cw) / 2;
-      RELICS.forEach((rl, i) => {
+      const start = this._codexPager(ctx, game, RELICS.length, 21);
+      RELICS.slice(start, start + 21).forEach((rl, i) => {
         const owned = !!codex.relics[rl.id];
         const rar = RARITY[rl.rarity];
         const r = { x: x0 + (i % cols) * cw + 4, y: 138 + Math.floor(i / cols) * chh, w: cw - 8, h: chh - 8 };
@@ -1078,7 +1093,8 @@ const HUD = {
       this._codexHeader(ctx, found, TRAITS.length);
       const cols = 8, cw = 112, chh = 82;
       const x0 = (Renderer.W - cols * cw) / 2;
-      TRAITS.forEach((t, i) => {
+      const start = this._codexPager(ctx, game, TRAITS.length, 32);
+      TRAITS.slice(start, start + 32).forEach((t, i) => {
         const picks = codex.traits[t.id] || 0;
         const r = { x: x0 + (i % cols) * cw + 3, y: 138 + Math.floor(i / cols) * chh, w: cw - 6, h: chh - 6 };
         const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
