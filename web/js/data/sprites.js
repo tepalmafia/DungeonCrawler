@@ -941,7 +941,7 @@ const Sprites = (() => {
   });
 
   // 처형자 (8층): 도끼 내려찍기 (직사각 텔레그래프)
-  const EXEC_ROWS = pad([
+  const EXEC_ROWS = pad([ // (v87 인간판이 라이브 — 본 맵은 참조 기록용)
     '.......hhhhhh......X',
     '......hhhhhhhh....XX',
     '......hrrrrrrh....XXx',
@@ -1023,22 +1023,26 @@ const Sprites = (() => {
   });
 
   // 방패 해골: 전면 대형 방패
-  const SHIELD_ROWS = pad([
-    '.....wwww....B',
-    '....wwwwww..BB',
-    '....wkwwkw..BB',
-    '....wwwwww.BBBB',
-    '.....wmw...BBBB',
-    '...wwwwwww.BBBB',
-    '..w.wwwww..BBBB',
-    '..w.wwwww..BBBB',
-    '..w..www...BBBB',
-    '......w.....BB',
-    '....wwwww...BB',
-    '....w...w....B',
-    '...ww...ww',
+  const SHIELD_ROWS = pad([ // 백골 방패병 (v122 A안) — v121 백골과 같은 뼈 언어 + 타워 방패
+    '....wwww.....BBB..',
+    '...wwwwww...BBBBB.',
+    '...wewwew...BBBBB.',
+    '...wwwwww...BmmmB.',
+    '....wmmw....BmmmB.',
+    '...wwwwww...BmmmB.',
+    '..wwwwwwww..BmmmB.',
+    '..w.wwwww.wwBmmmB.',
+    '..w.wmwmw...BmmmB.',
+    '..w.wwwww...BmmmB.',
+    '....wwwww...BBBBB.',
+    '....wmwmw...BBBBB.',
+    '....wwwww....BBB..',
+    '....ww.ww.........',
+    '....w...w.........',
+    '...ww...ww........',
+    '..www...www.......',
   ]);
-  sprites.shieldSkeleton = make(SHIELD_ROWS, { w: '#d8d3c5', k: '#1a1c2c', m: '#8a8074', B: '#3a7ca5' });
+  sprites.shieldSkeleton = make(SHIELD_ROWS, { w: '#e8dfc8', k: '#1a1c2c', m: '#8a8074', B: '#3a7ca5', e: '#e43b44' });
 
   // 저격 해골: 후드 + 장궁
   sprites.sniper = make(pad([
@@ -1172,7 +1176,7 @@ const Sprites = (() => {
     f: '#2a6a9a', F: '#5aaad8', W: '#a8e0f8', w: '#e8f8ff', k: '#101820',
   });
   // 주술사: 아군을 치유하는 토템 가면
-  const SHAMAN_ROWS = pad([
+  const SHAMAN_ROWS = pad([ // (v87 인간판이 라이브 — 본 맵은 참조 기록용)
     '....t.tt.t',
     '....tttttt',
     '...ttwwwwtt',
@@ -1372,7 +1376,7 @@ const Sprites = (() => {
   sprites.lavaBurster = make(CRYSTAL_ROWS, { c: '#a83a1a', C: '#e06030', w: '#ffd866', W: '#fff0c0', d: '#701d0a' });
   sprites.voidSpawn = make(SWARM_ROWS, { k: '#12081e', b: '#3d2c5c', B: '#7a5ac2', l: '#241838' });
   sprites.riftCaster = make(NECRO_ROWS, { n: '#241838', f: '#0d0b14', g: '#c9b8e8', s: '#b13ae0', N: '#160e24' });
-  sprites.mirrorKnight = make(SHIELD_ROWS, { w: '#e8ecf4', k: '#1a1c2c', m: '#9aa6ba', B: '#c8d4e4' });
+  sprites.mirrorKnight = make(SHIELD_ROWS, { w: '#e8ecf4', k: '#1a1c2c', m: '#9aa6ba', B: '#c8d4e4', e: '#5ce0e6' });
 
   // 1층: 무덤지기 오스문드 — 챙 넓은 두건, 낡은 외투, 낫과 랜턴 (v118: 사신 → 시체를 팔아온 인간)
   const BOSS_ROWS = pad([
