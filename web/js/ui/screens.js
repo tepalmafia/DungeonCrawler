@@ -213,10 +213,15 @@ const GameScreens = {
 
   _tickCodex() {
     if (Input.pressed('Escape', 'Digit0', 'Backspace')) { this.state = 'hub'; return; }
+    const prevTab = this.codexTab;
     if (Input.pressed('Digit1')) this.codexTab = 0;
     if (Input.pressed('Digit2')) this.codexTab = 1;
     if (Input.pressed('Digit3')) this.codexTab = 2;
     if (Input.pressed('Digit4')) this.codexTab = 3;
+    if (this.codexTab !== prevTab) this.codexPage = 0;
+    // 페이지 넘김 (←→) — 도감이 89종을 넘으며 한 화면에 다 안 들어간다
+    if (Input.pressed('ArrowLeft', 'KeyA')) { this.codexPage = Math.max(0, (this.codexPage || 0) - 1); AudioSys.orb(); }
+    if (Input.pressed('ArrowRight', 'KeyD')) { this.codexPage = (this.codexPage || 0) + 1; AudioSys.orb(); }
     if (Input.mouse.justDown) {
       const back = HUD.backButtonRect();
       if (Input.mouse.x >= back.x && Input.mouse.x <= back.x + back.w &&
