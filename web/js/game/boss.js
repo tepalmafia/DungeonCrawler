@@ -9,107 +9,112 @@
 //  charge     긴 돌진 (벽에 부딪히면 그로기). opt.trail이면 불길 흔적
 //  ring       확장 충격파 링 (대시로 통과)
 
+// ══ 1막 「나를 죽인 손들」 (v118 시나리오 정합) — 죄 없는 자 하나를 죽음까지 운반한
+// 변두리의 손들: 묻은 손(1)·나른 손(2)·가둔 손(3)·태운 손(4)·매단 자들의 원한(5),
+// 그리고 저주에 되삼켜진 그들(6~9) → 마지막에 벤 손, 처형인(10)이 기다린다.
 const BOSS_DEFS = {
   1: {
     name: '무덤지기 오스문드', sprite: 'boss', scale: 1.35, r: 26, hp: 95, speed: 42,
     banner: '무덤지기 오스문드',
-    punish: 'volley', punishProj: 'soul',
-    p1: ['sweep>sweep', 'fan:soul', 'fan:soul:snipe'],
-    p2: ['sweep>fan:soul', 'curse>sweep>fan:soul', 'fan:soul:cross'],
+    punish: 'volley', punishProj: 'rock', // 인간의 손 — 뼛조각과 무덤 흙을 던진다 (원혼 부채꼴은 되살아난 후의 것)
+    p1: ['sweep>sweep', 'fan:rock', 'fan:rock:snipe'],
+    p2: ['sweep>fan:rock', 'curse>sweep>fan:rock', 'fan:rock:cross', 'uniq'], // 입문 보스: 고유기는 2페이즈부터
     rageText: '오스문드가 낫을 고쳐쥔다!',
     intro: '죄인은 무덤 밖으로 못 나간다. 그게 내 밥줄이야.', outro: '네 관은… 비어 있었지… 이상하다 했어…',
-    deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
+    deathPalette: ['#c9a24a', '#3a3226', '#e8e0cf'],
   },
   2: {
-    name: '늪지기 몰귀', sprite: 'bossSpore', scale: 1.45, r: 32, hp: 170, speed: 34, // 관통 v3: 3연속 계측에서 2층 벽 (9회) — 190→170, 레벨 1~2 노출 시간 단축
-    mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
-    banner: '늪지기 몰귀',
-    // 분산 귀속 (열기5): 보스방 사망의 60%가 소환수(독슬라임 독구름 r52 + 버섯 근접 포자) —
-    // 재생 정지를 위해 부하를 근접 처치해야 하는 검사가 독구름 루프에 갇혔다.
-    // 소환수를 경량 포자 방울(독구름 r32/1.5s)로 교체 — 기믹(부하 처치=재생 정지)은 유지
+    // 나른 손 — 처형된 시신을 밤마다 수레로 늪에 버린 삯꾼 (관통 v3 hp 170 유지: 2층 벽 계측 근거)
+    name: "시체 짐꾼 '삯꾼 몰레'", sprite: 'bossSpore', scale: 1.45, r: 32, hp: 170, speed: 34,
+    mechanic: { type: 'regen', label: '거들 손 — 부하가 살아있는 동안 상처를 감춘다' },
+    banner: "시체 짐꾼 '삯꾼 몰레'",
+    // 분산 귀속 (열기5): 소환수는 경량 늪 거품 유지 — 기믹(부하 처치=재생 정지) 계측 근거 보존
     punish: 'volley', punishProj: 'spore',
     p1: ['fan:spore', 'ring>summon:sporePuff', 'fan:spore:snipe'],
-    p2: ['fan:spore:cross', 'fan:spore:snipe>ring', 'curse>fan:spore'],
-    rageText: '포자가 미친 듯이 흩날린다!',
-    intro: '늪은 왕의 것도, 네 것도 아니다. 전부 가라앉을 뿐.', outro: '너도 언젠가… 가라앉는다…',
-    deathPalette: ['#38b764', '#d8f070', '#8a5ac2'],
+    p2: ['fan:spore:cross', 'fan:spore:snipe>ring', 'curse>fan:spore', 'uniq'],
+    rageText: '몰레가 수레를 뒤엎는다!',
+    intro: '밤마다 수레 하나 값이었지. 비켜라 — 오늘은 짐이 밀렸다.', outro: '버린 게 아니야… 나른 것뿐… 시킨 놈은… 위에…',
+    deathPalette: ['#6a7a4a', '#8a653f', '#3a4a3a'],
   },
   3: {
+    // 가둔 손 — 처형 전야, 나를 가둔 지하 감옥의 간수장
     name: '간수장 바르곤', sprite: 'bossGolem', scale: 1.5, r: 33, hp: 190, speed: 30,
-    mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
+    mechanic: { type: 'armor', cap: 2, label: '간수의 철갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
     punish: 'charge',
-    p1: ['charge>ring', 'fan:rock', 'fan:rock:snipe'],
+    p1: ['charge>ring', 'fan:rock', 'fan:rock:snipe', 'uniq'],
     // 매트릭스 계측: 이중 돌진 금지 유지 (열기0 3층 스파이크 귀속) — 연계는 돌진 1회까지만
-    p2: ['charge>ring>fan:rock', 'ring>fan:rock', 'fan:rock:gap'],
+    p2: ['charge>ring>fan:rock', 'ring>fan:rock', 'fan:rock:gap', 'uniq'],
     rageText: '바르곤의 사슬이 풀렸다!',
     intro: '네 얼굴, 명부에서 봤다. 처형 완료라 적혀 있었는데.', outro: '명부가… 처음부터… 거짓이었나…',
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
   },
   4: {
-    name: '방화대장 이그니스', sprite: 'bossIgnis', scale: 1.55, r: 30, hp: 430, speed: 44,
-    mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
-    banner: '방화대장 이그니스',
+    // 태운 손 — 단서 ③의 농가를 태워 장부를 지운 방화대장
+    name: "방화대장 '그을음 브란트'", sprite: 'bossIgnis', scale: 1.55, r: 30, hp: 430, speed: 44,
+    mechanic: { type: 'rage', label: '불장난 — 시간이 지날수록 달아오른다' },
+    banner: "방화대장 '그을음 브란트'",
     punish: 'charge', punishTrail: true,
-    p1: ['fan:fire>charge:trail', 'curse:fire', 'fan:fire:snipe'],
-    p2: ['charge:trail>fan:fire', 'fan:fire:snipe>charge:trail', 'fan:fire:cross'],
-    rageText: '이그니스가 백열한다!',
-    intro: '역병 마을은 태우라는 게 왕명이다. 산 자도 함께.', outro: '불은… 명령이었다… 나는 그저…',
+    p1: ['fan:fire>charge:trail', 'curse:fire', 'fan:fire:snipe', 'uniq'],
+    p2: ['charge:trail>fan:fire', 'fan:fire:snipe>charge:trail', 'fan:fire:cross', 'uniq'],
+    rageText: '브란트가 기름통을 비운다!',
+    intro: '장부가 있던 농가? 내가 태웠다. 종이는 잘 타지 — 너는 어떨까.', outro: '불은… 명령이었다… 나는 그저…',
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
   },
   5: {
+    // 매단 자들의 원한 — 교수대 언덕에서 죄 없이 매달린 혼들이 뭉친 것. 눈먼 원한은 같은 처지의 망자도 가리지 않는다
     name: '교수대의 그림자', sprite: 'bossAbyss', scale: 1.75, r: 28, hp: 700, speed: 50,
-    mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라' },
+    mechanic: { type: 'veil', label: '목매단 원한 — 영혼 구슬을 파괴하라' },
     banner: '교수대의 그림자',
     punish: 'volley', punishProj: 'soul',
-    p1: ['sweep>fan:soul', 'ring:gap', 'fan:soul:snipe'],
-    p2: ['ring:gap>sweep>fan:soul', 'fan:soul:cross>ring', 'summon:wraith:elite'],
+    p1: ['sweep>fan:soul', 'ring:gap', 'fan:soul:snipe', 'uniq'],
+    p2: ['ring:gap>sweep>fan:soul', 'fan:soul:cross>ring', 'summon:wraith:elite', 'uniq'],
     rageText: '목매단 자들의 원한이 깨어난다!',
     intro: '이 언덕에 매달린 자, 셀 수 없다. 너도 그중 하나였을 뿐.', outro: '우리는… 전부… 죄가 없었다…',
     deathPalette: ['#e43b44', '#16101f', '#c9b8e8'],
   },
-  // ── 6~10층 각성 보스: 같은 존재의 심층 강화판 (기믹 강화 + 패턴 확장) ──
+  // ── 6~10층: 저주에 되삼켜진 손들 — 네가 벤 자들이 같은 저주로 깨어나 다시 막아선다 ──
   6: {
     awakened: true, name: '되살아난 오스문드', sprite: 'bossWraith', scale: 1.6, r: 26, hp: 550, speed: 48,
     banner: '되살아난 오스문드',
-    punish: 'volley', punishProj: 'soul',
-    p1: ['sweep>spiral:soul', 'curse', 'fan:soul:snipe'],
-    p2: ['curse>spiral:soul>sweep', 'sweep>sweep', 'summon:boneHeap>spiral:soul'],
+    punish: 'volley', punishProj: 'soul', // 이제는 원혼 — 죽어서야 죽은 자들의 무기를 손에 넣었다
+    p1: ['sweep>spiral:soul', 'curse', 'fan:soul:snipe', 'uniq'],
+    p2: ['curse>spiral:soul>sweep', 'sweep>sweep', 'summon:boneHeap>spiral:soul', 'uniq'],
     rageText: '오스문드의 원혼이 울부짖는다!',
     intro: '네가 날 죽였지. 그런데… 왜 나도 깨어난 거지?', outro: '저주는… 너만의 것이… 아니었어…',
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
   },
   7: {
-    awakened: true, name: '역병 걸린 몰귀', sprite: 'bossPlague', scale: 1.6, r: 32, hp: 680, speed: 38,
-    mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
-    banner: '역병 걸린 몰귀',
+    awakened: true, name: "물에 불은 몰레", sprite: 'bossPlague', scale: 1.6, r: 32, hp: 680, speed: 38,
+    mechanic: { type: 'regen', label: '가라앉은 무리 — 부하가 살아있는 동안 늪이 그를 되메운다' },
+    banner: "물에 불은 몰레",
     punish: 'volley', punishProj: 'spore',
-    p1: ['fan:spore:cross', 'ring>summon:sporePuff', 'geyser:poison'],
-    p2: ['geyser:poison>fan:spore', 'fan:spore:snipe>geyser:poison', 'fan:spore:gap'],
-    rageText: '역병이 들끓는다!',
-    intro: '늪까지 스며들었다… 성에서 흘러온 그 잿가루가!', outro: '근원을… 끊어라… 성으로…',
-    deathPalette: ['#6ab04c', '#8a3a8c', '#d8f070'],
+    p1: ['fan:spore:cross', 'ring>summon:sporePuff', 'geyser:poison', 'uniq'],
+    p2: ['geyser:poison>fan:spore', 'fan:spore:snipe>geyser:poison', 'fan:spore:gap', 'uniq'],
+    rageText: '늪이 들끓는다!',
+    intro: '늪이… 뱉어냈다. 내가 버린 것들이 전부 깨어났어 — 너 때문에!', outro: '이제야 알겠어… 짐이 아니라… 사람이었어…',
+    deathPalette: ['#6ab04c', '#4a6a5a', '#d8f070'],
   },
   8: {
-    awakened: true, name: '절망의 바르곤', sprite: 'bossDespair', scale: 1.65, r: 33, hp: 650, speed: 34,
-    mechanic: { type: 'armor', cap: 2, label: '중장갑 — 강한 일격을 경감한다' },
-    banner: '절망의 바르곤',
+    awakened: true, name: '사슬에 얽힌 바르곤', sprite: 'bossDespair', scale: 1.65, r: 33, hp: 650, speed: 34,
+    mechanic: { type: 'armor', cap: 2, label: '얽힌 사슬 — 강한 일격을 경감한다' },
+    banner: '사슬에 얽힌 바르곤',
     punish: 'charge',
-    p1: ['charge>snare', 'fan:rock>ring', 'fan:rock:snipe'],
-    p2: ['snare>charge', 'charge>snare>fan:rock:snipe', 'snare>fan:rock'],
-    rageText: '절망이 짓누른다!',
-    intro: '심문실에서 나간 진실은 없다. 들어온 진실만 있을 뿐.', outro: '기록은… 지하 서고에… 아직…',
+    p1: ['charge>snare', 'fan:rock>ring', 'fan:rock:snipe', 'uniq'],
+    p2: ['snare>charge', 'charge>snare>fan:rock:snipe', 'snare>fan:rock', 'uniq'],
+    rageText: '사슬이 제멋대로 날뛴다!',
+    intro: '열쇠는… 내가 갖고 있었는데… 사슬이 날 놓아주질 않아…', outro: '기록은… 지하 서고에… 아직…',
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
   },
   9: {
-    awakened: true, name: '화형 집행관 이그니스', sprite: 'bossInferno', scale: 1.7, r: 30, hp: 850, speed: 48,
-    mechanic: { type: 'rage', label: '백열 — 시간이 지날수록 빨라진다' },
-    banner: '화형 집행관 이그니스',
+    awakened: true, name: '재가 된 브란트', sprite: 'bossInferno', scale: 1.7, r: 30, hp: 850, speed: 48,
+    mechanic: { type: 'rage', label: '잿불 — 시간이 지날수록 백열한다' },
+    banner: '재가 된 브란트',
     punish: 'charge', punishTrail: true,
-    p1: ['fan:fire>geyser:fire', 'charge:trail>ring'],
-    p2: ['geyser:fire>charge:trail', 'fan:fire:snipe>geyser:fire', 'charge:trail>geyser:fire'],
-    rageText: '겁화가 폭주한다!',
-    intro: '증거는 전부 태웠다. 너도 태우면 끝이다!', outro: '태워도… 태워도… 되살아나는군…',
+    p1: ['fan:fire>geyser:fire', 'charge:trail>ring', 'uniq'],
+    p2: ['geyser:fire>charge:trail', 'fan:fire:snipe>geyser:fire', 'charge:trail>geyser:fire', 'uniq'],
+    rageText: '잿불이 폭주한다!',
+    intro: '타고 남은 게… 이런 거였나. 이리 와 — 같이 타자.', outro: '꺼지질 않아… 이 불은… 내가 지른 불인데…',
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
   },
   10: {
@@ -782,7 +787,114 @@ function createBoss(floor, x, y) {
       const say = (txt) => { game.banner = { text: txt, life: 1.4, maxLife: 1.4, color: '#e8a13b' }; };
       const clampY = (y) => Math.min(Math.max(y, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5));
       const id = this.defId;
-      if (id === 10) {
+      if (id === 1) {
+        // 「생매장」 (무덤지기) — 발밑에 무덤이 파이고, 흙무더기가 날아든다
+        say('생매장 — 파헤친 무덤을 벗어나라');
+        this.curses.push({ x: p.x, y: p.y, t: 1.0, r: 64 });
+        U(1.1, (b, g) => {
+          const pp = g.player;
+          const a = Math.atan2(pp.y - b.y, pp.x - b.x);
+          for (const off of [-0.22, 0.22]) {
+            g.spawnProjectile('rock', b.x, b.y, { x: Math.cos(a + off), y: Math.sin(a + off) }, { speed: 250, dmg: 1 });
+          }
+          AudioSys.shoot();
+        });
+      } else if (id === 2) {
+        // 「짐 부리기」 (시체 짐꾼) — 등짐이 사방으로 던져지고, 떨어진 자리가 썩는다
+        say('짐 부리기 — 떨어지는 자리를 보라');
+        for (let k = 0; k < 4; k++) {
+          U(k * 0.16, (b, g) => {
+            const pp = g.player;
+            b.curses.push({
+              x: pp.x + (Math.random() - 0.5) * 190,
+              y: clampY(pp.y + (Math.random() - 0.5) * 150),
+              t: 0.85, r: 46, poison: true,
+            });
+          });
+        }
+      } else if (id === 3) {
+        // 「철창 호송」 (간수장) — 주위로 철창이 내리꽂힌다. 열린 틈 하나가 유일한 출구
+        say('철창 호송 — 열린 틈으로 나가라');
+        const cx = p.x, cy = p.y;
+        const gapI = Math.floor(Math.random() * 6);
+        for (let i = 0; i < 6; i++) {
+          if (i === gapI) continue;
+          const a = (i / 6) * Math.PI * 2;
+          this.curses.push({ x: cx + Math.cos(a) * 95, y: clampY(cy + Math.sin(a) * 95), t: 0.9, r: 44 });
+        }
+        this.curses.push({ x: cx, y: clampY(cy), t: 1.15, r: 52 }); // 감방 한가운데도 안전하지 않다
+      } else if (id === 4) {
+        // 「기름 붓기」 (방화대장) — 기름 자국이 그어지고, 한 박자 뒤 일제히 발화한다
+        say('기름 붓기 — 불길이 번지기 전에 비켜라');
+        const ux = dx / (d || 1), uy = dy / (d || 1);
+        const sx = this.x, sy = this.y;
+        for (let i = 1; i <= 5; i++) this.curses.push({ x: sx + ux * 70 * i, y: clampY(sy + uy * 70 * i), t: 1.0, noHit: true });
+        U(1.0, (b, g) => {
+          AudioSys.meteorImpact();
+          for (let i = 1; i <= 5; i++) {
+            g.firePatches.push({ x: sx + ux * 70 * i, y: clampY(sy + uy * 70 * i), r: 36, life: 2.6, kind: 'fire', by: b.name });
+          }
+        });
+      } else if (id === 5) {
+        // 「올가미」 (교수대의 그림자) — 밧줄이 세 곳에 떨어지고, 묶인 자에게 원혼이 날아든다
+        say('올가미 — 발밑을 보라');
+        const ax = p.x, ay = p.y;
+        this.curses.push({ x: ax, y: clampY(ay), t: 0.95, snare: true });
+        this.curses.push({ x: ax - 90, y: clampY(ay), t: 1.05, snare: true });
+        this.curses.push({ x: ax + 90, y: clampY(ay), t: 1.05, snare: true });
+        U(1.15, (b, g) => {
+          const pp = g.player;
+          const base = Math.atan2(pp.y - b.y, pp.x - b.x);
+          for (let i = 0; i < 5; i++) {
+            const a = base + (i - 2) * 0.18;
+            g.spawnProjectile('soul', b.x, b.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 200, dmg: 1 });
+          }
+          AudioSys.shoot();
+        });
+      } else if (id === 6) {
+        // 「합장」 (되살아난 오스문드) — 그와 나 사이의 땅이 차례로 갈라진다. 같이 묻히자
+        say('합장 — 무덤이 이어진다');
+        const sx = this.x, sy = this.y, ex = p.x, ey = p.y;
+        for (let i = 1; i <= 4; i++) {
+          const f = i / 4;
+          this.curses.push({ x: sx + (ex - sx) * f, y: clampY(sy + (ey - sy) * f), t: 0.55 + i * 0.15, r: 48 });
+        }
+      } else if (id === 7) {
+        // 「수레 뒤집기」 (물에 불은 몰레) — 썩은 오물이 물결로 밀려온다
+        say('수레 뒤집기 — 밀려오는 오물을 넘어라');
+        const ux = dx / (d || 1), uy = dy / (d || 1);
+        const sx = this.x, sy = this.y;
+        for (let w = 1; w <= 3; w++) {
+          U(0.3 * w, (b, g) => {
+            for (let j = -1; j <= 1; j++) {
+              const px = sx + ux * 95 * w + (-uy) * j * 70;
+              const py = sy + uy * 95 * w + ux * j * 70;
+              g.firePatches.push({ x: px, y: clampY(py), r: 40, life: 1.6, kind: 'poison', by: b.name });
+            }
+            Particles.burst(sx + ux * 95 * w, clampY(sy + uy * 95 * w), { count: 8, colors: ['#6ab04c', '#3a4a3a'], speed: 110, life: 0.4, size: 3 });
+            AudioSys.thud();
+          });
+        }
+      } else if (id === 8) {
+        // 「사슬 추적」 (사슬에 얽힌 바르곤) — 사슬이 발자국을 따라 내리꽂힌다. 멈추면 얽힌다
+        say('사슬 추적 — 멈추지 마라');
+        for (let k = 0; k < 4; k++) {
+          U(0.25 * k, (b, g) => { b.curses.push({ x: g.player.x, y: clampY(g.player.y), t: 0.8, snare: true }); });
+        }
+      } else if (id === 9) {
+        // 「불씨 비」 (재가 된 브란트) — 몸에서 튄 불씨가 비처럼 쏟아진다
+        say('불씨 비 — 하늘을 보라');
+        for (let k = 0; k < 8; k++) {
+          U(0.15 * k, (b, g) => {
+            const pp = g.player;
+            b.curses.push({
+              x: pp.x + (Math.random() - 0.5) * 260,
+              y: clampY(pp.y + (Math.random() - 0.5) * 200),
+              t: 0.8, r: 40, fire: true,
+            });
+          });
+        }
+      } else if (id === 10) {
         // 「단두 낙하」 — 거대 도끼가 떨어지고 충격파가 퍼진다
         say('단두 낙하 — 도끼 그림자를 벗어나라');
         const ax = p.x, ay = p.y;

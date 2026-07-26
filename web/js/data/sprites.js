@@ -1247,184 +1247,196 @@ const Sprites = (() => {
   sprites.riftCaster = make(NECRO_ROWS, { n: '#241838', f: '#0d0b14', g: '#c9b8e8', s: '#b13ae0', N: '#160e24' });
   sprites.mirrorKnight = make(SHIELD_ROWS, { w: '#e8ecf4', k: '#1a1c2c', m: '#9aa6ba', B: '#c8d4e4' });
 
-  // 1층: 무덤지기 카론 — 낫을 든 사신
+  // 1층: 무덤지기 오스문드 — 챙 넓은 두건, 낡은 외투, 낫과 랜턴 (v118: 사신 → 시체를 팔아온 인간)
   const BOSS_ROWS = pad([
-    '..........kkkkkkkkkk',
-    '........kkkkkkkkkkkkkk',
-    '.......kkkkkkkkkkkkkkkk',
-    '......kkkkkkkkkkkkkkkkkk....bb',
-    '......kkkkwwwwwwwwkkkkkk...bbb',
-    '.....kkkwwwwwwwwwwwwkkkk..bbbb',
-    '.....kkkwwwwwwwwwwwwkkk..bbbb',
-    '.....kkwwrrwwwwwwrrwwkk..bbb',
-    '.....kkwwrrwwwwwwrrwwkk..bbb',
-    '.....kkkwwwwwwwwwwwwkkk...bb',
-    '......kkwwmmwwwwmmwwkk....ss',
-    '......kkkwmmmmmmmmwkkk....ss',
-    '.......kkkwwmmmmwwkkk.....ss',
-    '........kkkkkkkkkkkk......ss',
-    '......ppppppppppppppp.....ss',
-    '.....pppppppppppppppppp...ss',
-    '....pppppqqqqqqqqqqppppp..ss',
-    '...pppppppppppppppppppppp.ss',
-    '...pppppppppppppppppppp.ssss',
-    '...ppppppppppppppppppppwsssw',
-    '...pqqpppppppppppppppp..ss',
-    '...pppppppppppppppppppp.ss',
-    '...pppppppppppppppppppp.ss',
-    '...ppppppppppppppppppp..ss',
-    '....pppppp.pppppppppp...ss',
-    '....ppppp...ppppppppp...ss',
-    '.....pppp....pppp.ppp...ss',
-    '.....ppp......ppp..pp',
-    '......pp.......pp',
-    '.......p........p',
+    '...........hhhhhhhh...........',
+    '.........hhhhhhhhhhhh.....SSSS',
+    '........hhhhhhhhhhhhhh..SSSSS.',
+    '.......hhhhhhhhhhhhhhhh.SSSS..',
+    '.......hhhHHHHHHHHhhhhh.SS....',
+    '........hffffffffffhh...ss....',
+    '........hffeeffeeffh....ss....',
+    '........hffeeffeeffh....ss....',
+    '........hffffffffffh....ss....',
+    '.........ffFFFFFFff.....ss....',
+    '.......cccccccccccccc...ss....',
+    '......cccccccccccccccc..ss....',
+    '.....ccccccCCCCcccccccc.ss....',
+    '.....ccccccCCCCcccccccc.ss....',
+    '....oo.ccccccccccccccc..ss....',
+    '...oooo.ccbbbbbbbbbcc...ss....',
+    '...oooo.cccccccccccccc..ss....',
+    '...oooo.cccccccccccccc..ss....',
+    '....OO..cccccccccccccc..ss....',
+    '....OO.ccccccccccccccc..ss....',
+    '.......cccccccccccccccc.ss....',
+    '.......ccccccc..ccccccc.ss....',
+    '.......cccccc....cccccc.ss....',
+    '.......ccccc......ccccc.ss....',
+    '........cccc......cccc..ss....',
+    '...ddddddd..........ddddddd...',
+    '...dddddd............dddddd...',
   ]);
   sprites.boss = make(BOSS_ROWS, {
-    k: '#16121f', w: '#e8e0cf', r: '#b13ae0', m: '#8a8074',
-    p: '#241832', q: '#4a3070', s: '#6b4a34', b: '#c8d4e4',
+    h: '#3a3226', H: '#5e5426', f: '#c8a078', F: '#a07850', e: '#1a1c2c',
+    c: '#2c2838', C: '#4a4458', b: '#6a4a2e', s: '#6b4a34', S: '#c8ccd8',
+    o: '#ffd866', O: '#8a653f', d: '#262033',
   });
 
-  // 2층: 포자왕 믹서스 — 거대 버섯 군주
+  // 2층: 시체 짐꾼 '삯꾼 몰레' — 구부정한 등에 짊어진 시체 자루, 손에는 짐꾼의 갈고리 (v118: 버섯 군주 → 나른 손)
   const BOSSSPORE_ROWS = pad([
-    '...............mmmmmmmmmm',
-    '...........mmmmmmmmmmmmmmmm',
-    '.........mmmmmmMMMMmmmmmmmmmm',
-    '.......mmmmmmmMMMMMMmmmmmmmmmm',
-    '......mmmmmmmmmMMMMmmmmmmMMmmmm',
-    '.....mmmMMmmmmmmmmmmmmmmMMMMmmmm',
-    '....mmmMMMMmmmmmmmmmmmmmmMMmmmmmm',
-    '....mmmmMMmmmmmmmmmmmmmmmmmmmmmmm',
-    '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
-    '...mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
-    '...DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
-    '....DDDDDDDDDDDDDDDDDDDDDDDDDDDDD',
-    '.......ssssssssssssssssssssss',
-    '......ssssssssssssssssssssssss',
-    '......ssskkkssssssssssskkksss',
-    '......ssskkkssssssssssskkksss',
-    '......ssssssssssssssssssssssss',
-    '......sssssrrrrrrrrrrrrsssssss',
-    '......ssssrrSSSSSSSSSSrrssssss',
-    '......sssssssssssssssssssssss',
-    '.......sssssssssssssssssssss',
-    '.......SsssssssssssssssssssS',
-    '........ssss...ssss...ssss',
-    '.......sss......sss....sss',
+    '......BBBBBBBBBB................',
+    '....BBBBBBBBBBBBBB..............',
+    '...BBBBBBbbBBBBBBBB.............',
+    '..BBBBBBbbbbBBBBBBBB............',
+    '..BBBBBBBbbBBBBBBBBBB...........',
+    '..BBBBBBBBBBBBBBBBBBB...........',
+    '..BBBBBBBBBBBBBBBBBBBB..........',
+    '...BBBBBBBBBBBBBBBBBBrr.........',
+    '...bBBBBBBBBBBBBBBBBrrr..hh.....',
+    '....bbBBBBBBBBBBBBrrr...hhhh....',
+    '......rrrrrrrrrrrr......hh.h....',
+    '.......jjjjjjjfffff.....ss......',
+    '......jjjjjjjffeeeff....ss......',
+    '.....jjjjjjjjffeeeff....ss......',
+    '.....jjjjJJjjjffffff....ss......',
+    '....jjjjjJJjjjjfFFF.....ss......',
+    '....jjjjjjjjjjjjjjj.....ss......',
+    '....jjjjjjjjjjjjjjjj....ss......',
+    '.....jjjjjjjjjjjjjjj...ss.......',
+    '.....jjjjjj..jjjjjj...ss........',
+    '......jjjjj...jjjjj.............',
+    '.....pppppp..pppppp.............',
+    '....dddddd....dddddd............',
   ]);
   sprites.bossSpore = make(BOSSSPORE_ROWS, {
-    m: '#38b764', M: '#d8f070', D: '#1d7a42',
-    s: '#e8e0cf', S: '#b8ae9c', k: '#5c1e5e', r: '#8a3a8c',
+    B: '#6a5a40', b: '#4a3e2a', r: '#8a653f', j: '#4a5a3a', J: '#6a7a4a',
+    f: '#c8a078', F: '#a07850', e: '#1a1c2c', h: '#c8ccd8', s: '#6b4a34',
+    p: '#3a3226', d: '#262033',
   });
 
-  // 3층: 간수장 바르곤 — 사슬 묶인 거대 골렘
+  // 3층: 간수장 바르곤 — 투구 쓴 거구, 가죽 앞치마, 사슬과 열쇠꾸러미 (v118: 골렘 → 가둔 손)
   const BOSSGOLEM_ROWS = pad([
-    '..........gggggggggggggggg',
-    '........gggggggggggggggggggg',
-    '........ggGGGGGGGGGGGGGGGGgg',
-    '........ggkkkkggggggkkkkggg',
-    '........ggkkkkggggggkkkkggg',
-    '........gggggggddddggggggg',
-    '......dggggggggggggggggggggd',
-    '....ggg.ggggggggggggggggg.ggg',
-    '...gggg.ggddggggggggddgg.gggg',
-    '..ggggg.gggggggggggggggg.ggggg',
-    '..gggdg.gggggggggggggggg.gdggg',
-    '..ggggg.ggggddddddddgggg.ggggg',
-    '..cgggg.gggddggggggddggg.ggggc',
-    '..cdggg.gggggggggggggggg.gggdc',
-    '..ggggg..dggggggggggggd..ggggg',
-    '...ggg....gggggggggggg....ggg',
-    '...ccc....gggggggggggg....ccc',
-    '...c.c....ggggg..ggggg....c.c',
-    '..........ggggg..ggggg',
-    '..........ggggg..ggggg',
-    '.........dggggd..dggggd',
-    '.........gggggg..gggggg',
+    '.........mmmmmmmm.............',
+    '........mmmmmmmmmm............',
+    '........mMMMMMMMMm............',
+    '........mmffffffmm............',
+    '........mmfeeffemm....cc......',
+    '.........ffffffff....cccc.....',
+    '.........fFFFFFFf...cc..cc....',
+    '.......tttttttttttt.cc..cc....',
+    '.....tttttttttttttttt.cc......',
+    '....ttttttTTTTtttttt..cc......',
+    '....tttaaaaaaaaaattt..cc......',
+    '....tttaaaaaaaaaatttmmcc......',
+    '....tttaAAAAAAaaattmmm........',
+    '....tttaaaaaaaaaattt..........',
+    '....tttaaaaaaaaaattKK.........',
+    '....tttaaaaaaaaaatKKK.........',
+    '.....ttaaaaaaaaaatt...........',
+    '.....tttttt..tttttt...........',
+    '......tttt....tttt............',
+    '......tttt....tttt............',
+    '....dddddd....dddddd..........',
+    '....ddddd......ddddd..........',
   ]);
   sprites.bossGolem = make(BOSSGOLEM_ROWS, {
-    g: '#6b7a94', d: '#454f63', G: '#8a9ab4', k: '#e43b44', c: '#9aa0b4',
+    m: '#6e7383', M: '#9aa1b0', f: '#dcb68c', F: '#c09468', e: '#1a1c2c',
+    t: '#3a4450', T: '#5a6470', a: '#5e4226', A: '#7a5a34',
+    c: '#9aa1b0', K: '#ffd866', d: '#262033',
   });
 
-  // 4층: 용암 심장 이그니스 — 백열하는 화염 정령체
+  // 4층: 방화대장 '그을음 브란트' — 치켜든 횃불, 기름단지, 그을린 붉은 두건 (v118: 화염 정령 → 태운 손)
   const BOSSIGNIS_ROWS = pad([
-    '................oo',
-    '...........oo..oooo..oo',
-    '..........oooo.oooo.oooo',
-    '..........ooooooooooooooo',
-    '.........ooooyyyyyyyyoooo',
-    '........oooyyyyyyyyyyyyooo',
-    '.......oooyyyyyyyyyyyyyyoo',
-    '.......ooyyykkyyyyyykkyyyoo',
-    '.......ooyyykkyyyyyykkyyyoo',
-    '......oooyyyyyyyyyyyyyyyyooo',
-    '......ooyyyyWWWWWWWWyyyyyyoo',
-    '......ooyyyWWWWWWWWWWyyyyyoo',
-    '......ooyyyWWWWWWWWWWyyyyyoo',
-    '......oooyyyWWWWWWWWyyyyyooo',
-    '.......ooyyyyyyyyyyyyyyyyoo',
-    '.......rooyyyyyyyyyyyyyyoor',
-    '.......roooyyyyyyyyyyyyooor',
-    '........roooyyyyyyyyyyooor',
-    '........rrooooyyyyyyooorr',
-    '.........rroooo.ooooorr',
-    '..........rroo...oorr',
-    '...........rr.....rr',
+    '.....................OOO......',
+    '....................OOOOO.....',
+    '....................oOOOo.....',
+    '....................ooooo.....',
+    '.........rrrrrrrr....ooo......',
+    '........rrrrrrrrrr....ss......',
+    '........rrRRRRRRrr....ss......',
+    '........ffffffffff....ss......',
+    '........ffeeffeeff....ss......',
+    '.........ffffffff.....ss......',
+    '.........fFFFFFFf.....ss......',
+    '.......tttttttttttt...ss......',
+    '......tttttttttttttt..ss......',
+    '.....tttttTTTTttttttt.ss......',
+    '....jj.ttttTTTTtttttt.........',
+    '...jjjj.tttttttttttt..........',
+    '...jjjj.tttttttttttt..........',
+    '...jJJj.tttttttttttt..........',
+    '....jj..ttttt..ttttt..........',
+    '........tttt....tttt..........',
+    '....dddddd....dddddd..........',
+    '....ddddd......ddddd..........',
   ]);
   sprites.bossIgnis = make(BOSSIGNIS_ROWS, {
-    o: '#ff7043', y: '#ffd866', W: '#fff7d0', r: '#7a1010', k: '#4a0a0a',
+    r: '#7a1c28', R: '#a03040', f: '#b09068', F: '#8a6a48', e: '#1a1c2c',
+    t: '#5e3a28', T: '#7a4a30', o: '#ff9a3c', O: '#ffd866', s: '#6b4a34',
+    j: '#8a653f', J: '#6a4a2e', d: '#262033',
   });
 
-  // 5층: 심연의 군주 눅스 — 왕관과 뿔을 지닌 그림자 군주
+  // 5층: 교수대의 그림자 — 목에 밧줄을 늘어뜨린 창백한 원혼, 해진 수의 (v118: 심연 군주 잔재 → 매단 자들의 원한)
   const BOSSABYSS_ROWS = pad([
-    '...KK..................KK',
-    '..KKK......cccccc......KKK',
-    '..KK....cc.cccccc.cc....KK',
-    '..KK....cccccccccccc....KK',
-    '...KK..kkkkkkkkkkkkkk..KK',
-    '...KKkkkkkkkkkkkkkkkkkkKK',
-    '....kkkkkkkkkkkkkkkkkkkk',
-    '....kkkwwwwwwwwwwwwwwkkk',
-    '...kkkwwwwwwwwwwwwwwwwkkk',
-    '...kkwwrrrwwwwwwwwrrrwwkk',
-    '...kkwwrrrwwwwwwwwrrrwwkk',
-    '...kkkwwwwwwwwwwwwwwwwkkk',
-    '....kkwwwmmmmmmmmmmwwkk',
-    '.....kkkwwmmmmmmwwkkkk',
-    '......kkkkkkkkkkkkkkk',
-    '....pppppppppppppppppp',
-    '...pppppppppppppppppppp',
-    '..ppppqqqqppppppqqqqpppp',
-    '..pppppppppppppppppppppp',
-    '..pqqpppppppppppppppppqp',
-    '..pppppppppppppppppppppp',
-    '..pppppppppppppppppppppp',
-    '...ppppp.pppppppp.ppppp',
-    '...pppp...pppppp...pppp',
-    '....ppp....pppp.....ppp',
-    '.....pp.....pp.......pp',
-    '......p......p',
+    '............rr............',
+    '............rr............',
+    '............rr............',
+    '..........rrrrrr..........',
+    '.........rr.rr.rr.........',
+    '.........kkkkkkkk.........',
+    '.......kkkkkkkkkkkk.......',
+    '......kkkkkkkkkkkkkk......',
+    '......kkwwwwwwwwwwkk......',
+    '.....kkwwwwwwwwwwwwkk.....',
+    '.....kkwweewwwweewwkk.....',
+    '.....kkwweewwwweewwkk.....',
+    '.....kkwwwwwwwwwwwwkk.....',
+    '......kwwwmmmmmmwwwk......',
+    '......kkwwwmmmmwwwkk......',
+    '.....KKkkkkkkkkkkkkKK.....',
+    '....KKKKkkkkkkkkkkKKKK....',
+    '...KKKKkkkkkkkkkkkkKKKK...',
+    '...KKKkkkkkkkkkkkkkkKKK...',
+    '..KKKkkkkkkkkkkkkkkkkKKK..',
+    '..KKkkkkkkkk..kkkkkkkkKK..',
+    '..Kkkkkkkkk....kkkkkkkkK..',
+    '..kkkkkkk........kkkkkkk..',
+    '..kkkkk...........kkkkk...',
+    '...kkk.....kk......kkk....',
+    '....k......kk.......k.....',
   ]);
   sprites.bossAbyss = make(BOSSABYSS_ROWS, {
-    K: '#3d2c5c', c: '#f7b32b', k: '#0a0612', w: '#c9b8e8',
-    r: '#e43b44', m: '#5c1e5e', p: '#16101f', q: '#8a1c2c',
+    r: '#8a653f', k: '#16121f', K: '#2c2440', w: '#c9b8e8',
+    e: '#e43b44', m: '#5c1e5e',
   });
 
-  // ── 각성 보스 (6~10층) — 같은 실루엣, 다른 존재감: 전용 팔레트 ──
-  sprites.bossWraith = make(BOSS_ROWS, { k: '#1a0d12', w: '#d8c8c8', r: '#e43b44', m: '#6a5a5a', p: '#2c1218', q: '#5a2430', s: '#4a3a3a', b: '#e8a0a8' });
-  sprites.bossPlague = make(BOSSSPORE_ROWS, { m: '#6ab04c', M: '#c9d94a', D: '#3a6a2a', s: '#d8c8e8', S: '#a89ac0', k: '#3d1e5c', r: '#b13ae0' });
-  sprites.bossDespair = make(BOSSGOLEM_ROWS, { g: '#383850', d: '#242438', G: '#5a5a7c', k: '#5ce0e6', c: '#6a6a8a' });
-  sprites.bossInferno = make(BOSSIGNIS_ROWS, { o: '#ffd866', y: '#fff7d0', W: '#ffffff', r: '#d35400', k: '#7a1010' });
-  sprites.bossVoid = make(BOSSABYSS_ROWS, { K: '#5c1e5e', c: '#e43b44', k: '#050308', w: '#e8d8f8', r: '#ff4757', m: '#8a1c8c', p: '#0e0716', q: '#c02040' });
-  // 2막 막보스: 균사 여왕 스포라 — 보랏빛 왕관 균사 + 산성빛 홀씨
-  // 3막 막보스: 대재판관 발디아 — 잿금빛 법복 + 핏빛 인장
-  sprites.bossValdia = make(BOSSGOLEM_ROWS, { g: '#4c4434', d: '#322c20', G: '#6c6248', k: '#c22030', c: '#d9c08a' });
-  // 4막 막보스: 대주교 이노첸시오 — 상아빛 제의 + 금빛 성화 + 핏빛 눈
-  sprites.bossBishop = make(BOSSABYSS_ROWS, { K: '#c8bfa8', c: '#ffd866', k: '#3a3226', w: '#f4efe0', r: '#c22030', m: '#8a7a4a', p: '#241f14', q: '#d9a020' });
-  // 5막: 근위대장 '흰 늑대' — 흰 판금 + 강철 / 왕 바르텐 3세 — 금빛 왕관 + 성배의 핏빛
-  sprites.bossWolf = make(BOSSGOLEM_ROWS, { g: '#c8d0d8', d: '#8a94a4', G: '#e8ecf4', k: '#c22030', c: '#5a7a94' });
-  sprites.bossKing = make(BOSSABYSS_ROWS, { K: '#d9a020', c: '#c22030', k: '#241408', w: '#ffd866', r: '#e43b44', m: '#8a1c2c', p: '#141414', q: '#fff0c0' });
-  sprites.bossQueen = make(BOSSSPORE_ROWS, { m: '#4a5464', M: '#8a94a4', D: '#2e3644', s: '#8a1c2c', S: '#5e1420', k: '#14181e', r: '#c22030' });
+  // ── 되삼켜진 손들 (6~9층) — 같은 사람, 저주에 깨어난 후: 시체 팔레트 (v118) ──
+  // 되살아난 오스문드: 썩은 살빛, 붉은 눈, 혼불이 된 랜턴, 유령빛 낫날
+  sprites.bossWraith = make(BOSS_ROWS, {
+    h: '#2c1218', H: '#5a2430', f: '#9ab088', F: '#6a8060', e: '#e43b44',
+    c: '#1a0d12', C: '#3a2430', b: '#4a3a3a', s: '#4a3a3a', S: '#c9b8e8',
+    o: '#b13ae0', O: '#5c1e5e', d: '#262033',
+  });
+  // 물에 불은 몰레: 익사체의 부푼 살, 물에 젖은 자루 — 늪이 돌려보낸 것
+  sprites.bossPlague = make(BOSSSPORE_ROWS, {
+    B: '#3a4a44', b: '#2a3630', r: '#5a6a5a', j: '#2e3e34', J: '#46564a',
+    f: '#7aa08a', F: '#5a806a', e: '#e43b44', h: '#a9c1d8', s: '#4a5a4a',
+    p: '#1d2420', d: '#262033',
+  });
+  // 사슬에 얽힌 바르곤: 잿빛 시체, 시퍼렇게 빛나는 사슬과 눈
+  sprites.bossDespair = make(BOSSGOLEM_ROWS, {
+    m: '#383850', M: '#5a5a7c', f: '#8a8a9a', F: '#6a6a7c', e: '#5ce0e6',
+    t: '#242438', T: '#3a3a52', a: '#3a3226', A: '#4a4234',
+    c: '#5ce0e6', K: '#8a8a6a', d: '#262033',
+  });
+  // 재가 된 브란트: 숯이 된 몸, 잉걸 눈, 백열하는 횃불 — 제 불에 삼켜진 자
+  sprites.bossInferno = make(BOSSIGNIS_ROWS, {
+    r: '#3a3230', R: '#5a4a40', f: '#3a3230', F: '#2a2422', e: '#ffd866',
+    t: '#2a2422', T: '#4a3a30', o: '#ff7043', O: '#fff7d0', s: '#2a1a10',
+    j: '#5a4a40', J: '#3a2e26', d: '#262033',
+  });
+  // (v118) 구 팔레트 스왑 막보스 정의 삭제 — 발디아/이노첸시오/늑대/왕/여왕은 아래 v101 전용 실루엣이 유일본
 
   // ══════════════ 오브젝트 ══════════════
 
