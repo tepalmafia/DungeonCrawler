@@ -558,7 +558,14 @@ function createBoss(floor, x, y) {
             // 마이크로 서사 (S3): 보스의 첫 마디 — 이름표가 아니라 존재가 되도록
             if (this.def.intro && !this._spoke) {
               this._spoke = true;
-              game.banner = { text: `"${this.def.intro}"`, life: 2.4, maxLife: 2.4, color: '#c9b8e8' };
+              let line = this.def.intro;
+              // 다섯 번째 손 — 별지기 오벨만은 관찰자를 '본다': 시선을 자각한 자에게 존재를 일러준다
+              if (this.defId === 66 && Meta.data.fifthHand && Meta.data.fifthHand.stage >= 1) {
+                line = '오르빈은 별을 읽고 죽었다. 나는 읽고도 입을 다물었지. …그런데 네 뒤의 그것은 뭐냐. 너희를 따라 걷는 — 다섯 번째 손 말이다.';
+                if (Meta.data.fifthHand.stage < 2) { Meta.data.fifthHand.stage = 2; Meta.save(); }
+                game.showWhisper('…들켰군.');
+              }
+              game.banner = { text: `"${line}"`, life: 2.4, maxLife: 2.4, color: '#c9b8e8' };
             }
           }
           break;

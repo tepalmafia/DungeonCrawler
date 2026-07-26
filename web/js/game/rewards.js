@@ -39,6 +39,7 @@ const GameRewards = {
     this.banner = { text: `원한의 세공 — 「${m.name}」 ${this.player.skillName()}의 형태가 바뀐다`, life: 2.6, maxLife: 2.6, color: '#b13ae0' };
     AudioSys.levelup();
     this.state = 'play';
+    this.maybeWhisper(0.15);
     this.saveRun();
   },
 
@@ -49,6 +50,7 @@ const GameRewards = {
     this.banner = { text: `${r.name} — ${r.tag}로 진군한다`, life: 2.4, maxLife: 2.4, color: r.color };
     AudioSys.pickup();
     this.state = 'play';
+    this.maybeWhisper(0.22); // 다섯 번째 손 — 갈림길은 속삭임이 가장 잘 스며드는 순간
     this.saveRun();
   },
 
@@ -169,6 +171,13 @@ const GameRewards = {
       this._newRecord = !Meta.data[recKey] || this.time < Meta.data[recKey];
       if (this._newRecord) { Meta.data[recKey] = this.time; Meta.save(); }
       this._vicStart = undefined; // 승리 연출 타이머 리셋
+      // 다섯 번째 손 — 왕좌 정복(5막) 첫 회: 정산 전에 네 망자가 관찰자에게 말을 건다
+      if (this.act >= 5 && Dungeon.floor >= 50 && !Meta.data.epilogueSeen && !this.bossRush) {
+        this._epi = { page: 0, done: false };
+        Meta.data.epilogueSeen = true;
+        if (Meta.data.fifthHand.stage < 3) Meta.data.fifthHand.stage = 3;
+        Meta.save();
+      }
       this.state = 'victory';
       Renderer.shake(8, 0.6);
       AudioSys.gameover();

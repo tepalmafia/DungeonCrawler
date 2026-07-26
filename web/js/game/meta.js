@@ -220,6 +220,8 @@ const Meta = {
       heatPacts: null, // 열기 서약 골라담기 {hp,count,speed,heal,boss} — null이면 heat 수치에서 이관
       muted: false,
       opts: null, // 설정 {bgm,sfx,shake,dmgNum,flash} — null이면 load()에서 기본값 채움
+      fifthHand: null, // 「다섯 번째 손」 자각 단계 {stage: 0 미자각/1 시선/2 존재/3 진실} — load()에서 채움
+      epilogueSeen: false, // 정복 에필로그는 한 번만 — 반복 정복 시 생략
       codex: { kills: {}, relics: {}, traits: {} }, // 도감 기록
       welcomed: false, // 환영 파편 지급 여부
     };
@@ -238,6 +240,7 @@ const Meta = {
       this.data = this._default();
     }
     this.data.opts = { ...this._defaultOpts(), ...(this.data.opts || {}) };
+    this.data.fifthHand = { stage: 0, ...(this.data.fifthHand || {}) };
     // 환영 선물: 처음부터 다른 직업을 해금해 볼 수 있도록 파편 지급 (1회)
     if (!this.data.welcomed) {
       this.data.welcomed = true;

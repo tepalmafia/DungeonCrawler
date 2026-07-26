@@ -203,6 +203,25 @@ const GamePlay = {
     }
   },
 
+  // ── 다섯 번째 손: 관찰자의 속삭임 — 선택의 순간, 4번째 벽 너머에서 스며드는 문장 ──
+  showWhisper(text) {
+    this.whisper = { text, t: 4.2, maxT: 4.2 };
+  },
+
+  // 선택 직후 호출 — 자각 단계 1+에서 낮은 확률로 속삭인다 (선택이라는 행위 자체에 대한 물음)
+  maybeWhisper(chance = 0.15) {
+    if (!Meta.data.fifthHand || Meta.data.fifthHand.stage < 1) return;
+    if (Math.random() >= chance) return;
+    const POOL = [
+      '…방금 그 길 — 네가 고른 것이냐, 골라진 것이냐.',
+      '다섯 번째 손은 패를 섞을 뿐. 쥐는 손은 언제나 넷… 아니, 다섯.',
+      '별을 읽던 자는 알고 있었다 — 읽히는 쪽이 누구인지.',
+      '누군가 아주 오래전부터 함께 걷고 있다.',
+      '골라진 길이라도, 걷는 발은 네 것이다.',
+    ];
+    this.showWhisper(POOL[Math.floor(Math.random() * POOL.length)]);
+  },
+
   // 징조: 무너진 길 — 세 갈래 중 하나가 잔해에 막혀 있다 (선택지 2개는 항상 보장)
   _maybeCollapseDoor(opts) {
     if (opts.length >= 3 && Math.random() < 0.08) {
@@ -331,6 +350,7 @@ const GamePlay = {
     }
 
     this.time += dt;
+    if (this.whisper) { this.whisper.t -= dt; if (this.whisper.t <= 0) this.whisper = null; }
     if (this.vignette > 0) this.vignette -= dt * 1.5;
     if (this.critFlash > 0) this.critFlash -= dt * 3;
     if (this.hurtFlash > 0) this.hurtFlash -= dt * 2;
@@ -691,6 +711,13 @@ const GamePlay = {
           if (o.pale) {
             this.banner = { text: '…하늘의 눈이 나를 본다. 이 시선은… 적의가 없다…?', life: 3, maxLife: 3, color: '#c8d4e4' };
             Meta.data.paleEyeSeen = (Meta.data.paleEyeSeen || 0) + 1;
+            // 다섯 번째 손 — 첫 목격: 시선의 자각. 이때부터 선택의 순간마다 속삭임이 스며든다
+            if (Meta.data.fifthHand.stage < 1) {
+              Meta.data.fifthHand.stage = 1;
+              this.showWhisper('…누구지. 처음부터 지켜보고 있었던 것 같은데.');
+            } else {
+              this.showWhisper('또 그 시선이다. …나쁜 시선은 아니다. 오히려—');
+            }
             Meta.save();
           } else {
             this.banner = { text: '어둠의 눈이 내려다본다 — 죽은 것들이 꿈틀거린다!', life: 2.6, maxLife: 2.6, color: '#b13ae0' };

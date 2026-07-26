@@ -550,6 +550,16 @@ const Game = {
       // 오클릭 방지: 진입 직후에는 입력을 받지 않는다 (죽은 줄도 모르고 넘어가는 문제)
       if (this.overLockT > 0) { this.overLockT -= dt; return; }
 
+      // 다섯 번째 손 — 에필로그: 정산보다 먼저, 아무 키로 3장을 넘긴다
+      if (this.state === 'victory' && this._epi && !this._epi.done) {
+        if (Input.mouse.justDown || Input.pressed('Space', 'Enter', 'KeyR', 'KeyC', 'KeyJ')) {
+          this._epi.page++;
+          AudioSys.pickup();
+          if (this._epi.page >= 3) this._epi.done = true;
+        }
+        return;
+      }
+
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도
       if (this.state === 'victory' && Input.pressed('KeyC')) {
