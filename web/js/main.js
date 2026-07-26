@@ -165,6 +165,12 @@ const Game = {
     this.gold = 0; // 런 화폐 — 무덤까지 못 가져간다 (상인에게만 쓴다)
     this.player = createPlayer(0, 0, Meta.data.cls);
     this.player.rerolls = Meta.lvl('reroll'); // 환생 각인: 런당 카드 리롤 횟수
+    // ── 깨어진 비석 (정복 후 상위 열) ──
+    this.gold += Meta.lvl('b_gold') * 80; // 노획의 눈
+    if (Meta.lvl('b_mod') > 0) { // 세공의 기억: 스킬 개조 1개를 지니고 부활
+      const mods = SKILL_MODS[this.player.classId] || [];
+      if (mods.length) this.player.skillMod = mods[Math.floor(Math.random() * mods.length)].id;
+    }
     if (this.pacts.boss) {
       this.player.maxHp = Math.max(1, this.player.maxHp - 1);
       this.player.hp = this.player.maxHp;

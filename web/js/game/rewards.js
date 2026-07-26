@@ -288,6 +288,17 @@ const GameRewards = {
 
   openRelicChoice() {
     this.relicCards = rollRelics(this.player, 3, true);
+    // 페이싱 (몰입 감사 B): 5층 보스 보상엔 아직 못 만난 '나의 유품'을 반드시 한 장 —
+    // 첫 시너지 절정("내 과거와 맞물렸다")을 1막 안으로 앞당긴다
+    if (Dungeon.floor === 5 && this.relicCards.length > 0) {
+      const p = this.player;
+      const hasHeir = p.relics.some((id) => { const r = RELICS.find((x) => x.id === id); return r && r.heir; });
+      const inCards = this.relicCards.some((r) => r.heir === p.classId);
+      if (!hasHeir && !inCards) {
+        const heirs = RELICS.filter((r) => r.heir === p.classId && !p.relics.includes(r.id) && Meta.isUnlocked(r));
+        if (heirs.length) this.relicCards[Math.floor(Math.random() * this.relicCards.length)] = heirs[Math.floor(Math.random() * heirs.length)];
+      }
+    }
     if (this.relicCards.length === 0) {
       this._afterBossReward();
       return;

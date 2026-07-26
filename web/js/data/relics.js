@@ -164,6 +164,13 @@ function rollRelics(player, n, bossRoll = false) {
   for (let i = 0; i < n && pool.length > 0; i++) {
     const want = rollRelicRarity(bossRoll);
     let candidates = pool.filter((r) => r.rarity === want && !out.includes(r));
+    // 깨어진 비석 「유품의 부름」: 유품이 후보에 있으면 단계당 1번 더 이름을 올린다 (등장 가중)
+    const heirW = typeof Meta !== 'undefined' ? Meta.lvl('b_heir') : 0;
+    if (heirW > 0) {
+      for (const r of candidates.slice()) {
+        if (r.heir) for (let k = 0; k < heirW; k++) candidates.push(r);
+      }
+    }
     if (candidates.length === 0) {
       for (const rar of order.slice(order.indexOf(want))) {
         candidates = pool.filter((r) => r.rarity === rar && !out.includes(r));
