@@ -178,6 +178,30 @@ const GameRender = {
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('받아들이기 전엔 알 수 없다', it.x, it.y - 30);
         }
+      } else if (it.kind === 'gambler') {
+        // 망자의 도박사: 구르는 주사위 한 쌍 + 금빛 기운
+        if (!it.used) {
+          ctx.globalAlpha = 0.22 + Math.sin(it.t * 3) * 0.1;
+          ctx.fillStyle = '#f7b32b';
+          ctx.beginPath(); ctx.arc(it.x, it.y, 32, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        const wob = Math.sin(it.t * 5) * 3;
+        ctx.fillStyle = '#e8e0cf';
+        ctx.fillRect(it.x - 14, it.y - 6 + wob, 11, 11);
+        ctx.fillRect(it.x + 3, it.y - 4 - wob, 11, 11);
+        ctx.fillStyle = '#1a1c2c';
+        ctx.fillRect(it.x - 11, it.y - 3 + wob, 2, 2); ctx.fillRect(it.x - 7, it.y + 1 + wob, 2, 2);
+        ctx.fillRect(it.x + 6, it.y - 1 - wob, 2, 2); ctx.fillRect(it.x + 10, it.y + 3 - wob, 2, 2); ctx.fillRect(it.x + 8, it.y + 1 - wob, 2, 2);
+        if (!it.used) {
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#f7b32b';
+          ctx.fillText('교수대 주사위', it.x, it.y - 40);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('골드 절반을 건다 — 이기면 2.2배', it.x, it.y - 26);
+        }
       } else if (it.kind === 'cursedChest') {
         // 저주받은 상자: 보라 기운 + 거래 조건 라벨
         if (!it.used) {
@@ -337,7 +361,7 @@ const GameRender = {
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('담금질 — 이번 층 공격력 +1', it.x, it.y - 30);
         }
-      } else if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll' || it.kind === 'shopShards') {
+      } else if (it.kind === 'shopRelic' || it.kind === 'shopHeal' || it.kind === 'shopReroll' || it.kind === 'shopShards' || it.kind === 'shopBlack') {
         // 상인 판매대 (G1): 받침 + 품목 아이콘 + 가격표. 살 수 있으면 금빛, 못 사면 잿빛
         if (it.used) continue;
         const afford = this.gold >= it.price;
@@ -353,11 +377,11 @@ const GameRender = {
         ctx.textAlign = 'center';
         ctx.font = 'bold 15px monospace';
         ctx.fillStyle = afford ? '#e8e0cf' : '#666a80';
-        const icon = it.kind === 'shopRelic' ? '◆' : it.kind === 'shopHeal' ? '♥' : it.kind === 'shopShards' ? '◈' : '↻';
+        const icon = it.kind === 'shopRelic' ? '◆' : it.kind === 'shopHeal' ? '♥' : it.kind === 'shopShards' ? '◈' : it.kind === 'shopBlack' ? '☠' : '↻';
         ctx.fillText(icon, it.x, it.y - 8);
         ctx.font = 'bold 11px monospace';
         ctx.fillStyle = afford ? '#2ec4b6' : '#9aa0b4';
-        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : it.kind === 'shopShards' ? `한 조각 ${it.shards}` : '리롤 +1';
+        const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : it.kind === 'shopShards' ? `한 조각 ${it.shards}` : it.kind === 'shopBlack' ? '검은 상자 (레어+)' : '리롤 +1';
         ctx.fillText(name, it.x, it.y - 40);
         ctx.fillStyle = afford ? '#ffd866' : '#8a6a20';
         ctx.fillText(`${it.price}G`, it.x, it.y - 27);
