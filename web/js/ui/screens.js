@@ -150,7 +150,15 @@ const GameScreens = {
 
     const rects = HUD.hubButtonRects();
     let act = -1;
-    if (Input.pressed('Digit1') || Input.pressed('Space', 'Enter')) act = 0;
+    // 세이브 보호: 중단된 런이 있으면 Space/Enter는 '이어하기' — 타이틀을 Space로 넘기고
+    // 한 번 더 누르면 세이브가 지워지며 새 런이 시작되던 함정 (실플레이 제보: 이어하기가 없어짐)
+    const hasSave = !!this.loadRunSave();
+    if (Input.pressed('Digit1') || (!hasSave && Input.pressed('Space', 'Enter'))) act = 0;
+    if (hasSave && Input.pressed('Space', 'Enter')) {
+      AudioSys.buy();
+      this.resumeRun();
+      return;
+    }
     if (Input.pressed('Digit2')) act = 1;
     if (Input.pressed('Digit3')) act = 2;
     if (Input.pressed('Digit4')) act = 3;
