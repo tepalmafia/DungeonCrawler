@@ -1405,6 +1405,200 @@ const HUD = {
     ctx.fillText(`발견 ${found}/${total}${found >= total ? ' — 완성!' : ''}`, Renderer.W - 40, 100);
   },
 
+  // ── v120 스토리 화면 3종 ──────────────────────────────────────────
+  // 한글 줄바꿈 — 글자 단위로 자른다 (공백 우선)
+  _wrapText(ctx, text, maxW) {
+    const out = [];
+    let line = '';
+    for (const ch of text) {
+      if (ctx.measureText(line + ch).width > maxW && line.length > 0) {
+        out.push(line);
+        line = ch === ' ' ? '' : ch;
+      } else line += ch;
+    }
+    if (line) out.push(line);
+    return out;
+  },
+
+  // ① 프롤로그 — 무덤 속에서 깨어나 내 비석을 마주하기까지 (4단계, 아무 키 진행 / Esc 건너뛰기)
+  drawPrologue(ctx, game) {
+    const W = Renderer.W, H = Renderer.H;
+    const pr = game._pro || { step: 0, t: 0 };
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#050409';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    const fade = Math.min(1, pr.t / 0.6);
+    const cx = W / 2;
+
+    if (pr.step === 0) {
+      ctx.globalAlpha = fade;
+      ctx.font = '20px Galmuri11, monospace';
+      ctx.fillStyle = '#9a9488';
+      ctx.fillText('…심장이 뛰지 않는다.', cx, H / 2 - 24);
+      if (pr.t > 1.0) {
+        ctx.globalAlpha = Math.min(1, (pr.t - 1.0) / 0.6);
+        ctx.fillStyle = '#e8e0cf';
+        ctx.fillText('그런데 — 눈이 떠진다.', cx, H / 2 + 20);
+      }
+    } else if (pr.step === 1) {
+      // 흙을 뚫고 나오는 손 — 화면 아래에서 올라오는 검은 흙더미 + 창백한 손
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#181120';
+      ctx.fillRect(0, H - 130, W, 130);
+      for (let i = 0; i < 30; i++) {
+        const sx = cx - 150 + ((i * 97) % 300);
+        ctx.fillStyle = i % 3 ? '#241b2e' : '#2e2438';
+        ctx.fillRect(sx, H - 130 - (i % 4) * 8, 14, 14);
+      }
+      const rise = Math.min(1, pr.t / 0.8);
+      ctx.fillStyle = '#b8c0a8';
+      ctx.fillRect(cx - 8, H - 118 - rise * 46, 16, rise * 52); // 손목
+      ctx.fillRect(cx - 16, H - 126 - rise * 46, 32, 12);       // 벌린 손
+      ctx.globalAlpha = fade;
+      ctx.font = '20px Galmuri11, monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText('흙이 무너진다. 손이 — 내 손이, 밤 공기를 움켜쥔다.', cx, H / 2 - 60);
+    } else if (pr.step === 2) {
+      // 내 비석 대면 — 덧칠된 죄목. 첫 증거가 손에 들어온다
+      ctx.globalAlpha = 1;
+      const gy = H / 2 - 40;
+      ctx.fillStyle = '#3a3444';
+      ctx.fillRect(cx - 70, gy - 90, 140, 170);
+      ctx.fillStyle = '#4a4458';
+      ctx.fillRect(cx - 58, gy - 102, 116, 22);
+      ctx.fillStyle = '#241f2e';
+      ctx.fillRect(cx - 70, gy + 64, 140, 16);
+      ctx.font = '17px Galmuri11, monospace';
+      ctx.fillStyle = '#8a8496';
+      ctx.fillText('반 역 자', cx, gy - 40);
+      ctx.fillText('여기 잠들다', cx, gy - 14);
+      // 덧칠 — 원래 글자 위의 붉은 개칠
+      ctx.globalAlpha = 0.55 + Math.sin(pr.t * 3) * 0.1;
+      ctx.fillStyle = '#7a1c28';
+      ctx.fillRect(cx - 52, gy - 54, 104, 20);
+      ctx.globalAlpha = 1;
+      ctx.font = '13px Galmuri11, monospace';
+      ctx.fillStyle = '#c9b8e8';
+      ctx.fillText('덧칠 아래, 지워진 글자 — 「 무 죄 」', cx, gy + 46);
+      ctx.globalAlpha = fade;
+      ctx.font = '18px Galmuri11, monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText('내 비석이다. 죄목이 — 고쳐져 있다.', cx, gy + 110);
+      ctx.font = '14px Galmuri11, monospace';
+      ctx.fillStyle = '#f7b32b';
+      ctx.fillText(`◆ 증거 확보 「덧칠로 고쳐진 비석」 (${Meta.clueCount()}/${CLUES.length})`, cx, gy + 138);
+    } else {
+      ctx.globalAlpha = fade;
+      ctx.font = '20px Galmuri11, monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText('기억은 온전하다. 이유만 모른다.', cx, H / 2 - 24);
+      if (pr.t > 0.8) {
+        ctx.globalAlpha = Math.min(1, (pr.t - 0.8) / 0.6);
+        ctx.font = 'bold 22px Galmuri11, monospace';
+        ctx.fillStyle = '#c22030';
+        ctx.fillText('단서를 모아 — 왕좌에 못박으러 간다.', cx, H / 2 + 24);
+      }
+    }
+    ctx.globalAlpha = 0.55 + Math.sin(game.blinkT * 4) * 0.25;
+    ctx.font = '12px Galmuri11, monospace';
+    ctx.fillStyle = '#8a8496';
+    ctx.fillText('아무 키 — 계속  ·  Esc — 건너뛰기', cx, H - 28);
+    ctx.globalAlpha = 1;
+  },
+
+  // ② 증거 카드 — 시간이 멈추고, 양피지 위의 진실을 읽는다
+  drawClueCard(ctx, game) {
+    const W = Renderer.W, H = Renderer.H;
+    const cc = game.clueCard;
+    if (!cc) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const a = Math.min(1, cc.t / 0.3);
+    ctx.fillStyle = `rgba(5,4,9,${0.68 * a})`;
+    ctx.fillRect(0, 0, W, H);
+    const cw = 540, chh = 250;
+    const x0 = (W - cw) / 2, y0 = (H - chh) / 2 - 14 + (1 - a) * 18;
+    ctx.globalAlpha = a;
+    // 양피지
+    ctx.fillStyle = '#1c1826';
+    ctx.fillRect(x0 - 4, y0 - 4, cw + 8, chh + 8);
+    ctx.fillStyle = '#2a2436';
+    ctx.fillRect(x0, y0, cw, chh);
+    ctx.strokeStyle = '#f7b32b';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x0 + 7, y0 + 7, cw - 14, chh - 14);
+    ctx.textAlign = 'center';
+    ctx.font = '13px Galmuri11, monospace';
+    ctx.fillStyle = '#f7b32b';
+    ctx.fillText('— 증 거 확 보 —', W / 2, y0 + 36);
+    ctx.font = 'bold 20px Galmuri11, monospace';
+    ctx.fillStyle = '#e8e0cf';
+    ctx.fillText(`「${cc.clue.name}」`, W / 2, y0 + 66);
+    ctx.font = '14px Galmuri11, monospace';
+    ctx.fillStyle = '#c8c0a8';
+    const lines = this._wrapText(ctx, cc.clue.text, cw - 80);
+    lines.slice(0, 4).forEach((ln, i) => ctx.fillText(ln, W / 2, y0 + 100 + i * 22));
+    // 수집록 게이지 — 진실이 좁혀진다
+    const done = Meta.clueCount(), total = CLUES.length;
+    const gw = cw - 120;
+    ctx.fillStyle = '#171320';
+    ctx.fillRect(x0 + 60, y0 + chh - 52, gw, 8);
+    ctx.fillStyle = '#f7b32b';
+    ctx.fillRect(x0 + 60, y0 + chh - 52, gw * (done / total), 8);
+    ctx.font = '12px Galmuri11, monospace';
+    ctx.fillStyle = '#9a9488';
+    ctx.fillText(`수집록 ${done}/${total} — 수사망이 좁혀진다` + (cc.reward ? `  ·  ◆ +${cc.reward}` : ''), W / 2, y0 + chh - 28);
+    ctx.globalAlpha = (0.55 + Math.sin(game.blinkT * 4) * 0.25) * a;
+    ctx.fillText('아무 키 — 닫기', W / 2, y0 + chh + 24);
+    ctx.globalAlpha = 1;
+  },
+
+  // ③ 자백 장면 — 쓰러진 공범의 마지막 말이 타이핑된다 (첫 처치 한정)
+  drawConfession(ctx, game) {
+    const W = Renderer.W, H = Renderer.H;
+    const cf = game.confession;
+    if (!cf) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const a = Math.min(1, cf.t / 0.4);
+    ctx.fillStyle = `rgba(5,4,9,${0.8 * a})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = a;
+    // 쓰러진 자의 초상 — 스프라이트 확대, 어둡게
+    const img = Sprites[cf.sprite];
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = a * 0.85;
+      const sc = 4.2;
+      ctx.translate(W / 2 - 240, H / 2 - (img.height * sc) / 2 + 20);
+      ctx.rotate(-0.16); // 스러진 몸의 기울기
+      ctx.drawImage(img, 0, 0, img.width * sc, img.height * sc);
+      ctx.restore();
+      ctx.globalAlpha = a;
+    }
+    ctx.textAlign = 'left';
+    const tx = W / 2 - 60, tw = 400;
+    ctx.font = '14px Galmuri11, monospace';
+    ctx.fillStyle = '#8a8496';
+    ctx.fillText('— 마지막 말 —', tx, H / 2 - 92);
+    ctx.font = 'bold 19px Galmuri11, monospace';
+    ctx.fillStyle = '#e8e0cf';
+    ctx.fillText(cf.name, tx, H / 2 - 64);
+    // 타이핑 효과 — 죽어가는 목소리의 속도
+    const shown = cf.outro.slice(0, Math.floor(Math.max(0, cf.t - 0.5) * 22));
+    ctx.font = '16px Galmuri11, monospace';
+    ctx.fillStyle = '#c9b8e8';
+    this._wrapText(ctx, shown, tw).slice(0, 4).forEach((ln, i) => ctx.fillText(ln, tx, H / 2 - 24 + i * 26));
+    if (shown.length >= cf.outro.length) {
+      ctx.globalAlpha = (0.55 + Math.sin(game.blinkT * 4) * 0.25) * a;
+      ctx.font = '12px Galmuri11, monospace';
+      ctx.fillStyle = '#f7b32b';
+      ctx.fillText('자백이 증거가 된다 — 아무 키', tx, H / 2 + 92);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+  },
+
   drawGameOver(ctx, game, blinkT) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = 'rgba(8,8,15,0.75)';
@@ -1431,6 +1625,19 @@ const HUD = {
       ctx.font = 'italic 12px Galmuri11, monospace';
       ctx.fillStyle = '#8a8aa0';
       ctx.fillText(EPITAPHS[(Dungeon.floor + game.kills) % EPITAPHS.length], Renderer.W / 2, 232);
+      // v120 ⑤: 망자 본인의 한 줄 — 죽음이 실패가 아니라 불사(不死)의 확인이 되도록
+      const DEATH_LINES = {
+        knight: ['목이 잘려도 일어난 몸이다. 이 정도로는 — 어림없다.', '마르타, 조금만 더 기다려. 아직 할 일이 남았다.'],
+        archer: ['밧줄도 날 못 잡았다. 흙이 잡을 리 없지.', '동생들아 — 누나는 아직 안 끝났어.'],
+        mage: ['별은 말했다. 내 이야기의 끝은 여기가 아니라고.', '피오, 네 별지도가 맞다면 — 나는 다시 일어난다.'],
+        alch: ['독으로 죽은 몸에 죽음이 두 번 듣겠는가.', '이번엔… 해독제를 늦지 않게 마시지.'],
+      };
+      const dl = DEATH_LINES[(game.player && game.player.classId) || 'knight'];
+      if (dl) {
+        ctx.font = '13px Galmuri11, monospace';
+        ctx.fillStyle = '#c8c0a8';
+        ctx.fillText(`"${dl[game.kills % dl.length]}"`, Renderer.W / 2, 395); // 재도전 힌트 바로 위 — 망자의 다짐
+      }
     }
 
     ctx.font = '18px Galmuri11, monospace';

@@ -208,6 +208,31 @@ const GamePlay = {
     this.whisper = { text, t: 4.2, maxT: 4.2 };
   },
 
+  // ── v120 ④ 막 시작 독백 — 층에 도착한 망자의 혼잣말 (비차단 하단 텍스트, 층당 1회) ──
+  showMonologue(text) {
+    this.monologue = { text, t: 3.8, maxT: 3.8 };
+  },
+  _floorMonologue() {
+    if (Dungeon.roomIndex > 1 || this.bossRush) return;
+    this._monoDone = this._monoDone || {};
+    const f = Dungeon.floor;
+    if (this._monoDone[f]) return;
+    const MONO = {
+      5: '목매단 나무가 보인다. 밧줄이… 셀 수 없이 많다.',
+      10: '처형인의 홀. 내 목을 친 도끼가 저 안에 있다.',
+      11: '다리를 건넌다. 검은 마차가 지나갔다는 그 다리다.',
+      21: '포도밭이 보인다. 배심원들이 상으로 받았다는 그 땅이다.',
+      31: '판자로 막은 창문들. 이 마을은 역병이 아니라 비밀에 봉쇄됐다.',
+      41: '왕도의 불빛. 저 안 어딘가에서 내 사형이 서명됐다.',
+      44: '처형대가 늘어서 있다. 저 중 하나가 — 내 것이었다.',
+      49: '문 너머에서 심장 소리가 들린다. 내 것이 아니다. 성배의 것이다.',
+    };
+    if (MONO[f]) {
+      this._monoDone[f] = true;
+      this.showMonologue(MONO[f]);
+    }
+  },
+
   // 선택 직후 호출 — 자각 단계 1+에서 낮은 확률로 속삭인다 (선택이라는 행위 자체에 대한 물음)
   maybeWhisper(chance = 0.15) {
     if (!Meta.data.fifthHand || Meta.data.fifthHand.stage < 1) return;
@@ -351,6 +376,7 @@ const GamePlay = {
 
     this.time += dt;
     if (this.whisper) { this.whisper.t -= dt; if (this.whisper.t <= 0) this.whisper = null; }
+    if (this.monologue) { this.monologue.t -= dt; if (this.monologue.t <= 0) this.monologue = null; }
     if (this.vignette > 0) this.vignette -= dt * 1.5;
     if (this.critFlash > 0) this.critFlash -= dt * 3;
     if (this.hurtFlash > 0) this.hurtFlash -= dt * 2;
@@ -1250,9 +1276,9 @@ const GamePlay = {
           if (c) {
             const reward = 15 + c.act * 10;
             Meta.data.shards += reward; Meta.save();
-            this._storyQ = this._storyQ || [];
-            this._storyQ.push({ text: `증거 확보 — 「${c.name}」 (수집록 ${Meta.clueCount()}/${CLUES.length})`, color: '#f7b32b' });
-            this._storyQ.push({ text: c.text, color: '#c8c0a8' });
+            // v120 ②: 흘러가는 배너 대신 증거 카드 — 시간이 멈추고, 읽고, 아무 키로 닫는다
+            this.clueCard = { clue: c, reward, t: 0 };
+            this.state = 'cluecard';
             Particles.text(p.x, p.y - 30, `◆ +${reward}`, { color: '#2ec4b6', size: 15 });
             Particles.burst(it.x, it.y - 8, { count: 14, colors: ['#f7b32b', '#c8c0a8'], speed: 110, life: 0.5, size: 3, gravity: -60 });
             AudioSys.chest();
