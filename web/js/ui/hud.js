@@ -730,6 +730,12 @@ const HUD = {
       ctx.fillText(
         rec ? `📜 D 오늘의 수배령 · 오늘 ${rec.floor}층${rec.victory ? ' 완수!' : ''}` : '📜 D 오늘의 수배령 — 매일 같은 시드',
         Meta.data.wins > 0 ? Renderer.W / 2 + 24 : Renderer.W / 2, Renderer.H - 30);
+      // 왕도 직행 — 왕좌 정복자에게만 열리는 지름길
+      if (Meta.data.epilogueSeen || Meta.data.bestFloor >= 50) {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffd866';
+        ctx.fillText('👑 G 왕도 직행 — 3막부터, 시작 빌드 지급', Renderer.W / 2, Renderer.H - 48);
+      }
     }
 
     ctx.textAlign = 'center';

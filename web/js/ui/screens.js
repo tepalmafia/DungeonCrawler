@@ -181,6 +181,8 @@ const GameScreens = {
     if (Input.pressed('KeyD')) this.startDaily();
     // 보스 러시 (B): 첫 정복 후 해금
     if (Input.pressed('KeyB') && Meta.data.wins > 0) { this.clearRunSave(); this.startBossRush(); }
+    // 왕도 직행 (G): 왕좌 정복 후 해금 — 3막부터 1시간 안에 왕까지
+    if (Input.pressed('KeyG') && (Meta.data.epilogueSeen || Meta.data.bestFloor >= 50)) this.startExpress();
   },
 
   // 보스 러시 (B): 10보스 연속전 — 방·탐색 없이 보스전만. 시작 특성 4장, 보스마다 특성 2장 + 유물
@@ -196,6 +198,42 @@ const GameScreens = {
     this.openTraitChoice('elite');
     AudioSys.roar();
     this.banner = { text: '원수 연전 — 열 명의 원수가 연이어 온다', life: 3, maxLife: 3, color: '#e43b44' };
+  },
+
+  // 왕도 직행 (G): 정복 후 해금 — 3막(21층)부터, 2막 종료급 시작 빌드 지급.
+  // 페이싱 감사: 풀런 2시간+가 부담인 유저에게 '오늘 밤 왕까지'를 1시간 안으로
+  startExpress() {
+    this.restart();
+    this.clearRunSave();
+    this.expressRun = true;
+    this.route = null; this.routeCards = []; // 직행에 갈림길은 없다 (보스 러시와 동일)
+    this.act = 3;
+    Dungeon.floor = 21;
+    Dungeon.roomIndex = 1;
+    Dungeon.build('combat');
+    const p = this.player;
+    // 2막 종료급 근사 (계측 보정: 특성8+유물2+HP9는 21층에서 3분 15사망 — 정상 밴드는 1~2):
+    // 특성 14장 + 유물 4(레어+ 2 보장, 유품 1 포함) + 심장 +5 + 레벨 보정 + 노잣돈
+    p.maxHp += 5; p.hp = p.maxHp;
+    p.bonusAtk = (p.bonusAtk || 0) + 3; // 계측 2차 보정: 첫 보스(가로크) 8사망 — 특성 운에 안 맡기는 기본 딜
+    this.level = 15; this.xpNext = Math.round(this.xpNext * 6); // 레벨 커브 이어붙임 (21층 XP가 저레벨을 폭주시키지 않게)
+    this.gold = 200;
+    const pool = RELICS.filter((r) => Meta.isUnlocked(r) && (!r.heir || r.heir === p.classId));
+    const rares = pool.filter((r) => r.rarity !== 'common');
+    for (let k = 0; k < 2; k++) {
+      const cand = rares.filter((r) => !p.relics.includes(r.id));
+      const pick = cand[Math.floor(Math.random() * cand.length)];
+      if (pick) this.acquireRelic(pick);
+    }
+    const heirs = pool.filter((r) => r.heir === p.classId && !p.relics.includes(r.id));
+    if (heirs.length) this.acquireRelic(heirs[Math.floor(Math.random() * heirs.length)]);
+    const rest = pool.filter((r) => !p.relics.includes(r.id));
+    const last = rest[Math.floor(Math.random() * rest.length)];
+    if (last) this.acquireRelic(last);
+    this.pendingChoices = 14;
+    this.openTraitChoice('elite');
+    AudioSys.roar();
+    this.banner = { text: '왕도 직행 — 영지의 문턱에서 시작한다. 왕좌까지 세 막.', life: 3, maxLife: 3, color: '#ffd866' };
   },
 
   startDaily() {
