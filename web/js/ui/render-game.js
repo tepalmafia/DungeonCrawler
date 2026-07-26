@@ -1,6 +1,136 @@
 // 게임 렌더링 — 월드/개체/이펙트를 그리고 HUD로 위임한다.
 // main.js에서 Object.assign(Game, GameRender)으로 Game에 합쳐진다.
 const GameRender = {
+  // ── 장판 텍스처 (v116) — 단색 원이 아니라 '그 물질'로 보이게 ──
+  // kind: poison(독 웅덩이) fire(불길) ice(빙판) shock(감전) smoke(연막)
+  _drawGroundPatch(ctx, x, y, r, kind, alpha, t, seed) {
+    if (alpha <= 0.01) return;
+    const N = 10;
+    const blob = (rad, wob) => {
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * Math.PI * 2;
+        const w = 1 - wob + wob * (0.5 + 0.5 * Math.sin(seed * 3.7 + i * 2.13));
+        const rr = rad * w;
+        const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.92; // 살짝 눌린 웅덩이 원근
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    };
+    ctx.save();
+    if (kind === 'poison') {
+      // 독 웅덩이: 어두운 심연 + 밝은 유막 가장자리 + 떠오르는 기포
+      ctx.globalAlpha = alpha;
+      const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
+      g.addColorStop(0, 'rgba(28,52,24,0.95)');
+      g.addColorStop(0.7, 'rgba(58,96,44,0.85)');
+      g.addColorStop(1, 'rgba(122,176,76,0.75)');
+      ctx.fillStyle = g;
+      blob(r, 0.14); ctx.fill();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.strokeStyle = '#8fd460';
+      ctx.lineWidth = 1.5;
+      blob(r * 0.97, 0.14); ctx.stroke();
+      // 기포: 자리에서 커졌다 터진다
+      for (let i = 0; i < 4; i++) {
+        const ph = ((t * (0.5 + (i % 3) * 0.2) + i * 0.31 + seed * 0.13) % 1);
+        const ba = seed * 1.3 + i * 2.4;
+        const bx = x + Math.cos(ba) * r * (0.25 + (i % 3) * 0.2);
+        const by = y + Math.sin(ba) * r * 0.5 * (0.3 + (i % 2) * 0.35);
+        ctx.globalAlpha = alpha * (1 - ph) * 0.9;
+        ctx.strokeStyle = '#c8e89a';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(bx, by, 1.5 + ph * 3.5, 0, Math.PI * 2); ctx.stroke();
+      }
+    } else if (kind === 'fire') {
+      // 불길: 그을린 바닥 + 일렁이는 불꽃 혀 + 잔불
+      ctx.globalAlpha = alpha * 0.9;
+      const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+      g.addColorStop(0, 'rgba(90,30,10,0.9)');
+      g.addColorStop(0.6, 'rgba(160,60,20,0.7)');
+      g.addColorStop(1, 'rgba(40,18,10,0.55)');
+      ctx.fillStyle = g;
+      blob(r, 0.12); ctx.fill();
+      for (let i = 0; i < 6; i++) {
+        const fa = seed * 2.1 + i * 1.05;
+        const fx = x + Math.cos(fa) * r * (0.2 + (i % 3) * 0.22);
+        const fy = y + Math.sin(fa) * r * 0.5 * (0.25 + (i % 2) * 0.3);
+        const fh = (7 + (i % 3) * 4) * (0.7 + 0.3 * Math.sin(t * 11 + i * 1.7 + seed));
+        const fw = 4 + (i % 2) * 2;
+        ctx.globalAlpha = alpha * (0.75 + 0.25 * Math.sin(t * 13 + i));
+        ctx.fillStyle = i % 3 === 0 ? '#ffd866' : '#e25822';
+        ctx.beginPath();
+        ctx.moveTo(fx - fw / 2, fy);
+        ctx.quadraticCurveTo(fx - fw / 2, fy - fh * 0.5, fx + Math.sin(t * 9 + i) * 2, fy - fh);
+        ctx.quadraticCurveTo(fx + fw / 2, fy - fh * 0.5, fx + fw / 2, fy);
+        ctx.closePath(); ctx.fill();
+      }
+      // 잔불 점
+      for (let i = 0; i < 5; i++) {
+        const ea = seed * 0.7 + i * 1.9;
+        ctx.globalAlpha = alpha * (0.4 + 0.6 * ((Math.sin(t * 7 + i * 2.3) + 1) / 2));
+        ctx.fillStyle = '#ffb347';
+        ctx.fillRect(x + Math.cos(ea) * r * 0.7, y + Math.sin(ea) * r * 0.6, 2, 2);
+      }
+    } else if (kind === 'ice') {
+      // 빙판: 창백한 판 + 방사 균열 + 반짝임
+      ctx.globalAlpha = alpha;
+      const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+      g.addColorStop(0, 'rgba(200,228,240,0.75)');
+      g.addColorStop(1, 'rgba(120,170,200,0.55)');
+      ctx.fillStyle = g;
+      blob(r, 0.1); ctx.fill();
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.strokeStyle = '#eaf6ff';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const ca = seed * 1.7 + i * 1.55;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(ca) * r * 0.15, y + Math.sin(ca) * r * 0.12);
+        ctx.lineTo(x + Math.cos(ca + 0.2) * r * 0.55, y + Math.sin(ca + 0.2) * r * 0.5);
+        ctx.lineTo(x + Math.cos(ca - 0.12) * r * 0.9, y + Math.sin(ca - 0.12) * r * 0.82);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = alpha * (0.5 + 0.5 * Math.sin(t * 5 + seed));
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x + Math.cos(seed) * r * 0.4 - 1, y + Math.sin(seed) * r * 0.3 - 1, 2, 2);
+    } else if (kind === 'smoke') {
+      // 연막: 겹치는 회색 뭉게 — 느리게 소용돌이
+      for (let i = 0; i < 5; i++) {
+        const sa = t * 0.4 * (i % 2 ? 1 : -1) + i * 1.3 + seed;
+        const sx = x + Math.cos(sa) * r * 0.35;
+        const sy = y + Math.sin(sa) * r * 0.3;
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.fillStyle = i % 2 ? '#9aa0b4' : '#6e7383';
+        ctx.beginPath(); ctx.arc(sx, sy, r * (0.4 + (i % 3) * 0.14), 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      // 감전: 옅은 원반 + 튀는 번개 아크
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.fillStyle = 'rgba(255,216,102,0.5)';
+      blob(r, 0.08); ctx.fill();
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        const pulse = (Math.sin(t * 17 + i * 2.6 + seed) + 1) / 2;
+        if (pulse < 0.55) continue; // 번개는 깜빡이며 친다
+        ctx.globalAlpha = alpha * pulse;
+        ctx.strokeStyle = i === 0 ? '#fff7c0' : '#ffd866';
+        const la = seed * 2.3 + i * 2.1 + Math.floor(t * 8) * 0.7;
+        ctx.beginPath();
+        let lx = x + Math.cos(la) * r * 0.15, ly = y + Math.sin(la) * r * 0.15;
+        ctx.moveTo(lx, ly);
+        for (let s2 = 1; s2 <= 4; s2++) {
+          lx = x + Math.cos(la + Math.sin(s2 * 3.1 + t * 8) * 0.5) * r * (0.15 + s2 * 0.2);
+          ly = y + Math.sin(la + Math.cos(s2 * 2.7 + t * 8) * 0.5) * r * (0.15 + s2 * 0.2) * 0.9;
+          ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  },
+
   render() {
     const ctx = Renderer.ctx;
     Renderer.begin();
@@ -19,18 +149,13 @@ const GameRender = {
 
     World.drawDoors(ctx, this.blinkT);
 
-    // 불길/독 장판 (플레이어 위험)
+    // 불길/독/빙판 장판 (플레이어 위험) — 물질감 텍스처 (v116)
     for (const fp of this.firePatches) {
-      const col = fp.kind === 'poison' ? '106,176,76' : '255,112,67';
-      ctx.globalAlpha = Math.min(0.45, fp.life * 0.4) * (0.75 + Math.random() * 0.25);
-      ctx.fillStyle = `rgba(${col},0.5)`;
-      ctx.beginPath();
-      ctx.arc(fp.x, fp.y, fp.r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      if (Math.random() < 0.25) {
-        Particles.burst(fp.x + (Math.random() - 0.5) * fp.r * 1.4, fp.y + (Math.random() - 0.5) * fp.r * 1.4, {
-          count: 1, colors: fp.kind === 'poison' ? ['#6ab04c'] : ['#ff7043', '#ffd866'],
+      const a = Math.min(0.85, fp.life * 0.75);
+      this._drawGroundPatch(ctx, fp.x, fp.y, fp.r, fp.kind, a, this.blinkT, (fp.x * 7 + fp.y * 13) % 97);
+      if (Math.random() < 0.2) {
+        Particles.burst(fp.x + (Math.random() - 0.5) * fp.r * 1.2, fp.y + (Math.random() - 0.5) * fp.r * 1.2, {
+          count: 1, colors: fp.kind === 'poison' ? ['#6ab04c'] : fp.kind === 'ice' ? ['#c8e4f0'] : ['#ff7043', '#ffd866'],
           speed: 20, life: 0.35, size: 3, gravity: -120,
         });
       }
@@ -70,20 +195,19 @@ const GameRender = {
       ctx.restore();
     }
 
-    // 감전/독구름/잿불 장판 (적 피해)
+    // 감전/독구름/잿불/연막 장판 (적 피해) — 물질감 텍스처 (v116)
     for (const z of this.zones) {
-      const col = z.kind === 'poison' ? '#6ab04c' : z.kind === 'fire' ? '#ff7043' : '#ffd866';
-      // 가독성 설계: 큰 장판일수록 옅게 (반경 90px 기준 감쇠) — 장판이 적을 가리면 안 된다
+      // 가독성 설계 유지: 큰 장판일수록 옅게 (반경 90px 기준 감쇠) — 장판이 적을 가리면 안 된다
       const fade = Math.min(1, 90 / Math.max(90, z.r));
-      ctx.globalAlpha = Math.min(0.32, z.life) * (0.7 + Math.random() * 0.3) * fade;
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
-      ctx.fill();
-      // 테두리 링: 영역 경계는 항상 또렷하게
+      const a = Math.min(0.55, z.life * 0.8) * fade;
+      this._drawGroundPatch(ctx, z.x, z.y, z.r, z.kind, a, this.blinkT, (z.x * 11 + z.y * 5) % 89);
+      // 테두리 링: 영역 경계는 항상 또렷하게 (가독성 계약 유지)
+      const col = z.kind === 'poison' ? '#8fd460' : z.kind === 'fire' ? '#ff9a5c' : z.kind === 'smoke' ? '#9aa0b4' : '#ffd866';
       ctx.globalAlpha = Math.min(0.5, z.life * 0.5);
       ctx.strokeStyle = col;
       ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
