@@ -117,6 +117,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'veil', label: '어둠 장막 — 영혼 구슬을 파괴하라', veils: [0.75, 0.5, 0.25] },
     banner: "왕실 처형인 '무거운 손'",
     punish: 'volley', punishProj: 'soul',
+    sig: 'halfSweep', // 인장기 「참수 집행」 — 나를 처형한 그 도끼
     p1: ['sweep>spiral:soul', 'ring:gap>curse', 'fan:soul:snipe'],
     p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'sweep>curse>fan:soul', 'summon:voidSpawn>spiral:soul'],
     rageText: '처형인의 도끼가 검게 물든다!',
@@ -129,6 +130,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'regen', label: '군의관 지원 — 부하가 살아있는 동안 재생한다' },
     banner: "관문 사령관 '철벽 로트가르'",
     punish: 'volley', punishProj: 'spore',
+    sig: 'shieldCharge', // 인장기 「방패 파쇄 돌격」
     p1: ['fan:spore:gap>ring', 'summon:sporeling>spiral:spore', 'geyser:poison>fan:spore'],
     p2: ['ring:gap>spiral:spore', 'summon:glowShrieker>fan:spore:cross', 'fan:spore:snipe>geyser:poison>ring'],
     rageText: '관문 수비대 전원, 응전하라!',
@@ -141,6 +143,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'armor', cap: 2, label: '판결의 법복 — 강한 일격을 경감한다' },
     banner: "대재판관 '발디아 공작'",
     punish: 'volley', punishProj: 'rock',
+    sig: 'brandZone', // 인장기 「사형 선고」 — 판결은 도망쳐도 따라온다
     p1: ['fan:rock:snipe>ring', 'snare>fan:rock', 'charge>ring>fan:rock'],
     p2: ['snare>charge>fan:rock:snipe', 'ring:gap>fan:rock:cross', 'geyser:poison>snare>ring'],
     rageText: '법정 모독이다! 전원 처형하라!',
@@ -154,6 +157,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'veil', label: '성역 결계 — 성물을 파괴하라', veils: [0.7, 0.4] },
     banner: "대주교 '이노첸시오'",
     punish: 'volley', punishProj: 'soul',
+    sig: 'sanctPulse', // 인장기 「파문(破門)」 — 교회 밖에는 구원이 없다
     p1: ['fan:soul:snipe>ring', 'curse>spiral:soul', 'summon:acolyte>fan:soul:cross'],
     p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'curse>summon:acolyte>ring', 'sweep>curse>spiral:soul'],
     rageText: '신성 모독이다! 성화여, 불태워라!',
@@ -167,6 +171,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'armor', cap: 2, label: '근위 판금 — 강한 일격을 경감한다' },
     banner: "근위대장 '흰 늑대'",
     punish: 'charge',
+    sig: 'triCharge', // 인장기 「일기토」 — 셋째 창격만이 관통한다
     p1: ['charge>ring', 'sweep>sweep>fan:rock:snipe', 'snare>charge'],
     p2: ['charge>snare>fan:rock:snipe', 'sweep>sweep>ring', 'fan:rock:cross>charge'],
     rageText: '늑대가 이빨을 드러낸다!',
@@ -181,6 +186,7 @@ const BOSS_DEFS = {
     banner: '왕 바르텐 3세',
     punish: 'volley', punishProj: 'soul',
     // 1페이즈: 국왕 검술 — 인간의 격식
+    sig: 'kingCross', sigP3: true, // 인장기 「왕의 선고」 — p3 전용, 왕국 전체가 칼이 된다
     p1: ['sweep>sweep', 'charge>ring', 'fan:rock:snipe>sweep'],
     // 2페이즈: 성배 폭주 — 지나온 보스들의 패턴을 역으로 사용 ("네놈들의 원한이 이런 모습이더냐")
     p2: ['spiral:soul>ring:gap', 'geyser:poison>fan:fire:cross', 'summon:voidSpawn>spiral:soul', 'curse>sweep>fan:soul:snipe'],
@@ -439,11 +445,26 @@ function createBoss(floor, x, y) {
           break;
 
         case 'idle': {
+          this._sigElapsed = (this._sigElapsed || 0) + dt;
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 원거리 농성 시 공격 템포 상승 — 거리는 안전이 아니라 다른 종류의 압박이 된다
           const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1);
           if (this.stateT >= wait) {
+            // 인장기 (왕의 인장기): HP 75% 이하 첫 발동, 이후 막별 주기 (3막 12s / 4막 10s / 5막 8s)
+            if (this.def.sig && !(this.def.sigP3 && !this._onslaught) &&
+                this.hp <= this.maxHp * 0.75 && !(this._sigT > 0) && !game.sigActive()) {
+              const act = Math.min(5, Math.ceil((Dungeon.floor <= 50 ? Dungeon.floor : 46) / 10));
+              const interval = { 1: 999, 2: 999, 3: 12, 4: 10, 5: 8 }[act] || 10;
+              if (!this._sigDone || this._sigElapsed >= interval) {
+                this._sigDone = true;
+                this._sigElapsed = 0;
+                game.startSignature(this, this.def.sig);
+                this.state = 'idle';
+                this.stateT = -1.6; // 인장기 시전 동안 일반 초식 정지
+                break;
+              }
+            }
             if (this._farT > 3.2 && this.def.punish) { // 상시 누적으로 전환하며 임계 4.5→3.2
               // 응징: 카이팅 거리를 부수는 초식 — 돌진형은 추격, 시전형은 속사 저격.
               // 재범(게이지 리셋 없이 또 참)은 연계가 붙는다 — 눌러앉기의 비용이 커진다

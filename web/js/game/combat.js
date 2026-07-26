@@ -87,7 +87,7 @@ const GameCombat = {
       }
 
       const p = this.player;
-      if (crit && p.flags.lifesteal && p.lifestealCd <= 0 && p.hp < p.maxHp) {
+      if (crit && p.flags.lifesteal && p.lifestealCd <= 0 && p.hp < p.maxHp && !(p.brandT > 0)) {
         p.hp++;
         p.lifestealCd = 4;
         Particles.text(p.x, p.y - 26, '+1', { color: '#e43b44', size: 14 });
@@ -173,7 +173,7 @@ const GameCombat = {
         Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
       }
       // 도살자의 갈고리: 굵직한 처치가 곧 회복 — 근접 빌드의 유지력 축
-      if (pl && pl.rflags.butcher && (e.elite || e.isMini || e.isBoss) && pl.hp < pl.maxHp) {
+      if (pl && pl.rflags.butcher && (e.elite || e.isMini || e.isBoss) && pl.hp < pl.maxHp && !(pl.brandT > 0)) {
         pl.hp++;
         Particles.text(pl.x, pl.y - 28, '+1', { color: '#e43b44', size: 14 });
       }
@@ -308,7 +308,7 @@ const GameCombat = {
       p._overchargeCd = 2;
       Particles.text(p.x, p.y - 26, '충전!', { color: '#ffd866', size: 13 });
     }
-    if (p.rflags.fang && Math.random() < 0.08 && p.hp < p.maxHp) {
+    if (p.rflags.fang && Math.random() < 0.08 && p.hp < p.maxHp && !(p.brandT > 0)) {
       p.hp++;
       Particles.text(p.x, p.y - 26, '+1', { color: '#e43b44', size: 14 });
     }
