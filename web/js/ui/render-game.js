@@ -72,11 +72,18 @@ const GameRender = {
     // 감전/독구름/잿불 장판 (적 피해)
     for (const z of this.zones) {
       const col = z.kind === 'poison' ? '#6ab04c' : z.kind === 'fire' ? '#ff7043' : '#ffd866';
-      ctx.globalAlpha = Math.min(0.4, z.life) * (0.7 + Math.random() * 0.3);
+      // 가독성 설계: 큰 장판일수록 옅게 (반경 90px 기준 감쇠) — 장판이 적을 가리면 안 된다
+      const fade = Math.min(1, 90 / Math.max(90, z.r));
+      ctx.globalAlpha = Math.min(0.32, z.life) * (0.7 + Math.random() * 0.3) * fade;
       ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
       ctx.fill();
+      // 테두리 링: 영역 경계는 항상 또렷하게
+      ctx.globalAlpha = Math.min(0.5, z.life * 0.5);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.stroke();
       ctx.globalAlpha = 1;
     }
 

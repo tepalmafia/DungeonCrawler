@@ -118,7 +118,7 @@ const TRAITS = [
   { id: 'al_cd', name: '증류 가속', tag: '연금', color: '#c9d94a', cls: 'alch', stack: true, max: 3,
     desc: '독배 쿨다운 -30%', apply: (p) => { p.skillCdMul *= 0.7; } },
   { id: 'al_radius', name: '증폭 용액', tag: '연금', color: '#c9d94a', cls: 'alch', stack: true, max: 2,
-    desc: '플라스크·독배 폭발 반경 +25%', apply: (p) => { p.flaskRadMul = (p.flaskRadMul || 1) * 1.25; } },
+    desc: '플라스크·독배 폭발 반경 +25%', apply: (p) => { p.flaskRadMul = Math.min(2.0, (p.flaskRadMul || 1) * 1.25); } }, // 상한 ×2 — 무한 중첩이 화면을 덮었다
   { id: 'al_double', name: '쌍병 투척', tag: '연금', color: '#c9d94a', cls: 'alch',
     desc: '투척 20% 확률로 2연투', flag: 'al_double' },
   { id: 'al_acid', name: '농축 산', tag: '연금', color: '#c9d94a', cls: 'alch',
