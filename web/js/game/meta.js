@@ -168,6 +168,15 @@ const CODEX_ENEMIES = [
   { id: 'boss40', boss: true, name: "대주교 '이노첸시오'", sprite: 'bossBishop', desc: '4막의 주인. 성배를 왕에게 바친 자 — 성역 결계 중에는 성물만이 약점이다.' },
   { id: 'boss45', boss: true, name: "근위대장 '흰 늑대'", sprite: 'bossWolf', desc: '왕좌 앞 마지막 검. 알고도 침묵한 자 — 근위 판금이 강한 일격을 경감한다.' },
   { id: 'boss50', boss: true, name: '왕 바르텐 3세', sprite: 'bossKing', desc: '모든 것의 답. 성배로 백 년을 산 자 — 3번 모습을 바꾼다. 증거를 전부 모아 왕좌에 못박아라.' },
+  // 왕의 공범들 — 막별 순환 보스 (51층+ 무한 가도에서는 8인 전원이 순환한다)
+  { id: 'boss60', boss: true, name: "수문장 '갈고리 브람'", sprite: 'bossBram', desc: '2막의 공범. 강을 건너려는 시체를 갈고리로 건져올린 자 — 돌진을 응징하고 방패를 파쇄한다.' },
+  { id: 'boss61', boss: true, name: "뱃사공 '침묵의 요른'", sprite: 'bossJorn', desc: '2막의 공범. 검은 마차의 짐을 강 건너로 날랐다 — 나선탄과 반면 참격, 입은 끝까지 열지 않는다.' },
+  { id: 'boss62', boss: true, name: "위증 서기장 '퀼른'", sprite: 'bossQuill', desc: '3막의 공범. 내 죄목을 받아 적은 깃펜 — 기록이 그를 지키는 동안(부하 생존) 상처가 아문다.' },
+  { id: 'boss63', boss: true, name: "사병대장 '철퇴 가로크'", sprite: 'bossGarok', desc: '3막의 공범. 재판 전에 이미 판결을 알고 있던 자 — 중갑이 강한 일격을 경감한다.' },
+  { id: 'boss64', boss: true, name: "역병 의사 '코르부스'", sprite: 'bossCorvus', desc: '4막의 공범. 역병 보고서를 고쳐 쓴 새부리 — 검은 처방(부하 생존)이 그를 치료한다.' },
+  { id: 'boss65', boss: true, name: "소각로장 '재의 우르쉬'", sprite: 'bossUrsh', desc: '4막의 공범. 증거와 시체를 함께 태운 자 — 소각로의 열기로 시간이 지날수록 백열한다.' },
+  { id: 'boss66', boss: true, name: "왕실 마법장 '별지기 오벨'", sprite: 'bossObel', desc: '5막의 공범. 별을 읽고도 입을 다문 자 — 성좌 장막이 도는 동안 구슬만이 약점이다.' },
+  { id: 'boss67', boss: true, name: '무언의 기수', sprite: 'bossLancer', desc: '5막의 공범. 이름도 얼굴도 기록에 없는 왕의 창 — 세 번째 창격이 심장을 노린다.' },
 ];
 
 // 기억의 제단 — 영구 업그레이드 (밸런스 원칙: 초반 체감 +30% 이내)
@@ -210,9 +219,15 @@ const Meta = {
       heat: 0,       // 열기 (고난이도 0~5, 첫 클리어 후 해금) — 서약 수의 캐시
       heatPacts: null, // 열기 서약 골라담기 {hp,count,speed,heal,boss} — null이면 heat 수치에서 이관
       muted: false,
+      opts: null, // 설정 {bgm,sfx,shake,dmgNum,flash} — null이면 load()에서 기본값 채움
       codex: { kills: {}, relics: {}, traits: {} }, // 도감 기록
       welcomed: false, // 환영 파편 지급 여부
     };
+  },
+
+  // 설정 기본값 — 저장본에 없는 키만 채운다 (구버전 세이브 호환)
+  _defaultOpts() {
+    return { bgm: 0.8, sfx: 0.8, shake: 1, dmgNum: 1, flash: 1 };
   },
 
   load() {
@@ -222,6 +237,7 @@ const Meta = {
     } catch (e) {
       this.data = this._default();
     }
+    this.data.opts = { ...this._defaultOpts(), ...(this.data.opts || {}) };
     // 환영 선물: 처음부터 다른 직업을 해금해 볼 수 있도록 파편 지급 (1회)
     if (!this.data.welcomed) {
       this.data.welcomed = true;

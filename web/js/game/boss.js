@@ -275,7 +275,7 @@ const BOSS_DEFS = {
   // 5막 「왕도와 왕좌」
   66: {
     awakened: true, name: "왕실 마법장 '별지기 오벨'", sprite: 'bossObel', scale: 1.8, r: 29, hp: 660, speed: 42,
-    mechanic: { type: 'veil', hits: [0.5], label: '성좌 장막 — 별이 도는 동안 구슬만이 약점이다' },
+    mechanic: { type: 'veil', veils: [0.5], label: '성좌 장막 — 별이 도는 동안 구슬만이 약점이다' },
     banner: "왕실 마법장 '별지기 오벨'",
     punish: 'volley', punishProj: 'soul', sig: 'brandZone',
     p1: ['spiral:soul>curse', 'fan:soul:cross>ring:gap', 'ring:gap>fan:soul:snipe'],
@@ -318,6 +318,7 @@ function createBoss(floor, x, y) {
   return {
     type: 'boss', isBoss: true,
     name: def.name,
+    defId: defKey, // 도감 귀속 — 층 산식 대신 실제 킷으로
     def,
     x, y,
     hp, maxHp: hp,
@@ -481,7 +482,7 @@ function createBoss(floor, x, y) {
         if (this.rageT >= 16 && this.rageStacks < 4) {
           this.rageT = 0;
           this.rageStacks++;
-          game.banner = { text: `이그니스가 더 뜨거워진다! (×${this.rageStacks})`, life: 1.3, maxLife: 1.3, color: '#ff7043' };
+          game.banner = { text: `${this.name}의 기세가 오른다! (×${this.rageStacks})`, life: 1.3, maxLife: 1.3, color: '#ff7043' };
           AudioSys.roar();
           Particles.burst(this.x, this.y, { count: 18, colors: ['#ff7043', '#ffd866'], speed: 180, life: 0.5, size: 4 });
         }
@@ -651,7 +652,7 @@ function createBoss(floor, x, y) {
             Particles.burst(this.x + this.aimDir.x * 20, this.y, {
               count: 16, colors: ['#5e5e74', ...this.def.deathPalette], speed: 170, life: 0.5, size: 4,
             });
-            game.rings.push({ x: this.x, y: this.y, r: 16, maxR: 110, speed: 240, width: 13, dmg: 1 });
+            game.rings.push({ x: this.x, y: this.y, r: 16, maxR: 110, speed: 240, width: 13, dmg: 1, by: this.name });
             this.state = 'stunned';
             this.stateT = 0;
           }
@@ -711,10 +712,12 @@ function createBoss(floor, x, y) {
             game.hurtPlayer(1, { x: ddx / dd, y: ddy / dd });
           }
           if (c.fire) {
-            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire' });
+            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire', by: this.name });
           }
           if (c.poison) {
-            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 3.0, kind: 'poison' });
+            // 계측 (관통 v3): 20층 사망 18회 중 13회가 독 웅덩이 — 재생 기믹 장기전에서 융단이 됐다.
+            // 지속 3.0→2.2s: 화염(2.4s) 밴드에 정렬, 웅덩이가 '피할 것'에서 '기다릴 것'으로 격하되지 않는 선
+            game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.2, kind: 'poison', by: this.name });
           }
           if (c.snare && Math.hypot(p.x - c.x, p.y - c.y) < 55 + p.r) {
             p.slowT = Math.max(p.slowT, 1.6);
@@ -844,9 +847,9 @@ function createBoss(floor, x, y) {
         AudioSys.thud();
         // 간극 링 (P2): 안전 부채꼴 1곳 — 대시 없이도 읽으면 피할 길이 있다
         const gap = opt.includes('gap') ? { gapA: Math.random() * Math.PI * 2, gapW: 1.0 } : {};
-        game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 300, width: 15, dmg: 1, ...gap });
+        game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 300, width: 15, dmg: 1, by: this.name, ...gap });
         if (this.phase === 2 && Dungeon.floor >= 3) { // 이중 링은 3층부터 — 입문 보스에서 대시 2관리 요구는 과했다
-          game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 210, width: 15, dmg: 1, ...gap });
+          game.rings.push({ x: this.x, y: this.y, r: 24, maxR: 340, speed: 210, width: 15, dmg: 1, by: this.name, ...gap });
         }
         this._endMove();
       } else {

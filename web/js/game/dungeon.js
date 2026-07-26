@@ -195,6 +195,9 @@ const Dungeon = {
 
   build(type) {
     this.roomType = type;
+    // 미니맵: 이 층에서 지나온 방 이력 (roomIndex 1이면 새 층 시작)
+    if (this.roomIndex === 1 && type === 'combat') this.roomLog = [];
+    (this.roomLog = this.roomLog || []).push(type);
     World.buildRoom(this.roomIndex, type, this.floor);
     Game.onRoomBuilt(type);
   },

@@ -11,6 +11,7 @@ const GameRender = {
       else if (this.state === 'classes') HUD.drawClasses(ctx, this.blinkT);
       else HUD.drawCodex(ctx, this.blinkT, this);
       if (this.showManual) HUD.drawManual(ctx, this, this.showManual);
+      if (this.showSettings) HUD.drawSettings(ctx, this);
       return;
     }
 
@@ -800,6 +801,7 @@ const GameRender = {
         ['Tab', '획득 목록 · 현재 스탯'],
         ['1 2 3', '카드 선택 (E — 리롤, 환생 각인)'],
         ['M', '음소거'],
+        ['O', '설정 (음량·흔들림·섬광)'],
       ];
       basics.forEach(([k, v], i) => {
         ctx.fillStyle = '#e8e0cf';
@@ -846,6 +848,7 @@ const GameRender = {
     }
 
     if (this.showManual && this.state === 'play') HUD.drawManual(ctx, this, this.showManual);
+    if (this.showSettings && this.state === 'play') HUD.drawSettings(ctx, this);
 
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);

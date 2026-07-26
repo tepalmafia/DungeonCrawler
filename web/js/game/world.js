@@ -1272,9 +1272,12 @@ const World = {
       if (this.map[ty][tx] !== 0) return false;
       return !(this._noSpawn && this._noSpawn[ty] && this._noSpawn[ty][tx]);
     };
-    const tx0 = Math.floor(x / TS), ty0 = Math.floor((y - this.offsetY) / TS);
-    if (ok(tx0, ty0)) return { x, y };
-    for (let r = 1; r < 8; r++) {
+    // 소프트락 수리: 목표가 맵 밖이면 먼저 경계 안으로 클램프 — 돌진 착지점이 맵 밖 8타일+면
+    // 링 탐색이 전부 실패해 원좌표(벽/허공)를 그대로 돌려줬고, 보스가 밖에 박혀 영영 못 나왔다 (14층 계측)
+    const tx0 = Math.min(this.cols - 2, Math.max(1, Math.floor(x / TS)));
+    const ty0 = Math.min(this.rows - 2, Math.max(1, Math.floor((y - this.offsetY) / TS)));
+    if (ok(tx0, ty0)) return { x: tx0 * TS + TS / 2, y: ty0 * TS + TS / 2 + this.offsetY };
+    for (let r = 1; r < 16; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -1284,7 +1287,8 @@ const World = {
         }
       }
     }
-    return { x, y };
+    // 최후: 방 중앙 (어떤 경우에도 맵 밖은 돌려주지 않는다)
+    return { x: (this.cols / 2) * TS, y: (this.rows / 2) * TS + this.offsetY };
   },
 
   isSolidAt(x, y) {

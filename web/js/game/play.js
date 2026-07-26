@@ -295,12 +295,20 @@ const GamePlay = {
       return; // 매뉴얼이 열려 있는 동안 게임 정지
     }
 
-    // 일시정지 (Q로 런 포기 가능)
-    if (Input.pressed('Escape', 'KeyP')) {
+    // 일시정지 (Q로 런 포기 가능) — 설정 패널이 열려 있으면 Escape는 패널을 닫는 데 쓴다
+    if (!this.showSettings && Input.pressed('Escape', 'KeyP')) {
       this.paused = !this.paused;
       AudioSys.pickup();
     }
     if (this.paused) {
+      // 설정 (O) — 일시정지 중에도 조절 가능
+      if (this.showSettings) { this._tickSettings(); return; }
+      if (Input.pressed('KeyO')) {
+        this.showSettings = true;
+        this._setRow = 0;
+        AudioSys.pickup();
+        return;
+      }
       if (Input.pressed('KeyQ')) {
         this.paused = false;
         this.gaveUp = true;
@@ -333,9 +341,10 @@ const GamePlay = {
     if (this._wallCheckT > 2) {
       this._wallCheckT = 0;
       for (const e of this.enemies) {
-        if (e.dead || e.neutral || e.isBoss || e.phased) continue;
+        if (e.dead || e.neutral || e.phased) continue;
         if (World.isSolidAt(e.x, e.y)) {
-          const pos = World.randomSpawnPos(this.player, 120);
+          // 보스도 포함 — 벽에 박힌 보스는 소프트락(문이 영영 안 열림)이라 더 치명적이다 (14층 계측)
+          const pos = e.isBoss ? World.safeSpot(e.x, e.y) : World.randomSpawnPos(this.player, 120);
           e.x = pos.x;
           e.y = pos.y;
           e.spawnT = 0.35;
@@ -382,7 +391,7 @@ const GamePlay = {
             if (fp.kind === 'ice') {
               p.slowT = Math.max(p.slowT, 0.35); // 빙판: 피해 없이 미끄러운 감속
             } else {
-              this.hurtPlayer(1, { x: 0, y: 0 }, 60, '불길');
+              this.hurtPlayer(1, { x: 0, y: 0 }, 60, fp.by || (fp.kind === 'poison' ? '독 웅덩이' : '불길'));
               break;
             }
           }
@@ -822,7 +831,7 @@ const GamePlay = {
       if (!inGap && Math.abs(pd - ring.r) < ring.width) {
         // 무적 중이어도 hurtPlayer로 — 대시 관통 시 완벽 회피 판정이 살아난다
         const dir = { x: (p.x - ring.x) / (pd || 1), y: (p.y - ring.y) / (pd || 1) };
-        this.hurtPlayer(ring.dmg, dir, 300);
+        this.hurtPlayer(ring.dmg, dir, 300, ring.by);
       }
       if (ring.r > ring.maxR) this.rings.splice(i, 1);
     }
@@ -853,21 +862,21 @@ const GamePlay = {
       const pdist = Math.hypot(p.x - a.x, p.y - a.y);
       if (p.invuln > 0) {
         // 대시 무적 중 스치는 탄(+12px 그레이즈) = 완벽 회피 판정 — 탄은 그대로 지나간다
-        if (a.dmg > 0 && pdist < p.r + a.r + 12) this.hurtPlayer(a.dmg, a.dir);
+        if (a.dmg > 0 && pdist < p.r + a.r + 12) this.hurtPlayer(a.dmg, a.dir, 260, a.by);
       } else if (pdist < p.r + a.r) {
         if (a.slow > 0) {
           p.slowT = Math.max(p.slowT, a.slow);
           Particles.text(p.x, p.y - 26, '끈적!', { color: '#e8e0cf', size: 13 });
           Particles.burst(p.x, p.y, { count: 6, colors: ['#e8e0cf'], speed: 60, life: 0.3, size: 2 });
         }
-        if (a.dmg > 0) this.hurtPlayer(a.dmg, a.dir);
+        if (a.dmg > 0) this.hurtPlayer(a.dmg, a.dir, 260, a.by);
         this.arrows.splice(i, 1);
         continue;
       }
       const hitWall = (a.kind === 'arrow' || a.kind === 'rock' || a.kind === 'web' || a.kind === 'fire') && World.isSolidAt(a.x, a.y);
       if (a.life <= 0 || hitWall) {
         if (PROJ_STYLES[a.kind]?.patchOnEnd) {
-          this.firePatches.push({ x: a.x, y: a.y, r: 34, life: 2.0, kind: 'fire' });
+          this.firePatches.push({ x: a.x, y: a.y, r: 34, life: 2.0, kind: 'fire', by: a.by });
         }
         Particles.burst(a.x, a.y, {
           count: 4, colors: [PROJ_STYLES[a.kind]?.color || '#a99e8c'], speed: 70, life: 0.25, size: 2,

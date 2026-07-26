@@ -94,10 +94,12 @@ const GameCombat = {
         AudioSys.pickup();
       }
     }
-    Particles.text(e.x, e.y - 22, String(dmg), {
-      color: color || (crit ? '#f7b32b' : '#ffffff'),
-      size: crit ? 22 : feel ? 15 : 12,
-    });
+    if (Meta.data.opts?.dmgNum !== 0) {
+      Particles.text(e.x, e.y - 22, String(dmg), {
+        color: color || (crit ? '#f7b32b' : '#ffffff'),
+        size: crit ? 22 : feel ? 15 : 12,
+      });
+    }
 
     if (e.hp <= 0) this.killEnemy(e, dir, crit);
   },
@@ -145,17 +147,8 @@ const GameCombat = {
         }
       }
     }
-    // 보스 도감 키: 1~10층은 층 그대로, 무한 모드는 순환 각성 보스(6~10)로 귀속
-    Meta.codexKill(e.isBoss
-      ? 'boss' + (Dungeon.floor <= 10 ? Dungeon.floor
-        : Dungeon.floor === 20 ? 20
-        : Dungeon.floor === 30 ? 30
-        : Dungeon.floor === 40 ? 40
-        : Dungeon.floor === 45 ? 45
-        : Dungeon.floor >= 50 && Dungeon.floor === 50 ? 50
-        : Dungeon.floor <= 49 ? ((Dungeon.floor - 11) % 4) + 6
-        : ((Dungeon.floor - 51) % 5) + 6)
-      : (e.codexType || e.type));
+    // 보스 도감 키: createBoss가 새긴 실제 킷 id — 층 산식은 순환 보스 개편으로 폐기
+    Meta.codexKill(e.isBoss ? 'boss' + (e.defId || Dungeon.floor) : (e.codexType || e.type));
     if (e.isBoss && e.def) this._lastBossOutro = e.def.outro; // 마이크로 서사: onBossDead 끝에서 출력
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
@@ -384,6 +377,18 @@ const GameCombat = {
 
 
   // 사망 리포트용 — 방금 나를 때린 것의 이름 (가장 가까운 살아있는 적 추정)
+  _foeName(e) {
+    let name;
+    if (e.isBoss) name = e.name;
+    else if (e.isMini) name = e.miniName || '우두머리';
+    else {
+      const c = typeof CODEX_ENEMIES !== 'undefined' && CODEX_ENEMIES.find((x) => x.id === (e.codexType || e.type));
+      name = c ? c.name : e.type;
+    }
+    if (e.elite && !e.isBoss && !e.isMini) name = '정예 ' + name;
+    return name;
+  },
+
   _nearestFoeName() {
     const p = this.player;
     let best = 170, name = null;
@@ -392,13 +397,7 @@ const GameCombat = {
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d < best) {
         best = d;
-        if (e.isBoss) name = e.name;
-        else if (e.isMini) name = e.miniName || '우두머리';
-        else {
-          const c = typeof CODEX_ENEMIES !== 'undefined' && CODEX_ENEMIES.find((x) => x.id === (e.codexType || e.type));
-          name = c ? c.name : e.type;
-        }
-        if (e.elite && !e.isBoss && !e.isMini) name = '정예 ' + name;
+        name = this._foeName(e);
       }
     }
     return name;
@@ -566,6 +565,13 @@ const GameCombat = {
       }
     }
     const style = PROJ_STYLES[kind] || PROJ_STYLES.arrow;
-    this.arrows.push({ kind, x, y, dir, speed, dmg, slow, homing, r: style.r || 4, life, t: 0 });
+    // 사인 각인: 탄은 발사자 몸에서 태어난다 — 발사 좌표 최근접 생존 적이 곧 사수
+    let by = null, bd = 48;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d < bd) { bd = d; by = this._foeName(e); }
+    }
+    this.arrows.push({ kind, x, y, dir, speed, dmg, slow, homing, r: style.r || 4, life, t: 0, by });
   },
 };
