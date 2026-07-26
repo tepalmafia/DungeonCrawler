@@ -21,7 +21,7 @@ const BOSS_DEFS = {
     deathPalette: ['#b13ae0', '#241832', '#e8e0cf'],
   },
   2: {
-    name: '늪지기 몰귀', sprite: 'bossSpore', scale: 1.45, r: 32, hp: 190, speed: 34, // 계측: 2층 사망이 전체의 절반 — 전투 길이 단축
+    name: '늪지기 몰귀', sprite: 'bossSpore', scale: 1.45, r: 32, hp: 170, speed: 34, // 관통 v3: 3연속 계측에서 2층 벽 (9회) — 190→170, 레벨 1~2 노출 시간 단축
     mechanic: { type: 'regen', label: '포자 갑피 — 부하가 살아있는 동안 재생한다' },
     banner: '늪지기 몰귀',
     // 분산 귀속 (열기5): 보스방 사망의 60%가 소환수(독슬라임 독구름 r52 + 버섯 근접 포자) —
@@ -126,7 +126,8 @@ const BOSS_DEFS = {
   },
   // ── 2막 막보스 (20층): 균사 정원의 주인 ──
   20: {
-    awakened: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', scale: 1.9, r: 32, hp: 1800, speed: 40,
+    // 관통 v3: 재생 예산 후에도 조우당 11회 — 전 보스 최다 (왕 0·발디아 5). TTK 단축으로 노출 감소
+    awakened: true, name: "관문 사령관 '철벽 로트가르'", sprite: 'bossQueen', scale: 1.9, r: 32, hp: 1600, speed: 40,
     mechanic: { type: 'regen', label: '군의관 지원 — 부하가 살아있는 동안 재생한다' },
     banner: "관문 사령관 '철벽 로트가르'",
     punish: 'volley', punishProj: 'spore',
