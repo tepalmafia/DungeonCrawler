@@ -466,6 +466,11 @@ const GameCombat = {
       count: 13, colors: ['#e43b44', '#8a1c2c'], speed: 160, life: 0.4, size: 3,
     });
     Particles.ring(p.x, p.y, { r0: 6, r1: 38, life: 0.25, color: '#e43b44', width: 4 });
+    // 방향성 임팩트 — 맞은 방향에서 흰 파편이 튄다 (어디서 맞았는지 몸이 먼저 안다)
+    Particles.burst(p.x - dir.x * 10, p.y - dir.y * 10, {
+      count: 6, colors: ['#ffffff', '#e8e0cf'], speed: 240, life: 0.22, size: 2,
+      dir: Math.atan2(dir.y, dir.x), spread: 0.7,
+    });
 
     // 잿불 망토: 얻어맞은 대가로 주변을 불태운다 (반응 재료 공급원이기도 하다)
     if (p.rflags.ashcloak) {

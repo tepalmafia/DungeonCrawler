@@ -787,8 +787,10 @@ function createPlayer(x, y, classId = 'knight') {
             bounces: this.flags.rebound ? 1 : 0, // 도탄 특성
           });
         }
-        Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
-          count: 3, colors: ['#d9cbb8', '#38b764'], speed: 50, life: 0.2, size: 2,
+        // 머즐 플래시 — 시위를 놓는 순간의 방향성 섬광
+        Particles.burst(this.x + dir.x * 18, this.y + dir.y * 18, {
+          count: finisher ? 7 : 4, colors: ['#ffffff', '#d9cbb8', '#38b764'],
+          speed: 170, life: 0.18, size: 2, dir: Math.atan2(dir.y, dir.x), spread: 0.5,
         });
       } else if (this.classId === 'alch') {
         // 플라스크 투척: 모든 착탄이 소형 산성 폭발(중독) — 반응의 밑재료를 상시 뿌린다
@@ -808,8 +810,10 @@ function createPlayer(x, y, classId = 'knight') {
         };
         throwOnce(0);
         if (this.flags.al_double && Math.random() < 0.2) throwOnce(0.16); // 쌍병 투척
-        Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
-          count: 4, colors: ['#c9d94a', '#6ada8a'], speed: 60, life: 0.25, size: 3,
+        // 투척 순간 액체 튐 — 병 주둥이에서 흩날리는 산성 방울
+        Particles.burst(this.x + dir.x * 18, this.y + dir.y * 18, {
+          count: finisher ? 8 : 5, colors: ['#ffffff', '#c9d94a', '#6ada8a'],
+          speed: 150, life: 0.22, size: 2, dir: Math.atan2(dir.y, dir.x), spread: 0.8, gravity: 120,
         });
       } else {
         AudioSys.bolt(finisher);
@@ -824,8 +828,10 @@ function createPlayer(x, y, classId = 'knight') {
           life: 2.0, hit: new Set(),
           bounces: this.flags.rebound ? 1 : 0, // 도탄 특성
         });
-        Particles.burst(this.x + dir.x * 16, this.y + dir.y * 16, {
-          count: 4, colors: fireball ? ['#ff7043', '#ffd866'] : ['#c56cf0', '#8a5ac2'], speed: 60, life: 0.25, size: 3,
+        // 시전 섬광 — 지팡이 끝에서 마력이 터진다
+        Particles.burst(this.x + dir.x * 18, this.y + dir.y * 18, {
+          count: finisher ? 8 : 5, colors: fireball ? ['#ffffff', '#ff7043', '#ffd866'] : ['#ffffff', '#c56cf0', '#8a5ac2'],
+          speed: 160, life: 0.2, size: 2, dir: Math.atan2(dir.y, dir.x), spread: 0.6,
         });
       }
 
@@ -920,6 +926,8 @@ function createPlayer(x, y, classId = 'knight') {
         life: finisher ? 0.16 : 0.12,
         maxLife: finisher ? 0.16 : 0.12,
         finisher,
+        rev: comboStep === 1, // 2타는 역방향 스윙 — 왕복 베기의 리듬
+        step: comboStep,
       });
 
       // 칼날 궤적 스파크 (부채꼴 가장자리를 따라)
@@ -952,6 +960,7 @@ function createPlayer(x, y, classId = 'knight') {
       }
       if (hitAny && finisher) {
         Renderer.shake(3, 0.15);
+        game.hitstop = Math.max(game.hitstop, 0.045); // 3타가 박히는 찰나 — 세계가 반박자 멈춘다
         // 전투 본능 (검사 고유): 마무리 일격이 적중하면 HP 1 회복 (6초에 한 번)
         // — 근접의 리스크를 "잘 싸우면 버틴다"로 보상한다
         if (this.finisherHealCd <= 0 && this.hp < this.maxHp) {
@@ -1060,21 +1069,79 @@ function createPlayer(x, y, classId = 'knight') {
         ctx.arc(0, 0, s.range, -s.arc / 2, s.arc / 2);
         ctx.closePath();
         ctx.fill();
-        // 칼날 궤적 (밝은 외곽 호 — 시간에 따라 휘둘러지는 느낌)
-        const sweep = (1 - t) * s.arc; // 진행도만큼 호가 그려짐
+        // 칼날 궤적 (밝은 외곽 호 — 시간에 따라 휘둘러지는 느낌). 2타(rev)는 역방향으로 되돌아온다
+        const prog = Math.max(1 - t, 0.35);
+        const sweep = prog * s.arc;
         ctx.globalAlpha = t;
         ctx.strokeStyle = s.finisher ? '#ffd866' : '#ffffff';
         ctx.lineWidth = s.finisher ? 4 : 3;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.arc(0, 0, s.range * 0.94, -s.arc / 2, -s.arc / 2 + Math.max(sweep, s.arc * 0.35));
+        if (s.rev) ctx.arc(0, 0, s.range * 0.94, s.arc / 2, s.arc / 2 - sweep, true);
+        else ctx.arc(0, 0, s.range * 0.94, -s.arc / 2, -s.arc / 2 + sweep);
         ctx.stroke();
+        // 칼날 스트릭 — 실제 휘둘러지는 검신: 진행 각도에 빛나는 날 (두꺼운 잔광 + 흰 심)
+        const bladeA = s.rev ? s.arc / 2 - (1 - t) * s.arc : -s.arc / 2 + (1 - t) * s.arc;
+        const bx = Math.cos(bladeA), by = Math.sin(bladeA);
+        ctx.globalAlpha = t * 0.55;
+        ctx.strokeStyle = s.finisher ? '#f7b32b' : '#c8d4e4';
+        ctx.lineWidth = s.finisher ? 7 : 5;
+        ctx.beginPath();
+        ctx.moveTo(bx * s.range * 0.3, by * s.range * 0.3);
+        ctx.lineTo(bx * s.range * 0.98, by * s.range * 0.98);
+        ctx.stroke();
+        ctx.globalAlpha = t;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bx * s.range * 0.34, by * s.range * 0.34);
+        ctx.lineTo(bx * s.range * 0.96, by * s.range * 0.96);
+        ctx.stroke();
+        // 마무리 일격: 부챗살 스피드라인 — 한 프레임의 폭발적 기세
+        if (s.finisher) {
+          ctx.globalAlpha = t * 0.6;
+          ctx.strokeStyle = '#fff7c0';
+          ctx.lineWidth = 1.5;
+          for (let k = 0; k < 6; k++) {
+            const la = -s.arc / 2 + ((k + 0.5) / 6) * s.arc;
+            const lx = Math.cos(la), ly = Math.sin(la);
+            ctx.beginPath();
+            ctx.moveTo(lx * s.range * 1.02, ly * s.range * 1.02);
+            ctx.lineTo(lx * (s.range * 1.02 + 14 + (k % 2) * 8), ly * (s.range * 1.02 + 14 + (k % 2) * 8));
+            ctx.stroke();
+          }
+        }
         // 안쪽 보조 호
         ctx.globalAlpha = t * 0.5;
+        ctx.strokeStyle = s.finisher ? '#ffd866' : '#ffffff';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(0, 0, s.range * 0.6, -s.arc / 2, s.arc / 2);
         ctx.stroke();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+      // 회전 베기: 도는 동안 칼바람 궤적 링 + 3개 칼날 잔광이 함께 돈다
+      if (this.spinT > 0) {
+        const rr = 96 * this.rangeMul;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = 0.35 + Math.sin(this.animT * 30) * 0.12;
+        ctx.strokeStyle = '#c8d4e4';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        const spinA = this.animT * 22;
+        for (let k = 0; k < 3; k++) {
+          const a = spinA + (k / 3) * Math.PI * 2;
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = k === 0 ? '#ffffff' : '#9fb8cc';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, rr * 0.97, a, a + 0.9);
+          ctx.stroke();
+        }
         ctx.restore();
         ctx.globalAlpha = 1;
       }
