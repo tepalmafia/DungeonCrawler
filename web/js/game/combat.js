@@ -105,6 +105,7 @@ const GameCombat = {
     // 약한 빌드에는 상한이 걸리지 않으므로 저점 난이도는 그대로다.
     // 왕관의 파편: 굵직한 표적 특화 — 버스트 상한보다 먼저 곱해 상한 취지 유지
     if ((e.isBoss || e.isMini) && this.player && this.player.rflags.crownshard) dmg = Math.round(dmg * 1.15);
+    if (e._markUntil && this.time < e._markUntil) dmg = Math.round(dmg * 1.25); // 사냥 표식 (계승)
     if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.015)));
     // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
     if (crit && !e.isBoss && this.player && this.player.rflags.stormcrit && Math.random() < 0.2) {
@@ -183,6 +184,19 @@ const GameCombat = {
   },
 
   hitEnemy(e, dmg, dir, opts = {}) {
+    // 계승 형상 훅 (v127) — 플레이어의 타격에만 걸린다
+    {
+      const pf = this.player;
+      if (pf && pf.form === 'noose' && Math.random() < 0.12) { // 밧줄의 망령: 올가미
+        e.status.shock = Math.max(e.status.shock || 0, 1.2);
+        Particles.text(e.x, e.y - 26, '올가미!', { color: '#c8a860', size: 12 });
+      }
+      if (pf && pf.form === 'ash') e.status.burn = Math.max(e.status.burn || 0, 1.5); // 재의 현자: 명중마다 불
+      if (pf && pf.form === 'hunt' && opts && opts.crit) { // 사냥의 원혼: 크리가 표식을 남긴다
+        e._markUntil = this.time + 2.5;
+        Particles.ring(e.x, e.y, { r0: 4, r1: 26, life: 0.3, color: '#8adf76', width: 2 });
+      }
+    }
     this.damageEnemy(e, dmg, dir, { ...opts, feel: true });
   },
 
@@ -379,8 +393,12 @@ const GameCombat = {
     if (p.flags.burnboom && e.status.burn > 0) {
       this._explode(e.x, e.y, 80, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
     }
-    if (p.flags.plague && e.status.poison > 0) {
+    if ((p.flags.plague || p.form === 'plague') && e.status.poison > 0) { // 역병 의사 (계승): 역병은 번진다
       this.zones.push({ x: e.x, y: e.y, r: 50, life: 2.5, kind: 'poison', tickT: 0, hit: null });
+    }
+    if (p.form === 'venge') { // 복수귀 (계승): 처치마다 원한이 쌓인다
+      p._vs = Math.min(8, (p._vs || 0) + 1);
+      if (p._vs === 8 && !p._vsMax) { p._vsMax = true; Particles.text(p.x, p.y - 36, '원한 만개!', { color: '#e43b44', size: 14 }); }
     }
     if (p.rflags.bomb && Math.random() < 0.15) {
       this._explode(e.x, e.y, 70, 2, ['#f7b32b', '#ff7043'], '#f7b32b');
@@ -527,11 +545,21 @@ const GameCombat = {
     }
     // 사인 기록: 명시된 출처(용암 등) > 최근접 적 추정
     this._lastHurtBy = src || this._nearestFoeName() || '이름 모를 어둠';
+    if (p.form === 'venge' && p._vs > 0 && !p.shield) { p._vs = Math.floor(p._vs / 2); p._vsMax = false; } // 복수귀: 피는 원한을 씻는다
 
     // 보호막: 피해 1회 무효
     if (p.shield) {
       p.shield = false;
       p.shieldT = 0;
+      if (p.form === 'guard') { // 수호망령 (계승): 깨진 보호막이 주위를 밀쳐낸다
+        for (const en of this.enemies) {
+          if (en.dead || en.isBoss) continue;
+          const dd = Math.hypot(en.x - p.x, en.y - p.y);
+          if (dd < 120) { const ux = (en.x - p.x) / (dd || 1), uy = (en.y - p.y) / (dd || 1); en.kbx = ux * 380; en.kby = uy * 380; }
+        }
+        Particles.ring(p.x, p.y, { r0: 10, r1: 118, life: 0.4, color: '#5ce0e6', width: 5 });
+        AudioSys.thud();
+      }
       p.invuln = Math.max(p.invuln, 0.5);
       p.hurtPoseT = 0.18; // 막았어도 몸은 휘청인다
       p.kbx = dir.x * kb * 0.5;

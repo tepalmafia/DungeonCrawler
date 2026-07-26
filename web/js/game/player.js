@@ -55,10 +55,13 @@ const SUBSKILLS = {
 
 function createPlayer(x, y, classId = 'knight') {
   const cls = CLASSES[classId] || CLASSES.knight;
-  return {
+  const pl = {
     x, y,
     r: 13,
     classId: cls.id,
+    // 계승 (v127): 첫 정복 후 선택한 형상 — 원한이 형태를 고른다
+    form: (Meta.data.wins > 0 && Meta.data.forms && Meta.data.forms[cls.id] > 0 && FORMS[cls.id])
+      ? FORMS[cls.id][Meta.data.forms[cls.id] - 1].id : null,
     maxHp: cls.hp + Meta.lvl('vit') + Meta.grudgeHp(), // 사무친 원한: 막의 진실 완성마다 +1
     hp: cls.hp + Meta.lvl('vit') + Meta.grudgeHp(),
     speed: cls.speed,
@@ -531,6 +534,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (this._dashWin > 0) this._dashWin -= dt;
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
+      if (this._chaliceT > 0) this._chaliceT -= dt;
 
       if (this.dashCharges < this.dashMax) {
         this.dashRegenT += dt;
@@ -542,7 +546,7 @@ function createPlayer(x, y, classId = 'knight') {
 
       // 보호막 충전: 수호의 문장 특성(8초) 또는 검사 고유 '철벽'(9초)
       // 매트릭스 계측: 검사 사망이 심층(8~10층) 접촉 피해에 집중 — 철벽 11→9로 근접 리스크 보상
-      const shieldCd = this.flags.shield ? 8 : this.rflags.ringshield ? 10 : (this.classId === 'knight' ? 9 : 0);
+      const shieldCd = this.flags.shield ? 8 : this.rflags.ringshield ? 10 : (this.classId === 'knight' ? (this.form === 'guard' ? 5.4 : 9) : 0); // 수호망령: 철벽 40% 단축
       if (shieldCd > 0 && !this.shield) {
         this.shieldT += dt;
         if (this.shieldT >= shieldCd) {
@@ -686,6 +690,8 @@ function createPlayer(x, y, classId = 'knight') {
 
     currentAtk() {
       let atk = 1 + this.bonusAtk + (this.floorAtk || 0); // floorAtk: 모닥불 담금질 (이번 층 한정)
+      if (this.form === 'venge') atk += Math.min(8, this._vs || 0) * 0.4; // 복수귀: 원한 중첩
+      if (this._chaliceT > 0) atk += 1; // 성배를 삼킨 자: 하트의 힘
       if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 1; // DPS 리그: +2는 +59%로 과함
       if (this.flags.berserk && this.hp <= 2) atk += 1;
       if (this.rflags.berserkhelm && this.hp <= 3) atk += 4; // 에픽 가치 밴드 보정
@@ -823,7 +829,7 @@ function createPlayer(x, y, classId = 'knight') {
           kind: 'pbolt', x: this.x + dir.x * 14, y: this.y + dir.y * 14,
           dir: { ...dir }, speed: (finisher ? 260 : 300) * (this.flags.mgsnipe ? 1.9 : 1),
           finisher, pierce: fireball, homing: this.flags.mgsnipe ? 0 : 5.0,
-          aoe: finisher ? 70 : (fireball ? 40 : (this.flags.mgsnipe ? 35 : 0)),
+          aoe: finisher ? (this.form === 'star' ? 98 : 70) : (fireball ? 40 : (this.flags.mgsnipe ? 35 : 0)), // 별의 인도자: 대원혼탄 +40%
           fire: fireball,
           life: 2.0, hit: new Set(),
           bounces: this.flags.rebound ? 1 : 0, // 도탄 특성
@@ -1147,4 +1153,6 @@ function createPlayer(x, y, classId = 'knight') {
       }
     },
   };
+  if (pl.form === 'chalice') { pl.maxHp = Math.max(1, pl.maxHp - 1); pl.hp = pl.maxHp; } // 성배를 삼킨 자
+  return pl;
 }

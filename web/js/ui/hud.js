@@ -1152,6 +1152,21 @@ const HUD = {
     });
 
     this._drawBackButton(ctx);
+    // 계승 (v127): 정복자의 특권 — 선택 직업의 형상
+    if (Meta.data.wins > 0) {
+      const cid = Meta.data.cls;
+      const fi = (Meta.data.forms && Meta.data.forms[cid]) || 0;
+      const f = fi > 0 && FORMS[cid] ? FORMS[cid][fi - 1] : null;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 15px Galmuri11, monospace';
+      ctx.fillStyle = f ? '#e43b44' : '#8f8577';
+      ctx.fillText(`계승 — ${f ? '「' + f.name + '」' : '기본 (형상 없음)'}   ← → 변경`, Renderer.W / 2, Renderer.H - 74);
+      if (f) {
+        ctx.font = '13px Galmuri11, monospace';
+        ctx.fillStyle = '#c8c0a8';
+        ctx.fillText(f.desc, Renderer.W / 2, Renderer.H - 52);
+      }
+    }
   },
 
   // ══════════════ 획득 목록 (게임 중 Tab) ══════════════
