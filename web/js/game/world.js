@@ -1040,6 +1040,7 @@ const World = {
     this.act = floor <= 50 ? Math.min(5, Math.ceil(floor / 10)) : 5;
     // 왕좌 카펫: 45·50층 보스방 (무한 모드의 왕좌 순환층 포함)
     this._bossCarpet = type === 'boss' && (floor === 45 || floor === 50 || (floor > 50 && (floor - 51) % 5 === 4));
+    this._bossRoom = type === 'boss'; // v125: 모든 보스방에 결전장 프레이밍 (러너·기둥·배너)
 
     // 막 실루엣 적용 — 금고방(보너스)만 제외. 템플릿·스폰·용암보다 먼저 깔린다
     if (type !== 'vault') {
@@ -1454,6 +1455,47 @@ const World = {
             ctx.fillStyle = 'rgba(0,0,0,0.22)';
             ctx.fillRect(x + (v < 0.5 ? 1 : TS - 9), y + TS - 8, 8, 7);
           }
+          // 막별 바닥 재질 (v125 「막의 표정」): 같은 판석이라도 막의 땅이 다르다
+          if (this.act === 1) { // 묘지·변두리: 무덤 흙 얼룩 + 풀포기
+            if (hsh(tx * 3 + 1, ty * 5) < 0.14) {
+              ctx.fillStyle = 'rgba(58,44,26,0.30)';
+              ctx.fillRect(x + 5 + (tx % 3) * 6, y + 8 + (ty % 3) * 6, 18, 12);
+            }
+            if (hsh(tx * 11, ty * 7 + 2) < 0.10) {
+              ctx.fillStyle = 'rgba(74,106,58,0.55)';
+              const gx2 = x + 8 + ((tx * 13) % 26), gy2 = y + 10 + ((ty * 17) % 26);
+              ctx.fillRect(gx2, gy2 - 3, 1, 4); ctx.fillRect(gx2 + 2, gy2 - 4, 1, 5); ctx.fillRect(gx2 + 4, gy2 - 2, 1, 3);
+            }
+          } else if (this.act === 2) { // 다리·관문: 젖은 판석 — 물기 하이라이트
+            if (hsh(tx * 5, ty * 3 + 1) < 0.18) {
+              ctx.fillStyle = 'rgba(120,200,190,0.06)';
+              ctx.fillRect(x + 3, y + TS - 10 - ((tx * 7) % 8), TS - 6, 3);
+            }
+          } else if (this.act === 3) { // 재판소·영지: 대리석 결
+            if (hsh(tx * 7 + 3, ty * 11) < 0.22) {
+              ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(x + 4, y + 6 + ((tx * 5) % 12));
+              ctx.lineTo(x + TS - 6, y + 18 + ((ty * 7) % 16));
+              ctx.stroke();
+            }
+          } else if (this.act === 4) { // 역병 마을: 판자 덧댐 + 마른 얼룩
+            if (hsh(slabX * 5 + 2, ty * 3) < 0.13) {
+              ctx.fillStyle = 'rgba(74,54,32,0.42)';
+              ctx.fillRect(x + 2, y + 4, TS - 4, TS - 8);
+              ctx.fillStyle = 'rgba(0,0,0,0.25)';
+              for (let k = 1; k < 4; k++) ctx.fillRect(x + 2 + k * ((TS - 4) / 4), y + 4, 1, TS - 8);
+            } else if (hsh(tx * 9, ty * 13 + 5) < 0.10) {
+              ctx.fillStyle = 'rgba(40,20,14,0.28)';
+              ctx.beginPath(); ctx.arc(x + TS / 2 + ((tx * 7) % 10) - 5, y + TS / 2, 9 + (ty % 4), 0, Math.PI * 2); ctx.fill();
+            }
+          } else if (this.act === 5) { // 왕성: 금 상감 — 판 경계에 드물게 금선
+            if ((leftSlab !== slabX || tx === 0) && hsh(slabX * 13, ty * 5 + 1) < 0.16) {
+              ctx.fillStyle = 'rgba(176,141,74,0.35)';
+              ctx.fillRect(x, y + 2, 1, TS - 4);
+            }
+          }
           if (RNG.chance(0.10)) { // 잔돌·이물 (기존 감성 유지)
             ctx.fillStyle = 'rgba(120,120,150,0.10)';
             ctx.fillRect(x + RNG.int(6, TS - 12), y + RNG.int(6, TS - 12), RNG.int(3, 8), 3);
@@ -1477,6 +1519,44 @@ const World = {
         ctx.fillRect(tx * TS + TS / 2 - 1, cy0 + 10, 2, ch2 - 20); // 융단 문양 세로줄
       }
     }
+
+    // 1.6) 보스방 결전장 프레이밍 (v125): 왕좌 카펫이 없는 보스방도 '결전의 방'으로 읽히게
+    if (this._bossRoom && !this._bossCarpet) {
+      const AC = { 1: '110,70,140', 2: '60,140,130', 3: '180,130,60', 4: '110,150,70', 5: '180,50,60' }[this.act] || '140,50,60';
+      // 입장로 러너: 좌측 문에서 결전 문양까지, 막 색의 낡은 융단
+      const ry0 = Math.floor(this.rows / 2) * TS - Math.floor(TS * 0.6);
+      const rh = Math.floor(TS * 1.2);
+      const rw = Math.floor(this.cols * 0.58) * TS;
+      ctx.fillStyle = `rgba(${AC},0.26)`;
+      ctx.fillRect(TS, ry0, rw, rh);
+      ctx.fillStyle = `rgba(${AC},0.55)`;
+      ctx.fillRect(TS, ry0, rw, 3);
+      ctx.fillRect(TS, ry0 + rh - 3, rw, 3);
+      ctx.fillStyle = 'rgba(0,0,0,0.28)'; // 러너 그늘 결
+      for (let sx2 = TS + 20; sx2 < TS + rw - 10; sx2 += 52) ctx.fillRect(sx2, ry0 + 6, 2, rh - 12);
+      // 결전 문양: 러너 끝의 이중 링 — 보스가 기다리는 자리
+      const mx = TS + rw + Math.floor(TS * 1.2), my = ry0 + rh / 2;
+      ctx.strokeStyle = `rgba(${AC},0.55)`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(mx, my, TS * 1.15, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(mx, my, TS * 0.72, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(${AC},0.20)`;
+      ctx.beginPath(); ctx.arc(mx, my, TS * 0.72, 0, Math.PI * 2); ctx.fill();
+      // 기둥 받침 데칼 2열 (러너 양옆)
+      for (let px2 = 4; px2 < this.cols - 3; px2 += 4) {
+        for (const py2 of [ry0 - TS - 6, ry0 + rh + TS - 24]) {
+          if (py2 < TS || py2 > (this.rows - 1) * TS) continue;
+          ctx.fillStyle = 'rgba(0,0,0,0.4)';
+          ctx.fillRect(px2 * TS + 6, py2 + 22, 34, 10);
+          ctx.fillStyle = `rgba(${AC},0.5)`;
+          ctx.fillRect(px2 * TS + 10, py2, 26, 26);
+          ctx.fillStyle = 'rgba(255,255,255,0.10)';
+          ctx.fillRect(px2 * TS + 10, py2, 26, 4);
+        }
+      }
+      this._bossBanner = AC; // 정면 벽 배너 색 — 벽 패스에서 그린다
+    } else this._bossBanner = null;
 
     // 2) 바닥 데코 (테마별, 스폰 위치 회피 불필요 — 순수 장식)
     // 첫인상 스프린트 ③: 9~15 → 18~26 — 넓은 검은 바닥이 그대로 노출되던 밀도를 상향
@@ -1565,6 +1645,20 @@ const World = {
           } else if (this.act === 5) { // 왕성: 금 몰딩
             ctx.fillStyle = 'rgba(176,141,74,0.45)';
             ctx.fillRect(x, y + 8, TS, 1);
+          }
+          // 보스방 배너 (v125): 결전의 방 정면 벽마다 막 색의 깃발이 걸린다
+          if (this._bossBanner && tx % 4 === 1) {
+            ctx.fillStyle = `rgba(${this._bossBanner},0.75)`;
+            ctx.fillRect(x + TS / 2 - 6, y + 6, 12, 26);
+            ctx.beginPath();
+            ctx.moveTo(x + TS / 2 - 6, y + 32);
+            ctx.lineTo(x + TS / 2, y + 40);
+            ctx.lineTo(x + TS / 2 + 6, y + 32);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.18)';
+            ctx.fillRect(x + TS / 2 - 6, y + 6, 12, 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(x + TS / 2 - 6, y + 5, 12, 1);
           }
         } else {
           // 윗면(지붕) v124: 석재 블록 질감 — 배경 어둠과 구분되는 '두꺼운 벽 덩어리'로
