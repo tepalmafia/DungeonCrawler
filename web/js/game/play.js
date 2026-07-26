@@ -79,6 +79,130 @@ const GamePlay = {
     }
   },
 
+  // ── 왕의 인장기: 피할 수는 있지만 막을 수는 없다 (예고 1.2s+ → 관통 피해 + 낙인) ──
+  sigActive() { return (this.sigs || []).length > 0; },
+
+  startSignature(boss, type) {
+    if (!this.sigs) this.sigs = [];
+    const p = this.player;
+    const sig = { type, boss, t: 0, phase: 'tel' };
+    if (type === 'halfSweep') {
+      sig.tel = 1.35; sig.side = p.x >= World.cols * TS / 2 ? 'R' : 'L'; // 플레이어 쪽 절반을 벤다
+      sig.splitX = World.cols * TS / 2;
+    } else if (type === 'shieldCharge') {
+      sig.tel = 1.25; sig.x0 = boss.x; sig.y0 = boss.y;
+      const d = Math.hypot(p.x - boss.x, p.y - boss.y) || 1;
+      sig.dir = { x: (p.x - boss.x) / d, y: (p.y - boss.y) / d };
+      sig.len = 640;
+    } else if (type === 'brandZone') {
+      sig.tel = 1.5; sig.lock = 0.45; sig.x = p.x; sig.y = p.y; sig.r = 95;
+    } else if (type === 'sanctPulse') {
+      sig.tel = 1.5;
+      const s = World.safeSpot(p.x + (Math.random() - 0.5) * 260, p.y + (Math.random() - 0.5) * 180);
+      sig.sx = s.x; sig.sy = s.y; sig.sr = 96; // 안전지대 한 곳
+    } else if (type === 'triCharge') {
+      sig.tel = 1.1; sig.dashes = 3; sig.dashN = 0;
+    } else if (type === 'kingCross') {
+      sig.tel = 1.55; sig.cx = boss.x; sig.cy = boss.y; sig.w = 74; // X자 참격 폭
+    } else if (type === 'miniSig') {
+      sig.tel = 1.15; sig.x = boss.x; sig.y = boss.y; sig.r = 150;
+    }
+    this.sigs.push(sig);
+    this.sigWarnT = sig.tel;
+    this.banner = { text: `⚠ ${boss.name} — 인장기!`, life: 1.4, maxLife: 1.4, color: '#e43b44' };
+    AudioSys.roar();
+    Renderer.shake(3, 0.3);
+  },
+
+  // 인장기 관통 명중 — 보호막을 뚫고 하트 2 + 낙인 5초 (대시 무적은 존중: 피할 수 있다)
+  _sigHit(sig, dmg = 2) {
+    const p = this.player;
+    if (p.invuln > 0 || p.god) return; // 회피 성공
+    p.brandT = 5;
+    const hadShield = p.shield;
+    p.shield = false; // 보호막 관통
+    this.hurtPlayer(dmg, { x: 0, y: -0.6 }, 320, (sig.boss && sig.boss.name) || '인장기');
+    Particles.text(p.x, p.y - 44, hadShield ? '관통! 낙인 — 5초간 회복 불가' : '낙인 — 5초간 회복 불가', { color: '#e43b44', size: 13 });
+  },
+
+  _tickSignatures(dt) {
+    if (!this.sigs || !this.sigs.length) return;
+    const p = this.player;
+    for (let i = this.sigs.length - 1; i >= 0; i--) {
+      const s = this.sigs[i];
+      s.t += dt;
+      if (s.type === 'brandZone' && s.t < s.tel) { // 낙인진은 발밑을 따라온다 (마지막 0.45s 고정)
+        if (s.t < s.tel - s.lock) { s.x += (p.x - s.x) * Math.min(1, dt * 3.2); s.y += (p.y - s.y) * Math.min(1, dt * 3.2); }
+        continue;
+      }
+      if (s.t < s.tel) continue;
+      // ── 발동 ──
+      Renderer.shake(6, 0.35);
+      AudioSys.meteorImpact();
+      if (s.type === 'halfSweep') {
+        const inHalf = s.side === 'R' ? p.x >= s.splitX : p.x < s.splitX;
+        Particles.ring(s.splitX, World.rows * TS / 2, { r0: 30, r1: 400, life: 0.5, color: '#e43b44', width: 8 });
+        if (inHalf) this._sigHit(s);
+        this.sigs.splice(i, 1);
+      } else if (s.type === 'shieldCharge') {
+        const b = s.boss;
+        // 경로 캡슐 판정 + 보스 순간 돌진
+        const tx = s.x0 + s.dir.x * s.len, ty = s.y0 + s.dir.y * s.len;
+        const px = p.x - s.x0, py = p.y - s.y0;
+        const tproj = Math.max(0, Math.min(s.len, px * s.dir.x + py * s.dir.y));
+        const perp = Math.hypot(px - s.dir.x * tproj, py - s.dir.y * tproj);
+        if (perp < 62 + p.r) this._sigHit(s, 1); // 방패 파쇄: 하트 1 + 보호막 파괴
+        if (b && !b.dead) { const e2 = World.safeSpot(tx, ty); b.x = e2.x; b.y = e2.y; }
+        Particles.burst((s.x0 + tx) / 2, (s.y0 + ty) / 2, { count: 24, colors: ['#e43b44', '#c8ccd8'], speed: 260, life: 0.5, size: 4 });
+        this.sigs.splice(i, 1);
+      } else if (s.type === 'brandZone') {
+        if (Math.hypot(p.x - s.x, p.y - s.y) < s.r + p.r) this._sigHit(s);
+        Particles.ring(s.x, s.y, { r0: 10, r1: s.r, life: 0.4, color: '#e43b44', width: 6 });
+        this.sigs.splice(i, 1);
+      } else if (s.type === 'sanctPulse') {
+        if (Math.hypot(p.x - s.sx, p.y - s.sy) > s.sr) this._sigHit(s);
+        Particles.ring(s.sx, s.sy, { r0: s.sr, r1: 500, life: 0.5, color: '#f7b32b', width: 7 });
+        this.sigs.splice(i, 1);
+      } else if (s.type === 'triCharge') {
+        const b = s.boss;
+        s.dashN++;
+        if (b && !b.dead) {
+          const d = Math.hypot(p.x - b.x, p.y - b.y) || 1;
+          const dir = { x: (p.x - b.x) / d, y: (p.y - b.y) / d };
+          const dest = World.safeSpot(b.x + dir.x * Math.min(420, d + 60), b.y + dir.y * Math.min(420, d + 60));
+          // 경로 판정 — 셋째 창격만 관통, 1·2타는 일반 피해
+          const len2 = Math.hypot(dest.x - b.x, dest.y - b.y) || 1;
+          const ux = (dest.x - b.x) / len2, uy = (dest.y - b.y) / len2;
+          const px = p.x - b.x, py = p.y - b.y;
+          const tp = Math.max(0, Math.min(len2, px * ux + py * uy));
+          const perp = Math.hypot(px - ux * tp, py - uy * tp);
+          if (perp < 46 + p.r) {
+            if (s.dashN >= 3) this._sigHit(s);
+            else this.hurtPlayer(1, { x: ux, y: uy }, 280, b.name);
+          }
+          b.x = dest.x; b.y = dest.y;
+          Particles.burst(b.x, b.y, { count: 14, colors: ['#c8ccd8', '#e43b44'], speed: 220, life: 0.4, size: 3 });
+        }
+        if (s.dashN >= 3 || !b || b.dead) this.sigs.splice(i, 1);
+        else { s.t = s.tel - 0.55; } // 다음 돌진 0.55s 후
+      } else if (s.type === 'kingCross') {
+        // X자: 중심 기준 대각 두 축 — 축까지의 수직거리
+        const dx = p.x - s.cx, dy = p.y - s.cy;
+        const d1 = Math.abs(dx - dy) / Math.SQRT2; // y=x 축
+        const d2 = Math.abs(dx + dy) / Math.SQRT2; // y=-x 축
+        if (d1 < s.w || d2 < s.w) this._sigHit(s);
+        Particles.ring(s.cx, s.cy, { r0: 20, r1: 460, life: 0.55, color: '#e43b44', width: 9 });
+        this.sigs.splice(i, 1);
+      } else if (s.type === 'miniSig') {
+        if (Math.hypot(p.x - s.x, p.y - s.y) < s.r + p.r) this._sigHit(s, 1);
+        Particles.ring(s.x, s.y, { r0: 16, r1: s.r, life: 0.4, color: '#e43b44', width: 5 });
+        this.sigs.splice(i, 1);
+      } else {
+        this.sigs.splice(i, 1);
+      }
+    }
+  },
+
   // 징조: 무너진 길 — 세 갈래 중 하나가 잔해에 막혀 있다 (선택지 2개는 항상 보장)
   _maybeCollapseDoor(opts) {
     if (opts.length >= 3 && Math.random() < 0.08) {
@@ -526,10 +650,25 @@ const GamePlay = {
         }
         continue;
       }
+      // 우두머리 약식 인장기 (4막+): HP 60% 이하에서 1회 — 왕의 인장을 받은 자들
+      if (e.isMini && !e.dead && !e._sigDone && Dungeon.floor >= 31 && e.hp <= e.maxHp * 0.6 && !this.sigActive()) {
+        e._sigDone = true;
+        this.startSignature(e, 'miniSig');
+      }
       if (!e.dead) e.update(dt, this);
       if (!e.dead) this._steer(e, dt, p);
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
+
+    // ── 왕의 인장기 ──
+    this._tickSignatures(dt);
+    if (this.sigWarnT > 0) this.sigWarnT -= dt;
+    if (p.brandT > 0) {
+      p.brandT -= dt;
+      if (Math.random() < 0.12) {
+        Particles.burst(p.x + (Math.random() - 0.5) * 20, p.y - 20, { count: 1, colors: ['#e43b44'], speed: 24, life: 0.4, size: 2, gravity: -70 });
+      }
+    }
 
     // ── 왕국의 징조 발동 ──
     if (this._omen && !this._omen.fired && !this.roomCleared && this.enemies.some((e) => !e.dead && !e.neutral)) {
@@ -958,9 +1097,10 @@ const GamePlay = {
         pk.y += (dy / d) * 250 * dt;
       }
       if (Math.hypot(p.x - pk.x, p.y - pk.y) < p.r + pk.r) {
-        // 마시다 만 해독제 (이졸데 유품): 하트 회복량 +1
+        // 마시다 만 해독제 (이졸데 유품): 하트 회복량 +1 — 낙인 중에는 회복이 막힌다
         const heal = 1 + (p.heartBonus || 0);
-        if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + heal);
+        if (p.brandT > 0) Particles.text(p.x, p.y - 30, '낙인 — 회복 불가', { color: '#e43b44', size: 12 });
+        else if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + heal);
         AudioSys.pickup();
         Particles.burst(pk.x, pk.y, { count: 8, colors: ['#e43b44', '#f5817e'], speed: 100, life: 0.4, size: 3 });
         this.pickups.splice(i, 1);

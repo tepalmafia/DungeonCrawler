@@ -407,7 +407,7 @@ function createPlayer(x, y, classId = 'knight') {
           }
         }
         // 피의 회전
-        if (this.flags.kn_blood && hits >= 3 && this.hp < this.maxHp) {
+        if (this.flags.kn_blood && hits >= 3 && this.hp < this.maxHp && !(this.brandT > 0)) {
           this.hp++;
           Particles.text(this.x, this.y - 28, '+1', { color: '#e43b44', size: 15 });
         }

@@ -114,6 +114,66 @@ const GameRender = {
       ctx.restore();
     }
 
+    // ── 왕의 인장기 예고 — 길고 또렷하게: 피할 수 있어야 공정하다 ──
+    for (const s of (this.sigs || [])) {
+      if (s.t >= s.tel) continue;
+      const blink = 0.45 + Math.sin(this.blinkT * 16) * 0.2;
+      ctx.save();
+      if (s.type === 'halfSweep') {
+        ctx.globalAlpha = 0.16 * blink * 2;
+        ctx.fillStyle = '#e43b44';
+        const half = s.side === 'R' ? [s.splitX, 0, World.cols * TS - s.splitX, World.rows * TS + 20] : [0, 0, s.splitX, World.rows * TS + 20];
+        ctx.fillRect(half[0], half[1], half[2], half[3]);
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = '#e43b44'; ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath(); ctx.moveTo(s.splitX, 0); ctx.lineTo(s.splitX, World.rows * TS + 20); ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (s.type === 'shieldCharge') {
+        ctx.globalAlpha = 0.3 * blink * 2;
+        ctx.strokeStyle = '#e43b44'; ctx.lineWidth = 124;
+        ctx.beginPath(); ctx.moveTo(s.x0, s.y0); ctx.lineTo(s.x0 + s.dir.x * s.len, s.y0 + s.dir.y * s.len); ctx.stroke();
+      } else if (s.type === 'brandZone') {
+        ctx.globalAlpha = 0.5 * blink * 2;
+        ctx.strokeStyle = '#e43b44'; ctx.fillStyle = 'rgba(228,59,68,0.14)';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#e43b44';
+        ctx.fillText('선고', s.x, s.y - s.r - 8);
+      } else if (s.type === 'sanctPulse') {
+        ctx.globalAlpha = 0.13 * blink * 2;
+        ctx.fillStyle = '#e43b44';
+        ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = '#2ec4b6'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(s.sx, s.sy, s.sr, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#2ec4b6';
+        ctx.fillText('성역 — 이 안으로', s.sx, s.sy - s.sr - 8);
+      } else if (s.type === 'triCharge' && s.boss) {
+        const b = s.boss, pl = this.player;
+        const d = Math.hypot(pl.x - b.x, pl.y - b.y) || 1;
+        ctx.globalAlpha = 0.3 * blink * 2;
+        ctx.strokeStyle = s.dashN >= 2 ? '#e43b44' : '#c8ccd8'; ctx.lineWidth = 92;
+        ctx.beginPath(); ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x + ((pl.x - b.x) / d) * 460, b.y + ((pl.y - b.y) / d) * 460); ctx.stroke();
+      } else if (s.type === 'kingCross') {
+        ctx.globalAlpha = 0.3 * blink * 2;
+        ctx.strokeStyle = '#e43b44'; ctx.lineWidth = s.w * 2;
+        for (const sgn of [1, -1]) {
+          ctx.beginPath();
+          ctx.moveTo(s.cx - 600, s.cy - 600 * sgn);
+          ctx.lineTo(s.cx + 600, s.cy + 600 * sgn);
+          ctx.stroke();
+        }
+      } else if (s.type === 'miniSig') {
+        ctx.globalAlpha = 0.4 * blink * 2;
+        ctx.strokeStyle = '#e43b44'; ctx.fillStyle = 'rgba(228,59,68,0.12)';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // 스폰 마커
     for (const m of this.markers) {
       const r = 10 + m.t * 30;
@@ -684,6 +744,16 @@ const GameRender = {
     // 핏빛 월식 틴트 — 원한이 끓는 동안 세계가 붉다
     if (this._moonT > 0) {
       ctx.fillStyle = `rgba(122,16,24,${Math.min(0.13, this._moonT * 0.05)})`;
+      ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
+    }
+
+    // 인장기 경고 — 화면 테두리가 핏빛으로 고동친다
+    if (this.sigWarnT > 0) {
+      const a = Math.min(0.5, this.sigWarnT) * (0.5 + Math.sin(this.blinkT * 18) * 0.3);
+      const wg = ctx.createRadialGradient(Renderer.W / 2, Renderer.H / 2, Renderer.H * 0.36, Renderer.W / 2, Renderer.H / 2, Renderer.H * 0.72);
+      wg.addColorStop(0, 'rgba(122,16,24,0)');
+      wg.addColorStop(1, `rgba(200,20,34,${a})`);
+      ctx.fillStyle = wg;
       ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
     }
 
