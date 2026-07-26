@@ -163,6 +163,7 @@ const GameScreens = {
   // 보스 러시 (B): 10보스 연속전 — 방·탐색 없이 보스전만. 시작 특성 4장, 보스마다 특성 2장 + 유물
   startBossRush() {
     this.restart();
+    this.state = 'play'; this.route = null; this.routeCards = []; // 원수 연전엔 진군로가 없다
     this.bossRush = true;
     this.clearRunSave();
     Dungeon.floor = 1;

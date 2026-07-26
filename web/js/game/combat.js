@@ -315,6 +315,11 @@ const GameCombat = {
 
     if (e.noDrops) return; // 폭탄벌레 자폭 등 — 보상 없는 죽음
 
+    // 전화의 길: 정예가 한(恨) 조각을 떨군다 — 위험을 정면으로 걸은 값
+    if (e.elite && this.route === 'war') {
+      Meta.data.shards += 1;
+      Particles.text(e.x, e.y - 26, '◆ +1', { color: '#e43b44', size: 12 });
+    }
     // 지름길 층 (R3): 정예가 파편을 떨군다 — 위험을 감수한 만큼의 수당
     if (e.elite && Dungeon.shortcutHot) {
       Meta.data.shards += 4;

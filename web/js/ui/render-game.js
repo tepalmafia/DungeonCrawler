@@ -696,6 +696,7 @@ const GameRender = {
 
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);
+    if (this.state === 'route') HUD.drawRouteChoice(ctx, this);
     if (this.state === 'over') HUD.drawGameOver(ctx, this, this.blinkT);
     if (this.state === 'victory') HUD.drawVictory(ctx, this, this.blinkT);
 

@@ -1,6 +1,37 @@
 // 보상·성장 — XP/레벨업 카드/유물 선택/런 정산.
 // main.js에서 Object.assign(Game, GameRewards)으로 Game에 합쳐진다.
+// 진군로 (왕국 진군 지도) — 막 시작마다 양피지 지도에서 길을 고른다. 선택이 막의 성격을 정한다
+const ROUTES = [
+  { id: 'war', name: '전화(戰火)의 길', tag: '붉은 길', color: '#e43b44',
+    desc: '정예가 들끓는다 (+8%p) — 대신 정예가 한(恨) 조각을 떨군다',
+    lore: '왕의 깃발을 정면으로 걷는다. 놈들이 나를 보게 하라.' },
+  { id: 'mist', name: '안개의 샛길', tag: '잿빛 길', color: '#5c9ded',
+    desc: '토벌대 무리 -1 — 장물아비 까마귀를 만날 확률이 늘어난다',
+    lore: '죽은 자는 소리가 없다. 안개가 나를 감춘다.' },
+  { id: 'old', name: '기억의 옛길', tag: '금빛 길', color: '#b08d4a',
+    desc: '단서 발견 확률이 크게 늘고, 기이한 일이 잦아진다',
+    lore: '생전에 걷던 길이다 — 무엇을 두고 왔는지, 기억나기 시작한다.' },
+];
+
 const GameRewards = {
+  // 진군로 선택 열기 — 막 시작(1·11·21·31·41층)마다
+  openRouteChoice() {
+    if (this.bossRush) return; // 원수 연전엔 길이 없다
+    this.routeCards = ROUTES.map((r) => ({ ...r }));
+    this.choiceLockT = 0.25;
+    this.state = 'route';
+  },
+
+  pickRoute(i) {
+    const r = this.routeCards[i];
+    if (!r) return;
+    this.route = r.id;
+    this.banner = { text: `${r.name} — ${r.tag}로 진군한다`, life: 2.4, maxLife: 2.4, color: r.color };
+    AudioSys.pickup();
+    this.state = 'play';
+    this.saveRun();
+  },
+
   // 런 종료 정산 — 영혼 파편 지급 (1회만)
   endRun(victory) {
     if (this.runEnded) return;
@@ -80,6 +111,7 @@ const GameRewards = {
     this.banner = { text: banners[this.act] || `${this.act}막 — 왕좌가 가까워진다`, life: 2.8, maxLife: 2.8, color: '#8a1c2c' };
     AudioSys.roar();
     Dungeon.nextFloor();
+    this.openRouteChoice(); // 새 막, 새 진군로 — 양피지 지도를 펼친다
     this.saveRun(); // 진입 즉시 스냅샷 — 이어하기 지원
   },
 

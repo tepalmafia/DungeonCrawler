@@ -247,9 +247,15 @@ const Dungeon = {
     // 보물·모닥불은 층당 1회만 — 한 번 들어가면 그 층에서는 다시 나오지 않는다
     if (!this.tookTreasure) pool.push('treasure');
     if (!this.tookCamp && next >= 4) pool.push('camp');
-    if (!this.tookEvent && next >= 3) pool.push('event'); // 기연: 리스크-리워드 이벤트
+    if (!this.tookEvent && next >= 3) {
+      pool.push('event'); // 기연: 리스크-리워드 이벤트
+      if (typeof Game !== 'undefined' && Game.route === 'old') pool.push('event'); // 기억의 옛길: 기이한 일이 잦다
+    }
     if (this.floor >= 3 && !this.tookSiege) pool.push('siege'); // 습격 (맵 M4): 3층+ 웨이브 생존 도전
-    if (this.floor >= 2 && !this.tookMerchant && next >= 3) pool.push('merchant'); // 상인 (G1): 층당 1회
+    if (this.floor >= 2 && !this.tookMerchant && next >= 3) {
+      pool.push('merchant'); // 상인 (G1): 층당 1회
+      if (typeof Game !== 'undefined' && Game.route === 'mist') pool.push('merchant'); // 안개의 샛길: 까마귀와 자주 마주친다
+    }
     if (this.floor >= 4 && !this.trialSeen && RNG.chance(0.3)) pool.push('trial'); // 시련 (G5): 런당 1회, 희귀
     pool.push('combat');
 
@@ -284,8 +290,10 @@ const Dungeon = {
     // 1~2층에 몰리는 역전 곡선 보정 (신규 이탈 구간 완화)
     const earlyEase = this.floor <= 2 ? 2 : 0;
     // 물량 상향 (2026-07 몬스터 확장): 기본 +1, 층 기울기 0.9→1.0, 상한 16→18
-    const n = Math.max(3, Math.min(18, 4 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 1.0) + heatBonus - earlyEase));
+    const mistEase = (typeof Game !== 'undefined' && Game.route === 'mist') ? 1 : 0; // 안개의 샛길: 무리 -1
+    const n = Math.max(3, Math.min(18, 4 + Math.ceil(depth * 0.9) + Math.floor((this.floor - 1) * 1.0) + heatBonus - earlyEase - mistEase));
     let eliteChance = Math.min(0.4, 0.03 + (this.floor - 1) * 0.04); // 층당 4%, 상한 40% (무한 모드)
+    if (typeof Game !== 'undefined' && Game.route === 'war') eliteChance = Math.min(0.6, eliteChance + 0.08); // 전화의 길
     if (Game.pacts && Game.pacts.elite) eliteChance = Math.min(0.55, eliteChance + 0.10); // 서약 '성난 망령'
     if (this.shortcutHot) eliteChance = Math.min(0.5, eliteChance * 2); // 지름길 층: 정예 2배
 

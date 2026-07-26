@@ -183,6 +183,11 @@ const Bot = {
       Input.justPressed['Digit1'] = true;
       return;
     }
+    if (game.state === 'route') {
+      // 진군로: 무작위 선택 — 계측이 세 길을 고르게 밟게 한다
+      Input.justPressed['Digit' + (1 + Math.floor(Math.random() * 3))] = true;
+      return;
+    }
     // ── 사망/클리어: loop 모드면 재시작 ──
     if (game.state === 'over' || game.state === 'victory') {
       if (!this.loop) return;
