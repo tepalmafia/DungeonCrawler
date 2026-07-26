@@ -879,7 +879,9 @@ const GamePlay = {
         pk.y += (dy / d) * 250 * dt;
       }
       if (Math.hypot(p.x - pk.x, p.y - pk.y) < p.r + pk.r) {
-        if (p.hp < p.maxHp) p.hp++;
+        // 마시다 만 해독제 (이졸데 유품): 하트 회복량 +1
+        const heal = 1 + (p.heartBonus || 0);
+        if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + heal);
         AudioSys.pickup();
         Particles.burst(pk.x, pk.y, { count: 8, colors: ['#e43b44', '#f5817e'], speed: 100, life: 0.4, size: 3 });
         this.pickups.splice(i, 1);
