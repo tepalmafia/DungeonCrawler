@@ -1684,7 +1684,7 @@ const HUD = {
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     const o = Meta.data.opts;
     const cx = Renderer.W / 2;
-    const px = cx - 250, pw = 500, py = 92, ph = 330;
+    const px = cx - 250, pw = 500, py = 78, ph = 386; // 6줄 (전체화면 추가)
     ctx.fillStyle = '#14101e';
     ctx.fillRect(px, py, pw, ph);
     ctx.strokeStyle = '#6a5a40';
@@ -1697,12 +1697,14 @@ const HUD = {
 
     const volBar = (v) => '■'.repeat(Math.round((v ?? 0.8) * 10)).padEnd(10, '·') + `  ${Math.round((v ?? 0.8) * 100)}%`;
     const triLbl = (v) => (v ?? 1) <= 0 ? '끔' : (v ?? 1) < 1 ? '약하게' : '보통';
+    const fsOn = window.desktop ? !!game._fsOn : !!document.fullscreenElement;
     const rows = [
       ['음악 음량', volBar(o.bgm)],
       ['효과음 음량', volBar(o.sfx)],
       ['화면 흔들림', triLbl(o.shake)],
       ['피해 숫자 표시', o.dmgNum ? '켬' : '끔'],
       ['화면 섬광', triLbl(o.flash) + '  (광과민성 배려)'],
+      ['전체화면', fsOn ? '켬' : '끔'],
     ];
     const ry0 = py + 92, rh = 40;
     rows.forEach(([name, val], i) => {

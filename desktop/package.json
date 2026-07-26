@@ -1,0 +1,23 @@
+{
+  "name": "grave-to-throne-desktop",
+  "productName": "무덤에서 왕좌까지",
+  "version": "0.1.0",
+  "description": "무덤에서 왕좌까지 — 데스크톱(스팀) 래퍼",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --mac --linux"
+  },
+  "build": {
+    "appId": "com.tepalmafia.gravetothrone",
+    "files": ["main.cjs", "preload.cjs", "../web/**/*"],
+    "directories": { "output": "dist" }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "optionalDependencies": {
+    "steamworks.js": "^0.4.0"
+  }
+}

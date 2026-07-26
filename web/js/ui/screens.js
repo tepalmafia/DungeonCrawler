@@ -86,9 +86,21 @@ const GameScreens = {
   },
 
   // ── 설정 패널 (O) — 음량/화면 흔들림/대미지 숫자/섬광. 거점·일시정지 공용 ──
+  // 전체화면 토글 — 데스크톱(Electron)은 창 전체화면, 웹은 브라우저 Fullscreen API
+  toggleFullscreen() {
+    if (window.desktop && window.desktop.setFullscreen) {
+      this._fsOn = !this._fsOn;
+      window.desktop.setFullscreen(this._fsOn);
+    } else if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  },
+
   _tickSettings() {
     const o = Meta.data.opts;
-    const ROWS = 5;
+    const ROWS = 6;
     this._setRow = this._setRow || 0;
     if (Input.pressed('Escape', 'KeyO')) {
       this.showSettings = false;
@@ -107,6 +119,7 @@ const GameScreens = {
     else if (this._setRow === 2) o.shake = tri(o.shake);
     else if (this._setRow === 3) o.dmgNum = o.dmgNum ? 0 : 1;
     else if (this._setRow === 4) o.flash = tri(o.flash);
+    else if (this._setRow === 5) { this.toggleFullscreen(); return; }
     AudioSys.applyOpts();
     AudioSys.pickup(); // 새 음량이 곧장 귀로 확인된다
     Meta.save();

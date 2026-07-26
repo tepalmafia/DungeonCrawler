@@ -84,7 +84,7 @@ const Game = {
     if (this.runEnded || Dungeon.floor > 50 || this.endless || this.bossRush) return; // 무한 모드·보스 러시는 저장 없음
     const p = this.player;
     try {
-      localStorage.setItem('dungeoncrawler_run', JSON.stringify({
+      Store.set('dungeoncrawler_run', JSON.stringify({
         v: 1, cls: p.classId, heat: this.heat, pacts: this.pacts,
         act: this.act || 1, sp: this.shardsPaid || 0, kp: this.killsPaid || 0, route: this.route || null,
         floor: Dungeon.floor, roomIndex: Dungeon.roomIndex, roomType: Dungeon.roomType,
@@ -105,14 +105,14 @@ const Game = {
 
   loadRunSave() {
     try {
-      const raw = localStorage.getItem('dungeoncrawler_run');
+      const raw = Store.get('dungeoncrawler_run');
       const s = raw ? JSON.parse(raw) : null;
       return s && s.v === 1 ? s : null;
     } catch (e) { return null; }
   },
 
   clearRunSave() {
-    try { localStorage.removeItem('dungeoncrawler_run'); } catch (e) {}
+    try { Store.remove('dungeoncrawler_run'); } catch (e) {}
   },
 
   resumeRun() {
@@ -631,10 +631,11 @@ const Game = {
 Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
 
 // ── 부트스트랩 ──
-(function boot() {
+(async function boot() {
   const canvas = document.getElementById('game');
   Renderer.init(canvas);
   Input.init(canvas);
+  await Store.init(); // 저장 백엔드 준비 (웹 localStorage / 데스크톱 세이브 파일) — Meta.load보다 먼저
   Meta.load();
   // 픽셀 폰트 선로드 — 로드 전 프레임은 monospace로 그려지다 자연 전환 (font-display: swap)
   if (document.fonts && document.fonts.load) {
@@ -688,6 +689,9 @@ Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     acc += dt;
+    // 게임패드 폴링 — 키 입력으로 번역 (선택 화면에선 십자키 = 번호)
+    const MENU_STATES = ['levelup', 'relic', 'route', 'skillmod', 'hub', 'over', 'victory', 'title'];
+    Input.pollGamepad(MENU_STATES.includes(Game.state) || Game.paused);
     while (acc >= STEP) {
       // 배속 (?ff=N): 프레임당 N틱 — 봇 소크 테스트용
       for (let i = 0; i < Bot.ff; i++) {
