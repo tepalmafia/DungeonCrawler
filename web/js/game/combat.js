@@ -105,6 +105,10 @@ const GameCombat = {
     // 약한 빌드에는 상한이 걸리지 않으므로 저점 난이도는 그대로다.
     // 왕관의 파편: 굵직한 표적 특화 — 버스트 상한보다 먼저 곱해 상한 취지 유지
     if ((e.isBoss || e.isMini) && this.player && this.player.rflags.crownshard) dmg = Math.round(dmg * 1.15);
+    // 시너지 유물 (v128): 표적의 상태가 피해를 키운다 — 버스트 상한보다 먼저 곱한다
+    if ((e.isBoss || e.isMini || e.elite) && this.player && this.player.rflags.wolftooth) dmg = Math.round(dmg * 1.1); // 흰 늑대의 이빨
+    if (e.status && e.status.burn > 0 && this.player && this.player.rflags.brand) dmg = Math.round(dmg * 1.25); // 낙인 인두
+    if (e.status && e.status.shock > 0 && this.player && this.player.rflags.gallows) dmg = Math.round(dmg * 1.35); // 교수대의 밧줄
     if (e._markUntil && this.time < e._markUntil) dmg = Math.round(dmg * 1.25); // 사냥 표식 (계승)
     if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.015)));
     // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
@@ -196,6 +200,19 @@ const GameCombat = {
         e._markUntil = this.time + 2.5;
         Particles.ring(e.x, e.y, { r0: 4, r1: 26, life: 0.3, color: '#8adf76', width: 2 });
       }
+      // 사형수의 쇠고랑 (v128): 감전이 이웃에게 옮는다 — 감전 전이 유물
+      if (pf && pf.rflags.conduct && e.status && e.status.shock > 0) {
+        let near = null, bd = 120;
+        for (const o of this.enemies) {
+          if (o === e || o.dead || o.phased || o.neutral || (o.status && o.status.shock > 0)) continue;
+          const dd = Math.hypot(o.x - e.x, o.y - e.y);
+          if (dd < bd) { bd = dd; near = o; }
+        }
+        if (near) {
+          near.status.shock = Math.max(near.status.shock || 0, 1.5);
+          Particles.text(near.x, near.y - 26, '전이', { color: '#ffd866', size: 11 });
+        }
+      }
     }
     this.damageEnemy(e, dmg, dir, { ...opts, feel: true });
   },
@@ -256,6 +273,11 @@ const GameCombat = {
         const g = Math.round((4 + Dungeon.floor) * gmul);
         this.gold += g;
         Particles.text(e.x, e.y - 26, `+${g}G`, { color: '#ffd866', size: 13 });
+      }
+      // 묘지기의 삽 (v128): 잡몹도 가끔 동전을 문다 — 소액 골드 보조 수입
+      if (pl && pl.rflags.shovel && !e.isBoss && !e.elite && !e.isMini && Math.random() < 0.08) {
+        this.gold += 2;
+        Particles.text(e.x, e.y - 22, '+2G', { color: '#ffd866', size: 11 });
       }
       // 도살자의 갈고리: 굵직한 처치가 곧 회복 — 근접 빌드의 유지력 축
       if (pl && pl.rflags.butcher && (e.elite || e.isMini || e.isBoss) && pl.hp < pl.maxHp && !(pl.brandT > 0)) {
@@ -393,7 +415,7 @@ const GameCombat = {
     if (p.flags.burnboom && e.status.burn > 0) {
       this._explode(e.x, e.y, 80, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
     }
-    if ((p.flags.plague || p.form === 'plague') && e.status.poison > 0) { // 역병 의사 (계승): 역병은 번진다
+    if ((p.flags.plague || p.form === 'plague' || p.rflags.venomburst) && e.status.poison > 0) { // 역병 의사 (계승)·초록 유리병 (유물): 역병은 번진다
       this.zones.push({ x: e.x, y: e.y, r: 50, life: 2.5, kind: 'poison', tickT: 0, hit: null });
     }
     if (p.form === 'venge') { // 복수귀 (계승): 처치마다 원한이 쌓인다
@@ -402,6 +424,22 @@ const GameCombat = {
     }
     if (p.rflags.bomb && Math.random() < 0.15) {
       this._explode(e.x, e.y, 70, 2, ['#f7b32b', '#ff7043'], '#f7b32b');
+    }
+    // 집행인의 장갑 (v128): 크리티컬 처치(brutal)가 곧 처형 — 폭발로 번진다
+    if (p.rflags.headsman && brutal) {
+      this._explode(e.x, e.y, 70, 2, ['#e43b44', '#f7b32b'], '#e43b44');
+    }
+    // 죄인의 사슬 (v128): 3초 안의 세 목숨이 사슬을 푼다 — 대시 완전 충전
+    if (p.rflags.chain3) {
+      if (this.time - (p._ckT || -9) > 3) { p._ckT = this.time; p._ckN = 0; }
+      if (++p._ckN >= 3) {
+        p._ckN = 0; p._ckT = -9;
+        if (p.dashCharges < p.dashMax) {
+          p.dashCharges = p.dashMax;
+          p.dashRegenT = 0;
+          Particles.text(p.x, p.y - 26, '사슬이 풀린다!', { color: '#5ce0e6', size: 13 });
+        }
+      }
     }
     // 과충전: 물량방에서 처치가 초당 수 회 일어나면 사실상 무한 대시가 되므로 2초에 1회로 제한
     if (p.flags.overcharge && e.status.shock > 0 && p.dashCharges < p.dashMax && !(p._overchargeCd > 0)) {
@@ -540,11 +578,29 @@ const GameCombat = {
           p.skillCd = Math.max(0, p.skillCd - 1.5);
           Particles.text(p.x, p.y - 52, '스킬 -1.5초', { color: '#f7b32b', size: 13 });
         }
+        // 검은 거울 조각 (v128): 완벽 회피의 잔상이 주위를 벤다
+        if (p.rflags.mirror) {
+          for (const en of this.enemies) {
+            if (en.dead || en.phased || en.neutral) continue;
+            const dd = Math.hypot(en.x - p.x, en.y - p.y);
+            if (dd < 110) {
+              this.damageEnemy(en, 3, { x: (en.x - p.x) / (dd || 1), y: (en.y - p.y) / (dd || 1) }, { feel: false, kb: 220, color: '#5ce0e6' });
+            }
+          }
+        }
       }
       return;
     }
     // 사인 기록: 명시된 출처(용암 등) > 최근접 적 추정
     this._lastHurtBy = src || this._nearestFoeName() || '이름 모를 어둠';
+    // 흰 늑대의 가죽 (v128): 상처 없는 몸이 첫 이빨을 튕겨낸다 (12초마다 1회)
+    if (p.rflags.pelt && p.hp >= p.maxHp && !(p._peltCd > 0)) {
+      p._peltCd = 12;
+      Particles.text(p.x, p.y - 34, '늑대 가죽!', { color: '#e8e0cf', size: 13 });
+      Particles.ring(p.x, p.y, { r0: 6, r1: 60, life: 0.3, color: '#e8e0cf', width: 3 });
+      AudioSys.clank();
+      return;
+    }
     if (p.form === 'venge' && p._vs > 0 && !p.shield) { p._vs = Math.floor(p._vs / 2); p._vsMax = false; } // 복수귀: 피는 원한을 씻는다
 
     // 보호막: 피해 1회 무효
@@ -597,6 +653,8 @@ const GameCombat = {
       dir: Math.atan2(dir.y, dir.x), spread: 0.7,
     });
 
+    // 수의 고정핀 (v128): 맞은 만큼 빨라진다 — 이탈 창
+    if (p.rflags.panic) p._panicT = 2.5;
     // 잿불 망토: 얻어맞은 대가로 주변을 불태운다 (반응 재료 공급원이기도 하다)
     if (p.rflags.ashcloak) {
       for (const e of this.enemies) {

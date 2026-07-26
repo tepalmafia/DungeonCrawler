@@ -1189,6 +1189,10 @@ const GamePlay = {
         if (p.form === 'chalice') { p._chaliceT = 4; Particles.text(p.x, p.y - 42, '성배의 힘 +1', { color: '#ffd866', size: 12 }); }
         if (p.brandT > 0) Particles.text(p.x, p.y - 30, '낙인 — 회복 불가', { color: '#e43b44', size: 12 });
         else if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + heal);
+        else if (p.rflags.martyr && !p.shield) { // 순교자의 피 (v128): 넘치는 생명이 막이 된다
+          p.shield = true;
+          Particles.text(p.x, p.y - 30, '순교자의 피 — 보호막', { color: '#5ce0e6', size: 12 });
+        }
         AudioSys.pickup();
         Particles.burst(pk.x, pk.y, { count: 8, colors: ['#e43b44', '#f5817e'], speed: 100, life: 0.4, size: 3 });
         this.pickups.splice(i, 1);

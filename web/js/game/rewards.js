@@ -212,6 +212,16 @@ const GameRewards = {
       // 완만한 커브: 초반 과속을 막고 심층(6~10층)에서도 성장이 이어지게 한다
       this.xpNext = Math.round(this.xpNext * 1.27); // 1.24→1.27: 중반 이후 레벨 폭주 완화
       this.pendingChoices++;
+      // 찬탈자의 서명 (v128): 성장이 곧 생존 — 레벨업 회복 + 5레벨마다 최대 HP
+      const up = this.player;
+      if (up && up.rflags.usurper) {
+        if (up.hp < up.maxHp && !(up.brandT > 0)) up.hp++;
+        if (this.level % 5 === 0) {
+          up.maxHp++;
+          up.hp = Math.min(up.maxHp, up.hp + 1);
+          Particles.text(up.x, up.y - 40, '찬탈자의 서명 — 최대 HP +1', { color: '#f7b32b', size: 12 });
+        }
+      }
     }
     this.checkEvolution(); // 개화 대기 중이었다면 Lv.12 도달 순간 진화
     if (this.pendingChoices > 0 && this.state === 'play') {
