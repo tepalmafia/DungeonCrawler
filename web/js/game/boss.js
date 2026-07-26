@@ -139,7 +139,9 @@ const BOSS_DEFS = {
   },
   // ── 3막 막보스 (30층): 나를 판결한 자 ──
   30: {
-    awakened: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', scale: 1.9, r: 33, hp: 2400, speed: 36,
+    // 관통 v3: 발디아 15회 — 흰 늑대(11)·왕(5)을 웃도는 서열 역전. hp 2400→2100로 TTK 단축
+    // (armor cap은 유지 — 막보스의 '판결의 법복' 정체성. 2100 < 이노첸시오 3200 서열 보존)
+    awakened: true, name: "대재판관 '발디아 공작'", sprite: 'bossValdia', scale: 1.9, r: 33, hp: 2100, speed: 36,
     mechanic: { type: 'armor', cap: 2, label: '판결의 법복 — 강한 일격을 경감한다' },
     banner: "대재판관 '발디아 공작'",
     punish: 'volley', punishProj: 'rock',
@@ -236,8 +238,10 @@ const BOSS_DEFS = {
     deathPalette: ['#b8ae96', '#7a1c28', '#3a2c1a'],
   },
   63: {
+    // 관통 v3: 3막 홀수층 5조우 × 사망 ~10 = 구간 최다 군집 (짝수층 퀼른은 0) — 중갑 cap 2로
+    // TTK가 극단적으로 길어 링 연쇄 노출이 누적됐다. cap 2→3: 강타 경감은 유지하되 TTK 단축
     awakened: true, name: "사병대장 '철퇴 가로크'", sprite: 'bossGarok', scale: 1.9, r: 32, hp: 760, speed: 38,
-    mechanic: { type: 'armor', cap: 2, label: '영주의 중갑 — 강한 일격을 경감한다' },
+    mechanic: { type: 'armor', cap: 3, label: '영주의 중갑 — 강한 일격을 경감한다' },
     banner: "사병대장 '철퇴 가로크'",
     punish: 'charge', sig: 'miniSig',
     p1: ['charge>ring', 'ring>fan:rock', 'sweep>sweep>ring'],
