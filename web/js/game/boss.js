@@ -511,9 +511,16 @@ function createBoss(floor, x, y) {
       }
 
       // ── 기믹: 백열 (16초마다 가속, 최대 4중첩) ──
+      // 규칙 서사 (v122): 증거 20+로 왕좌에 서면 성배의 고동이 흔들린다 — 진실이 곧 무기.
+      // 보너스 방향으로만 작동한다 (미수집 유저는 기존 밴드 그대로 — 수집을 게이트로 만들지 않는다)
       if (this.def.mechanic?.type === 'rage' && this.state !== 'enter') {
+        const rageCap = (this.defId === 50 && Meta.clueCount() >= 20) ? 2 : 4;
         this.rageT += dt;
-        if (this.rageT >= 16 && this.rageStacks < 4) {
+        if (this.rageT >= 16 && this.rageStacks >= rageCap && rageCap === 2 && !this._truthShown) {
+          this._truthShown = true;
+          game.banner = { text: '성배가 진실 앞에 떨고 있다 — 왕의 고동이 더는 빨라지지 못한다', life: 2.6, maxLife: 2.6, color: '#f7b32b' };
+        }
+        if (this.rageT >= 16 && this.rageStacks < rageCap) {
           this.rageT = 0;
           this.rageStacks++;
           game.banner = { text: `${this.name}의 기세가 오른다! (×${this.rageStacks})`, life: 1.3, maxLife: 1.3, color: '#ff7043' };
@@ -598,6 +605,15 @@ function createBoss(floor, x, y) {
                 this.hp <= this.maxHp * 0.75 && !(this._sigT > 0) && !game.sigActive()) {
               const act = Math.min(5, Math.ceil((Dungeon.floor <= 50 ? Dungeon.floor : 46) / 10));
               const interval = { 1: 999, 2: 999, 3: 12, 4: 10, 5: 8 }[act] || 10;
+              // 규칙 서사 (v122): 흰 늑대는 가레스에게 첫 인장기를 겨누다 — 멈칫한다.
+              // 배신과 죄책감을 대사가 아니라 프레임으로: 일기토 1회가 불발된다 (가레스 회차 한정, 전투당 1회)
+              if (this.defId === 45 && !this._hesitated && game.player && game.player.classId === 'knight') {
+                this._hesitated = true;
+                game.banner = { text: '늑대의 창끝이 흔들린다 — "…가레스? 그 목소리, 설마."', life: 2.4, maxLife: 2.4, color: '#c9b8e8' };
+                this.state = 'idle';
+                this.stateT = -1.4;
+                break;
+              }
               if (!this._sigDone || this._sigElapsed >= interval) {
                 this._sigDone = true;
                 this._sigElapsed = 0;

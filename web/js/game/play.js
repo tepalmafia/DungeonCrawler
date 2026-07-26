@@ -227,6 +227,18 @@ const GamePlay = {
       44: '처형대가 늘어서 있다. 저 중 하나가 — 내 것이었다.',
       49: '문 너머에서 심장 소리가 들린다. 내 것이 아니다. 성배의 것이다.',
     };
+    if (f === 44 && !Meta.data.scaffoldSeen) {
+      // 환경 서사 (v122): 내가 처형된 그 단두대 — 생애 첫 도달만 회상이 덮친다 (이후엔 독백 한 줄)
+      Meta.data.scaffoldSeen = true;
+      Meta.save();
+      this._monoDone[f] = true;
+      this.hurtFlash = 0.9;
+      Renderer.shake(4, 0.5);
+      this._storyQ = this._storyQ || [];
+      this._storyQ.push({ text: '…무릎을 꿇렸던 자리다. 목이 놓였던 홈이, 그대로 있다.', color: '#c8c0a8' });
+      this._storyQ.push({ text: '그날 군중 속에서 누군가 울었다. 이제 안다 — 울어준 이가 있었다.', color: '#9a9488' });
+      return;
+    }
     if (MONO[f]) {
       this._monoDone[f] = true;
       this.showMonologue(MONO[f]);
