@@ -1345,51 +1345,115 @@ const GamePlay = {
           }
           Renderer.shake(3, 0.2);
         } else if (it.kind === 'mystery') {
-          // 미지의 기연: 수락하는 순간 정체가 드러난다 (60% 순이익 / 25% 대가 있는 이익 / 15% 손해)
-          const roll = Math.random();
+          // 미지의 기연 (v129): 15종 가중치 테이블 — 60% 순이익 / 25% 대가 있는 이익 / 15% 손해.
+          // 봇 수락 조건(최대 HP≥4·HP≥3)이 감당하는 최악은 그대로: HP -2 / 최대 HP -1.
           this.hurtFlash = 0.15;
           Renderer.shake(4, 0.25);
           Particles.burst(it.x, it.y, { count: 20, colors: ['#b13ae0', '#ffd866', '#241832'], speed: 160, life: 0.5, size: 3 });
-          if (roll < 0.25) {
-            const rolled = rollRelics(p, 1, false);
-            if (rolled.length > 0) this.acquireRelic(rolled[0]);
-            else { Meta.data.shards += 40; Meta.save(); Particles.text(p.x, p.y - 30, '◆ +40', { color: '#2ec4b6', size: 15 }); }
-            this.banner = { text: '기연 — 잠들어 있던 유물을 얻었다!', life: 2.0, maxLife: 2.0, color: '#f7b32b' };
-          } else if (roll < 0.40) {
-            p.bonusAtk += 1;
-            this.banner = { text: '기연 — 힘이 깃든다 (공격력 +1)', life: 2.0, maxLife: 2.0, color: '#ffd866' };
-            AudioSys.crit();
-          } else if (roll < 0.55) {
-            p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1);
-            this.banner = { text: '기연 — 생명력이 차오른다 (최대 HP +1)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
-            AudioSys.pickup();
-          } else if (roll < 0.60) {
-            const bonus = 30 + Dungeon.floor * 3;
-            Meta.data.shards += bonus; Meta.save();
-            Particles.text(p.x, p.y - 30, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
-            this.banner = { text: '기연 — 영혼 파편이 쏟아진다!', life: 2.0, maxLife: 2.0, color: '#2ec4b6' };
-            AudioSys.buy();
-          } else if (roll < 0.85) {
-            // 대가 있는 이익: 저주받은 유물 (유물 풀 고갈 시 파편으로 대체 — 보상 없는 저주 방지)
-            const rolled = rollRelics(p, 1, false);
-            if (rolled.length > 0) {
-              this.acquireRelic(rolled[0]);
-              p.maxHp = Math.max(2, p.maxHp - 1); // 도박 저주는 하한 2 — 선택한 적 없는 1칸 인생 방지
-              p.hp = Math.min(p.hp, p.maxHp);
-              this.banner = { text: '기연 — 유물을 얻었지만... 저주가 스며든다 (최대 HP -1)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
+          const EV = [
+            // ── 순이익 (60) ──
+            { w: 8, run: () => { // 잠든 유물
+              const rolled = rollRelics(p, 1, false);
+              if (rolled.length > 0) this.acquireRelic(rolled[0]);
+              else { Meta.data.shards += 40; Meta.save(); Particles.text(p.x, p.y - 30, '◆ +40', { color: '#2ec4b6', size: 15 }); }
+              this.banner = { text: '기연 — 잠들어 있던 유물을 얻었다!', life: 2.0, maxLife: 2.0, color: '#f7b32b' };
+            } },
+            { w: 7, run: () => { // 힘
+              p.bonusAtk += 1;
+              this.banner = { text: '기연 — 힘이 깃든다 (공격력 +1)', life: 2.0, maxLife: 2.0, color: '#ffd866' };
+              AudioSys.crit();
+            } },
+            { w: 7, run: () => { // 생명력
+              p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1);
+              this.banner = { text: '기연 — 생명력이 차오른다 (최대 HP +1)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+              AudioSys.pickup();
+            } },
+            { w: 6, run: () => { // 영혼 파편
+              const bonus = 30 + Dungeon.floor * 3;
+              Meta.data.shards += bonus; Meta.save();
+              Particles.text(p.x, p.y - 30, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
+              this.banner = { text: '기연 — 영혼 파편이 쏟아진다!', life: 2.0, maxLife: 2.0, color: '#2ec4b6' };
+              AudioSys.buy();
+            } },
+            { w: 8, run: () => { // 낙수공의 금고: 골드
+              const g = 25 + Dungeon.floor * 2;
+              this.gold += g;
+              Particles.text(p.x, p.y - 30, `+${g}G`, { color: '#ffd866', size: 16 });
+              this.banner = { text: '기연 — 죽은 낙수공의 금고다. 주인은 이제 없다', life: 2.0, maxLife: 2.0, color: '#ffd866' };
+              AudioSys.buy();
+            } },
+            { w: 8, run: () => { // 순례자의 물병: 완전 회복 + 보호막
+              if (!(p.brandT > 0)) p.hp = p.maxHp;
+              p.shield = true;
+              this.banner = { text: '기연 — 순례자의 물병. 죽은 몸에도 물은 달다 (완전 회복 + 보호막)', life: 2.2, maxLife: 2.2, color: '#5ce0e6' };
+              AudioSys.pickup();
+            } },
+            { w: 6, run: () => { // 별똥별의 파편: 크리
+              p.critChance += 0.08;
+              this.banner = { text: '기연 — 별똥별의 파편이 눈에 스민다 (크리티컬 +8%)', life: 2.0, maxLife: 2.0, color: '#f7b32b' };
+              AudioSys.crit();
+            } },
+            { w: 5, run: () => { // 파수꾼의 신발: 이속 + 대시
+              p.speed *= 1.06;
+              p.dashCharges = p.dashMax;
+              p.dashRegenT = 0;
+              this.banner = { text: '기연 — 늙은 파수꾼의 신발. 아직 걸음이 남아 있다 (이동 +6%)', life: 2.0, maxLife: 2.0, color: '#5ca4cc' };
+              AudioSys.pickup();
+            } },
+            { w: 5, run: () => { // 이름 없는 비석: 경험
+              this.gainXp(Math.round(this.xpNext * 0.6 / (p.xpMul || 1)));
+              this.banner = { text: '기연 — 이름 없는 비석 앞에서, 어딘가 익숙한 이름을 읽었다 (경험 획득)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
+            } },
+            // ── 대가 있는 이익 (25) ──
+            { w: 9, run: () => { // 저주받은 유물
+              const rolled = rollRelics(p, 1, false);
+              if (rolled.length > 0) {
+                this.acquireRelic(rolled[0]);
+                p.maxHp = Math.max(2, p.maxHp - 1); // 도박 저주는 하한 2 — 선택한 적 없는 1칸 인생 방지
+                p.hp = Math.min(p.hp, p.maxHp);
+                this.banner = { text: '기연 — 유물을 얻었지만... 저주가 스며든다 (최대 HP -1)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
+                AudioSys.hurt();
+              } else {
+                Meta.data.shards += 40; Meta.save();
+                Particles.text(p.x, p.y - 30, '◆ +40', { color: '#2ec4b6', size: 15 });
+                this.banner = { text: '기연 — 영혼 파편을 얻었다', life: 1.8, maxLife: 1.8, color: '#2ec4b6' };
+              }
+            } },
+            { w: 8, run: () => { // 피의 계약서: 공격 +2, HP -2
+              p.bonusAtk += 2;
+              p.hp = Math.max(1, p.hp - 2);
+              this.banner = { text: '기연 — 피의 계약서에 서명했다 (공격력 +2, HP -2)', life: 2.2, maxLife: 2.2, color: '#e43b44' };
+              this.hurtFlash = 0.2;
               AudioSys.hurt();
-            } else {
-              Meta.data.shards += 40; Meta.save();
-              Particles.text(p.x, p.y - 30, '◆ +40', { color: '#2ec4b6', size: 15 });
-              this.banner = { text: '기연 — 영혼 파편을 얻었다', life: 1.8, maxLife: 1.8, color: '#2ec4b6' };
-            }
-          } else {
-            // 손해: 피의 대가 (한도: HP 1까지만)
-            p.hp = Math.max(1, p.hp - 2);
-            this.banner = { text: '기연 — 함정이었다! (HP -2)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
-            this.hurtFlash = 0.22;
-            AudioSys.hurt();
-          }
+            } },
+            { w: 8, run: () => { // 금단의 서: 특성 +1, HP -1
+              p.hp = Math.max(1, p.hp - 1);
+              this.pendingChoices++;
+              this.banner = { text: '기연 — 금단의 서를 읽었다. 머리가 아프다 (특성 +1, HP -1)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
+              AudioSys.hurt();
+              if (this.state === 'play') this.openTraitChoice('levelup');
+            } },
+            // ── 손해 (15) ──
+            { w: 6, run: () => { // 함정
+              p.hp = Math.max(1, p.hp - 2);
+              this.banner = { text: '기연 — 함정이었다! (HP -2)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
+              this.hurtFlash = 0.22;
+              AudioSys.hurt();
+            } },
+            { w: 5, run: () => { // 도굴꾼의 손버릇: 골드 -30%
+              const loss = Math.ceil(this.gold * 0.3);
+              this.gold = Math.max(0, this.gold - loss);
+              this.banner = { text: loss > 0 ? `기연 — 도굴꾼의 손이 먼저 다녀갔다 (-${loss}G)` : '기연 — 도굴꾼의 손이 먼저 다녀갔다. 빈 주머니라 다행이다', life: 2.2, maxLife: 2.2, color: '#8f8577' };
+              AudioSys.deny();
+            } },
+            { w: 4, run: () => { // 헛된 속삭임: 아무것도 없다
+              this.banner = { text: '기연 — 속삭임을 따라갔지만... 먼지뿐이었다', life: 2.0, maxLife: 2.0, color: '#8f8577' };
+              AudioSys.deny();
+            } },
+          ];
+          let tw = 0; for (const ev of EV) tw += ev.w;
+          let mroll = Math.random() * tw;
+          for (const ev of EV) { mroll -= ev.w; if (mroll <= 0) { ev.run(); break; } }
         } else if (it.kind === 'cursedChest') {
           // 저주받은 상자: 유물 +1, 최대 HP -1
           const rolled = rollRelics(p, 1, false);
