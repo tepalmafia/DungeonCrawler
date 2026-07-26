@@ -22,6 +22,26 @@ const GameRewards = {
     this.state = 'route';
   },
 
+  // 스킬 개조 (3축): 31층 세공대 — 직업 전용 모듈 3택1
+  openModChoice() {
+    const mods = SKILL_MODS[this.player.classId] || [];
+    if (!mods.length || this.player.skillMod) return;
+    this.modCards = mods.map((m) => ({ ...m }));
+    this.choiceLockT = 0.25;
+    this.state = 'skillmod';
+    this.banner = null;
+  },
+
+  pickSkillMod(i) {
+    const m = this.modCards[i];
+    if (!m) return;
+    this.player.skillMod = m.id;
+    this.banner = { text: `원한의 세공 — 「${m.name}」 ${this.player.skillName()}의 형태가 바뀐다`, life: 2.6, maxLife: 2.6, color: '#b13ae0' };
+    AudioSys.levelup();
+    this.state = 'play';
+    this.saveRun();
+  },
+
   pickRoute(i) {
     const r = this.routeCards[i];
     if (!r) return;

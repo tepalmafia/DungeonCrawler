@@ -838,6 +838,20 @@ const GamePlay = {
     for (let i = this.rains.length - 1; i >= 0; i--) {
       const r = this.rains[i];
       r.t += dt;
+      // 개조 「추적하는 비」: 구름이 가장 가까운 적을 따라간다
+      if (r.track) {
+        let tgt = null, best = 9999;
+        for (const e of this.enemies) {
+          if (e.dead || e.neutral) continue;
+          const dd = Math.hypot(e.x - r.x, e.y - r.y);
+          if (dd < best) { best = dd; tgt = e; }
+        }
+        if (tgt) {
+          const dd = Math.hypot(tgt.x - r.x, tgt.y - r.y) || 1;
+          r.x += ((tgt.x - r.x) / dd) * 85 * dt;
+          r.y += ((tgt.y - r.y) / dd) * 85 * dt;
+        }
+      }
       if (r.fired < r.shots) {
         r.next -= dt;
         if (r.next <= 0) {
@@ -854,7 +868,7 @@ const GamePlay = {
             if (e.dead || e.phased) continue;
             const dd = Math.hypot(e.x - ix, e.y - iy);
             if (dd < 30 + e.r) {
-              p.strike(this, e, { x: (e.x - ix) / (dd || 1), y: (e.y - iy) / (dd || 1) }, { kb: 130 });
+              p.strike(this, e, { x: (e.x - ix) / (dd || 1), y: (e.y - iy) / (dd || 1) }, { kb: 130, dmgMul: r.dmgMul || 1 });
               if (!e.dead) e.status.shock = Math.max(e.status.shock, 0.9); // 화살비 지역 장악: 잠깐 감속
             }
           }
@@ -884,10 +898,21 @@ const GamePlay = {
           const dd = Math.hypot(e.x - m.x, e.y - m.y);
           if (dd < m.r + e.r) {
             const dir = { x: (e.x - m.x) / (dd || 1), y: (e.y - m.y) / (dd || 1) };
-            const dmg = p.currentAtk() * 4;
+            const dmg = Math.max(1, Math.round(p.currentAtk() * 4 * (m.dmgMul || 1)));
             const crit = p.rflags.allcrit || Math.random() < Math.min(0.8, p.critChance);
-            this.hitEnemy(e, crit ? Math.round(dmg * p.critMul) : dmg, dir, { crit, kb: 320 });
+            this.hitEnemy(e, crit ? Math.round(dmg * p.critMul) : dmg, dir, { crit, kb: m.pull ? -260 : 320 });
             if (!e.dead) e.status.burn = Math.max(e.status.burn, p.flags.inferno ? 4 : 2);
+          }
+        }
+        // 개조 「별의 인력」: 착탄 반경 밖 1.6배까지 끌어당긴다
+        if (m.pull) {
+          for (const e of this.enemies) {
+            if (e.dead || e.neutral || e.isBoss) continue;
+            const dd = Math.hypot(e.x - m.x, e.y - m.y);
+            if (dd > m.r && dd < m.r * 1.7) {
+              e.kbx -= ((e.x - m.x) / dd) * 340;
+              e.kby -= ((e.y - m.y) / dd) * 340;
+            }
           }
         }
         if (p.flags.mg_ash) {
@@ -1054,6 +1079,9 @@ const GamePlay = {
             Particles.burst(it.x, it.y - 8, { count: 14, colors: ['#f7b32b', '#c8c0a8'], speed: 110, life: 0.5, size: 3, gravity: -60 });
             AudioSys.chest();
           }
+        } else if (it.kind === 'modShrine') {
+          it.used = true;
+          this.openModChoice();
         } else if (it.kind === 'skillShrine') {
           // 스킬 사당 (P1): 보조 스킬 3택1 — 액티브 킷이 런 중간에 자란다
           AudioSys.levelup();
