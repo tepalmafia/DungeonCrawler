@@ -215,6 +215,26 @@ for (const f of [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42,
   }
 })();
 
+// 막별 이야기 소품 주입 (비주얼 1차) — 바닥 데칼 풀에 막의 사연을 심는다
+(() => {
+  const EXTRA = {
+    1: ['tombstone', 'crow', 'wither'],
+    2: ['rope'],
+    3: ['scroll', 'scalemark'],
+    4: ['plank', 'plagueX'],
+    5: ['banner', 'candle'],
+  };
+  const done = new Set();
+  for (const k of Object.keys(FLOOR_THEMES)) {
+    const t = FLOOR_THEMES[k];
+    if (done.has(t)) continue;
+    done.add(t);
+    const f = Number(k);
+    const act = f <= 10 ? 1 : Math.min(5, Math.ceil(f / 10));
+    for (const d of EXTRA[act] || []) if (!t.decals.includes(d)) t.decals.push(d);
+  }
+})();
+
 // 층별 환경 기믹 (테마 순환)
 const FLOOR_HAZARDS = {
   2: 'fog', 3: 'prison', 4: 'lava', 5: 'dark', 7: 'fog', 8: 'prison', 9: 'lava', 10: 'dark',
@@ -822,6 +842,94 @@ const ACT_TAG_BOOST = {
 
 // 바닥 장식 그리기 루틴 — 전부 코드 픽셀
 const DECAL_PAINTERS = {
+  // ── 막별 이야기 소품 (비주얼 1차) — 바닥이 막의 사연을 말한다 ──
+  tombstone(ctx, x, y) { // 1막: 이름 없는 비석
+    ctx.fillStyle = '#4a4a58';
+    ctx.fillRect(x + 2, y, 8, 11);
+    ctx.fillRect(x, y + 9, 12, 3);
+    ctx.fillStyle = '#5c5c6e';
+    ctx.fillRect(x + 3, y + 1, 3, 2);
+    ctx.fillStyle = '#2a2a36';
+    ctx.fillRect(x + 4, y + 4, 4, 1);
+    ctx.fillRect(x + 4, y + 6, 4, 1);
+  },
+  crow(ctx, x, y) { // 1막: 처형장의 까마귀
+    ctx.fillStyle = '#16141e';
+    ctx.fillRect(x + 2, y + 3, 7, 4);
+    ctx.fillRect(x + 4, y + 1, 4, 3);
+    ctx.fillRect(x + 9, y + 4, 3, 2);
+    ctx.fillStyle = '#e43b44';
+    ctx.fillRect(x + 5, y + 2, 1, 1);
+  },
+  wither(ctx, x, y) { // 1막: 시든 조화(弔花)
+    ctx.fillStyle = '#4a3a2e';
+    ctx.fillRect(x + 4, y + 3, 1, 8);
+    ctx.fillStyle = '#6a5240';
+    ctx.fillRect(x + 2, y + 1, 2, 3);
+    ctx.fillRect(x + 6, y + 2, 2, 2);
+  },
+  rope(ctx, x, y) { // 2막: 젖은 밧줄 뭉치
+    ctx.strokeStyle = '#6a5a40';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + 6, y + 6, 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#6a5a40';
+    ctx.fillRect(x + 9, y + 8, 6, 2);
+  },
+  scroll(ctx, x, y) { // 3막: 버려진 판결문
+    ctx.fillStyle = '#b8ae96';
+    ctx.fillRect(x, y + 2, 12, 9);
+    ctx.fillStyle = '#8a8272';
+    ctx.fillRect(x + 2, y + 4, 8, 1);
+    ctx.fillRect(x + 2, y + 6, 8, 1);
+    ctx.fillRect(x + 2, y + 8, 5, 1);
+    ctx.fillStyle = '#7a1c28';
+    ctx.fillRect(x + 9, y + 8, 2, 2); // 핏빛 인장
+  },
+  scalemark(ctx, x, y) { // 3막: 바닥에 새겨진 저울 각인
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(x + 5, y, 2, 9);
+    ctx.fillRect(x, y + 2, 12, 1);
+    ctx.fillRect(x, y + 3, 3, 2);
+    ctx.fillRect(x + 9, y + 3, 3, 2);
+  },
+  plank(ctx, x, y) { // 4막: 뜯겨 나뒹구는 판자
+    ctx.fillStyle = '#5e4226';
+    ctx.save();
+    ctx.translate(x + 8, y + 6);
+    ctx.rotate(0.4);
+    ctx.fillRect(-9, -2, 18, 4);
+    ctx.fillStyle = '#3a2a16';
+    ctx.fillRect(-7, -1, 1, 2);
+    ctx.fillRect(6, -1, 1, 2);
+    ctx.restore();
+  },
+  plagueX(ctx, x, y) { // 4막: 역병 봉쇄 표식 — 붉은 X
+    ctx.strokeStyle = 'rgba(160,32,44,0.55)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y); ctx.lineTo(x + 12, y + 12);
+    ctx.moveTo(x + 12, y); ctx.lineTo(x, y + 12);
+    ctx.stroke();
+  },
+  banner(ctx, x, y) { // 5막: 찢어져 밟힌 왕실 깃발
+    ctx.fillStyle = '#7a1c28';
+    ctx.fillRect(x, y, 10, 12);
+    ctx.fillStyle = '#b08d4a';
+    ctx.fillRect(x + 2, y + 2, 6, 1);
+    ctx.fillStyle = '#14110f';
+    ctx.fillRect(x + 2, y + 9, 3, 3);
+    ctx.fillRect(x + 7, y + 10, 3, 2);
+  },
+  candle(ctx, x, y) { // 5막: 쓰러진 촛대
+    ctx.fillStyle = '#d8d3c5';
+    ctx.fillRect(x + 2, y + 5, 8, 3);
+    ctx.fillStyle = '#b08d4a';
+    ctx.fillRect(x, y + 6, 3, 2);
+    ctx.fillStyle = 'rgba(255,216,102,0.5)';
+    ctx.fillRect(x + 10, y + 5, 2, 2);
+  },
   skull(ctx, x, y) {
     ctx.fillStyle = '#c9c2b2';
     ctx.fillRect(x, y, 10, 8);
@@ -1378,6 +1486,29 @@ const World = {
           // 벽돌 하이라이트
           ctx.fillStyle = 'rgba(255,255,255,0.05)';
           ctx.fillRect(x + 2, y + 9, TS / 2 - 3, 2);
+          // 막별 벽 표정 (비주얼 1차) — 같은 벽돌이라도 막의 이야기가 묻어 있다
+          if (this.act === 1) { // 묘지: 돌 틈의 이끼
+            if ((tx * 7 + ty * 5) % 3 === 0) {
+              ctx.fillStyle = 'rgba(56,110,72,0.35)';
+              ctx.fillRect(x + ((tx * 9) % 28) + 4, y + 10 + ((ty * 7) % 18), 7, 2);
+            }
+          } else if (this.act === 2) { // 강둑: 물때 자국
+            ctx.fillStyle = 'rgba(52,110,104,0.28)';
+            ctx.fillRect(x, y + TS - 13, TS, 7);
+          } else if (this.act === 3) { // 재판소: 정제 석벽 몰딩
+            ctx.fillStyle = 'rgba(255,255,255,0.09)';
+            ctx.fillRect(x, y + 12, TS, 1);
+          } else if (this.act === 4) { // 역병 마을: 덧대어 못박은 판자
+            if ((tx + ty) % 2 === 0) {
+              ctx.fillStyle = 'rgba(94,66,38,0.55)';
+              ctx.fillRect(x + 6 + ((tx * 5) % 12), y + 10, 5, TS - 18);
+              ctx.fillStyle = 'rgba(255,255,255,0.12)';
+              ctx.fillRect(x + 8 + ((tx * 5) % 12), y + 13, 1, 1);
+            }
+          } else if (this.act === 5) { // 왕성: 금 몰딩
+            ctx.fillStyle = 'rgba(176,141,74,0.45)';
+            ctx.fillRect(x, y + 8, TS, 1);
+          }
         } else {
           // 윗면(지붕): 어둡고 평평하게 + 미세 노이즈
           ctx.fillStyle = th.roof;
