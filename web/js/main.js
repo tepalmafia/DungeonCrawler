@@ -182,6 +182,7 @@ const Game = {
     this.dailyRun = false; // 오늘의 탑은 startDaily()로만 (R 재도전은 일반 런)
     this.bossRush = false; // 보스 러시는 startBossRush()로만
     this.deathInfo = null;
+    this._camp = null; // 모닥불 대화 — 다음 거점 방문 때 새 대화
     this._lastHurtBy = null;
     this.slowmoT = 0; // 완벽 회피 슬로모
     this._roomMod = null;
@@ -463,7 +464,20 @@ const Game = {
       // 골드 sink (경제 계측: 50층 7.5만 잉여): 검은 상자 — 비싸지만 레어 이상 확정
       const s5 = World.safeSpot(c.x, c.y + 95);
       this.interactables.push({ kind: 'shopBlack', x: s5.x, y: s5.y, r: 26, used: false, t: 0, price: Math.round((200 + f * 20) * disc) });
-      this.banner = { text: "장물아비 '까마귀' — 죽은 자의 편. 골드는 왕좌까지 못 가져간다", life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
+      // 까마귀의 기억 (v123): 런을 거듭할수록 나를 기억한다 — 단골에게는 진실 부스러기를 흘린다
+      Meta.data.crowMet = (Meta.data.crowMet || 0) + 1;
+      Meta.save();
+      const cm = Meta.data.crowMet;
+      const CROW = cm === 1 ? '…산 것도, 죽은 것도 아니군. 내 가게엔 제일 좋은 손님이야.'
+        : cm === 2 ? '또 왔군. 죽은 자 치고 발이 빠르단 말이지.'
+        : cm === 3 ? '네 얘기가 왕도까지 퍼졌어. 목값이 오르면 물건값도 올라야 하는데 — 정 때문에 참는다.'
+        : cm === 5 ? '까마귀들이 그러더군. 축일마다 성 지하 예배당에 불이 켜진다고. 그날 밤엔 장사도 접어.'
+        : cm === 8 ? '왕비의 무덤이 비어 있다는 소문은 들었나? 시신 없이 관만 묻었다더군.'
+        : cm === 12 ? '너 말이야… 처음 왔을 때보다 눈빛이 사람 같아졌어. 이상한 일이지, 죽은 놈이.'
+        : null;
+      this.banner = CROW
+        ? { text: `장물아비 '까마귀' — "${CROW}"`, life: 3.0, maxLife: 3.0, color: '#2ec4b6' }
+        : { text: "장물아비 '까마귀' — 죽은 자의 편. 골드는 왕좌까지 못 가져간다", life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
     } else if (type === 'trial') {
       // 시련 (G5): 다른 층의 악몽이 섞여 몰려온다 — 이기면 확정 상급 유물 + 골드
       this._trial = true;
