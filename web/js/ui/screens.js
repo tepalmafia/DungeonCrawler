@@ -70,6 +70,7 @@ const GameScreens = {
       if (rolled.length > 0) this.acquireRelic(rolled[0]);
     }
     if (Input.pressed('KeyB') && Dungeon.roomType !== 'boss') {
+      this._cheatScaleToFloor(); // 보스 직행 테스트: 층에 맞는 레벨·특성·유물로 자동 세팅 (순차 진행은 무관)
       Dungeon.roomIndex = Dungeon.totalRooms - 1;
       this.state = 'transition';
       this.transition = { phase: 'out', t: 0, type: 'boss' };
@@ -83,6 +84,46 @@ const GameScreens = {
         this.transition = { phase: 'out', t: 0, type: 'nextfloor' };
       }
     }
+  },
+
+  // ── 보스 직행 테스트 스케일링 — 층 기준 정상 진행 빌드 근사 (계측 곡선: Lv ≈ 층×1.5+3) ──
+  // 이미 그 수준 이상이면 건드리지 않는다 (정상 진행 중 B를 눌러도 빌드가 뒤로 가지 않게)
+  _cheatScaleToFloor() {
+    const p = this.player;
+    const f = Dungeon.floor;
+    const targetLv = Math.round(f * 1.5) + 3;
+    if (!p || this.level >= targetLv) return;
+    // 레벨·체력 곡선
+    this.level = targetLv;
+    this.xp = 0; this.xpNext = Math.round(40 * Math.pow(1.25, targetLv));
+    p.maxHp = Math.min(14, 6 + Math.floor(f / 4));
+    p.hp = p.maxHp;
+    this.gold = f * 15;
+    // 특성: 레벨 수만큼 태그 겹치기 휴리스틱으로 자동 픽 (진화 시너지 근사)
+    const tagCount = {};
+    for (let i = 0; i < targetLv - 1; i++) {
+      const cards = rollTraitCards(p, 3);
+      if (!cards.length) break;
+      let best = cards[0], bs = -1;
+      for (const c of cards) {
+        const s = (tagCount[c.tag] || 0) + (c.cls ? 0.5 : 0);
+        if (s > bs) { bs = s; best = c; }
+      }
+      applyTrait(p, best);
+      if (best.tag !== '스탯') tagCount[best.tag] = (tagCount[best.tag] || 0) + 1;
+    }
+    // 유물: 6층당 1개 (직업 유품 포함 풀)
+    for (let i = 0; i < Math.floor(f / 6); i++) {
+      const rolled = rollRelics(p, 1, true);
+      if (rolled.length) applyRelic(p, rolled[0]); // applyRelic이 relics 목록 push까지 담당
+    }
+    // 31층+: 스킬 개조 소지, 10층+: 처형 선고
+    if (f >= 31 && !p.skillMod) {
+      const mods = SKILL_MODS[p.classId] || [];
+      if (mods.length) p.skillMod = mods[Math.floor(Math.random() * mods.length)].id;
+    }
+    if (f >= 11 && !p.ult) { p.ult = f >= 21 ? 2 : 1; p.ultGauge = 0; }
+    this.banner = { text: `⚙ 보스 직행 세팅 — Lv.${targetLv} · 특성 ${p.traits.length} · 유물 ${p.relics.length}`, life: 2.2, maxLife: 2.2, color: '#5ce0e6' };
   },
 
   // ── 설정 패널 (O) — 음량/화면 흔들림/대미지 숫자/섬광. 거점·일시정지 공용 ──

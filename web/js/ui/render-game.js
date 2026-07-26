@@ -51,6 +51,11 @@ const GameRender = {
       g.addColorStop(1, 'rgba(40,18,10,0.55)');
       ctx.fillStyle = g;
       blob(r, 0.12); ctx.fill();
+      // 그을음 림 — 불길의 유기적 가장자리
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.strokeStyle = '#b0501c';
+      ctx.lineWidth = 1.5;
+      blob(r * 0.98, 0.12); ctx.stroke();
       for (let i = 0; i < 6; i++) {
         const fa = seed * 2.1 + i * 1.05;
         const fx = x + Math.cos(fa) * r * (0.2 + (i % 3) * 0.22);
@@ -109,6 +114,10 @@ const GameRender = {
       ctx.globalAlpha = alpha * 0.55;
       ctx.fillStyle = 'rgba(255,216,102,0.5)';
       blob(r, 0.08); ctx.fill();
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.strokeStyle = 'rgba(255,216,102,0.8)';
+      ctx.lineWidth = 1;
+      blob(r * 0.98, 0.08); ctx.stroke();
       ctx.lineWidth = 1.5;
       for (let i = 0; i < 3; i++) {
         const pulse = (Math.sin(t * 17 + i * 2.6 + seed) + 1) / 2;
@@ -200,16 +209,8 @@ const GameRender = {
       // 가독성 설계 유지: 큰 장판일수록 옅게 (반경 90px 기준 감쇠) — 장판이 적을 가리면 안 된다
       const fade = Math.min(1, 90 / Math.max(90, z.r));
       const a = Math.min(0.55, z.life * 0.8) * fade;
+      // 경계는 텍스처의 유기적 가장자리가 담당 — 기계적인 원형 링은 없다 (실플레이 제보)
       this._drawGroundPatch(ctx, z.x, z.y, z.r, z.kind, a, this.blinkT, (z.x * 11 + z.y * 5) % 89);
-      // 테두리 링: 영역 경계는 항상 또렷하게 (가독성 계약 유지)
-      const col = z.kind === 'poison' ? '#8fd460' : z.kind === 'fire' ? '#ff9a5c' : z.kind === 'smoke' ? '#9aa0b4' : '#ffd866';
-      ctx.globalAlpha = Math.min(0.5, z.life * 0.5);
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
     }
 
     // 화살비 예고 원
