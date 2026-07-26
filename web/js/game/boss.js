@@ -467,11 +467,24 @@ function createBoss(floor, x, y) {
         if (minionCount > 0 && this._regenPause <= 0 && this.hp < this.maxHp) {
           // 계측 (검사·열기5): 2층 피해 110+ = 전층 최대 — 근접 단일딜은 부하 정리가 느려
           // 재생을 뚫는 데 오래 걸린다. 6→4/s (재생 정지 컨트롤 해법은 그대로 유효)
-          this.hp = Math.min(this.maxHp, this.hp + 3 * dt); // 클린 계측: 1목숨 첫 사망 95%가 1~2층 — 2층 벽 완화 2차
-          this._regenTick += dt;
-          if (this._regenTick >= 1.0) {
-            this._regenTick = 0;
-            Particles.text(this.x, this.y - 40, '재생 +3', { color: '#38b764', size: 12 });
+          // 재생 총량 예산 (관통 v3): 딜이 재생을 못 이기는 약체 빌드에게 재생전은 '어려움'이 아니라
+          // 수학적으로 끝나지 않는 소모전이었다 (몰귀 7연사·로트가르 33연사). 한 전투에서 최대체력의
+          // 100%까지만 재생 — 예산이 마르면 갑피가 말라붙고, 오래 버티면 반드시 끝나는 싸움이 된다.
+          // 정상 빌드는 예산 근처에도 못 가므로 중앙값 난이도는 불변.
+          if (this._regenBudget == null) this._regenBudget = this.maxHp;
+          if (this._regenBudget > 0) {
+            const add = Math.min(3 * dt, this._regenBudget, this.maxHp - this.hp);
+            this.hp += add;
+            this._regenBudget -= add;
+            if (this._regenBudget <= 0) {
+              game.banner = { text: '재생의 힘이 다했다 — 갑피가 말라붙는다!', life: 2.0, maxLife: 2.0, color: '#ffd866' };
+              AudioSys.roar();
+            }
+            this._regenTick += dt;
+            if (this._regenTick >= 1.0) {
+              this._regenTick = 0;
+              Particles.text(this.x, this.y - 40, '재생 +3', { color: '#38b764', size: 12 });
+            }
           }
         }
       }
