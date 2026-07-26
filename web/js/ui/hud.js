@@ -331,6 +331,18 @@ const HUD = {
       ctx.font = '12px monospace';
       ctx.fillStyle = '#9aa0b4';
       this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
+      // 기억 한 줄 (유물 lore) — 모든 힘은 과거에서 온다. 전용 유물(heir)은 표기도 함께
+      if (c.lore) {
+        ctx.font = 'italic 10.5px monospace';
+        ctx.fillStyle = '#7a7060';
+        this._wrapText(ctx, `"${c.lore}"`, cx, r.y + lift + r.h - (c.heir ? 60 : 46), r.w - 26, 14);
+        if (c.heir) {
+          ctx.font = 'bold 10px monospace';
+          ctx.fillStyle = '#b08d4a';
+          const cn = CLASSES[c.heir];
+          ctx.fillText(`◆ ${cn ? cn.name : c.heir}의 유품`, cx, r.y + lift + r.h - 26);
+        }
+      }
       // 중첩 특성: 보유 수 / 상한 표시
       if (c.max && game.player) {
         const owned = game.player.traits.filter((id) => id === c.id).length;

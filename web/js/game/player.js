@@ -482,7 +482,7 @@ function createPlayer(x, y, classId = 'knight') {
 
       // 보호막 충전: 수호의 문장 특성(8초) 또는 검사 고유 '철벽'(9초)
       // 매트릭스 계측: 검사 사망이 심층(8~10층) 접촉 피해에 집중 — 철벽 11→9로 근접 리스크 보상
-      const shieldCd = this.flags.shield ? 8 : (this.classId === 'knight' ? 9 : 0);
+      const shieldCd = this.flags.shield ? 8 : this.rflags.ringshield ? 10 : (this.classId === 'knight' ? 9 : 0);
       if (shieldCd > 0 && !this.shield) {
         this.shieldT += dt;
         if (this.shieldT >= shieldCd) {
