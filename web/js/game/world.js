@@ -1418,17 +1418,46 @@ const World = {
           }
           continue;
         }
-        // 석판 바닥: 명암 변화 + 줄눈
-        ctx.fillStyle = RNG.pick(th.floor);
-        ctx.fillRect(x, y, TS, TS);
-        ctx.fillStyle = 'rgba(0,0,0,0.28)';
-        ctx.fillRect(x, y, TS, 1);
-        ctx.fillRect(x, y, 1, TS);
-        ctx.fillStyle = 'rgba(255,255,255,0.02)';
-        ctx.fillRect(x + 1, y + 1, TS - 2, 1);
-        if (RNG.chance(0.15)) {
-          ctx.fillStyle = 'rgba(120,120,150,0.1)';
-          ctx.fillRect(x + RNG.int(6, TS - 12), y + RNG.int(6, TS - 12), RNG.int(3, 8), 3);
+        // 석판 바닥 (v124 맵 퀄리티): 타일 격자 → 큰 판석. 행마다 반 칸 엇갈린 2타일 판석이
+        // 4단 명암으로 깔린다 — 세로 줄눈이 절반으로 줄고, 도면이 아니라 돌바닥이 된다
+        {
+          const hsh = (a, b) => { let h = (a * 73856093) ^ (b * 19349663) ^ (this._slabSeed || 0); h = (h ^ (h >> 13)) * 1274126177; return ((h ^ (h >> 16)) >>> 0) % 1000 / 1000; };
+          const slabX = Math.floor((tx + (ty % 2)) / 2); // 벽돌식 엇갈림
+          const v = hsh(slabX, ty);
+          ctx.fillStyle = th.floor[Math.floor(v * th.floor.length) % th.floor.length];
+          ctx.fillRect(x, y, TS, TS);
+          // 판석 명암 4단 — 판 단위로만 달라진다
+          const tone = v < 0.25 ? 'rgba(0,0,0,0.10)' : v < 0.5 ? 'rgba(0,0,0,0.045)' : v < 0.75 ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.042)';
+          ctx.fillStyle = tone;
+          ctx.fillRect(x, y, TS, TS);
+          // 줄눈: 가로는 매 행, 세로는 판 경계에만
+          ctx.fillStyle = 'rgba(0,0,0,0.30)';
+          ctx.fillRect(x, y, TS, 1);
+          const leftSlab = Math.floor(((tx - 1) + (ty % 2)) / 2);
+          if (leftSlab !== slabX || tx === 0) ctx.fillRect(x, y, 1, TS);
+          // 판석 상단 미세 하이라이트 (판 왼쪽 칸에서만 한 번)
+          if ((tx + (ty % 2)) % 2 === 0) {
+            ctx.fillStyle = 'rgba(255,255,255,0.028)';
+            ctx.fillRect(x + 1, y + 1, TS * 2 - 2, 1);
+          }
+          // 깨진 판석: 사선 균열 + 떨어져나간 모서리
+          if (hsh(slabX * 31 + 7, ty) < 0.11) {
+            ctx.strokeStyle = 'rgba(0,0,0,0.32)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            const cx0 = x + 6 + v * 20, cy0 = y + 5;
+            ctx.moveTo(cx0, cy0);
+            ctx.lineTo(cx0 + 8 - v * 10, cy0 + 14);
+            ctx.lineTo(cx0 + 3, cy0 + 26);
+            ctx.stroke();
+          } else if (hsh(slabX * 17 + 3, ty * 13) < 0.08) {
+            ctx.fillStyle = 'rgba(0,0,0,0.22)';
+            ctx.fillRect(x + (v < 0.5 ? 1 : TS - 9), y + TS - 8, 8, 7);
+          }
+          if (RNG.chance(0.10)) { // 잔돌·이물 (기존 감성 유지)
+            ctx.fillStyle = 'rgba(120,120,150,0.10)';
+            ctx.fillRect(x + RNG.int(6, TS - 12), y + RNG.int(6, TS - 12), RNG.int(3, 8), 3);
+          }
         }
       }
     }
@@ -1485,14 +1514,24 @@ const World = {
           // 정면: 벽돌 쌓기 + 윗면 캡 + 아래 어두운 립
           ctx.fillStyle = th.wallBase;
           ctx.fillRect(x, y, TS, TS);
-          ctx.fillStyle = th.wallFace;
-          ctx.fillRect(x + 1, y + 8, TS - 2, TS - 14);
-          // 벽돌 줄눈 (엇갈린 패턴)
-          ctx.fillStyle = th.wallBase;
-          ctx.fillRect(x, y + 8 + 13, TS, 2);
-          ctx.fillRect(x + TS / 2 - 1, y + 8, 2, 13);
-          ctx.fillRect(x + TS / 4 - 1, y + 23, 2, 12);
-          ctx.fillRect(x + (TS * 3) / 4 - 1, y + 23, 2, 12);
+          // 벽돌 단위 명암 (v124): 벽돌 하나하나가 다른 돌이다 — 평면 스트립 탈피
+          {
+            const bh = Math.floor((TS - 14) / 2); // 벽돌 2단
+            for (let row = 0; row < 2; row++) {
+              const off = row % 2 ? TS / 4 : 0;
+              for (let col = -1; col < 3; col++) {
+                const bx = x + off + col * (TS / 2) + 1;
+                const bw = TS / 2 - 2;
+                const cx2 = Math.max(x + 1, bx), cw = Math.min(x + TS - 1, bx + bw) - cx2;
+                if (cw <= 0) continue;
+                let bv = ((tx * 7 + col * 13 + row * 29 + ty * 3) % 5);
+                ctx.fillStyle = th.wallFace;
+                ctx.fillRect(cx2, y + 8 + row * (bh + 2), cw, bh);
+                ctx.fillStyle = bv === 0 ? 'rgba(0,0,0,0.14)' : bv === 1 ? 'rgba(0,0,0,0.07)' : bv === 4 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0)';
+                ctx.fillRect(cx2, y + 8 + row * (bh + 2), cw, bh);
+              }
+            }
+          }
           // 윗면 캡
           ctx.fillStyle = th.roof;
           ctx.fillRect(x, y, TS, 8);
@@ -1528,22 +1567,23 @@ const World = {
             ctx.fillRect(x, y + 8, TS, 1);
           }
         } else {
-          // 윗면(지붕): 어둡고 평평하게 + 미세 노이즈
+          // 윗면(지붕) v124: 석재 블록 질감 — 배경 어둠과 구분되는 '두꺼운 벽 덩어리'로
           ctx.fillStyle = th.roof;
           ctx.fillRect(x, y, TS, TS);
-          ctx.fillStyle = 'rgba(255,255,255,0.03)';
+          // 큰 블록 줄눈 (2×2 격자, 엇갈림)
+          ctx.fillStyle = 'rgba(0,0,0,0.30)';
+          ctx.fillRect(x, y + TS / 2, TS, 1);
+          ctx.fillRect(x + (ty % 2 ? TS / 2 : TS / 4), y, 1, TS / 2);
+          ctx.fillRect(x + (ty % 2 ? TS / 4 : TS / 2), y + TS / 2, 1, TS / 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.035)';
           for (let i = 0; i < 3; i++) {
             ctx.fillRect(x + RNG.int(2, TS - 8), y + RNG.int(2, TS - 4), RNG.int(3, 6), 1);
           }
-          // 바닥과 접한 좌우 모서리에 얇은 하이라이트
-          if (!this._wallAt(tx - 1, ty)) {
-            ctx.fillStyle = 'rgba(255,255,255,0.06)';
-            ctx.fillRect(x, y, 2, TS);
-          }
-          if (!this._wallAt(tx + 1, ty)) {
-            ctx.fillStyle = 'rgba(255,255,255,0.06)';
-            ctx.fillRect(x + TS - 2, y, 2, TS);
-          }
+          // 바닥과 접한 전 방향 모서리 — 벽 실루엣이 어둠 속에서도 읽힌다
+          ctx.fillStyle = 'rgba(255,255,255,0.075)';
+          if (!this._wallAt(tx - 1, ty)) ctx.fillRect(x, y, 2, TS);
+          if (!this._wallAt(tx + 1, ty)) ctx.fillRect(x + TS - 2, y, 2, TS);
+          if (!this._wallAt(tx, ty - 1)) ctx.fillRect(x, y, TS, 2);
         }
 
         // 횃불 배치: 정면 벽에 일정 간격으로
@@ -1573,6 +1613,30 @@ const World = {
           ctx.fillStyle = g;
           ctx.fillRect(x, y, 8, TS);
         }
+        if (this._wallAt(tx + 1, ty)) {
+          const g = ctx.createLinearGradient(x + TS - 7, 0, x + TS, 0);
+          g.addColorStop(0, 'rgba(0,0,0,0)');
+          g.addColorStop(1, 'rgba(0,0,0,0.20)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x + TS - 7, y, 7, TS);
+        }
+      }
+    }
+
+    // 5) 광원 보장 (v124): 방마다 최소 2개의 불 — 초점 없는 균일 어둠 방지
+    if (this.torches.length < 2) {
+      const spots = [[0.3, 0.35], [0.7, 0.65]];
+      for (const [fxr, fyr] of spots) {
+        if (this.torches.length >= 2) break;
+        let tx0 = Math.round(this.cols * fxr), ty0 = Math.round(this.rows * fyr);
+        let found = null;
+        for (let rr = 0; rr < 5 && !found; rr++) {
+          for (let dy = -rr; dy <= rr && !found; dy++) for (let dx = -rr; dx <= rr && !found; dx++) {
+            const ax = tx0 + dx, ay = ty0 + dy;
+            if (ax > 0 && ay > 0 && ax < this.cols - 1 && ay < this.rows - 1 && this.map[ay][ax] === 0) found = [ax, ay];
+          }
+        }
+        if (found) this.torches.push({ x: found[0] * TS + TS / 2, y: found[1] * TS + TS / 2, seed: RNG.next() * 10, stand: true });
       }
     }
 
@@ -1610,9 +1674,17 @@ const World = {
     for (const t of this.torches || []) {
       const y = t.y + this.offsetY;
       const flick = Math.sin(animT * 11 + t.seed) * 0.5 + Math.sin(animT * 23 + t.seed * 3) * 0.3;
-      // 받침대
+      // 받침대 (stand: 바닥 화로 — 기둥과 화분이 있다)
       ctx.fillStyle = '#3d2418';
-      ctx.fillRect(t.x - 2, y, 4, 8);
+      if (t.stand) {
+        ctx.fillRect(t.x - 2, y - 4, 4, 16);
+        ctx.fillStyle = '#2a1a10';
+        ctx.fillRect(t.x - 6, y + 10, 12, 3);
+        ctx.fillStyle = '#4a3020';
+        ctx.fillRect(t.x - 5, y - 6, 10, 4);
+      } else {
+        ctx.fillRect(t.x - 2, y, 4, 8);
+      }
       // 불꽃 (3단)
       ctx.fillStyle = '#ff7043';
       ctx.fillRect(t.x - 3, y - 6 + flick, 6, 6);
@@ -1621,12 +1693,14 @@ const World = {
       ctx.fillStyle = '#fff7c0';
       ctx.fillRect(t.x - 1, y - 7 + flick, 2, 3);
       // 빛 번짐
-      const glow = ctx.createRadialGradient(t.x, y - 4, 4, t.x, y - 4, 66 + flick * 6);
-      glow.addColorStop(0, 'rgba(255,150,60,0.13)');
+      const gr = (t.stand ? 96 : 78) + flick * 7; // v124: 빛 반경 확대 — 방에 초점이 생긴다
+      const glow = ctx.createRadialGradient(t.x, y - 4, 4, t.x, y - 4, gr);
+      glow.addColorStop(0, 'rgba(255,150,60,0.15)');
+      glow.addColorStop(0.6, 'rgba(255,120,50,0.06)');
       glow.addColorStop(1, 'rgba(255,150,60,0)');
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(t.x, y - 4, 70, 0, Math.PI * 2);
+      ctx.arc(t.x, y - 4, gr + 4, 0, Math.PI * 2);
       ctx.fill();
     }
 

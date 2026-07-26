@@ -862,17 +862,35 @@ const GameRender = {
     Particles.draw(ctx);
 
     // 상시 횃불 시야 (기획 §7 다크 패스): 플레이어 주변만 밝다 — 어둠 기믹 층은 아래의 더 강한 것을 쓴다
+    // v124: 오프스크린 합성으로 전환 — 횃불·화로가 어둠에 구멍을 뚫는다 (먼 방에도 초점이 생긴다)
     if (World.hazard !== 'dark' && this.state !== 'over' && this.state !== 'victory' && this.player) {
       const p = this.player;
       // 막별 어둠의 색 (비주얼 1차): 묘지의 달밤 남색 / 강둑 안개 청록 / 재판소 호박 그늘 /
       // 역병 마을 병든 녹 / 왕성 성화의 핏금 — 같은 횃불이라도 막의 밤이 다르다
       const SH = { 1: '10,8,26', 2: '4,14,14', 3: '16,10,4', 4: '6,14,6', 5: '16,5,8' }[World.act] || '4,2,8';
-      const g = ctx.createRadialGradient(p.x, p.y, 150, p.x, p.y, 520);
+      const dk = this._dkCanvas || (this._dkCanvas = document.createElement('canvas'));
+      if (dk.width !== Renderer.W || dk.height !== Renderer.H) { dk.width = Renderer.W; dk.height = Renderer.H; }
+      const dc = dk.getContext('2d');
+      dc.globalCompositeOperation = 'source-over';
+      dc.clearRect(0, 0, dk.width, dk.height);
+      const g = dc.createRadialGradient(p.x, p.y, 150, p.x, p.y, 520);
       g.addColorStop(0, `rgba(${SH},0)`);
       g.addColorStop(0.7, `rgba(${SH},0.28)`);
       g.addColorStop(1, `rgba(${SH},0.62)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(-60, World.offsetY - 60, World.cols * TS + 120, World.rows * TS + 120);
+      dc.fillStyle = g;
+      dc.fillRect(0, 0, dk.width, dk.height);
+      dc.globalCompositeOperation = 'destination-out';
+      for (const t of World.torches || []) {
+        const ty2 = t.y + World.offsetY - 4;
+        const hr = t.stand ? 118 : 92;
+        const hole = dc.createRadialGradient(t.x, ty2, 4, t.x, ty2, hr);
+        hole.addColorStop(0, 'rgba(0,0,0,0.8)');
+        hole.addColorStop(1, 'rgba(0,0,0,0)');
+        dc.fillStyle = hole;
+        dc.beginPath(); dc.arc(t.x, ty2, hr + 2, 0, Math.PI * 2); dc.fill();
+      }
+      dc.globalCompositeOperation = 'source-over';
+      ctx.drawImage(dk, 0, 0);
     }
 
     // 어둠 기믹 층: 시야 제한 — HUD보다 아래에
