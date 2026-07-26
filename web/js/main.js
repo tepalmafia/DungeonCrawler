@@ -347,6 +347,18 @@ const Game = {
       this.banner = { text: '스킬 사당이 빛난다 — 다가가서 보조 스킬을 고르자 (E키로 사용)', life: 3.0, maxLife: 3.0, color: '#c9d94a' };
     }
 
+    // 왕국의 징조 (Omen): 방마다 낮은 확률로 세계가 개입한다 — 저주는 편을 가리지 않는다
+    if (this._moonT > 0 && this.player) { this.player.bonusAtk -= 1; this.player.speed /= 1.1; } // 월식 버프 회수
+    this._moonT = 0;
+    this._omen = null;
+    this._omenKills = [];
+    if ((type === 'combat' || type === 'elite') && Dungeon.floor >= 4 && RNG.chance(0.09)) {
+      const pool = ['moon', 'eye'];
+      if (Dungeon.floor >= 6) pool.push('eye'); // 심층부터 눈이 잦아진다
+      if (Dungeon.floor >= 21) pool.push('horn');
+      this._omen = { type: RNG.pick(pool), delay: 3 + RNG.next() * 5, fired: false, eyeT: 0 };
+    }
+
     // 드라마 AI (M1) — 방 단위 상태 리셋: 경보/전투 시계/전령/전사자 장부/대형 여부
     this._roomAlert = false;
     this._roomFightT = 0;

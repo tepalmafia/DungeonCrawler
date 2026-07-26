@@ -604,6 +604,35 @@ const GameRender = {
       ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
     }
 
+    // 왕국의 징조 — 어둠의 눈: 하늘의 시선, 동공이 플레이어를 따라온다
+    if (this._omen && this._omen.eyeT > 0 && this.player) {
+      const o = this._omen;
+      const a = Math.min(1, o.eyeT > 5 ? (6 - o.eyeT) * 2 : Math.min(1, o.eyeT));
+      const ex = Renderer.W / 2, ey = 76;
+      ctx.save();
+      ctx.globalAlpha = 0.5 * a;
+      const eg = ctx.createRadialGradient(ex, ey, 10, ex, ey, 280);
+      eg.addColorStop(0, o.pale ? 'rgba(200,212,228,0.5)' : 'rgba(70,12,84,0.6)');
+      eg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = eg;
+      ctx.fillRect(0, 0, Renderer.W, 220);
+      ctx.globalAlpha = 0.85 * a;
+      ctx.fillStyle = '#0a060c';
+      ctx.beginPath(); ctx.ellipse(ex, ey, 110, 32, 0, 0, Math.PI * 2); ctx.fill();
+      const edx = this.player.x - ex, edy = this.player.y - ey, edd = Math.hypot(edx, edy) || 1;
+      const ipx = ex + (edx / edd) * 32, ipy = ey + (edy / edd) * 9;
+      ctx.fillStyle = o.pale ? '#c8d4e4' : '#7a1c8c';
+      ctx.beginPath(); ctx.ellipse(ipx, ipy, 19, 17, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = o.pale ? '#eef4fa' : '#e43b44';
+      ctx.beginPath(); ctx.arc(ipx, ipy, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    // 핏빛 월식 틴트 — 원한이 끓는 동안 세계가 붉다
+    if (this._moonT > 0) {
+      ctx.fillStyle = `rgba(122,16,24,${Math.min(0.13, this._moonT * 0.05)})`;
+      ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
+    }
+
     // [아트 리마스터] 층 컬러 그레이딩 + 상시 비네트 (던전 분위기)
     ctx.fillStyle = World.theme.grade;
     ctx.fillRect(-20, -20, Renderer.W + 40, Renderer.H + 40);
