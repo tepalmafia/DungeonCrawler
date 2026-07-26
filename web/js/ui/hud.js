@@ -827,6 +827,12 @@ const HUD = {
         ctx.fillStyle = '#666a80';
         ctx.fillText(`한 조각 +${heat * 20}%`, rcx, lr.y + 44);
       }
+      if (!Meta.heatUnlocked()) {
+        // 잠금 안내 — 조건 없이는 기능이 숨겨진 것처럼 보인다 (실플레이 제보)
+        ctx.font = '10px Galmuri11, monospace';
+        ctx.fillStyle = '#4a4a5c';
+        ctx.fillText('🔒 현상금(난이도) — 5층 도달 또는 첫 승리 시 해금', rcx, lr.y + 30);
+      }
       if (Meta.heatUnlocked()) {
         const FLAVOR = [
           '수배 없음 — 왕은 아직 너를 모른다',
