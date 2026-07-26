@@ -86,7 +86,7 @@ const Game = {
     try {
       localStorage.setItem('dungeoncrawler_run', JSON.stringify({
         v: 1, cls: p.classId, heat: this.heat, pacts: this.pacts,
-        act: this.act || 1, sp: this.shardsPaid || 0, kp: this.killsPaid || 0,
+        act: this.act || 1, sp: this.shardsPaid || 0, kp: this.killsPaid || 0, route: this.route || null,
         floor: Dungeon.floor, roomIndex: Dungeon.roomIndex, roomType: Dungeon.roomType,
         took: {
           t: Dungeon.tookTreasure, c: Dungeon.tookCamp, e: Dungeon.tookEvent,
@@ -128,6 +128,7 @@ const Game = {
     // 열기 서약·진행도 복원
     this.heat = s.heat;
     this.pacts = s.pacts || Meta.pactFlags(s.heat);
+    this.route = s.route || null; // 진군로 복원 — 이어하기에서 다시 묻지 않는다
     this.level = s.level; this.xp = s.xp; this.xpNext = s.xpNext;
     this.kills = s.kills; this.time = s.time; this.gold = s.gold;
     // 2막 진행 복원 — 정산 이중 지급 방지 장부까지
@@ -178,6 +179,8 @@ const Game = {
     this._roomMod = null;
     this.endless = false;
     this.act = 1;
+    this.route = null;
+    this.routeCards = [];
     this._shrineSeen = 0;
     this._subChoice = false;
     this.shardsPaid = 0;
@@ -216,6 +219,9 @@ const Game = {
         this._storyQ = [{ text: `${cls.name} — 흙을 털고 다시 일어선다. 왕좌는 아직 멀다.`, color: '#9a9488' }];
       }
     }
+
+    // 진군로: 1막 진군 지도 — 오프닝 자막과 함께 열린다
+    this.openRouteChoice();
 
     // 유산 각인: 런 시작 시 커먼 유물 3택1 (기존 유물 선택 UI 재사용)
     if (Meta.lvl('legacy') > 0) {
@@ -324,7 +330,7 @@ const Game = {
         Dungeon.floor >= c.floors[0] && Dungeon.floor <= c.floors[1]);
       for (const c of cand) {
         const sure = c.guaranteed && Dungeon.roomIndex === 1;
-        if (sure || (Dungeon.roomIndex > 1 && type !== 'boss' && RNG.chance(0.16))) {
+        if (sure || (Dungeon.roomIndex > 1 && type !== 'boss' && RNG.chance(this.route === 'old' ? 0.3 : 0.16))) {
           const spot = World.safeSpot(World.center().x + 140, World.center().y + 60);
           this.interactables.push({ kind: 'clue', clueId: c.id, x: spot.x, y: spot.y, r: 26, used: false, t: 0 });
           if (sure) this.banner = { text: '낯익은 비석이 보인다…', life: 2.2, maxLife: 2.2, color: '#c8c0a8' };
@@ -544,6 +550,11 @@ const Game = {
       this._handleCardInput(this.relicCards, (i) => this.pickRelic(i));
       return;
     }
+    if (this.state === 'route') {
+      this.choiceLockT -= dt;
+      this._handleCardInput(this.routeCards, (i) => this.pickRoute(i));
+      return;
+    }
     if (this.state === 'transition') {
       const tr = this.transition;
       tr.t += dt * 3;
@@ -683,7 +694,7 @@ function installDemoBot() {
   };
   const origTick = Game.tick.bind(Game);
   Game.tick = function (dt) {
-    if (this.state === 'levelup' || this.state === 'relic') Input.justPressed['Digit1'] = true;
+    if (this.state === 'levelup' || this.state === 'relic' || this.state === 'route') Input.justPressed['Digit1'] = true;
     origTick(dt);
   };
 }

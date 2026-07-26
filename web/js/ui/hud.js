@@ -278,6 +278,90 @@ const HUD = {
   },
 
   // 범용 카드 선택 UI (레벨업 특성 / 보스 유물 공용)
+  // ── 왕국 진군 지도 (양피지) — 막 시작마다 길을 고른다: 선택이 막의 성격을 정한다 ──
+  drawRouteChoice(ctx, game) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(8,6,4,0.82)';
+    ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+
+    // 양피지 판 — 태운 가장자리 + 얼룩
+    const px = 90, py = 34, pw = Renderer.W - 180, ph = Renderer.H - 68;
+    ctx.fillStyle = '#2a2318';
+    ctx.fillRect(px - 6, py - 6, pw + 12, ph + 12);
+    ctx.fillStyle = '#c9b98d';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.fillStyle = 'rgba(120,90,50,0.18)';
+    for (let i = 0; i < 14; i++) {
+      const bx = px + ((i * 149) % (pw - 60)), by = py + ((i * 83) % (ph - 40));
+      ctx.beginPath(); ctx.ellipse(bx + 30, by + 20, 26 + (i % 3) * 12, 12 + (i % 4) * 5, i, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(60,40,20,0.5)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(px + 7, py + 7, pw - 14, ph - 14);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px monospace';
+    ctx.fillStyle = '#3a2c1a';
+    ctx.fillText(`왕국 진군 지도 — ${game.act}막`, Renderer.W / 2, py + 42);
+
+    // 행군로: 묘지 → 다리 → 재판소 → 마을 → 왕좌 (현재 막 강조)
+    const LM = ['† 묘지', '≋ 다리', '⚖ 재판소', '✝ 마을', '♛ 왕좌'];
+    const mapY = py + 84;
+    const step = (pw - 160) / 4;
+    ctx.strokeStyle = 'rgba(90,60,30,0.7)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath();
+    ctx.moveTo(px + 80, mapY);
+    ctx.lineTo(px + 80 + step * 4, mapY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    LM.forEach((name, i) => {
+      const lx = px + 80 + step * i;
+      const here = i === game.act - 1;
+      ctx.fillStyle = here ? '#7a1c28' : 'rgba(60,40,20,0.85)';
+      ctx.beginPath(); ctx.arc(lx, mapY, here ? 8 : 5, 0, Math.PI * 2); ctx.fill();
+      ctx.font = here ? 'bold 13px monospace' : '11px monospace';
+      ctx.fillStyle = here ? '#7a1c28' : 'rgba(60,40,20,0.8)';
+      ctx.fillText(name, lx, mapY - 16);
+      if (here) ctx.fillText('▼', lx, mapY + 24);
+    });
+
+    ctx.font = '12px monospace';
+    ctx.fillStyle = 'rgba(60,40,20,0.8)';
+    ctx.fillText('어느 길로 진군하는가 (1~3 키 또는 클릭)', Renderer.W / 2, mapY + 46);
+
+    // 루트 3택 — 양피지 위의 낡은 카드
+    const rects = this.cardRects(3);
+    const mx = Input.mouse.x, my = Input.mouse.y;
+    game.routeCards.forEach((c, i) => {
+      const r = rects[i];
+      const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+      const lift = hover ? -5 : 0;
+      ctx.fillStyle = hover ? '#efe2bd' : '#d9c99b';
+      ctx.fillRect(r.x, r.y + lift, r.w, r.h);
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = hover ? 3 : 1.5;
+      ctx.strokeRect(r.x, r.y + lift, r.w, r.h);
+      const cx = r.x + r.w / 2;
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = c.color;
+      ctx.fillText(`[ ${c.tag} ]`, cx, r.y + lift + 26);
+      ctx.font = 'bold 17px monospace';
+      ctx.fillStyle = '#3a2c1a';
+      ctx.fillText(c.name, cx, r.y + lift + 52);
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#5a4630';
+      this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
+      ctx.font = 'italic 10.5px monospace';
+      ctx.fillStyle = 'rgba(90,60,30,0.75)';
+      this._wrapText(ctx, `"${c.lore}"`, cx, r.y + lift + r.h - 44, r.w - 26, 14);
+      ctx.font = 'bold 14px monospace';
+      ctx.fillStyle = hover ? c.color : 'rgba(60,40,20,0.5)';
+      ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 12);
+    });
+  },
+
   drawCardChoice(ctx, game, cards, title, tagFn, colorFn) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = 'rgba(8,8,15,0.78)';
