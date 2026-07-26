@@ -976,6 +976,21 @@ const GamePlay = {
           } else if (it.kind === 'shopReroll') {
             p.rerolls = (p.rerolls || 0) + 1;
             Particles.text(p.x, p.y - 28, '리롤 +1 (E)', { color: '#2ec4b6', size: 14 });
+          } else if (it.kind === 'shopBlack') {
+            // 검은 상자: 레어 이상 확정 — 죽은 자의 물건 중에서도 값나가는 것
+            const owned = new Set(p.relics);
+            const pool = RELICS.filter((r) => !owned.has(r.id) && Meta.isUnlocked(r) &&
+              (!r.heir || r.heir === p.classId) && r.rarity !== 'common');
+            if (pool.length) {
+              const w = { rare: 60, epic: 30, legendary: 10 };
+              let tot = 0; for (const r of pool) tot += w[r.rarity] || 1;
+              let roll = Math.random() * tot; let picked = pool[0];
+              for (const r of pool) { roll -= w[r.rarity] || 1; if (roll <= 0) { picked = r; break; } }
+              this.acquireRelic(picked);
+            } else {
+              this.gold += Math.round(it.price / 2);
+              Particles.text(it.x, it.y - 30, '상자가 비었다 — 절반 환불', { color: '#ffd866', size: 12 });
+            }
           } else if (it.kind === 'shopShards') {
             // 파편 주머니: 잉여 골드 → 메타 화폐 (죽으면 사라질 골드에 마지막 쓸모)
             Meta.data.shards += it.shards; Meta.save();
@@ -1052,6 +1067,22 @@ const GamePlay = {
           Particles.burst(it.x, it.y, { count: 14, colors: ['#ffd866', '#c8d4e4'], speed: 110, life: 0.5, size: 3 });
           Particles.text(p.x, p.y - 30, '공격력 +1', { color: '#ffd866', size: 15 });
           for (const o of this.interactables) if (o.kind === 'camp') o.used = true; // 양자택일
+        } else if (it.kind === 'gambler') {
+          // 교수대 주사위: 골드 절반을 건다 — 이기면 2.2배로 돌아온다 (기대값 -6%: 집이 이긴다)
+          const stake = Math.floor(this.gold / 2);
+          if (stake < 10) {
+            this.banner = { text: '도박사가 코웃음 친다 — "그 푼돈으로는…"', life: 1.6, maxLife: 1.6, color: '#8f8577' };
+          } else if (Math.random() < 0.47) {
+            this.gold += Math.round(stake * 1.2);
+            this.banner = { text: `교수대 주사위 — 이겼다! +${Math.round(stake * 1.2)}G`, life: 2.2, maxLife: 2.2, color: '#f7b32b' };
+            AudioSys.buy();
+            Particles.burst(it.x, it.y, { count: 16, colors: ['#ffd866', '#f7b32b'], speed: 150, life: 0.5, size: 3 });
+          } else {
+            this.gold -= stake;
+            this.banner = { text: `교수대 주사위 — 잃었다. -${stake}G "죽은 자의 운이란…"`, life: 2.2, maxLife: 2.2, color: '#8f8577' };
+            AudioSys.deny();
+          }
+          Renderer.shake(3, 0.2);
         } else if (it.kind === 'mystery') {
           // 미지의 기연: 수락하는 순간 정체가 드러난다 (60% 순이익 / 25% 대가 있는 이익 / 15% 손해)
           const roll = Math.random();

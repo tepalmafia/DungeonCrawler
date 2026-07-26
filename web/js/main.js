@@ -405,7 +405,11 @@ const Game = {
       this.interactables.push({ kind: 'whetstone', x: c.x + 78, y: c.y, r: 28, used: false, t: 0 });
     } else if (type === 'event') {
       const c = World.center();
-      if (RNG.chance(0.4) && this.player.maxHp > 2) {
+      if (this.gold >= 150 && RNG.chance(0.3)) {
+        // 망자의 도박사 (골드 sink): 교수대 간수들이 하던 노름 — 골드 절반을 건다
+        this.interactables.push({ kind: 'gambler', x: c.x, y: c.y, r: 26, used: false, t: 0 });
+        this.banner = { text: '망자의 도박사 — 교수대 주사위가 구른다…', life: 2.0, maxLife: 2.0, color: '#f7b32b' };
+      } else if (RNG.chance(0.4) && this.player.maxHp > 2) {
         // 악마 거래 (G2): 대가를 치르는 파워 — 최대 HP 1 ↔ 정예급 특성 선택
         this.interactables.push({ kind: 'bloodAltar', x: c.x, y: c.y, r: 26, used: false, t: 0 });
         this.banner = { text: '핏빛 제단이 고동친다... (대가: 최대 HP 1)', life: 2.2, maxLife: 2.2, color: '#e43b44' };
@@ -428,6 +432,9 @@ const Game = {
       this.interactables.push({ kind: 'shopHeal', x: s2.x, y: s2.y, r: 26, used: false, t: 0, price: Math.round((12 + f * 3) * disc) });
       this.interactables.push({ kind: 'shopReroll', x: s3.x, y: s3.y, r: 26, used: false, t: 0, price: Math.round((18 + f * 3) * disc) });
       this.interactables.push({ kind: 'shopShards', x: s4.x, y: s4.y, r: 26, used: false, t: 0, price: Math.round((30 + f * 6) * disc), shards: 10 + f * 2 });
+      // 골드 sink (경제 계측: 50층 7.5만 잉여): 검은 상자 — 비싸지만 레어 이상 확정
+      const s5 = World.safeSpot(c.x, c.y + 95);
+      this.interactables.push({ kind: 'shopBlack', x: s5.x, y: s5.y, r: 26, used: false, t: 0, price: Math.round((200 + f * 20) * disc) });
       this.banner = { text: "장물아비 '까마귀' — 죽은 자의 편. 골드는 왕좌까지 못 가져간다", life: 2.2, maxLife: 2.2, color: '#2ec4b6' };
     } else if (type === 'trial') {
       // 시련 (G5): 다른 층의 악몽이 섞여 몰려온다 — 이기면 확정 상급 유물 + 골드
