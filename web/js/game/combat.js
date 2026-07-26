@@ -384,6 +384,18 @@ const GameCombat = {
 
 
   // 사망 리포트용 — 방금 나를 때린 것의 이름 (가장 가까운 살아있는 적 추정)
+  _foeName(e) {
+    let name;
+    if (e.isBoss) name = e.name;
+    else if (e.isMini) name = e.miniName || '우두머리';
+    else {
+      const c = typeof CODEX_ENEMIES !== 'undefined' && CODEX_ENEMIES.find((x) => x.id === (e.codexType || e.type));
+      name = c ? c.name : e.type;
+    }
+    if (e.elite && !e.isBoss && !e.isMini) name = '정예 ' + name;
+    return name;
+  },
+
   _nearestFoeName() {
     const p = this.player;
     let best = 170, name = null;
@@ -392,13 +404,7 @@ const GameCombat = {
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d < best) {
         best = d;
-        if (e.isBoss) name = e.name;
-        else if (e.isMini) name = e.miniName || '우두머리';
-        else {
-          const c = typeof CODEX_ENEMIES !== 'undefined' && CODEX_ENEMIES.find((x) => x.id === (e.codexType || e.type));
-          name = c ? c.name : e.type;
-        }
-        if (e.elite && !e.isBoss && !e.isMini) name = '정예 ' + name;
+        name = this._foeName(e);
       }
     }
     return name;
@@ -566,6 +572,13 @@ const GameCombat = {
       }
     }
     const style = PROJ_STYLES[kind] || PROJ_STYLES.arrow;
-    this.arrows.push({ kind, x, y, dir, speed, dmg, slow, homing, r: style.r || 4, life, t: 0 });
+    // 사인 각인: 탄은 발사자 몸에서 태어난다 — 발사 좌표 최근접 생존 적이 곧 사수
+    let by = null, bd = 48;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d < bd) { bd = d; by = this._foeName(e); }
+    }
+    this.arrows.push({ kind, x, y, dir, speed, dmg, slow, homing, r: style.r || 4, life, t: 0, by });
   },
 };

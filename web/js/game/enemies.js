@@ -524,7 +524,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this.stateT = 0;
             Renderer.shake(4, 0.2);
             AudioSys.thud();
-            game.rings.push({ x: this.x, y: this.y, r: 20, maxR: 120, speed: 260, width: 14, dmg: 1 });
+            game.rings.push({ x: this.x, y: this.y, r: 20, maxR: 120, speed: 260, width: 14, dmg: 1, by: Game._foeName(this) });
             Particles.burst(this.x, this.y + 14, { count: 10, colors: ['#5d6b84', '#3d4a5c'], speed: 120, life: 0.4, size: 4 });
           }
         }
@@ -2428,7 +2428,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         } else if (this.state === 'raise') {
           if (this.stateT > 0.6) {
             this.state = 'walk'; this.slamCd = 3.2;
-            game.rings.push({ x: this.x, y: this.y, r: 14, speed: 240, width: 10, dmg: 1, maxR: 140 });
+            game.rings.push({ x: this.x, y: this.y, r: 14, speed: 240, width: 10, dmg: 1, maxR: 140, by: Game._foeName(this) });
             game.firePatches.push({ x: this.x, y: this.y, r: 46, life: 2.4, kind: 'ice' });
             Renderer.shake(3, 0.15);
             AudioSys.thud();
@@ -2926,7 +2926,7 @@ const MINI_AFFIXES = {
       e._qkT = (e._qkT || 0) + dt;
       if (e._qkT >= 4) {
         e._qkT = 0;
-        game.rings.push({ x: e.x, y: e.y, r: 12, speed: 230, width: 10, dmg: 1, maxR: 170 });
+        game.rings.push({ x: e.x, y: e.y, r: 12, speed: 230, width: 10, dmg: 1, maxR: 170, by: e.miniName || '우두머리' });
         Particles.burst(e.x, e.y, { count: 10, colors: ['#c8a068', '#8a8074'], speed: 120, life: 0.35, size: 3 });
         Renderer.shake(2.5, 0.12);
         AudioSys.thud();

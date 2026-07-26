@@ -853,14 +853,14 @@ const GamePlay = {
       const pdist = Math.hypot(p.x - a.x, p.y - a.y);
       if (p.invuln > 0) {
         // 대시 무적 중 스치는 탄(+12px 그레이즈) = 완벽 회피 판정 — 탄은 그대로 지나간다
-        if (a.dmg > 0 && pdist < p.r + a.r + 12) this.hurtPlayer(a.dmg, a.dir);
+        if (a.dmg > 0 && pdist < p.r + a.r + 12) this.hurtPlayer(a.dmg, a.dir, 260, a.by);
       } else if (pdist < p.r + a.r) {
         if (a.slow > 0) {
           p.slowT = Math.max(p.slowT, a.slow);
           Particles.text(p.x, p.y - 26, '끈적!', { color: '#e8e0cf', size: 13 });
           Particles.burst(p.x, p.y, { count: 6, colors: ['#e8e0cf'], speed: 60, life: 0.3, size: 2 });
         }
-        if (a.dmg > 0) this.hurtPlayer(a.dmg, a.dir);
+        if (a.dmg > 0) this.hurtPlayer(a.dmg, a.dir, 260, a.by);
         this.arrows.splice(i, 1);
         continue;
       }
