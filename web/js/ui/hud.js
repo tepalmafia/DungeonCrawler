@@ -582,9 +582,12 @@ const HUD = {
     ctx.quadraticCurveTo(240, 306, 520, 348);
     ctx.quadraticCurveTo(760, 382, W, 352);
     ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
-    // 언덕 위 비석·십자가 실루엣
-    ctx.fillStyle = '#171226';
-    for (const [gx, gy, gw, gh, cross] of [[96, 328, 14, 22, 0], [150, 318, 10, 18, 1], [214, 314, 16, 24, 0], [420, 330, 12, 20, 1], [500, 338, 14, 20, 0], [610, 356, 10, 16, 1]]) {
+    // 언덕 위 비석·십자가 실루엣 — 진실의 비석 (v123): 수집한 증거만큼 비석이 은은히 깨어난다
+    const STONES = [[96, 328, 14, 22, 0], [150, 318, 10, 18, 1], [214, 314, 16, 24, 0], [420, 330, 12, 20, 1], [500, 338, 14, 20, 0], [610, 356, 10, 16, 1]];
+    const lit = Math.min(6, Math.floor(Meta.clueCount() / 3.5)); // 21개 → 6기 전부
+    STONES.forEach(([gx, gy, gw, gh, cross], si) => {
+      const awake = si < lit;
+      ctx.fillStyle = awake ? '#2a2140' : '#171226';
       if (cross) {
         ctx.fillRect(gx + gw / 2 - 2, gy - 8, 4, gh + 8);
         ctx.fillRect(gx, gy - 1, gw, 4);
@@ -592,6 +595,20 @@ const HUD = {
         ctx.fillRect(gx, gy, gw, gh);
         ctx.fillRect(gx + 2, gy - 4, gw - 4, 5);
       }
+      if (awake) { // 새겨진 진실이 숨쉰다
+        ctx.globalAlpha = 0.35 + Math.sin(t * 1.8 + si * 1.3) * 0.2;
+        ctx.fillStyle = '#c9b8e8';
+        ctx.fillRect(gx + gw / 2 - 1, gy + 3, 2, Math.max(4, gh - 9));
+        ctx.globalAlpha = 1;
+      }
+    });
+    if (Meta.clueCount() > 0) {
+      ctx.globalAlpha = 0.55;
+      ctx.font = '11px Galmuri11, monospace';
+      ctx.fillStyle = '#8a8496';
+      ctx.textAlign = 'left';
+      ctx.fillText(`진실 ${Meta.clueCount()}/${CLUES.length} — 비석이 기억한다`, 96, 372);
+      ctx.globalAlpha = 1;
     }
     // 죽은 나무 (좌측)
     ctx.strokeStyle = '#171226';
@@ -659,6 +676,56 @@ const HUD = {
         ctx.fillText(cls.name, px, py - 34);
       }
       ctx.globalAlpha = 1;
+    }
+    // ── 모닥불 대화 (v123) — 런 사이, 네 망자가 한 마디씩 나눈다 (비차단, 거점 재진입마다 새 대화) ──
+    {
+      const game = (typeof Game !== 'undefined') ? Game : null;
+      if (game) {
+        if (!game._camp) {
+          const n = Meta.clueCount();
+          const pr = game.prevRun;
+          const pool = [
+            [['alch', '불이 따뜻하네. 죽은 몸인데도.'], ['knight', '따뜻하다고 느끼는 건… 기억이겠지.']],
+            [['archer', '동생들이 잘 있을까. 보러 가진 않을 거야, 이 꼴로는.'], ['alch', '끝나면, 멀리서 한 번만 보고 오자.']],
+            [['mage', '피오가 별지도를 품에 넣어줄 때 — 그 애 손이 떨리고 있었어.'], ['archer', '기억해주는 사람이 있으면, 진 게 아니야.']],
+            [['knight', '마르타는 내가 죽은 걸 알까. …아는 게 나을까.'], ['mage', '진실은 언제나 나아. 우리가 그 증거잖나.']],
+          ];
+          if (pr) pool.push([['knight', `이번엔 ${pr.floor}층이었다. 다음은 더 올라간다.`], ['alch', '상처는 꿰매뒀어. 실밥 뜯지 말고.']]);
+          if (n >= 1 && n < 8) pool.push([['archer', `증거 ${n}개. 아직 왕의 목에는 모자라.`], ['mage', '별은 이미 답을 안다. 우리는 걸어가 확인할 뿐.']]);
+          if (n >= 8) pool.push([['mage', '진실이 형태를 갖춰간다 — 별자리처럼.'], ['knight', '형태를 갖추면, 못박는다.']]);
+          if (Meta.data.wins > 0) pool.push([['knight', '왕좌는 비웠는데, 우리는 아직 여기 있군.'], ['mage', '이야기가 끝나도 불은 꺼야지. 조금만 더 쬐다 가자.']]);
+          game._camp = { t0: t, pair: pool[Math.floor(Math.random() * pool.length)] };
+        }
+        const el = t - game._camp.t0;
+        game._camp.pair.forEach(([who, line], i) => {
+          const a0 = 0.8 + i * 4.2, a1 = a0 + 3.6;
+          if (el < a0 || el > a1) return;
+          const a = Math.min(1, (el - a0) / 0.4) * Math.min(1, (a1 - el) / 0.5);
+          const [ox2, oy2] = seats[who];
+          const bx = fx + ox2, by = fy + oy2 - 52;
+          ctx.save();
+          ctx.globalAlpha = a * 0.92;
+          ctx.font = '12px Galmuri11, monospace';
+          const nw = ctx.measureText(CLASSES[who].name).width;
+          const tw = nw + 8 + ctx.measureText(line).width;
+          const bw = Math.min(tw + 18, 420);
+          const bxx = Math.max(8, Math.min(Renderer.W - bw - 8, bx - bw / 2));
+          ctx.fillStyle = '#0e0c16';
+          ctx.fillRect(bxx, by - 16, bw, 24);
+          ctx.strokeStyle = '#3a3450';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bxx + 0.5, by - 15.5, bw - 1, 23);
+          ctx.fillStyle = '#0e0c16';
+          ctx.beginPath(); ctx.moveTo(bx - 4, by + 8); ctx.lineTo(bx + 4, by + 8); ctx.lineTo(bx, by + 14); ctx.fill();
+          ctx.textAlign = 'left';
+          ctx.fillStyle = CLASSES[who].color;
+          ctx.fillText(CLASSES[who].name, bxx + 8, by + 1);
+          ctx.fillStyle = '#c8c0a8';
+          ctx.fillText(line, bxx + 8 + nw + 8, by + 1);
+          ctx.restore();
+          ctx.globalAlpha = 1;
+        });
+      }
     }
     // 장작 + 불꽃 (망자들 위에 그려 앞장면 유지)
     ctx.fillStyle = '#3a2c1a';
