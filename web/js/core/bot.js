@@ -26,14 +26,21 @@ const Bot = {
   },
 
   // 사망 기록 (무한 부활·실사망 공통) — 층별 난이도 리포트의 재료
+  // 리그 v2: 사인(何에게 죽었나)도 함께 — 층 숫자만으로는 귀속을 매번 수동으로 해야 했다
+  causes: {},
   onDeath(floor) {
     this.deaths[floor] = (this.deaths[floor] || 0) + 1;
+    const src = (typeof Game !== 'undefined' && Game._lastHurtBy) || '?';
+    const key = floor + ':' + src;
+    this.causes[key] = (this.causes[key] || 0) + 1;
   },
 
   deathReport() {
     const keys = Object.keys(this.deaths).map(Number).sort((a, b) => a - b);
     const total = keys.reduce((s, k) => s + this.deaths[k], 0);
-    return { total, byFloor: keys.map((k) => `${k}층:${this.deaths[k]}`).join(' ') };
+    const causes = Object.entries(this.causes).sort((a, b) => b[1] - a[1]).slice(0, 12)
+      .map(([k, n]) => `${k}×${n}`).join(' ');
+    return { total, byFloor: keys.map((k) => `${k}층:${this.deaths[k]}`).join(' '), causes };
   },
 
   _dash() {
@@ -476,7 +483,9 @@ const Bot = {
         if (i.kind === 'whetstone') return p.hp >= p.maxHp * 0.7;                 // 건강하면 공격력을 갈아둔다
         if (i.kind === 'mystery') return p.maxHp >= 4 && p.hp >= 3;              // 도박은 최악을 감당할 수 있을 때만
         if (i.kind === 'cursedChest') return p.maxHp >= 3;                       // 최대 HP 여유가 있으면 유물 거래 수락
-        if (i.kind === 'bloodAltar') return p.hp >= 4 && p.hp >= p.maxHp - 1;    // 체력이 넉넉할 때만 피의 계약
+        // 계측 왜곡 수정 (리그 v2): 조건만 맞으면 무한 수락 → full50 런에서 maxHp 9→3 자해,
+        // 3막 사망 급증의 상당분이 이 왜곡이었다. 사람처럼 하한(최대 HP 6)을 지킨다
+        if (i.kind === 'bloodAltar') return p.hp >= 4 && p.hp >= p.maxHp - 1 && p.maxHp >= 6;
         return false;
       });
       if (it) {
