@@ -822,7 +822,7 @@ const GamePlay = {
       if (!inGap && Math.abs(pd - ring.r) < ring.width) {
         // 무적 중이어도 hurtPlayer로 — 대시 관통 시 완벽 회피 판정이 살아난다
         const dir = { x: (p.x - ring.x) / (pd || 1), y: (p.y - ring.y) / (pd || 1) };
-        this.hurtPlayer(ring.dmg, dir, 300);
+        this.hurtPlayer(ring.dmg, dir, 300, ring.by);
       }
       if (ring.r > ring.maxR) this.rings.splice(i, 1);
     }
