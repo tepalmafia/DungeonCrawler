@@ -1289,6 +1289,63 @@ const HUD = {
     ctx.fillStyle = 'rgba(8,8,15,0.82)';
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
 
+    // ── 다섯 번째 손 — 정복 에필로그: 정산보다 먼저, 네 망자가 화면 밖을 본다 ──
+    if (game._epi && !game._epi.done) {
+      ctx.fillStyle = 'rgba(4,3,8,0.96)';
+      ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+      const PAGES = [
+        [
+          ['#e8e0cf', '왕좌는 비었다. 넷은 한동안 말이 없었다.'],
+          ['', ''],
+          ['#c8b89a', '가레스  "끝났군. …그런데 줄곧 이상했다."'],
+          ['#c8b89a', '        "갈림길마다 — 누가 등을 밀어주는 것 같았어."'],
+          ['', ''],
+          ['#9fc6a8', '레나    "나도 느꼈어. 시위를 놓는 순간마다,"'],
+          ['#9fc6a8', '        "손가락이 하나 더 있는 것 같았지."'],
+        ],
+        [
+          ['#a9c1d8', '오르빈  "별을 읽던 시절부터 알고 있었다."'],
+          ['#a9c1d8', '        "우리를 내려다보던 창백한 시선 — 적의 없는."'],
+          ['#a9c1d8', '        "…다섯 번째 손이다."'],
+          ['', ''],
+          ['#d8a9c1', '이졸데  "그래서? 그 손이 우리를 이끌었다 치자."'],
+          ['#d8a9c1', '        "흙을 털고 일어선 건 우리야. 걸은 것도,"'],
+          ['#d8a9c1', '        "벤 것도, 서로를 붙든 것도."'],
+        ],
+        [
+          ['#c8b89a', '가레스  "……거기 있는 거, 안다."'],
+          ['#c8b89a', '        "처음부터 함께였던 — 다섯 번째 손."'],
+          ['', ''],
+          ['#d8a9c1', '이졸데  "네 세상에도 보이지 않는 손이 있겠지."'],
+          ['#9fc6a8', '레나    "그래도 기억해. 손이 몇 개든 —"'],
+          ['', ''],
+          ['#ffd866', '넷이 함께   "결국, 인생은 우리가 선택한다."'],
+          ['', ''],
+          ['#8f8577', '(고맙다, 관찰자여. 이 복수는 너와 함께였다.)'],
+        ],
+      ];
+      const page = PAGES[Math.min(game._epi.page, PAGES.length - 1)];
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillStyle = '#6a6478';
+      ctx.fillText(`— 다섯 번째 손 · ${Math.min(game._epi.page + 1, 3)}/3 —`, cx, 110);
+      ctx.textAlign = 'left';
+      const lx = cx - 300;
+      let ly = 180;
+      ctx.font = '16px monospace';
+      for (const [col, line] of page) {
+        if (line) { ctx.fillStyle = col; ctx.fillText(line, lx, ly); }
+        ly += 34;
+      }
+      ctx.textAlign = 'center';
+      ctx.font = '13px monospace';
+      ctx.fillStyle = '#8f8577';
+      ctx.globalAlpha = 0.6 + Math.sin(blinkT * 3) * 0.3;
+      ctx.fillText('아무 키 — 계속', cx, Renderer.H - 46);
+      ctx.globalAlpha = 1;
+      return;
+    }
+
     // 회전 광선 (타이틀 뒤) — 승리의 무대 조명
     ctx.save();
     ctx.translate(cx, 165);

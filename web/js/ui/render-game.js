@@ -891,6 +891,23 @@ const GameRender = {
     if (this.showManual && this.state === 'play') HUD.drawManual(ctx, this, this.showManual);
     if (this.showSettings && this.state === 'play') HUD.drawSettings(ctx, this);
 
+    // 다섯 번째 손 — 관찰자의 속삭임: 하단에 낮게 스며드는 문장 (배너와 다른 결)
+    if (this.whisper && this.state === 'play') {
+      const w = this.whisper;
+      const a = Math.min(1, w.t / 0.8) * Math.min(1, (w.maxT - w.t) / 0.6);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = a * 0.85;
+      ctx.textAlign = 'center';
+      ctx.font = '14px monospace';
+      ctx.fillStyle = '#0a0812';
+      ctx.fillText(w.text, Renderer.W / 2 + 1, Renderer.H - 63);
+      ctx.fillStyle = '#b8a9d8';
+      ctx.fillText(w.text, Renderer.W / 2, Renderer.H - 64);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);
     if (this.state === 'route') HUD.drawRouteChoice(ctx, this);
