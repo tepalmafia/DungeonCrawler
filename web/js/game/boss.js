@@ -203,7 +203,11 @@ function createBoss(floor, x, y) {
     : floor <= 49 ? ((floor - 11) % 4) + 6
     : ((floor - 51) % 5) + 6;
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
-  const hpScale = floor <= 10 || FIXED[floor] ? 1 : 1 + 0.15 * (floor - 10);
+  // 계측 조정 (관통 v2): 배율 무제한이라 49층 절망의 바르곤 hp 4450 > 흰 늑대 3600 —
+  // 필러 보스가 랜드마크 보스를 넘어섰고, 3런 사망의 절반이 이 한 킷에 몰렸다 (49층 17회 군집).
+  // 상한 ×4.5: 49층 hp ≈2900 — 5막 서열(늑대 3600 < 왕 5000)을 회복한다. 51층+ 무한은 상한 없음 (의도된 지옥)
+  const rawScale = 1 + 0.15 * (floor - 10);
+  const hpScale = floor <= 10 || FIXED[floor] ? 1 : floor <= 50 ? Math.min(4.5, rawScale) : rawScale;
   const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,
