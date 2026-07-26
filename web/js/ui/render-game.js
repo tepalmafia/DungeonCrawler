@@ -267,6 +267,29 @@ const GameRender = {
           ctx.fillStyle = '#f7b32b';
           ctx.fillText('증거', it.x, it.y - 26);
         }
+      } else if (it.kind === 'modShrine') {
+        // 원한의 세공대: 보랏빛 모루 — 스킬의 형태를 두드려 바꾼다
+        if (!it.used) {
+          ctx.globalAlpha = 0.25 + Math.sin(it.t * 3) * 0.12;
+          ctx.fillStyle = '#b13ae0';
+          ctx.beginPath(); ctx.arc(it.x, it.y, 34, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = '#241832';
+        ctx.fillRect(it.x - 15, it.y - 2, 30, 13);
+        ctx.fillStyle = '#3d2c5c';
+        ctx.fillRect(it.x - 10, it.y - 12, 20, 10);
+        ctx.fillStyle = '#b13ae0';
+        ctx.fillRect(it.x - 4, it.y - 16, 8, 5);
+        if (!it.used) {
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#b13ae0';
+          ctx.fillText('원한의 세공대', it.x, it.y - 40);
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#9aa0b4';
+          ctx.fillText('스킬의 형태를 바꾼다 (택1)', it.x, it.y - 26);
+        }
       } else if (it.kind === 'skillShrine') {
         // 스킬 사당: 세 갈래 빛기둥 제단 — 보조 스킬 3택1
         ctx.fillStyle = '#3d3d52';
@@ -750,6 +773,7 @@ const GameRender = {
     if (this.state === 'levelup') HUD.drawCardChoice(ctx, this, this.traitCards, this.choiceReason === 'elite' ? '정예 처치 보상!' : '레벨 업!', (t) => `[ ${t.tag} ]`);
     if (this.state === 'relic') HUD.drawCardChoice(ctx, this, this.relicCards, '유물을 선택하라', (r) => `[ ${RARITY[r.rarity].label} ]`, (r) => RARITY[r.rarity].color);
     if (this.state === 'route') HUD.drawRouteChoice(ctx, this);
+    if (this.state === 'skillmod') HUD.drawCardChoice(ctx, this, this.modCards, '원한의 세공 — 스킬을 개조하라', () => '[ 개조 ]', () => '#b13ae0');
     if (this.state === 'over') HUD.drawGameOver(ctx, this, this.blinkT);
     if (this.state === 'victory') HUD.drawVictory(ctx, this, this.blinkT);
 

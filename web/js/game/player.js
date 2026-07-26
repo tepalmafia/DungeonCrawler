@@ -2,6 +2,34 @@
 // 타격 판정(strike)은 공용: 크리·상태이상·시너지가 모든 직업에서 동일하게 작동한다.
 // 보조 스킬 (P1 슬롯 확장): 5·15·25층 '스킬 사당'에서 3택1 — E키.
 // "10층만 가도 할 게 없다" 해결의 1축: 액티브 킷이 런 중간에 자란다
+// 3축 스킬 개조 「원한의 세공」 — 31층 세공대에서 택1. K스킬의 성격이 바뀐다 (진화와 중첩)
+const SKILL_MODS = {
+  knight: [
+    { id: 'kn_wide', name: '넓은 원한', desc: '참수 선회 반경 +45%, 피해 -15%', rMul: 1.45, dMul: 0.85 },
+    { id: 'kn_heavy', name: '집행의 무게', desc: '참수 선회 피해 +60%, 쿨다운 +30%', dMul: 1.6, cdMul: 1.3 },
+    { id: 'kn_double', name: '이중 선회', desc: '0.5초 뒤 두 번째 회전이 뒤따른다 (피해 50%)', flag: 'double' },
+  ],
+  archer: [
+    { id: 'ar_focus2', name: '집중 낙하', desc: '뼈화살 비 반경 -30%, 화살 피해 +80%', rMul: 0.7, dMul: 1.8 },
+    { id: 'ar_long', name: '긴 장마', desc: '화살 수 +60%, 반경 +15%, 피해 -15%', rMul: 1.15, sMul: 1.6, dMul: 0.85 },
+    { id: 'ar_track', name: '추적하는 비', desc: '화살비가 가장 가까운 적을 따라간다', flag: 'track' },
+  ],
+  mage: [
+    { id: 'mg_nova2', name: '초신성', desc: '별의 심판 반경 +35%, 피해 +40%, 낙하 예고 +0.3초', rMul: 1.35, dMul: 1.4, tAdd: 0.3 },
+    { id: 'mg_quick', name: '유성 소나기', desc: '쿨다운 -25%, 낙하 -0.2초 — 반경 -25%, 피해 -20%', rMul: 0.75, dMul: 0.8, cdMul: 0.75, tAdd: -0.2 },
+    { id: 'mg_pull', name: '별의 인력', desc: '착탄이 주변 적을 중심으로 끌어당긴다', flag: 'pull' },
+  ],
+  alch: [
+    { id: 'al_pool', name: '응고 독배', desc: '폭발 피해 -40% — 자리에 큰 독 웅덩이가 오래 남는다', dMul: 0.6, flag: 'pool' },
+    { id: 'al_throw2', name: '휘발 연투', desc: '쿨다운 -40%, 피해 -35%, 반경 -15%', rMul: 0.85, dMul: 0.65, cdMul: 0.6 },
+    { id: 'al_chain', name: '연쇄 반응', desc: '상태이상 2종 이상인 적마다 소폭발이 재점화된다', flag: 'chain' },
+  ],
+};
+function skillModOf(p2) {
+  if (!p2.skillMod) return null;
+  return (SKILL_MODS[p2.classId] || []).find((m) => m.id === p2.skillMod) || null;
+}
+
 const SUBSKILLS = {
   knight: [
     { id: 'sh_bash', name: '방패 올려치기', cd: 5, desc: '전방의 적을 방패로 쳐올린다 — 피해 + 강넉백' },
@@ -115,7 +143,8 @@ function createPlayer(x, y, classId = 'knight') {
       // 스킬 쿨 하한 (밸런스 점검): 시간 왜곡 × 직업 쿨감 3중첩 + 처치 시 -0.3s가 겹치면
       // 사실상 상시 스킬이 된다 — 최소 1.5초는 유지
       const pact = (typeof Game !== 'undefined' && Game.pacts && Game.pacts.skill) ? 1.25 : 1; // 서약 '짧은 심지'
-      return Math.max(1.5, base * this.skillCdMul * pact);
+      const mod = skillModOf(this);
+      return Math.max(1.5, base * this.skillCdMul * (mod && mod.cdMul ? mod.cdMul : 1) * pact);
     },
 
     skillName() {
@@ -343,6 +372,7 @@ function createPlayer(x, y, classId = 'knight') {
       this.skillCd = this.skillMaxCd();
       if (this.flags.mgward) this.invuln = Math.max(this.invuln, 0.6); // 마력 장막
 
+      const mod = skillModOf(this);
       if (this.classId === 'knight') {
         // 회전 베기: 360° 강타 + 강넉백 + 시전 중 무적 — 포위당했을 때의 탈출 버튼
         // [진화] 회오리 베기: 1.1초간 이동하며 회전 — 0.35초마다 추가 타격 펄스
@@ -358,9 +388,9 @@ function createPlayer(x, y, classId = 'knight') {
           if (e.dead || e.phased) continue;
           const dx = e.x - this.x, dy = e.y - this.y;
           const d = Math.hypot(dx, dy);
-          if (d > 100 + e.r) continue;
+          if (d > 100 * (mod && mod.rMul ? mod.rMul : 1) + e.r) continue;
           const dir = { x: dx / (d || 1), y: dy / (d || 1) };
-          const dmg = this.currentAtk() * 3;
+          const dmg = Math.max(1, Math.round(this.currentAtk() * 3 * (mod && mod.dMul ? mod.dMul : 1)));
           const crit = this.rflags.allcrit || Math.random() < Math.min(0.8, this.critChance);
           game.hitEnemy(e, crit ? Math.round(dmg * this.critMul) : dmg, dir, { crit, kb: 380 });
           hits++;
@@ -381,35 +411,46 @@ function createPlayer(x, y, classId = 'knight') {
           this.hp++;
           Particles.text(this.x, this.y - 28, '+1', { color: '#e43b44', size: 15 });
         }
+        // 개조 「이중 선회」: 두 번째 회전 예약
+        if (mod && mod.flag === 'double') this._spin2T = 0.5;
       } else if (this.classId === 'archer') {
         // 화살비: 지점 광역 폭격 — [진화] 화살 폭풍: 범위·화살 수 대폭 증가
         const t = this._skillTarget(game);
         AudioSys.rainCast();
         game.rains.push({
-          x: t.x, y: t.y, r: this.skillEvolved ? 140 : 110, t: 0, next: 0.25,
-          shots: this.skillEvolved ? 24 : 14, fired: 0,
+          x: t.x, y: t.y, r: (this.skillEvolved ? 140 : 110) * (mod && mod.rMul ? mod.rMul : 1), t: 0, next: 0.25,
+          shots: Math.round((this.skillEvolved ? 24 : 14) * (mod && mod.sMul ? mod.sMul : 1)), fired: 0,
           explo: this.flags.ar_explo,
+          dmgMul: mod && mod.dMul ? mod.dMul : 1,
+          track: !!(mod && mod.flag === 'track'),
         });
       } else if (this.classId === 'alch') {
         // 휘발성 혼합물: 지점 대폭발 + 독·화상 동시 부여 — 반응(맹독 연소)을 스스로 만든다.
         // [진화] 대반응 폭탄: 감전까지 3원소 — 과부하·마비가 연쇄한다
         const t = this._skillTarget(game);
         AudioSys.meteorCast();
-        const r = (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1);
-        game._explode(t.x, t.y, r, Math.round(this.currentAtk() * 2.5), ['#c9d94a', '#6ada8a', '#ff7043'], '#c9d94a');
+        const r = (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1) * (mod && mod.rMul ? mod.rMul : 1);
+        game._explode(t.x, t.y, r, Math.max(1, Math.round(this.currentAtk() * 2.5 * (mod && mod.dMul ? mod.dMul : 1))), ['#c9d94a', '#6ada8a', '#ff7043'], '#c9d94a');
+        if (mod && mod.flag === 'pool') game.zones.push({ x: t.x, y: t.y, r: r * 1.15, life: 4.5, kind: 'poison', tickT: 0.4 });
         for (const e of game.enemies) {
           if (e.dead || e.phased || e.neutral) continue;
           if (Math.hypot(e.x - t.x, e.y - t.y) < r + e.r) {
             e.status.poison = Math.max(e.status.poison || 0, this.flags.al_acid ? 6 : 4);
             e.status.burn = Math.max(e.status.burn || 0, 3);
             if (this.skillEvolved) e.status.shock = Math.max(e.status.shock || 0, 2.5);
+            // 개조 「연쇄 반응」: 상태 2종+ 적마다 소폭발 재점화
+            if (mod && mod.flag === 'chain') {
+              const st = (e.status.burn > 0 ? 1 : 0) + (e.status.poison > 0 ? 1 : 0) + (e.status.shock > 0 ? 1 : 0);
+              if (st >= 2) game._explode(e.x, e.y, 46, Math.max(1, Math.round(this.currentAtk())), ['#c9d94a', '#ffd866'], '#c9d94a');
+            }
           }
         }
       } else {
         // 메테오: 예고 후 대광역 낙하 — [진화] 쌍둥이 메테오: 두 번째 낙하가 뒤따른다
         const t = this._skillTarget(game);
         AudioSys.meteorCast();
-        game.meteors.push({ x: t.x, y: t.y, t: 0.7, r: 105 });
+        game.meteors.push({ x: t.x, y: t.y, t: 0.7 + (mod && mod.tAdd ? mod.tAdd : 0), r: 105 * (mod && mod.rMul ? mod.rMul : 1),
+          dmgMul: mod && mod.dMul ? mod.dMul : 1, pull: !!(mod && mod.flag === 'pull') });
         if (this.skillEvolved) {
           const side = Math.random() < 0.5 ? -1 : 1;
           game.meteors.push({ x: t.x + side * 120, y: t.y + (Math.random() - 0.5) * 90, t: 1.0, r: 105 });
@@ -433,6 +474,25 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.hurtPoseT > 0) this.hurtPoseT -= dt;
       if (this.subCd > 0) this.subCd -= dt;
       if (this.tonicT > 0) this.tonicT -= dt;
+      // 개조 「이중 선회」: 예약된 두 번째 회전
+      if (this._spin2T > 0) {
+        this._spin2T -= dt;
+        if (this._spin2T <= 0) {
+          this.spinT = 0.3;
+          this.invuln = Math.max(this.invuln, 0.3);
+          AudioSys.spin();
+          Particles.ring(this.x, this.y, { r0: 16, r1: 90, life: 0.25, color: '#4a6ede', width: 4 });
+          const mod2 = skillModOf(this);
+          const rr = 100 * (mod2 && mod2.rMul ? mod2.rMul : 1);
+          for (const e of game.enemies) {
+            if (e.dead || e.phased || e.neutral) continue;
+            const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy);
+            if (d > rr + e.r) continue;
+            const dmg = Math.max(1, Math.round(this.currentAtk() * 1.5));
+            game.hitEnemy(e, dmg, { x: dx / (d || 1), y: dy / (d || 1) }, { kb: 300 });
+          }
+        }
+      }
       if (this.skillCd > 0) {
         this.skillCd -= dt;
         if (this.skillCd <= 0) {
@@ -634,7 +694,7 @@ function createPlayer(x, y, classId = 'knight') {
 
     // ── 공용 타격 판정: 크리·추가피해·상태이상·연쇄를 한 곳에서 ──
     // 반환: 'blocked' | 'hit'
-    strike(game, e, hitDir, { finisher = false, kb = 190 } = {}) {
+    strike(game, e, hitDir, { finisher = false, kb = 190, dmgMul = 1 } = {}) {
       if (e.blocksFrom && e.blocksFrom(hitDir)) {
         Particles.text(e.x, e.y - 22, '막힘', { color: '#5ce0e6', size: 13 });
         Particles.burst(e.x - hitDir.x * 12, e.y - hitDir.y * 12, {
@@ -657,7 +717,7 @@ function createPlayer(x, y, classId = 'knight') {
       const baseDmg = this.currentAtk();
       let dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv + (this.flags.bowmaster ? 1 : 0))) : baseDmg;
       if (this.flags.greatsword) dmg = Math.round(dmg * 2.2); // 대검화: 느리고 무겁게
-      const finalDmg = (crit ? Math.round(dmg * this.critMul) : dmg) + bonus;
+      const finalDmg = Math.max(1, Math.round(((crit ? Math.round(dmg * this.critMul) : dmg) + bonus) * dmgMul));
       game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
 
       if (this.flags.ignite && !e.dead && Math.random() < 0.25) {

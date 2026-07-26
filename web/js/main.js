@@ -96,7 +96,7 @@ const Game = {
         time: this.time, gold: this.gold,
         traits: [...p.traits], relics: [...p.relics],
         hp: p.hp, maxHp: p.maxHp, bonusAtk: p.bonusAtk, rerolls: p.rerolls || 0,
-        sub: p.subSkill || null, shrineSeen: this._shrineSeen || 0,
+        sub: p.subSkill || null, shrineSeen: this._shrineSeen || 0, skillMod: p.skillMod || null, modSeen: this._modSeen || 0,
         ult: p.ult || 0, ultG: p.ultGauge || 0,
         floorAtk: p.floorAtk || 0, reviveUsed: !!p.reviveUsed,
       }));
@@ -129,6 +129,8 @@ const Game = {
     this.heat = s.heat;
     this.pacts = s.pacts || Meta.pactFlags(s.heat);
     this.route = s.route || null; // 진군로 복원 — 이어하기에서 다시 묻지 않는다
+    this.player.skillMod = s.skillMod || null;
+    this._modSeen = s.modSeen || 0;
     this.level = s.level; this.xp = s.xp; this.xpNext = s.xpNext;
     this.kills = s.kills; this.time = s.time; this.gold = s.gold;
     // 2막 진행 복원 — 정산 이중 지급 방지 장부까지
@@ -337,6 +339,14 @@ const Game = {
           break; // 방당 1개
         }
       }
+    }
+
+    // 스킬 개조 세공대 (3축): 31층 첫 방 — 4막 입구에서 원한을 세공한다
+    if (Dungeon.floor === 31 && Dungeon.roomIndex === 1 && !this.player.skillMod && this._modSeen !== 31) {
+      this._modSeen = 31;
+      const mc = World.safeSpot(World.center().x, World.center().y + 90);
+      this.interactables.push({ kind: 'modShrine', x: mc.x, y: mc.y, r: 30, used: false, t: 0 });
+      this.banner = { text: '원한의 세공대 — 스킬의 형태를 바꿀 수 있다 (다가가서 선택)', life: 3.0, maxLife: 3.0, color: '#b13ae0' };
     }
 
     // 스킬 사당 (P1): 5·15·25층의 첫 방에 무조건 선다 — 문 선택과 무관하게 킷이 자란다
@@ -574,6 +584,11 @@ const Game = {
       this._handleCardInput(this.routeCards, (i) => this.pickRoute(i));
       return;
     }
+    if (this.state === 'skillmod') {
+      this.choiceLockT -= dt;
+      this._handleCardInput(this.modCards, (i) => this.pickSkillMod(i));
+      return;
+    }
     if (this.state === 'transition') {
       const tr = this.transition;
       tr.t += dt * 3;
@@ -713,7 +728,7 @@ function installDemoBot() {
   };
   const origTick = Game.tick.bind(Game);
   Game.tick = function (dt) {
-    if (this.state === 'levelup' || this.state === 'relic' || this.state === 'route') Input.justPressed['Digit1'] = true;
+    if (this.state === 'levelup' || this.state === 'relic' || this.state === 'route' || this.state === 'skillmod') Input.justPressed['Digit1'] = true;
     origTick(dt);
   };
 }
