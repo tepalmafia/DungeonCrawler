@@ -123,7 +123,7 @@ const Particles = {
     for (const t of this.texts) {
       const pop = t.maxLife - t.life < 0.1 ? 1.4 : 1; // 등장 직후 살짝 커지는 팝 효과
       ctx.globalAlpha = Math.min(1, t.life / (t.maxLife * 0.4));
-      ctx.font = `bold ${Math.round(t.size * pop)}px monospace`;
+      ctx.font = `bold ${Math.round(t.size * pop)}px Galmuri11, monospace`;
       ctx.fillStyle = '#08080f';
       ctx.fillText(t.str, Math.round(t.x) + 2, Math.round(t.y) + 2);
       ctx.fillStyle = t.color;

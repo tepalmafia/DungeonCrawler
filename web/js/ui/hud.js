@@ -34,7 +34,7 @@ const HUD = {
     ctx.fillStyle = skRatio >= 1 ? '#f7b32b' : '#8a6a2b';
     ctx.fillRect(14, barY + 12, 86 * skRatio, 6);
     ctx.fillStyle = skRatio >= 1 ? '#f7b32b' : '#666a80';
-    ctx.font = '10px monospace';
+    ctx.font = '10px Galmuri11, monospace';
     ctx.textAlign = 'left';
     ctx.fillText(`${p.skillName()} K`, 104, barY + 19);
 
@@ -46,7 +46,7 @@ const HUD = {
       ctx.fillStyle = ur >= 1 ? '#e43b44' : '#5e1420';
       ctx.fillRect(210, barY, 56 * ur, 6);
       ctx.fillStyle = ur >= 1 ? '#e43b44' : '#666a80';
-      ctx.font = '10px monospace';
+      ctx.font = '10px Galmuri11, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(`처형 선고 R${p.ult >= 2 ? '+' : ''}`, 272, barY + 7);
     }
@@ -61,7 +61,7 @@ const HUD = {
         ctx.fillStyle = subR >= 1 ? '#c9d94a' : '#6a7a2a';
         ctx.fillRect(210, barY + 12, 56 * subR, 6);
         ctx.fillStyle = subR >= 1 ? '#c9d94a' : '#666a80';
-        ctx.font = '10px monospace';
+        ctx.font = '10px Galmuri11, monospace';
         ctx.fillText(`${sd.name} E`, 272, barY + 19);
       }
     }
@@ -73,13 +73,13 @@ const HUD = {
     ctx.fillStyle = '#2ec4b6';
     ctx.fillRect(14, barY + 24, 86 * xpRatio, 6);
     ctx.fillStyle = '#9aa0b4';
-    ctx.font = '11px monospace';
+    ctx.font = '11px Galmuri11, monospace';
     ctx.fillText(`Lv.${game.level}`, 104, barY + 32);
 
     // ── 골드 (G1) — 상인에게만 쓰는 런 화폐 (Lv 옆, 특성 칩과 겹치지 않게) ──
     if (game.gold > 0) {
       ctx.fillStyle = '#ffd866';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 12px Galmuri11, monospace';
       ctx.fillText(`${game.gold}G`, 158, barY + 32);
     }
 
@@ -100,7 +100,7 @@ const HUD = {
       ctx.drawImage(Icons.trait(id), 15, y + 1, 16, 16);
       if (counts[id] > 1) {
         ctx.fillStyle = '#e8e0cf';
-        ctx.font = '10px monospace';
+        ctx.font = '10px Galmuri11, monospace';
         ctx.textAlign = 'left';
         ctx.fillText('x' + counts[id], 35, y + 13);
       }
@@ -108,7 +108,7 @@ const HUD = {
     if (traitIds.length > maxTraitChips) {
       const y = barY + 46 + shownTraits.length * 22;
       ctx.fillStyle = '#666a80';
-      ctx.font = '10px monospace';
+      ctx.font = '10px Galmuri11, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(`+${traitIds.length - maxTraitChips} (Tab)`, 14, y + 12);
     }
@@ -129,14 +129,14 @@ const HUD = {
     });
     if (p.relics.length > maxRelicChips) {
       ctx.fillStyle = '#666a80';
-      ctx.font = '10px monospace';
+      ctx.font = '10px Galmuri11, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(`+${p.relics.length - maxRelicChips}`, 14 + maxRelicChips * 24, Renderer.H - 20);
     }
 
     // ── 층 진행도 ──
     ctx.textAlign = 'center';
-    ctx.font = 'bold 15px monospace';
+    ctx.font = 'bold 15px Galmuri11, monospace';
     ctx.fillStyle = '#e8e0cf';
     const roomLabel = Dungeon.roomType === 'boss'
       ? `${Dungeon.floor}층 보스전`
@@ -144,7 +144,7 @@ const HUD = {
     ctx.fillText(roomLabel, Renderer.W / 2, 26);
 
     ctx.textAlign = 'right';
-    ctx.font = '13px monospace';
+    ctx.font = '13px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`처치 ${game.kills}`, Renderer.W - 16, 26);
 
@@ -159,7 +159,7 @@ const HUD = {
       for (const c of cells) {
         if (c.t === 'boss') {
           ctx.textAlign = 'center';
-          ctx.font = '12px monospace';
+          ctx.font = '12px Galmuri11, monospace';
           ctx.fillStyle = '#e43b44';
           ctx.fillText('☠', mx, my + 4);
         } else if (!c.t) {
@@ -190,7 +190,7 @@ const HUD = {
       const w = 420;
       const x = (Renderer.W - w) / 2;
       ctx.textAlign = 'center';
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = '#b13ae0';
       ctx.fillText(boss.name, Renderer.W / 2, 52);
       ctx.fillStyle = '#1c1c28';
@@ -201,7 +201,7 @@ const HUD = {
       ctx.strokeRect(x + 0.5, 58.5, w - 1, 9);
       // 기믹 표시 — 해법은 플레이어가 연구한다
       if (boss.def && boss.def.mechanic) {
-        ctx.font = '11px monospace';
+        ctx.font = '11px Galmuri11, monospace';
         ctx.fillStyle = boss.phased ? '#b13ae0' : '#9aa0b4';
         ctx.fillText(boss.def.mechanic.label, Renderer.W / 2, 82);
       }
@@ -213,7 +213,7 @@ const HUD = {
       const t = b.life / b.maxLife;
       ctx.globalAlpha = Math.min(1, t * 3);
       ctx.textAlign = 'center';
-      ctx.font = 'bold 38px monospace';
+      ctx.font = 'bold 38px Galmuri11, monospace';
       ctx.fillStyle = '#08080f';
       ctx.fillText(b.text, Renderer.W / 2 + 3, 173);
       ctx.fillStyle = b.color || '#f7b32b';
@@ -250,28 +250,28 @@ const HUD = {
 
     if (AudioSys.muted) {
       ctx.textAlign = 'left';
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText('🔇 음소거 (M)', 14, Renderer.H - 44);
     }
 
     // ── 상시 단축키 바 — 최하단 중앙, 흐리게 (플레이 방해 없이 항상 보인다) ──
     ctx.textAlign = 'center';
-    ctx.font = '11px monospace';
+    ctx.font = '11px Galmuri11, monospace';
     ctx.fillStyle = 'rgba(154,160,180,0.45)';
     ctx.fillText('WASD 이동 · J/클릭 공격 · Space 대시 · K 스킬 · Tab 목록 · H 도움말 · ESC 일시정지', Renderer.W / 2, Renderer.H - 6);
 
     // ── 봇 모드 표시 + 층별 사망 리포트 ──
     if (Bot.enabled) {
       ctx.textAlign = 'right';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 12px Galmuri11, monospace';
       ctx.fillStyle = '#b13ae0';
       let botLabel = `🤖 봇 모드${Bot.human ? ' · 휴먼' : ''} ×${Bot.ff} (1~4 배속)`;
       if (Bot.loop) botLabel += ` · 런 ${Bot.runs}·승 ${Bot.wins}`;
       ctx.fillText(botLabel, Renderer.W - 16, 30);
       const rep = Bot.deathReport();
       if (rep.total > 0) {
-        ctx.font = '11px monospace';
+        ctx.font = '11px Galmuri11, monospace';
         ctx.fillStyle = '#e43b44';
         ctx.fillText(`사망 ${rep.total}회 — ${rep.byFloor}`, Renderer.W - 16, Renderer.H - 60);
       }
@@ -280,7 +280,7 @@ const HUD = {
     // ── 테스트 모드 표시 + 단축키 도움말 ──
     if (game.testMode) {
       ctx.textAlign = 'right';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 12px Galmuri11, monospace';
       ctx.fillStyle = '#e43b44';
       ctx.fillText('⚙ 테스트 모드', Renderer.W - 16, 46);
       if (p.god) {
@@ -296,7 +296,7 @@ const HUD = {
         ctx.fillStyle = '#5ce0e6';
         ctx.fillText('♻ 무한 부활', Renderer.W - 16, p.god ? 78 : 62);
       }
-      ctx.font = '10px monospace';
+      ctx.font = '10px Galmuri11, monospace';
       ctx.fillStyle = 'rgba(154,160,180,0.75)';
       lines.forEach((l, i) => ctx.fillText(l, Renderer.W - 16, Renderer.H - 46 + i * 14));
     }
@@ -337,7 +337,7 @@ const HUD = {
     ctx.strokeRect(px + 7, py + 7, pw - 14, ph - 14);
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 22px monospace';
+    ctx.font = 'bold 22px Galmuri11, monospace';
     ctx.fillStyle = '#3a2c1a';
     ctx.fillText(`왕국 진군 지도 — ${game.act}막`, Renderer.W / 2, py + 42);
 
@@ -358,13 +358,13 @@ const HUD = {
       const here = i === game.act - 1;
       ctx.fillStyle = here ? '#7a1c28' : 'rgba(60,40,20,0.85)';
       ctx.beginPath(); ctx.arc(lx, mapY, here ? 8 : 5, 0, Math.PI * 2); ctx.fill();
-      ctx.font = here ? 'bold 13px monospace' : '11px monospace';
+      ctx.font = here ? 'bold 13px Galmuri11, monospace' : '11px Galmuri11, monospace';
       ctx.fillStyle = here ? '#7a1c28' : 'rgba(60,40,20,0.8)';
       ctx.fillText(name, lx, mapY - 16);
       if (here) ctx.fillText('▼', lx, mapY + 24);
     });
 
-    ctx.font = '12px monospace';
+    ctx.font = '12px Galmuri11, monospace';
     ctx.fillStyle = 'rgba(60,40,20,0.8)';
     ctx.fillText('어느 길로 진군하는가 (1~3 키 또는 클릭)', Renderer.W / 2, mapY + 46);
 
@@ -381,19 +381,19 @@ const HUD = {
       ctx.lineWidth = hover ? 3 : 1.5;
       ctx.strokeRect(r.x, r.y + lift, r.w, r.h);
       const cx = r.x + r.w / 2;
-      ctx.font = 'bold 11px monospace';
+      ctx.font = 'bold 11px Galmuri11, monospace';
       ctx.fillStyle = c.color;
       ctx.fillText(`[ ${c.tag} ]`, cx, r.y + lift + 26);
-      ctx.font = 'bold 17px monospace';
+      ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#3a2c1a';
       ctx.fillText(c.name, cx, r.y + lift + 52);
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#5a4630';
       this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
-      ctx.font = 'italic 10.5px monospace';
+      ctx.font = 'italic 10.5px Galmuri11, monospace';
       ctx.fillStyle = 'rgba(90,60,30,0.75)';
       this._wrapText(ctx, `"${c.lore}"`, cx, r.y + lift + r.h - 44, r.w - 26, 14);
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = hover ? c.color : 'rgba(60,40,20,0.5)';
       ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 12);
     });
@@ -405,10 +405,10 @@ const HUD = {
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = 'bold 24px Galmuri11, monospace';
     ctx.fillStyle = '#2ec4b6';
     ctx.fillText(title, Renderer.W / 2, 112);
-    ctx.font = '12px monospace';
+    ctx.font = '12px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`선택하세요 (1~${cards.length} 키 또는 클릭)`, Renderer.W / 2, 138);
 
@@ -438,7 +438,7 @@ const HUD = {
 
       ctx.textAlign = 'center';
       const cx = r.x + r.w / 2;
-      ctx.font = 'bold 11px monospace';
+      ctx.font = 'bold 11px Galmuri11, monospace';
       ctx.fillStyle = color;
       ctx.fillText(tagFn(c), cx, r.y + lift + 26);
       // 픽셀 아이콘 (우상단 장식) — 유물은 rarity, 특성은 tag로 구분
@@ -446,19 +446,19 @@ const HUD = {
         const ic = c.rarity ? Icons.relic(c.id) : Icons.trait(c.id);
         if (ic) ctx.drawImage(ic, r.x + r.w - 32, r.y + lift + 8, 24, 24);
       }
-      ctx.font = 'bold 18px monospace';
+      ctx.font = 'bold 18px Galmuri11, monospace';
       ctx.fillStyle = '#e8e0cf';
       ctx.fillText(c.name, cx, r.y + lift + 52);
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
       // 기억 한 줄 (유물 lore) — 모든 힘은 과거에서 온다. 전용 유물(heir)은 표기도 함께
       if (c.lore) {
-        ctx.font = 'italic 10.5px monospace';
+        ctx.font = 'italic 10.5px Galmuri11, monospace';
         ctx.fillStyle = '#7a7060';
         this._wrapText(ctx, `"${c.lore}"`, cx, r.y + lift + r.h - (c.heir ? 60 : 46), r.w - 26, 14);
         if (c.heir) {
-          ctx.font = 'bold 10px monospace';
+          ctx.font = 'bold 10px Galmuri11, monospace';
           ctx.fillStyle = '#b08d4a';
           const cn = CLASSES[c.heir];
           ctx.fillText(`◆ ${cn ? cn.name : c.heir}의 유품`, cx, r.y + lift + r.h - 26);
@@ -468,7 +468,7 @@ const HUD = {
       if (c.max && game.player) {
         const owned = game.player.traits.filter((id) => id === c.id).length;
         if (owned > 0) {
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#666a80';
           ctx.fillText(`보유 ${owned}/${c.max}`, cx, r.y + lift + r.h - 30);
         }
@@ -479,7 +479,7 @@ const HUD = {
           const t = TRAITS.find((x) => x.id === id);
           return t && t.cls;
         }).length;
-        ctx.font = 'bold 10px monospace';
+        ctx.font = 'bold 10px Galmuri11, monospace';
         ctx.fillStyle = '#f7b32b';
         ctx.fillText(
           game.player.evoReady
@@ -487,14 +487,14 @@ const HUD = {
             : `⚡ 스킬 진화 ${clsOwned}/3 · Lv.12`,
           cx, r.y + lift + r.h - 44);
       }
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = hover ? color : '#4a4a5c';
       ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 12);
     });
 
     // 리롤 각인: 남은 횟수 표시
     if (game.player && game.player.rerolls > 0 && game.state === 'levelup') {
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = '#2ec4b6';
       ctx.fillText(`E — 다시 뽑기 (남은 ${game.player.rerolls}회)`, Renderer.W / 2, Renderer.H - 60);
     }
@@ -533,17 +533,172 @@ const HUD = {
     ctx.globalAlpha = 1;
   },
 
+  // ── 거점 야영 장면 (첫인상 스프린트 ①) — 무덤 언덕의 밤, 모닥불에 모인 네 망자 ──
+  _drawHubScene(ctx, t) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const W = Renderer.W, H = Renderer.H;
+    // 하늘: 검은 남보라 → 지평선의 죽은 자주빛
+    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.7);
+    sky.addColorStop(0, '#07060e');
+    sky.addColorStop(0.7, '#120c1e');
+    sky.addColorStop(1, '#1c1226');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    // 별 (영혼 입자 겸용)
+    for (let i = 0; i < 40; i++) {
+      const sx = (i * 173 + 89) % W;
+      const sy = (i * 97 + 31) % Math.round(H * 0.55);
+      ctx.globalAlpha = 0.10 + (i % 4) * 0.07 + Math.sin(t * 1.5 + i) * 0.04;
+      ctx.fillStyle = i % 7 === 0 ? '#2ec4b6' : '#c8ccd8';
+      ctx.fillRect(sx, sy, i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 2 : 1);
+    }
+    ctx.globalAlpha = 1;
+    // 창백한 달 — 다섯 번째 손의 시선이 걸려 있는 곳
+    const mx = 796, my = 96, mr = 34;
+    const glow = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 3.4);
+    glow.addColorStop(0, 'rgba(216,211,197,0.20)');
+    glow.addColorStop(1, 'rgba(216,211,197,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(mx - mr * 3.4, my - mr * 3.4, mr * 6.8, mr * 6.8);
+    ctx.fillStyle = '#d8d3c5';
+    ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b8b2a2';
+    ctx.beginPath(); ctx.arc(mx - 10, my - 6, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(mx + 8, my + 10, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(mx + 12, my - 12, 3, 0, Math.PI * 2); ctx.fill();
+    // 지평선 왕성 실루엣 — 복수의 끝이 보이는 곳
+    ctx.fillStyle = '#0d0a16';
+    ctx.fillRect(700, 296, 220, 60);
+    for (const [tx, tw, th] of [[706, 26, 38], [756, 34, 62], [818, 30, 48], [872, 24, 70]]) {
+      ctx.fillRect(tx, 296 - th, tw, th + 20);
+      ctx.fillRect(tx - 3, 296 - th, tw + 6, 7); // 총안
+    }
+    ctx.fillStyle = 'rgba(247,179,43,0.35)'; // 왕성의 불 켜진 창 — 왕은 잠들지 못한다
+    ctx.fillRect(764, 252, 4, 5); ctx.fillRect(880, 240, 3, 5); ctx.fillRect(826, 268, 3, 4);
+    // 무덤 언덕 실루엣 (2겹)
+    ctx.fillStyle = '#0f0c18';
+    ctx.beginPath();
+    ctx.moveTo(0, 356);
+    ctx.quadraticCurveTo(240, 306, 520, 348);
+    ctx.quadraticCurveTo(760, 382, W, 352);
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+    // 언덕 위 비석·십자가 실루엣
+    ctx.fillStyle = '#171226';
+    for (const [gx, gy, gw, gh, cross] of [[96, 328, 14, 22, 0], [150, 318, 10, 18, 1], [214, 314, 16, 24, 0], [420, 330, 12, 20, 1], [500, 338, 14, 20, 0], [610, 356, 10, 16, 1]]) {
+      if (cross) {
+        ctx.fillRect(gx + gw / 2 - 2, gy - 8, 4, gh + 8);
+        ctx.fillRect(gx, gy - 1, gw, 4);
+      } else {
+        ctx.fillRect(gx, gy, gw, gh);
+        ctx.fillRect(gx + 2, gy - 4, gw - 4, 5);
+      }
+    }
+    // 죽은 나무 (좌측)
+    ctx.strokeStyle = '#171226';
+    ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(52, 352); ctx.quadraticCurveTo(60, 280, 44, 232); ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(52, 292); ctx.quadraticCurveTo(88, 268, 104, 244); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(48, 262); ctx.quadraticCurveTo(20, 240, 14, 214); ctx.stroke();
+    // 전경 지면
+    const gnd = ctx.createLinearGradient(0, H * 0.66, 0, H);
+    gnd.addColorStop(0, '#151020');
+    gnd.addColorStop(1, '#0b0912');
+    ctx.fillStyle = gnd;
+    ctx.fillRect(0, H * 0.66, W, H);
+    // 안개 띠 (느리게 흐름)
+    for (let k = 0; k < 3; k++) {
+      const fy = 344 + k * 16;
+      ctx.globalAlpha = 0.05 + k * 0.02;
+      ctx.fillStyle = '#9aa0b4';
+      const off = (t * (6 + k * 4)) % (W + 400) - 200;
+      ctx.beginPath();
+      ctx.ellipse(off, fy, 260, 10 + k * 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse((off + 520) % (W + 400), fy + 6, 220, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // ── 모닥불 (좌측 전경) + 네 망자 ──
+    const fx = 260, fy = 442;
+    const flick = 0.85 + Math.sin(t * 11) * 0.1 + Math.sin(t * 23 + 1.7) * 0.05;
+    // 불빛
+    const light = ctx.createRadialGradient(fx, fy - 8, 10, fx, fy - 8, 190 * flick);
+    light.addColorStop(0, 'rgba(255,150,60,0.22)');
+    light.addColorStop(0.5, 'rgba(200,90,30,0.10)');
+    light.addColorStop(1, 'rgba(200,90,30,0)');
+    ctx.fillStyle = light;
+    ctx.fillRect(fx - 200, fy - 200, 400, 400);
+    // 네 망자 — 불가에 둘러앉은 동료들 (선택 직업은 또렷하게, 나머지는 어둡게)
+    const seats = { knight: [-84, -4, false], archer: [72, -2, true], mage: [-30, -34, false], alch: [34, 16, true] };
+    for (const id of Object.keys(seats)) {
+      const cls = CLASSES[id];
+      const fr = Sprites.playerFrames[cls.sprite];
+      if (!fr) continue;
+      const [ox, oy, flip] = seats[id];
+      const img = fr[0];
+      const px = fx + ox, py = fy + oy;
+      const sel = Meta.data.cls === id;
+      const bob = Math.sin(t * 2.2 + ox) * 1.5;
+      ctx.save();
+      // 그림자
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(px, py + 30, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = sel ? 1 : 0.62;
+      ctx.translate(px, py + bob);
+      if (flip) ctx.scale(-1, 1);
+      ctx.drawImage(img, -img.width * 1.5, -img.height * 1.5, img.width * 3, img.height * 3);
+      ctx.restore();
+      if (sel) {
+        ctx.globalAlpha = 0.9;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px Galmuri11, monospace';
+        ctx.fillStyle = cls.color;
+        ctx.fillText(cls.name, px, py - 34);
+      }
+      ctx.globalAlpha = 1;
+    }
+    // 장작 + 불꽃 (망자들 위에 그려 앞장면 유지)
+    ctx.fillStyle = '#3a2c1a';
+    ctx.fillRect(fx - 16, fy + 6, 32, 5);
+    ctx.fillRect(fx - 12, fy + 10, 24, 4);
+    for (let k = 0; k < 3; k++) {
+      const fh = (26 - k * 7) * flick;
+      const fw = 16 - k * 4;
+      ctx.fillStyle = ['#e25822', '#f7b32b', '#fff7c0'][k];
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(fx - fw / 2, fy + 6);
+      ctx.quadraticCurveTo(fx - fw / 2 + Math.sin(t * 9 + k) * 3, fy - fh * 0.6, fx + Math.sin(t * 13 + k * 2) * 2.5, fy + 6 - fh);
+      ctx.quadraticCurveTo(fx + fw / 2 + Math.sin(t * 11 + k) * 3, fy - fh * 0.5, fx + fw / 2, fy + 6);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 불티
+    for (let i = 0; i < 7; i++) {
+      const ph = ((t * (0.5 + (i % 3) * 0.22) + i * 0.37) % 1);
+      const ex = fx + Math.sin(t * 2 + i * 2.4) * (8 + ph * 22);
+      const ey = fy - ph * 90;
+      ctx.globalAlpha = (1 - ph) * 0.75;
+      ctx.fillStyle = i % 2 ? '#ffd866' : '#e25822';
+      ctx.fillRect(ex, ey, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  },
+
   _shardLabel(ctx, x, y, align = 'right') {
     ctx.textAlign = align;
-    ctx.font = 'bold 17px monospace';
+    ctx.font = 'bold 17px Galmuri11, monospace';
     ctx.fillStyle = '#2ec4b6';
     ctx.fillText(`◆ ${Meta.data.shards}`, x, y);
   },
 
   hubButtonRects() {
     const w = 320, h = 46, gap = 10;
-    const x = (Renderer.W - w) / 2;
-    const y0 = 278;
+    const x = Renderer.W - 404; // 우측 열 — 좌측은 모닥불 야영 장면
+    const y0 = 268;
     return [0, 1, 2, 3].map((i) => ({ x, y: y0 + i * (h + gap), w, h }));
   },
 
@@ -564,14 +719,14 @@ const HUD = {
     return HEAT_PACTS.map((_, i) => ({ x: x0 + i * (w + gap), y: 224, w, h }));
   },
 
-  // 로드아웃 한 줄 (직업 · 열기) — 클릭 영역
+  // 로드아웃 한 줄 (직업 · 열기) — 클릭 영역 (우측 열 상단)
   loadoutLineRect() {
-    return { x: Renderer.W / 2 - 130, y: 192, w: 260, h: 34 };
+    return { x: Renderer.W - 374, y: 190, w: 260, h: 34 };
   },
 
-  // 이어하기 슬림 버튼
+  // 이어하기 슬림 버튼 (우측 열)
   resumeButtonRect() {
-    return { x: Renderer.W / 2 - 170, y: 244, w: 340, h: 26 };
+    return { x: Renderer.W - 404, y: 234, w: 320, h: 26 };
   },
 
   backButtonRect() {
@@ -588,21 +743,43 @@ const HUD = {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 14px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText('돌아가기 (ESC)', r.x + r.w / 2, r.y + 25);
   },
 
   drawHub(ctx, blinkT) {
-    this._drawHubBg(ctx, blinkT);
+    this._drawHubScene(ctx, blinkT);
     ctx.textAlign = 'center';
 
-    ctx.font = 'bold 46px monospace';
-    ctx.fillStyle = '#8a1c2c';
-    ctx.fillText('무덤에서 왕좌까지', Renderer.W / 2, 120);
-    ctx.font = 'bold 20px monospace';
-    ctx.fillStyle = '#9a9488';
-    ctx.fillText('― 죄인의 묘지 ―', Renderer.W / 2, 156);
+    // 타이틀 타이포 — 그림자 → 핏빛 그라데이션 → 상단 하이라이트 3겹
+    {
+      const cx = Renderer.W / 2;
+      ctx.font = 'bold 50px Galmuri11, monospace';
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillText('무덤에서 왕좌까지', cx + 3, 116 + 4);
+      const tg = ctx.createLinearGradient(0, 74, 0, 122);
+      tg.addColorStop(0, '#e8503f');
+      tg.addColorStop(0.55, '#a81e2c');
+      tg.addColorStop(1, '#5e0f1c');
+      ctx.fillStyle = tg;
+      ctx.fillText('무덤에서 왕좌까지', cx, 116);
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#ffd8c0';
+      ctx.fillText('무덤에서 왕좌까지', cx, 114);
+      ctx.globalAlpha = 1;
+      // 장식 괘선 + 마름모
+      ctx.strokeStyle = '#6a5a40';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx - 240, 142); ctx.lineTo(cx - 70, 142); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + 70, 142); ctx.lineTo(cx + 240, 142); ctx.stroke();
+      ctx.fillStyle = '#b08d4a';
+      ctx.save(); ctx.translate(cx - 58, 142); ctx.rotate(Math.PI / 4); ctx.fillRect(-3, -3, 6, 6); ctx.restore();
+      ctx.save(); ctx.translate(cx + 58, 142); ctx.rotate(Math.PI / 4); ctx.fillRect(-3, -3, 6, 6); ctx.restore();
+      ctx.font = 'bold 16px Galmuri11, monospace';
+      ctx.fillStyle = '#9a9488';
+      ctx.fillText('죄인의 묘지', cx, 147);
+    }
 
     // 거점 반응 서사 (④): 기록에 따라 탑이 다르게 말을 건다
     {
@@ -615,7 +792,7 @@ const HUD = {
         : bf >= 5 ? '토벌대가 묘지 쪽을 흘끔거린다 — 무언가 걸어나온 걸 아는 눈치다.'
         : bf >= 2 ? '흙을 털고 일어섰다. 무덤은 너를 붙잡지 못했다.'
         : '그날 밤, 죄인의 묘지에서 눈이 떠졌다.';
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(line, Renderer.W / 2, 176);
     }
@@ -625,14 +802,14 @@ const HUD = {
     this._shardLabel(ctx, Renderer.W - 24, 36);
     if (Meta.data.runs > 0) {
       ctx.textAlign = 'left';
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(`도전 ${Meta.data.runs}회 · 최고 ${Meta.data.bestFloor}층 · 누적 처치 ${Meta.data.totalKills}`, 24, 36);
     }
 
     const cls = CLASSES[Meta.data.cls];
     ctx.textAlign = 'center';
-    ctx.font = '14px monospace';
+    ctx.font = '14px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
     // 로드아웃 한 줄 (UI 개편): 직업 + 열기 통합 — 클릭하면 서약 편집 패널이 열린다
     {
@@ -640,16 +817,15 @@ const HUD = {
       const lr = this.loadoutLineRect();
       const hover = Input.mouse.x >= lr.x && Input.mouse.x <= lr.x + lr.w &&
                     Input.mouse.y >= lr.y && Input.mouse.y <= lr.y + lr.h;
-      ctx.font = 'bold 15px monospace';
+      const rcx = lr.x + lr.w / 2; // 우측 열 중심
+      ctx.font = 'bold 15px Galmuri11, monospace';
       ctx.fillStyle = cls.color;
       const heatStr = Meta.heatUnlocked() ? (heat >= 8 ? '  ·  ☠ 왕의 진노' : `  ·  현상금 ${heat}단계`) : '';
-      ctx.fillText(cls.name + heatStr, Renderer.W / 2, lr.y + 15);
+      ctx.fillText(cls.name + heatStr, rcx, lr.y + 15);
       if (Meta.heatUnlocked() && heat > 0) {
-        ctx.fillStyle = '#e43b44';
-        // 열기 숫자만 붉게 덧칠하기엔 폭 계산이 과하다 — 파편 보너스를 옆에 흐리게
-        ctx.font = '11px monospace';
+        ctx.font = '11px Galmuri11, monospace';
         ctx.fillStyle = '#666a80';
-        ctx.fillText(`한 조각 +${heat * 20}%`, Renderer.W / 2 + 130, lr.y + 15);
+        ctx.fillText(`한 조각 +${heat * 20}%`, rcx, lr.y + 44);
       }
       if (Meta.heatUnlocked()) {
         const FLAVOR = [
@@ -659,9 +835,9 @@ const HUD = {
           '왕이 네 이름을 기억했다',
           '왕이 직접 토벌을 명했다 — 살아서 왕좌에 닿은 자는 없다',
         ];
-        ctx.font = '10px monospace';
+        ctx.font = '10px Galmuri11, monospace';
         ctx.fillStyle = heat >= 8 ? '#e43b44' : hover ? '#9aa0b4' : '#4a4a5c';
-        ctx.fillText(`${FLAVOR[Math.min(8, heat)]} · ←→ 조절`, Renderer.W / 2, lr.y + 30);
+        ctx.fillText(`${FLAVOR[Math.min(8, heat)]} · ←→ 조절`, rcx, lr.y + 30);
       }
     }
 
@@ -679,10 +855,10 @@ const HUD = {
         ctx.strokeStyle = '#2ec4b6';
         ctx.lineWidth = hover ? 2 : 1;
         ctx.strokeRect(r.x, r.y, r.w, r.h);
-        ctx.font = 'bold 13px monospace';
+        ctx.font = 'bold 13px Galmuri11, monospace';
         ctx.fillStyle = '#2ec4b6';
         ctx.textAlign = 'center';
-        ctx.fillText(`C — 이어하기  (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 현상금 ' + rs.heat : ''})`, Renderer.W / 2, r.y + 18);
+        ctx.fillText(`C — 이어하기  (${rs.floor}층 · Lv.${rs.level}${rs.heat > 0 ? ' · 현상금 ' + rs.heat : ''})`, r.x + r.w / 2, r.y + 18);
       }
     }
 
@@ -704,10 +880,10 @@ const HUD = {
       ctx.lineWidth = hover ? 3 : 1.5;
       ctx.strokeRect(r.x, r.y, r.w, r.h);
       ctx.textAlign = 'left';
-      ctx.font = 'bold 17px monospace';
+      ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#e8e0cf';
       ctx.fillText(`${i + 1}. ${labels[i].text}`, r.x + 22, r.y + 20);
-      ctx.font = '11px monospace';
+      ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(labels[i].sub, r.x + 22, r.y + 37);
     });
@@ -718,7 +894,7 @@ const HUD = {
       const key = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
       const rec = Meta.data.daily && Meta.data.daily.key === key ? Meta.data.daily : null;
       // 도전 모드 통합 한 줄 (UI 개편): 러시 | 오늘의 탑 — 좌우 분산·장문 제거
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 13px Galmuri11, monospace';
       const rrec = Meta.data.rushBest;
       if (Meta.data.wins > 0) {
         ctx.textAlign = 'right';
@@ -739,17 +915,17 @@ const HUD = {
     }
 
     ctx.textAlign = 'center';
-    ctx.font = '12px monospace';
+    ctx.font = '12px Galmuri11, monospace';
     ctx.fillStyle = '#4a4a5c';
     ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거 · O 설정', Renderer.W / 2, Renderer.H - 12);
 
     // 테스트 모드 상태 (T로 토글)
     if (Game.testMode) {
       ctx.textAlign = 'left';
-      ctx.font = 'bold 12px monospace';
+      ctx.font = 'bold 12px Galmuri11, monospace';
       ctx.fillStyle = '#e43b44';
       ctx.fillText('⚙ 테스트 모드 ON (T로 끄기)', 24, Renderer.H - 20);
-      ctx.font = '11px monospace';
+      ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText('O 한 조각+500 · I 도감 완성 · Y 직업/열기 해금 · V 봇 모드 · 게임 중 G무적 X전멸 N다음층...', 24, Renderer.H - 40);
     }
@@ -777,7 +953,7 @@ const HUD = {
   drawAltar(ctx, blinkT) {
     this._drawHubBg(ctx, blinkT);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 30px monospace';
+    ctx.font = 'bold 30px Galmuri11, monospace';
     ctx.fillStyle = '#2ec4b6';
     ctx.fillText('원한의 비석', Renderer.W / 2, 70);
     this._shardLabel(ctx, Renderer.W - 24, 36);
@@ -785,7 +961,7 @@ const HUD = {
     const list = this.altarList();
     const broken = Meta.brokenUnlocked();
     if (broken) {
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#2ec4b6';
       ctx.fillText('원한의 비석', Renderer.W / 2 - 240, 118);
@@ -810,10 +986,10 @@ const HUD = {
       ctx.strokeRect(r.x, r.y, r.w, r.h);
 
       ctx.textAlign = 'left';
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 15px Galmuri11, monospace';
       ctx.fillStyle = '#e8e0cf';
       ctx.fillText(`${isBroken ? '👑' : (i + 1) + '.'} ${up.name}`, r.x + 16, r.y + 19);
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(up.desc, r.x + 16, r.y + 36);
 
@@ -825,7 +1001,7 @@ const HUD = {
       }
 
       ctx.textAlign = 'right';
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       if (maxed) {
         ctx.fillStyle = '#666a80';
         ctx.fillText('완성', r.x + r.w - 16, r.y + 28);
@@ -841,7 +1017,7 @@ const HUD = {
   drawClasses(ctx, blinkT) {
     this._drawHubBg(ctx, blinkT);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 30px monospace';
+    ctx.font = 'bold 30px Galmuri11, monospace';
     ctx.fillStyle = '#b13ae0';
     ctx.fillText('망자 선택 — 왕에게 죽은 네 사람', Renderer.W / 2, 70);
     this._shardLabel(ctx, Renderer.W - 24, 36);
@@ -874,21 +1050,21 @@ const HUD = {
       ctx.drawImage(img, cx - img.width, r.y + lift + 14, img.width * 2, img.height * 2);
       ctx.restore();
 
-      ctx.font = 'bold 20px monospace';
+      ctx.font = 'bold 20px Galmuri11, monospace';
       ctx.fillStyle = unlocked ? '#e8e0cf' : '#666a80';
       ctx.fillText(cls.name, cx, r.y + lift + 90);
       if (cls.title) {
-        ctx.font = '11px monospace';
+        ctx.font = '11px Galmuri11, monospace';
         ctx.fillStyle = '#8a1c2c';
         ctx.fillText(cls.title, cx, r.y + lift + 104);
       }
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(`HP ${cls.hp} · 속도 ${cls.speed}`, cx, r.y + lift + 117);
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       this._wrapText(ctx, cls.desc, cx, r.y + lift + 130, r.w - 26, 14); // 3줄까지 라벨(h-14)과 안 겹치게
 
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       if (selected) {
         ctx.fillStyle = '#f7b32b';
         ctx.fillText('▶ 선택됨', cx, r.y + lift + 176); // 직업 카드 h=190 기준 (기본 165 참조 버그 수정)
@@ -914,15 +1090,15 @@ const HUD = {
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = 'bold 24px Galmuri11, monospace';
     ctx.fillStyle = '#f7b32b';
     ctx.fillText('획득 목록', Renderer.W / 2, 42);
-    ctx.font = '12px monospace';
+    ctx.font = '12px Galmuri11, monospace';
     ctx.fillStyle = '#666a80';
     ctx.fillText('Tab / ESC — 닫기', Renderer.W / 2, 62);
 
     // 현재 스탯 요약
-    ctx.font = '13px monospace';
+    ctx.font = '13px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
     const stats = [
       `공격력 ${p.currentAtk()}`,
@@ -939,13 +1115,13 @@ const HUD = {
     const traitIds = Object.keys(counts);
 
     ctx.textAlign = 'left';
-    ctx.font = 'bold 15px monospace';
+    ctx.font = 'bold 15px Galmuri11, monospace';
     ctx.fillStyle = '#2ec4b6';
     ctx.fillText(`특성 (${traitIds.length})`, 70, 126);
 
     let y = 150;
     if (traitIds.length === 0) {
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#4a4a5c';
       ctx.fillText('아직 없음 — 레벨업으로 획득', 70, y);
     }
@@ -953,29 +1129,29 @@ const HUD = {
     traitIds.slice(0, maxRows).forEach((id) => {
       const t = TRAITS.find((tr) => tr.id === id);
       if (!t) return;
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 13px Galmuri11, monospace';
       ctx.fillStyle = t.color;
       const stack = counts[id] > 1 ? ` x${counts[id]}` : '';
       ctx.fillText(`[${t.tag}] ${t.name}${stack}`, 70, y);
-      ctx.font = '11px monospace';
+      ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(t.desc, 82, y + 15);
       y += 33;
     });
     if (traitIds.length > maxRows) {
-      ctx.font = '11px monospace';
+      ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(`... 외 ${traitIds.length - maxRows}개`, 70, y);
     }
 
     // ── 오른쪽: 유물 ──
-    ctx.font = 'bold 15px monospace';
+    ctx.font = 'bold 15px Galmuri11, monospace';
     ctx.fillStyle = '#f7b32b';
     ctx.fillText(`유물 (${p.relics.length})`, 510, 126);
 
     y = 150;
     if (p.relics.length === 0) {
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#4a4a5c';
       ctx.fillText('아직 없음 — 보물상자·보스에게서 획득', 510, y);
     }
@@ -983,16 +1159,16 @@ const HUD = {
       const rl = RELICS.find((r) => r.id === id);
       if (!rl) return;
       const rar = RARITY[rl.rarity];
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 13px Galmuri11, monospace';
       ctx.fillStyle = rar.color;
       ctx.fillText(`[${rar.label}] ${rl.name}`, 510, y);
-      ctx.font = '11px monospace';
+      ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(rl.desc, 522, y + 15);
       y += 33;
     });
     if (p.relics.length > maxRows) {
-      ctx.font = '11px monospace';
+      ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(`... 외 ${p.relics.length - maxRows}개`, 510, y);
     }
@@ -1006,7 +1182,7 @@ const HUD = {
     game.codexPage = Math.min(Math.max(0, game.codexPage || 0), pages - 1);
     if (pages > 1) {
       ctx.textAlign = 'right';
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#8f8577';
       ctx.fillText(`◀ ${game.codexPage + 1} / ${pages} ▶  (←→ 페이지)`, Renderer.W - 24, 122);
     }
@@ -1031,7 +1207,7 @@ const HUD = {
   drawCodex(ctx, blinkT, game) {
     this._drawHubBg(ctx, blinkT);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 30px monospace';
+    ctx.font = 'bold 30px Galmuri11, monospace';
     ctx.fillStyle = '#f7b32b';
     ctx.fillText('도감', Renderer.W / 2, 56);
 
@@ -1048,7 +1224,7 @@ const HUD = {
       ctx.strokeStyle = active ? '#f7b32b' : '#4a4a5c';
       ctx.lineWidth = active ? 2 : 1;
       ctx.strokeRect(r.x, r.y, r.w, r.h);
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = active ? '#f7b32b' : '#9aa0b4';
       ctx.textAlign = 'center';
       ctx.fillText(`${i + 1}. ${tabs[i]}`, r.x + r.w / 2, r.y + 22);
@@ -1076,12 +1252,12 @@ const HUD = {
         ctx.strokeRect(r.x, r.y, r.w, r.h);
         if (kills > 0) {
           this._fitSprite(ctx, Sprites[e.sprite], r.x + r.w / 2, r.y + 22, 30);
-          ctx.font = '10px monospace';
+          ctx.font = '10px Galmuri11, monospace';
           ctx.fillStyle = e.boss ? '#e43b44' : '#e8e0cf';
           ctx.textAlign = 'center';
           ctx.fillText(e.name.length > 7 ? e.name.slice(0, 7) : e.name, r.x + r.w / 2, r.y + r.h - 6);
         } else {
-          ctx.font = 'bold 18px monospace';
+          ctx.font = 'bold 18px Galmuri11, monospace';
           ctx.fillStyle = '#33333f';
           ctx.textAlign = 'center';
           ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 6);
@@ -1109,11 +1285,11 @@ const HUD = {
         if (owned) {
           const ic = Icons.relic(rl.id);
           ctx.drawImage(ic, r.x + r.w / 2 - 21, r.y + 12, 42, 42);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#e8e0cf';
           ctx.fillText(rl.name, r.x + r.w / 2, r.y + r.h - 12);
         } else {
-          ctx.font = 'bold 24px monospace';
+          ctx.font = 'bold 24px Galmuri11, monospace';
           ctx.fillStyle = '#33333f';
           ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 8);
         }
@@ -1139,13 +1315,13 @@ const HUD = {
         if (picks > 0) {
           const ic = Icons.trait(t.id);
           ctx.drawImage(ic, r.x + r.w / 2 - 16, r.y + 7, 32, 32);
-          ctx.font = '10px monospace';
+          ctx.font = '10px Galmuri11, monospace';
           ctx.fillStyle = '#e8e0cf';
           ctx.fillText(t.name, r.x + r.w / 2, r.y + r.h - 20);
           ctx.fillStyle = '#666a80';
           ctx.fillText(`x${picks}`, r.x + r.w / 2, r.y + r.h - 8);
         } else {
-          ctx.font = 'bold 20px monospace';
+          ctx.font = 'bold 20px Galmuri11, monospace';
           ctx.fillStyle = '#33333f';
           ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 6);
         }
@@ -1162,7 +1338,7 @@ const HUD = {
           if (c.act !== lastAct) {
             lastAct = c.act;
             ctx.textAlign = 'left';
-            ctx.font = 'bold 13px monospace';
+            ctx.font = 'bold 13px Galmuri11, monospace';
             ctx.fillStyle = '#3a3a46';
             const actNames = { 3: '3막 — 영지와 재판소', 4: '4막 — 역병의 마을', 5: '5막 — 왕도와 왕좌' };
             ctx.fillText(`${actNames[c.act] || '?'} — 아직 닿을 수 없는 곳 (단서 ${CLUES.filter((x) => x.act === c.act).length}개)`, x0, y);
@@ -1173,7 +1349,7 @@ const HUD = {
         if (c.act !== lastAct) {
           lastAct = c.act;
           ctx.textAlign = 'left';
-          ctx.font = 'bold 13px monospace';
+          ctx.font = 'bold 13px Galmuri11, monospace';
           const actDone = CLUES.filter((x) => x.act === c.act).every((x) => Meta.clueOwned(x.id));
           ctx.fillStyle = actDone ? '#e43b44' : '#666a80';
           const actNames = { 1: '1막 — 변경', 2: '2막 — 다리와 관문', 3: '3막 — 영지와 재판소', 4: '4막 — 역병의 마을', 5: '5막 — 왕도와 왕좌' };
@@ -1182,12 +1358,12 @@ const HUD = {
         }
         const owned = Meta.clueOwned(c.id);
         const reachable = c.text !== null;
-        ctx.font = '12px monospace';
+        ctx.font = '12px Galmuri11, monospace';
         ctx.fillStyle = owned ? '#f7b32b' : reachable ? '#9aa0b4' : '#3a3a46';
         ctx.fillText(owned ? `■ ${c.name}` : reachable ? `□ ${c.name} — ${c.how === 'boss' ? '막보스의 자백' : '탐사로 발견'}` : '□ ??? — 아직 닿을 수 없는 곳', x0 + 14, y);
         y += 17;
         if (owned && c.text) {
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#7a7468';
           const words = c.text;
           // 2줄 래핑 (간단)
@@ -1205,10 +1381,10 @@ const HUD = {
     // 하단 상세 정보
     if (hovered) {
       ctx.textAlign = 'center';
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = '#e8e0cf';
       ctx.fillText(hovered.name, Renderer.W / 2, Renderer.H - 92);
-      ctx.font = '12px monospace';
+      ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText(hovered.desc, Renderer.W / 2, Renderer.H - 74);
     }
@@ -1218,7 +1394,7 @@ const HUD = {
 
   _codexHeader(ctx, found, total) {
     ctx.textAlign = 'right';
-    ctx.font = '13px monospace';
+    ctx.font = '13px Galmuri11, monospace';
     ctx.fillStyle = found >= total ? '#f7b32b' : '#9aa0b4';
     ctx.fillText(`발견 ${found}/${total}${found >= total ? ' — 완성!' : ''}`, Renderer.W - 40, 100);
   },
@@ -1229,13 +1405,13 @@ const HUD = {
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     ctx.textAlign = 'center';
 
-    ctx.font = 'bold 44px monospace';
+    ctx.font = 'bold 44px Galmuri11, monospace';
     ctx.fillStyle = game.gaveUp ? '#9aa0b4' : '#e43b44';
     ctx.fillText(game.gaveUp ? '런 포기' : '전사했다...', Renderer.W / 2, 180);
 
     // 사망 리포트 — 죽음을 다음 런의 지식으로
     if (!game.gaveUp && game.deathInfo) {
-      ctx.font = '15px monospace';
+      ctx.font = '15px Galmuri11, monospace';
       ctx.fillStyle = '#c46a6a';
       ctx.fillText(`☠ 사인: ${game.deathInfo.src}`, Renderer.W / 2, 210);
       // 마이크로 서사 (S3): 왕국의 목소리 — 죽음마다 세계가 한 줄 말을 건다
@@ -1246,23 +1422,23 @@ const HUD = {
         '네가 흘린 한(恨)은 흙 속에서도 식지 않는다.',
         '교수대의 밧줄이 오늘 하나 더 걸렸다.',
       ];
-      ctx.font = 'italic 12px monospace';
+      ctx.font = 'italic 12px Galmuri11, monospace';
       ctx.fillStyle = '#8a8aa0';
       ctx.fillText(EPITAPHS[(Dungeon.floor + game.kills) % EPITAPHS.length], Renderer.W / 2, 232);
     }
 
-    ctx.font = '18px monospace';
+    ctx.font = '18px Galmuri11, monospace';
     ctx.fillStyle = '#e8e0cf';
     ctx.fillText(
       `${Dungeon.floor}층 ${Dungeon.floorName()} · 방 ${Dungeon.roomIndex} 도달`,
       Renderer.W / 2, 240);
-    ctx.font = '15px monospace';
+    ctx.font = '15px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · ${game.time.toFixed(1)}초`,
       Renderer.W / 2, 272);
 
     // 진전 비교 — 지난 런 대비 어디까지 왔나
-    ctx.font = '13px monospace';
+    ctx.font = '13px Galmuri11, monospace';
     if (game.prevRun) {
       const up = Dungeon.floor > game.prevRun.floor;
       const same = Dungeon.floor === game.prevRun.floor;
@@ -1280,7 +1456,7 @@ const HUD = {
     this._drawRunTag(ctx, game, 448);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
-      ctx.font = 'bold 17px monospace';
+      ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('R — 즉시 재도전   ·   클릭/Space — 거점으로', Renderer.W / 2, 415);
     }
@@ -1289,7 +1465,7 @@ const HUD = {
   // 시드·열기 표기 (시드 공유용)
   _drawRunTag(ctx, game, y) {
     ctx.textAlign = 'center';
-    ctx.font = '12px monospace';
+    ctx.font = '12px Galmuri11, monospace';
     ctx.fillStyle = '#4a4a5c';
     const heatStr = game.heat > 0 ? ` · 현상금 ${game.heat}` : '';
     ctx.fillText(`시드 ${game.runSeed.toString(36).toUpperCase()}${heatStr} — ?seed=${game.runSeed.toString(36).toUpperCase()} 로 같은 던전 도전`, Renderer.W / 2, y);
@@ -1299,11 +1475,11 @@ const HUD = {
   _drawShardReward(ctx, game, y) {
     const shown = Math.min(game.shardsEarned, Math.floor(game.shardAnimT * 40));
     ctx.textAlign = 'center';
-    ctx.font = 'bold 26px monospace';
+    ctx.font = 'bold 26px Galmuri11, monospace';
     ctx.fillStyle = '#2ec4b6';
     ctx.fillText(`◆ 한(恨) 조각 +${shown}`, Renderer.W / 2, y);
     if (shown >= game.shardsEarned) {
-      ctx.font = '13px monospace';
+      ctx.font = '13px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(`보유: ◆ ${Meta.data.shards}`, Renderer.W / 2, y + 26);
     }
@@ -1357,19 +1533,19 @@ const HUD = {
       ];
       const page = PAGES[Math.min(game._epi.page, PAGES.length - 1)];
       ctx.textAlign = 'center';
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 15px Galmuri11, monospace';
       ctx.fillStyle = '#6a6478';
       ctx.fillText(`— 다섯 번째 손 · ${Math.min(game._epi.page + 1, 3)}/3 —`, cx, 110);
       ctx.textAlign = 'left';
       const lx = cx - 300;
       let ly = 180;
-      ctx.font = '16px monospace';
+      ctx.font = '16px Galmuri11, monospace';
       for (const [col, line] of page) {
         if (line) { ctx.fillStyle = col; ctx.fillText(line, lx, ly); }
         ly += 34;
       }
       ctx.textAlign = 'center';
-      ctx.font = '13px monospace';
+      ctx.font = '13px Galmuri11, monospace';
       ctx.fillStyle = '#8f8577';
       ctx.globalAlpha = 0.6 + Math.sin(blinkT * 3) * 0.3;
       ctx.fillText('아무 키 — 계속', cx, Renderer.H - 46);
@@ -1414,7 +1590,7 @@ const HUD = {
     const ty = 170 - (1 - drop) * 120;
     ctx.save();
     ctx.globalAlpha = drop;
-    ctx.font = 'bold 48px monospace';
+    ctx.font = 'bold 48px Galmuri11, monospace';
     ctx.fillStyle = '#f7b32b';
     if (t > 0.5) {
       ctx.shadowColor = '#ffd866';
@@ -1439,10 +1615,10 @@ const HUD = {
     ctx.fillText(vTitle[act] || `${act}막 완수`, cx, ty);
     ctx.restore();
     if (t > 0.55) {
-      ctx.font = 'bold 16px monospace';
+      ctx.font = 'bold 16px Galmuri11, monospace';
       ctx.fillStyle = '#e43b44';
       ctx.fillText(vLine[act] || `${act * 10}층 — 길이 열렸다`, cx, 208);
-      ctx.font = 'italic 13px monospace';
+      ctx.font = 'italic 13px Galmuri11, monospace';
       ctx.fillStyle = '#9a9ab8';
       ctx.fillText(vSub[act] || '', cx, 230);
     }
@@ -1452,17 +1628,17 @@ const HUD = {
     if (act >= 5) {
       // 엔딩 (기획 §2): 복수 + 진실 공표 + 안식 — 롱테이크 세 줄
       const n = Meta.clueCount();
-      rows.push({ f: 'italic 13px monospace', c: '#c8c0a8', y: 252, s: '광장 벽에 증거를 전부 붙였다. 백성들이 하나둘 멈춰 서서 읽는다.' });
-      rows.push({ f: 'italic 13px monospace', c: '#c8c0a8', y: 270, s: `수집한 진실 ${n}/${CLUES.length}건${n >= CLUES.length ? ' — 빠짐없이. 왕국은 이제 전부 안다.' : ' — 나머지는 소문이 채울 것이다.'}` });
-      rows.push({ f: 'italic 13px monospace', c: '#9a9488', y: 288, s: '그리고 처음으로 — 묘지가 평온하다. 이제 누워도 된다.' });
-      rows.push({ f: '15px monospace', c: '#666a80', y: 314, s: `Lv.${game.level} · 처치 ${game.kills} · ${(game.time / 60).toFixed(1)}분의 복수` });
+      rows.push({ f: 'italic 13px Galmuri11, monospace', c: '#c8c0a8', y: 252, s: '광장 벽에 증거를 전부 붙였다. 백성들이 하나둘 멈춰 서서 읽는다.' });
+      rows.push({ f: 'italic 13px Galmuri11, monospace', c: '#c8c0a8', y: 270, s: `수집한 진실 ${n}/${CLUES.length}건${n >= CLUES.length ? ' — 빠짐없이. 왕국은 이제 전부 안다.' : ' — 나머지는 소문이 채울 것이다.'}` });
+      rows.push({ f: 'italic 13px Galmuri11, monospace', c: '#9a9488', y: 288, s: '그리고 처음으로 — 묘지가 평온하다. 이제 누워도 된다.' });
+      rows.push({ f: '15px Galmuri11, monospace', c: '#666a80', y: 314, s: `Lv.${game.level} · 처치 ${game.kills} · ${(game.time / 60).toFixed(1)}분의 복수` });
     } else {
-    rows.push({ f: '17px monospace', c: '#e8e0cf', y: 262, s: `Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · 특성 ${game.player.traits.length}장` });
+    rows.push({ f: '17px Galmuri11, monospace', c: '#e8e0cf', y: 262, s: `Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · 특성 ${game.player.traits.length}장` });
     const timeStr = `클리어 시간 ${(game.time / 60).toFixed(1)}분` + (game.heat > 0 ? ` · 현상금 ${game.heat}` : '');
-    rows.push({ f: '15px monospace', c: '#9aa0b4', y: 290, s: timeStr });
+    rows.push({ f: '15px Galmuri11, monospace', c: '#9aa0b4', y: 290, s: timeStr });
     }
-    if (game._newRecord) rows.push({ f: 'bold 15px monospace', c: '#5ce0e6', y: 314, s: '★ 최속 클리어 신기록!' });
-    if (game.dailyRun) rows.push({ f: 'bold 14px monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '📜 오늘의 수배령 완수!' });
+    if (game._newRecord) rows.push({ f: 'bold 15px Galmuri11, monospace', c: '#5ce0e6', y: 314, s: '★ 최속 클리어 신기록!' });
+    if (game.dailyRun) rows.push({ f: 'bold 14px Galmuri11, monospace', c: '#f7b32b', y: game._newRecord ? 334 : 314, s: '📜 오늘의 수배령 완수!' });
     rows.forEach((r, i) => {
       const rt = (t - 0.8 - i * 0.15) / 0.25;
       if (rt <= 0) return;
@@ -1478,12 +1654,12 @@ const HUD = {
     this._drawRunTag(ctx, game, 497);
 
     if (t > 1.6 && Math.floor(blinkT * 1.6) % 2 === 0) {
-      ctx.font = 'bold 17px monospace';
+      ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', cx, 432);
     }
     if (t > 1.6) {
-      ctx.font = 'bold 16px monospace';
+      ctx.font = 'bold 16px Galmuri11, monospace';
       const cNext = {
         1: 'C — 2막 다리와 관문으로 (빌드 유지, 11~20층: 왕도로 가는 길)',
         2: 'C — 3막 영지와 재판소로 (빌드 유지, 21~30층: 판결한 자들에게)',
@@ -1509,7 +1685,7 @@ const HUD = {
     ctx.lineWidth = 2;
     ctx.strokeRect(px, py, pw, ph);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = 'bold 24px Galmuri11, monospace';
     ctx.fillStyle = '#e8e0cf';
     ctx.fillText('설 정', cx, py + 44);
 
@@ -1531,7 +1707,7 @@ const HUD = {
         ctx.fillRect(px + 14, y - 24, pw - 28, 34);
       }
       ctx.textAlign = 'left';
-      ctx.font = sel ? 'bold 16px monospace' : '15px monospace';
+      ctx.font = sel ? 'bold 16px Galmuri11, monospace' : '15px Galmuri11, monospace';
       ctx.fillStyle = sel ? '#e8e0cf' : '#9a917e';
       ctx.fillText((sel ? '▶ ' : '  ') + name, px + 28, y);
       ctx.textAlign = 'right';
@@ -1540,7 +1716,7 @@ const HUD = {
     });
 
     ctx.textAlign = 'center';
-    ctx.font = '13px monospace';
+    ctx.font = '13px Galmuri11, monospace';
     ctx.fillStyle = '#8f8577';
     ctx.fillText('↑↓ 항목 이동 · ←→ 조절 · O/Esc 닫기 (자동 저장)', cx, py + ph - 22);
   },
@@ -1551,25 +1727,25 @@ const HUD = {
     ctx.fillStyle = 'rgba(8,8,15,0.9)';
     ctx.fillRect(0, 0, Renderer.W, Renderer.H);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 26px monospace';
+    ctx.font = 'bold 26px Galmuri11, monospace';
     ctx.fillStyle = '#e8e0cf';
     ctx.fillText(page === 1 ? '매뉴얼 1/2 — 조작과 전투' : '매뉴얼 2/2 — 던전과 성장', Renderer.W / 2, 60);
 
     const drawCol = (x, title, color, rows) => {
       ctx.textAlign = 'left';
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 15px Galmuri11, monospace';
       ctx.fillStyle = color;
       ctx.fillText(title, x, 104);
       let y = 132;
       for (const r of rows) {
         if (r.h) { // 항목 제목
-          ctx.font = 'bold 13px monospace';
+          ctx.font = 'bold 13px Galmuri11, monospace';
           ctx.fillStyle = r.c || '#ffd866';
           ctx.fillText(r.h, x, y);
           y += 18;
         }
         if (r.t) {
-          ctx.font = '12px monospace';
+          ctx.font = '12px Galmuri11, monospace';
           ctx.fillStyle = r.dim ? '#8a90a4' : '#c8d4e4';
           ctx.fillText(r.t, x + (r.h === undefined ? 0 : 12), y);
           y += 18;
@@ -1623,7 +1799,7 @@ const HUD = {
     }
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 14px Galmuri11, monospace';
     ctx.fillStyle = '#5ce0e6';
     ctx.fillText(page === 1 ? 'H / — 다음 페이지   ·   ESC — 닫기' : 'H / — 닫기   ·   ESC — 닫기', Renderer.W / 2, Renderer.H - 24);
   },

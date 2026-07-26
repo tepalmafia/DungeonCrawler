@@ -636,6 +636,11 @@ Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
   Renderer.init(canvas);
   Input.init(canvas);
   Meta.load();
+  // 픽셀 폰트 선로드 — 로드 전 프레임은 monospace로 그려지다 자연 전환 (font-display: swap)
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('12px Galmuri11').catch(() => {});
+    document.fonts.load('bold 12px Galmuri11').catch(() => {});
+  }
   AudioSys.muted = Meta.data.muted;
 
   const qs = new URLSearchParams(location.search);

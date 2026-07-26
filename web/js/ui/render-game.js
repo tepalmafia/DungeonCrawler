@@ -139,7 +139,7 @@ const GameRender = {
         ctx.strokeStyle = '#e43b44'; ctx.fillStyle = 'rgba(228,59,68,0.14)';
         ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.font = 'bold 13px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#e43b44';
+        ctx.font = 'bold 13px Galmuri11, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#e43b44';
         ctx.fillText('선고', s.x, s.y - s.r - 8);
       } else if (s.type === 'sanctPulse') {
         ctx.globalAlpha = 0.13 * blink * 2;
@@ -148,7 +148,7 @@ const GameRender = {
         ctx.globalAlpha = 0.85;
         ctx.strokeStyle = '#2ec4b6'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(s.sx, s.sy, s.sr, 0, Math.PI * 2); ctx.stroke();
-        ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#2ec4b6';
+        ctx.font = 'bold 12px Galmuri11, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#2ec4b6';
         ctx.fillText('성역 — 이 안으로', s.sx, s.sy - s.sr - 8);
       } else if (s.type === 'triCharge' && s.boss) {
         const b = s.boss, pl = this.player;
@@ -236,13 +236,13 @@ const GameRender = {
             ctx.fillRect(it.x + Math.cos(a) * 20 - 1.5, it.y - 8 + Math.sin(a) * 9 - 1.5, 3, 3);
             ctx.globalAlpha = 1;
           }
-          ctx.font = 'bold 16px monospace';
+          ctx.font = 'bold 16px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#b13ae0';
           ctx.fillText('?', it.x, it.y - 16);
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.fillText('미지의 기연', it.x, it.y - 44);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('받아들이기 전엔 알 수 없다', it.x, it.y - 30);
         }
@@ -262,11 +262,11 @@ const GameRender = {
         ctx.fillRect(it.x - 11, it.y - 3 + wob, 2, 2); ctx.fillRect(it.x - 7, it.y + 1 + wob, 2, 2);
         ctx.fillRect(it.x + 6, it.y - 1 - wob, 2, 2); ctx.fillRect(it.x + 10, it.y + 3 - wob, 2, 2); ctx.fillRect(it.x + 8, it.y + 1 - wob, 2, 2);
         if (!it.used) {
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#f7b32b';
           ctx.fillText('교수대 주사위', it.x, it.y - 40);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('골드 절반을 건다 — 이기면 2.2배', it.x, it.y - 26);
         }
@@ -285,11 +285,11 @@ const GameRender = {
           ctx.fillStyle = '#241832';
           ctx.fillRect(it.x - 20, it.y - 20, 40, 24); // 어둠이 상자를 덮는다
           ctx.restore();
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#b13ae0';
           ctx.fillText('저주받은 상자', it.x, it.y - 44);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('유물 +1 · 최대 HP -1', it.x, it.y - 30);
         }
@@ -309,11 +309,11 @@ const GameRender = {
           if (Math.random() < 0.2) {
             Particles.burst(it.x, it.y - 12, { count: 1, colors: ['#e43b44'], speed: 20, life: 0.4, size: 2, gravity: -80 });
           }
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#e43b44';
           ctx.fillText('피의 제단', it.x, it.y - 44);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('HP 2 → 공격력 +1', it.x, it.y - 30);
         }
@@ -330,7 +330,7 @@ const GameRender = {
           ctx.fillStyle = '#c8c0a8';
           ctx.fillRect(it.x - 6, it.y - 9, 12, 3);
           ctx.fillRect(it.x - 6, it.y - 3, 12, 2);
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#f7b32b';
           ctx.fillText('증거', it.x, it.y - 26);
@@ -350,11 +350,11 @@ const GameRender = {
         ctx.fillStyle = '#b13ae0';
         ctx.fillRect(it.x - 4, it.y - 16, 8, 5);
         if (!it.used) {
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#b13ae0';
           ctx.fillText('원한의 세공대', it.x, it.y - 40);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('스킬의 형태를 바꾼다 (택1)', it.x, it.y - 26);
         }
@@ -371,11 +371,11 @@ const GameRender = {
             ctx.fillRect(it.x + k * 9 - 1.5, it.y - 34 + Math.sin(it.t * 2 + k * 2) * 3, 3, 20);
           }
           ctx.globalAlpha = 1;
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#c9d94a';
           ctx.fillText('스킬 사당', it.x, it.y - 46);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('보조 스킬 3택1 (E키 사용)', it.x, it.y - 32);
         } else {
@@ -406,11 +406,11 @@ const GameRender = {
           ctx.arc(it.x, it.y, 70, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 1;
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#ff7043';
           ctx.fillText('모닥불', it.x, it.y - 44);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText(`휴식 — HP +${this.pacts.heal ? 1 : 2}`, it.x, it.y - 30);
           // 숫돌과 공존 중이면 양자택일 안내 (두 오브젝트 중간 지점)
@@ -444,11 +444,11 @@ const GameRender = {
           ctx.arc(it.x, it.y, 46, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 1;
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#ffd866';
           ctx.fillText('숫돌', it.x, it.y - 44);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('담금질 — 이번 층 공격력 +1', it.x, it.y - 30);
         }
@@ -466,11 +466,11 @@ const GameRender = {
         ctx.beginPath(); ctx.arc(it.x, it.y - 8, 30, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1;
         ctx.textAlign = 'center';
-        ctx.font = 'bold 15px monospace';
+        ctx.font = 'bold 15px Galmuri11, monospace';
         ctx.fillStyle = afford ? '#e8e0cf' : '#666a80';
         const icon = it.kind === 'shopRelic' ? '◆' : it.kind === 'shopHeal' ? '♥' : it.kind === 'shopShards' ? '◈' : it.kind === 'shopBlack' ? '☠' : '↻';
         ctx.fillText(icon, it.x, it.y - 8);
-        ctx.font = 'bold 11px monospace';
+        ctx.font = 'bold 11px Galmuri11, monospace';
         ctx.fillStyle = afford ? '#2ec4b6' : '#9aa0b4';
         const name = it.kind === 'shopRelic' ? '유물' : it.kind === 'shopHeal' ? '회복 +2' : it.kind === 'shopShards' ? `한 조각 ${it.shards}` : it.kind === 'shopBlack' ? '검은 상자 (레어+)' : '리롤 +1';
         ctx.fillText(name, it.x, it.y - 40);
@@ -491,10 +491,10 @@ const GameRender = {
           ctx.fillStyle = '#e43b44';
           ctx.beginPath(); ctx.arc(it.x, it.y - 14, 6 + pulse * 2, 0, Math.PI * 2); ctx.fill();
           ctx.textAlign = 'center';
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 12px Galmuri11, monospace';
           ctx.fillStyle = '#e43b44';
           ctx.fillText('핏빛 제단', it.x, it.y - 44);
-          ctx.font = '11px monospace';
+          ctx.font = '11px Galmuri11, monospace';
           ctx.fillStyle = '#9aa0b4';
           ctx.fillText('최대 HP 1 → 정예급 특성 선택', it.x, it.y - 31);
         }
@@ -823,17 +823,17 @@ const GameRender = {
       ctx.fillStyle = 'rgba(8,8,15,0.82)';
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
       ctx.textAlign = 'center';
-      ctx.font = 'bold 30px monospace';
+      ctx.font = 'bold 30px Galmuri11, monospace';
       ctx.fillStyle = '#e8e0cf';
       ctx.fillText('일시정지 — 매뉴얼', Renderer.W / 2, 72);
 
       // ── 왼쪽: 기본 조작 ──
       const lx = Renderer.W / 2 - 396;
       ctx.textAlign = 'left';
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 15px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('기본 조작', lx, 122);
-      ctx.font = '13px monospace';
+      ctx.font = '13px Galmuri11, monospace';
       const basics = [
         ['WASD / 방향키', '이동'],
         ['클릭 / J', '공격 — 3연격, 3타째가 강하다'],
@@ -853,7 +853,7 @@ const GameRender = {
 
       // ── 오른쪽: 전투의 정수 (고급 기술) ──
       const rx = Renderer.W / 2 + 16;
-      ctx.font = 'bold 15px monospace';
+      ctx.font = 'bold 15px Galmuri11, monospace';
       ctx.fillStyle = '#f7b32b';
       ctx.fillText('전투의 정수', rx, 122);
       const tech = [
@@ -865,10 +865,10 @@ const GameRender = {
       ];
       let ty = 150;
       for (const t of tech) {
-        ctx.font = 'bold 13px monospace';
+        ctx.font = 'bold 13px Galmuri11, monospace';
         ctx.fillStyle = '#ffd866';
         ctx.fillText('· ' + t[0], rx, ty);
-        ctx.font = '12px monospace';
+        ctx.font = '12px Galmuri11, monospace';
         ctx.fillStyle = '#c8d4e4';
         ctx.fillText(t[1], rx + 16, ty + 18);
         ctx.fillStyle = '#8a90a4';
@@ -877,7 +877,7 @@ const GameRender = {
       }
 
       ctx.textAlign = 'center';
-      ctx.font = '14px monospace';
+      ctx.font = '14px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
       ctx.fillText('H 또는 / — 전체 매뉴얼 (던전·성장 안내 포함)', Renderer.W / 2, Renderer.H - 100);
       ctx.fillStyle = '#9aa0b4';
@@ -899,7 +899,7 @@ const GameRender = {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = a * 0.85;
       ctx.textAlign = 'center';
-      ctx.font = '14px monospace';
+      ctx.font = '14px Galmuri11, monospace';
       ctx.fillStyle = '#0a0812';
       ctx.fillText(w.text, Renderer.W / 2 + 1, Renderer.H - 63);
       ctx.fillStyle = '#b8a9d8';
