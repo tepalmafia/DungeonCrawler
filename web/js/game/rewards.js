@@ -99,6 +99,7 @@ const GameRewards = {
       this.clearRunSave(); // 런이 끝났다 — 이어하기 스냅샷 소멸
     }
     this.shardAnimT = 0;
+    Achieve.evaluate(this, !!victory); // 도전과제 일괄 평가 (중복 지급 없음)
     // 오클릭 방지: 전투 중 연타하던 클릭이 정산 화면을 바로 넘기지 않게 잠시 입력 잠금
     this.overLockT = 1.2;
   },

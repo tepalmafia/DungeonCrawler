@@ -1,5 +1,5 @@
 // 메타 프로그레션 — 죽어도 남는 것 (기획안 §6.2).
-// 영혼 파편으로 영구 업그레이드·직업 해금. localStorage에 저장된다.
+// 영혼 파편으로 영구 업그레이드·직업 해금. Store(웹 localStorage / 데스크톱 세이브 파일)에 저장된다.
 
 // 직업 3종 (기획안 §5) — 조작 감각 자체가 다르다
 // 왕에게 죽은 네 사람 — 같은 밤, 같은 묘지에서 눈을 떴다 (기획 SCENARIO.md §3)
@@ -243,7 +243,7 @@ const Meta = {
 
   load() {
     try {
-      const raw = localStorage.getItem('dungeoncrawler_meta');
+      const raw = Store.get('dungeoncrawler_meta');
       this.data = raw ? { ...this._default(), ...JSON.parse(raw) } : this._default();
     } catch (e) {
       this.data = this._default();
@@ -260,7 +260,7 @@ const Meta = {
 
   save() {
     try {
-      localStorage.setItem('dungeoncrawler_meta', JSON.stringify(this.data));
+      Store.set('dungeoncrawler_meta', JSON.stringify(this.data));
     } catch (e) { /* 시크릿 모드 등 저장 불가 환경 무시 */ }
   },
 
