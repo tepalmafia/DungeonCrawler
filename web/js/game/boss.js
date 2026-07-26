@@ -275,7 +275,7 @@ const BOSS_DEFS = {
   // 5막 「왕도와 왕좌」
   66: {
     awakened: true, name: "왕실 마법장 '별지기 오벨'", sprite: 'bossObel', scale: 1.8, r: 29, hp: 660, speed: 42,
-    mechanic: { type: 'veil', hits: [0.5], label: '성좌 장막 — 별이 도는 동안 구슬만이 약점이다' },
+    mechanic: { type: 'veil', veils: [0.5], label: '성좌 장막 — 별이 도는 동안 구슬만이 약점이다' },
     banner: "왕실 마법장 '별지기 오벨'",
     punish: 'volley', punishProj: 'soul', sig: 'brandZone',
     p1: ['spiral:soul>curse', 'fan:soul:cross>ring:gap', 'ring:gap>fan:soul:snipe'],
@@ -481,7 +481,7 @@ function createBoss(floor, x, y) {
         if (this.rageT >= 16 && this.rageStacks < 4) {
           this.rageT = 0;
           this.rageStacks++;
-          game.banner = { text: `이그니스가 더 뜨거워진다! (×${this.rageStacks})`, life: 1.3, maxLife: 1.3, color: '#ff7043' };
+          game.banner = { text: `${this.name}의 기세가 오른다! (×${this.rageStacks})`, life: 1.3, maxLife: 1.3, color: '#ff7043' };
           AudioSys.roar();
           Particles.burst(this.x, this.y, { count: 18, colors: ['#ff7043', '#ffd866'], speed: 180, life: 0.5, size: 4 });
         }
