@@ -307,6 +307,7 @@ const GameRewards = {
     }
     applyTrait(this.player, t);
     Meta.codexTrait(t.id);
+    this.checkSects(); // 계열 (v137): 단계 상승 순간 배너
     Particles.text(this.player.x, this.player.y - 30, t.name + '!', { color: t.color, size: 16 });
     this.pendingChoices = Math.max(0, this.pendingChoices - 1);
     if (this.pendingChoices > 0) {
@@ -390,6 +391,7 @@ const GameRewards = {
     if (relic.flag === 'kingseal') {
       this.pendingChoices++;
     }
+    this.checkSects(); // 계열 (v137): 유물도 길을 진전시킨다
   },
 
 };

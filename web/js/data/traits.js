@@ -182,6 +182,10 @@ function rollTraitCards(player, n = 3) {
     // 교차 원소 유도 (반응 노출 계측: 30분에 7회 발동 — 믹스가 안 나와서 반응이 묻혔다):
     // 원소 트리 하나를 2픽 이상 팠으면, 아직 안 판 다른 원소 카드가 더 자주 보인다
     if (hasElemTree && ELEM_TAGS.includes(t.tag) && (tagCount[t.tag] || 0) <= 1) w += 0.6;
+    // 계열 공명 (v137): 첫 임계(2)에 도달한 계열은 게임이 응답한다 — 등장 가중 ×1.5.
+    // 마일스톤을 '복권'이 아니라 '커밋의 결과'로 만드는 에이전시 밸브
+    const sk = SECT_BY_TAG[t.tag];
+    if (sk && typeof Game !== 'undefined' && Game.sects && Game.sects[sk] >= 1) w *= 1.5;
     return w;
   };
 
@@ -223,3 +227,27 @@ function applyTrait(player, trait) {
   }
   if (typeof Game !== 'undefined' && Game.checkEvolution) Game.checkEvolution();
 }
+
+// ══ 계열 「원한의 길」 (v137) — 드래프트의 목적지: 특성+유물+계승 형상을 통합 집계 ══
+// 임계 2/4/6 (풀 실측 기반 — 특성만으론 3~5장이 상한이라 유물·형상까지 세어야 6이 열린다).
+// 보너스는 새 피해 곱연산이 아니라 기존 메커닉의 증폭만 — 파워 인플레 구조적 차단.
+const SECT_THRESH = [2, 4, 6];
+const SECTS = {
+  fire:  { name: '화염', color: '#ff7043', tag: '화염',
+    relics: ['ashcloak', 'brandiron'], forms: ['ash'],
+    tiers: ['화상 지속 +50%', '화상이 더 빠르게 탄다 (0.5→0.35초)', '「대화재」 — 화상 중인 적이 죽으면 불길이 남는다'] },
+  volt:  { name: '번개', color: '#ffd866', tag: '번개',
+    relics: ['stormneedle', 'shackle', 'gallowsrope'], forms: ['noose'],
+    tiers: ['감전 지속 +50%', '감전된 적에게 크리티컬 +15%p', '「낙뢰」 — 감전된 적 처치 시 주변 2체로 전이'] },
+  venom: { name: '독', color: '#6ab04c', tag: '독',
+    relics: ['greenvial', 'antidote'], forms: ['plague'],
+    tiers: ['독 지속 +50%', '독이 더 빠르게 스민다 (1.0→0.7초)', '「창궐」 — 독구름 반경 +40%'] },
+  guard: { name: '수호', color: '#5ce0e6', tag: '수호',
+    relics: ['spikeshield', 'husbandring', 'wolfpelt', 'martyrblood'], forms: ['guard'],
+    tiers: ['보호막 충전 -15%', '피격 후 무적 +0.25초', '「성채」 — 보호막이 깨질 때 주변에 2 피해'] },
+  blood: { name: '혈맹', color: '#e43b44', tag: '흡혈',
+    relics: ['fang', 'butcherhook'], forms: ['chalice'],
+    tiers: ['흡혈 쿨다운 -25%', '하트 드랍 +25%', '「피의 축제」 — 처치 시 4% 확률로 HP 1 회복'] },
+};
+const SECT_BY_TAG = {};
+for (const k of Object.keys(SECTS)) SECT_BY_TAG[SECTS[k].tag] = k;

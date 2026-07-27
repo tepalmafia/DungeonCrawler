@@ -244,6 +244,14 @@ function rollRelics(player, n, bossRoll = false) {
         if (r.heir) for (let k = 0; k < heirW; k++) candidates.push(r);
       }
     }
+    // 계열 공명 (v137): 첫 임계에 도달한 계열의 유물은 이름을 한 번 더 올린다 (×~1.5)
+    if (typeof Game !== 'undefined' && Game.sects && typeof SECTS !== 'undefined') {
+      for (const r of candidates.slice()) {
+        for (const k of Object.keys(SECTS)) {
+          if (Game.sects[k] >= 1 && SECTS[k].relics.includes(r.id)) { candidates.push(r); break; }
+        }
+      }
+    }
     if (candidates.length === 0) {
       for (const rar of order.slice(order.indexOf(want))) {
         candidates = pool.filter((r) => r.rarity === rar && !out.includes(r));

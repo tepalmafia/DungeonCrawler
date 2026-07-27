@@ -307,7 +307,7 @@ const GamePlay = {
     if (!b.venom) return;
     // 직업 분화 (실플레이 "마도사와 구분 안 됨"): 플라스크는 자리에 산성 웅덩이를 남긴다 —
     // 마도사 = 순간 폭발 누커, 연금술사 = 바닥을 장악하는 지역전
-    this.zones.push({ x: b.x, y: b.y, r: Math.max(30, Math.round(b.aoe * 0.9)), life: 2.2, kind: 'poison', tickT: 0.4 });
+    this.zones.push({ x: b.x, y: b.y, r: Math.max(30, Math.round(b.aoe * 0.9 * (this.sects && this.sects.venom >= 3 ? 1.4 : 1))), life: 2.2, kind: 'poison', tickT: 0.4 }); // 독 3단 「창궐」
     const elem = b.catalyst ? ['poison', 'burn', 'shock'][Math.floor(Math.random() * 3)] : 'poison';
     const dur = elem === 'poison' ? (p.flags.al_acid ? 5 : 3) : elem === 'burn' ? 2.5 : 2;
     for (const e of this.enemies) {
@@ -670,23 +670,25 @@ const GamePlay = {
         }
         continue;
       }
+      // 계열 1단 (v137): 지속을 느리게 깎아 +50% — 부여 지점이 흩어져 있어 소모 지점에서 한 번에 증폭
+      const sc = this.sects || {};
       if (e.status.burn > 0) {
-        e.status.burn -= dt;
+        e.status.burn -= dt / (sc.fire >= 1 ? 1.5 : 1);
         e.status.burnTick -= dt;
         if (e.status.burnTick <= 0) {
-          e.status.burnTick = p.flags.inferno ? 0.25 : 0.5;
+          e.status.burnTick = (p.flags.inferno ? 0.25 : 0.5) * (sc.fire >= 2 ? 0.7 : 1); // 화염 2단: 더 빠르게 탄다
           this.damageEnemy(e, 1, { x: 0, y: -0.3 }, { feel: false, kb: 0, color: '#ff7043' });
         }
       }
       if (!e.dead && e.status.poison > 0) {
-        e.status.poison -= dt;
+        e.status.poison -= dt / (sc.venom >= 1 ? 1.5 : 1);
         e.status.poisonTick -= dt;
         if (e.status.poisonTick <= 0) {
-          e.status.poisonTick = 1.0;
+          e.status.poisonTick = sc.venom >= 2 ? 0.7 : 1.0; // 독 2단: 더 빠르게 스민다
           this.damageEnemy(e, 1, { x: 0, y: -0.3 }, { feel: false, kb: 0, color: '#6ab04c' });
         }
       }
-      if (e.status.shock > 0) e.status.shock -= dt;
+      if (e.status.shock > 0) e.status.shock -= dt / (sc.volt >= 1 ? 1.5 : 1);
 
       // ── 원소 교차 반응 (S1) — 두 상태가 한 몸에 공존하는 순간 화학이 터진다 ──
       // 트리를 하나만 파면 단일 원소, 두 트리를 섞으면 반응 — 조합 발견이 곧 콘텐츠

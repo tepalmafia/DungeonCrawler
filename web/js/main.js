@@ -145,6 +145,7 @@ const Game = {
     p.rerolls = s.rerolls; p.floorAtk = s.floorAtk; p.reviveUsed = s.reviveUsed;
     p.subSkill = s.sub || null; this._shrineSeen = s.shrineSeen || 0;
     p.ult = s.ult || 0; p.ultGauge = s.ultG || 0;
+    this.sects = {}; this.checkSects(true); // 계열 (v137): 복원분 무연출 동기화
     Dungeon.floor = s.floor; Dungeon.roomIndex = s.roomIndex;
     Dungeon.tookTreasure = s.took.t; Dungeon.tookCamp = s.took.c; Dungeon.tookEvent = s.took.e;
     Dungeon.tookSiege = s.took.s; Dungeon.tookMerchant = s.took.m; Dungeon.trialSeen = s.took.tr;
@@ -281,6 +282,7 @@ const Game = {
     this.bossSlashes = [];
     this.corpses = [];
     this.gibs = [];
+    this.sects = {}; this.checkSects(true); // 계열 (v137): 새 런 리셋 (형상 포함 재집계)
     this.roomCleared = false;
     Particles.clear();
 

@@ -434,7 +434,7 @@ function createPlayer(x, y, classId = 'knight') {
         AudioSys.meteorCast();
         const r = Math.min(240, (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1) * (mod && mod.rMul ? mod.rMul : 1)); // 반경 상한 240px
         game._explode(t.x, t.y, r, Math.max(1, Math.round(this.currentAtk() * 2.5 * (mod && mod.dMul ? mod.dMul : 1))), ['#c9d94a', '#6ada8a', '#ff7043'], '#c9d94a');
-        if (mod && mod.flag === 'pool') game.zones.push({ x: t.x, y: t.y, r: r * 1.15, life: 4.5, kind: 'poison', tickT: 0.4 });
+        if (mod && mod.flag === 'pool') game.zones.push({ x: t.x, y: t.y, r: r * 1.15 * (game.sects && game.sects.venom >= 3 ? 1.4 : 1), life: 4.5, kind: 'poison', tickT: 0.4 }); // 독 3단
         for (const e of game.enemies) {
           if (e.dead || e.phased || e.neutral) continue;
           if (Math.hypot(e.x - t.x, e.y - t.y) < r + e.r) {
@@ -549,7 +549,8 @@ function createPlayer(x, y, classId = 'knight') {
 
       // 보호막 충전: 수호의 문장 특성(8초) 또는 검사 고유 '철벽'(9초)
       // 매트릭스 계측: 검사 사망이 심층(8~10층) 접촉 피해에 집중 — 철벽 11→9로 근접 리스크 보상
-      const shieldCd = this.flags.shield ? 8 : this.rflags.ringshield ? 10 : (this.classId === 'knight' ? (this.form === 'guard' ? 5.4 : 9) : 0); // 수호망령: 철벽 40% 단축
+      const sectG = (typeof Game !== 'undefined' && Game.sects && Game.sects.guard >= 1) ? 0.85 : 1; // 수호 1단: 충전 -15%
+      const shieldCd = (this.flags.shield ? 8 : this.rflags.ringshield ? 10 : (this.classId === 'knight' ? (this.form === 'guard' ? 5.4 : 9) : 0)) * sectG; // 수호망령: 철벽 40% 단축
       if (shieldCd > 0 && !this.shield) {
         this.shieldT += dt;
         if (this.shieldT >= shieldCd) {
@@ -718,7 +719,9 @@ function createPlayer(x, y, classId = 'knight') {
         return 'blocked';
       }
 
-      let crit = Math.random() < Math.min(0.8, this.critChance);
+      // 번개 2단 (v137): 감전된 적은 급소가 드러난다 — 크리 +15%p
+      const voltCc = (game.sects && game.sects.volt >= 2 && e.status && e.status.shock > 0) ? 0.15 : 0;
+      let crit = Math.random() < Math.min(0.8, this.critChance + voltCc);
       if (this.rflags.allcrit) crit = true;
       if (this.flags.firecrit && e.status.burn > 0) crit = true;
       if (this.dashCritReady) { crit = true; this.dashCritReady = false; }
