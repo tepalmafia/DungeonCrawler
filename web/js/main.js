@@ -426,6 +426,12 @@ const Game = {
         this.banner = Dungeon.shortcutHot
           ? { text: `지름길 — ${Dungeon.floor}층 ${Dungeon.floorName()} (정예가 들끓는다)`, life: 2.5, maxLife: 2.5, color: '#e43b44' }
           : { text: `${Dungeon.floor}층 — ${Dungeon.floorName()}`, life: 2.0, maxLife: 2.0 };
+        // 다음 보스 예고 (v142): 층의 끝에서 누가 기다리는지 — 보스가 목적지가 된다
+        const bd = typeof bossDefFor === 'function' ? bossDefFor(Dungeon.floor) : null;
+        if (bd && !this.bossRush) {
+          this._storyQ = this._storyQ || [];
+          this._storyQ.push({ text: `이 층의 끝 — 「${bd.name}」이 기다린다`, color: '#e43b44' });
+        }
       }
     } else if (type === 'elite') {
       Dungeon.eliteComp(depth).forEach((s, i) => {
@@ -517,7 +523,12 @@ const Game = {
         boss.hp = boss.maxHp = Math.round(boss.maxHp * 1.5);
       }
       this.enemies.push(boss);
-      this.banner = { text: boss.def.banner, life: 2.0, maxLife: 2.0 };
+      // 보스 등장 카드 (v142): 이름·기믹을 정면으로 — 싸우기 전에 "누구인지"부터 각인
+      boss.spawnT = 1.2;
+      this._bossIntro = { t: 2.4, name: boss.name, label: boss.def.mechanic ? boss.def.mechanic.label : '' };
+      this.banner = null; // 카드가 화면을 갖는다 — 유언 배너는 카드가 걷힌 뒤
+      this._storyQ = this._storyQ || [];
+      this._storyQ.push({ text: boss.def.banner, color: '#e43b44' });
       AudioSys.bossAppear();
       Renderer.shake(5, 0.5);
     }

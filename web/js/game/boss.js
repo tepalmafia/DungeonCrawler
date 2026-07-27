@@ -308,7 +308,11 @@ const BOSS_DEFS = {
   },
 };
 
-function createBoss(floor, x, y) {
+// 보스 타격 피해 (v142): 1~3층은 1(온보딩 — 압박은 템포가 담당), 4층+는 2 — 실수 3번이 죽음
+function bossDmg() { return Dungeon.floor >= 4 ? 2 : 1; }
+
+// 층 → 보스 정의 해석 (v142: 예고 연출과 공유 — "이 층의 끝에서 누가 기다리는가")
+function bossDefFor(floor) {
   // 중간 층 (11~19·21~29·31~39): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
   // 20 로트가르 / 30 발디아 / 40 이노첸시오 = 막보스 (고정 HP). 41층+ (무한 가도): 각성 5보스 순환
   const FIXED = { 20: 20, 30: 30, 40: 40, 45: 45, 50: 50 };
@@ -319,6 +323,12 @@ function createBoss(floor, x, y) {
     : floor <= 50 ? CYCLE_POOL[Math.min(5, Math.ceil(floor / 10))][floor % 2]
     : [60, 61, 62, 63, 64, 65, 66, 67][(floor - 51) % 8];
   const def = BOSS_DEFS[defKey] || BOSS_DEFS[1];
+  def._key = defKey; // 도감 귀속용 실제 킷 id
+  return def;
+}
+
+function createBoss(floor, x, y) {
+  const def = bossDefFor(floor);
   // 계측 조정 (관통 v2): 배율 무제한이라 49층 절망의 바르곤 hp 4450 > 흰 늑대 3600 —
   // 필러 보스가 랜드마크 보스를 넘어섰고, 3런 사망의 절반이 이 한 킷에 몰렸다 (49층 17회 군집).
   // 상한 ×4.5: 49층 hp ≈2900 — 5막 서열(늑대 3600 < 왕 5000)을 회복한다. 51층+ 무한은 상한 없음 (의도된 지옥)
@@ -328,7 +338,7 @@ function createBoss(floor, x, y) {
   return {
     type: 'boss', isBoss: true,
     name: def.name,
-    defId: defKey, // 도감 귀속 — 층 산식 대신 실제 킷으로
+    defId: def._key, // 도감 귀속 — 층 산식 대신 실제 킷으로
     def,
     x, y,
     hp, maxHp: hp,
@@ -356,7 +366,7 @@ function createBoss(floor, x, y) {
     _regenTick: 0,
     _regenPause: 0,
     fightT: 0,        // 전투 경과 시간 — 소프트 인레이지
-    enrage: 0,        // 45초마다 +1 (최대 3): 패턴 가속
+    enrage: 0,        // 30초마다 +1 (최대 3): 패턴 가속
     swingCount: 0,
     aimDir: { x: -1, y: 0 },
     curses: [],
@@ -431,7 +441,7 @@ function createBoss(floor, x, y) {
             const ang = v.aim ? Math.atan2(p.y - this.y, p.x - this.x) : v.baseAngle + (v.offset || 0);
             for (let j = 0; j < v.n; j++) {
               const a = ang + (j - (v.n - 1) / 2) * v.spread;
-              game.spawnProjectile(v.projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: v.speed, dmg: 1 });
+              game.spawnProjectile(v.projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: v.speed, dmg: bossDmg() });
             }
             AudioSys.shoot();
             this._delayed.splice(i, 1);
@@ -482,11 +492,11 @@ function createBoss(floor, x, y) {
         this.kby *= Math.pow(0.0001, dt);
       }
 
-      // ── 소프트 인레이지: 오래 끌수록 보스가 빨라진다 (45초마다, 최대 3중첩) ──
+      // ── 소프트 인레이지: 오래 끌수록 보스가 빨라진다 (30초마다, 최대 3중첩) ──
       // 긴장감의 시간 축 — "언젠가는 잡겠지"가 아니라 "빨리 잡아야 한다"
       if (this.state !== 'enter') {
         this.fightT += dt;
-        const want = Math.min(3, Math.floor(this.fightT / 45));
+        const want = Math.min(3, Math.floor(this.fightT / 30));
         if (want > this.enrage) {
           this.enrage = want;
           game.banner = { text: `${this.name}의 살기가 짙어진다! (×${this.enrage})`, life: 1.6, maxLife: 1.6, color: '#e43b44' };
@@ -619,7 +629,7 @@ function createBoss(floor, x, y) {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           // 원거리 농성 시 공격 템포 상승 — 거리는 안전이 아니라 다른 종류의 압박이 된다
-          const wait = (this.phase === 2 ? 0.75 : 1.1) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1);
+          const wait = (this.phase === 2 ? 0.6 : 0.9) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1);
           if (this.stateT >= wait) {
             // 인장기 (왕의 인장기): HP 75% 이하 첫 발동, 이후 막별 주기 (3막 12s / 4막 10s / 5막 8s)
             if (this.def.sig && !(this.def.sigP3 && !this._onslaught) &&
@@ -705,7 +715,7 @@ function createBoss(floor, x, y) {
               while (diff > Math.PI) diff -= Math.PI * 2;
               while (diff < -Math.PI) diff += Math.PI * 2;
               if (Math.abs(diff) < 1.35) {
-                game.hurtPlayer(1, { x: pdx / (pd || 1), y: pdy / (pd || 1) });
+                game.hurtPlayer(bossDmg(), { x: pdx / (pd || 1), y: pdy / (pd || 1) });
               }
             }
             const maxSwings = this.phase === 2 ? 4 : 3;
@@ -722,7 +732,7 @@ function createBoss(floor, x, y) {
             game.firePatches.push({ x: this.x, y: this.y, r: 26, life: 1.6, kind: 'fire' });
           }
           if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
-            game.hurtPlayer(1, this.aimDir, 420);
+            game.hurtPlayer(bossDmg(), this.aimDir, 420);
           }
           if (hit.x || hit.y || this.stateT > 1.4) {
             Renderer.shake(6, 0.3);
@@ -766,7 +776,7 @@ function createBoss(floor, x, y) {
             const baseAngle = Math.atan2(p.y - this.y, p.x - this.x);
             for (let i = 0; i < 9; i++) {
               const a = baseAngle + (i - 4) * 0.22;
-              game.spawnProjectile('soul', this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 210, dmg: 1 });
+              game.spawnProjectile('soul', this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 210, dmg: bossDmg() });
             }
             this.state = 'idle';
             this.stateT = 0;
@@ -792,7 +802,7 @@ function createBoss(floor, x, y) {
           if (Math.hypot(p.x - c.x, p.y - c.y) < (c.r || 48) + p.r) {
             const ddx = p.x - c.x, ddy = p.y - c.y;
             const dd = Math.hypot(ddx, ddy) || 1;
-            game.hurtPlayer(1, { x: ddx / dd, y: ddy / dd });
+            game.hurtPlayer(bossDmg(), { x: ddx / dd, y: ddy / dd });
           }
           if (c.fire) {
             game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire', by: this.name });
@@ -813,7 +823,7 @@ function createBoss(floor, x, y) {
       // 접촉 데미지 (장막 중 제외) — 2페이즈부터는 몸 자체가 흉기다
       if (this.state !== 'veil' && this.hitCd <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
         this.hitCd = 0.8;
-        game.hurtPlayer(this.phase === 2 && Dungeon.floor >= 3 ? 2 : 1, { x: dx / d, y: dy / d }); // 접촉 2는 3층부터
+        game.hurtPlayer(this.phase === 2 && Dungeon.floor >= 4 ? bossDmg() + 1 : bossDmg(), { x: dx / d, y: dy / d }); // 접촉 2는 3층부터
       }
     },
 
@@ -832,7 +842,7 @@ function createBoss(floor, x, y) {
           const pp = g.player;
           const a = Math.atan2(pp.y - b.y, pp.x - b.x);
           for (const off of [-0.22, 0.22]) {
-            g.spawnProjectile('rock', b.x, b.y, { x: Math.cos(a + off), y: Math.sin(a + off) }, { speed: 250, dmg: 1 });
+            g.spawnProjectile('rock', b.x, b.y, { x: Math.cos(a + off), y: Math.sin(a + off) }, { speed: 250, dmg: bossDmg() });
           }
           AudioSys.shoot();
         });
@@ -884,7 +894,7 @@ function createBoss(floor, x, y) {
           const base = Math.atan2(pp.y - b.y, pp.x - b.x);
           for (let i = 0; i < 5; i++) {
             const a = base + (i - 2) * 0.18;
-            g.spawnProjectile('soul', b.x, b.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 200, dmg: 1 });
+            g.spawnProjectile('soul', b.x, b.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 200, dmg: bossDmg() });
           }
           AudioSys.shoot();
         });
@@ -989,7 +999,7 @@ function createBoss(floor, x, y) {
             AudioSys.slash(2);
             const dd = Math.hypot(pp.x - b.x, pp.y - b.y) || 1;
             Particles.burst(b.x + (pp.x - b.x) * 0.5, b.y + (pp.y - b.y) * 0.5, { count: 8, colors: ['#ffffff', '#d8dce4'], speed: 200, life: 0.3, size: 3, dir: Math.atan2(pp.y - b.y, pp.x - b.x), spread: 0.8 });
-            if (dd < 108 && pp.invuln <= 0) g.hurtPlayer(1, { x: (pp.x - b.x) / dd, y: (pp.y - b.y) / dd }, 300, b.name);
+            if (dd < 108 && pp.invuln <= 0) g.hurtPlayer(bossDmg(), { x: (pp.x - b.x) / dd, y: (pp.y - b.y) / dd }, 300, b.name);
           });
         }
       } else if (id === 50) {
@@ -1005,7 +1015,7 @@ function createBoss(floor, x, y) {
           for (const o of origins) {
             const pp = g.player;
             const dd = Math.hypot(pp.x - o.x, pp.y - o.y) || 1;
-            g.spawnProjectile('rock', o.x, o.y, { x: (pp.x - o.x) / dd, y: (pp.y - o.y) / dd }, { speed: 500, dmg: 1 });
+            g.spawnProjectile('rock', o.x, o.y, { x: (pp.x - o.x) / dd, y: (pp.y - o.y) / dd }, { speed: 500, dmg: bossDmg() });
           }
         });
       } else if (id === 60) {
@@ -1021,7 +1031,7 @@ function createBoss(floor, x, y) {
           Particles.burst(b.x + ux * 215, b.y + uy * 215, { count: 12, colors: ['#c8ccd8', '#8a653f'], speed: 200, life: 0.35, size: 3 });
           AudioSys.thud();
           if (perp < 34 + pp.r && pp.invuln <= 0) {
-            g.hurtPlayer(1, { x: -ux, y: -uy }, 80, b.name);
+            g.hurtPlayer(bossDmg(), { x: -ux, y: -uy }, 80, b.name);
             World.moveEntity(pp, (b.x + ux * 50 - pp.x) * 0.75, (b.y + uy * 50 - pp.y) * 0.75); // 끌려온다
             Particles.text(pp.x, pp.y - 30, '갈고리에 걸렸다!', { color: '#e43b44', size: 13 });
           }
@@ -1033,7 +1043,7 @@ function createBoss(floor, x, y) {
         const row = (off, gap) => {
           for (let i = 0; i < 6; i++) {
             if (i === gap) continue; // 물결에도 틈은 있다
-            game.spawnProjectile('soul', this.x + dirX * off, clampY(this.y - 150 + i * 60), { x: dirX, y: 0 }, { speed: 235, dmg: 1 });
+            game.spawnProjectile('soul', this.x + dirX * off, clampY(this.y - 150 + i * 60), { x: dirX, y: 0 }, { speed: 235, dmg: bossDmg() });
           }
         };
         row(18, 1 + Math.floor(Math.random() * 4));
@@ -1070,7 +1080,7 @@ function createBoss(floor, x, y) {
         for (let i = 0; i < 8; i++) {
           U(i * 0.11, (b, g) => {
             const a = i * 0.85 + b.patternIdx;
-            g.spawnProjectile('fire', b.x, b.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 150, dmg: 1 });
+            g.spawnProjectile('fire', b.x, b.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 150, dmg: bossDmg() });
           });
         }
         AudioSys.shoot();
@@ -1100,7 +1110,7 @@ function createBoss(floor, x, y) {
             const distSeg = Math.hypot(pp.x - (a1.x + seg.x * t2), pp.y - (a1.y + seg.y * t2));
             if (!hitOnce && distSeg < 20 + pp.r && pp.invuln <= 0) {
               hitOnce = true;
-              g.hurtPlayer(1, { x: 0, y: -0.5 }, 220, b.name);
+              g.hurtPlayer(bossDmg(), { x: 0, y: -0.5 }, 220, b.name);
             }
           }
         });
@@ -1117,7 +1127,7 @@ function createBoss(floor, x, y) {
           const px = pp.x - sx, py = pp.y - sy;
           const tp = Math.max(0, Math.min(len, px * nx + py * ny));
           const perp = Math.hypot(px - nx * tp, py - ny * tp);
-          if (perp < 40 + pp.r && pp.invuln <= 0) g.hurtPlayer(1, { x: nx, y: ny }, 320, b.name);
+          if (perp < 40 + pp.r && pp.invuln <= 0) g.hurtPlayer(bossDmg(), { x: nx, y: ny }, 320, b.name);
           for (let s2 = 0; s2 < 6; s2++) Particles.burst(sx + vx * (s2 / 6), sy + vy * (s2 / 6), { count: 2, colors: ['#c8ccd8', '#16141e'], speed: 90, life: 0.3, size: 3 });
           const spot = World.safeSpot(ex, ey);
           b.x = spot.x; b.y = spot.y;
@@ -1206,9 +1216,9 @@ function createBoss(floor, x, y) {
         const rot = this.patternIdx * 0.45;
         for (let i = 0; i < 8; i++) {
           const a = rot + (i / 8) * Math.PI * 2;
-          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 200, dmg: 1 });
+          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, { speed: 200, dmg: bossDmg() });
           const a2 = a + Math.PI / 8;
-          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a2), y: Math.sin(a2) }, { speed: 130, dmg: 1 });
+          game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a2), y: Math.sin(a2) }, { speed: 130, dmg: bossDmg() });
         }
         AudioSys.shoot();
         this._endMove();

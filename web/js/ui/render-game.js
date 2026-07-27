@@ -1062,6 +1062,32 @@ const GameRender = {
       ctx.fillStyle = '#4a4a5c';
       ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, Renderer.H - 12);
     }
+    // 보스 등장 카드 (v142): 상하 암막 + 이름·기믹 대문 — 결전의 문턱을 몸으로 느끼게
+    if (this._bossIntro && this.state === 'play') {
+      const bi = this._bossIntro;
+      const k = Math.min(1, (2.4 - bi.t) * 3);          // 진입 페이드
+      const out = bi.t < 0.5 ? bi.t / 0.5 : 1;           // 퇴장 페이드
+      const a = k * out;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = `rgba(5,4,10,${0.35 * a})`;
+      ctx.fillRect(0, 0, Renderer.W, Renderer.H);
+      ctx.fillStyle = `rgba(5,4,10,${0.85 * a})`;
+      ctx.fillRect(0, 0, Renderer.W, 96 * k);
+      ctx.fillRect(0, Renderer.H - 96 * k, Renderer.W, 96 * k);
+      ctx.globalAlpha = a;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 36px Galmuri11, monospace';
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillText(bi.name, Renderer.W / 2 + 2, Renderer.H / 2 - 12);
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText(bi.name, Renderer.W / 2, Renderer.H / 2 - 14);
+      if (bi.label) {
+        ctx.font = '14px Galmuri11, monospace';
+        ctx.fillStyle = '#c8c2b4';
+        ctx.fillText(bi.label, Renderer.W / 2, Renderer.H / 2 + 16);
+      }
+      ctx.globalAlpha = 1;
+    }
     // 자동 저장 표시 (v141): 방 입장마다 기록된다는 걸 보여준다 — '저장이 없다'는 오해 해소
     if (this._saveFlashT > 0 && this.state === 'play') {
       ctx.setTransform(1, 0, 0, 1, 0, 0);

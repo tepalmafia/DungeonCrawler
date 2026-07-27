@@ -519,6 +519,7 @@ const GamePlay = {
     World.tickGore(dt); // 고어 풍화 (v136): 핏자국·잔해가 서서히 마르며 사라진다
     if (this._chainT > 0) this._chainT -= dt; // 킬 체인 (v138) 창 감쇠
     if (this._saveFlashT > 0) this._saveFlashT -= dt; // 자동 저장 표시 (v141)
+    if (this._bossIntro && (this._bossIntro.t -= dt) <= 0) this._bossIntro = null; // 보스 등장 카드 (v142)
     // 온보딩 (v139): 첫 걸음 힌트 진행 — 입력이 확인되면 다음 동사로
     if (this._obHints) {
       // 게임 상태로 감지 — 입력 프레임 폴링은 짧은 탭을 놓친다
