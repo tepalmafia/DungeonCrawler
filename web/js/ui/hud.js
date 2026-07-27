@@ -1824,6 +1824,12 @@ const HUD = {
     }
 
     this._drawShardReward(ctx, game, 330);
+    // 망자의 가호 힌트 (v145): 연속 사망 2회+ 이고 가호가 꺼져 있으면 — 다정한 한 줄
+    if ((Meta.data.deathStreak || 0) >= 2 && !(Meta.data.opts && Meta.data.opts.grace)) {
+      ctx.font = '13px Galmuri11, monospace';
+      ctx.fillStyle = '#c9b8e8';
+      ctx.fillText('힘겹다면 — 설정(O)의 「망자의 가호」가 함께 싸운다', Renderer.W / 2, 436);
+    }
     this._drawRunTag(ctx, game, 448);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
@@ -2101,6 +2107,7 @@ const HUD = {
       ['화면 섬광', triLbl(o.flash) + '  (광과민성 배려)'],
       ['전체화면', fsOn ? '켬' : '끔'],
       ['죽음 연출 (고어)', (o.gore ?? 1) <= 0 ? '끔' : (o.gore ?? 1) < 1 ? '약하게' : '진하게'],
+      ['망자의 가호 (어시스트)', (o.grace ?? 0) <= 0 ? '끔' : (o.grace ?? 0) < 1 ? '가호 — 2 이상 피해 -1' : '비호 — 가호 + 런당 부활 1회'],
     ];
     const ry0 = py + 92, rh = 40;
     rows.forEach(([name, val], i) => {

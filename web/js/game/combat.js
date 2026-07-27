@@ -737,6 +737,9 @@ const GameCombat = {
     // 위협 스케일 (v141, 실플레이 제보 "갈수록 쉬워진다"): 적 피해가 층과 함께 오른다 —
     // 잡몹 접촉 1이 끝까지 1이면, 커진 최대 HP·회복 앞에서 위협이 소멸한다
     dmg += Dungeon.floor >= 31 ? 2 : Dungeon.floor >= 16 ? 1 : 0;
+    // 망자의 가호 (v145, 선택형 어시스트 — Hades God Mode 문법): 2 이상 피해 -1.
+    // 실력의 벽을 낮추되 1뎀 잡몹 구간은 그대로 — 긴장의 최저선은 지킨다
+    if ((Meta.data.opts && Meta.data.opts.grace) >= 0.5 && dmg >= 2) dmg -= 1;
     this._runHurts = (this._runHurts || 0) + 1; // 플레이 리포트 (v144): 런당 피격 집계
     p.hp -= dmg;
     p.hurtPoseT = 0.32; // 피격 스프라이트 — 젖혀진 자세로 "맞았다"를 몸으로 보여준다
@@ -811,6 +814,16 @@ const GameCombat = {
         p.kbx = p.kby = 0;
         this.banner = { text: '♻ 부활 (테스트 모드)', life: 1.2, maxLife: 1.2, color: '#5ce0e6' };
         Particles.burst(p.x, p.y, { count: 16, colors: ['#5ce0e6', '#a9fff7'], speed: 160, life: 0.5, size: 3 });
+        return;
+      }
+      // 망자의 가호 · 비호 (v145): 런당 1회 — 완전한 죽음 직전에 일으켜 세운다 (유물 부활과 별개·중첩)
+      if ((Meta.data.opts && Meta.data.opts.grace) >= 1 && !this._graceRevived) {
+        this._graceRevived = true;
+        p.hp = 2;
+        p.invuln = 2.5;
+        this.banner = { text: '망자의 가호 — 아직 쓰러질 때가 아니다', life: 2.2, maxLife: 2.2, color: '#c9b8e8' };
+        AudioSys.levelup();
+        Particles.burst(p.x, p.y, { count: 24, colors: ['#c9b8e8', '#9a9488', '#ffffff'], speed: 200, life: 0.7, size: 3, gravity: -120 });
         return;
       }
       // 불사조 깃털: 1회 부활
