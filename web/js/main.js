@@ -185,6 +185,9 @@ const Game = {
     this.bossRush = false; // 보스 러시는 startBossRush()로만
     this.deathInfo = null;
     this._camp = null; // 모닥불 대화 — 다음 거점 방문 때 새 대화
+    // 온보딩 (v139): 생애 첫 런만 — 걷기→베기→대시 순서로 몸을 깨운다
+    this._obHints = Meta.data.runs === 0 && Meta.data.wins === 0;
+    this._obMoved = false; this._obAtk = false; this._obDash = false;
     this._lastHurtBy = null;
     this.slowmoT = 0; // 완벽 회피 슬로모
     this._roomMod = null;
