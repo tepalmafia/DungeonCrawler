@@ -153,7 +153,12 @@ const GameCombat = {
     if (e.status && e.status.burn > 0 && this.player && this.player.rflags.brand) dmg = Math.round(dmg * 1.25); // 낙인 인두
     if (e.status && e.status.shock > 0 && this.player && this.player.rflags.gallows) dmg = Math.round(dmg * 1.35); // 교수대의 밧줄
     if (e._markUntil && this.time < e._markUntil) dmg = Math.round(dmg * 1.25); // 사냥 표식 (계승)
-    if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.012))); // v141: 1.5→1.2% — 보스 순삭 제보
+    // 보스 버스트 상한 층 계단 (v143, "고층도 일관되게"): 상한이 %라 최소 타수는 층 무관 일정하지만,
+    // 고층 빌드는 초당 타격 횟수가 수 배라 실시간 TTK가 고층일수록 짧아진다 — 상한을 조여 보정
+    if (e.isBoss) {
+      const capPct = Dungeon.floor >= 31 ? 0.008 : Dungeon.floor >= 16 ? 0.010 : 0.012; // 최소 83/100/125타
+      dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * capPct)));
+    }
     // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
     if (crit && !e.isBoss && this.player && this.player.rflags.stormcrit && Math.random() < 0.2) {
       e.status.shock = Math.max(e.status.shock || 0, 2);
