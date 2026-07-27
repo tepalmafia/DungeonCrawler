@@ -628,7 +628,10 @@ function createPlayer(x, y, classId = 'knight') {
           }
         }
       } else if (len > 0) {
-        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1);
+        // 클리어 가속 (v140, 몰입 계측 처방): 방을 비운 순간부터 다음 방까지 +20% —
+        // 로밍 타임(마도사 28.8% 실측)이 몰입을 끊는 유일한 구간이었다
+        const clearMul = (typeof Game !== 'undefined' && Game.roomCleared) ? 1.2 : 1;
+        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1) * clearMul;
         World.moveEntity(this, mx * spd * dt, my * spd * dt);
       }
 
