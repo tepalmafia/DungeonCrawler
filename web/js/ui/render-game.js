@@ -5,12 +5,14 @@ const GameRender = {
   // kind: poison(독 웅덩이) fire(불길) ice(빙판) shock(감전) smoke(연막)
   _drawGroundPatch(ctx, x, y, r, kind, alpha, t, seed) {
     if (alpha <= 0.01) return;
-    const N = 10;
+    // v135: 테두리 제거 — 림 스트로크를 없애고 가장자리를 그라데이션 페이드로.
+    // 10각 폴리곤이 '각진 테두리'로 읽히던 것도 24분할로 완화 (실플레이 제보)
+    const N = 24;
     const blob = (rad, wob) => {
       ctx.beginPath();
       for (let i = 0; i <= N; i++) {
         const a = (i / N) * Math.PI * 2;
-        const w = 1 - wob + wob * (0.5 + 0.5 * Math.sin(seed * 3.7 + i * 2.13));
+        const w = 1 - wob + wob * (0.5 + 0.5 * Math.sin(seed * 3.7 + a * 3.4));
         const rr = rad * w;
         const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr * 0.92; // 살짝 눌린 웅덩이 원근
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
@@ -19,18 +21,15 @@ const GameRender = {
     };
     ctx.save();
     if (kind === 'poison') {
-      // 독 웅덩이: 어두운 심연 + 밝은 유막 가장자리 + 떠오르는 기포
+      // 독 웅덩이: 어두운 심연 → 가장자리로 녹아 사라지는 독기 + 떠오르는 기포
       ctx.globalAlpha = alpha;
       const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r);
       g.addColorStop(0, 'rgba(28,52,24,0.95)');
-      g.addColorStop(0.7, 'rgba(58,96,44,0.85)');
-      g.addColorStop(1, 'rgba(122,176,76,0.75)');
+      g.addColorStop(0.62, 'rgba(58,96,44,0.85)');
+      g.addColorStop(0.86, 'rgba(122,176,76,0.5)');
+      g.addColorStop(1, 'rgba(122,176,76,0)');
       ctx.fillStyle = g;
       blob(r, 0.14); ctx.fill();
-      ctx.globalAlpha = alpha * 0.9;
-      ctx.strokeStyle = '#8fd460';
-      ctx.lineWidth = 1.5;
-      blob(r * 0.97, 0.14); ctx.stroke();
       // 기포: 자리에서 커졌다 터진다
       for (let i = 0; i < 4; i++) {
         const ph = ((t * (0.5 + (i % 3) * 0.2) + i * 0.31 + seed * 0.13) % 1);
@@ -43,19 +42,15 @@ const GameRender = {
         ctx.beginPath(); ctx.arc(bx, by, 1.5 + ph * 3.5, 0, Math.PI * 2); ctx.stroke();
       }
     } else if (kind === 'fire') {
-      // 불길: 그을린 바닥 + 일렁이는 불꽃 혀 + 잔불
+      // 불길: 그을린 바닥이 가장자리로 스러진다 + 일렁이는 불꽃 혀 + 잔불
       ctx.globalAlpha = alpha * 0.9;
       const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
       g.addColorStop(0, 'rgba(90,30,10,0.9)');
-      g.addColorStop(0.6, 'rgba(160,60,20,0.7)');
-      g.addColorStop(1, 'rgba(40,18,10,0.55)');
+      g.addColorStop(0.55, 'rgba(160,60,20,0.7)');
+      g.addColorStop(0.85, 'rgba(40,18,10,0.4)');
+      g.addColorStop(1, 'rgba(40,18,10,0)');
       ctx.fillStyle = g;
       blob(r, 0.12); ctx.fill();
-      // 그을음 림 — 불길의 유기적 가장자리
-      ctx.globalAlpha = alpha * 0.6;
-      ctx.strokeStyle = '#b0501c';
-      ctx.lineWidth = 1.5;
-      blob(r * 0.98, 0.12); ctx.stroke();
       for (let i = 0; i < 6; i++) {
         const fa = seed * 2.1 + i * 1.05;
         const fx = x + Math.cos(fa) * r * (0.2 + (i % 3) * 0.22);
@@ -78,11 +73,12 @@ const GameRender = {
         ctx.fillRect(x + Math.cos(ea) * r * 0.7, y + Math.sin(ea) * r * 0.6, 2, 2);
       }
     } else if (kind === 'ice') {
-      // 빙판: 창백한 판 + 방사 균열 + 반짝임
+      // 빙판: 창백한 판 + 방사 균열 + 반짝임 — 가장자리는 서리로 녹는다
       ctx.globalAlpha = alpha;
       const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
       g.addColorStop(0, 'rgba(200,228,240,0.75)');
-      g.addColorStop(1, 'rgba(120,170,200,0.55)');
+      g.addColorStop(0.8, 'rgba(120,170,200,0.45)');
+      g.addColorStop(1, 'rgba(120,170,200,0)');
       ctx.fillStyle = g;
       blob(r, 0.1); ctx.fill();
       ctx.globalAlpha = alpha * 0.85;
@@ -110,14 +106,14 @@ const GameRender = {
         ctx.beginPath(); ctx.arc(sx, sy, r * (0.4 + (i % 3) * 0.14), 0, Math.PI * 2); ctx.fill();
       }
     } else {
-      // 감전: 옅은 원반 + 튀는 번개 아크
+      // 감전: 가장자리로 잦아드는 대전(帶電) 원반 + 튀는 번개 아크
       ctx.globalAlpha = alpha * 0.55;
-      ctx.fillStyle = 'rgba(255,216,102,0.5)';
+      const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+      g.addColorStop(0, 'rgba(255,216,102,0.55)');
+      g.addColorStop(0.7, 'rgba(255,216,102,0.4)');
+      g.addColorStop(1, 'rgba(255,216,102,0)');
+      ctx.fillStyle = g;
       blob(r, 0.08); ctx.fill();
-      ctx.globalAlpha = alpha * 0.45;
-      ctx.strokeStyle = 'rgba(255,216,102,0.8)';
-      ctx.lineWidth = 1;
-      blob(r * 0.98, 0.08); ctx.stroke();
       ctx.lineWidth = 1.5;
       for (let i = 0; i < 3; i++) {
         const pulse = (Math.sin(t * 17 + i * 2.6 + seed) + 1) / 2;
