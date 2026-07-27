@@ -596,7 +596,8 @@ const GameCombat = {
     const bossFight = this.enemies.some((b) => b.isBoss && !b.dead) ? 0.5 : 1;
     // 행운(×2 중첩)·클로버(×1.8)가 겹치면 ×7.2까지 폭주 — 총 배율 상한 ×3
     const luckMul = Math.min(3, p.luckMul);
-    let heartChance = 0.045 * floorDecay * bossFight * luckMul * (this.pacts.heal ? 0.5 : 1) *
+    // v147: 0.045→0.032 — 위협 상향과 세트. 회복 공급이 그대로면 피해 유입 증가가 하트로 상쇄된다
+    let heartChance = 0.032 * floorDecay * bossFight * luckMul * (this.pacts.heal ? 0.5 : 1) *
       ((this.sects && this.sects.blood >= 2) ? 1.25 : 1); // 혈맹 2단: 하트 드랍 +25%
     if (p.flags.bloodlust) heartChance += 0.12;
     if (p.hp >= p.maxHp) heartChance *= 0.35; // 풀피면 감쇠 — 못 먹는 하트가 바닥에 쌓이는 낭비 방지
@@ -734,9 +735,11 @@ const GameCombat = {
       return;
     }
 
-    // 위협 스케일 (v141, 실플레이 제보 "갈수록 쉬워진다"): 적 피해가 층과 함께 오른다 —
-    // 잡몹 접촉 1이 끝까지 1이면, 커진 최대 HP·회복 앞에서 위협이 소멸한다
-    dmg += Dungeon.floor >= 31 ? 2 : Dungeon.floor >= 16 ? 1 : 0;
+    // 위협 스케일 (v141→v147, 실플레이 재제보 "아직도 너무 쉽다"): 적 피해가 층과 함께 오른다 —
+    // 잡몹 접촉 1이 끝까지 1이면, 커진 최대 HP·회복 앞에서 위협이 소멸한다.
+    // v147: 계단을 8층부터 시작 — 1막 후반(8~10층)이 이미 '죽을 수 있는 구간'이어야
+    // 성장 스노볼(특성 10장+)을 위협이 따라잡는다. 16+/31+도 한 단씩 상향
+    dmg += Dungeon.floor >= 31 ? 3 : Dungeon.floor >= 16 ? 2 : Dungeon.floor >= 8 ? 1 : 0;
     // 망자의 가호 (v145, 선택형 어시스트 — Hades God Mode 문법): 2 이상 피해 -1.
     // 실력의 벽을 낮추되 1뎀 잡몹 구간은 그대로 — 긴장의 최저선은 지킨다
     if ((Meta.data.opts && Meta.data.opts.grace) >= 0.5 && dmg >= 2) dmg -= 1;
@@ -745,8 +748,10 @@ const GameCombat = {
     p.hurtPoseT = 0.32; // 피격 스프라이트 — 젖혀진 자세로 "맞았다"를 몸으로 보여준다
     // 고어 (기획 §7): 나도 피를 흘린다 — 후퇴선이 핏자국으로 남는다
     World.stampBlood(p.x + (Math.random() - 0.5) * 10, p.y + (Math.random() - 0.5) * 10, 3 + Math.random() * 3, 0.4);
-    // 검사 1.2(근접 리스크 보상) / 궁수 1.05(밴드 계측: 열기0 사망이 검사의 120% — HP4 연쇄 피격 완화) / 마도사 0.9(밴드 내)
-    p.invuln = (p.classId === 'knight' ? 1.2 : p.classId === 'archer' ? 1.05 : 0.9) +
+    // 검사 0.95(근접 리스크 보상) / 궁수 0.9(HP4 연쇄 피격 완화) / 마도사 0.75
+    // v147: 전 직업 -0.15~0.25 단축 — 피격 후 1.2초 무적은 난전에서도 피해 유입을 초당 0.8로
+    // 봉인해 죽음을 수학적으로 지웠다 (실플레이 재제보 "아직도 너무 쉽다"의 최대 사인)
+    p.invuln = (p.classId === 'knight' ? 0.95 : p.classId === 'archer' ? 0.9 : 0.75) +
       ((this.sects && this.sects.guard >= 2) ? 0.25 : 0); // 수호 2단: 피격 후 무적 연장
     p.kbx = dir.x * kb;
     p.kby = dir.y * kb;

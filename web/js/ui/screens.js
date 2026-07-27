@@ -86,12 +86,12 @@ const GameScreens = {
     }
   },
 
-  // ── 보스 직행 테스트 스케일링 — 층 기준 정상 진행 빌드 근사 (계측 곡선: Lv ≈ 층×1.5+3) ──
+  // ── 보스 직행 테스트 스케일링 — 층 기준 정상 진행 빌드 근사 (계측 곡선: Lv ≈ 층×1.3+3, v147 XP 감속 반영) ──
   // 이미 그 수준 이상이면 건드리지 않는다 (정상 진행 중 B를 눌러도 빌드가 뒤로 가지 않게)
   _cheatScaleToFloor() {
     const p = this.player;
     const f = Dungeon.floor;
-    const targetLv = Math.round(f * 1.5) + 3;
+    const targetLv = Math.round(f * 1.3) + 3;
     if (!p || this.level >= targetLv) return;
     // 레벨·체력 곡선
     this.level = targetLv;

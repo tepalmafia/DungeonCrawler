@@ -80,7 +80,9 @@ const GameRewards = {
         hurts: this._runHurts || 0,
         bosses: this._runBossLog || [],
         grace: (Meta.data.opts && Meta.data.opts.grace) || 0, // 리포트 해석용 — 가호 킨 런은 따로 읽는다
-        bot: !!(typeof Bot !== 'undefined' && Bot.enabled) || this.testMode, // 봇/치트 런 구분
+        bot: !!(typeof Bot !== 'undefined' && Bot.enabled), // 봇 런: 리포트에서 제외
+        cheat: !!this.testMode, // v147: 테스트모드 수동 런은 라벨만 붙여 리포트에 포함 — 사장의 주력 테스트 동선(B 보스 직행)이 데이터가 되도록
+        quit: !!this.gaveUp, // v147: 포기 런 구분 — '사망(?)'으로 찍히던 가독성 버그
       });
       while (log.length > 15) log.shift();
       Meta.data.deathStreak = victory ? 0 : (Meta.data.deathStreak || 0) + 1; // 가호 힌트용 (v145)
@@ -252,7 +254,7 @@ const GameRewards = {
       this.xp -= this.xpNext;
       this.level++;
       // 완만한 커브: 초반 과속을 막고 심층(6~10층)에서도 성장이 이어지게 한다
-      this.xpNext = Math.round(this.xpNext * 1.27); // 1.24→1.27: 중반 이후 레벨 폭주 완화
+      this.xpNext = Math.round(this.xpNext * 1.29); // 1.27→1.29 (v147): 중반 이후 레벨 폭주 추가 완화
       this.pendingChoices++;
       // 찬탈자의 서명 (v128): 성장이 곧 생존 — 레벨업 회복 + 5레벨마다 최대 HP
       const up = this.player;

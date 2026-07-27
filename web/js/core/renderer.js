@@ -51,6 +51,12 @@ const Renderer = {
 
   // 스프라이트를 중심 기준으로 그린다. squash: 스쿼시&스트레치, shadow: 발밑 그림자
   drawSprite(img, x, y, { flip = false, alpha = 1, squashX = 1, squashY = 1, rot = 0, scale = SCALE, shadow = false } = {}) {
+    // 프레임 누락 방어 (v147): undefined가 오면 이 프레임의 렌더 전체가 예외로 죽는다 (소크에서 간헐 관측).
+    // 스킵하고 호출 스택을 기록해 원인 스프라이트를 추적한다
+    if (!img) {
+      if (!window.__spriteErr) { window.__spriteErr = new Error().stack; console.warn('drawSprite: undefined img\n', window.__spriteErr); }
+      return;
+    }
     const ctx = this.ctx;
     const w = img.width * scale * squashX;
     const h = img.height * scale * squashY;

@@ -70,6 +70,8 @@ const Game = {
 
   // ── 플레이 리포트 (v144): 실플레이가 곧 계측 — 거점 F9로 복사해 붙여넣으면 밸런스 조정에 쓴다 ──
   copyPlayReport() {
+    // v147: 봇 런만 제외 — 테스트모드 수동 런(B 보스 직행 등)은 '치트' 라벨로 포함한다.
+    // 사장의 주력 테스트 동선이 테스트모드라, 전부 거르면 리포트가 텅 빈다 (실플레이 제보)
     const log = (Meta.data.playLog || []).filter((r) => !r.bot);
     if (!log.length) {
       this.banner = { text: '기록이 아직 없다 — 한 판 다녀오면 쌓인다', life: 2.0, maxLife: 2.0, color: '#9aa0b4' };
@@ -81,11 +83,11 @@ const Game = {
     let hurts = 0;
     for (const r of log) {
       hurts += r.hurts || 0;
-      if (!r.win) {
+      if (!r.win && !r.quit && !r.cheat) { // 사망 통계는 정상 런만 — 포기·치트는 오염원
         deathFloors[r.floor] = (deathFloors[r.floor] || 0) + 1;
         if (r.deathBy) causes[r.deathBy] = (causes[r.deathBy] || 0) + 1;
       }
-      for (const b of r.bosses || []) (bossLines[b.f] = bossLines[b.f] || []).push(b.t);
+      for (const b of r.bosses || []) (bossLines[b.f] = bossLines[b.f] || []).push(b.t + (r.cheat ? 'c' : ''));
     }
     const top = (o, suf) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([k, v]) => `${k}${suf}×${v}`).join('  ') || '없음';
@@ -93,11 +95,11 @@ const Game = {
       `[무덤에서 왕좌까지 — 플레이 리포트] 런 ${log.length} · 승리 ${wins} · 최고 ${best}층`,
       `사망 층 분포: ${top(deathFloors, '층')}`,
       `사망 원인 TOP: ${top(causes, '')}`,
-      `보스 처치 (층: 소요초): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
+      `보스 처치 (층: 소요초, c=치트런): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
         .map(([f, ts]) => `${f}층 ${ts.join('/')}s`).join(' · ') || '없음'}`,
       `런당 피격 평균: ${(hurts / log.length).toFixed(1)}`,
       '── 최근 런 ──',
-      ...log.slice(-6).map((r) => `${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` + (r.heat ? ` · 현상금${r.heat}` : '')),
+      ...log.slice(-6).map((r) => `${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` + (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '')),
     ].join('\n');
     console.log(text);
     this.banner = { text: '📋 플레이 리포트 복사됨 — 그대로 붙여넣어 주세요', life: 2.6, maxLife: 2.6, color: '#2ec4b6' };
@@ -253,7 +255,7 @@ const Game = {
     this.hurtFlash = 0;
     this.xp = 0;
     this.level = 1;
-    this.xpNext = 40; // 36→40: 레벨 유입 감속 (실플레이: 특성이 너무 빨리 쌓여 금방 쉬워진다)
+    this.xpNext = 46; // 40→46 (v147): 보상 인플레 절제 — 1막 종료 기대 Lv.18→16, 특성 2장 감소
     this.pendingChoices = 0;
     this.traitCards = [];
     this.relicCards = [];

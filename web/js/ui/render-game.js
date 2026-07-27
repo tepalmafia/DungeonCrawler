@@ -681,7 +681,9 @@ const GameRender = {
     drawables.sort((a, b) => a.y - b.y);
     for (const d of drawables) {
       // 등장 연출: 땅에서 솟아오르며 실체화
-      if (d.spawnT > 0) {
+      // v147: 스프라이트 없는 개체(영혼 구슬 등 sprite:null) 방어 — 벽 겹침 재배치(play.js)가
+      // spawnT를 재부여하면 Sprites[null]=undefined를 그리려다 렌더 프레임 전체가 죽었다 (소크 간헐 크래시)
+      if (d.spawnT > 0 && (d.isBoss ? d.def.sprite : d.sprite)) {
         const k = 1 - d.spawnT / (d.isBoss ? 0.6 : 0.35);
         const key = d.isBoss ? d.def.sprite : d.sprite;
         const img = d.elite ? Sprites.tint(Sprites[key]) : Sprites[key];
