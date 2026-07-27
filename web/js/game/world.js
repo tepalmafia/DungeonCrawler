@@ -1735,15 +1735,20 @@ const World = {
     }
 
     this._floorCanvas = c;
+    // 고어 레이어 (v136): 혈흔·잔해는 바닥과 분리된 캔버스에 굽는다 — 시간이 지나면 마르며 사라진다
+    const gc = document.createElement('canvas');
+    gc.width = c.width; gc.height = c.height;
+    this._goreCanvas = gc;
+    this._goreFadeT = 0;
   },
 
-  // ── 혈흔 스탬프 (고어, 기획 §7): 바닥 프리렌더에 직접 굽는다 — 프레임 비용 0.
-  // 방을 나갈 때까지 지워지지 않는다: 전투가 끝난 방은 학살의 기록이 된다
+  // ── 혈흔 스탬프 (고어, 기획 §7): 고어 레이어에 굽는다 — 프레임 비용 0.
+  // v136: 영구 잔존 → 서서히 마르며 사라진다 (오랜 전투에서 바닥이 학살 지도가 되는 문제)
   stampBlood(x, y, r = 8, alpha = 0.5, shadesIn = null) {
-    if (!this._floorCanvas) return;
+    if (!this._goreCanvas) return;
     if ((Meta.data.opts && Meta.data.opts.gore) <= 0) return; // 고어 끔 — 흔적을 남기지 않는다
     if (this.isSolidAt(x, y)) return; // 벽 위에는 안 굽는다
-    const ctx = this._floorCanvas.getContext('2d');
+    const ctx = this._goreCanvas.getContext('2d');
     ctx.save();
     ctx.globalAlpha = alpha;
     const shades = shadesIn || ['#4a0d12', '#5a1016', '#3a0a0e', '#66131b'];
@@ -1762,11 +1767,11 @@ const World = {
     ctx.restore();
   },
 
-  // 절단 조각 베이크 (v126): 멈춘 조각을 바닥 캔버스에 굽는다 — 프레임 비용 0으로 방에 남는다
+  // 절단 조각 베이크 (v126): 멈춘 조각을 고어 레이어에 굽는다 — 프레임 비용 0, 시간이 지나면 스러진다
   stampImage(img, x, y, rot = 0, alpha = 0.88) {
-    if (!this._floorCanvas || !img) return;
+    if (!this._goreCanvas || !img) return;
     if (this.isSolidAt(x, y)) return;
-    const ctx = this._floorCanvas.getContext('2d');
+    const ctx = this._goreCanvas.getContext('2d');
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(x, y - this.offsetY);
@@ -1775,8 +1780,25 @@ const World = {
     ctx.restore();
   },
 
+  // 고어 풍화 (v136): 0.5초마다 알파를 5%씩 깎는다 — 핏자국이 마르고 잔해가 삭는다.
+  // 신선한 흔적은 또렷하고(3초 후에도 74%), 오랜 전투의 누적은 스스로 정리된다 (30초 ≈ 4%)
+  tickGore(dt) {
+    if (!this._goreCanvas) return;
+    this._goreFadeT = (this._goreFadeT || 0) + dt;
+    if (this._goreFadeT < 0.5) return;
+    this._goreFadeT -= 0.5;
+    const ctx = this._goreCanvas.getContext('2d');
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = 0.05;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, this._goreCanvas.width, this._goreCanvas.height);
+    ctx.restore();
+  },
+
   draw(ctx, animT = 0) {
     ctx.drawImage(this._floorCanvas, 0, this.offsetY);
+    if (this._goreCanvas) ctx.drawImage(this._goreCanvas, 0, this.offsetY);
 
     // 횃불: 깜빡이는 불꽃 + 따뜻한 빛 번짐
     for (const t of this.torches || []) {
