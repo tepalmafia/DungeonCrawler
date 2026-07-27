@@ -644,7 +644,11 @@ function createBoss(floor, x, y) {
           // 원거리 농성 시 공격 템포 상승 — 거리는 안전이 아니라 다른 종류의 압박이 된다
           // v147: 0.9/0.6→0.55/0.35 — 실플레이 재제보 "보스전이 만피로 끝난다". 초식 사이 휴지가
           // 길어 위협이 단발로 끊긴다. 예고(windup)는 그대로 두고 휴지만 줄여 공정한 밀도를 만든다
-          const wait = (this.phase === 2 ? 0.35 : 0.55) * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1);
+          // v149: 1~3층 유예 0.8/0.5 — F9 실측: 기사(근접)가 1~2층 보스에 3전 3사 (피격 7/7/8, 20초 내).
+          // 다른 난이도 축(보스 1뎀·전역 스케일 0)은 모두 1~3층 계단이 있는데 템포만 일괄이었다.
+          // 근접 직업은 템포 상향을 정면으로 받는다 — 온보딩 저점(첫 보스)은 배울 시간을 준다
+          const base = Dungeon.floor <= 3 ? (this.phase === 2 ? 0.5 : 0.8) : (this.phase === 2 ? 0.35 : 0.55);
+          const wait = base * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1);
           if (this.stateT >= wait) {
             // 인장기 (왕의 인장기): HP 75% 이하 첫 발동, 이후 막별 주기 (3막 12s / 4막 10s / 5막 8s)
             if (this.def.sig && !(this.def.sigP3 && !this._onslaught) &&
