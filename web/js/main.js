@@ -99,9 +99,12 @@ const Game = {
       '── 최근 런 ──',
       ...log.slice(-6).map((r) => `${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` + (r.heat ? ` · 현상금${r.heat}` : '')),
     ].join('\n');
-    try { navigator.clipboard.writeText(text); } catch (e) { /* 클립보드 불가 환경 — 콘솔로 */ }
     console.log(text);
     this.banner = { text: '📋 플레이 리포트 복사됨 — 그대로 붙여넣어 주세요', life: 2.6, maxLife: 2.6, color: '#2ec4b6' };
+    const fail = () => { this.banner = { text: '클립보드 복사 실패 — F12 콘솔에 리포트가 있다', life: 3.2, maxLife: 3.2, color: '#f7b32b' }; };
+    try {
+      navigator.clipboard.writeText(text).catch(fail); // 비 https·권한 거부 환경 — 콘솔 안내로 전환
+    } catch (e) { fail(); }
     AudioSys.pickup();
   },
 
@@ -618,6 +621,11 @@ const Game = {
     if (Bot.enabled) Bot.update(this, dt);
 
     if (this.state === 'hub') {
+      // 거점 배너 감쇠 — 플레이 틱과 별개 경로 (F9 리포트 배너가 영영 안 사라지던/안 보이던 문제)
+      if (this.banner) {
+        this.banner.life -= dt;
+        if (this.banner.life <= 0) this.banner = null;
+      }
       this._tickHub();
       return;
     }
