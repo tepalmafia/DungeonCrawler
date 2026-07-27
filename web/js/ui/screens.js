@@ -242,6 +242,7 @@ const GameScreens = {
 
     // 오늘의 탑 (D): 날짜 기반 고정 시드 — 오늘은 모두가 같은 던전에 도전한다
     if (Input.pressed('KeyD')) this.startDaily();
+    if (Input.pressed('F9')) this.copyPlayReport(); // 플레이 리포트 (v144)
     // 보스 러시 (B): 첫 정복 후 해금
     if (Input.pressed('KeyB') && Meta.data.wins > 0) { this.clearRunSave(); this.startBossRush(); }
     // 왕도 직행 (G): 왕좌 정복 후 해금 — 3막부터 1시간 안에 왕까지

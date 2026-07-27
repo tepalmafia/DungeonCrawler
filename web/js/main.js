@@ -68,6 +68,43 @@ const Game = {
   heat: 0,
   paused: false,
 
+  // ── 플레이 리포트 (v144): 실플레이가 곧 계측 — 거점 F9로 복사해 붙여넣으면 밸런스 조정에 쓴다 ──
+  copyPlayReport() {
+    const log = (Meta.data.playLog || []).filter((r) => !r.bot);
+    if (!log.length) {
+      this.banner = { text: '기록이 아직 없다 — 한 판 다녀오면 쌓인다', life: 2.0, maxLife: 2.0, color: '#9aa0b4' };
+      return;
+    }
+    const wins = log.filter((r) => r.win).length;
+    const best = Math.max(...log.map((r) => r.floor));
+    const deathFloors = {}, causes = {}, bossLines = {};
+    let hurts = 0;
+    for (const r of log) {
+      hurts += r.hurts || 0;
+      if (!r.win) {
+        deathFloors[r.floor] = (deathFloors[r.floor] || 0) + 1;
+        if (r.deathBy) causes[r.deathBy] = (causes[r.deathBy] || 0) + 1;
+      }
+      for (const b of r.bosses || []) (bossLines[b.f] = bossLines[b.f] || []).push(b.t);
+    }
+    const top = (o, suf) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([k, v]) => `${k}${suf}×${v}`).join('  ') || '없음';
+    const text = [
+      `[무덤에서 왕좌까지 — 플레이 리포트] 런 ${log.length} · 승리 ${wins} · 최고 ${best}층`,
+      `사망 층 분포: ${top(deathFloors, '층')}`,
+      `사망 원인 TOP: ${top(causes, '')}`,
+      `보스 처치 (층: 소요초): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
+        .map(([f, ts]) => `${f}층 ${ts.join('/')}s`).join(' · ') || '없음'}`,
+      `런당 피격 평균: ${(hurts / log.length).toFixed(1)}`,
+      '── 최근 런 ──',
+      ...log.slice(-6).map((r) => `${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` + (r.heat ? ` · 현상금${r.heat}` : '')),
+    ].join('\n');
+    try { navigator.clipboard.writeText(text); } catch (e) { /* 클립보드 불가 환경 — 콘솔로 */ }
+    console.log(text);
+    this.banner = { text: '📋 플레이 리포트 복사됨 — 그대로 붙여넣어 주세요', life: 2.6, maxLife: 2.6, color: '#2ec4b6' };
+    AudioSys.pickup();
+  },
+
   // 반응 학습 (완성도 점검 ②): 각 교차 반응의 첫 발동 순간에 1회 설명 —
   // 계측 결과 반응이 30분에 7회뿐(과부하 0회) = 시스템이 묻혀 있었다. 발견을 가르쳐야 쓴다
   teachReaction(id, text) {
@@ -186,6 +223,7 @@ const Game = {
     this.bossRush = false; // 보스 러시는 startBossRush()로만
     this.deathInfo = null;
     this._camp = null; // 모닥불 대화 — 다음 거점 방문 때 새 대화
+    this._runHurts = 0; this._runBossLog = []; // 플레이 리포트 (v144) 런 집계 리셋
     // 온보딩 (v139): 생애 첫 런만 — 걷기→베기→대시 순서로 몸을 깨운다
     this._obHints = Meta.data.runs === 0 && Meta.data.wins === 0;
     this._obMoved = false; this._obAtk = false; this._obDash = false;

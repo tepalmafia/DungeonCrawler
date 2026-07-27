@@ -69,6 +69,20 @@ const GameRewards = {
     this.runEnded = true;
     // 사망 리포트: 직전 런과의 비교 기준 저장 (덮어쓰기 전에 백업)
     this.prevRun = Meta.data.lastRun || null;
+    // 플레이 리포트 (v144): 런 요약 축적 (최근 15런) — 거점 F9로 복사해 밸런스 캘리브레이션에 쓴다
+    {
+      const log = Meta.data.playLog = Meta.data.playLog || [];
+      log.push({
+        cls: this.player.classId, floor: Dungeon.floor, room: Dungeon.roomIndex,
+        lv: this.level, kills: this.kills, win: !!victory, heat: this.heat,
+        min: +(this.time / 60).toFixed(1),
+        deathBy: victory ? null : (this.deathInfo ? this.deathInfo.src : this._lastHurtBy) || null,
+        hurts: this._runHurts || 0,
+        bosses: this._runBossLog || [],
+        bot: !!(typeof Bot !== 'undefined' && Bot.enabled) || this.testMode, // 봇/치트 런 구분
+      });
+      while (log.length > 15) log.shift();
+    }
     Meta.data.lastRun = { floor: Dungeon.floor, level: this.level, kills: this.kills, victory: !!victory };
     // 보스 러시 기록: 도달 군주 수 + 최속 완주
     if (this.bossRush) {

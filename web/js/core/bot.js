@@ -434,8 +434,9 @@ const Bot = {
       // 예고 회피: 방향이 굳은 급습 예고(거머리 말기·박쥐 조준·광전사 포효·원혼 실체화)가
       // 가까이 보이면 궤도에서 옆으로 비켜선다 — 인간이 텔레그래프를 읽는 행동의 근사
       const tele = game.enemies.find((e) => !e.dead && !e.phased &&
-        ((e.coilT > 0) || (e.aimT > 0) || (e.roarT > 0) || (e.windT > 0)) &&
-        Math.hypot(e.x - p.x, e.y - p.y) < 260);
+        ((e.coilT > 0) || (e.aimT > 0) || (e.roarT > 0) || (e.windT > 0) ||
+         (e.isBoss && (e.state === 'windup' || e.state === 'aim'))) && // v144: 보스 예고 자세도 읽는다
+        Math.hypot(e.x - p.x, e.y - p.y) < 300);
       if (!tele) this._sideDir = null;
       if (tele) {
         const td = Math.hypot(tele.x - p.x, tele.y - p.y) || 1;
@@ -468,19 +469,21 @@ const Bot = {
       } else {
         // 근접: 히트&런 — 준비되면 파고들어 베고, 쿨 중엔 몸을 뺀다
         this._watchGoal(target, d, dt, p);
+        // v144: 안전 반경 — 보스는 몸이 커서 고정 62px로는 접촉뎀 링 안에 서게 된다
+        const safeR = target.r + p.r + (target.isBoss ? 30 : 10);
         if (p.attackCd <= 0) {
           this._move(p, target.x, target.y);
-          if (d < 80) {
+          if (d < Math.max(80, safeR + 42)) {
             p.facing = { x: (target.x - p.x) / d, y: (target.y - p.y) / d };
             Input.justPressed['KeyJ'] = true; Bot.stats.attacks++;
           }
-        } else if (d < 62) {
+        } else if (d < safeR + 26) {
           this._move(p, p.x * 2 - target.x, p.y * 2 - target.y);
         } else {
           this._releaseKeys();
         }
         // 몸이 겹치면 대시로 이탈
-        if (d < 32 && p.dashCharges >= 1) this._dash();
+        if (d < target.r + p.r + 6 && p.dashCharges >= 1) this._dash();
       }
     } else {
       // 적 없음: 상호작용(상자/모닥불) → 문
@@ -654,6 +657,20 @@ const Bot = {
         }
       }
     }
+    // 보스 돌진/스윕 (v144, 사인 계측: 보스전 피격의 54%가 접촉): 경로에서 수직 이탈 + 대시
+    for (const e of game.enemies) {
+      if (!e.isBoss || e.dead) continue;
+      if (e.state === 'charge' || e.state === 'sweep') {
+        const cd2 = e.aimDir || { x: Math.sign(p.x - e.x) || 1, y: 0 };
+        const rx = p.x - e.x, ry = p.y - e.y;
+        const along = rx * cd2.x + ry * cd2.y;
+        const perp = -rx * cd2.y + ry * cd2.x;
+        if (along > -30 && along < 520 && Math.abs(perp) < e.r + 60) {
+          const sg = perp >= 0 ? 1 : -1;
+          return { x: -cd2.y * sg, y: cd2.x * sg, dash: true };
+        }
+      }
+    }
     // 보스 저주 장판: 예고 원 안에 서 있으면 터지기 전에 벗어난다
     for (const e of game.enemies) {
       if (!e.isBoss || e.dead || !e.curses) continue;
@@ -721,7 +738,7 @@ const Bot = {
     for (const a of game.arrows) {
       const d = Math.hypot(p.x - a.x, p.y - a.y);
       const closing = a.dir.x * (p.x - a.x) + a.dir.y * (p.y - a.y) > 0;
-      if (d < 55 && closing && a.dmg > 0) {
+      if (closing && a.dmg > 0 && d < Math.max(70, (a.speed || 250) * 0.33)) { // v144: 탄속 비례 리드
         return { x: -a.dir.y, y: a.dir.x, dash: p.dashCharges >= 1 };
       }
     }

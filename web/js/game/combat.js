@@ -546,6 +546,8 @@ const GameCombat = {
     }
 
     if (e.isBoss) {
+      // 플레이 리포트 (v144): 보스 처치 기록 — 층·소요 시간
+      (this._runBossLog = this._runBossLog || []).push({ f: Dungeon.floor, t: Math.round(e.fightT || 0) });
       this.onBossDead();
       return;
     }
@@ -735,6 +737,7 @@ const GameCombat = {
     // 위협 스케일 (v141, 실플레이 제보 "갈수록 쉬워진다"): 적 피해가 층과 함께 오른다 —
     // 잡몹 접촉 1이 끝까지 1이면, 커진 최대 HP·회복 앞에서 위협이 소멸한다
     dmg += Dungeon.floor >= 31 ? 2 : Dungeon.floor >= 16 ? 1 : 0;
+    this._runHurts = (this._runHurts || 0) + 1; // 플레이 리포트 (v144): 런당 피격 집계
     p.hp -= dmg;
     p.hurtPoseT = 0.32; // 피격 스프라이트 — 젖혀진 자세로 "맞았다"를 몸으로 보여준다
     // 고어 (기획 §7): 나도 피를 흘린다 — 후퇴선이 핏자국으로 남는다
