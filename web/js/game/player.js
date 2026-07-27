@@ -992,7 +992,9 @@ function createPlayer(x, y, classId = 'knight') {
         // — 근접의 리스크를 "잘 싸우면 버틴다"로 보상한다
         if (this.finisherHealCd <= 0 && this.hp < this.maxHp) {
           this.hp++;
-          this.finisherHealCd = 5; // 매트릭스 계측: 검사만 전 열기 목표 초과 — 6은 과했다, 4는 부족했다 (중간값)
+          // v147: 5→8초 — 소크 계측: 27분 런 기준 본능 회복 총량 ~324로, 피격 310회의 피해를
+          // 혼자 상쇄한다 (사망 0의 최대 지분). 위협 상향과 세트로 회복 경제를 적자로 전환
+          this.finisherHealCd = 8;
           Particles.text(this.x, this.y - 26, '전투 본능 +1', { color: '#e43b44', size: 13 });
           AudioSys.pickup();
         }
