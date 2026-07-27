@@ -487,6 +487,31 @@ const HUD = {
             : `⚡ 스킬 진화 ${clsOwned}/3 · Lv.12`,
           cx, r.y + lift + r.h - 44);
       }
+      // 계열 하이라이트 (v137): 이 카드가 길을 진전시킨다 — 임계 직전이면 금테 + 각성 예고
+      if (game.sectPreview && typeof SECTS !== 'undefined') {
+        let sp = null;
+        if (c.tag && SECT_BY_TAG[c.tag]) sp = game.sectPreview(c.tag);
+        else if (c.rarity && c.id) {
+          for (const k of Object.keys(SECTS)) {
+            if (SECTS[k].relics.includes(c.id)) { sp = game.sectPreview(SECTS[k].tag); break; }
+          }
+        }
+        if (sp) {
+          if (sp.crossing) {
+            ctx.save();
+            ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.007) * 0.3;
+            ctx.strokeStyle = '#f7b32b';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(r.x - 4, r.y + lift - 4, r.w + 8, r.h + 8);
+            ctx.restore();
+          }
+          ctx.font = 'bold 10px Galmuri11, monospace';
+          ctx.fillStyle = sp.crossing ? '#f7b32b' : sp.color;
+          ctx.fillText(
+            sp.crossing ? `★ ${sp.name}의 길 ${sp.cnt}/${sp.next} — 이 한 장으로 각성` : `${sp.name}의 길 ${sp.cnt}/${sp.next}`,
+            cx, r.y + lift + r.h - 58);
+        }
+      }
       ctx.font = 'bold 14px Galmuri11, monospace';
       ctx.fillStyle = hover ? color : '#4a4a5c';
       ctx.fillText(String(i + 1), cx, r.y + lift + r.h - 12);
@@ -1215,7 +1240,7 @@ const HUD = {
       ctx.fillStyle = '#4a4a5c';
       ctx.fillText('아직 없음 — 레벨업으로 획득', 70, y);
     }
-    const maxRows = 11;
+    const maxRows = 9; // v137: 하단 '원한의 길' 스트립 자리 확보 (H 540)
     traitIds.slice(0, maxRows).forEach((id) => {
       const t = TRAITS.find((tr) => tr.id === id);
       if (!t) return;
@@ -1261,6 +1286,52 @@ const HUD = {
       ctx.font = '11px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(`... 외 ${p.relics.length - maxRows}개`, 510, y);
+    }
+
+    // ── 하단: 원한의 길 (v137) — 계열 게이지 5열 + 진화 진행: 빌드의 현재 위치와 다음 목적지 ──
+    if (typeof SECTS !== 'undefined' && game.sectCount) {
+      ctx.strokeStyle = 'rgba(154,160,180,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(70, 452); ctx.lineTo(Renderer.W - 70, 452); ctx.stroke();
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px Galmuri11, monospace';
+      ctx.fillStyle = '#b13ae0';
+      ctx.fillText('원한의 길', 70, 472);
+      // 진화 진행 — 직업 축도 같은 문법으로
+      if (!p.skillEvolved) {
+        const clsOwned = p.traits.filter((id) => { const t = TRAITS.find((x) => x.id === id); return t && t.cls; }).length;
+        ctx.font = 'bold 12px Galmuri11, monospace';
+        ctx.fillStyle = '#f7b32b';
+        ctx.textAlign = 'right';
+        ctx.fillText(p.evoReady ? `⚡ 스킬 개화 대기 — Lv.12 (현재 ${game.level})` : `⚡ 스킬 진화 — 직업 특성 ${clsOwned}/3 · Lv.${game.level}/12`, Renderer.W - 70, 472);
+      }
+      const keys = Object.keys(SECTS);
+      keys.forEach((k, i) => {
+        const s = SECTS[k];
+        const cnt = game.sectCount(k);
+        const lv = (game.sects && game.sects[k]) || 0;
+        const x0 = 70 + i * 168;
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px Galmuri11, monospace';
+        ctx.fillStyle = cnt > 0 ? s.color : '#4a4a5c';
+        const next = SECT_THRESH.find((th) => th > cnt);
+        ctx.fillText(`${s.name} ${cnt}${next ? '/' + next : ' MAX'}`, x0, 494);
+        // 게이지 6칸 — 임계(2/4/6) 칸은 밝은 테두리
+        for (let c2 = 0; c2 < 6; c2++) {
+          const gx = x0 + 62 + c2 * 15, gy = 486;
+          ctx.fillStyle = c2 < cnt ? s.color : 'rgba(74,74,92,0.6)';
+          ctx.fillRect(gx, gy, 11, 8);
+          if (SECT_THRESH.includes(c2 + 1)) {
+            ctx.strokeStyle = c2 < cnt ? '#ffffff' : '#8f8577';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(gx + 0.5, gy + 0.5, 10, 7);
+          }
+        }
+        ctx.font = '10px Galmuri11, monospace';
+        ctx.fillStyle = lv > 0 ? '#c8c2b4' : '#666a80';
+        const line = lv > 0 ? `${lv}단 · ${s.tiers[lv - 1]}` : (next ? `${next - cnt}장 → ${s.tiers[SECT_THRESH.indexOf(next)]}` : '');
+        ctx.fillText(line.length > 22 ? line.slice(0, 21) + '…' : line, x0, 512);
+      });
     }
   },
 

@@ -25,6 +25,49 @@ const GORE_KINDS = {
 // 보스 예외 (기본 = human): 그림자 5 소산 / 몰레·되살아난 손들은 썩은 피 / 재가 된 브란트는 잿돌
 const GORE_BOSS = { 2: 'rot', 5: 'spirit', 6: 'rot', 7: 'rot', 8: 'rot', 9: 'stone' };
 const GameCombat = {
+  // ══ 계열 「원한의 길」 (v137) — 특성(태그)+유물+계승 형상을 통합 집계, 임계 2/4/6 ══
+  sectCount(key) {
+    const s = SECTS[key];
+    const p = this.player;
+    if (!s || !p) return 0;
+    let n = 0;
+    for (const id of p.traits) {
+      const t = TRAITS.find((x) => x.id === id);
+      if (t && t.tag === s.tag) n++;
+    }
+    for (const rid of s.relics) if (p.relics.includes(rid)) n++;
+    if (p.form && s.forms.includes(p.form)) n++;
+    return n;
+  },
+  // 획득 시마다 호출 — 단계 상승 순간에만 배너 (silent: 런 복원 시 연출 없이 동기화)
+  checkSects(silent = false) {
+    this.sects = this.sects || {};
+    for (const k of Object.keys(SECTS)) {
+      const cnt = this.sectCount(k);
+      let lv = 0;
+      for (const th of SECT_THRESH) if (cnt >= th) lv++;
+      const prev = this.sects[k] || 0;
+      this.sects[k] = lv;
+      if (!silent && lv > prev) {
+        const s = SECTS[k];
+        this.banner = { text: `「${s.name}」의 길 ${lv}단 — ${s.tiers[lv - 1]}`, life: 2.6, maxLife: 2.6, color: s.color };
+        AudioSys.levelup();
+        Particles.burst(this.player.x, this.player.y, { count: 18, colors: [s.color, '#ffffff'], speed: 150, life: 0.6, size: 3, gravity: -60 });
+        Particles.ring(this.player.x, this.player.y, { r0: 8, r1: 70, life: 0.45, color: s.color, width: 4 });
+      }
+    }
+  },
+  // 카드 하이라이트용: 이 태그를 1장 더 집으면 어느 계열이 몇 단이 되나
+  sectPreview(tag) {
+    const k = SECT_BY_TAG[tag];
+    if (!k || !this.player) return null;
+    const s = SECTS[k];
+    const cnt = this.sectCount(k);
+    const next = SECT_THRESH.find((th) => th > cnt);
+    if (!next) return null;
+    return { name: s.name, color: s.color, cnt, next, crossing: cnt + 1 >= next, nextDesc: s.tiers[SECT_THRESH.indexOf(next)] };
+  },
+
   // 히트스톱 완화 — '탁탁' 끊기는 멈춤이 렉처럼 보인다는 피드백.
   // 0.35초 창 안에서는 첫 방만 짧게 멈추고, 나머지는 아예 멈추지 않는다 (초당 최대 ~3회).
   // 적용 여부를 돌려줘서 크리 섬광도 같은 리듬으로만 터지게 한다 (연속 번쩍임 방지).
@@ -172,7 +215,7 @@ const GameCombat = {
       const p = this.player;
       if (crit && p.flags.lifesteal && p.lifestealCd <= 0 && p.hp < p.maxHp && !(p.brandT > 0)) {
         p.hp++;
-        p.lifestealCd = 4;
+        p.lifestealCd = (this.sects && this.sects.blood >= 1) ? 3 : 4; // 혈맹 1단: 흡혈 쿨 -25%
         Particles.text(p.x, p.y - 26, '+1', { color: '#e43b44', size: 14 });
         AudioSys.pickup();
       }
@@ -416,7 +459,27 @@ const GameCombat = {
       this._explode(e.x, e.y, 80, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
     }
     if ((p.flags.plague || p.form === 'plague' || p.rflags.venomburst) && e.status.poison > 0) { // 역병 의사 (계승)·초록 유리병 (유물): 역병은 번진다
-      this.zones.push({ x: e.x, y: e.y, r: 50, life: 2.5, kind: 'poison', tickT: 0, hit: null });
+      this.zones.push({ x: e.x, y: e.y, r: 50 * (this.sects && this.sects.venom >= 3 ? 1.4 : 1), life: 2.5, kind: 'poison', tickT: 0, hit: null }); // 독 3단 「창궐」
+    }
+    // 계열 3단 발화 (v137) — 화염 「대화재」 / 번개 「낙뢰」 / 혈맹 「피의 축제」
+    if (this.sects && this.sects.fire >= 3 && e.status.burn > 0) {
+      this.zones.push({ x: e.x, y: e.y, r: 44, life: 2.0, kind: 'fire', tickT: 0.3, hit: null });
+    }
+    if (this.sects && this.sects.volt >= 3 && e.status.shock > 0) {
+      let spread = 0;
+      for (const o of this.enemies) {
+        if (spread >= 2) break;
+        if (o === e || o.dead || o.phased || o.neutral || (o.status && o.status.shock > 0)) continue;
+        if (Math.hypot(o.x - e.x, o.y - e.y) < 130) {
+          o.status.shock = Math.max(o.status.shock || 0, 1.8);
+          Particles.text(o.x, o.y - 26, '낙뢰', { color: '#ffd866', size: 11 });
+          spread++;
+        }
+      }
+    }
+    if (this.sects && this.sects.blood >= 3 && Math.random() < 0.04 && p.hp < p.maxHp && !(p.brandT > 0)) {
+      p.hp++;
+      Particles.text(p.x, p.y - 26, '+1', { color: '#e43b44', size: 14 });
     }
     if (p.form === 'venge') { // 복수귀 (계승): 처치마다 원한이 쌓인다
       p._vs = Math.min(8, (p._vs || 0) + 1);
@@ -513,7 +576,8 @@ const GameCombat = {
     const bossFight = this.enemies.some((b) => b.isBoss && !b.dead) ? 0.5 : 1;
     // 행운(×2 중첩)·클로버(×1.8)가 겹치면 ×7.2까지 폭주 — 총 배율 상한 ×3
     const luckMul = Math.min(3, p.luckMul);
-    let heartChance = 0.045 * floorDecay * bossFight * luckMul * (this.pacts.heal ? 0.5 : 1);
+    let heartChance = 0.045 * floorDecay * bossFight * luckMul * (this.pacts.heal ? 0.5 : 1) *
+      ((this.sects && this.sects.blood >= 2) ? 1.25 : 1); // 혈맹 2단: 하트 드랍 +25%
     if (p.flags.bloodlust) heartChance += 0.12;
     if (p.hp >= p.maxHp) heartChance *= 0.35; // 풀피면 감쇠 — 못 먹는 하트가 바닥에 쌓이는 낭비 방지
     if ((this._roomHearts || 0) >= 2) heartChance *= 0.25; // 방당 2개 이후 급감 (물량 방 인플레 방지)
@@ -635,6 +699,15 @@ const GameCombat = {
         p.pdodgeCrit = true; // 기사도: 막아낸 다음 일격은 확정 크리 (완벽 회피 보상 재사용)
         Particles.text(p.x, p.y - 40, '반격 준비!', { color: '#f7b32b', size: 13 });
       }
+      // 수호 3단 「성채」 (v137): 깨진 보호막이 주위를 벤다 (형상 노바와 별개·중첩 가능)
+      if (this.sects && this.sects.guard >= 3) {
+        for (const en of this.enemies) {
+          if (en.dead || en.phased || en.neutral) continue;
+          const dd = Math.hypot(en.x - p.x, en.y - p.y);
+          if (dd < 100) this.damageEnemy(en, 2, { x: (en.x - p.x) / (dd || 1), y: (en.y - p.y) / (dd || 1) }, { feel: false, kb: 200, color: '#5ce0e6' });
+        }
+        Particles.ring(p.x, p.y, { r0: 8, r1: 96, life: 0.35, color: '#5ce0e6', width: 4 });
+      }
       Particles.text(p.x, p.y - 26, '막음!', { color: '#5ce0e6', size: 15 });
       Particles.burst(p.x, p.y, { count: 10, colors: ['#5ce0e6', '#a9fff7'], speed: 130, life: 0.35, size: 3 });
       AudioSys.clank();
@@ -646,7 +719,8 @@ const GameCombat = {
     // 고어 (기획 §7): 나도 피를 흘린다 — 후퇴선이 핏자국으로 남는다
     World.stampBlood(p.x + (Math.random() - 0.5) * 10, p.y + (Math.random() - 0.5) * 10, 3 + Math.random() * 3, 0.4);
     // 검사 1.2(근접 리스크 보상) / 궁수 1.05(밴드 계측: 열기0 사망이 검사의 120% — HP4 연쇄 피격 완화) / 마도사 0.9(밴드 내)
-    p.invuln = p.classId === 'knight' ? 1.2 : p.classId === 'archer' ? 1.05 : 0.9;
+    p.invuln = (p.classId === 'knight' ? 1.2 : p.classId === 'archer' ? 1.05 : 0.9) +
+      ((this.sects && this.sects.guard >= 2) ? 0.25 : 0); // 수호 2단: 피격 후 무적 연장
     p.kbx = dir.x * kb;
     p.kby = dir.y * kb;
     this.hitstop = Math.max(this.hitstop, 0.09); // 얻어맞는 순간은 세계가 함께 멈춘다
