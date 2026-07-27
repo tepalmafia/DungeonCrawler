@@ -1017,7 +1017,7 @@ const HUD = {
     ctx.textAlign = 'center';
     ctx.font = '12px Galmuri11, monospace';
     ctx.fillStyle = '#4a4a5c';
-    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거 · O 설정', Renderer.W / 2, Renderer.H - 12);
+    ctx.fillText('WASD 이동 · 클릭/J 공격 · Space 대시 · M 음소거 · O 설정 · F9 플레이 리포트 복사', Renderer.W / 2, Renderer.H - 12);
 
     // 테스트 모드 상태 (T로 토글)
     if (Game.testMode) {
