@@ -80,7 +80,9 @@ const GameRewards = {
         hurts: this._runHurts || 0,
         bosses: this._runBossLog || [],
         grace: (Meta.data.opts && Meta.data.opts.grace) || 0, // 리포트 해석용 — 가호 킨 런은 따로 읽는다
-        bot: !!(typeof Bot !== 'undefined' && Bot.enabled) || this.testMode, // 봇/치트 런 구분
+        bot: !!(typeof Bot !== 'undefined' && Bot.enabled), // 봇 런: 리포트에서 제외
+        cheat: !!this.testMode, // v147: 테스트모드 수동 런은 라벨만 붙여 리포트에 포함 — 사장의 주력 테스트 동선(B 보스 직행)이 데이터가 되도록
+        quit: !!this.gaveUp, // v147: 포기 런 구분 — '사망(?)'으로 찍히던 가독성 버그
       });
       while (log.length > 15) log.shift();
       Meta.data.deathStreak = victory ? 0 : (Meta.data.deathStreak || 0) + 1; // 가호 힌트용 (v145)
