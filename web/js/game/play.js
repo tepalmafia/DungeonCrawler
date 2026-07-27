@@ -365,6 +365,16 @@ const GamePlay = {
         AudioSys.pickup();
         return;
       }
+      if (Input.pressed('KeyB') && !this.endless && !this.bossRush) {
+        // 저장하고 거점으로 (v141, 실플레이 제보): 런은 살아 있다 — 거점에서 '이어하기'로 복귀.
+        // 기존엔 Q(포기·기록 소멸)뿐이라 쉬러 나간 유저가 런을 잃었다
+        this.paused = false;
+        this._forceSave = true; this.saveRun(); this._forceSave = false;
+        this.state = 'hub';
+        this.banner = null;
+        AudioSys.pickup();
+        return;
+      }
       if (Input.pressed('KeyQ')) {
         this.paused = false;
         this.gaveUp = true;
@@ -508,6 +518,7 @@ const GamePlay = {
     }
     World.tickGore(dt); // 고어 풍화 (v136): 핏자국·잔해가 서서히 마르며 사라진다
     if (this._chainT > 0) this._chainT -= dt; // 킬 체인 (v138) 창 감쇠
+    if (this._saveFlashT > 0) this._saveFlashT -= dt; // 자동 저장 표시 (v141)
     // 온보딩 (v139): 첫 걸음 힌트 진행 — 입력이 확인되면 다음 동사로
     if (this._obHints) {
       // 게임 상태로 감지 — 입력 프레임 폴링은 짧은 탭을 놓친다
