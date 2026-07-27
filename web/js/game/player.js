@@ -582,6 +582,11 @@ function createPlayer(x, y, classId = 'knight') {
         this.dashHit = new Set();
         this._pdodged = false; // 완벽 회피: 대시당 1회
         this._dashWin = this.rflags.bell ? 0.38 : 0.24; // 완벽 회피 판정 창 — 무덤의 종은 창을 넓힌다
+        // 게임필 (v138): 대시 먼지 — 발끝에서 흙이 튄다 (이동에 무게가 실린다)
+        Particles.burst(this.x, this.y + 12, {
+          count: 6, colors: ['#8a8074', '#5a5347', '#6e675c'], speed: 90, life: 0.35, size: 2,
+          dir: Math.atan2(-this.dashDir.y, -this.dashDir.x), spread: 0.9, gravity: 60,
+        });
         this.dashAtkT = 0.35; // 대시 파생기 입력 창: 대시 중 + 직후 0.19초 (0.16초는 너무 빡빡했다)
         if (this.flags.hunterstep) this._huntT = 1.5; // 사냥꾼의 호흡: 대시 후 공속 창
         if (this.rflags.dashcrit) this.dashCritReady = true;
