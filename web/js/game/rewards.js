@@ -252,7 +252,7 @@ const GameRewards = {
       this.xp -= this.xpNext;
       this.level++;
       // 완만한 커브: 초반 과속을 막고 심층(6~10층)에서도 성장이 이어지게 한다
-      this.xpNext = Math.round(this.xpNext * 1.27); // 1.24→1.27: 중반 이후 레벨 폭주 완화
+      this.xpNext = Math.round(this.xpNext * 1.29); // 1.27→1.29 (v147): 중반 이후 레벨 폭주 추가 완화
       this.pendingChoices++;
       // 찬탈자의 서명 (v128): 성장이 곧 생존 — 레벨업 회복 + 5레벨마다 최대 HP
       const up = this.player;
