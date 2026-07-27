@@ -538,6 +538,8 @@ function createPlayer(x, y, classId = 'knight') {
       if (this._hornT > 0) this._hornT -= dt;
       if (this._panicT > 0) this._panicT -= dt;
       if (this._peltCd > 0) this._peltCd -= dt;
+      if (this._reaperT > 0) this._reaperT -= dt; // 사신의 걸음 (v151)
+      if (this._vengeT > 0) this._vengeT -= dt;   // 원한 폭주 (v151)
 
       if (this.dashCharges < this.dashMax) {
         this.dashRegenT += dt;
@@ -631,7 +633,8 @@ function createPlayer(x, y, classId = 'knight') {
         // 클리어 가속 (v140, 몰입 계측 처방): 방을 비운 순간부터 다음 방까지 +20% —
         // 로밍 타임(마도사 28.8% 실측)이 몰입을 끊는 유일한 구간이었다
         const clearMul = (typeof Game !== 'undefined' && Game.roomCleared) ? 1.2 : 1;
-        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1) * clearMul;
+        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1) * clearMul *
+          (this.flags.reapstep && this._reaperT > 0 ? 1.3 : 1); // 사신의 걸음 (v151)
         World.moveEntity(this, mx * spd * dt, my * spd * dt);
       }
 
@@ -712,6 +715,8 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.rflags.debt && typeof Game !== 'undefined') atk += Math.min(5, Math.floor((Game.gold || 0) / 60)); // 차용증: 빚이 무기가 된다
       if (this.rflags.nail) atk += (this.maxHp - this.hp) * 0.7; // 관의 못: 상처가 힘이다
       if (this.rflags.lastwill && typeof Meta !== 'undefined') atk += Meta.clueCount() * 0.15; // 유언장: 진실의 무게
+      if (this.flags.collector) atk += Math.floor(this.relics.length / 2); // 수집가 (v151): 유물 2개당 +1
+      if (this.flags.vengeblood && this._vengeT > 0) atk += 3; // 원한 폭주 (v151): 상처가 칼이 된다
       return atk;
     },
 
@@ -734,17 +739,29 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.flags.firecrit && e.status.burn > 0) crit = true;
       if (this.dashCritReady) { crit = true; this.dashCritReady = false; }
       if (this.pdodgeCrit) { crit = true; this.pdodgeCrit = false; } // 완벽 회피 보상: 다음 일격 확정 크리
+      if (this.flags.firststrike && this._fsReady) { crit = true; this._fsReady = false; Particles.text(e.x, e.y - 34, '선제일격!', { color: '#c9b8e8', size: 13 }); }
 
       let bonus = 0;
       if (this.flags.corrode && e.status.poison > 0) bonus += 1;
       if (this.flags.static && e.status.shock > 0) bonus += 2; // 번개 트리 상향
+      if (this.flags.execeye && e.hp <= e.maxHp * 0.3) bonus += 2; // 처형인의 눈 (v151)
+      if (this.flags.duelist && !e.isBoss && game.enemies.filter((o) => !o.dead && !o.neutral && !o.phased).length === 1) bonus += 3; // 결투가 (v151)
 
       const baseDmg = this.currentAtk();
       let dmg = finisher ? Math.round(baseDmg * (2 + this.comboLv + (this.flags.bowmaster ? 1 : 0))) : baseDmg;
       if (finisher && this.rflags.knell) dmg = Math.round(dmg * 1.3); // 세 번째 타종: 마지막 울림이 가장 크다
       if (this.flags.greatsword) dmg = Math.round(dmg * 2.2); // 대검화: 느리고 무겁게
+      if (this.flags.gambler && !crit) dmg = Math.max(1, dmg - 1); // 도박사의 피 (v151): 비크리는 무디다
       const finalDmg = Math.max(1, Math.round(((crit ? Math.round(dmg * this.critMul) : dmg) + bonus) * dmgMul));
       game.hitEnemy(e, finalDmg, hitDir, { crit, kb });
+      // 메아리 일격 (v151): 네 번째 일격마다 잔격 50% — 리듬이 손에 익는 순간을 만든다
+      if (this.flags.echostrike && !e.dead) {
+        this._echoN = (this._echoN || 0) + 1;
+        if (this._echoN % 4 === 0) {
+          game.damageEnemy(e, Math.max(1, Math.round(finalDmg * 0.5)), hitDir, { feel: false, kb: 80, color: '#c9b8e8' });
+          Particles.text(e.x, e.y - 26, '메아리', { color: '#c9b8e8', size: 12 });
+        }
+      }
 
       if (this.flags.ignite && !e.dead && Math.random() < 0.25) {
         e.status.burn = this.flags.inferno ? 4 : 2;
@@ -789,6 +806,7 @@ function createPlayer(x, y, classId = 'knight') {
       else cdBase = finisher ? 0.58 : 0.32;
       let cd = cdBase * this.atkCdMul;
       if (this.flags.berserk && this.hp <= 2) cd *= 0.7;
+      if (this.flags.underdog && this.hp <= this.maxHp / 2) cd *= 0.75; // 역전의 명수 (v151)
       if (this._huntT > 0) cd *= 0.7; // 사냥꾼의 호흡
       // 공속 하한 (밸런스 점검): 신속×4 + 민첩의 룬 + 광폭 중첩 시 10타/초까지 치솟는 폭주 차단
       this.attackCd = Math.max(0.12, cd);

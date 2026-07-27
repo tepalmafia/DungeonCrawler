@@ -435,6 +435,19 @@ const HUD = {
         ctx.strokeRect(r.x - 4, r.y + lift - 4, r.w + 8, r.h + 8);
         ctx.restore();
       }
+      // 희귀 카드 (v151): 보랏빛 겹테두리 — 결정의 무게가 한눈에 보이게
+      if (c.rare) {
+        ctx.save();
+        ctx.globalAlpha = 0.45 + Math.sin(Date.now() * 0.005) * 0.2;
+        ctx.strokeStyle = '#c9b8e8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(r.x - 3, r.y + lift - 3, r.w + 6, r.h + 6);
+        ctx.restore();
+        ctx.font = 'bold 10px Galmuri11, monospace';
+        ctx.fillStyle = '#c9b8e8';
+        ctx.textAlign = 'left';
+        ctx.fillText('◆ 희귀', r.x + 10, r.y + lift + 16);
+      }
 
       ctx.textAlign = 'center';
       const cx = r.x + r.w / 2;

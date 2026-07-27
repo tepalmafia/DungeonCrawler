@@ -316,6 +316,20 @@ const Game = {
   onRoomBuilt(type) {
     // 층 첫 방: 담금질(층 한정 공격력) 만료
     if (Dungeon.roomIndex === 1 && this.player) this.player.floorAtk = 0;
+    if (this.player && this.player.flags.firststrike) this.player._fsReady = true; // 선제일격 (v151): 방마다 재장전
+    // 왕의 유산 (v151 전설): 새 층 진입마다 무작위 스탯 특성 자동 획득
+    if (Dungeon.roomIndex === 1 && this.player && this.player.flags.kingsoath) {
+      const p = this.player;
+      const countOf = (id) => p.traits.filter((x) => x === id).length;
+      const pool = TRAITS.filter((t) => t.tag === '스탯' && t.apply && Meta.isUnlocked(t) &&
+        (!t.flag || !p.flags[t.flag]) && (!t.max || countOf(t.id) < t.max || p.flags.unbound));
+      if (pool.length) {
+        const t = pool[Math.floor(Math.random() * pool.length)];
+        applyTrait(p, t);
+        Particles.text(p.x, p.y - 44, `왕의 유산 — ${t.name}`, { color: '#ffd866', size: 13 });
+        AudioSys.pickup();
+      }
+    }
     this._roomHearts = 0; // 방당 하트 소프트캡 카운터 리셋
     this.enemies = [];
     this.arrows = [];
