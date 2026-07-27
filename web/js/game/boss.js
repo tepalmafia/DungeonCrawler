@@ -18,7 +18,7 @@ const BOSS_DEFS = {
     banner: '무덤지기 오스문드',
     punish: 'volley', punishProj: 'rock', // 인간의 손 — 뼛조각과 무덤 흙을 던진다 (원혼 부채꼴은 되살아난 후의 것)
     p1: ['sweep>sweep', 'fan:rock', 'fan:rock:snipe'],
-    p2: ['sweep>fan:rock', 'curse>sweep>fan:rock', 'fan:rock:cross', 'uniq'], // 입문 보스: 고유기는 2페이즈부터
+    p2: ['sweep>fan:rock', 'curse>sweep>fan:rock', 'fan:rock:cross', 'mortar', 'uniq'], // 입문 보스: 고유기는 2페이즈부터
     rageText: '오스문드가 낫을 고쳐쥔다!',
     intro: '죄인은 무덤 밖으로 못 나간다. 그게 내 밥줄이야.', outro: '네 관은… 비어 있었지… 이상하다 했어…',
     deathPalette: ['#c9a24a', '#3a3226', '#e8e0cf'],
@@ -31,7 +31,7 @@ const BOSS_DEFS = {
     // 분산 귀속 (열기5): 소환수는 경량 늪 거품 유지 — 기믹(부하 처치=재생 정지) 계측 근거 보존
     punish: 'volley', punishProj: 'spore',
     p1: ['fan:spore', 'ring>summon:sporePuff', 'fan:spore:snipe'],
-    p2: ['fan:spore:cross', 'fan:spore:snipe>ring', 'curse>fan:spore', 'uniq'],
+    p2: ['fan:spore:cross', 'fan:spore:snipe>ring', 'mortar:poison', 'curse>fan:spore', 'uniq'],
     rageText: '몰레가 수레를 뒤엎는다!',
     intro: '밤마다 수레 하나 값이었지. 비켜라 — 오늘은 짐이 밀렸다.', outro: '버린 게 아니야… 나른 것뿐… 시킨 놈은… 위에…',
     deathPalette: ['#6a7a4a', '#8a653f', '#3a4a3a'],
@@ -44,7 +44,7 @@ const BOSS_DEFS = {
     punish: 'charge',
     p1: ['charge>ring', 'fan:rock', 'fan:rock:snipe', 'uniq'],
     // 매트릭스 계측: 이중 돌진 금지 유지 (열기0 3층 스파이크 귀속) — 연계는 돌진 1회까지만
-    p2: ['charge>ring>fan:rock', 'ring>fan:rock', 'fan:rock:gap', 'uniq'],
+    p2: ['charge>ring>fan:rock', 'pulse', 'ring>fan:rock', 'fan:rock:gap', 'uniq'],
     rageText: '바르곤의 사슬이 풀렸다!',
     intro: '네 얼굴, 명부에서 봤다. 처형 완료라 적혀 있었는데.', outro: '명부가… 처음부터… 거짓이었나…',
     deathPalette: ['#6b7a94', '#454f63', '#e43b44'],
@@ -56,7 +56,7 @@ const BOSS_DEFS = {
     banner: "방화대장 '그을음 브란트'",
     punish: 'charge', punishTrail: true,
     p1: ['fan:fire>charge:trail', 'curse:fire', 'fan:fire:snipe', 'uniq'],
-    p2: ['charge:trail>fan:fire', 'fan:fire:snipe>charge:trail', 'fan:fire:cross', 'uniq'],
+    p2: ['charge:trail>fan:fire', 'mortar:fire', 'fan:fire:snipe>charge:trail', 'fan:fire:cross', 'uniq'],
     rageText: '브란트가 기름통을 비운다!',
     intro: '장부가 있던 농가? 내가 태웠다. 종이는 잘 타지 — 너는 어떨까.', outro: '불은… 명령이었다… 나는 그저…',
     deathPalette: ['#ff7043', '#ffd866', '#7a1010'],
@@ -68,7 +68,7 @@ const BOSS_DEFS = {
     banner: '교수대의 그림자',
     punish: 'volley', punishProj: 'soul',
     p1: ['sweep>fan:soul', 'ring:gap', 'fan:soul:snipe', 'uniq'],
-    p2: ['ring:gap>sweep>fan:soul', 'fan:soul:cross>ring', 'summon:wraith:elite', 'uniq'],
+    p2: ['ring:gap>sweep>fan:soul', 'pulse', 'fan:soul:cross>ring', 'summon:wraith:elite', 'uniq'],
     rageText: '목매단 자들의 원한이 깨어난다!',
     intro: '이 언덕에 매달린 자, 셀 수 없다. 너도 그중 하나였을 뿐.', outro: '우리는… 전부… 죄가 없었다…',
     deathPalette: ['#e43b44', '#16101f', '#c9b8e8'],
@@ -79,7 +79,7 @@ const BOSS_DEFS = {
     banner: '되살아난 오스문드',
     punish: 'volley', punishProj: 'soul', // 이제는 원혼 — 죽어서야 죽은 자들의 무기를 손에 넣었다
     p1: ['sweep>spiral:soul', 'curse', 'fan:soul:snipe', 'uniq'],
-    p2: ['curse>spiral:soul>sweep', 'sweep>sweep', 'summon:boneHeap>spiral:soul', 'uniq'],
+    p2: ['curse>spiral:soul>sweep', 'echo', 'sweep>sweep', 'summon:boneHeap>spiral:soul', 'uniq'],
     rageText: '오스문드의 원혼이 울부짖는다!',
     intro: '네가 날 죽였지. 그런데… 왜 나도 깨어난 거지?', outro: '저주는… 너만의 것이… 아니었어…',
     deathPalette: ['#e43b44', '#241832', '#e8e0cf'],
@@ -90,7 +90,7 @@ const BOSS_DEFS = {
     banner: "물에 불은 몰레",
     punish: 'volley', punishProj: 'spore',
     p1: ['fan:spore:cross', 'ring>summon:sporePuff', 'geyser:poison', 'uniq'],
-    p2: ['geyser:poison>fan:spore', 'fan:spore:snipe>geyser:poison', 'fan:spore:gap', 'uniq'],
+    p2: ['geyser:poison>fan:spore', 'mortar:poison', 'fan:spore:snipe>geyser:poison', 'fan:spore:gap', 'uniq'],
     rageText: '늪이 들끓는다!',
     intro: '늪이… 뱉어냈다. 내가 버린 것들이 전부 깨어났어 — 너 때문에!', outro: '이제야 알겠어… 짐이 아니라… 사람이었어…',
     deathPalette: ['#6ab04c', '#4a6a5a', '#d8f070'],
@@ -101,7 +101,7 @@ const BOSS_DEFS = {
     banner: '사슬에 얽힌 바르곤',
     punish: 'charge',
     p1: ['charge>snare', 'fan:rock>ring', 'fan:rock:snipe', 'uniq'],
-    p2: ['snare>charge', 'charge>snare>fan:rock:snipe', 'snare>fan:rock', 'uniq'],
+    p2: ['snare>charge', 'pulse>snare', 'charge>snare>fan:rock:snipe', 'snare>fan:rock', 'uniq'],
     rageText: '사슬이 제멋대로 날뛴다!',
     intro: '열쇠는… 내가 갖고 있었는데… 사슬이 날 놓아주질 않아…', outro: '기록은… 지하 서고에… 아직…',
     deathPalette: ['#383850', '#a9c1d8', '#e43b44'],
@@ -112,7 +112,7 @@ const BOSS_DEFS = {
     banner: '재가 된 브란트',
     punish: 'charge', punishTrail: true,
     p1: ['fan:fire>geyser:fire', 'charge:trail>ring', 'uniq'],
-    p2: ['geyser:fire>charge:trail', 'fan:fire:snipe>geyser:fire', 'charge:trail>geyser:fire', 'uniq'],
+    p2: ['geyser:fire>charge:trail', 'beam', 'mortar:fire', 'charge:trail>geyser:fire', 'uniq'],
     rageText: '잿불이 폭주한다!',
     intro: '타고 남은 게… 이런 거였나. 이리 와 — 같이 타자.', outro: '꺼지질 않아… 이 불은… 내가 지른 불인데…',
     deathPalette: ['#ffd866', '#ff7043', '#7a1010'],
@@ -124,7 +124,7 @@ const BOSS_DEFS = {
     punish: 'volley', punishProj: 'soul',
     sig: 'halfSweep', // 인장기 「참수 집행」 — 나를 처형한 그 도끼
     p1: ['sweep>spiral:soul', 'ring:gap>curse', 'fan:soul:snipe', 'uniq'],
-    p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'sweep>curse>fan:soul', 'summon:voidSpawn>spiral:soul', 'uniq'],
+    p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'beam', 'pulse', 'sweep>curse>fan:soul', 'summon:voidSpawn>spiral:soul', 'uniq'],
     rageText: '처형인의 도끼가 검게 물든다!',
     intro: '네 목을 친 건 나다. 원한은 알겠으나 — 두 번 치는 것도 일이지.', outro: '명단은… 재판소가 아니라… 성에서 내려왔다…',
     deathPalette: ['#e43b44', '#0a0612', '#c9b8e8'],
@@ -138,7 +138,7 @@ const BOSS_DEFS = {
     punish: 'volley', punishProj: 'spore',
     sig: 'shieldCharge', // 인장기 「방패 파쇄 돌격」
     p1: ['fan:spore:gap>ring', 'summon:sporeling>spiral:spore', 'geyser:poison>fan:spore', 'uniq'],
-    p2: ['ring:gap>spiral:spore', 'summon:glowShrieker>fan:spore:cross', 'fan:spore:snipe>geyser:poison>ring', 'uniq'],
+    p2: ['ring:gap>spiral:spore', 'mortar:poison', 'summon:glowShrieker>fan:spore:cross', 'fan:spore:snipe>geyser:poison>ring', 'uniq'],
     rageText: '관문 수비대 전원, 응전하라!',
     intro: '여기서부터는 왕도다. 죽은 것은 다리를 건널 수 없다.', outro: '마차 호위는… 명예였다… 안을 보기 전까지는…',
     deathPalette: ['#c9d94a', '#8adf76', '#6a3aa2'],
@@ -153,7 +153,7 @@ const BOSS_DEFS = {
     punish: 'volley', punishProj: 'rock',
     sig: 'brandZone', // 인장기 「사형 선고」 — 판결은 도망쳐도 따라온다
     p1: ['fan:rock:snipe>ring', 'snare>fan:rock', 'charge>ring>fan:rock', 'uniq'],
-    p2: ['snare>charge>fan:rock:snipe', 'ring:gap>fan:rock:cross', 'geyser:poison>snare>ring', 'uniq'],
+    p2: ['snare>charge>fan:rock:snipe', 'beam', 'ring:gap>fan:rock:cross', 'geyser:poison>snare>ring', 'uniq'],
     rageText: '법정 모독이다! 전원 처형하라!',
     intro: '피고, 다시 입정했는가. 판결은 이미 내려졌다 — 두 번 죽어라.',
     outro: '성배가 마르면… 왕국이 마른다고 했다… 나는… 서명만 했을 뿐…',
@@ -166,8 +166,8 @@ const BOSS_DEFS = {
     banner: "대주교 '이노첸시오'",
     punish: 'volley', punishProj: 'soul',
     sig: 'sanctPulse', // 인장기 「파문(破門)」 — 교회 밖에는 구원이 없다
-    p1: ['fan:soul:snipe>ring', 'curse>spiral:soul', 'summon:acolyte>fan:soul:cross', 'uniq'],
-    p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'curse>summon:acolyte>ring', 'sweep>curse>spiral:soul', 'uniq'],
+    p1: ['fan:soul:snipe>ring', 'beam', 'curse>spiral:soul', 'summon:acolyte>fan:soul:cross', 'uniq'],
+    p2: ['ring:gap>spiral:soul>fan:soul:snipe', 'beam>fan:soul', 'curse>summon:acolyte>ring', 'sweep>curse>spiral:soul', 'uniq'],
     rageText: '신성 모독이다! 성화여, 불태워라!',
     intro: '죽은 자가 성소에 들다니. 성화의 이름으로 — 재가 되어라.',
     outro: '성배는… 교회가 왕에게 바쳤다… 신의 이름으로… 우리가… 시작했다…',
@@ -181,7 +181,7 @@ const BOSS_DEFS = {
     punish: 'charge',
     sig: 'triCharge', // 인장기 「일기토」 — 셋째 창격만이 관통한다
     p1: ['charge>ring', 'sweep>sweep>fan:rock:snipe', 'snare>charge', 'uniq'],
-    p2: ['charge>snare>fan:rock:snipe', 'sweep>sweep>ring', 'fan:rock:cross>charge', 'uniq'],
+    p2: ['charge>snare>fan:rock:snipe', 'echo', 'sweep>sweep>ring', 'fan:rock:cross>charge', 'uniq'],
     rageText: '늑대가 이빨을 드러낸다!',
     intro: '가레스… 아니, 그게 누구였든. 나는 맹세를 지킬 뿐이다. 알면서도.',
     outro: '알고 있었다… 전부… 미안하다는 말은… 하지 않겠다… 벌을 다오…',
@@ -197,9 +197,9 @@ const BOSS_DEFS = {
     sig: 'kingCross', sigP3: true, // 인장기 「왕의 선고」 — p3 전용, 왕국 전체가 칼이 된다
     p1: ['sweep>sweep', 'charge>ring', 'fan:rock:snipe>sweep', 'uniq'],
     // 2페이즈: 성배 폭주 — 지나온 보스들의 패턴을 역으로 사용 ("네놈들의 원한이 이런 모습이더냐")
-    p2: ['spiral:soul>ring:gap', 'geyser:poison>fan:fire:cross', 'summon:voidSpawn>spiral:soul', 'curse>sweep>fan:soul:snipe', 'uniq'],
+    p2: ['spiral:soul>ring:gap', 'pulse', 'geyser:poison>fan:fire:cross', 'summon:voidSpawn>spiral:soul', 'curse>sweep>fan:soul:snipe', 'uniq'],
     // 3페이즈 (HP 25%↓ 맹공과 함께): 성배 분리 발악 — 모든 것을 쏟아낸다
-    p3: ['ring:gap>spiral:soul>fan:soul:snipe', 'geyser:poison>summon:voidSpawn>ring', 'curse>charge>fan:fire:cross'],
+    p3: ['ring:gap>spiral:soul>fan:soul:snipe', 'beam>echo', 'pulse>fan:soul:cross', 'geyser:poison>summon:voidSpawn>ring', 'curse>charge>fan:fire:cross'],
     rageText: '성배여! 짐에게 시간을 다오!',
     rageText2: '이 몸이 곧 왕국이다 — 전부 데려가겠다!',
     intro: '…그 종이쪼가리들을 여기까지 들고 왔느냐. 짐은 왕국을 지켰을 뿐이다.',
@@ -213,7 +213,7 @@ const BOSS_DEFS = {
     banner: "수문장 '갈고리 브람'",
     punish: 'charge', sig: 'shieldCharge',
     p1: ['snare>charge', 'fan:rock:snipe>snare', 'charge>ring', 'uniq'],
-    p2: ['snare>charge>fan:rock', 'ring>snare>charge', 'charge>snare>charge', 'uniq'],
+    p2: ['snare>charge>fan:rock', 'pulse', 'ring>snare>charge', 'charge>snare>charge', 'uniq'],
     rageText: '갈고리에 걸리면 끝이다!',
     intro: '강에 버린 것들이 기어 올라오는군. 다시 가라앉혀주마.',
     outro: '건진 게… 아니라… 버린 거였나… 나는…',
@@ -224,7 +224,7 @@ const BOSS_DEFS = {
     banner: "뱃사공 '침묵의 요른'",
     punish: 'volley', punishProj: 'soul', sig: 'halfSweep',
     p1: ['sweep>spiral:soul', 'spiral:soul>ring', 'fan:soul:snipe>sweep', 'uniq'],
-    p2: ['spiral:soul>sweep>ring', 'ring:gap>spiral:soul', 'sweep>fan:soul:cross', 'uniq'],
+    p2: ['spiral:soul>sweep>ring', 'pulse', 'ring:gap>spiral:soul', 'sweep>fan:soul:cross', 'uniq'],
     rageText: '…….',
     intro: '……. (노를 든다)',
     outro: '…축일마다… 실어 날랐다… 산 사람을…',
@@ -237,7 +237,7 @@ const BOSS_DEFS = {
     banner: "위증 서기장 '퀼른'",
     punish: 'volley', punishProj: 'soul', sig: 'brandZone',
     p1: ['summon:acolyte>fan:soul', 'curse>fan:soul:snipe', 'fan:soul:cross>curse', 'uniq'],
-    p2: ['summon:shade>curse>fan:soul', 'fan:soul:snipe>summon:acolyte', 'curse>fan:soul:cross', 'uniq'],
+    p2: ['summon:shade>curse>fan:soul', 'mortar', 'fan:soul:snipe>summon:acolyte', 'curse>fan:soul:cross', 'uniq'],
     rageText: '기록은 조작하면 그만이다!',
     intro: '네 죄목? 내가 썼다. 잉크 값은 영지로 받았지.',
     outro: '고쳐 쓸 수… 없는 기록도… 있었군…',
@@ -251,7 +251,7 @@ const BOSS_DEFS = {
     banner: "사병대장 '철퇴 가로크'",
     punish: 'charge', sig: 'miniSig',
     p1: ['charge>ring', 'ring>fan:rock', 'sweep>sweep>ring', 'uniq'],
-    p2: ['charge>ring>fan:rock', 'ring>ring', 'sweep>charge>ring', 'uniq'],
+    p2: ['charge>ring>fan:rock', 'mortar', 'ring>ring', 'sweep>charge>ring', 'uniq'],
     rageText: '뼈째로 갈아주마!',
     intro: '공작님 포도밭에 거름이 필요하던 참이다.',
     outro: '월급은… 좋았는데… 말이지…',
@@ -264,7 +264,7 @@ const BOSS_DEFS = {
     banner: "역병 의사 '부리가면 코르부스'",
     punish: 'volley', punishProj: 'spore', sig: 'sanctPulse',
     p1: ['geyser:poison>fan:spore', 'summon:sporePuff>ring', 'fan:spore:snipe>geyser:poison', 'uniq'],
-    p2: ['curse>geyser:poison>fan:spore', 'fan:spore:cross>summon:sporePuff', 'geyser:poison>ring:gap', 'uniq'],
+    p2: ['curse>geyser:poison>fan:spore', 'mortar:poison', 'fan:spore:cross>summon:sporePuff', 'geyser:poison>ring:gap', 'uniq'],
     rageText: '진단: 전원 소각 대상!',
     intro: "'역병'의 정체를 아는 자는 둘 뿐이다. 왕과, 나.",
     outro: '역병 같은 건… 처음부터… 없었어…',
@@ -276,7 +276,7 @@ const BOSS_DEFS = {
     banner: "소각로장 '재의 우르쉬'",
     punish: 'charge', punishTrail: true, sig: 'halfSweep',
     p1: ['charge:trail>geyser:fire', 'fan:fire>charge:trail', 'geyser:fire>ring', 'uniq'],
-    p2: ['geyser:fire>charge:trail>fan:fire', 'fan:fire:cross>geyser:fire', 'charge:trail>ring>fan:fire', 'uniq'],
+    p2: ['geyser:fire>charge:trail>fan:fire', 'beam', 'fan:fire:cross>geyser:fire', 'charge:trail>ring>fan:fire', 'uniq'],
     rageText: '소각로는 식지 않는다!',
     intro: '명단도 태우고, 시신도 태우고… 너도 태우면 완벽하군.',
     outro: '재는… 말이 없을 줄… 알았는데…',
@@ -288,8 +288,8 @@ const BOSS_DEFS = {
     mechanic: { type: 'veil', veils: [0.5], label: '성좌 장막 — 별이 도는 동안 구슬만이 약점이다' },
     banner: "왕실 마법장 '별지기 오벨'",
     punish: 'volley', punishProj: 'soul', sig: 'brandZone',
-    p1: ['spiral:soul>curse', 'fan:soul:cross>ring:gap', 'ring:gap>fan:soul:snipe', 'uniq'],
-    p2: ['curse>spiral:soul>fan:soul', 'summon:voidSpawn>ring:gap', 'spiral:soul>fan:soul:cross', 'uniq'],
+    p1: ['spiral:soul>curse', 'beam', 'fan:soul:cross>ring:gap', 'ring:gap>fan:soul:snipe', 'uniq'],
+    p2: ['curse>spiral:soul>fan:soul', 'echo', 'summon:voidSpawn>ring:gap', 'spiral:soul>fan:soul:cross', 'uniq'],
     rageText: '별은 거짓을 말하지 않는다 — 내가 대신 말했을 뿐!',
     intro: '오르빈은 별을 읽고 죽었다. 나는 읽고도 입을 다물었지.',
     outro: '별점은… 옳았다… 전부… 오르빈… 미안…',
@@ -300,7 +300,7 @@ const BOSS_DEFS = {
     banner: "검은 창기병 '무언의 기수'",
     punish: 'charge', sig: 'triCharge',
     p1: ['charge>charge', 'sweep>charge', 'fan:rock:snipe>charge', 'uniq'],
-    p2: ['charge>charge>charge', 'sweep>charge>ring', 'charge>fan:rock:snipe>charge', 'uniq'],
+    p2: ['charge>charge>charge', 'echo>charge', 'sweep>charge>ring', 'charge>fan:rock:snipe>charge', 'uniq'],
     rageText: '(창끝이 낮아진다)',
     intro: '(아무 말 없이 창을 겨눈다)',
     outro: '(투구 속에서, 아주 오래된 한숨이 새어 나온다)',
@@ -348,11 +348,29 @@ function createBoss(floor, x, y) {
   // 저작 HP가 구 선형 곡선 기준이라 20층 1600·30층 2100이 필러보다 약했다 (v148 곡선 검증에서 발각).
   // 최종 서열: 필러 3200 < 막 결산 3520 < 흰 늑대 3600 < 왕 5000
   if (BOSS_FIXED[floor] && floor > 10 && floor <= 50) hp = Math.max(hp, 3520);
+  // ── 어픽스 변주 (v150 "패턴이 단조롭다"): 필러 보스(11층+)는 조우마다 다른 얼굴로 온다 ──
+  // 이름 접두가 곧 예고: 등장 카드에서 읽고 대비하는 것까지가 플레이. 21층+는 2중 변주
+  const AFFIXES = [
+    { id: 'swift', pre: '성마른', label: '성마른 — 모든 초식이 빨라진다' },
+    { id: 'guarded', pre: '무장한', label: '무장한 — 호위병과 함께 싸운다' },
+    { id: 'burning', pre: '타오르는', label: '타오르는 — 지나간 자리가 불탄다' },
+    { id: 'ironhide', pre: '끈질긴', label: '끈질긴 — 강한 일격을 경감한다' },
+    { id: 'echoing', pre: '메아리치는', label: '메아리치는 — 고유기가 한 번 더 울린다' },
+  ];
+  let affixes = [];
+  if (floor > 10 && !BOSS_FIXED[floor]) { // 51층+ 무한 가도에도 — 순환 킷의 반복 조우일수록 변주가 필요하다
+    const n = floor >= 21 ? 2 : 1;
+    const pool = [...AFFIXES];
+    for (let i = 0; i < n; i++) affixes.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  const affixName = affixes.length ? affixes.map((a) => a.pre).join(' ') + ' ' + def.name : def.name;
   return {
     type: 'boss', isBoss: true,
-    name: def.name,
+    name: affixName,
     defId: def._key, // 도감 귀속 — 층 산식 대신 실제 킷으로
     def,
+    affixes: affixes.map((a) => a.id),
+    affixLabel: affixes.map((a) => a.label.split(' — ')[0]).join(' · ') || '',
     x, y,
     hp, maxHp: hp,
     r: def.r || 24,
@@ -370,8 +388,10 @@ function createBoss(floor, x, y) {
     stateT: 0,
     patternIdx: 0,
     attack: null,     // 현재 공격 {kind, opt}
-    // 기믹 상태
-    armorCap: def.mechanic?.type === 'armor' ? def.mechanic.cap : 0,
+    _patN: 0,          // v150 패턴 문법: 초식 카운터 — 4수마다 고유기가 온다
+    _echoes: [],       // v150 echo 잔상 분신
+    // 기믹 상태 (끈질긴 어픽스: 철갑 +1, 무기믹 보스는 cap 1 부여)
+    armorCap: (def.mechanic?.type === 'armor' ? def.mechanic.cap : 0) + (affixes.some((a) => a.id === 'ironhide') ? 1 : 0),
     rageT: 0,
     rageStacks: 0,
     veilsDone: 0,
@@ -395,6 +415,11 @@ function createBoss(floor, x, y) {
       this.animT += dt;
       if (this.flash > 0) this.flash -= dt;
       if (this.hitCd > 0) this.hitCd -= dt;
+      // v150 echo 잔상 감쇠
+      for (let i = this._echoes.length - 1; i >= 0; i--) {
+        this._echoes[i].t -= dt;
+        if (this._echoes[i].t <= 0) this._echoes.splice(i, 1);
+      }
     },
 
     _parseStep(step) {
@@ -410,10 +435,10 @@ function createBoss(floor, x, y) {
       let pool = list;
       if (d != null) {
         if (d > 300 && Math.random() < 0.75) {
-          const sub = list.filter((c) => /snipe|geyser|spiral|summon|curse/.test(c));
+          const sub = list.filter((c) => /snipe|geyser|spiral|summon|curse|beam|mortar/.test(c));
           if (sub.length) pool = sub;
         } else if (d < 150 && Math.random() < 0.6) {
-          const sub = list.filter((c) => /ring|sweep|charge/.test(c));
+          const sub = list.filter((c) => /ring|sweep|charge|pulse|echo/.test(c));
           if (sub.length) pool = sub;
         }
       }
@@ -604,7 +629,7 @@ function createBoss(floor, x, y) {
         Particles.ring(this.x, this.y, { r0: 12, r1: 140, life: 0.6, color: '#e43b44', width: 5 });
       }
 
-      // 페이즈 전환
+      // 페이즈 전환 — v150: 격노의 첫 수는 고유기. "여기서부터 다르다"를 수치가 아니라 기술로 선언
       if (this.phase === 1 && this.hp <= this.maxHp / 2 && this.state !== 'veil') {
         this.phase = 2;
         this.state = 'idle';
@@ -616,6 +641,27 @@ function createBoss(floor, x, y) {
         Particles.burst(this.x, this.y, {
           count: 26, colors: this.def.deathPalette, speed: 200, life: 0.7, size: 4,
         });
+        (this._uq = this._uq || []).push({ t: 0.9, fn: (b, g) => {
+          if (b.dead || b.state === 'veil') return;
+          const pp = g.player;
+          const ddx = pp.x - b.x, ddy = pp.y - b.y;
+          b._uniqMove(g, ddx, ddy, Math.hypot(ddx, ddy) || 1);
+        } });
+      }
+
+      // 어픽스 '무장한' (v150): 전투 개시 호위 2 + 20초마다 재소집 1 (재생 기믹과 자연 결합)
+      if (this.affixes && this.affixes.includes('guarded') && this.state !== 'enter' && this.spawnT <= 0) {
+        this._guardT = (this._guardT ?? 999) + dt;
+        if (this._guardT >= 20) {
+          this._guardT = 0;
+          const n = this._guardInit ? 1 : 2;
+          this._guardInit = true;
+          const minions = game.enemies.filter((e) => !e.isBoss && !e.dead).length;
+          for (let i = 0; i < Math.min(n, 4 - minions); i++) {
+            const pos = World.randomSpawnPos(p, 160);
+            game.markers.push({ x: pos.x, y: pos.y, type: this.def.punishProj === 'spore' ? 'sporePuff' : 'acolyte', elite: true, t: 0.7 });
+          }
+        }
       }
 
       switch (this.state) {
@@ -648,7 +694,8 @@ function createBoss(floor, x, y) {
           // 다른 난이도 축(보스 1뎀·전역 스케일 0)은 모두 1~3층 계단이 있는데 템포만 일괄이었다.
           // 근접 직업은 템포 상향을 정면으로 받는다 — 온보딩 저점(첫 보스)은 배울 시간을 준다
           const base = Dungeon.floor <= 3 ? (this.phase === 2 ? 0.5 : 0.8) : (this.phase === 2 ? 0.35 : 0.55);
-          const wait = base * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1);
+          const wait = base * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1) *
+            (this.affixes && this.affixes.includes('swift') ? 0.85 : 1); // 어픽스 '성마른'
           if (this.stateT >= wait) {
             // 인장기 (왕의 인장기): HP 75% 이하 첫 발동, 이후 막별 주기 (3막 12s / 4막 10s / 5막 8s)
             if (this.def.sig && !(this.def.sigP3 && !this._onslaught) &&
@@ -687,7 +734,15 @@ function createBoss(floor, x, y) {
                 if (this._punishN >= 2) this._comboQueue = ['fan:' + (this.def.punishProj || 'soul') + ':snipe'];
               }
             } else {
-              this.attack = this._nextPattern(d);
+              // 패턴 문법 (v150 "랜덤이 곧 밋밋함"): 개막 1수 = 고유기 — 킷의 정체성을 첫 수에 소개.
+              // 이후 4수마다 고유기가 돌아온다 — 랜덤 사이에 리듬이 생기고, 이름이 곧 기술임을 잊지 않게
+              this._patN++;
+              if ((this._patN === 1 || this._patN % 4 === 0) && this.spawnT <= 0) {
+                this.attack = { kind: 'uniq', opt: [] };
+                this._comboQueue = [];
+              } else {
+                this.attack = this._nextPattern(d);
+              }
             }
             this.state = 'windup';
             this.stateT = 0;
@@ -700,7 +755,7 @@ function createBoss(floor, x, y) {
           const k = this.attack.kind;
           // 조준 갱신 (마지막 순간 고정)
           if (this.stateT < 0.35) this.aimDir = { x: dx / d, y: dy / d };
-          const windups = { sweep: 0.55, fan: 0.65, curse: 0.5, summon: 0.6, charge: 0.75, ring: 0.6, spiral: 0.7, snare: 0.55, geyser: 0.6 };
+          const windups = { sweep: 0.55, fan: 0.65, curse: 0.5, summon: 0.6, charge: 0.75, ring: 0.6, spiral: 0.7, snare: 0.55, geyser: 0.6, beam: 0.9, mortar: 0.6, pulse: 0.65, echo: 0.5 };
           if ((k === 'fan' || k === 'curse') && Math.random() < 0.4) {
             Particles.burst(this.x + (Math.random() - 0.5) * 40, this.y + (Math.random() - 0.5) * 40, {
               count: 1, colors: this.def.deathPalette, speed: -60, life: 0.3, size: 3,
@@ -769,6 +824,24 @@ function createBoss(floor, x, y) {
         case 'stunned':
           if (this.stateT > (this.phase === 2 ? 0.6 : 1.0)) { this._endMove(); this.stateT = 0; } // 그로기(딜 타임)는 온전히 — 연계는 그 후에
           break;
+
+        case 'beam': {
+          // 회전 광선 (v150): 1.5초간 2.2rad 쓸기 — 시전 중 본체는 정지 (딜 기회이자 회피 과제)
+          const dur = 1.5, sweepArc = 2.2;
+          const prog = Math.min(1, this.stateT / dur);
+          this._beamAng = this._beamA + this._beamSign * sweepArc * prog;
+          const bx = Math.cos(this._beamAng), by = Math.sin(this._beamAng);
+          const px = p.x - this.x, py = p.y - this.y;
+          const tp = Math.max(0, Math.min(460, px * bx + py * by));
+          const perp = Math.hypot(px - bx * tp, py - by * tp);
+          if (perp < 20 + p.r && p.invuln <= 0) game.hurtPlayer(bossDmg(), { x: bx, y: by }, 260, this.name);
+          if (Math.random() < 0.6) {
+            const dd = 60 + Math.random() * 380;
+            Particles.burst(this.x + bx * dd, this.y + by * dd, { count: 1, colors: this.def.deathPalette, speed: 60, life: 0.25, size: 3 });
+          }
+          if (this.stateT >= dur) { this._beamAng = null; this._endMove(); this.stateT = 0; }
+          break;
+        }
 
         case 'veil': {
           const orbs = game.enemies.filter((o) => o.type === 'soulOrb' && !o.dead);
@@ -1267,6 +1340,68 @@ function createBoss(floor, x, y) {
         this._endMove();
       } else if (kind === 'uniq') {
         this._uniqMove(game, dx, dy, d);
+        // 어픽스 '메아리치는': 반 박자 뒤 고유기가 한 번 더 — 첫 회피가 답의 전부가 아니게 된다
+        if (this.affixes && this.affixes.includes('echoing') && !this._echoLock) {
+          this._echoLock = true; // 재귀 방지 — 메아리가 메아리를 부르지 않게
+          (this._uq = this._uq || []).push({ t: 1.7, fn: (b, g) => {
+            const pp = g.player;
+            const ddx = pp.x - b.x, ddy = pp.y - b.y;
+            Particles.text(b.x, b.y - 46, '메아리!', { color: '#c9b8e8', size: 13 });
+            b._uniqMove(g, ddx, ddy, Math.hypot(ddx, ddy) || 1);
+            b._echoLock = false;
+          } });
+        }
+        this._endMove();
+      } else if (kind === 'beam') {
+        // 회전 광선 (v150): 조준각에서 한쪽으로 크게 쓸어간다 — 회전 반대쪽으로 도는 것이 답
+        this._beamSign = Math.random() < 0.5 ? 1 : -1;
+        this._beamA = Math.atan2(dy, dx) - this._beamSign * 1.1;
+        this.state = 'beam';
+        AudioSys.roar();
+      } else if (kind === 'mortar') {
+        // 이동 예측 폭격 (v150): 지금 위치가 아니라 '가려는 곳'에 떨어진다 — 급정거·역주행이 해법.
+        // 예측은 bb(평활 속도 추정기) 기반 — 봇·패드 입력에도 동일하게 작동한다
+        const flag = opt.includes('poison') ? { poison: true } : opt.includes('fire') ? { fire: true } : {};
+        const pv = game.bb || { pvx: 0, pvy: 0 };
+        const clampYm = (y) => Math.min(Math.max(y, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5));
+        for (let i = 0; i < 5; i++) {
+          const lead = 0.27 * i; // i번째 탄일수록 더 먼 미래를 겨눈다
+          this.curses.push({
+            x: p.x + pv.pvx * lead + (Math.random() - 0.5) * 36,
+            y: clampYm(p.y + pv.pvy * lead + (Math.random() - 0.5) * 30),
+            t: 0.72 + i * 0.16, r: 46, ...flag,
+          });
+        }
+        AudioSys.shoot();
+        this._endMove();
+      } else if (kind === 'pulse') {
+        // 수축 원환 (v150): 장외에서 조여든다 — 틈을 찾거나, 대시 무적으로 꿰뚫거나
+        Renderer.shake(3, 0.15);
+        AudioSys.thud();
+        const gapA = Math.random() * Math.PI * 2;
+        game.rings.push({ x: this.x, y: this.y, r: 330, minR: 12, maxR: 340, speed: -185, width: 15, dmg: 1, by: this.name, gapA, gapW: 0.95 });
+        if (this.phase === 2) { // 두 겹째는 틈이 반대편 — 틈에서 틈으로 달리는 것이 플레이
+          game.rings.push({ x: this.x, y: this.y, r: 415, minR: 12, maxR: 420, speed: -185, width: 15, dmg: 1, by: this.name, gapA: gapA + Math.PI, gapW: 0.95 });
+        }
+        this._endMove();
+      } else if (kind === 'echo') {
+        // 잔상 분신 (v150): 이 자리에 원혼이 남고, 본체는 도약 — 반 박자 뒤 두 곳에서 협공
+        const gx = this.x, gy = this.y;
+        this._echoes.push({ x: gx, y: gy, t: 1.4, flip: this.flip });
+        const projKind = this.def.punishProj || 'soul';
+        (this._uq = this._uq || []).push({ t: 0.8, fn: (b, g) => {
+          const pp = g.player;
+          const a = Math.atan2(pp.y - gy, pp.x - gx);
+          for (let i = 0; i < 5; i++) {
+            const aa = a + (i - 2) * 0.16;
+            g.spawnProjectile(projKind, gx, gy, { x: Math.cos(aa), y: Math.sin(aa) }, { speed: 215, dmg: bossDmg() });
+          }
+          AudioSys.shoot();
+        } });
+        const s = World.safeSpot(this.x + (Math.random() - 0.5) * 280, this.y + (Math.random() - 0.5) * 200);
+        Particles.burst(gx, gy, { count: 12, colors: this.def.deathPalette, speed: 140, life: 0.4, size: 3 });
+        this.x = s.x; this.y = s.y;
+        AudioSys.slash(2);
         this._endMove();
       } else if (kind === 'charge') {
         this.state = 'charge';
@@ -1282,6 +1417,10 @@ function createBoss(floor, x, y) {
         this._endMove();
       } else {
         this._endMove();
+      }
+      // 어픽스 '타오르는': 초식을 쓸 때마다 제 발밑이 불탄다 — 보스의 동선이 지형이 된다
+      if (this.affixes && this.affixes.includes('burning')) {
+        game.firePatches.push({ x: this.x, y: this.y, r: 30, life: 2.2, kind: 'fire', by: this.name });
       }
       this.stateT = 0;
     },
@@ -1314,6 +1453,43 @@ function createBoss(floor, x, y) {
           ctx.lineTo(this.x + this.aimDir.x * 520, this.y + this.aimDir.y * 520);
           ctx.stroke();
           ctx.restore();
+        } else if (k === 'beam') {
+          // 광선 예고 (v150): 쓸어갈 부채꼴 전체를 옅게 + 시작 사선을 진하게 — 어디서 시작해 어디로 도는지 읽힌다
+          const ca = Math.atan2(this.aimDir.y, this.aimDir.x);
+          ctx.save();
+          ctx.translate(this.x, this.y);
+          ctx.globalAlpha = 0.12 + Math.sin(this.animT * 14) * 0.05;
+          ctx.fillStyle = '#ffd866';
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.arc(0, 0, 460, ca - 1.15, ca + 1.15);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      // 광선 본체 (v150): 회전하며 쓸어가는 빛기둥
+      if (this.state === 'beam' && this._beamAng != null) {
+        ctx.save();
+        const bx = Math.cos(this._beamAng), by = Math.sin(this._beamAng);
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = '#fff7c0';
+        ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + bx * 460, this.y + by * 460); ctx.stroke();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = (this.def.deathPalette && this.def.deathPalette[0]) || '#ffd866';
+        ctx.lineWidth = 16;
+        ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + bx * 460, this.y + by * 460); ctx.stroke();
+        ctx.restore();
+      }
+      // 잔상 분신 (v150 echo): 남겨진 원혼 — 반투명 잔상이 사격 직전까지 떨린다
+      for (const e of this._echoes) {
+        const img2 = Sprites[this.def.sprite];
+        if (img2) {
+          Renderer.drawSprite(img2, e.x + (Math.random() - 0.5) * 2, e.y, {
+            flip: e.flip, alpha: 0.28 + Math.sin(this.animT * 20) * 0.08,
+            squashX: this.def.scale, squashY: this.def.scale,
+          });
         }
       }
       // 저주 장판 텔레그래프 (v117: 가변 반경 + 별/무해 마커 변주)

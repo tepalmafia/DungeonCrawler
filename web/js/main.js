@@ -571,7 +571,7 @@ const Game = {
       this.enemies.push(boss);
       // 보스 등장 카드 (v142): 이름·기믹을 정면으로 — 싸우기 전에 "누구인지"부터 각인
       boss.spawnT = 1.2;
-      this._bossIntro = { t: 2.4, name: boss.name, label: boss.def.mechanic ? boss.def.mechanic.label : '' };
+      this._bossIntro = { t: 2.4, name: boss.name, label: [boss.affixLabel, boss.def.mechanic ? boss.def.mechanic.label : ''].filter(Boolean).join(' · ') };
       this.banner = null; // 카드가 화면을 갖는다 — 유언 배너는 카드가 걷힌 뒤
       this._storyQ = this._storyQ || [];
       this._storyQ.push({ text: boss.def.banner, color: '#e43b44' });

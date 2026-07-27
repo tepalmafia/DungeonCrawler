@@ -934,7 +934,7 @@ const GamePlay = {
         const dir = { x: (p.x - ring.x) / (pd || 1), y: (p.y - ring.y) / (pd || 1) };
         this.hurtPlayer(ring.dmg, dir, 300, ring.by);
       }
-      if (ring.r > ring.maxR) this.rings.splice(i, 1);
+      if (ring.speed < 0 ? ring.r <= (ring.minR || 10) : ring.r > ring.maxR) this.rings.splice(i, 1); // v150: 수축 링(pulse) — 음수 속도는 안쪽으로 조여든다
     }
 
     // ── 투사체 ──
