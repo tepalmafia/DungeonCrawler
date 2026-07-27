@@ -78,7 +78,9 @@ const GameRewards = {
         min: +(this.time / 60).toFixed(1),
         deathBy: victory ? null : (this.deathInfo ? this.deathInfo.src : this._lastHurtBy) || null,
         hurts: this._runHurts || 0,
-        bosses: this._runBossLog || [],
+        // v148: 사본 저장 — 무한 모드 진입 시 같은 런이 두 번 정산되는데(1막 완주 + 최종 도달),
+        // 참조 공유면 첫 기록의 보스 목록이 소급 성장해 리포트가 전부 이중 집계된다 (사장 F9 실측)
+        bosses: (this._runBossLog || []).slice(),
         grace: (Meta.data.opts && Meta.data.opts.grace) || 0, // 리포트 해석용 — 가호 킨 런은 따로 읽는다
         bot: !!(typeof Bot !== 'undefined' && Bot.enabled), // 봇 런: 리포트에서 제외
         cheat: !!this.testMode, // v147: 테스트모드 수동 런은 라벨만 붙여 리포트에 포함 — 사장의 주력 테스트 동선(B 보스 직행)이 데이터가 되도록
