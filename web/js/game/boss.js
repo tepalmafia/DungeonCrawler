@@ -311,13 +311,16 @@ const BOSS_DEFS = {
 // 보스 타격 피해 (v142): 1~3층은 1(온보딩 — 압박은 템포가 담당), 4층+는 2 — 실수 3번이 죽음
 function bossDmg() { return Dungeon.floor >= 4 ? 2 : 1; }
 
+// 중간 층 (11~19·21~29·31~39): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
+// 20 로트가르 / 30 발디아 / 40 이노첸시오 = 막보스 (고정 HP). 41층+ (무한 가도): 각성 5보스 순환.
+// 모듈 스코프 공유 (v142 핫픽스: bossDefFor 안으로 옮겼다가 createBoss의 hpScale 참조가 깨져
+// 11층+ 보스 스폰이 전부 죽었다 — 단락 평가 탓에 1~10층만 무사해 검증을 통과한 잠복 버그)
+const BOSS_FIXED = { 20: 20, 30: 30, 40: 40, 45: 45, 50: 50 };
+const BOSS_CYCLE_POOL = { 2: [60, 61], 3: [62, 63], 4: [64, 65], 5: [66, 67] };
+
 // 층 → 보스 정의 해석 (v142: 예고 연출과 공유 — "이 층의 끝에서 누가 기다리는가")
 function bossDefFor(floor) {
-  // 중간 층 (11~19·21~29·31~39): 각성 보스(6~9)가 원혼으로 재림, 층당 +15% HP.
-  // 20 로트가르 / 30 발디아 / 40 이노첸시오 = 막보스 (고정 HP). 41층+ (무한 가도): 각성 5보스 순환
-  const FIXED = { 20: 20, 30: 30, 40: 40, 45: 45, 50: 50 };
-  // 왕의 공범들: 막별 전용 순환 보스 (재림 4인방 해체) — 51층+ 무한은 8인 전원 순환
-  const CYCLE_POOL = { 2: [60, 61], 3: [62, 63], 4: [64, 65], 5: [66, 67] };
+  const FIXED = BOSS_FIXED, CYCLE_POOL = BOSS_CYCLE_POOL;
   const defKey = floor <= 10 ? floor
     : FIXED[floor] ? FIXED[floor]
     : floor <= 50 ? CYCLE_POOL[Math.min(5, Math.ceil(floor / 10))][floor % 2]
@@ -333,7 +336,7 @@ function createBoss(floor, x, y) {
   // 필러 보스가 랜드마크 보스를 넘어섰고, 3런 사망의 절반이 이 한 킷에 몰렸다 (49층 17회 군집).
   // 상한 ×4.5: 49층 hp ≈2900 — 5막 서열(늑대 3600 < 왕 5000)을 회복한다. 51층+ 무한은 상한 없음 (의도된 지옥)
   const rawScale = 1 + 0.15 * (floor - 10);
-  const hpScale = floor <= 10 || FIXED[floor] ? 1 : floor <= 50 ? Math.min(4.5, rawScale) : rawScale;
+  const hpScale = floor <= 10 || BOSS_FIXED[floor] ? 1 : floor <= 50 ? Math.min(4.5, rawScale) : rawScale;
   const hp = Math.round(def.hp * hpScale);
   return {
     type: 'boss', isBoss: true,
