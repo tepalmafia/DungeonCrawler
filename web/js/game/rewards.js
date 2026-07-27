@@ -79,9 +79,11 @@ const GameRewards = {
         deathBy: victory ? null : (this.deathInfo ? this.deathInfo.src : this._lastHurtBy) || null,
         hurts: this._runHurts || 0,
         bosses: this._runBossLog || [],
+        grace: (Meta.data.opts && Meta.data.opts.grace) || 0, // 리포트 해석용 — 가호 킨 런은 따로 읽는다
         bot: !!(typeof Bot !== 'undefined' && Bot.enabled) || this.testMode, // 봇/치트 런 구분
       });
       while (log.length > 15) log.shift();
+      Meta.data.deathStreak = victory ? 0 : (Meta.data.deathStreak || 0) + 1; // 가호 힌트용 (v145)
     }
     Meta.data.lastRun = { floor: Dungeon.floor, level: this.level, kills: this.kills, victory: !!victory };
     // 보스 러시 기록: 도달 군주 수 + 최속 완주

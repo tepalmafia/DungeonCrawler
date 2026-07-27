@@ -224,6 +224,7 @@ const Game = {
     this.deathInfo = null;
     this._camp = null; // 모닥불 대화 — 다음 거점 방문 때 새 대화
     this._runHurts = 0; this._runBossLog = []; // 플레이 리포트 (v144) 런 집계 리셋
+    this._graceRevived = false; // 망자의 가호 (v145) — 런당 1회
     // 온보딩 (v139): 생애 첫 런만 — 걷기→베기→대시 순서로 몸을 깨운다
     this._obHints = Meta.data.runs === 0 && Meta.data.wins === 0;
     this._obMoved = false; this._obAtk = false; this._obDash = false;

@@ -258,7 +258,7 @@ const Meta = {
 
   // 설정 기본값 — 저장본에 없는 키만 채운다 (구버전 세이브 호환)
   _defaultOpts() {
-    return { bgm: 0.8, sfx: 0.8, shake: 1, dmgNum: 1, flash: 1, gore: 1 }; // gore: 0 끔 / 0.5 약하게 / 1 진하게
+    return { bgm: 0.8, sfx: 0.8, shake: 1, dmgNum: 1, flash: 1, gore: 1, grace: 0 }; // gore: 3단 / grace(망자의 가호): 0 끔 / 0.5 가호 / 1 비호
   },
 
   load() {
