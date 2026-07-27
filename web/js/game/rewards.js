@@ -17,6 +17,15 @@ const GameRewards = {
   // 진군로 선택 열기 — 막 시작(1·11·21·31·41층)마다
   openRouteChoice() {
     if (this.bossRush) return; // 원수 연전엔 길이 없다
+    // 온보딩 (v139): 생애 첫 출정은 갈림길 없이 — 부활 직후의 발걸음은 기억을 따라간다.
+    // 첫 10분 인지 부하 원칙: 이동/공격/대시/카드 3택 밖의 시스템은 첫 런에 내밀지 않는다
+    if (Meta.data.runs === 0 && Meta.data.wins === 0 && Dungeon.floor <= 1) {
+      this.route = 'old'; // 기억의 옛길: 단서 확률 증가 — 첫 런의 서사 훅과 정확히 겹친다
+      this.routeCards = [];
+      this._storyQ = this._storyQ || [];
+      this._storyQ.push({ text: '발이 먼저 기억한다 — 생전에 걷던 길이다 (기억의 옛길)', color: '#b08d4a' });
+      return;
+    }
     this.routeCards = ROUTES.map((r) => ({ ...r }));
     this.choiceLockT = 0.25;
     this.state = 'route';

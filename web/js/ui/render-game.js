@@ -1082,6 +1082,20 @@ const GameRender = {
     }
 
     // v120 ④ 막 시작 독백 — 속삭임과 같은 자리, 뼛빛 톤 (비차단)
+    // 온보딩 (v139): 첫 걸음 힌트 — 머리 위에서 한 동사씩 (걷는다 → 벤다 → 대시)
+    if (this._obHints && this.state === 'play' && this.player) {
+      const hint = !this._obMoved ? 'W A S D — 걷는다' : !this._obAtk ? 'J / 클릭 — 벤다' : 'Space — 대시';
+      const hp2 = this.player;
+      ctx.save();
+      ctx.globalAlpha = 0.7 + Math.sin(this.blinkT * 4) * 0.3;
+      ctx.font = 'bold 13px Galmuri11, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillText(hint, hp2.x + 1, hp2.y - 45);
+      ctx.fillStyle = '#ffd866';
+      ctx.fillText(hint, hp2.x, hp2.y - 46);
+      ctx.restore();
+    }
     if (this.monologue && this.state === 'play') {
       const m = this.monologue;
       const a = Math.min(1, m.t / 0.8) * Math.min(1, (m.maxT - m.t) / 0.6);

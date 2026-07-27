@@ -508,6 +508,14 @@ const GamePlay = {
     }
     World.tickGore(dt); // 고어 풍화 (v136): 핏자국·잔해가 서서히 마르며 사라진다
     if (this._chainT > 0) this._chainT -= dt; // 킬 체인 (v138) 창 감쇠
+    // 온보딩 (v139): 첫 걸음 힌트 진행 — 입력이 확인되면 다음 동사로
+    if (this._obHints) {
+      // 게임 상태로 감지 — 입력 프레임 폴링은 짧은 탭을 놓친다
+      if (Input.down('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight')) this._obMoved = true;
+      if (this._obMoved && p.attackCd > 0) this._obAtk = true;
+      if (this._obAtk && (p.dashCharges < p.dashMax || p.dashT > 0)) this._obDash = true;
+      if (this._obDash) this._obHints = false;
+    }
     // 절단 조각 (v126): 미끄러지며 회전 — 멈추면 바닥에 구워진다
     for (let i = this.gibs.length - 1; i >= 0; i--) {
       const g = this.gibs[i];
