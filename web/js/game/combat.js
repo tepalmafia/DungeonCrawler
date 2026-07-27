@@ -150,6 +150,7 @@ const GameCombat = {
     if ((e.isBoss || e.isMini) && this.player && this.player.rflags.crownshard) dmg = Math.round(dmg * 1.15);
     // 시너지 유물 (v128): 표적의 상태가 피해를 키운다 — 버스트 상한보다 먼저 곱한다
     if ((e.isBoss || e.isMini || e.elite) && this.player && this.player.rflags.wolftooth) dmg = Math.round(dmg * 1.1); // 흰 늑대의 이빨
+    if ((e.isBoss || e.isMini || e.elite) && this.player && this.player.flags.regicide) dmg = Math.round(dmg * 1.12); // 군주 살해자 (v151)
     if (e.status && e.status.burn > 0 && this.player && this.player.rflags.brand) dmg = Math.round(dmg * 1.25); // 낙인 인두
     if (e.status && e.status.shock > 0 && this.player && this.player.rflags.gallows) dmg = Math.round(dmg * 1.35); // 교수대의 밧줄
     if (e._markUntil && this.time < e._markUntil) dmg = Math.round(dmg * 1.25); // 사냥 표식 (계승)
@@ -287,6 +288,7 @@ const GameCombat = {
       return;
     }
     this.kills++;
+    if (this.player && this.player.flags.reapstep) this.player._reaperT = 1.5; // 사신의 걸음 (v151)
     // 킬 체인 (v138): 2초 안에 이어지는 처치 — 학살의 리듬이 화면에 보인다
     if (!e.neutral) {
       this._chainN = (this._chainT > 0 ? (this._chainN || 0) : 0) + 1;
@@ -674,6 +676,17 @@ const GameCombat = {
           p.skillCd = Math.max(0, p.skillCd - 1.5);
           Particles.text(p.x, p.y - 52, '스킬 -1.5초', { color: '#f7b32b', size: 13 });
         }
+        // 반격 충격파 (v151 희귀 특성): 완벽 회피가 공격이 된다
+        if (p.flags.riposte) {
+          for (const en of this.enemies) {
+            if (en.dead || en.phased || en.neutral) continue;
+            const dd = Math.hypot(en.x - p.x, en.y - p.y);
+            if (dd < 130) {
+              this.damageEnemy(en, 3, { x: (en.x - p.x) / (dd || 1), y: (en.y - p.y) / (dd || 1) }, { feel: false, kb: 280, color: '#c9b8e8' });
+            }
+          }
+          Particles.ring(p.x, p.y, { r0: 10, r1: 126, life: 0.35, color: '#c9b8e8', width: 4 });
+        }
         // 검은 거울 조각 (v128): 완벽 회피의 잔상이 주위를 벤다
         if (p.rflags.mirror) {
           for (const en of this.enemies) {
@@ -744,6 +757,13 @@ const GameCombat = {
     // 실력의 벽을 낮추되 1뎀 잡몹 구간은 그대로 — 긴장의 최저선은 지킨다
     if ((Meta.data.opts && Meta.data.opts.grace) >= 0.5 && dmg >= 2) dmg -= 1;
     this._runHurts = (this._runHurts || 0) + 1; // 플레이 리포트 (v144): 런당 피격 집계
+    // 핏값 (v151 양날): 맞을 때마다 골드가 샌다
+    if (p.flags.bloodprice && this.gold > 0) {
+      const loss = Math.min(8, this.gold);
+      this.gold -= loss;
+      Particles.text(p.x, p.y - 44, `-${loss}G`, { color: '#f7b32b', size: 12 });
+    }
+    if (p.flags.vengeblood) { p._vengeT = 3; Particles.text(p.x, p.y - 56, '원한 폭주!', { color: '#ffd866', size: 13 }); } // 원한 폭주 (v151)
     p.hp -= dmg;
     p.hurtPoseT = 0.32; // 피격 스프라이트 — 젖혀진 자세로 "맞았다"를 몸으로 보여준다
     // 고어 (기획 §7): 나도 피를 흘린다 — 후퇴선이 핏자국으로 남는다

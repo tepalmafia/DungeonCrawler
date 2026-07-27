@@ -155,6 +155,41 @@ const TRAITS = [
     } },
   { id: 'monarch', unlock: { stat: 'wins', n: 1, label: '첫 복수' },   name: '왕의 권능',   tag: '전설', color: '#ffd866', legend: true,
     desc: '처치 시 5% 확률로 영혼 폭발 (주변에 3 피해)', flag: 'monarch' },
+
+  // ── 희귀 (v151 "특성이 단조롭다"): 수치 채우기가 아니라 결정이 되는 카드 ──
+  // 양날 — 힘에는 값이 있다
+  { id: 'bloodprice', rare: true, name: '핏값', tag: '희귀', color: '#c9b8e8',
+    desc: '공격력 +2 — 대신 피격마다 골드 8을 흘린다', flag: 'bloodprice', apply: (p) => { p.bonusAtk += 2; } },
+  { id: 'heavyplate', rare: true, name: '중갑 서약', tag: '희귀', color: '#c9b8e8',
+    desc: '최대 HP +3, 즉시 3 회복 — 대신 이동 속도 -10%',
+    apply: (p) => { p.maxHp += 3; p.hp = Math.min(p.maxHp, p.hp + 3); p.speed *= 0.9; } },
+  { id: 'gambler', rare: true, name: '도박사의 피', tag: '희귀', color: '#c9b8e8',
+    desc: '크리티컬 확률 +20% — 대신 크리티컬이 아닌 일격은 피해 -1', flag: 'gambler', apply: (p) => { p.critChance += 0.20; } },
+  // 조건부 — 상황을 읽는 자의 카드
+  { id: 'underdog', rare: true, name: '역전의 명수', tag: '희귀', color: '#c9b8e8',
+    desc: 'HP가 절반 이하일 때 공격 속도 +25%', flag: 'underdog' },
+  { id: 'firststrike', rare: true, name: '선제일격', tag: '희귀', color: '#c9b8e8',
+    desc: '방에 들어선 뒤 첫 일격은 확정 크리티컬', flag: 'firststrike' },
+  { id: 'execeye', rare: true, name: '처형인의 눈', tag: '희귀', color: '#c9b8e8',
+    desc: 'HP 30% 이하의 적에게 주는 피해 +2', flag: 'execeye' },
+  { id: 'regicide', rare: true, unlock: { stat: 'bestFloor', n: 5, label: '5층 도달' }, name: '군주 살해자', tag: '희귀', color: '#c9b8e8',
+    desc: '보스·정예에게 주는 피해 +12%', flag: 'regicide' },
+  { id: 'collector', rare: true, name: '수집가', tag: '희귀', color: '#c9b8e8',
+    desc: '유물 2개마다 공격력 +1', flag: 'collector' },
+  { id: 'duelist', rare: true, name: '결투가', tag: '희귀', color: '#c9b8e8',
+    desc: '방에 홀로 남은 적에게 주는 피해 +3', flag: 'duelist' },
+  { id: 'reapstep', rare: true, name: '사신의 걸음', tag: '희귀', color: '#c9b8e8',
+    desc: '처치 후 1.5초간 이동 속도 +30%', flag: 'reapstep' },
+  // 동사 — 리듬을 바꾸는 카드
+  { id: 'echostrike', rare: true, unlock: { stat: 'totalKills', n: 400, label: '누적 400킬' }, name: '메아리 일격', tag: '희귀', color: '#c9b8e8',
+    desc: '네 번째 일격마다 잔격이 한 번 더 때린다 (50% 피해)', flag: 'echostrike' },
+  { id: 'riposte', rare: true, unlock: { stat: 'bestFloor', n: 3, label: '3층 도달' }, name: '반격 충격파', tag: '희귀', color: '#c9b8e8',
+    desc: '완벽 회피 순간 주변 적에게 3 피해와 넉백', flag: 'riposte' },
+  // 전설 신설
+  { id: 'vengeblood', unlock: { stat: 'runs', n: 8, label: '8회 도전' }, name: '원한 폭주', tag: '전설', color: '#ffd866', legend: true,
+    desc: '피격당하면 3초간 공격력 +3 — 상처가 칼이 된다', flag: 'vengeblood' },
+  { id: 'kingsoath', unlock: { stat: 'wins', n: 1, label: '첫 복수' }, name: '왕의 유산', tag: '전설', color: '#ffd866', legend: true,
+    desc: '새 층에 들어설 때마다 무작위 스탯 특성 1개를 자동으로 얻는다', flag: 'kingsoath' },
 ];
 
 // 레벨업 카드 뽑기 — 이미 가진 고유(flag) 특성은 제외.
@@ -177,8 +212,9 @@ function rollTraitCards(player, n = 3) {
   const ELEM_TAGS = ['화염', '번개', '독']; // 교차 반응의 재료 원소
   const hasElemTree = ELEM_TAGS.some((el) => (tagCount[el] || 0) >= 2);
   const weightOf = (t) => {
-    if (t.legend) return 0.08; // 전설: 극저확률 — 나오면 런이 특별해진다
+    if (t.legend) return 0.1; // 전설: 극저확률 — 나오면 런이 특별해진다 (풀 확대에 맞춰 0.08→0.1)
     let w = (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
+    if (t.rare) w *= 0.42; // 희귀 (v151): 세 판에 한 번쯤 — 나왔을 때 '오늘 런의 방향'이 되는 빈도
     // 교차 원소 유도 (반응 노출 계측: 30분에 7회 발동 — 믹스가 안 나와서 반응이 묻혔다):
     // 원소 트리 하나를 2픽 이상 팠으면, 아직 안 판 다른 원소 카드가 더 자주 보인다
     if (hasElemTree && ELEM_TAGS.includes(t.tag) && (tagCount[t.tag] || 0) <= 1) w += 0.6;
