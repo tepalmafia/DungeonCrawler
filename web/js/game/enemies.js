@@ -74,6 +74,37 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       if (this.hitCd > 0) this.hitCd -= dt;
       if (this._slamCd > 0) this._slamCd -= dt;
       if (this.hasteT > 0) this.hasteT -= dt; // 절규자의 가속 함성 (2막)
+      // ── 정예 공용 동사 (v152): 대지 강타 — 정예가 '색만 다른 몹'이 아니라 다른 리듬이 되게.
+      // 모든 정예(근접·원거리 불문)가 근거리에서 예고(0.55s) 후 충격파 링을 터뜨린다.
+      // tickTimers는 전 몹이 매 프레임 부르는 유일한 공용 훅 — 킷별 update 수정 없이 전 층에 깔린다
+      if (this.elite && !this.isBoss && !this.isMini && !this.neutral && !this.dead && this.spawnT <= 0 &&
+          typeof Game !== 'undefined' && Game.player && Game.state === 'play') {
+        if (this._stompCd == null) this._stompCd = 2.5 + Math.random() * 2;
+        if (this._stompT > 0) {
+          this._stompT -= dt;
+          if (Math.random() < 0.5) {
+            Particles.burst(this.x + (Math.random() - 0.5) * this.r * 2, this.y + this.r * 0.6, {
+              count: 1, colors: ['#ff4757', '#ffb74d'], speed: 40, life: 0.25, size: 2, gravity: -60,
+            });
+          }
+          if (this._stompT <= 0) {
+            Game.rings.push({ x: this.x, y: this.y, r: 10, maxR: 125, speed: 250, width: 12, dmg: 1, by: '정예의 강타' });
+            Particles.burst(this.x, this.y + 6, { count: 10, colors: ['#c8d4e4', '#8a8074'], speed: 120, life: 0.35, size: 3 });
+            Renderer.shake(2.5, 0.12);
+            AudioSys.thud();
+          }
+        } else if (this._stompCd > 0) {
+          this._stompCd -= dt;
+        } else {
+          const p = Game.player;
+          if (Math.hypot(p.x - this.x, p.y - this.y) < 170) {
+            this._stompT = 0.55;
+            this._stompCd = 4 + Math.random() * 2.5;
+            Particles.text(this.x, this.y - this.r - 14, '!', { color: '#ff4757', size: 16 });
+            AudioSys.shard();
+          }
+        }
+      }
     },
 
     touchPlayer(game, dmg) {
@@ -1286,12 +1317,28 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const p = game.player;
         this.orbitA += this.orbitDir * 2.2 * dt;
         const dx = p.x - this.x, dy = p.y - this.y, d = Math.hypot(dx, dy) || 1;
-        // 나선: 접근 성분 + 회전 성분
-        const vx = (dx / d) * 0.6 + Math.cos(this.orbitA) * 0.8;
-        const vy = (dy / d) * 0.6 + Math.sin(this.orbitA) * 0.8;
-        const vl = Math.hypot(vx, vy) || 1;
-        const spd = this.effSpeed();
-        World.moveGhost(this, (vx / vl) * spd * dt, (vy / vl) * spd * dt);
+        // 점화 쇄도 (v152): 나선 스침만 있던 몹에 커밋 공격 — 확 밝아진 뒤 직선으로 파고든다
+        if (this._dashCd > 0) this._dashCd -= dt;
+        if (this._glowT > 0) {
+          this._glowT -= dt; // 예고: 제자리에서 밝아진다
+          if (Math.random() < 0.6) Particles.burst(this.x, this.y, { count: 2, colors: ['#a9e3ff', '#ffffff'], speed: 50, life: 0.2, size: 2 });
+          if (this._glowT <= 0) { this._rushT = 0.55; AudioSys.shard(); }
+        } else if (this._rushT > 0) {
+          this._rushT -= dt;
+          World.moveGhost(this, this._rushDir.x * 240 * dt, this._rushDir.y * 240 * dt);
+        } else {
+          // 나선: 접근 성분 + 회전 성분
+          const vx = (dx / d) * 0.6 + Math.cos(this.orbitA) * 0.8;
+          const vy = (dy / d) * 0.6 + Math.sin(this.orbitA) * 0.8;
+          const vl = Math.hypot(vx, vy) || 1;
+          const spd = this.effSpeed();
+          World.moveGhost(this, (vx / vl) * spd * dt, (vy / vl) * spd * dt);
+          if (this._dashCd <= 0 && d > 120 && d < 240) {
+            this._glowT = 0.3;
+            this._dashCd = 3.8;
+            this._rushDir = { x: dx / d, y: dy / d };
+          }
+        }
         this.flip = dx < 0;
         if (Math.random() < 0.3) {
           Particles.burst(this.x, this.y, { count: 1, colors: ['#7ac0e8', '#3a8ac0'], speed: 15, life: 0.3, size: 2 });
@@ -1299,7 +1346,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.touchPlayer(game, 1);
       },
       draw(ctx) {
-        const pulse = 1 + Math.sin(this.animT * 8) * 0.15;
+        let pulse = 1 + Math.sin(this.animT * 8) * 0.15;
+        if (this._glowT > 0) pulse = 1.5; // 점화 — 위험 신호
+        if (this._rushT > 0) pulse = 1.25;
         Renderer.drawSprite(this.skin(Sprites.wisp), this.x, this.y + Math.sin(this.animT * 5) * 3, { flip: this.flip, squashX: pulse, squashY: pulse, shadow: false });
         this.drawStatus(ctx);
       },
@@ -1387,11 +1436,31 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             if (dd < cd) { cd = dd; corpse = c; }
           }
         }
+        // 도약 물기 (v152): 순수 추격이던 유일한 근접몹에 커밋 공격 — 웅크림 예고 후 덮친다
+        if (this._pounceCd > 0) this._pounceCd -= dt;
+        if (this._crouchT > 0) {
+          this._crouchT -= dt;
+          if (this._crouchT <= 0) { this._lungeT = 0.3; AudioSys.shoot(); }
+          this.touchPlayer(game, this.eaten > 0 ? 2 : 1);
+          return;
+        }
+        if (this._lungeT > 0) {
+          this._lungeT -= dt;
+          World.moveEntity(this, this._lungeDir.x * 330 * dt, this._lungeDir.y * 330 * dt);
+          this.touchPlayer(game, this.eaten > 0 ? 2 : 1);
+          return;
+        }
         const tx = corpse ? corpse.x : p.x, ty = corpse ? corpse.y : p.y;
         const dx = tx - this.x, dy = ty - this.y, d = Math.hypot(dx, dy) || 1;
         const spd = this.effSpeed();
         World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
         this.flip = dx < 0;
+        if (!corpse && this._pounceCd <= 0 && d < 140) {
+          const pd = Math.hypot(p.x - this.x, p.y - this.y) || 1;
+          this._crouchT = 0.35;
+          this._pounceCd = 2.6;
+          this._lungeDir = { x: (p.x - this.x) / pd, y: (p.y - this.y) / pd };
+        }
         if (corpse && d < 20) {
           corpse.t = corpse.dur; // 시체 소멸
           this.eaten++;
@@ -1404,11 +1473,17 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.touchPlayer(game, this.eaten > 0 ? 2 : 1);
       },
       draw(ctx) {
-        const hunch = 1 + Math.sin(this.animT * 8) * 0.06;
-        Renderer.drawSprite(this.skin(Sprites.ghoul), this.x, this.y, { flip: this.flip, squashY: hunch, shadow: true });
+        let hunch = 1 + Math.sin(this.animT * 8) * 0.06;
+        if (this._crouchT > 0) hunch = 0.72; // 웅크림 — 덮치기 직전
+        if (this._lungeT > 0) hunch = 1.3;
+        Renderer.drawSprite(this.skin(Sprites.ghoul), this.x, this.y, { flip: this.flip, squashY: hunch, squashX: this._lungeT > 0 ? 1.25 : 1, shadow: true });
+        if (this._crouchT > 0) {
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 26);
+        }
         if (this.eaten > 0) {
           ctx.fillStyle = '#e43b44'; ctx.font = 'bold 10px Galmuri11, monospace'; ctx.textAlign = 'center';
-          ctx.fillText('▲'.repeat(this.eaten), this.x, this.y - 26);
+          ctx.fillText('▲'.repeat(this.eaten), this.x, this.y - (this._crouchT > 0 ? 38 : 26));
         }
         this.drawStatus(ctx);
       },
