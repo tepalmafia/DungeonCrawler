@@ -87,16 +87,18 @@ const Game = {
         deathFloors[r.floor] = (deathFloors[r.floor] || 0) + 1;
         if (r.deathBy) causes[r.deathBy] = (causes[r.deathBy] || 0) + 1;
       }
-      for (const b of r.bosses || []) (bossLines[b.f] = bossLines[b.f] || []).push(b.t + (r.cheat ? 'c' : ''));
+      for (const b of r.bosses || []) (bossLines[b.f] = bossLines[b.f] || []).push(b.t + 's' + (r.cheat ? 'c' : ''));
     }
+    // v148: 이중 정산(무한 진입 런) 잔재 중복 제거 — 같은 층·같은 초는 한 번만
+    for (const f in bossLines) bossLines[f] = [...new Set(bossLines[f])];
     const top = (o, suf) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([k, v]) => `${k}${suf}×${v}`).join('  ') || '없음';
     const text = [
       `[무덤에서 왕좌까지 — 플레이 리포트] 런 ${log.length} · 승리 ${wins} · 최고 ${best}층`,
       `사망 층 분포: ${top(deathFloors, '층')}`,
       `사망 원인 TOP: ${top(causes, '')}`,
-      `보스 처치 (층: 소요초, c=치트런): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
-        .map(([f, ts]) => `${f}층 ${ts.join('/')}s`).join(' · ') || '없음'}`,
+      `보스 처치 (층: 소요, c=치트런): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
+        .map(([f, ts]) => `${f}층 ${ts.join('/')}`).join(' · ') || '없음'}`,
       `런당 피격 평균: ${(hurts / log.length).toFixed(1)}`,
       '── 최근 런 ──',
       ...log.slice(-6).map((r) => `${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` + (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '')),

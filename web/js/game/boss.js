@@ -335,9 +335,19 @@ function createBoss(floor, x, y) {
   // 계측 조정 (관통 v2): 배율 무제한이라 49층 절망의 바르곤 hp 4450 > 흰 늑대 3600 —
   // 필러 보스가 랜드마크 보스를 넘어섰고, 3런 사망의 절반이 이 한 킷에 몰렸다 (49층 17회 군집).
   // 상한 ×4.5: 49층 hp ≈2900 — 5막 서열(늑대 3600 < 왕 5000)을 회복한다. 51층+ 무한은 상한 없음 (의도된 지옥)
-  const rawScale = 1 + 0.15 * (floor - 10);
-  const hpScale = floor <= 10 || BOSS_FIXED[floor] ? 1 : floor <= 50 ? Math.min(4.5, rawScale) : rawScale;
-  const hp = Math.round(def.hp * hpScale);
+  // v148 (사장 F9 실측: 11~20층 보스 TTK 10~13초 — 긴장이 생길 시간이 없다): 선형 +0.15/층은
+  // 곱연산으로 자라는 플레이어 화력에 반드시 추월당한다 (v141 잡몹과 동일 결론) → 지수 1.17^(f-10).
+  // 서열 보존은 배율 상한 대신 절대 HP 상한 3200으로: 필러가 흰 늑대(3600)·왕(5000)을 넘지 않는다.
+  // 51층+ 무한은 기존 선형 유지 (지수로 두면 1.17^41=×620 — 의도된 지옥이 아니라 버그다)
+  const rawScale = floor > 50 ? 1 + 0.15 * (floor - 10) : Math.pow(1.17, floor - 10);
+  const hpScale = floor <= 10 || BOSS_FIXED[floor] ? 1 : rawScale;
+  let hp = floor > 10 && floor <= 50 && !BOSS_FIXED[floor]
+    ? Math.min(3200, Math.round(def.hp * hpScale))
+    : Math.round(def.hp * hpScale);
+  // 막 결산 고정 보스(21~50층)가 필러 상한(3200) 아래로 꺼지는 서열 역전 방지 —
+  // 저작 HP가 구 선형 곡선 기준이라 20층 1600·30층 2100이 필러보다 약했다 (v148 곡선 검증에서 발각).
+  // 최종 서열: 필러 3200 < 막 결산 3520 < 흰 늑대 3600 < 왕 5000
+  if (BOSS_FIXED[floor] && floor > 10 && floor <= 50) hp = Math.max(hp, 3520);
   return {
     type: 'boss', isBoss: true,
     name: def.name,
