@@ -145,6 +145,22 @@ const GameRender = {
       else if (this.state === 'altar') HUD.drawAltar(ctx, this.blinkT);
       else if (this.state === 'classes') HUD.drawClasses(ctx, this.blinkT);
       else HUD.drawCodex(ctx, this.blinkT, this);
+      // 거점 배너 (F9 리포트 복사 등) — 플레이 HUD와 별개 경로라 여기서 직접 그린다 (v146: 안 보이던 버그)
+      if (this.state === 'hub' && this.banner) {
+        const b = this.banner;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (b.life / b.maxLife) * 3);
+        ctx.font = 'bold 15px Galmuri11, monospace';
+        ctx.textAlign = 'center';
+        const bw = ctx.measureText(b.text).width + 30;
+        ctx.fillStyle = 'rgba(8,8,15,0.85)';
+        ctx.fillRect(Renderer.W / 2 - bw / 2, 26, bw, 28);
+        ctx.strokeStyle = '#3a3a4c';
+        ctx.strokeRect(Renderer.W / 2 - bw / 2 + 0.5, 26.5, bw - 1, 27);
+        ctx.fillStyle = b.color || '#f7b32b';
+        ctx.fillText(b.text, Renderer.W / 2, 45);
+        ctx.restore();
+      }
       if (this.showManual) HUD.drawManual(ctx, this, this.showManual);
       if (this.showSettings) HUD.drawSettings(ctx, this);
       return;
