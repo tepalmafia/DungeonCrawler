@@ -153,7 +153,7 @@ const GameCombat = {
     if (e.status && e.status.burn > 0 && this.player && this.player.rflags.brand) dmg = Math.round(dmg * 1.25); // 낙인 인두
     if (e.status && e.status.shock > 0 && this.player && this.player.rflags.gallows) dmg = Math.round(dmg * 1.35); // 교수대의 밧줄
     if (e._markUntil && this.time < e._markUntil) dmg = Math.round(dmg * 1.25); // 사냥 표식 (계승)
-    if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.015)));
+    if (e.isBoss) dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * 0.012))); // v141: 1.5→1.2% — 보스 순삭 제보
     // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
     if (crit && !e.isBoss && this.player && this.player.rflags.stormcrit && Math.random() < 0.2) {
       e.status.shock = Math.max(e.status.shock || 0, 2);
@@ -727,6 +727,9 @@ const GameCombat = {
       return;
     }
 
+    // 위협 스케일 (v141, 실플레이 제보 "갈수록 쉬워진다"): 적 피해가 층과 함께 오른다 —
+    // 잡몹 접촉 1이 끝까지 1이면, 커진 최대 HP·회복 앞에서 위협이 소멸한다
+    dmg += Dungeon.floor >= 31 ? 2 : Dungeon.floor >= 16 ? 1 : 0;
     p.hp -= dmg;
     p.hurtPoseT = 0.32; // 피격 스프라이트 — 젖혀진 자세로 "맞았다"를 몸으로 보여준다
     // 고어 (기획 §7): 나도 피를 흘린다 — 후퇴선이 핏자국으로 남는다

@@ -101,6 +101,7 @@ const Game = {
         ult: p.ult || 0, ultG: p.ultGauge || 0,
         floorAtk: p.floorAtk || 0, reviveUsed: !!p.reviveUsed,
       }));
+      this._saveFlashT = 1.4; // 자동 저장 표시 (v141) — '저장이 없다'는 오해 해소
     } catch (e) { /* 저장 실패는 게임을 막지 않는다 */ }
   },
 
@@ -528,7 +529,11 @@ const Game = {
   // 계측 근거: 5층부터 받은 피해가 거의 0 — 성장(공격력·진화·유물)이 +30% 기울기를 추월한다
   floorHpScale() {
     const f = Dungeon.floor;
-    return f <= 5 ? 1 + (f - 1) * 0.3 : 2.2 + (f - 5) * 0.4;
+    if (f <= 5) return 1 + (f - 1) * 0.3;
+    if (f <= 10) return 2.2 + (f - 5) * 0.4;
+    // v141 난이도 역전 수정 (실플레이 제보): 11층+ 지수 곡선 — 플레이어 화력은 곱연산으로
+    // 자라는데 적 HP가 선형(+0.4/층)이면 후반이 반드시 쉬워진다. 10층 접합점에서 연속
+    return 4.2 * Math.pow(1.07, f - 10);
   },
 
   // 열기 반영 적 강화 배율

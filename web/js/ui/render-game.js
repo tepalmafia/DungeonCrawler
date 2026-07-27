@@ -1055,10 +1055,22 @@ const GameRender = {
       ctx.fillText('H 또는 / — 전체 매뉴얼 (던전·성장 안내 포함)', Renderer.W / 2, Renderer.H - 100);
       ctx.fillStyle = '#9aa0b4';
       ctx.fillText('ESC / P — 계속하기', Renderer.W / 2, Renderer.H - 78);
+      ctx.fillStyle = '#2ec4b6';
+      ctx.fillText('B — 저장하고 거점으로 (거점에서 이어하기)', Renderer.W / 2, Renderer.H - 56);
       ctx.fillStyle = '#e43b44';
-      ctx.fillText('Q — 런 포기하고 정산', Renderer.W / 2, Renderer.H - 56);
+      ctx.fillText('Q — 런 포기하고 정산 (기록 소멸)', Renderer.W / 2, Renderer.H - 34);
       ctx.fillStyle = '#4a4a5c';
-      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, Renderer.H - 32);
+      ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, Renderer.H - 12);
+    }
+    // 자동 저장 표시 (v141): 방 입장마다 기록된다는 걸 보여준다 — '저장이 없다'는 오해 해소
+    if (this._saveFlashT > 0 && this.state === 'play') {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = Math.min(1, this._saveFlashT);
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 12px Galmuri11, monospace';
+      ctx.fillStyle = '#2ec4b6';
+      ctx.fillText('◈ 기록됨', Renderer.W - 14, Renderer.H - 26);
+      ctx.globalAlpha = 1;
     }
 
     if (this.showManual && this.state === 'play') HUD.drawManual(ctx, this, this.showManual);
