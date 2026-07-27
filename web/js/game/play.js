@@ -507,6 +507,7 @@ const GamePlay = {
       if (this.corpses[i].t >= this.corpses[i].dur) this.corpses.splice(i, 1);
     }
     World.tickGore(dt); // 고어 풍화 (v136): 핏자국·잔해가 서서히 마르며 사라진다
+    if (this._chainT > 0) this._chainT -= dt; // 킬 체인 (v138) 창 감쇠
     // 절단 조각 (v126): 미끄러지며 회전 — 멈추면 바닥에 구워진다
     for (let i = this.gibs.length - 1; i >= 0; i--) {
       const g = this.gibs[i];

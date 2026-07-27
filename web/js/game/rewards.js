@@ -154,6 +154,10 @@ const GameRewards = {
   onBossDead() {
     this.arrows = [];
     this.rings = [];
+    // 게임필 (v138): 원수를 벤 순간 — 시간이 늘어지고 화면이 하얗게 번쩍인다 (트레일러의 그 컷)
+    this.slowmoT = Math.max(this.slowmoT || 0, 0.65);
+    this.critFlash = 0.14;
+    Renderer.shake(9, 0.5);
     // 보스 자백 (기획 §4 → v120 ③): 막보스의 마지막 말이 고정 단서가 된다.
     // 첫 처치는 자백 '장면'(암전+초상+타이핑) — 단서는 1회만 나오므로 재회차 축약이 자동으로 보장된다
     {

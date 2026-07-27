@@ -282,6 +282,19 @@ const GameCombat = {
       return;
     }
     this.kills++;
+    // 킬 체인 (v138): 2초 안에 이어지는 처치 — 학살의 리듬이 화면에 보인다
+    if (!e.neutral) {
+      this._chainN = (this._chainT > 0 ? (this._chainN || 0) : 0) + 1;
+      this._chainT = 2;
+      if (this._chainN >= 2) {
+        const cn = this._chainN;
+        Particles.text(e.x, e.y - 48, `×${cn}`, {
+          color: cn >= 8 ? '#e43b44' : cn >= 5 ? '#f7b32b' : '#ffd866',
+          size: Math.min(15 + cn * 1.5, 30),
+        });
+        if (cn === 5 || cn === 8 || cn === 12) Renderer.shake(Math.min(4 + cn * 0.4, 9), 0.2);
+      }
+    }
     this._fearCheck(e, brutal); // 드라마 AI: 동료의 죽음을 본 산 자는 무너질 수 있다
     // 징조: 최근 시체 기록 — 어둠의 눈이 뜨면 이 자리에서 다시 일어난다
     if (this._omenKills && !e.isBoss && !e.isMini) {

@@ -787,6 +787,20 @@ const GameRender = {
 
     // 플레이어 투사체
     for (const b of this.pbolts) {
+      // 게임필 (v138): 모션 스트릭 — 탄이 지나온 자리가 잠깐 빛난다 (상태 없는 렌더 트레일)
+      if (b.kind !== 'pwave') {
+        const tl = b.kind === 'parrow' ? 16 : 12;
+        const tc = b.kind === 'parrow' ? '217,203,184' : b.kind === 'pflask' ? '201,217,74' : '197,108,240';
+        const tg = ctx.createLinearGradient(b.x - b.dir.x * tl, b.y - b.dir.y * tl, b.x, b.y);
+        tg.addColorStop(0, `rgba(${tc},0)`);
+        tg.addColorStop(1, `rgba(${tc},${b.finisher ? 0.65 : 0.4})`);
+        ctx.strokeStyle = tg;
+        ctx.lineWidth = b.finisher ? 4 : 2.5;
+        ctx.beginPath();
+        ctx.moveTo(b.x - b.dir.x * tl, b.y - b.dir.y * tl);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
       if (b.kind === 'pwave') {
         // 검기: 진행 방향에 수직인 칼날
         ctx.save();
