@@ -29,6 +29,9 @@ const Input = {
       const rect = canvas.getBoundingClientRect();
       this.mouse.x = ((e.clientX - rect.left) / rect.width) * canvas.width;
       this.mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+      // v167: 최근 이동 시각 — 조준이 마우스를 따를지 이동 방향을 따를지 가른다.
+      // 키보드로만 노는 사람이 가만히 놓인 커서에 끌려가면 안 된다
+      this.mouse.moveT = performance.now() / 1000;
     });
 
     // v157: 포인터가 캔버스를 떠나면 좌표를 화면 밖으로 (모든 호버 판정의 뿌리 수정).
@@ -36,7 +39,7 @@ const Input = {
     // 좌표가 **마지막 위치에 얼어붙었다**. 그 결과 로드아웃 줄 위에서 마우스를 뺀 뒤 키보드만
     // 써도 현상금이 계속 조절됐다 (실측 1200x760에서 3→6→4). 사장이 겪은 "몰래 오른 열기"의
     // 잔존 경로이자, 호버를 쓰는 모든 UI에 공통으로 걸려 있던 문제다
-    const leave = () => { this.mouse.x = -9999; this.mouse.y = -9999; this.mouse.down = false; };
+    const leave = () => { this.mouse.x = -9999; this.mouse.y = -9999; this.mouse.down = false; this.mouse.moveT = -999; };
     canvas.addEventListener('mouseleave', leave);
     window.addEventListener('blur', leave);
 
@@ -46,6 +49,7 @@ const Input = {
         this.mouse.justDown = true;
         this.buf.Mouse0 = this.BUFT;
         this.anyKeyPressed = true;
+        this.mouse.moveT = performance.now() / 1000; // 클릭도 '마우스를 쓰는 중'이다 (v167)
       }
       if (e.button === 2) {
         this.mouse.rightJustDown = true; // 우클릭 = 스킬

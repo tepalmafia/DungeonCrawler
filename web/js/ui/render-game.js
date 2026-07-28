@@ -785,7 +785,10 @@ const GameRender = {
 
     // 자동 타겟 표시 (모서리 브래킷)
     if (this.state === 'play' && this.player) {
-      const t = this.player.autoTarget(this);
+      // v167: 브래킷은 **실제로 조준 중인 대상**을 가리킨다.
+      // 종전엔 autoTarget(가장 가까운 적)을 그렸는데, 조준이 플레이어에게 넘어온 지금
+      // 그대로 두면 화면이 또 거짓말을 한다 (겨눈 곳과 다른 곳에 표시)
+      const t = this.player._aimTarget && !this.player._aimTarget.dead ? this.player._aimTarget : null;
       if (t) {
         const r = t.r + 8;
         const L = 6;
