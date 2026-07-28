@@ -390,6 +390,23 @@ const HUD = {
       ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#5a4630';
       this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
+      // v170: 대가 표시 — 얻으면 잃는다는 사실이 **고르기 전에** 화면에 있어야 결정이 된다
+      if (c.costHp) {
+        ctx.save();
+        ctx.font = 'bold 14px Galmuri11, monospace';
+        ctx.fillStyle = '#e43b44';
+        ctx.textAlign = 'center';
+        // 카드 **위쪽 바깥**에 경고 띠 — 로어·설명과 절대 겹치지 않는 자리다
+        const by = r.y + lift - 26;
+        ctx.fillStyle = 'rgba(228,59,68,0.92)';
+        ctx.fillRect(r.x + 6, by, r.w - 12, 22);
+        ctx.fillStyle = '#fff2f2';
+        ctx.fillText(`⚠ 대가 — 최대 HP -${c.costHp}`, cx, by + 16);
+        ctx.strokeStyle = 'rgba(228,59,68,0.85)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(r.x + 3, r.y + lift + 3, r.w - 6, r.h - 6);
+        ctx.restore();
+      }
       ctx.font = 'italic 10.5px Galmuri11, monospace';
       ctx.fillStyle = 'rgba(90,60,30,0.75)';
       this._wrapText(ctx, `"${c.lore}"`, cx, r.y + lift + r.h - 44, r.w - 26, 14);
@@ -465,6 +482,23 @@ const HUD = {
       ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#9aa0b4';
       this._wrapText(ctx, c.desc, cx, r.y + lift + 80, r.w - 24, 16);
+      // v170: 대가 표시 — 얻으면 잃는다는 사실이 **고르기 전에** 화면에 있어야 결정이 된다
+      if (c.costHp) {
+        ctx.save();
+        ctx.font = 'bold 14px Galmuri11, monospace';
+        ctx.fillStyle = '#e43b44';
+        ctx.textAlign = 'center';
+        // 카드 **위쪽 바깥**에 경고 띠 — 로어·설명과 절대 겹치지 않는 자리다
+        const by = r.y + lift - 26;
+        ctx.fillStyle = 'rgba(228,59,68,0.92)';
+        ctx.fillRect(r.x + 6, by, r.w - 12, 22);
+        ctx.fillStyle = '#fff2f2';
+        ctx.fillText(`⚠ 대가 — 최대 HP -${c.costHp}`, cx, by + 16);
+        ctx.strokeStyle = 'rgba(228,59,68,0.85)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(r.x + 3, r.y + lift + 3, r.w - 6, r.h - 6);
+        ctx.restore();
+      }
       // 기억 한 줄 (유물 lore) — 모든 힘은 과거에서 온다. 전용 유물(heir)은 표기도 함께
       if (c.lore) {
         ctx.font = 'italic 10.5px Galmuri11, monospace';

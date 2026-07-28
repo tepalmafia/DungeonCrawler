@@ -398,8 +398,20 @@ const GameRewards = {
   pickRelic(i) {
     const r = this.relicCards[i];
     if (!r) return;
+    // v170: 대가가 붙은 카드 — 고르는 순간 값을 치른다.
+    // "얻으면 잃는다"가 화면에 적혀 있고 실제로 그렇게 동작해야 결정이 된다
+    if (r.costHp) {
+      const p = this.player;
+      p.maxHp = Math.max(1, p.maxHp - r.costHp);
+      p.hp = Math.min(p.hp, p.maxHp);
+      this.hurtFlash = 0.25;
+      Renderer.shake(4, 0.2);
+      Particles.text(p.x, p.y - 34, `최대 HP -${r.costHp}`, { color: '#e43b44', size: 15 });
+      AudioSys.hurt();
+    }
     this.acquireRelic(r);
     this.state = 'play';
+    if (this._relicSource === 'chest') { this._relicSource = null; return; } // 상자는 보상 흐름을 타지 않는다
     if (this._relicSource === 'legacy') {
       this._relicSource = null; // 시작 유물(유산 각인)은 보상 흐름을 타지 않는다
       this.openRouteChoice();   // v164: 미뤄둔 진군로를 이제 펼친다 (종전엔 여기서 건너뛰었다)
