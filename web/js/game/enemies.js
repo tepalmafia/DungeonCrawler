@@ -1312,6 +1312,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     wisp: () => ({
       hp: 2, r: 10, speed: 110, xpVal: 8, sprite: 'wisp',
       orbitA: Math.random() * Math.PI * 2, orbitDir: Math.random() < 0.5 ? 1 : -1,
+      // v157: 구울과 같은 함정 — `this._dashCd <= 0` 이 undefined면 false라
+      // 「점화 쇄도」가 실플레이 3,341틱 동안 0회 발동이었다
+      _dashCd: 0, _glowT: 0, _rushT: 0, _rushDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
         const p = game.player;
@@ -1425,6 +1428,11 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     ghoul: () => ({
       hp: 5, r: 14, speed: 70, xpVal: 10, sprite: 'ghoul',
       eaten: 0, eatT: 0,
+      // v157: 이 초기화가 없으면 「도약 물기」가 영영 발동하지 않는다 —
+      // 발동 조건이 `this._pounceCd <= 0` 인데 undefined <= 0 은 false다.
+      // v152 검증이 테스트에서 이 필드를 직접 0으로 주입하는 바람에 데드코드를 통과시켰다
+      // (실플레이 1,673틱 관측: 도약 0회). 상태 필드는 반드시 def에서 초기화한다
+      _pounceCd: 0, _crouchT: 0, _lungeT: 0, _lungeDir: { x: 1, y: 0 },
       update(dt, game) {
         this.tickTimers(dt); this.applyKnockback(dt);
         const p = game.player;

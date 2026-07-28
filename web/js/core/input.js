@@ -28,6 +28,15 @@ const Input = {
       this.mouse.y = ((e.clientY - rect.top) / rect.height) * canvas.height;
     });
 
+    // v157: 포인터가 캔버스를 떠나면 좌표를 화면 밖으로 (모든 호버 판정의 뿌리 수정).
+    // mousemove가 캔버스에만 붙어 있어, 레터박스 여백(16:9가 아닌 창)으로 포인터가 나가면
+    // 좌표가 **마지막 위치에 얼어붙었다**. 그 결과 로드아웃 줄 위에서 마우스를 뺀 뒤 키보드만
+    // 써도 현상금이 계속 조절됐다 (실측 1200x760에서 3→6→4). 사장이 겪은 "몰래 오른 열기"의
+    // 잔존 경로이자, 호버를 쓰는 모든 UI에 공통으로 걸려 있던 문제다
+    const leave = () => { this.mouse.x = -9999; this.mouse.y = -9999; this.mouse.down = false; };
+    canvas.addEventListener('mouseleave', leave);
+    window.addEventListener('blur', leave);
+
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
         this.mouse.down = true;

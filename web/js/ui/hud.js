@@ -954,7 +954,9 @@ const HUD = {
         ];
         ctx.font = '10px Galmuri11, monospace';
         ctx.fillStyle = heat >= 8 ? '#e43b44' : hover ? '#9aa0b4' : '#4a4a5c';
-        ctx.fillText(FLAVOR[Math.min(8, heat)], rcx, lr.y + 30);
+        // v157: 호버 중엔 화살표 조절이 가능하다는 걸 표시 — v154에서 이 안내가 사라져
+        // "보이지 않는데 영구 설정을 바꾸는 기능"이 됐다 (스텔스 조절 재발의 씨앗)
+        ctx.fillText(hover ? `${FLAVOR[Math.min(8, heat)]} · ←→ 조절` : FLAVOR[Math.min(8, heat)], rcx, lr.y + 30);
         // 현상금 −/+ 버튼 (v154): 항상 보이는 조절 수단
         for (const b of this.heatBtnRects()) {
           // v155: 하한(0)·상한(8)에서는 딤 처리 — "더 못 간다"를 눌러보기 전에 알 수 있게
