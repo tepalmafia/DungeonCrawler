@@ -95,7 +95,45 @@ const AudioSys = {
     this._noise({ dur: step === 2 ? 0.1 : 0.07, vol: step === 2 ? 0.3 : 0.22, freq: this._v(base), q: 0.8 });
     if (step === 2) this._tone({ type: 'sine', f0: 140, f1: 50, dur: 0.14, vol: 0.3 });
   },
-  hit()    { if (!this._gate('hit')) return; this._noise({ dur: 0.06, vol: 0.4, freq: this._v(900) }); this._tone({ f0: this._v(180), f1: 60, dur: 0.08, vol: 0.35 }); },
+  // ── 타격음 재질 분기 (v162) ────────────────────────────────────────
+  // 종전엔 해골도 골렘도 점액도 망령도 **전부 같은 소리**였다. 손맛의 절반은 귀에서 온다 —
+  // 무엇을 때렸는지가 들려야 화면을 안 봐도 상황이 읽히고, 같은 동작이 지루해지지 않는다.
+  // 적마다 재질 필드를 다는 대신 스프라이트 이름에서 유도한다 (보스 23종도 자동으로 덮인다).
+  _MATRX: [
+    [/slime|spore|ooze|acid|toxic|mushroom|mycel|fung|leech|venom|shriek|plague/i, 'ooze'],
+    [/skel|bone|necro|ash|quill/i, 'bone'],
+    [/golem|crystal|obsidian|lava|magma|turret|warden|mirror|mimic|snail|jorn|obel/i, 'stone'],
+    [/wisp|wraith|shade|spirit|void|gazer|rift|ember|cinder|abyss|despair|corvus/i, 'spirit'],
+  ],
+  _matCache: {},
+  mat(sprite) {
+    if (!sprite) return 'flesh';
+    const c = this._matCache[sprite];
+    if (c) return c;
+    let m = 'flesh';
+    for (const [rx, name] of this._MATRX) if (rx.test(sprite)) { m = name; break; }
+    return (this._matCache[sprite] = m);
+  },
+  hit(mat = 'flesh') {
+    if (!this._gate('hit')) return;
+    if (mat === 'bone') {          // 마른 뼈 — 짧고 높은 딱
+      this._noise({ dur: 0.04, vol: 0.34, freq: this._v(2600), q: 1.6 });
+      this._tone({ type: 'triangle', f0: this._v(520), f1: 240, dur: 0.05, vol: 0.22 });
+    } else if (mat === 'stone') {  // 돌·판금 — 둔탁하고 무겁다
+      this._noise({ dur: 0.08, vol: 0.36, freq: this._v(420), q: 0.5 });
+      this._tone({ f0: this._v(120), f1: 45, dur: 0.13, vol: 0.4 });
+    } else if (mat === 'ooze') {   // 점액 — 물컹, 고음이 없다
+      this._noise({ dur: 0.09, vol: 0.22, freq: this._v(260), q: 0.4 });
+      this._tone({ type: 'sine', f0: this._v(150), f1: 70, dur: 0.12, vol: 0.3 });
+    } else if (mat === 'spirit') { // 혼 — 타격이 아니라 울림. 잡음이 거의 없다
+      this._tone({ type: 'sine', f0: this._v(680), f1: 320, dur: 0.16, vol: 0.26 });
+      this._tone({ type: 'sine', f0: this._v(1020), f1: 500, dur: 0.1, vol: 0.14, delay: 0.02 });
+      this._noise({ dur: 0.04, vol: 0.1, freq: this._v(1400) });
+    } else {                       // 살 — 종전 소리 그대로
+      this._noise({ dur: 0.06, vol: 0.4, freq: this._v(900) });
+      this._tone({ f0: this._v(180), f1: 60, dur: 0.08, vol: 0.35 });
+    }
+  },
   crit()   {
     if (!this._gate('crit')) return;
     this._noise({ dur: 0.08, vol: 0.45, freq: this._v(750) });

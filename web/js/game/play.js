@@ -1065,6 +1065,13 @@ const GamePlay = {
               finisher: b.finisher,
               kb: b.finisher ? 300 : 170,
             });
+            // 마무리 히트스톱 (v162): 3타째가 박히는 찰나 세계가 반박자 멈춘다 —
+            // 종전엔 검사에게만 있어서, 원거리 직업은 콤보의 마지막 타가 아무 무게도 없었다.
+            // 근접(0.045)보다 짧게 준다 — 원거리는 화면이 흔들려도 잃는 게 없기 때문
+            if (b.finisher && res !== 'blocked') {
+              this.hitstop = Math.max(this.hitstop, 0.032);
+              Renderer.shake(2, 0.1);
+            }
             if (b.aoe) this._boltExplode(b, p);
             if (res === 'blocked' || !b.pierce) remove = true;
             break;
