@@ -829,6 +829,15 @@ const HUD = {
     return { x: Renderer.W - 374, y: 190, w: 260, h: 34 };
   },
 
+  // 현상금 −/+ 버튼 (v154): "마우스 올리고 화살표"는 라이트 유저에게 안 보였다 — 버튼이 정답
+  heatBtnRects() {
+    const lr = this.loadoutLineRect();
+    return [
+      { x: lr.x - 30, y: lr.y + 2, w: 24, h: 24, d: -1 },
+      { x: lr.x + lr.w + 6, y: lr.y + 2, w: 24, h: 24, d: +1 },
+    ];
+  },
+
   // 이어하기 슬림 버튼 (우측 열)
   resumeButtonRect() {
     return { x: Renderer.W - 404, y: 234, w: 320, h: 26 };
@@ -948,7 +957,19 @@ const HUD = {
         ];
         ctx.font = '10px Galmuri11, monospace';
         ctx.fillStyle = heat >= 8 ? '#e43b44' : hover ? '#9aa0b4' : '#4a4a5c';
-        ctx.fillText(`${FLAVOR[Math.min(8, heat)]} · ${hover ? '←→ 조절' : '여기에 마우스 올리고 ←→'}`, rcx, lr.y + 30);
+        ctx.fillText(FLAVOR[Math.min(8, heat)], rcx, lr.y + 30);
+        // 현상금 −/+ 버튼 (v154): 항상 보이는 조절 수단
+        for (const b of this.heatBtnRects()) {
+          const bh = Input.mouse.x >= b.x && Input.mouse.x <= b.x + b.w && Input.mouse.y >= b.y && Input.mouse.y <= b.y + b.h;
+          ctx.fillStyle = bh ? '#1d1d2e' : '#141420';
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          ctx.strokeStyle = bh ? '#f7b32b' : '#4a4a5c';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+          ctx.font = 'bold 15px Galmuri11, monospace';
+          ctx.fillStyle = bh ? '#f7b32b' : '#9aa0b4';
+          ctx.fillText(b.d < 0 ? '−' : '+', b.x + b.w / 2, b.y + 17);
+        }
       }
     }
 
