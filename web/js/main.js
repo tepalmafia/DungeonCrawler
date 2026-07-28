@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 162;
+const GAME_VERSION = 163;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -163,6 +163,8 @@ const Game = {
         v: 1, cls: p.classId, heat: this.heat, pacts: this.pacts,
         act: this.act || 1, sp: this.shardsPaid || 0, kp: this.killsPaid || 0, route: this.route || null,
         floor: Dungeon.floor, roomIndex: Dungeon.roomIndex, roomType: Dungeon.roomType,
+        seed: this.runSeed, rseed: Dungeon.roomSeed || 0, // v163: 이어하기 방 리롤 봉쇄
+        nr: this.state === 'route' ? 1 : 0, // v163: 막 경계 — 이어하기에서 진군로를 다시 펼친다
         took: {
           t: Dungeon.tookTreasure, c: Dungeon.tookCamp, e: Dungeon.tookEvent,
           s: Dungeon.tookSiege, m: Dungeon.tookMerchant, tr: Dungeon.trialSeen,
@@ -195,7 +197,7 @@ const Game = {
     const s = this.loadRunSave();
     if (!s) return false;
     Meta.data.cls = s.cls;
-    this.restart();
+    this.restart(s.seed != null ? s.seed : undefined); // v163: 런 시드까지 복원 (시드 런도 이어진다)
     // 버그 수정: 유산 각인(시작 유물 3택1)이 이어하기마다 다시 열리던 문제 —
     // 시작 보상은 원래 런에서 이미 받았다. restart가 연 선택창을 닫는다
     this.relicCards = [];
@@ -224,8 +226,13 @@ const Game = {
     Dungeon.floor = s.floor; Dungeon.roomIndex = s.roomIndex;
     Dungeon.tookTreasure = s.took.t; Dungeon.tookCamp = s.took.c; Dungeon.tookEvent = s.took.e;
     Dungeon.tookSiege = s.took.s; Dungeon.tookMerchant = s.took.m; Dungeon.trialSeen = s.took.tr;
+    // v163: 나올 때의 방 씨앗 그대로 다시 짓는다 — 이어하기가 리롤 버튼이 되지 않게
+    if (s.rseed) Dungeon._forceSeed = s.rseed;
     Dungeon.build(s.roomType);
     this.banner = { text: '이어서 도전한다 — ' + s.floor + '층', life: 2.0, maxLife: 2.0, color: '#2ec4b6' };
+    // v163: 막 경계에서 저장했다면 진군로를 고르는 그 화면부터 다시 시작한다.
+    // 이게 없으면 지난 막의 진군로를 그대로 달고 새 막을 걷게 된다
+    if (s.nr) this.openRouteChoice();
     return true;
   },
 
@@ -730,6 +737,19 @@ const Game = {
 
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도
+      // v163: 승리 화면 S — 다음 막을 이어받되 지금은 쉰다.
+      // 종전엔 C(즉시 계속)와 거점(빌드 소멸) 둘뿐이라, 30분을 쌓은 빌드를 들고
+      // "오늘은 여기까지"를 고르면 그 빌드가 사라졌다. 로그라이크의 한 판은 길다
+      if (this.state === 'victory' && Input.pressed('KeyS')) {
+        const MAX_ACT = 5;
+        if ((this.act || 1) < MAX_ACT && Dungeon.floor <= (this.act || 1) * 10) {
+          this.continueNextAct(); // 다음 막 진입 + 진군로 대기 상태로 스냅샷 저장
+          this.state = 'hub';
+          this.banner = { text: '여기까지 저장했다 — 거점에서 「이어하기」로 돌아온다', life: 3.0, maxLife: 3.0, color: '#2ec4b6' };
+          AudioSys.pickup();
+        }
+        return;
+      }
       if (this.state === 'victory' && Input.pressed('KeyC')) {
         const MAX_ACT = 5; // 전 막 구현 완료 — 50층 왕좌가 끝이다
         if ((this.act || 1) < MAX_ACT && Dungeon.floor <= (this.act || 1) * 10) this.continueNextAct();
