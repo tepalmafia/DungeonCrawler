@@ -94,11 +94,14 @@ const GameScreens = {
     const targetLv = Math.round(f * 1.3) + 3;
     if (!p || this.level >= targetLv) return;
     // 레벨·체력 곡선
+    // v155: 대입(=)이라 정상 진행으로 쌓은 HP·골드가 곡선 값으로 **깎이던** 문제 —
+    // "빌드가 뒤로 가지 않는다"는 이 함수의 약속이 레벨에만 적용돼 있었다 (적대적 재검에서 발각)
+    const preHp = p.maxHp;
     this.level = targetLv;
     this.xp = 0; this.xpNext = Math.round(40 * Math.pow(1.25, targetLv));
-    p.maxHp = Math.min(14, 6 + Math.floor(f / 4));
+    p.maxHp = Math.max(preHp, Math.min(14, 6 + Math.floor(f / 4)));
     p.hp = p.maxHp;
-    this.gold = f * 15;
+    this.gold = Math.max(this.gold || 0, f * 15);
     // 특성: 레벨 수만큼 태그 겹치기 휴리스틱으로 자동 픽 (진화 시너지 근사)
     // v153 (실플레이 제보: 마도사 하트 19개): v151 희귀 특성이 '희귀' 태그를 공유하자 겹치기
     // 휴리스틱이 강골×6+중갑 서약을 스스로 조립해 HP 요새를 만들었다 — 중앙값 빌드 근사라는
@@ -107,9 +110,14 @@ const GameScreens = {
     const hpCap = Math.min(14, 6 + Math.floor(f / 4)) + 2;
     // v153 연쇄 B 폭주 수정: 매 호출마다 전량(targetLv-1)을 새로 얹어 10층 연쇄에 특성 78개가
     // 쌓였다 (정상 ~15) — 이미 가진 수를 빼고 '차액'만 채운다. 유물도 동일
-    const wantTraits = Math.max(0, (targetLv - 1) - p.traits.length);
+    // v155 (사장 F9 실측, 기사 1층 4연사): 겹치기 휴리스틱이 **화력을 전혀 안 챙겼다** —
+    // 1·3층 자동빌드의 공격력이 기본값 1 그대로였고(=TTK 25초), 게다가 리듬을 뒤집는 공격 변형
+    // (대검화 공속 ×1.8 등)까지 뽑아 봇·라이트 유저 기준 DPS가 무너졌다. 사람은 초반에 반드시
+    // 화력을 한두 장 집는다 — 그 상식을 도구에 넣는다: ① 리듬 반전 특성 제외 ② 공격력 하한 보증
+    const RHYTHM_FLIP = ['greatsword', 'twinbow', 'mgsnipe', 'al_catalyst']; // 중앙값 근사엔 부적합
+    const wantTraits = Math.max(0, (targetLv - 1) - p.traits.length); // 연쇄 호출도 차액만 (v153)
     for (let i = 0; i < wantTraits; i++) {
-      const cards = rollTraitCards(p, 3).filter((c) => !c.rare && !c.legend);
+      const cards = rollTraitCards(p, 3).filter((c) => !c.rare && !c.legend && !RHYTHM_FLIP.includes(c.flag));
       if (!cards.length) continue;
       let best = null, bs = -1;
       for (const c of cards) {
@@ -121,12 +129,27 @@ const GameScreens = {
       applyTrait(p, best);
       if (best.tag !== '스탯') tagCount[best.tag] = (tagCount[best.tag] || 0) + 1;
     }
+    // 공격력 하한 — 층에 걸맞은 화력을 보증 (사람이 집었을 만큼). 상한은 힘 단련 스택(8)
+    const atkTarget = 1 + Math.ceil(f * 0.35);
+    const might = TRAITS.find((t) => t.id === 'atk');
+    let guard = 0;
+    while (might && p.currentAtk() < atkTarget && guard++ < 12 &&
+           (p.traits.filter((x) => x === 'atk').length < (might.max || 8) || p.flags.unbound)) {
+      applyTrait(p, might);
+    }
     // 유물: 6층당 1개 (직업 유품 포함 풀) — 연쇄 호출도 차액만
     const wantRelics = Math.max(0, Math.floor(f / 6) - p.relics.length);
     for (let i = 0; i < wantRelics; i++) {
       const rolled = rollRelics(p, 1, true);
       if (rolled.length) applyRelic(p, rolled[0]); // applyRelic이 relics 목록 push까지 담당
     }
+    // ★ 최종 HP 클램프 (v155) — 사장이 본 '하트 19개'의 진짜 뿌리.
+    // v153의 hpCap은 **특성 루프에만** 걸려 있었고, 그 뒤 유물(마르타의 목걸이 +2, 심장 조각 +1,
+    // 황금 심장 +1 등)이 상한 밖으로 밀어올렸다 — 새 세이브 35층 58회 중 16회 초과, 최댓값 정확히 19.
+    // 유물 풀이 얇은 **깨끗한 세이브(=신규 테스터의 기본 상태)에서 가장 자주 터진다**.
+    // 단, 원래 갖고 있던 HP는 깎지 않는다 (빌드 하향 금지 원칙 유지)
+    p.maxHp = Math.min(p.maxHp, Math.max(hpCap, preHp));
+    p.hp = Math.min(p.hp, p.maxHp);
     // 31층+: 스킬 개조 소지, 10층+: 처형 선고
     if (f >= 31 && !p.skillMod) {
       const mods = SKILL_MODS[p.classId] || [];

@@ -16,6 +16,14 @@ const ROUTES = [
 const GameRewards = {
   // 진군로 선택 열기 — 막 시작(1·11·21·31·41층)마다
   openRouteChoice() {
+    // 현상금 고지 (v155): _storyQ는 restart·프롤로그 종료 등에서 **배열 통째로 재대입**되므로
+    // restart에서 push해 둔 배너가 소멸했다 — v153의 "출정 시 단계 명시"는 실제로 한 번도 뜬 적이
+    // 없다 (적대적 재검에서 발각). 두 경로가 모두 지나는 이 지점에서, 재대입이 끝난 뒤 맨 앞에 꽂는다
+    if (this._heatNotice) {
+      this._storyQ = this._storyQ || [];
+      this._storyQ.unshift(this._heatNotice);
+      this._heatNotice = null;
+    }
     if (this.bossRush) return; // 원수 연전엔 길이 없다
     // 온보딩 (v139): 생애 첫 출정은 갈림길 없이 — 부활 직후의 발걸음은 기억을 따라간다.
     // 첫 10분 인지 부하 원칙: 이동/공격/대시/카드 3택 밖의 시스템은 첫 런에 내밀지 않는다

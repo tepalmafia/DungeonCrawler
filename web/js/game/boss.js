@@ -641,12 +641,15 @@ function createBoss(floor, x, y) {
         Particles.burst(this.x, this.y, {
           count: 26, colors: this.def.deathPalette, speed: 200, life: 0.7, size: 4,
         });
-        (this._uq = this._uq || []).push({ t: 0.9, fn: (b, g) => {
-          if (b.dead || b.state === 'veil') return;
-          const pp = g.player;
-          const ddx = pp.x - b.x, ddy = pp.y - b.y;
-          b._uniqMove(g, ddx, ddy, Math.hypot(ddx, ddy) || 1);
-        } });
+        // v155: 2페이즈 목록이 고유기를 쓰는 킷에서만 — 킷 설계를 문법이 덮어쓰지 않는다
+        if (Array.isArray(this.def.p2) && this.def.p2.some((c) => /\buniq\b/.test(c))) {
+          (this._uq = this._uq || []).push({ t: 0.9, fn: (b, g) => {
+            if (b.dead || b.state === 'veil') return;
+            const pp = g.player;
+            const ddx = pp.x - b.x, ddy = pp.y - b.y;
+            b._uniqMove(g, ddx, ddy, Math.hypot(ddx, ddy) || 1);
+          } });
+        }
       }
 
       // 어픽스 '무장한' (v150): 전투 개시 호위 2 + 20초마다 재소집 1 (재생 기믹과 자연 결합)
@@ -693,7 +696,14 @@ function createBoss(floor, x, y) {
           // v149: 1~3층 유예 0.8/0.5 — F9 실측: 기사(근접)가 1~2층 보스에 3전 3사 (피격 7/7/8, 20초 내).
           // 다른 난이도 축(보스 1뎀·전역 스케일 0)은 모두 1~3층 계단이 있는데 템포만 일괄이었다.
           // 근접 직업은 템포 상향을 정면으로 받는다 — 온보딩 저점(첫 보스)은 배울 시간을 준다
-          const base = Dungeon.floor <= 3 ? (this.phase === 2 ? 0.5 : 0.8) : (this.phase === 2 ? 0.35 : 0.55);
+          // v155: 온보딩 템포를 3단 계단으로. 실측 근거 —
+          //  ① 1층 초당 피격 0.39 = HP6 생존 15초 < TTK 20초 (수학적 필패 구조였다)
+          //  ② 구 경계(3→4층)에서 0.221→0.402(+82%)의 절벽 + 4층부터 보스 피해 1→2 배가가 겹쳐
+          //     실효 생존이 급락 — 문제를 1층에서 4층으로 옮기는 꼴이라 계단을 하나 더 놓는다
+          const f = Dungeon.floor;
+          const base = f <= 2 ? (this.phase === 2 ? 0.62 : 1.0)
+            : f <= 5 ? (this.phase === 2 ? 0.48 : 0.78)
+            : (this.phase === 2 ? 0.35 : 0.55);
           // v153 거리 비대칭 보정 (실플레이: "근접은 첫 보스도 벽, 원거리는 순항"):
           // 칼끝 거리(<130)는 휴지 +15% — 근접의 자리값. 원거리 농성(>300)은 가속 유지 + 응징 임계 단축
           const distMul = d < 130 ? 1.15 : d > 300 ? 0.65 : 1;
@@ -738,9 +748,18 @@ function createBoss(floor, x, y) {
               }
             } else {
               // 패턴 문법 (v150 "랜덤이 곧 밋밋함"): 개막 1수 = 고유기 — 킷의 정체성을 첫 수에 소개.
-              // 이후 4수마다 고유기가 돌아온다 — 랜덤 사이에 리듬이 생기고, 이름이 곧 기술임을 잊지 않게
+              // 이후 N수마다 고유기가 돌아온다 — 랜덤 사이에 리듬이 생기고, 이름이 곧 기술임을 잊지 않게
+              //
+              // v155 (사장 F9 실측, 열기1 기사 1층 보스 4연사): v150 문법이 **해당 페이즈의 패턴 목록을
+              // 무시하고** 고유기를 강제해, "입문 보스는 고유기를 2페이즈부터"라는 오스문드의 명시적
+              // 온보딩 설계를 짓밟았다 (1페이즈에 「생매장」 3회 실측 — p1 목록엔 uniq가 없는데도).
+              // → 현재 페이즈 목록에 uniq가 실제로 있을 때만 강제한다. 설계가 문법보다 우선이다.
+              // 주기도 1~3층은 6수로 완화 — 배우는 층에서는 리듬이 느려야 읽힌다.
+              const curList = (this._onslaught && this.def.p3) ? this.def.p3 : this.phase === 2 ? this.def.p2 : this.def.p1;
+              const uniqAllowed = Array.isArray(curList) && curList.some((c) => /\buniq\b/.test(c));
+              const cadence = Dungeon.floor <= 3 ? 6 : 4;
               this._patN++;
-              if ((this._patN === 1 || this._patN % 4 === 0) && this.spawnT <= 0) {
+              if (uniqAllowed && (this._patN === 1 || this._patN % cadence === 0) && this.spawnT <= 0) {
                 this.attack = { kind: 'uniq', opt: [] };
                 this._comboQueue = [];
               } else {
@@ -795,7 +814,8 @@ function createBoss(floor, x, y) {
                 game.hurtPlayer(bossDmg(), { x: pdx / (pd || 1), y: pdy / (pd || 1) });
               }
             }
-            const maxSwings = this.phase === 2 ? 4 : 3;
+            // v155: 1~3층은 1페이즈 2연타 — 온보딩 층의 최대 피해원(휘두르기 58%)을 배울 수 있는 크기로
+            const maxSwings = this.phase === 2 ? 4 : (Dungeon.floor <= 3 ? 2 : 3);
             if (this.swingCount >= maxSwings) { this._endMove(); this.stateT = 0; }
           }
           break;
@@ -916,8 +936,10 @@ function createBoss(floor, x, y) {
       }
 
       // 접촉 데미지 (장막 중 제외) — 2페이즈부터는 몸 자체가 흉기다
+      // v155: 접촉 쿨다운도 3단 계단 — 근접은 몸통에 붙어 있어야 하는 직업이라 접촉이 상시 과금된다
+      // (1층 실측 피해의 32%). 1~3층 1.3 / 4~5층 1.0 / 6층+ 0.8 (본 난이도 불변)
       if (this.state !== 'veil' && this.hitCd <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
-        this.hitCd = 0.8;
+        this.hitCd = Dungeon.floor <= 3 ? 1.3 : Dungeon.floor <= 5 ? 1.0 : 0.8;
         game.hurtPlayer(this.phase === 2 && Dungeon.floor >= 4 ? bossDmg() + 1 : bossDmg(), { x: dx / d, y: dy / d }); // 접촉 2는 3층부터
       }
     },
