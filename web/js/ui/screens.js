@@ -100,20 +100,30 @@ const GameScreens = {
     p.hp = p.maxHp;
     this.gold = f * 15;
     // 특성: 레벨 수만큼 태그 겹치기 휴리스틱으로 자동 픽 (진화 시너지 근사)
+    // v153 (실플레이 제보: 마도사 하트 19개): v151 희귀 특성이 '희귀' 태그를 공유하자 겹치기
+    // 휴리스틱이 강골×6+중갑 서약을 스스로 조립해 HP 요새를 만들었다 — 중앙값 빌드 근사라는
+    // 도구의 목적에 맞게 희귀·전설은 자동 픽에서 제외하고, HP 특성은 설계 곡선 +2까지만
     const tagCount = {};
-    for (let i = 0; i < targetLv - 1; i++) {
-      const cards = rollTraitCards(p, 3);
-      if (!cards.length) break;
-      let best = cards[0], bs = -1;
+    const hpCap = Math.min(14, 6 + Math.floor(f / 4)) + 2;
+    // v153 연쇄 B 폭주 수정: 매 호출마다 전량(targetLv-1)을 새로 얹어 10층 연쇄에 특성 78개가
+    // 쌓였다 (정상 ~15) — 이미 가진 수를 빼고 '차액'만 채운다. 유물도 동일
+    const wantTraits = Math.max(0, (targetLv - 1) - p.traits.length);
+    for (let i = 0; i < wantTraits; i++) {
+      const cards = rollTraitCards(p, 3).filter((c) => !c.rare && !c.legend);
+      if (!cards.length) continue;
+      let best = null, bs = -1;
       for (const c of cards) {
+        if ((c.id === 'hp' || c.id === 'heavyplate') && p.maxHp >= hpCap) continue; // HP 상한
         const s = (tagCount[c.tag] || 0) + (c.cls ? 0.5 : 0);
         if (s > bs) { bs = s; best = c; }
       }
+      if (!best) continue;
       applyTrait(p, best);
       if (best.tag !== '스탯') tagCount[best.tag] = (tagCount[best.tag] || 0) + 1;
     }
-    // 유물: 6층당 1개 (직업 유품 포함 풀)
-    for (let i = 0; i < Math.floor(f / 6); i++) {
+    // 유물: 6층당 1개 (직업 유품 포함 풀) — 연쇄 호출도 차액만
+    const wantRelics = Math.max(0, Math.floor(f / 6) - p.relics.length);
+    for (let i = 0; i < wantRelics; i++) {
       const rolled = rollRelics(p, 1, true);
       if (rolled.length) applyRelic(p, rolled[0]); // applyRelic이 relics 목록 push까지 담당
     }
@@ -122,7 +132,7 @@ const GameScreens = {
       const mods = SKILL_MODS[p.classId] || [];
       if (mods.length) p.skillMod = mods[Math.floor(Math.random() * mods.length)].id;
     }
-    if (f >= 11 && !p.ult) { p.ult = f >= 21 ? 2 : 1; p.ultGauge = 0; }
+    if (f >= 11) { const want = f >= 21 ? 2 : 1; if ((p.ult || 0) < want) { p.ult = want; p.ultGauge = p.ultGauge || 0; } } // 연쇄 시 2강 승급도 정상 반영
     this.banner = { text: `⚙ 보스 직행 세팅 — Lv.${targetLv} · 특성 ${p.traits.length} · 유물 ${p.relics.length}`, life: 2.2, maxLife: 2.2, color: '#5ce0e6' };
   },
 
@@ -197,10 +207,17 @@ const GameScreens = {
     }
     if (this.testMode) this._tickCheats();
 
-    // 열기(고난이도) 조절 — 첫 정복 후 해금 (UI 개편: 칩은 로드아웃 줄 클릭 시에만)
+    // 열기(고난이도) 조절 — 첫 정복 후 해금.
+    // v153 (실플레이 제보 "열기 4~5인데 고른 적 없다"): 전역 ←→가 열기를 몰래 올려 영구 저장되던
+    // 스텔스 조절 버그 — 로드아웃 줄에 마우스를 올린 동안만 조절된다
     if (Meta.heatUnlocked()) {
-      if (Input.pressed('ArrowLeft')) { Meta.setHeat(Meta.data.heat - 1); AudioSys.orb(); }
-      if (Input.pressed('ArrowRight')) { Meta.setHeat(Meta.data.heat + 1); AudioSys.orb(); }
+      const lr = HUD.loadoutLineRect();
+      const hovering = Input.mouse.x >= lr.x && Input.mouse.x <= lr.x + lr.w &&
+                       Input.mouse.y >= lr.y && Input.mouse.y <= lr.y + lr.h;
+      if (hovering) {
+        if (Input.pressed('ArrowLeft')) { Meta.setHeat(Meta.data.heat - 1); AudioSys.orb(); }
+        if (Input.pressed('ArrowRight')) { Meta.setHeat(Meta.data.heat + 1); AudioSys.orb(); }
+      }
       // 세부 은닉 (난이도 개편): 골라담기 폐지 — 단계만 고른다. 무엇이 강해지는지는 몸으로 알게 된다
     }
 

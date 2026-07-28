@@ -694,7 +694,10 @@ function createBoss(floor, x, y) {
           // 다른 난이도 축(보스 1뎀·전역 스케일 0)은 모두 1~3층 계단이 있는데 템포만 일괄이었다.
           // 근접 직업은 템포 상향을 정면으로 받는다 — 온보딩 저점(첫 보스)은 배울 시간을 준다
           const base = Dungeon.floor <= 3 ? (this.phase === 2 ? 0.5 : 0.8) : (this.phase === 2 ? 0.35 : 0.55);
-          const wait = base * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * (d > 300 ? 0.65 : 1) *
+          // v153 거리 비대칭 보정 (실플레이: "근접은 첫 보스도 벽, 원거리는 순항"):
+          // 칼끝 거리(<130)는 휴지 +15% — 근접의 자리값. 원거리 농성(>300)은 가속 유지 + 응징 임계 단축
+          const distMul = d < 130 ? 1.15 : d > 300 ? 0.65 : 1;
+          const wait = base * Math.pow(0.87, this.rageStacks) * Math.pow(0.85, this.enrage) * (this._onslaught ? 0.6 : 1) * distMul *
             (this.affixes && this.affixes.includes('swift') ? 0.85 : 1); // 어픽스 '성마른'
           if (this.stateT >= wait) {
             // 인장기 (왕의 인장기): HP 75% 이하 첫 발동, 이후 막별 주기 (3막 12s / 4막 10s / 5막 8s)
@@ -720,7 +723,7 @@ function createBoss(floor, x, y) {
                 break;
               }
             }
-            if (this._farT > 3.2 && this.def.punish) { // 상시 누적으로 전환하며 임계 4.5→3.2
+            if (this._farT > 2.4 && this.def.punish) { // 임계 3.2→2.4 (v153): 원거리 순항 제보 — 카이팅의 값이 더 빨리 청구된다
               // 응징: 카이팅 거리를 부수는 초식 — 돌진형은 추격, 시전형은 속사 저격.
               // 재범(게이지 리셋 없이 또 참)은 연계가 붙는다 — 눌러앉기의 비용이 커진다
               this._farT = 0;

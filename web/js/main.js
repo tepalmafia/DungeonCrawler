@@ -209,6 +209,12 @@ const Game = {
     RNG.seed(this.runSeed);
     this.heat = Meta.heat();
     this.pacts = Meta.pactFlags(this.heat); // 열기 서약 스냅샷 (골라담기)
+    // v153 (열기 스텔스 버그 후속): 현상금이 걸린 출정은 첫 화면에서 단계를 명시 —
+    // "고른 적 없는 난이도"가 몰래 적용되는 일이 다시는 없게
+    if (this.heat > 0) {
+      this._storyQ = this._storyQ || [];
+      this._storyQ.push({ text: `☠ 현상금 ${this.heat}단계 — 왕국이 너를 노린다 (거점 우측 상단에서 조절)`, color: '#e43b44' });
+    }
     this.gold = 0; // 런 화폐 — 무덤까지 못 가져간다 (상인에게만 쓴다)
     this.player = createPlayer(0, 0, Meta.data.cls);
     this.player.rerolls = Meta.lvl('reroll'); // 환생 각인: 런당 카드 리롤 횟수
