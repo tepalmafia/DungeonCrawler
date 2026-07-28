@@ -575,7 +575,9 @@ function createPlayer(x, y, classId = 'knight') {
       }
       this.moving = len > 0;
 
-      if (Input.pressed('Space', 'ShiftLeft', 'ShiftRight') && this.dashCharges >= 1) {
+      // v160: 조건을 먼저 본다 — 대시 충전이 없으면 버퍼를 소비하지 않고 남겨,
+      // 충전이 차오르는 순간 눌러둔 대시가 나간다 (선입력 버퍼의 핵심 규칙)
+      if (this.dashCharges >= 1 && Input.take('Space', 'ShiftLeft', 'ShiftRight')) {
         this.dashCharges--;
         this.dashTimer = 0.16;
         this.invuln = Math.max(this.invuln, 0.22);
@@ -650,21 +652,25 @@ function createPlayer(x, y, classId = 'knight') {
       }
 
       // 스킬 (K / 우클릭)
-      if (Input.pressed('KeyE') && this.subSkill && this.subCd <= 0 && this.dashTimer <= 0) {
+      if (this.subSkill && this.subCd <= 0 && this.dashTimer <= 0 && Input.take('KeyE')) {
         this.useSubSkill(game);
       }
-      if (Input.pressed('KeyR') && this.ult > 0 && this.ultGauge >= this.ultMax && this.dashTimer <= 0) {
+      if (this.ult > 0 && this.ultGauge >= this.ultMax && this.dashTimer <= 0 && Input.take('KeyR')) {
         this.useUltimate(game);
       }
-      if ((Input.pressed('KeyK') || Input.mouse.rightJustDown) && this.skillCd <= 0 && this.dashTimer <= 0) {
+      if (this.skillCd <= 0 && this.dashTimer <= 0 && Input.take('KeyK', 'Mouse2')) {
         this.useSkill(game);
       }
 
-      const attackInput = Input.mouse.justDown || Input.pressed('KeyJ');
+      // 공격 입력 (v160): ① 선입력 버퍼 ② 마우스/J 홀드 연사.
+      // 쿨이 남아 있으면 take를 부르지 않는다 — 버퍼가 살아 쿨 종료 즉시 첫 타가 나간다.
+      const byMouse = Input.mouse.down || Input.mouse.justDown || Input.buf.Mouse0 > 0;
+      const attackInput = this.attackCd <= 0 &&
+        (Input.take('KeyJ', 'Mouse0') || Input.mouse.down || Input.down('KeyJ'));
       // 대시 파생기 (P2): 대시 중·직후 입력 창(0.35초) 안에 공격 — 직업별 특수기
-      if (attackInput && this.attackCd <= 0 && this.dashAtkT > 0) {
+      if (attackInput && this.dashAtkT > 0) {
         this.dashAttack(game);
-      } else if (attackInput && this.attackCd <= 0 && this.dashTimer <= 0) {
+      } else if (attackInput && this.dashTimer <= 0) {
         // 자동 타겟팅: 가장 가까운 적을 자동 조준. 적이 없으면 마우스/이동 방향
         let dir = null;
         const target = this.autoTarget(game);
@@ -673,7 +679,7 @@ function createPlayer(x, y, classId = 'knight') {
           const dy = target.y - this.y;
           const d = Math.hypot(dx, dy) || 1;
           dir = { x: dx / d, y: dy / d };
-        } else if (Input.mouse.justDown) {
+        } else if (byMouse) {
           const dx = Input.mouse.x - Renderer.offsetX - this.x;
           const dy = Input.mouse.y - Renderer.offsetY - this.y;
           const d = Math.hypot(dx, dy) || 1;

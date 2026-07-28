@@ -469,8 +469,13 @@ const Meta = {
     this.data.runs++;
     this.data.totalKills += kills;
     if (victory) this.data.wins++;
-    setTimeout(() => this.checkUnlocks(), 0); // 정산 직후 새 해금 배너 (스탯 반영 뒤)
     this.data.bestFloor = Math.max(this.data.bestFloor, victory ? 10 : floor);
+    // v160: 해금 알림을 정산 화면이 직접 그린다.
+    // 종전에는 setTimeout으로 Game.banner만 세웠는데, 배너는 전투 화면에서만 그려지고
+    // 감쇠한다. 즉 런이 끝나 정산 화면에 있는 그 순간, 해금 소식은 화면에 오르지도 못하고
+    // 사라졌다. 「해금했다」는 다음 런을 시작할 이유 그 자체인데 아무도 못 봤다.
+    const fresh = this.checkUnlocks();
+    if (typeof Game !== 'undefined') Game._freshUnlocks = fresh.length ? fresh : null;
     this.save();
     return earned;
   },

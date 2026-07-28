@@ -156,6 +156,7 @@ const GameCombat = {
     if (e._markUntil && this.time < e._markUntil) dmg = Math.round(dmg * 1.25); // 사냥 표식 (계승)
     // 보스 버스트 상한 층 계단 (v143, "고층도 일관되게"): 상한이 %라 최소 타수는 층 무관 일정하지만,
     // 고층 빌드는 초당 타격 횟수가 수 배라 실시간 TTK가 고층일수록 짧아진다 — 상한을 조여 보정
+    if (e.ironhide) dmg = Math.max(1, Math.round(dmg * 0.85)); // 어픽스 「끈질긴」 (v160): 하드 상한이 아닌 감쇠
     if (e.isBoss) {
       const capPct = Dungeon.floor >= 31 ? 0.008 : Dungeon.floor >= 16 ? 0.010 : 0.012; // 최소 83/100/125타
       // v158: 1~3층 하한을 층 비례로. 종전 고정 하한 2는 온보딩에서 **퇴화**했다 —
@@ -164,7 +165,33 @@ const GameCombat = {
       // 게다가 **공격력을 아무리 올려도 피해가 2에서 멈춰** 온보딩 3개 층 내내 화력 성장이 무의미했다.
       // 상한의 목적은 '한 방 순삭 방지'이지 '성장 무효화'가 아니다
       const minCap = Dungeon.floor <= 3 ? Math.round(Dungeon.floor * 1.8) : 2; // 2/4/5
-      dmg = Math.min(dmg, Math.max(minCap, Math.round(e.maxHp * capPct)));
+      // v160: 보스 특화 증폭은 **상한 자체를 곱한다**. 종전엔 피해만 올리고 상한이 그대로라
+      // 「왕관의 파편 보스 피해 +15%」 같은 카드가 보스전에서 실효 +0%였다 —
+      // 카드에 적힌 문장과 코드가 어긋나 있었다 (감사: "약속만 하고 숫자가 배신한다")
+      const pl = this.player;
+      let capMul = 1;
+      if (pl) {
+        if (pl.rflags.crownshard) capMul *= 1.15;   // 왕관의 파편
+        if (pl.rflags.wolftooth) capMul *= 1.10;    // 흰 늑대의 이빨
+        if (pl.flags.regicide) capMul *= 1.12;      // 군주 살해자
+        if (pl.rflags.brand && e.status && e.status.burn > 0) capMul *= 1.25; // 낙인 인두 (화상 조건부)
+        if (pl.rflags.gallows && e.status && e.status.shock > 0) capMul *= 1.35; // 교수대의 밧줄
+      }
+      // 「끈질긴」은 상한도 함께 낮춘다 (v160 검증에서 발각):
+      // 감쇠를 상한 앞에서만 걸면, 상한에 걸리는 큰 일격에서는 15%가 통째로 증발한다
+      // (실측 25층: 끈질긴 32 = 기본 32). 어픽스 문구가 정확히 '강한 일격을 경감한다'인데
+      // 정작 강한 일격에서만 아무 일도 일어나지 않았다
+      if (e.ironhide) capMul *= 0.85;
+      const cap = Math.max(1, Math.round(Math.max(minCap, Math.round(e.maxHp * capPct)) * capMul));
+      if (dmg > cap) {
+        dmg = cap;
+        // 상한에 걸렸다는 사실을 숨기지 않는다 — 침묵하면 "성장이 안 먹힌다"로만 체감된다.
+        // 잡몹 중장갑이 이미 쓰는 문법과 동일 (0.4초 게이트로 도배 방지)
+        if (feel && !(this._capTipT > this.time - 0.4)) {
+          this._capTipT = this.time;
+          Particles.text(e.x, e.y - 40, '한계!', { color: '#9aa0b4', size: 12 });
+        }
+      }
     }
     // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
     if (crit && !e.isBoss && this.player && this.player.rflags.stormcrit && Math.random() < 0.2) {
