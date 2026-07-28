@@ -12,7 +12,10 @@ const Input = {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) {
         e.preventDefault();
       }
-      if (!this.keys[e.code]) this.justPressed[e.code] = true;
+      if (!this.keys[e.code]) {
+        this.justPressed[e.code] = true;
+        if (this.BUFKEYS.includes(e.code)) this.buf[e.code] = this.BUFT;
+      }
       this.keys[e.code] = true;
       this.anyKeyPressed = true;
       AudioSys.unlock();
@@ -41,10 +44,12 @@ const Input = {
       if (e.button === 0) {
         this.mouse.down = true;
         this.mouse.justDown = true;
+        this.buf.Mouse0 = this.BUFT;
         this.anyKeyPressed = true;
       }
       if (e.button === 2) {
         this.mouse.rightJustDown = true; // 우클릭 = 스킬
+        this.buf.Mouse2 = this.BUFT;
       }
       AudioSys.unlock();
     });
@@ -64,6 +69,37 @@ const Input = {
     return codes.some((c) => this.justPressed[c]);
   },
 
+  // ── 선입력 버퍼 (v160) ──────────────────────────────────────────────
+  // 히트스톱은 최대 0.09초(≈5프레임) 동안 tick을 통째로 건너뛰는데, endFrame은 그동안에도
+  // 돌아 justPressed를 지웠다. 즉 "때린 그 순간 바로 누른 다음 타"가 조용히 사라졌다.
+  // 사장이 느낀 "가끔 안 나가는 공격"의 정체다. 이제 전투 입력은 0.15초를 버틴다.
+  BUFT: 0.15,
+  BUFKEYS: ['KeyJ', 'Space', 'ShiftLeft', 'ShiftRight', 'KeyK', 'KeyE', 'KeyR'],
+  buf: {},
+
+  // 버퍼 소비 — 소비하는 쪽이 "지금 발동 가능"할 때만 부르는 게 원칙이다.
+  // 쿨다운 중에 부르지 않으면 버퍼가 살아남아 쿨이 끝나는 즉시 발동한다.
+  // 봇·게임패드는 justPressed를 직접 쓰므로 그 경로도 함께 인정한다.
+  take(...codes) {
+    let hit = false;
+    for (const c of codes) {
+      if (c === 'Mouse0') {
+        if (this.mouse.justDown) { this.mouse.justDown = false; hit = true; }
+      } else if (c === 'Mouse2') {
+        if (this.mouse.rightJustDown) { this.mouse.rightJustDown = false; hit = true; }
+      } else if (this.justPressed[c]) {
+        this.justPressed[c] = false; hit = true;
+      }
+      if (this.buf[c] > 0) { this.buf[c] = 0; hit = true; }
+    }
+    return hit;
+  },
+
+  decay(dt) {
+    if (dt <= 0) return; // 히트스톱: 세계가 멈추면 버퍼도 함께 멈춘다
+    for (const c in this.buf) if (this.buf[c] > 0) this.buf[c] -= dt;
+  },
+
   // 프레임 종료 시 호출 — "이번 프레임에 눌림" 상태 초기화
   endFrame() {
     this.justPressed = {};
@@ -81,7 +117,10 @@ const Input = {
     const gp = [...navigator.getGamepads()].find((g) => g && g.connected);
     if (!gp) return;
     const press = (code, down) => {
-      if (down && !this._padPrev[code]) { this.justPressed[code] = true; this.anyKeyPressed = true; }
+      if (down && !this._padPrev[code]) {
+        this.justPressed[code] = true; this.anyKeyPressed = true;
+        if (this.BUFKEYS.includes(code)) this.buf[code] = this.BUFT;
+      }
       if (down) this.keys[code] = true;
       else if (this._padPrev[code]) this.keys[code] = false;
       this._padPrev[code] = down;

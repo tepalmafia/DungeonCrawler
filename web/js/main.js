@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 159;
+const GAME_VERSION = 160;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -126,7 +126,10 @@ const Game = {
         })() : '시각?';
         const verTag = r.ver ? `v${r.ver}` : 'v?';
         const newest = i === arr.length - 1 ? '  ◀ 방금 이 판' : '';
-        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` +
+        // v160: 빌드 스냅샷 표기 — 같은 층·같은 사망이어도 HP6/공1 몸과 HP9/공3 몸은 다른 게임이다.
+        // 이게 없으면 리포트로 난이도를 판정할 수 없다 (계측 오염의 마지막 구멍)
+        const build = r.mhp ? ` · HP${r.mhp}/공${r.atk}/특${r.tr}/유${r.rel}` : '';
+        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}${build}` +
           (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '') + newest;
       }),
     ].join('\n');
@@ -241,6 +244,7 @@ const Game = {
     if (this.heat > 0) {
       this._heatNotice = { text: `☠ 현상금 ${this.heat}단계 — 왕국이 너를 노린다 (거점 우측 상단 [−][+]로 조절)`, color: '#e43b44' };
     }
+    this._freshUnlocks = null; // 지난 런의 해금 소식은 정산 화면과 함께 접는다 (v160)
     this.gold = 0; // 런 화폐 — 무덤까지 못 가져간다 (상인에게만 쓴다)
     this.player = createPlayer(0, 0, Meta.data.cls);
     this.player.rerolls = Meta.lvl('reroll'); // 환생 각인: 런당 카드 리롤 횟수
@@ -882,6 +886,11 @@ Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
       // 배속 (?ff=N): 프레임당 N틱 — 봇 소크 테스트용
       for (let i = 0; i < Bot.ff; i++) {
         Game.tick(STEP);
+        // 선입력 버퍼 (v160): 히트스톱(세계가 멈춘 순간)에는 함께 멈춘다.
+        // 전투 밖에서는 통째로 비운다 — 카드를 Space로 고른 손이 복귀 직후
+        // 유령 대시로 이어지면 안 된다
+        if (Game.state !== 'play') Input.buf = {};
+        else Input.decay(Game.hitstop > 0 ? 0 : STEP);
         Input.endFrame();
       }
       acc -= STEP;

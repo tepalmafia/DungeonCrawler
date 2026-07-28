@@ -96,6 +96,14 @@ const GameRewards = {
         // v156 (제보 "방금 한 건 없고 과거 정보만 있는데?"): 최근 런들이 글자까지 똑같아 어느 게
         // 방금 건지 구분이 안 됐다. 시각 + 빌드 버전을 남겨 '방금' 표시와 버전 대조가 가능하게
         ts: Date.now(),
+        // v160 빌드 스냅샷 — 감사 지적: 지금 리포트로는 HP6/공1 세이브와 HP9/공3 세이브를
+        // 구분할 수 없어 **앞으로의 모든 튜닝이 또 오염된다**. 제단 강화 상태까지 함께 남긴다
+        mhp: this.player.maxHp,
+        atk: +this.player.currentAtk().toFixed(1),
+        tr: this.player.traits.length,
+        rel: this.player.relics.length,
+        alt: (typeof Meta !== 'undefined' && Meta.lvl)
+          ? ['vit', 'pow', 'choice', 'reroll', 'greed'].map((k) => Meta.lvl(k)).join('') : '',
         ver: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 0,
       });
       while (log.length > 15) log.shift();

@@ -391,7 +391,13 @@ function createBoss(floor, x, y) {
     _patN: 0,          // v150 패턴 문법: 초식 카운터 — 4수마다 고유기가 온다
     _echoes: [],       // v150 echo 잔상 분신
     // 기믹 상태 (끈질긴 어픽스: 철갑 +1, 무기믹 보스는 cap 1 부여)
-    armorCap: (def.mechanic?.type === 'armor' ? def.mechanic.cap : 0) + (affixes.some((a) => a.id === 'ironhide') ? 1 : 0),
+    // v160: 어픽스 「끈질긴」이 armorCap에 +1을 하던 것을 폐기 — 효과가 **정반대로** 걸려 있었다.
+    //  · 철갑 보스: cap 2 → 3 = 경감이 약해진다 (어픽스인데 보스가 약해짐)
+    //  · 기믹 없는 보스: cap 0 → **1** = 모든 직접 타격이 1로 잘려 3200HP 보스가 사실상 불사
+    //    (감사 실측: 25층 직격 TTK 약 16분). 11~50층 조우의 상당수가 여기 걸렸다
+    // → armorCap은 킷 설계 그대로 두고, 어픽스는 별도 축(직접 타격 -15%)으로 분리한다
+    armorCap: def.mechanic?.type === 'armor' ? def.mechanic.cap : 0,
+    ironhide: affixes.some((a) => a.id === 'ironhide'),
     rageT: 0,
     rageStacks: 0,
     veilsDone: 0,

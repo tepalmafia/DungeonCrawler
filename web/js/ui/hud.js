@@ -1819,7 +1819,7 @@ const HUD = {
       ];
       ctx.font = 'italic 12px Galmuri11, monospace';
       ctx.fillStyle = '#8a8aa0';
-      ctx.fillText(EPITAPHS[(Dungeon.floor + game.kills) % EPITAPHS.length], Renderer.W / 2, 232);
+      ctx.fillText(EPITAPHS[(Dungeon.floor + game.kills) % EPITAPHS.length], Renderer.W / 2, 228); // v160: 아래 18px 줄과 겹쳤다
       // v120 ⑤: 망자 본인의 한 줄 — 죽음이 실패가 아니라 불사(不死)의 확인이 되도록
       const DEATH_LINES = {
         knight: ['목이 잘려도 일어난 몸이다. 이 정도로는 — 어림없다.', '마르타, 조금만 더 기다려. 아직 할 일이 남았다.'],
@@ -1831,7 +1831,7 @@ const HUD = {
       if (dl) {
         ctx.font = '13px Galmuri11, monospace';
         ctx.fillStyle = '#c8c0a8';
-        ctx.fillText(`"${dl[game.kills % dl.length]}"`, Renderer.W / 2, 395); // 재도전 힌트 바로 위 — 망자의 다짐
+        ctx.fillText(`"${dl[game.kills % dl.length]}"`, Renderer.W / 2, 418); // 재도전 힌트 바로 위 — 망자의 다짐
       }
     }
 
@@ -1839,11 +1839,11 @@ const HUD = {
     ctx.fillStyle = '#e8e0cf';
     ctx.fillText(
       `${Dungeon.floor}층 ${Dungeon.floorName()} · 방 ${Dungeon.roomIndex} 도달`,
-      Renderer.W / 2, 240);
+      Renderer.W / 2, 250);
     ctx.font = '15px Galmuri11, monospace';
     ctx.fillStyle = '#9aa0b4';
-    ctx.fillText(`Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · ${game.time.toFixed(1)}초`,
-      Renderer.W / 2, 272);
+    ctx.fillText(`Lv.${game.level} · 처치 ${game.kills} · 유물 ${game.player.relics.length}개 · 특성 ${game.player.traits.length}장 · ${game.time.toFixed(1)}초`,
+      Renderer.W / 2, 276);
 
     // 진전 비교 — 지난 런 대비 어디까지 왔나
     ctx.font = '13px Galmuri11, monospace';
@@ -1862,19 +1862,36 @@ const HUD = {
     }
 
     this._drawShardReward(ctx, game, 330);
+    // v160: 해금 → 망자의 다짐(410) → 재도전(442) → 가호(470) → 런 태그(498) 순으로
+    // 아래 절반을 다시 배분했다. 종전엔 해금 줄을 넣을 자리가 아예 없었다
+    this._drawUnlocks(ctx, game, 378);
     // 망자의 가호 힌트 (v145): 연속 사망 2회+ 이고 가호가 꺼져 있으면 — 다정한 한 줄
     if ((Meta.data.deathStreak || 0) >= 2 && !(Meta.data.opts && Meta.data.opts.grace)) {
       ctx.font = '13px Galmuri11, monospace';
       ctx.fillStyle = '#c9b8e8';
-      ctx.fillText('힘겹다면 — 설정(O)의 「망자의 가호」가 함께 싸운다', Renderer.W / 2, 436);
+      ctx.fillText('힘겹다면 — 설정(O)의 「망자의 가호」가 함께 싸운다', Renderer.W / 2, 470);
     }
-    this._drawRunTag(ctx, game, 448);
+    this._drawRunTag(ctx, game, 498);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('R — 즉시 재도전   ·   클릭/Space — 거점으로', Renderer.W / 2, 415);
+      ctx.fillText('R — 즉시 재도전   ·   클릭/Space — 거점으로', Renderer.W / 2, 442);
     }
+  },
+
+  // 새 해금 (v160) — 정산 화면이 직접 그린다. 다음 런을 시작할 이유는 여기서 생긴다
+  _drawUnlocks(ctx, game, y) {
+    const fresh = game._freshUnlocks;
+    if (!fresh || !fresh.length) return;
+    const cx = Renderer.W / 2;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 14px Galmuri11, monospace';
+    ctx.fillStyle = '#f7b32b';
+    ctx.fillText(`🔓 해금! ${fresh.slice(0, 3).join(' · ')}${fresh.length > 3 ? ` 외 ${fresh.length - 3}종` : ''}`, cx, y);
+    ctx.font = '12px Galmuri11, monospace';
+    ctx.fillStyle = '#9a8f6a';
+    ctx.fillText('다음 런부터 카드 목록에 등장한다', cx, y + 17);
   },
 
   // 일일 수배령 기록판 (v132): 최근 7일 미니 바 — 층수가 높이, 완수는 금빛과 별
@@ -2095,13 +2112,14 @@ const HUD = {
     });
 
     if (t > 1.3) this._drawShardReward(ctx, game, 352);
+    if (t > 1.5) this._drawUnlocks(ctx, game, 396);
     if (game.dailyRun && t > 1.3) this._drawDailyBoard(ctx, Renderer.W - 150, 240); // 기록판 (v132)
-    this._drawRunTag(ctx, game, 497);
+    this._drawRunTag(ctx, game, 508);
 
     if (t > 1.6 && Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', cx, 432);
+      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', cx, 442);
     }
     if (t > 1.6) {
       ctx.font = 'bold 16px Galmuri11, monospace';
@@ -2112,7 +2130,7 @@ const HUD = {
         4: 'C — 5막 왕도로 (빌드 유지, 41~50층: 마지막 열 층)',
       };
       ctx.fillStyle = cNext[act] ? '#c9d94a' : '#b13ae0';
-      ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 462);
+      ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 472);
     }
   },
 
