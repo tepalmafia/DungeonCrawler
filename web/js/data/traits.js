@@ -160,7 +160,11 @@ const TRAITS = [
   // 양날 — 힘에는 값이 있다
   { id: 'bloodprice', rare: true, name: '핏값', tag: '희귀', color: '#c9b8e8',
     desc: '공격력 +2 — 대신 피격마다 골드 8을 흘린다', flag: 'bloodprice', apply: (p) => { p.bonusAtk += 2; } },
-  { id: 'heavyplate', rare: true, name: '중갑 서약', tag: '희귀', color: '#c9b8e8',
+  // v157: v151 희귀 14종 중 **유일하게 flag도 max도 없어** 무한 중첩됐다 (실측 런당 평균 2장,
+  // 최대 8장 = HP+24·이속 ×0.43). 게다가 '희귀' 태그 공명이 희귀 전체 가중을 밀어올려
+  // 희귀 등장률이 사양 10.2% → 최대 16.5%로 팽창하는 되먹임까지 만들었다.
+  // flag가 없는 특성은 반드시 max를 준다 — rollTraitCards의 제외 조건이 그 둘뿐이다
+  { id: 'heavyplate', rare: true, name: '중갑 서약', tag: '희귀', color: '#c9b8e8', stack: true, max: 2,
     desc: '최대 HP +3, 즉시 3 회복 — 대신 이동 속도 -10%',
     apply: (p) => { p.maxHp += 3; p.hp = Math.min(p.maxHp, p.hp + 3); p.speed *= 0.9; } },
   { id: 'gambler', rare: true, name: '도박사의 피', tag: '희귀', color: '#c9b8e8',
@@ -213,7 +217,12 @@ function rollTraitCards(player, n = 3) {
   const hasElemTree = ELEM_TAGS.some((el) => (tagCount[el] || 0) >= 2);
   const weightOf = (t) => {
     if (t.legend) return 0.1; // 전설: 극저확률 — 나오면 런이 특별해진다 (풀 확대에 맞춰 0.08→0.1)
-    let w = (1 + 0.7 * (tagCount[t.tag] || 0) * (t.tag === '스탯' ? 0.2 : 1)) * (t.cls ? 1.5 : 1);
+    // 태그 공명은 **시너지 계열**(화염·번개·독·수호·흡혈·직업)에만 준다.
+    // v157: '희귀'는 계열이 아니라 **등급**인데 태그를 공유하는 바람에, 희귀를 한 장 집으면
+    // 희귀 전체 가중이 오르는 되먹임이 생겼다 — 실측 등장률이 사양 10%의 1.7배(16.7%)까지 팽창.
+    // 등급 태그는 공명 계수 0 (스탯은 종전대로 0.2로 감쇠)
+    const reso = t.tag === '희귀' ? 0 : t.tag === '스탯' ? 0.2 : 1;
+    let w = (1 + 0.7 * (tagCount[t.tag] || 0) * reso) * (t.cls ? 1.5 : 1);
     if (t.rare) w *= 0.42; // 희귀 (v151): 세 판에 한 번쯤 — 나왔을 때 '오늘 런의 방향'이 되는 빈도
     // 교차 원소 유도 (반응 노출 계측: 30분에 7회 발동 — 믹스가 안 나와서 반응이 묻혔다):
     // 원소 트리 하나를 2픽 이상 팠으면, 아직 안 판 다른 원소 카드가 더 자주 보인다
