@@ -93,6 +93,10 @@ const GameRewards = {
         bot: !!(typeof Bot !== 'undefined' && Bot.enabled), // 봇 런: 리포트에서 제외
         cheat: !!this.testMode, // v147: 테스트모드 수동 런은 라벨만 붙여 리포트에 포함 — 사장의 주력 테스트 동선(B 보스 직행)이 데이터가 되도록
         quit: !!this.gaveUp, // v147: 포기 런 구분 — '사망(?)'으로 찍히던 가독성 버그
+        // v156 (제보 "방금 한 건 없고 과거 정보만 있는데?"): 최근 런들이 글자까지 똑같아 어느 게
+        // 방금 건지 구분이 안 됐다. 시각 + 빌드 버전을 남겨 '방금' 표시와 버전 대조가 가능하게
+        ts: Date.now(),
+        ver: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : 0,
       });
       while (log.length > 15) log.shift();
       Meta.data.deathStreak = victory ? 0 : (Meta.data.deathStreak || 0) + 1; // 가호 힌트용 (v145)
