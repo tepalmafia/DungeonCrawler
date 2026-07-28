@@ -91,23 +91,30 @@ const GameScreens = {
   _cheatScaleToFloor() {
     const p = this.player;
     const f = Dungeon.floor;
-    const targetLv = Math.round(f * 1.3) + 3;
+    // ══ v158 곡선 전면 재교정 — 실측 대조(봇 정상 진행 vs 직행, 1·3·5·8층, 총 100+런) 근거 ══
+    // 종전 곡선은 **모든 항목에서 정상 진행보다 약했다**. 실측 직행/정상 비율:
+    //   유물 0~4% · 골드 6~23% · 특성 36~53% · 공격력 21~50% · 레벨 67~78%
+    // 즉 사장이 B로 치른 보스전은 정상 플레이어보다 화력 1/4, 유물 0개인 몸으로 싸운 것이고,
+    // 그 위에서 잰 수치로 v155 보스 완화를 결정했다. 도구가 밸런스 판단을 오염시킨 세 번째 사례다.
+    // 아래 계수는 전부 실측 중앙값에서 역산했다 (괄호: f=1/3/5/8 산출 → 실측):
+    const targetLv = Math.round(f * 1.9) + 3;            // 5/9/13/18 → 4.2/10.4/12.8/17
     if (!p || this.level >= targetLv) return;
-    // 레벨·체력 곡선
-    // v155: 대입(=)이라 정상 진행으로 쌓은 HP·골드가 곡선 값으로 **깎이던** 문제 —
-    // "빌드가 뒤로 가지 않는다"는 이 함수의 약속이 레벨에만 적용돼 있었다 (적대적 재검에서 발각)
     const preHp = p.maxHp;
     this.level = targetLv;
     this.xp = 0; this.xpNext = Math.round(40 * Math.pow(1.25, targetLv));
-    p.maxHp = Math.max(preHp, Math.min(14, 6 + Math.floor(f / 4)));
+    // HP — **직업 기본치 기준 상대 성장**. 종전은 기사 곡선(6+f/4)을 전 직업에 강제해
+    // 마도사(기본 3)에게 6을 줬다: 정상 3.31 대비 181% 과다 — 사장의 "체력이 너무 많은데?"의 진짜 뿌리.
+    // (v155에서 고친 건 유물이 상한을 넘긴 것뿐이었고, 곡선이 직업을 무시하는 문제는 남아 있었다)
+    const hpTarget = preHp + Math.round(f * 0.6);        // 기사 7/8/9/11 · 마도사 4/5/6/8
+    p.maxHp = Math.max(preHp, hpTarget);
     p.hp = p.maxHp;
-    this.gold = Math.max(this.gold || 0, f * 15);
+    this.gold = Math.max(this.gold || 0, Math.round(25 * f * f + 40 * f)); // 65/345/825/1920 → 65/345/564/1899
     // 특성: 레벨 수만큼 태그 겹치기 휴리스틱으로 자동 픽 (진화 시너지 근사)
     // v153 (실플레이 제보: 마도사 하트 19개): v151 희귀 특성이 '희귀' 태그를 공유하자 겹치기
     // 휴리스틱이 강골×6+중갑 서약을 스스로 조립해 HP 요새를 만들었다 — 중앙값 빌드 근사라는
     // 도구의 목적에 맞게 희귀·전설은 자동 픽에서 제외하고, HP 특성은 설계 곡선 +2까지만
     const tagCount = {};
-    const hpCap = Math.min(14, 6 + Math.floor(f / 4)) + 2;
+    const hpCap = hpTarget + 3; // 직업 기본치 기준 상한 (종전은 기사 곡선 고정이라 마도사가 두 배였다)
     // v153 연쇄 B 폭주 수정: 매 호출마다 전량(targetLv-1)을 새로 얹어 10층 연쇄에 특성 78개가
     // 쌓였다 (정상 ~15) — 이미 가진 수를 빼고 '차액'만 채운다. 유물도 동일
     // v155 (사장 F9 실측, 기사 1층 4연사): 겹치기 휴리스틱이 **화력을 전혀 안 챙겼다** —
@@ -115,9 +122,13 @@ const GameScreens = {
     // (대검화 공속 ×1.8 등)까지 뽑아 봇·라이트 유저 기준 DPS가 무너졌다. 사람은 초반에 반드시
     // 화력을 한두 장 집는다 — 그 상식을 도구에 넣는다: ① 리듬 반전 특성 제외 ② 공격력 하한 보증
     const RHYTHM_FLIP = ['greatsword', 'twinbow', 'mgsnipe', 'al_catalyst']; // 중앙값 근사엔 부적합
-    const wantTraits = Math.max(0, (targetLv - 1) - p.traits.length); // 연쇄 호출도 차액만 (v153)
+    // 특성 수 — 종전 `targetLv-1`은 **레벨업 보상만** 세고 엘리트 방 카드(1층만 평균 3.9개)를
+    // 통째로 빠뜨렸다. 실측 대조에서 정상의 36~53%에 그쳤다
+    const wantTraits = Math.max(0, Math.round(3 + f * 4.5) - p.traits.length); // 8/17/26/39 → 7.3/22/25/39
     for (let i = 0; i < wantTraits; i++) {
-      const cards = rollTraitCards(p, 3).filter((c) => !c.rare && !c.legend && !RHYTHM_FLIP.includes(c.flag));
+      // v158: 희귀 재허용 — v153에서 전면 배제했으나 정상 빌드의 약 30%가 희귀다(8층 실측 12장).
+      // 배제의 원래 목적(HP 요새)은 v157의 중갑 상한·등급 공명 제거 + 아래 최종 클램프가 담당한다
+      const cards = rollTraitCards(p, 3).filter((c) => !c.legend && !RHYTHM_FLIP.includes(c.flag));
       if (!cards.length) continue;
       let best = null, bs = -1;
       for (const c of cards) {
@@ -129,19 +140,23 @@ const GameScreens = {
       applyTrait(p, best);
       if (best.tag !== '스탯') tagCount[best.tag] = (tagCount[best.tag] || 0) + 1;
     }
-    // 공격력 하한 — 층에 걸맞은 화력을 보증 (사람이 집었을 만큼). 상한은 힘 단련 스택(8)
-    const atkTarget = 1 + Math.ceil(f * 0.35);
+    // 유물 — 종전 `floor(f/6)`은 1~5층 전 구간에서 **0개**를 뱉었다. 정상은 1층조차 최소 1개이고
+    // (49런 중 0개 0회) 8층이면 24개다. 유물은 화력·생존에 직접 붙는 축이라 이게 빠지면
+    // 빌드의 절반이 사라진다 — 실측 직행/정상 비율 0~4%로 전 항목 중 최악이었다
+    const wantRelics = Math.max(0, Math.round(f * 3) - p.relics.length); // 3/9/15/24 → 2.9/11.4/14.9/24
+    for (let i = 0; i < wantRelics; i++) {
+      const rolled = rollRelics(p, 1, true);
+      if (rolled.length) applyRelic(p, rolled[0]); // applyRelic이 relics 목록 push까지 담당
+      else break; // 풀 고갈
+    }
+    // 공격력 하한 — **유물 뒤에** 둔다. 유물이 화력의 상당 부분을 담당하므로(수집가 등),
+    // 앞에 두면 힘 단련이 이중으로 쌓인다. 남는 차액만 메운다
+    const atkTarget = Math.max(1, Math.round(f * 2.4 - 0.5)); // 2/7/12/19 → 2/6/12.7/19
     const might = TRAITS.find((t) => t.id === 'atk');
     let guard = 0;
     while (might && p.currentAtk() < atkTarget && guard++ < 12 &&
            (p.traits.filter((x) => x === 'atk').length < (might.max || 8) || p.flags.unbound)) {
       applyTrait(p, might);
-    }
-    // 유물: 6층당 1개 (직업 유품 포함 풀) — 연쇄 호출도 차액만
-    const wantRelics = Math.max(0, Math.floor(f / 6) - p.relics.length);
-    for (let i = 0; i < wantRelics; i++) {
-      const rolled = rollRelics(p, 1, true);
-      if (rolled.length) applyRelic(p, rolled[0]); // applyRelic이 relics 목록 push까지 담당
     }
     // ★ 최종 HP 클램프 (v155) — 사장이 본 '하트 19개'의 진짜 뿌리.
     // v153의 hpCap은 **특성 루프에만** 걸려 있었고, 그 뒤 유물(마르타의 목걸이 +2, 심장 조각 +1,

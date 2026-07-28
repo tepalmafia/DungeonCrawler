@@ -158,7 +158,13 @@ const GameCombat = {
     // 고층 빌드는 초당 타격 횟수가 수 배라 실시간 TTK가 고층일수록 짧아진다 — 상한을 조여 보정
     if (e.isBoss) {
       const capPct = Dungeon.floor >= 31 ? 0.008 : Dungeon.floor >= 16 ? 0.010 : 0.012; // 최소 83/100/125타
-      dmg = Math.min(dmg, Math.max(2, Math.round(e.maxHp * capPct)));
+      // v158: 1~3층 하한을 층 비례로. 종전 고정 하한 2는 온보딩에서 **퇴화**했다 —
+      // 보스 HP가 작아 %상한이 하한에 눌리면서, 2층 170HP는 최소 85타·3층 190HP는 95타가 됐다
+      // (재생·철갑 기믹까지 얹혀 실측 소모율 1.27~1.28 = 시작 HP를 넘겨 소모하는 필패 구조).
+      // 게다가 **공격력을 아무리 올려도 피해가 2에서 멈춰** 온보딩 3개 층 내내 화력 성장이 무의미했다.
+      // 상한의 목적은 '한 방 순삭 방지'이지 '성장 무효화'가 아니다
+      const minCap = Dungeon.floor <= 3 ? Math.round(Dungeon.floor * 1.8) : 2; // 2/4/5
+      dmg = Math.min(dmg, Math.max(minCap, Math.round(e.maxHp * capPct)));
     }
     // 피뢰침: 크리티컬이 감전을 심는다 — 원소 트리 없이도 반응(과부하·마비)의 문이 열린다
     if (crit && !e.isBoss && this.player && this.player.rflags.stormcrit && Math.random() < 0.2) {
