@@ -71,6 +71,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       this.animT += dt;
       if (this.flash > 0) this.flash -= dt;
       if (this._strikeT > 0) this._strikeT -= dt;
+      if (this._whiffT > 0) this._whiffT -= dt;
+      // 접촉 예고 만료 (v168)
+      if (this._windT > 0) {
+        this._windT -= dt;
+        if (this._windT <= 0 && typeof Game !== 'undefined' && Game.player && !this.dead && this.spawnT <= 0) {
+          this._resolveWind(Game);
+        } else if (this._windT <= 0) { this._windT = 0; }
+      }
       if (this.hitCd > 0) this.hitCd -= dt;
       if (this._slamCd > 0) this._slamCd -= dt;
       if (this.hasteT > 0) this.hasteT -= dt; // 절규자의 가속 함성 (2막)
@@ -107,25 +115,50 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       }
     },
 
+    // ── 접촉 피해 예고 (v168) ────────────────────────────────────────────
+    // 종전엔 **닿는 순간 곧바로 피해**였다. 예고가 없으니 "왜 맞았는지"를 배울 수 없었고,
+    // 무엇보다 **'어디에 서 있을까'가 결정이 되지 못했다** — 붙으면 맞고, 그게 전부였다.
+    // v159에서 보스 예고를 판정과 일치시킨 것과 같은 원칙을 잡몹 접촉에 적용한다:
+    //   ① 닿으면 먼저 **겨눈다**(0.25초, 정예 0.3초) — 화면에 붉은 부채꼴이 자란다
+    //   ② 그 사이에 물러나면 **헛손질** — 그리고 적은 더 길게 경직된다(반격의 창)
+    // 회피에 성공하면 이득이 있어야 회피가 '결정'이 된다. 그냥 안 맞는 것만으로는 부족하다
     touchPlayer(game, dmg) {
       const p = game.player;
-      if (this.hitCd > 0) return;
+      if (this.hitCd > 0 || this._windT > 0) return;
       const d = Math.hypot(p.x - this.x, p.y - this.y);
       if (d < p.r + this.r) {
-        const dir = { x: (p.x - this.x) / (d || 1), y: (p.y - this.y) / (d || 1) };
+        this._windT = (this.elite || this.isMini) ? 0.30 : 0.25;
+        this._windMax = this._windT;
+        this._windDmg = dmg;
+        this._windA = Math.atan2(p.y - this.y, p.x - this.x);
+      }
+    },
+
+    // 예고 만료 처리 — tickTimers(전 몹이 매 프레임 부르는 공용 훅)에서 돈다.
+    // touchPlayer 안에서 처리하면 플레이어가 물러난 순간 호출이 끊겨 예고가 영영 안 터진다
+    _resolveWind(game) {
+      const p = game.player;
+      this._windT = 0;
+      const d = Math.hypot(p.x - this.x, p.y - this.y);
+      const dir = { x: (p.x - this.x) / (d || 1), y: (p.y - this.y) / (d || 1) };
+      this._strikeT = 0.22;
+      this._strikeA = Math.atan2(dir.y, dir.x);
+      if (d < p.r + this.r + 8) {
+        this.hitCd = 0.8;
+        let dmg = this._windDmg || 1;
+        // 심층 압박 (R1): 7층+ 정예·우두머리의 접촉은 2 — 후반에도 죽음이 가깝다
+        if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);
         if (p.invuln > 0) {
           // 무적 중 접촉은 피해가 없지만 — 대시 무적이라면 '완벽 회피' 판정 기회다
-          // (hurtPlayer의 무적 분기가 처리. 기존엔 여기서 끊겨 근접 몹 상대 완벽 회피가 불가능했다)
           if (p._dashWin > 0) game.hurtPlayer(dmg, dir);
           return;
         }
-        this.hitCd = 0.8;
-        // 심층 압박 (R1): 7층+ 정예·우두머리의 접촉은 2 — 후반에도 죽음이 가깝다
-        if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);
-        // 공격 모션: 접촉이 '닿음'이 아니라 '휘두름'으로 보이게 — 렌더가 이 창에서 무기 궤적을 그린다
-        this._strikeT = 0.22;
-        this._strikeA = Math.atan2(dir.y, dir.x);
         game.hurtPlayer(dmg, dir);
+      } else {
+        // 물러섰다 — 헛손질. 경직을 길게 줘서 반격의 창을 연다 (회피가 이득이 되도록)
+        this.hitCd = 1.15;
+        this._whiffT = 0.5;
+        Particles.text(this.x, this.y - 26, '헛손질', { color: '#9aa0b4', size: 11 });
       }
     },
 

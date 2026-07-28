@@ -712,6 +712,33 @@ const GameRender = {
         ctx.restore();
       }
       d.draw(ctx);
+      // ── 접촉 예고 (v168): 때리기 **전에** 붉은 부채꼴이 자란다 ──
+      // 예고 없이 맞으면 그건 난이도가 아니라 정보 부족이다 (v159 보스 예고와 같은 원칙).
+      // 예고가 다 차기 전에 물러나면 헛손질 — 위치 선정이 그제야 '결정'이 된다
+      if (d._windT > 0 && !d.dead) {
+        const k = 1 - d._windT / (d._windMax || 0.25); // 0 → 1 로 자란다
+        const a0 = d._windA || 0;
+        const rr = d.r + 20;
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(a0);
+        ctx.globalAlpha = 0.20 + 0.45 * k;
+        ctx.fillStyle = 'rgba(228,59,68,0.55)';
+        ctx.beginPath(); ctx.moveTo(0, 0);
+        ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 0.5 + 0.5 * k;
+        ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.stroke();
+        ctx.restore();
+      }
+      // 헛손질 경직 — 반격의 창이 열렸다는 신호
+      if (d._whiffT > 0 && !d.dead) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.55, d._whiffT);
+        ctx.strokeStyle = '#5ce0e6'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(d.x, d.y, d.r + 10, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
       // ── 적 공격 모션 (2차): 접촉 타격 순간 무기/발톱 궤적 — 병사는 검격, 짐승·시체는 할퀴기 ──
       if (d._strikeT > 0 && !d.dead) {
         const t = d._strikeT / 0.22;
