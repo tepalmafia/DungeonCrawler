@@ -466,6 +466,37 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('cards.enduranceOncePerRun', peak.enduredHp === 1 && peak.used && peak.secondHp <= 0,
     `불굴 — 첫 치명상 HP ${peak.enduredHp}로 버팀, 두 번째는 ${peak.secondHp}`);
 
+  // ── 상자가 결정이 되는가 (v170) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const chest = await page.evaluate(() => {
+    const p = Game.player; p.maxHp = 8; p.hp = 8;
+    Dungeon.tookRelicChest = false;
+    Game.interactables.length = 0;
+    Game.interactables.push({ kind: 'chest', x: p.x, y: p.y, used: false, r: 20 });
+    Game.state = 'play';
+    for (let i = 0; i < 20; i++) Game.tick(1 / 60);   // 상자 위에 서 있으면 열린다
+    const opened = { state: Game.state, n: (Game.relicCards || []).length, src: Game._relicSource };
+    const costCard = (Game.relicCards || []).findIndex((c) => c.costHp);
+    const before = { hp: p.maxHp, rel: p.relics.length };
+    // 대가는 acquireRelic **전에** 치러진다. 유물 자체가 최대 HP를 올리면 순증감이 상쇄되므로
+    // (예: 「식지 않은 심장 조각」 +1) 지불 직후 시점을 붙잡아야 정확하다
+    let paidHp = null;
+    const oAcq = Game.acquireRelic.bind(Game);
+    Game.acquireRelic = function (r) { paidHp = p.maxHp; return oAcq(r); };
+    Game.choiceLockT = 0;
+    Game.pickRelic(costCard >= 0 ? costCard : 0);
+    Game.acquireRelic = oAcq;
+    const after = { hp: p.maxHp, rel: p.relics.length, state: Game.state, paidHp };
+    return { opened, costIdx: costCard, before, after };
+  });
+  ok('chest.threeWayChoice', chest.opened.state === 'relic' && chest.opened.n === 3 && chest.opened.src === 'chest',
+    `상자 → 유물 ${chest.opened.n}장 중 1택 (v169까지는 랜덤 1개 강제 = 결정 없음)`);
+  ok('chest.costCardExists', chest.costIdx >= 0, `대가 카드 ${chest.costIdx + 1}번 (한 등급 위 · 최대 HP -1)`);
+  ok('chest.costIsPaid',
+    chest.after.rel === chest.before.rel + 1 && chest.after.paidHp === chest.before.hp - 1 && chest.after.state === 'play',
+    `대가 카드 선택 → 유물 +1 · 지불 시점 최대 HP ${chest.before.hp}→${chest.after.paidHp}` +
+    (chest.after.hp !== chest.after.paidHp ? ` (유물 효과로 최종 ${chest.after.hp})` : ''));
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

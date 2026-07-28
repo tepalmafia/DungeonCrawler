@@ -1342,10 +1342,28 @@ const GamePlay = {
           // (9층 공격력 25.5 대 잡몹 HP 12~54 = 평균 1.8타). 상자는 계속 열 만하되,
           // 유물은 층에 하나뿐인 사건으로 되돌린다. 나머지 상자는 금화를 두 배로 준다
           const first = !Dungeon.tookRelicChest;
-          const rolled = first ? rollRelics(p, 1, false) : [];
+          // v170: **상자가 결정이 된다.** 종전엔 열면 랜덤 유물 1개가 그냥 주어졌다 —
+          // 특수방에 도착하는 것 말고는 아무 판단도 없었다.
+          //  ① 3장 중 1택 (고르지 않은 둘은 사라진다 — 그것이 첫 번째 대가)
+          //  ② 그중 한 장은 **한 등급 위**이지만 **최대 HP 1**을 요구한다
+          //     — "지금 강해지고 나중에 덜 버틸까"는 로그라이크의 가장 오래된 질문이다
+          const rolled = first ? rollRelics(p, 3, false) : [];
           if (rolled.length > 0) {
             Dungeon.tookRelicChest = true;
-            this.acquireRelic(rolled[0]);
+            const cards = rolled.slice(0, 3);
+            // 승급 유물이 이미 뽑힌 3장과 겹치면 대가 카드가 사라진다 — 겹치지 않을 때까지 몇 번 더 굴린다
+            // (검증에서 간헐 실패로 발각: 대가 카드가 없는 상자 = 결정이 없는 상자)
+            let up = null;
+            for (let k = 0; k < 6 && !up; k++) {
+              const cand = rollRelics(p, 1, true)[0];
+              if (cand && !cards.includes(cand)) up = cand;
+            }
+            if (up && p.maxHp > 2) cards[cards.length - 1] = { ...up, costHp: 1 };
+            this.relicCards = cards;
+            this._relicSource = 'chest';
+            this.state = 'relic';
+            this.choiceLockT = 0.35;
+            AudioSys.chest();
           } else {
             AudioSys.chest();
             if (!first) Particles.text(it.x, it.y - 30, '금화 더미', { color: '#f7b32b', size: 13 });
