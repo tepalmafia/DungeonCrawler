@@ -1311,14 +1311,21 @@ const GamePlay = {
         it.used = true;
         if (it.kind === 'chest') {
           Renderer.shake(2, 0.1);
-          // 보물상자: 유물 1개 (루트의 도파민!)
-          const rolled = rollRelics(p, 1, false);
+          // 보물상자 — v166: **층당 유물 1개**.
+          // 실측(봇 9층 정상 진행): 유물 23개 중 **16개가 이 상자 하나에서** 나왔다(70%).
+          // 유물이 층마다 두세 개씩 쏟아지니 한 개의 무게가 사라졌고, 화력이 적 성장을 압도했다
+          // (9층 공격력 25.5 대 잡몹 HP 12~54 = 평균 1.8타). 상자는 계속 열 만하되,
+          // 유물은 층에 하나뿐인 사건으로 되돌린다. 나머지 상자는 금화를 두 배로 준다
+          const first = !Dungeon.tookRelicChest;
+          const rolled = first ? rollRelics(p, 1, false) : [];
           if (rolled.length > 0) {
+            Dungeon.tookRelicChest = true;
             this.acquireRelic(rolled[0]);
           } else {
             AudioSys.chest();
+            if (!first) Particles.text(it.x, it.y - 30, '금화 더미', { color: '#f7b32b', size: 13 });
           }
-          for (let k = 0; k < 5; k++) {
+          for (let k = 0; k < (first && rolled.length ? 5 : 10); k++) {
             const a = Math.random() * Math.PI * 2;
             this.orbs.push({ x: it.x, y: it.y, val: 3, vx: Math.cos(a) * 160, vy: Math.sin(a) * 160 - 60 });
           }
@@ -1579,7 +1586,10 @@ const GamePlay = {
       }
       if (Dungeon.roomType !== 'boss') {
         World.openDoors(this._maybeCollapseDoor(Dungeon.doorOptions()));
-        if (Dungeon.roomType === 'elite') {
+        if (Dungeon.roomType === 'elite' && !Dungeon.tookEliteCard) {
+          // v166: 정예방 특성 카드도 **층당 1장**. 실측 9층까지 정예 카드만 19장으로,
+          // 레벨업분(18장)과 맞먹었다 — 층마다 정예방이 1~2개씩 나오니 카드가 흔해졌다
+          Dungeon.tookEliteCard = true;
           this.pendingChoices++;
           this.openTraitChoice('elite');
         }

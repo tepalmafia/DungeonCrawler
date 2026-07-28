@@ -94,13 +94,17 @@ const GameScreens = {
   // 어느 쪽이든 **화면에 정상치를 함께 띄우므로**, 도구가 다시 어긋나면 눈으로 즉시 보인다
   // 대역표 — 봇 정상 진행 실측(현상금 0, 치트 없음). 층 사이는 선형 보간한다.
   // 직업별 화력 차가 크다: 3층 실측 기사 공6 vs 궁수 공2 (3배). 뭉뚱그리면 도구가 다시 어긋난다
+  // v166 보상 축소 **후** 실측으로 갱신 (1~5층 봇 표본 13건). 종전 표는 축소 전 값이라
+  // 그대로 두면 도구가 다시 과잉 공급한다 — 실측 3층 기사 공6→3 · 유7→4
   _FALLBACK: {
-    knight: { 1: { lv: 1, hp: 7, atk: 1, tr: 0, rel: 0 }, 2: { lv: 4, hp: 6, atk: 3, tr: 8, rel: 5 },
-      3: { lv: 5, hp: 7, atk: 6, tr: 11, rel: 7 }, 5: { lv: 9, hp: 7, atk: 9, tr: 20, rel: 11 },
-      8: { lv: 18, hp: 10, atk: 19.5, tr: 38, rel: 26 }, 10: { lv: 20, hp: 14, atk: 25.5, tr: 46, rel: 31 } },
-    archer: { 1: { lv: 1, hp: 5, atk: 1, tr: 0, rel: 0 }, 2: { lv: 4, hp: 6, atk: 2, tr: 7, rel: 5 },
-      3: { lv: 6, hp: 10, atk: 2, tr: 13, rel: 9 }, 5: { lv: 9, hp: 10, atk: 4, tr: 20, rel: 12 },
-      8: { lv: 13, hp: 9, atk: 14, tr: 33, rel: 16 }, 10: { lv: 18, hp: 12, atk: 22.5, tr: 45, rel: 27 } },
+    knight: { 1: { lv: 1, hp: 6, atk: 1, tr: 0, rel: 0 }, 2: { lv: 4, hp: 5, atk: 3, tr: 5, rel: 2 },
+      3: { lv: 7, hp: 5, atk: 3, tr: 9, rel: 4 }, 4: { lv: 10, hp: 6, atk: 4, tr: 14, rel: 7 },
+      5: { lv: 12, hp: 5, atk: 5, tr: 19, rel: 8 },
+      8: { lv: 18, hp: 10, atk: 10, tr: 32, rel: 14 }, 10: { lv: 20, hp: 14, atk: 13, tr: 39, rel: 17 } },
+    // 궁수는 축소 후 표본이 없어 기사 대비 비율(화력 0.55·HP 1.3)로 환산 — normRef가 쌓이면 대체된다
+    archer: { 1: { lv: 1, hp: 5, atk: 1, tr: 0, rel: 0 }, 2: { lv: 4, hp: 6, atk: 2, tr: 5, rel: 2 },
+      3: { lv: 6, hp: 8, atk: 2, tr: 10, rel: 4 }, 5: { lv: 9, hp: 8, atk: 3, tr: 19, rel: 8 },
+      8: { lv: 13, hp: 9, atk: 7, tr: 28, rel: 12 }, 10: { lv: 18, hp: 12, atk: 11, tr: 38, rel: 15 } },
   },
 
   _normalRef(f, cls) {
@@ -204,6 +208,9 @@ const GameScreens = {
       let best = null, bs = -1;
       for (const c of cards) {
         if ((c.id === 'hp' || c.id === 'heavyplate') && p.maxHp >= hpCap) continue; // HP 상한
+        // v166: 화력도 상한을 둔다. 순서를 유물→화력→특성으로 바꾼 뒤,
+        // 마지막 특성 채우기가 힘 단련을 더 집어 기준선을 넘겼다 (궁수 3층 목표 공2에 공6)
+        if (c.id === 'atk' && p.currentAtk() >= atkTarget) continue;
         const s = (tagCount[c.tag] || 0) + (c.cls ? 0.5 : 0);
         if (s > bs) { bs = s; best = c; }
       }
