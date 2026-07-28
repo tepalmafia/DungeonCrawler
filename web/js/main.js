@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 161;
+const GAME_VERSION = 162;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -715,6 +715,18 @@ const Game = {
         }
         return;
       }
+
+      // v162: 정산 화면에서도 획득 목록(Tab)과 설정(O)이 열린다.
+      // "이번 판에 뭘 들고 있었지"를 확인할 마지막 순간이고, 「망자의 가호」를 켜야겠다고
+      // 마음먹는 순간도 정확히 여기다. 종전엔 둘 다 play 상태에서만 열려서,
+      // 사망 화면이 권하는 설정을 사망 화면에서는 열 수 없었다
+      if (this.showSettings) { this._tickSettings(); return; }
+      if (this.showInventory) {
+        if (Input.pressed('Tab', 'Escape', 'KeyP')) { this.showInventory = false; AudioSys.pickup(); }
+        return;
+      }
+      if (Input.pressed('Tab')) { this.showInventory = true; AudioSys.pickup(); return; }
+      if (Input.pressed('KeyO')) { this.showSettings = true; this._setRow = 0; AudioSys.pickup(); return; }
 
       if (Input.pressed('KeyR')) { this.restart(); return; }
       // 승리 화면에서 C — 1막 완수 후엔 2막(다리와 관문), 2막 완수 후엔 왕도 가도

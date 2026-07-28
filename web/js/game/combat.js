@@ -273,7 +273,7 @@ const GameCombat = {
         // 화면 섬광은 히트스톱과 같은 리듬으로만 — 고크리 빌드에서 연속 번쩍임(눈 아픔) 방지
         if (stopped) this.critFlash = 0.07;
       } else {
-        AudioSys.hit();
+        AudioSys.hit(AudioSys.mat(e.sprite)); // v162: 뼈/돌/살/점액/혼 — 무엇을 때렸는지가 들린다
       }
 
       const p = this.player;

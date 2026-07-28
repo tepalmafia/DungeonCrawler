@@ -395,10 +395,10 @@ const Meta = {
     }
     if (fresh.length) {
       this.save();
-      if (typeof Game !== 'undefined') {
-        Game.banner = { text: `해금! ${fresh.join(' · ')} — 다음 런부터 등장`, life: 3.0, maxLife: 3.0, color: '#f7b32b' };
-        AudioSys.buy();
-      }
+      // v162: 배너는 걷어낸다. v160부터 정산 화면이 해금을 직접 그리는데, 배너는 그 아래
+      // 전투 HUD 층에 **정산 그림을 가로지르며** 남았다 (해금이 여러 개면 화면 폭을 넘겨
+      // 「전사했다」 위를 덮었다). 소리만 남긴다 — 알림은 정산 화면 몫이다
+      if (typeof AudioSys !== 'undefined') AudioSys.buy();
     }
     return fresh;
   },

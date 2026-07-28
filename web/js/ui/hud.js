@@ -1869,9 +1869,13 @@ const HUD = {
     if ((Meta.data.deathStreak || 0) >= 2 && !(Meta.data.opts && Meta.data.opts.grace)) {
       ctx.font = '13px Galmuri11, monospace';
       ctx.fillStyle = '#c9b8e8';
-      ctx.fillText('힘겹다면 — 설정(O)의 「망자의 가호」가 함께 싸운다', Renderer.W / 2, 470);
+      ctx.fillText('힘겹다면 — 지금 O를 눌러 「망자의 가호」를 켜라 (설정 맨 윗줄)', Renderer.W / 2, 470);
     }
     this._drawRunTag(ctx, game, 498);
+    ctx.textAlign = 'center';
+    ctx.font = '12px Galmuri11, monospace';
+    ctx.fillStyle = '#5a5468';
+    ctx.fillText('Tab — 이번 판 획득 목록   ·   O — 설정', Renderer.W / 2, 522);
 
     if (Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px Galmuri11, monospace';
@@ -2155,7 +2159,11 @@ const HUD = {
     const volBar = (v) => '■'.repeat(Math.round((v ?? 0.8) * 10)).padEnd(10, '·') + `  ${Math.round((v ?? 0.8) * 100)}%`;
     const triLbl = (v) => (v ?? 1) <= 0 ? '끔' : (v ?? 1) < 1 ? '약하게' : '보통';
     const fsOn = window.desktop ? !!game._fsOn : !!document.fullscreenElement;
+    // v162: 「망자의 가호」를 최상단으로. 이 항목이 필요한 사람은 방금 여러 번 죽은 사람인데,
+    // 종전엔 음량·흔들림·고어 일곱 줄을 지나야 나왔다. 사망 화면이 "설정(O)의 망자의 가호"를
+    // 권해놓고 정작 가장 찾기 어려운 자리에 뒀던 셈이다
     const rows = [
+      ['망자의 가호 (어시스트)', (o.grace ?? 0) <= 0 ? '끔' : (o.grace ?? 0) < 1 ? '가호 — 2 이상 피해 -1' : '비호 — 가호 + 런당 부활 1회'],
       ['음악 음량', volBar(o.bgm)],
       ['효과음 음량', volBar(o.sfx)],
       ['화면 흔들림', triLbl(o.shake)],
@@ -2163,7 +2171,6 @@ const HUD = {
       ['화면 섬광', triLbl(o.flash) + '  (광과민성 배려)'],
       ['전체화면', fsOn ? '켬' : '끔'],
       ['죽음 연출 (고어)', (o.gore ?? 1) <= 0 ? '끔' : (o.gore ?? 1) < 1 ? '약하게' : '진하게'],
-      ['망자의 가호 (어시스트)', (o.grace ?? 0) <= 0 ? '끔' : (o.grace ?? 0) < 1 ? '가호 — 2 이상 피해 -1' : '비호 — 가호 + 런당 부활 1회'],
     ];
     const ry0 = py + 92, rh = 40;
     rows.forEach(([name, val], i) => {

@@ -1174,6 +1174,11 @@ const GameRender = {
     if (this.state === 'skillmod') HUD.drawCardChoice(ctx, this, this.modCards, '원한의 세공 — 스킬을 개조하라', () => '[ 개조 ]', () => '#b13ae0');
     if (this.state === 'over') HUD.drawGameOver(ctx, this, this.blinkT);
     if (this.state === 'victory') HUD.drawVictory(ctx, this, this.blinkT);
+    // 정산 화면 위에 얹는 오버레이 (v162) — 정산 그림 뒤가 아니라 앞에 와야 보인다
+    if (this.state === 'over' || this.state === 'victory') {
+      if (this.showInventory && this.player) HUD.drawInventory(ctx, this);
+      if (this.showSettings) HUD.drawSettings(ctx, this);
+    }
     // v120 스토리 화면 3종
     if (this.state === 'prologue') HUD.drawPrologue(ctx, this);
     if (this.state === 'cluecard') HUD.drawClueCard(ctx, this);

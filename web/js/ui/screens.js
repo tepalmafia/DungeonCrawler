@@ -203,14 +203,15 @@ const GameScreens = {
     if (!dir) return;
     const vol = (v) => Math.round(Math.min(1, Math.max(0, v + dir * 0.1)) * 10) / 10;
     const tri = (v) => Math.min(1, Math.max(0, (v ?? 1) + dir * 0.5)); // 0 / 0.5 / 1 세 단계
-    if (this._setRow === 0) o.bgm = vol(o.bgm ?? 0.8);
-    else if (this._setRow === 1) o.sfx = vol(o.sfx ?? 0.8);
-    else if (this._setRow === 2) o.shake = tri(o.shake);
-    else if (this._setRow === 3) o.dmgNum = o.dmgNum ? 0 : 1;
-    else if (this._setRow === 4) o.flash = tri(o.flash);
-    else if (this._setRow === 5) { this.toggleFullscreen(); return; }
-    else if (this._setRow === 6) o.gore = tri(o.gore); // 죽음 연출 수위 — 심의·취향 대응
-    else if (this._setRow === 7) o.grace = tri(o.grace ?? 0); // 망자의 가호 (v145) — 선택형 어시스트
+    // 순서는 drawSettings의 rows와 1:1로 맞춰야 한다 (v162: 가호가 최상단)
+    if (this._setRow === 0) o.grace = tri(o.grace ?? 0); // 망자의 가호 (v145) — 선택형 어시스트
+    else if (this._setRow === 1) o.bgm = vol(o.bgm ?? 0.8);
+    else if (this._setRow === 2) o.sfx = vol(o.sfx ?? 0.8);
+    else if (this._setRow === 3) o.shake = tri(o.shake);
+    else if (this._setRow === 4) o.dmgNum = o.dmgNum ? 0 : 1;
+    else if (this._setRow === 5) o.flash = tri(o.flash);
+    else if (this._setRow === 6) { this.toggleFullscreen(); return; }
+    else if (this._setRow === 7) o.gore = tri(o.gore); // 죽음 연출 수위 — 심의·취향 대응
     AudioSys.applyOpts();
     AudioSys.pickup(); // 새 음량이 곧장 귀로 확인된다
     Meta.save();
