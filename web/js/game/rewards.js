@@ -401,7 +401,8 @@ const GameRewards = {
     this.acquireRelic(r);
     this.state = 'play';
     if (this._relicSource === 'legacy') {
-      this._relicSource = null; // 시작 유물(유산 각인)은 보상 흐름 없이 바로 시작
+      this._relicSource = null; // 시작 유물(유산 각인)은 보상 흐름을 타지 않는다
+      this.openRouteChoice();   // v164: 미뤄둔 진군로를 이제 펼친다 (종전엔 여기서 건너뛰었다)
       return;
     }
     this._afterBossReward();
