@@ -948,7 +948,7 @@ const HUD = {
         ];
         ctx.font = '10px Galmuri11, monospace';
         ctx.fillStyle = heat >= 8 ? '#e43b44' : hover ? '#9aa0b4' : '#4a4a5c';
-        ctx.fillText(`${FLAVOR[Math.min(8, heat)]} · ←→ 조절`, rcx, lr.y + 30);
+        ctx.fillText(`${FLAVOR[Math.min(8, heat)]} · ${hover ? '←→ 조절' : '여기에 마우스 올리고 ←→'}`, rcx, lr.y + 30);
       }
     }
 
