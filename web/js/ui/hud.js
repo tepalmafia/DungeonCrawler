@@ -807,13 +807,6 @@ const HUD = {
     return [0, 1, 2, 3].map((i) => ({ x, y: y0 + i * (h + gap), w, h }));
   },
 
-  heatButtonRects() {
-    const cy = 243;
-    return [
-      { x: Renderer.W / 2 - 156, y: cy - 15, w: 26, h: 26 },
-      { x: Renderer.W / 2 + 130, y: cy - 15, w: 26, h: 26 },
-    ];
-  },
 
   // 열기 서약 칩 — 서약 편집 패널(로드아웃 줄 클릭)에서만 표시
   pactChipRects() {
@@ -833,8 +826,8 @@ const HUD = {
   heatBtnRects() {
     const lr = this.loadoutLineRect();
     return [
-      { x: lr.x - 30, y: lr.y + 2, w: 24, h: 24, d: -1 },
-      { x: lr.x + lr.w + 6, y: lr.y + 2, w: 24, h: 24, d: +1 },
+      { x: lr.x - 38, y: lr.y + 2, w: 24, h: 24, d: -1 },
+      { x: lr.x + lr.w + 14, y: lr.y + 2, w: 24, h: 24, d: +1 },
     ];
   },
 
@@ -960,7 +953,11 @@ const HUD = {
         ctx.fillText(FLAVOR[Math.min(8, heat)], rcx, lr.y + 30);
         // 현상금 −/+ 버튼 (v154): 항상 보이는 조절 수단
         for (const b of this.heatBtnRects()) {
-          const bh = Input.mouse.x >= b.x && Input.mouse.x <= b.x + b.w && Input.mouse.y >= b.y && Input.mouse.y <= b.y + b.h;
+          // v155: 하한(0)·상한(8)에서는 딤 처리 — "더 못 간다"를 눌러보기 전에 알 수 있게
+          const atEnd = (b.d < 0 && heat <= 0) || (b.d > 0 && heat >= 8);
+          const bh = !atEnd && Input.mouse.x >= b.x && Input.mouse.x <= b.x + b.w && Input.mouse.y >= b.y && Input.mouse.y <= b.y + b.h;
+          ctx.save();
+          if (atEnd) ctx.globalAlpha = 0.35;
           ctx.fillStyle = bh ? '#1d1d2e' : '#141420';
           ctx.fillRect(b.x, b.y, b.w, b.h);
           ctx.strokeStyle = bh ? '#f7b32b' : '#4a4a5c';
@@ -969,6 +966,7 @@ const HUD = {
           ctx.font = 'bold 15px Galmuri11, monospace';
           ctx.fillStyle = bh ? '#f7b32b' : '#9aa0b4';
           ctx.fillText(b.d < 0 ? '−' : '+', b.x + b.w / 2, b.y + 17);
+          ctx.restore();
         }
       }
     }

@@ -72,9 +72,20 @@ const Game = {
   copyPlayReport() {
     // v147: 봇 런만 제외 — 테스트모드 수동 런(B 보스 직행 등)은 '치트' 라벨로 포함한다.
     // 사장의 주력 테스트 동선이 테스트모드라, 전부 거르면 리포트가 텅 빈다 (실플레이 제보)
-    const log = (Meta.data.playLog || []).filter((r) => !r.bot);
+    const raw = Meta.data.playLog || [];
+    const log = raw.filter((r) => !r.bot);
+    const botDropped = raw.length - log.length;
+    // v155 (사장 제보 "1단계로 테스트했는데 왜 기록이 없지?"): 기록이 비는 경로가 둘 있는데 둘 다
+    // 침묵했다 — ① 일시정지 「저장하고 거점」은 런이 끝난 게 아니라 기록되지 않는다 ② 봇 모드(V)로
+    // 돌린 런은 계측 오염 방지로 리포트에서 제외된다. 이유를 화면이 직접 말하게 한다
     if (!log.length) {
-      this.banner = { text: '기록이 아직 없다 — 한 판 다녀오면 쌓인다', life: 2.0, maxLife: 2.0, color: '#9aa0b4' };
+      const msg = botDropped > 0
+        ? `봇 런 ${botDropped}건뿐 — 리포트에서 제외된다 (테스트모드 V로 봇을 끄고 직접 한 판)`
+        : this.loadRunSave()
+          ? '진행 중인 런은 아직 기록 전 — 승리·사망·포기로 끝나야 남는다 (「저장하고 거점」은 기록 아님)'
+          : '기록이 아직 없다 — 한 판 다녀오면 쌓인다';
+      this.banner = { text: msg, life: 3.4, maxLife: 3.4, color: '#9aa0b4' };
+      console.log('[플레이 리포트] ' + msg);
       return;
     }
     const wins = log.filter((r) => r.win).length;
@@ -94,7 +105,8 @@ const Game = {
     const top = (o, suf) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 6)
       .map(([k, v]) => `${k}${suf}×${v}`).join('  ') || '없음';
     const text = [
-      `[무덤에서 왕좌까지 — 플레이 리포트] 런 ${log.length} · 승리 ${wins} · 최고 ${best}층`,
+      `[무덤에서 왕좌까지 — 플레이 리포트] 런 ${log.length} · 승리 ${wins} · 최고 ${best}층` +
+        (botDropped > 0 ? ` (봇 런 ${botDropped}건 제외)` : ''),
       `사망 층 분포: ${top(deathFloors, '층')}`,
       `사망 원인 TOP: ${top(causes, '')}`,
       `보스 처치 (층: 소요, c=치트런): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
@@ -212,8 +224,7 @@ const Game = {
     // v153 (열기 스텔스 버그 후속): 현상금이 걸린 출정은 첫 화면에서 단계를 명시 —
     // "고른 적 없는 난이도"가 몰래 적용되는 일이 다시는 없게
     if (this.heat > 0) {
-      this._storyQ = this._storyQ || [];
-      this._storyQ.push({ text: `☠ 현상금 ${this.heat}단계 — 왕국이 너를 노린다 (거점 우측 상단에서 조절)`, color: '#e43b44' });
+      this._heatNotice = { text: `☠ 현상금 ${this.heat}단계 — 왕국이 너를 노린다 (거점 우측 상단 [−][+]로 조절)`, color: '#e43b44' };
     }
     this.gold = 0; // 런 화폐 — 무덤까지 못 가져간다 (상인에게만 쓴다)
     this.player = createPlayer(0, 0, Meta.data.cls);
