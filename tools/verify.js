@@ -376,6 +376,56 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     '아무도 없는 쪽을 겨누면 그쪽으로 나간다');
   ok('aim.botKeepsAutoTarget', aim.bot.t, '봇 모드는 종전 자동 조준 유지 (계측 인프라 보존)');
 
+  // ── 접촉 피해 예고 + 분리력 (v168) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const touch = await page.evaluate(() => {
+    const p = Game.player; p.god = false; p.invuln = 0; p.hp = p.maxHp;
+    Game.enemies.length = 0; Game.pendingSpawns.length = 0;
+    const e = createEnemy('skeleton', p.x + 10, p.y, false, 1);
+    e.spawnT = 0; e.hitCd = 0; e.maxHp = 999; e.hp = 999;
+    Game.enemies.push(e);
+    // ① 닿는 즉시 피해가 아니라 '겨눔'이 먼저 선다
+    const hp0 = p.hp;
+    e.touchPlayer(Game, 1);
+    const wound = { wind: e._windT, hpSame: p.hp === hp0 };
+    // ② 예고 동안 물러나면 헛손질
+    e.x = p.x + 400;                       // 플레이어가 벗어난 것과 같은 상황
+    for (let i = 0; i < 25; i++) e.tickTimers(1 / 60);
+    const whiff = { hp: p.hp, whiffT: e._whiffT, cd: +e.hitCd.toFixed(2) };
+    // ③ 버티면 맞는다
+    e.x = p.x + 10; e.hitCd = 0; e._whiffT = 0; e._windT = 0;
+    e.touchPlayer(Game, 1);
+    for (let i = 0; i < 25; i++) e.tickTimers(1 / 60);
+    const hit = { hp: p.hp };
+    return { wound, whiff, hit, hp0 };
+  });
+  ok('touch.telegraphFirst', touch.wound.wind > 0 && touch.wound.hpSame,
+    `닿아도 즉시 피해 없음 — 예고 ${(touch.wound.wind || 0).toFixed(2)}초 (v167까지는 닿는 순간 피해)`);
+  ok('touch.whiffWhenDodged', touch.whiff.hp === touch.hp0 && touch.whiff.whiffT > 0 && touch.whiff.cd > 0.8,
+    `물러나면 헛손질 + 경직 ${touch.whiff.cd}초 (반격의 창)`);
+  ok('touch.hitsWhenStayed', touch.hit.hp < touch.hp0, `버티면 맞는다 (HP ${touch.hp0}→${touch.hit.hp})`);
+
+  const sep = await page.evaluate(() => {
+    const p = Game.player;
+    Game.enemies.length = 0;
+    const es = [];
+    for (let i = 0; i < 4; i++) {                  // 한 점에 포개 놓는다
+      const e = createEnemy('skeleton', p.x + 200, p.y, false, 1);
+      e.spawnT = 0; e.hitCd = 99; es.push(e); Game.enemies.push(e);
+    }
+    const minDistOf = () => {
+      let m = Infinity;
+      for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++)
+        m = Math.min(m, Math.hypot(es[i].x - es[j].x, es[i].y - es[j].y));
+      return m;
+    };
+    const before = minDistOf();
+    for (let t = 0; t < 60; t++) for (const e of es) Game._steer(e, 1 / 60, p);
+    return { before: +before.toFixed(1), after: +minDistOf().toFixed(1), want: +(es[0].r * 2 * 0.95).toFixed(1) };
+  });
+  ok('separation.pushesApart', sep.after > sep.before && sep.after >= sep.want * 0.7,
+    `겹친 4마리 최소 간격 ${sep.before} → ${sep.after}px (목표 ${sep.want}) — 종전엔 완전히 포개졌다`);
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

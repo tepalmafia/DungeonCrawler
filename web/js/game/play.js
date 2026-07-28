@@ -63,6 +63,31 @@ const GamePlay = {
       }
     }
 
+    // ── 분리력 (v168) ────────────────────────────────────────────────
+    // 적끼리 완전히 겹칠 수 있었다. 셋이 한 점에 포개지면 플레이어는 **개별 위협을 읽을 수 없고**,
+    // 각자의 접촉 예고가 서로를 가린다 — "어디에 서 있을까"를 판단할 정보 자체가 화면에 없었다.
+    // 서로 밀어내면 무리가 '한 덩어리'가 아니라 **여러 개의 읽을 수 있는 위협**이 된다
+    {
+      let sx = 0, sy = 0;
+      for (const o of this.enemies) {
+        if (o === e || o.dead || o.phased || o.neutral) continue;
+        const ox = e.x - o.x, oy = e.y - o.y;
+        const od = Math.hypot(ox, oy);
+        const want = (e.r + o.r) * 0.95;
+        if (od < want && od > 0.01) {
+          const push = (want - od) / want;
+          // 큰 개체(우두머리)는 밀리기보다 미는 쪽 — 질량 차이가 대열에 드러난다
+          const mass = (o.isMini || o.isBoss) ? 1.8 : 1;
+          sx += (ox / od) * push * mass; sy += (oy / od) * push * mass;
+        }
+      }
+      if (sx !== 0 || sy !== 0) {
+        const m = Math.hypot(sx, sy) || 1;
+        const spd = e.speed * 0.8;
+        World.moveEntity(e, (sx / m) * spd * dt, (sy / m) * spd * dt);
+      }
+    }
+
     const role = enemyRole(e);
     if (!e._flank) e._flank = (Math.random() < 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.5);
     const tx = -dy / d, ty = dx / d; // 접선 방향
