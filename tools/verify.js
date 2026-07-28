@@ -426,6 +426,46 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('separation.pushesApart', sep.after > sep.before && sep.after >= sep.want * 0.7,
     `겹친 4마리 최소 간격 ${sep.before} → ${sep.after}px (목표 ${sep.want}) — 종전엔 완전히 포개졌다`);
 
+  // ── 카드가 규칙을 바꾸는가 (v169) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const cards = await page.evaluate(() => {
+    const stat = TRAITS.filter((t) => t.tag === '스탯');
+    const cap = (t) => (t.stack ? (t.max || 1) : 1);
+    const statCap = stat.reduce((a, t) => a + cap(t), 0);
+    const allCap = TRAITS.reduce((a, t) => a + cap(t), 0);
+    // 등장 분포 — 스탯이 카드 풀을 지배하지 않는가
+    const p = Game.player;
+    let statSeen = 0, total = 0;
+    for (let i = 0; i < 400; i++) for (const c of rollTraitCards(p, 3)) { total++; if (c.tag === '스탯') statSeen++; }
+    return { statCap, allCap, statPct: Math.round(statSeen / total * 100), peaks: TRAITS.filter((t) => t.peak).length };
+  });
+  ok('cards.statStackTrimmed', cards.statCap <= 30 && cards.allCap <= 100,
+    `스탯 중복 상한 ${cards.statCap}장 (v168은 52) · 전체 ${cards.allCap}장 (121)`);
+  ok('cards.statNotDominant', cards.statPct <= 32,
+    `카드 3장 400회 중 스탯 비중 ${cards.statPct}%`);
+
+  const peak = await page.evaluate(() => {
+    const p = Game.player;
+    const out = {};
+    const take = (id, n) => { const t = TRAITS.find((x) => x.id === id); for (let i = 0; i < n; i++) applyTrait(p, t); };
+    take('atk', 3); out.atkPeak = !!p.flags.atkPeak;
+    take('hp', 3); out.hpPeak = !!p.flags.hpPeak;
+    take('crit', 3); out.critPeak = !!p.flags.critPeak;
+    take('dashcd', 2); out.dashPeak = !!p.flags.dashPeak;
+    // 불굴: 치명상을 한 번 버틴다
+    p.god = false; p.invuln = 0; p.hp = 1; p._hpPeakUsed = false;
+    Game.hurtPlayer(99, { x: 1, y: 0 });
+    out.enduredHp = p.hp; out.used = !!p._hpPeakUsed;
+    p.invuln = 0; p.hp = 1;
+    Game.hurtPlayer(99, { x: 1, y: 0 });
+    out.secondHp = p.hp;   // 두 번째는 못 버틴다 (런당 1회)
+    return out;
+  });
+  ok('cards.peaksUnlock', peak.atkPeak && peak.hpPeak && peak.critPeak && peak.dashPeak,
+    '힘 단련·강골·급소 간파·바람걸음 정점 4종 발동');
+  ok('cards.enduranceOncePerRun', peak.enduredHp === 1 && peak.used && peak.secondHp <= 0,
+    `불굴 — 첫 치명상 HP ${peak.enduredHp}로 버팀, 두 번째는 ${peak.secondHp}`);
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

@@ -802,6 +802,16 @@ function createPlayer(x, y, classId = 'knight') {
       if (this.pdodgeCrit) { crit = true; this.pdodgeCrit = false; } // 완벽 회피 보상: 다음 일격 확정 크리
       if (this.flags.firststrike && this._fsReady) { crit = true; this._fsReady = false; Particles.text(e.x, e.y - 34, '선제일격!', { color: '#c9b8e8', size: 13 }); }
 
+      // ✦ 완력의 정점 (v169 — 힘 단련 3장): 타격이 적을 두 배로 밀어낸다.
+      // v168 분리력과 맞물려 **전선을 밀어내는 무기**가 된다 — 벽꽂기 피해까지 이어진다
+      if (this.flags.atkPeak) kb = Math.round(kb * 2);
+      // ✦ 간파의 정점 (v169 — 급소 간파 3장): 크리티컬이 그 적의 접촉 예고를 지운다.
+      // "크리가 터지면 한 대 안 맞는다" — 확률 스탯이 **방어 행동**으로 번역된다
+      if (crit && this.flags.critPeak && e._windT > 0) {
+        e._windT = 0; e.hitCd = Math.max(e.hitCd, 0.7);
+        Particles.text(e.x, e.y - 30, '끊었다', { color: '#ffd866', size: 12 });
+      }
+
       let bonus = 0;
       if (this.flags.corrode && e.status.poison > 0) bonus += 1;
       if (this.flags.static && e.status.shock > 0) bonus += 2; // 번개 트리 상향
