@@ -157,11 +157,19 @@ function createPlayer(x, y, classId = 'knight') {
       return { knight: '참수 선회', archer: '뼈화살 비', mage: '별의 심판', alch: '독배' }[this.classId];
     },
 
-    // 스킬 조준점: 자동 타겟 위치 > 마우스 > 바라보는 방향 앞
+    // 스킬 조준점 (v167): 공격과 같은 규칙 — 겨눈 곳에 떨어진다.
+    // 종전엔 '가장 가까운 적'에 고정이라, 뒤의 소환술사에게 메테오를 떨구는 선택 자체가 없었다
     _skillTarget(game) {
-      const t = this.autoTarget(game);
+      const dir = this.aimDir(game);
+      const t = this._aimTarget;
       if (t) return { x: t.x, y: t.y };
-      return { x: this.x + this.facing.x * 180, y: this.y + this.facing.y * 180 };
+      const reach = this.classId === 'knight' ? 150 : 260;
+      if (this.aimSource() === 'mouse' && !(typeof Bot !== 'undefined' && Bot.enabled)) {
+        const mx = Input.mouse.x - Renderer.offsetX, my = Input.mouse.y - Renderer.offsetY;
+        const d = Math.hypot(mx - this.x, my - this.y);
+        if (d > 1) { const k = Math.min(1, reach * 1.6 / d); return { x: this.x + (mx - this.x) * k, y: this.y + (my - this.y) * k }; }
+      }
+      return { x: this.x + dir.x * reach, y: this.y + dir.y * reach };
     },
 
     subSkillDef() {
@@ -662,6 +670,10 @@ function createPlayer(x, y, classId = 'knight') {
         this.useSkill(game);
       }
 
+      // 조준은 매 프레임 갱신한다 — 브래킷이 '지금 겨눈 대상'을 실시간으로 보여주도록 (v167).
+      // 공격할 때만 계산하면 화면이 한 박자 늦은 거짓말을 한다
+      const aim = this.aimDir(game);
+
       // 공격 입력 (v160): ① 선입력 버퍼 ② 마우스/J 홀드 연사.
       // 쿨이 남아 있으면 take를 부르지 않는다 — 버퍼가 살아 쿨 종료 즉시 첫 타가 나간다.
       const byMouse = Input.mouse.down || Input.mouse.justDown || Input.buf.Mouse0 > 0;
@@ -671,23 +683,7 @@ function createPlayer(x, y, classId = 'knight') {
       if (attackInput && this.dashAtkT > 0) {
         this.dashAttack(game);
       } else if (attackInput && this.dashTimer <= 0) {
-        // 자동 타겟팅: 가장 가까운 적을 자동 조준. 적이 없으면 마우스/이동 방향
-        let dir = null;
-        const target = this.autoTarget(game);
-        if (target) {
-          const dx = target.x - this.x;
-          const dy = target.y - this.y;
-          const d = Math.hypot(dx, dy) || 1;
-          dir = { x: dx / d, y: dy / d };
-        } else if (byMouse) {
-          const dx = Input.mouse.x - Renderer.offsetX - this.x;
-          const dy = Input.mouse.y - Renderer.offsetY - this.y;
-          const d = Math.hypot(dx, dy) || 1;
-          dir = { x: dx / d, y: dy / d };
-        } else {
-          dir = { ...this.facing };
-        }
-        this.attack(dir, game);
+        this.attack(aim, game); // v167: 조준은 플레이어의 것
       }
 
       for (let i = this.slashes.length - 1; i >= 0; i--) {
@@ -696,7 +692,66 @@ function createPlayer(x, y, classId = 'knight') {
       }
     },
 
-    // 자동 타겟: 사거리 내 가장 가까운 적 (비물질 망령 제외)
+    // ══ 조준 (v167) — 조준은 플레이어의 것이다 ═══════════════════════════
+    // 종전엔 autoTarget이 **가장 가까운 적**을 대신 골랐다. 그래서 로그라이크 전투에서
+    // 가장 자주 내리는 결정 — "누구를 먼저 칠까" — 가 통째로 사라져 있었다.
+    // 소환술사를 먼저 끊을지, 돌진해 오는 놈을 먼저 칠지, 뒤의 저격수를 볼지를
+    // 이제 플레이어가 정한다. 대신 픽셀 정밀도는 요구하지 않는다 — 겨눈 근처면 붙는다.
+    aimSource() {
+      // 최근 2.5초 안에 마우스를 움직였거나 누르고 있으면 '마우스로 조준 중'.
+      // 키보드만 쓰는 사람이 가만히 놓인 커서에 끌려가면 안 된다
+      const t = (Input.mouse.moveT || -999);
+      return (Input.mouse.down || (performance.now() / 1000 - t) < 2.5) && Input.mouse.x > -9000
+        ? 'mouse' : 'move';
+    },
+
+    aimDir(game) {
+      // 봇은 마우스가 없다 — 계측 인프라를 보존하려 종전 자동 조준을 그대로 쓴다
+      if (typeof Bot !== 'undefined' && Bot.enabled) {
+        const t = this.autoTarget(game);
+        this._aimTarget = t;
+        if (t) { const dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy) || 1; return { x: dx / d, y: dy / d }; }
+        return { ...this.facing };
+      }
+      let base;
+      if (this.aimSource() === 'mouse') {
+        const dx = Input.mouse.x - Renderer.offsetX - this.x;
+        const dy = Input.mouse.y - Renderer.offsetY - this.y;
+        const d = Math.hypot(dx, dy) || 1;
+        base = { x: dx / d, y: dy / d };
+      } else {
+        base = { ...this.facing };
+      }
+      return this._snapAim(game, base);
+    },
+
+    // 소프트 스냅 — 조준선에서 일정 각 안에 있는 적 중 **각도가 가장 가까운** 놈에게 붙는다.
+    // '가장 가까운 적'이 아니라 '가장 겨눈 적'이라는 점이 핵심이다: 겨눈 대상이 곧 표적이다
+    _snapAim(game, base) {
+      const maxRange = this.classId === 'knight' ? 240 : this.classId === 'archer' ? 440 : 520;
+      const SNAP = this.aimSource() === 'mouse' ? 0.24 : 0.40; // 마우스 ≈14° · 키보드 ≈23°
+      const a0 = Math.atan2(base.y, base.x);
+      let best = Infinity, target = null;
+      for (const e of game.enemies) {
+        if (e.dead || e.phased || e.spawnT > 0 || e.neutral) continue;
+        const dx = e.x - this.x, dy = e.y - this.y;
+        const d = Math.hypot(dx, dy);
+        if (d > maxRange) continue;
+        let diff = Math.atan2(dy, dx) - a0;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        // 몸이 겹치는 근접 거리에선 창을 넓힌다 — 붙어 있는데 안 맞으면 그건 답답함이지 난이도가 아니다
+        const win = SNAP * (d < 90 ? 1.7 : 1);
+        const ad = Math.abs(diff);
+        if (ad < win && ad < best) { best = ad; target = e; }
+      }
+      this._aimTarget = target;
+      if (!target) return base;
+      const dx = target.x - this.x, dy = target.y - this.y, d = Math.hypot(dx, dy) || 1;
+      return { x: dx / d, y: dy / d };
+    },
+
+    // 자동 타겟: 사거리 내 가장 가까운 적 (비물질 망령 제외) — 봇 전용으로 남는다
     autoTarget(game) {
       const maxRange = this.classId === 'knight' ? 240 : this.classId === 'archer' ? 440 : 520;
       let best = maxRange;

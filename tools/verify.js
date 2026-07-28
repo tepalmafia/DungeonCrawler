@@ -336,6 +336,46 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     mat.spot.bossGolem === 'stone' && mat.spot.bossWraith === 'spirit' && mat.spot.bossSpore === 'ooze',
     mat.seen.join('/') + ' · 보스도 자동 분류');
 
+  // ── 조준이 플레이어의 것인가 (v167) ──
+  await boot(page, { cls: 'archer', heat: 0 });
+  const aim = await page.evaluate(() => {
+    const p = Game.player;
+    Game.enemies.length = 0; Game.pendingSpawns.length = 0;
+    // 가까운 적은 오른쪽, 먼 적은 위쪽 — 위를 겨누면 위가 맞아야 한다
+    const near = createEnemy('skeleton', p.x + 70, p.y, false, 1);
+    const far = createEnemy('archer', p.x, p.y - 200, false, 1);
+    near.spawnT = 0; far.spawnT = 0;
+    Game.enemies.push(near, far);
+    const angleTo = (e) => Math.atan2(e.y - p.y, e.x - p.x);
+    const setMouse = (dx, dy) => {
+      Input.mouse.x = Renderer.offsetX + p.x + dx;
+      Input.mouse.y = Renderer.offsetY + p.y + dy;
+      Input.mouse.moveT = performance.now() / 1000;
+    };
+    const dirOf = () => { const d = p.aimDir(Game); return Math.atan2(d.y, d.x); };
+    setMouse(0, -180);                    // 위(먼 적) 겨눔
+    const up = { a: dirOf(), t: p._aimTarget === far };
+    setMouse(180, 0);                     // 오른쪽(가까운 적) 겨눔
+    const right = { a: dirOf(), t: p._aimTarget === near };
+    setMouse(-180, 0);                    // 아무도 없는 왼쪽 — 스냅되면 안 된다
+    const left = { a: dirOf(), t: p._aimTarget };
+    // 봇 모드에서는 종전 자동 조준이 살아 있어야 한다 (계측 인프라)
+    Bot.enabled = true;
+    setMouse(-180, 0);
+    dirOf();                              // 조준을 실제로 다시 계산해야 _aimTarget이 갱신된다
+    const bot = { t: p._aimTarget === near };
+    Bot.enabled = false;
+    const nearA = angleTo(near), farA = angleTo(far);
+    return { up, right, left, bot, nearA, farA };
+  });
+  const closeAng = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) < 0.05;
+  ok('aim.playerChoosesTarget',
+    aim.up.t && closeAng(aim.up.a, aim.farA) && aim.right.t && closeAng(aim.right.a, aim.nearA),
+    '위를 겨누면 먼 적, 오른쪽을 겨누면 가까운 적 (v166은 항상 가장 가까운 적)');
+  ok('aim.noSnapWhenNothingAimed', !aim.left.t && closeAng(aim.left.a, Math.PI),
+    '아무도 없는 쪽을 겨누면 그쪽으로 나간다');
+  ok('aim.botKeepsAutoTarget', aim.bot.t, '봇 모드는 종전 자동 조준 유지 (계측 인프라 보존)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
