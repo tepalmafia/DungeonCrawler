@@ -2,27 +2,27 @@
 // 기획안 규칙: 모든 고유 특성은 최소 2개 이상의 다른 특성과 상호작용해야 한다.
 const TRAITS = [
   // ── 스탯 (max 회까지 중복 획득 가능 — 곱연산 특성은 낮게, 덧셈 특성은 넉넉하게) ──
-  { id: 'atk',     name: '힘 단련',   tag: '스탯', color: '#e8e0cf', stack: true, max: 8,
-    desc: '공격력 +1', apply: (p) => { p.bonusAtk += 1; } },
-  { id: 'aspd',    name: '신속',      tag: '스탯', color: '#e8e0cf', stack: true, max: 4,
+  { id: 'atk',     name: '힘 단련',   tag: '스탯', color: '#e8e0cf', stack: true, max: 3, peak: 'atkPeak',
+    desc: '공격력 +1 · 3장이면 「완력의 정점」 — 타격이 적을 두 배로 밀어낸다', apply: (p) => { p.bonusAtk += 1; } },
+  { id: 'aspd',    name: '신속',      tag: '스탯', color: '#e8e0cf', stack: true, max: 2,
     desc: '공격 속도 +14%', apply: (p) => { p.atkCdMul *= 0.86; } },
-  { id: 'mov',     name: '질풍',      tag: '스탯', color: '#e8e0cf', stack: true, max: 4,
+  { id: 'mov',     name: '질풍',      tag: '스탯', color: '#e8e0cf', stack: true, max: 2,
     desc: '이동 속도 +12%', apply: (p) => { p.speed *= 1.12; } },
-  { id: 'hp',      name: '강골',      tag: '스탯', color: '#e8e0cf', stack: true, max: 6,
-    desc: '최대 HP +1, 즉시 1 회복', apply: (p) => { p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); } },
-  { id: 'crit',    name: '급소 간파', tag: '스탯', color: '#f7b32b', stack: true, max: 6,
-    desc: '크리티컬 확률 +10%', apply: (p) => { p.critChance += 0.10; } },
-  { id: 'critdmg', name: '파괴자',    tag: '스탯', color: '#f7b32b', stack: true, max: 5,
+  { id: 'hp',      name: '강골',      tag: '스탯', color: '#e8e0cf', stack: true, max: 3, peak: 'hpPeak',
+    desc: '최대 HP +1, 즉시 1 회복 · 3장이면 「불굴」 — 런당 1회, 치명상을 버틴다', apply: (p) => { p.maxHp += 1; p.hp = Math.min(p.maxHp, p.hp + 1); } },
+  { id: 'crit',    name: '급소 간파', tag: '스탯', color: '#f7b32b', stack: true, max: 3, peak: 'critPeak',
+    desc: '크리티컬 확률 +10% · 3장이면 「간파의 정점」 — 크리티컬이 적의 다음 접촉 예고를 지운다', apply: (p) => { p.critChance += 0.10; } },
+  { id: 'critdmg', name: '파괴자',    tag: '스탯', color: '#f7b32b', stack: true, max: 2,
     desc: '크리티컬 피해 +50%', apply: (p) => { p.critMul += 0.5; } },
-  { id: 'range',   name: '장검술',    tag: '스탯', color: '#e8e0cf', stack: true, max: 4,
+  { id: 'range',   name: '장검술',    tag: '스탯', color: '#e8e0cf', stack: true, max: 2,
     desc: '공격 범위 +18%', apply: (p) => { p.rangeMul *= 1.18; } },
-  { id: 'combo',   name: '콤보 마스터', tag: '스탯', color: '#f7b32b', stack: true, max: 3,
+  { id: 'combo',   name: '콤보 마스터', tag: '스탯', color: '#f7b32b', stack: true, max: 2,
     desc: '3연격 마무리 피해 +50%', apply: (p) => { p.comboLv += 1; } },
-  { id: 'dashcd',  name: '바람걸음',  tag: '스탯', color: '#e8e0cf', stack: true, max: 3,
-    desc: '대시 충전 속도 +25%', apply: (p) => { p.dashRegenMul *= 0.75; } },
-  { id: 'magnet',  name: '탐욕',      tag: '스탯', color: '#2ec4b6', stack: true, max: 3,
+  { id: 'dashcd',  name: '바람걸음',  tag: '스탯', color: '#e8e0cf', stack: true, max: 2, peak: 'dashPeak',
+    desc: '대시 충전 속도 +25% · 2장이면 「바람의 정점」 — 완벽 회피 시 대시가 즉시 1충전', apply: (p) => { p.dashRegenMul *= 0.75; } },
+  { id: 'magnet',  name: '탐욕',      tag: '스탯', color: '#2ec4b6', stack: true, max: 1,
     desc: 'XP 획득 +15%, 흡인 범위 +80%', apply: (p) => { p.xpMul *= 1.15; p.magnetMul *= 1.8; } },
-  { id: 'luck', unlock: { stat: 'totalKills', n: 1000, label: '누적 1000킬' },    name: '행운',      tag: '스탯', color: '#f7b32b', stack: true, max: 2,
+  { id: 'luck', unlock: { stat: 'totalKills', n: 1000, label: '누적 1000킬' },    name: '행운',      tag: '스탯', color: '#f7b32b', stack: true, max: 1,
     desc: '크리티컬 +5%, 하트 드랍 확률 2배', apply: (p) => { p.critChance += 0.05; p.luckMul *= 2; } },
   { id: 'regen',   name: '회복력',    tag: '스탯', color: '#e43b44',
     desc: '방 클리어 시 HP 1 회복', flag: 'regen' },
@@ -199,6 +199,19 @@ const TRAITS = [
 // 레벨업 카드 뽑기 — 이미 가진 고유(flag) 특성은 제외.
 // 태그 시너지 가중치: 보유한 태그의 특성이 더 자주 등장한다 (트리를 "판다"는
 // 플레이 성립 — 보스 기믹의 정답 트리를 연구해 완성할 수 있게 지원).
+// ── 정점 보너스 (v169) ─────────────────────────────────────────────────
+// 스탯 중복 상한을 조인 대신, **마지막 한 장이 규칙을 바꾼다**.
+// "공격력 +1을 여덟 번"이 아니라 "세 번째 힘 단련이 전투 방식을 바꾼다"가 되도록.
+// 카드 한 장의 값을 키우지 않으면, 장수만 줄이는 건 도파민만 깎는 짓이다
+function applyTraitPeak(player, t) {
+  if (!t.peak) return null;
+  const cnt = player.traits.filter((x) => x === t.id).length;
+  if (cnt < (t.max || 1)) return null;
+  if (player.flags[t.peak]) return null;
+  player.flags[t.peak] = true;
+  return { atkPeak: '완력의 정점', hpPeak: '불굴', critPeak: '간파의 정점', dashPeak: '바람의 정점' }[t.peak];
+}
+
 function rollTraitCards(player, n = 3) {
   // 직업 전용 특성은 해당 직업에게만, 상한(max) 도달한 특성은 제외
   const countOf = (id) => player.traits.filter((x) => x === id).length;
@@ -223,6 +236,10 @@ function rollTraitCards(player, n = 3) {
     // 등급 태그는 공명 계수 0 (스탯은 종전대로 0.2로 감쇠)
     const reso = t.tag === '희귀' ? 0 : t.tag === '스탯' ? 0.2 : 1;
     let w = (1 + 0.7 * (tagCount[t.tag] || 0) * reso) * (t.cls ? 1.5 : 1);
+    // v169: 스탯 카드 등장 가중 ×0.6. 보상을 1/3로 줄인 지금(v166), 남은 몇 장이 또
+    // '공격력 +1'이면 그 런에는 **아무 결정도 없다**. 카드는 규칙을 바꿔야 한다.
+    // 중복 상한도 함께 조였다 (스탯 총량 52장 → 22장) — 힘 단련 8장은 빌드가 아니라 곱셈이었다
+    if (t.tag === '스탯') w *= 0.6;
     if (t.rare) w *= 0.42; // 희귀 (v151): 세 판에 한 번쯤 — 나왔을 때 '오늘 런의 방향'이 되는 빈도
     // 교차 원소 유도 (반응 노출 계측: 30분에 7회 발동 — 믹스가 안 나와서 반응이 묻혔다):
     // 원소 트리 하나를 2픽 이상 팠으면, 아직 안 판 다른 원소 카드가 더 자주 보인다
@@ -254,6 +271,16 @@ function applyTrait(player, trait) {
   if (trait.apply) trait.apply(player);
   if (trait.flag) player.flags[trait.flag] = true;
   player.traits.push(trait.id);
+
+  // 정점 도달 (v169) — 마지막 한 장이 규칙을 바꾼다. 화면이 그 순간을 알린다
+  const peak = applyTraitPeak(player, trait);
+  if (peak && typeof Particles !== 'undefined') {
+    Particles.text(player.x, player.y - 46, '✦ ' + peak, { color: '#ffd866', size: 15 });
+    if (typeof Game !== 'undefined') {
+      Game.banner = { text: `✦ ${peak} — ${trait.name} 정점에 닿았다`, life: 2.8, maxLife: 2.8, color: '#ffd866' };
+      if (typeof AudioSys !== 'undefined') AudioSys.relic && AudioSys.relic('epic');
+    }
+  }
 
   // 스킬 진화 준비 — 직업 특성 3장을 모으면 '개화 대기' 상태가 된다.
   // 실제 진화는 Lv.12부터 (Game.checkEvolution) — 봇 계측 결과 3장만으로는 평균 1.7층에

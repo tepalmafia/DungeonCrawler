@@ -734,6 +734,12 @@ const GameCombat = {
         Particles.text(p.x, p.y - 34, '완벽 회피!', { color: '#5ce0e6', size: 19 });
         AudioSys.pdodge();
         Renderer.shake(3, 0.14);
+        // ✦ 바람의 정점 (v169 — 바람걸음 2장): 완벽 회피가 대시를 즉시 되돌려준다.
+        // 회피가 자원을 소모하는 게 아니라 **자원을 버는** 행위가 된다 — 리듬이 통째로 바뀐다
+        if (p.flags.dashPeak && p.dashCharges < p.dashMax) {
+          p.dashCharges = Math.min(p.dashMax, p.dashCharges + 1);
+          Particles.text(p.x, p.y - 54, '✦ 대시 +1', { color: '#a9fff7', size: 13 });
+        }
         // 시곗바늘: 완벽 회피가 스킬을 당긴다 — 회피 실력이 화력이 되는 레전더리
         if (p.rflags.clockhand && p.skillCd > 0) {
           p.skillCd = Math.max(0, p.skillCd - 1.5);
@@ -880,6 +886,19 @@ const GameCombat = {
         }
       }
       Particles.burst(p.x, p.y, { count: 10, colors: ['#5ce0e6'], speed: 180, life: 0.3, size: 3 });
+    }
+
+    // ✦ 불굴 (v169 정점 — 강골 3장): 런당 1회, 치명상을 HP 1로 버틴다.
+    // 스탯 중복을 조인 대신 마지막 한 장이 **규칙을 바꾼다**는 약속의 실물
+    if (p.hp <= 0 && p.flags.hpPeak && !p._hpPeakUsed) {
+      p._hpPeakUsed = true;
+      p.hp = 1;
+      p.invuln = Math.max(p.invuln, 1.1);
+      this.slowmoT = Math.max(this.slowmoT || 0, 0.5);
+      Renderer.shake(6, 0.3);
+      Particles.ring(p.x, p.y, { r0: 6, r1: 90, life: 0.5, color: '#ffd866', width: 5 });
+      Particles.text(p.x, p.y - 40, '✦ 불굴 — 버텼다', { color: '#ffd866', size: 18 });
+      AudioSys.pdodge();
     }
 
     if (p.hp <= 0) {
