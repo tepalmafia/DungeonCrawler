@@ -218,6 +218,15 @@ const GameScreens = {
         if (Input.pressed('ArrowLeft')) { Meta.setHeat(Meta.data.heat - 1); AudioSys.orb(); }
         if (Input.pressed('ArrowRight')) { Meta.setHeat(Meta.data.heat + 1); AudioSys.orb(); }
       }
+      // v154: 항상 보이는 −/+ 버튼 — "마우스 올리고 화살표"는 라이트 유저에게 발견되지 않았다
+      if (Input.mouse.justDown) {
+        for (const b of HUD.heatBtnRects()) {
+          if (Input.mouse.x >= b.x && Input.mouse.x <= b.x + b.w && Input.mouse.y >= b.y && Input.mouse.y <= b.y + b.h) {
+            Meta.setHeat(Meta.data.heat + b.d);
+            AudioSys.orb();
+          }
+        }
+      }
       // 세부 은닉 (난이도 개편): 골라담기 폐지 — 단계만 고른다. 무엇이 강해지는지는 몸으로 알게 된다
     }
 
