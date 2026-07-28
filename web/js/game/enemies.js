@@ -2946,7 +2946,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   e.xpVal = Math.max(1, Math.round(e.xpVal * (0.7 + 0.3 * floorScale) * 0.68));
 
   if (elite) {
-    e.hp = Math.ceil(e.hp * 2.5);
+    // v166: 정예 배수 2.5 → 3.2. 실측 정예 필요 타수가 3~14타로 편차가 크고
+    // 4·6·10층은 3~5타에 그쳐 '정예'라는 이름값을 못 했다 (목표 8~15타)
+    e.hp = Math.ceil(e.hp * 3.2);
     e.speed *= 1.15;
     e.r *= 1.15;
     e.xpVal *= 3;

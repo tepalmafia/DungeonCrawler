@@ -341,9 +341,13 @@ function createBoss(floor, x, y) {
   // 51층+ 무한은 기존 선형 유지 (지수로 두면 1.17^41=×620 — 의도된 지옥이 아니라 버그다)
   const rawScale = floor > 50 ? 1 + 0.15 * (floor - 10) : Math.pow(1.17, floor - 10);
   const hpScale = floor <= 10 || BOSS_FIXED[floor] ? 1 : rawScale;
+  // v166: 보상 1/3 축소로 **플레이어 화력이 절반**이 됐다 (실측 기사 3층 공6→3, 5층 9→5).
+  // 잡몹은 그 덕에 딱 좋아졌지만(1.3~1.9타 → 2.1~4.2타) 보스는 그대로 두면 두 배로 길어진다 —
+  // 봇 실측 2층 보스 **255초**, 3층 135초. 화력 감소분만큼 보스 HP도 함께 내린다
+  const powerAdj = 0.62;
   let hp = floor > 10 && floor <= 50 && !BOSS_FIXED[floor]
-    ? Math.min(3200, Math.round(def.hp * hpScale))
-    : Math.round(def.hp * hpScale);
+    ? Math.min(3200, Math.round(def.hp * hpScale * powerAdj))
+    : Math.round(def.hp * hpScale * powerAdj);
   // 막 결산 고정 보스(21~50층)가 필러 상한(3200) 아래로 꺼지는 서열 역전 방지 —
   // 저작 HP가 구 선형 곡선 기준이라 20층 1600·30층 2100이 필러보다 약했다 (v148 곡선 검증에서 발각).
   // 최종 서열: 필러 3200 < 막 결산 3520 < 흰 늑대 3600 < 왕 5000
@@ -567,7 +571,9 @@ function createBoss(floor, x, y) {
           // 수학적으로 끝나지 않는 소모전이었다 (몰귀 7연사·로트가르 33연사). 한 전투에서 최대체력의
           // 100%까지만 재생 — 예산이 마르면 갑피가 말라붙고, 오래 버티면 반드시 끝나는 싸움이 된다.
           // 정상 빌드는 예산 근처에도 못 가므로 중앙값 난이도는 불변.
-          if (this._regenBudget == null) this._regenBudget = this.maxHp;
+          // v166: 예산 100% → 50%. 재생 예산은 사실상 '실효 HP 2배'라, 화력이 절반이 되자
+          // 재생 보스가 수학적으로 끝나지 않는 소모전으로 되돌아갔다 (봇 2층 255초)
+          if (this._regenBudget == null) this._regenBudget = this.maxHp * 0.5;
           if (this._regenBudget > 0) {
             const add = Math.min(3 * dt, this._regenBudget, this.maxHp - this.hp);
             this.hp += add;
