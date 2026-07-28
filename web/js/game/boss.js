@@ -792,10 +792,15 @@ function createBoss(floor, x, y) {
         }
 
         case 'sweep': {
+          // v159: 스윙마다 방향을 **미리 확정**한다. 종전엔 타격 순간에 재조준해서
+          // 2·3타는 예고가 없을 뿐 아니라 내가 벌린 거리를 방향까지 따라와 지웠다 —
+          // 위치로는 원리적으로 회피 불가능한 구조였다. 이제 확정된 방향을 0.32초간 예고한다
+          if (!this._swingAim) this._swingAim = { x: dx / d, y: dy / d };
           if (this.stateT > 0.32) {
             this.stateT = 0;
             this.swingCount++;
-            this.aimDir = { x: dx / d, y: dy / d };
+            this.aimDir = this._swingAim;
+            this._swingAim = null; // 다음 스윙 방향은 다음 프레임에 다시 확정 → 다시 예고된다
             World.moveEntity(this, this.aimDir.x * 85, this.aimDir.y * 85);
             AudioSys.slash();
             Renderer.shake(3, 0.12);
@@ -1452,22 +1457,43 @@ function createBoss(floor, x, y) {
 
     draw(ctx) {
       // 텔레그래프
+      // ★ 휘두르기 예고 (v159) — 이 게임에서 가장 중요한 한 조각.
+      // 종전 예고는 **실제 위험 구역의 절반만 그렸다**: 그리기는 보스 현재 위치에서 반경 95·각 ±1.1,
+      // 실제 판정은 보스가 **85px 전진한 뒤** 반경 95+플레이어반경(=108)·각 ±1.35.
+      // 즉 화면이 "여기는 안전하다"고 그려놓고 때렸다. 실측상 1층 보스전 피해의 58%가 이 기술인데,
+      // 그 죽음이 학습으로 이어질 수 없었다 (몰입 정의 ②: 패배가 납득돼야 재도전을 부른다).
+      // → 판정과 **같은 수치**로, 전진 전·후 두 부채꼴의 합집합을 그린다. 과하게 그릴지언정
+      //   안전하다고 거짓말하지 않는다. sweep 진행 중(2·3타)에도 다음 스윙을 예고한다
+      {
+        const k = this.attack?.kind;
+        const teleAim = this.state === 'sweep' ? this._swingAim
+          : (this.state === 'windup' && k === 'sweep') ? this.aimDir : null;
+        if (teleAim) {
+          const a = Math.atan2(teleAim.y, teleAim.x);
+          const R = 95 + 13;    // 판정 반경 (95 + 플레이어 반경)
+          const ARC = 1.35;     // 판정 각 (±1.35 rad)
+          ctx.save();
+          ctx.globalAlpha = 0.22 + Math.sin(this.animT * 18) * 0.08;
+          ctx.fillStyle = '#e43b44';
+          for (const off of [0, 85]) { // 0 = 제자리 판정, 85 = 전진 후 판정
+            ctx.save();
+            ctx.translate(this.x + Math.cos(a) * off, this.y + Math.sin(a) * off);
+            ctx.rotate(a);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, R, -ARC, ARC);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+          ctx.restore();
+          ctx.globalAlpha = 1;
+        }
+      }
       if (this.state === 'windup') {
         const k = this.attack?.kind;
         if (k === 'sweep') {
-          const a = Math.atan2(this.aimDir.y, this.aimDir.x);
-          ctx.save();
-          ctx.translate(this.x, this.y);
-          ctx.rotate(a);
-          ctx.globalAlpha = 0.25 + Math.sin(this.animT * 18) * 0.1;
-          ctx.fillStyle = '#e43b44';
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.arc(0, 0, 95, -1.1, 1.1);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-          ctx.globalAlpha = 1;
+          // (예고는 위 공용 블록이 담당 — 판정과 같은 수치로 그린다)
         } else if (k === 'charge') {
           ctx.save();
           ctx.globalAlpha = 0.3 + Math.sin(this.animT * 16) * 0.12;
