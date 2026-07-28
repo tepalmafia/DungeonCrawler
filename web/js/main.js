@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 164;
+const GAME_VERSION = 165;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -370,6 +370,33 @@ const Game = {
   onRoomBuilt(type) {
     // 층 첫 방: 담금질(층 한정 공격력) 만료
     if (Dungeon.roomIndex === 1 && this.player) this.player.floorAtk = 0;
+    // ── 정상 진행 기준선 자가 계측 (v165) ──────────────────────────────
+    // 치트 스케일링 곡선을 다섯 번 손으로 재교정했고 다섯 번 다 틀렸다
+    // (v151·v153·v155·v158, 그리고 이번 v165). 손으로 박은 상수는 게임이 바뀌면 즉시 낡는다.
+    // → 이제 게임이 **자기 자신을 계측한다**: 치트·봇이 아닌 진짜 런이 층에 들어설 때마다
+    //   그 시점 빌드를 지수평균으로 눌러 담고, 치트 도구는 그 값을 기준으로 삼는다
+    if (Dungeon.roomIndex === 1 && this.player && !this.testMode &&
+        !(typeof Bot !== 'undefined' && Bot.enabled) && Dungeon.floor <= 50) {
+      const p = this.player;
+      // 직업별로 나눠 담는다 — 실측 3층 공격력이 기사 6 vs 궁수 2로 3배 차이라
+      // 직업을 뭉뚱그리면 도구가 다시 어긋난다
+      Meta.data.normRef = Meta.data.normRef || {};
+      const bag = (Meta.data.normRef[p.classId] = Meta.data.normRef[p.classId] || {});
+      const cur = { lv: this.level, hp: p.maxHp, atk: +p.currentAtk().toFixed(1), tr: p.traits.length, rel: p.relics.length };
+      const prev = bag[Dungeon.floor];
+      if (!prev) bag[Dungeon.floor] = { ...cur, n: 1 };
+      else {
+        const w = Math.min(0.5, 1 / (prev.n + 1)); // 표본이 쌓일수록 천천히 움직인다
+        const mix = (a, b) => +(a + (b - a) * w).toFixed(1);
+        bag[Dungeon.floor] = {
+          lv: mix(prev.lv == null ? cur.lv : prev.lv, cur.lv),
+          hp: mix(prev.hp, cur.hp), atk: mix(prev.atk, cur.atk),
+          tr: mix(prev.tr, cur.tr), rel: mix(prev.rel, cur.rel),
+          n: prev.n + 1,
+        };
+      }
+      Meta.save();
+    }
     if (this.player && this.player.flags.firststrike) this.player._fsReady = true; // 선제일격 (v151): 방마다 재장전
     // 왕의 유산 (v151 전설): 새 층 진입마다 무작위 스탯 특성 자동 획득
     if (Dungeon.roomIndex === 1 && this.player && this.player.flags.kingsoath) {
