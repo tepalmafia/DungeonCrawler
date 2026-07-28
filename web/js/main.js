@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 163;
+const GAME_VERSION = 164;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -323,6 +323,33 @@ const Game = {
     }
 
     // 진군로: 1막 진군 지도 — 오프닝 자막과 함께 열린다
+    this._openRunStart();
+  },
+
+  // ── 런 시작 관문 (v164) ── 「유산」 각인의 시작 유물 → 그 다음 진군로.
+  // 결함 둘을 한꺼번에 고친다:
+  //  ① **각인이 사실상 한 번도 발동하지 않았다** — 발동부가 `_endPrologue()`에만 있었는데
+  //     프롤로그는 생애 첫 런에서만 돈다. 「유산」은 400 파편짜리 후반 구매물이라
+  //     플레이어가 그것을 사는 시점엔 프롤로그가 끝난 지 한참이다. 즉 사고 나서
+  //     **아무 일도 일어나지 않는 각인**이었다
+  //  ② 그 유일한 발동 경로에서도 유물 선택 화면이 `openRouteChoice()`가 세운 'route'를
+  //     덮어썼고, 유물을 고르면 pickRelic이 'play'로 보내버려 **진군로가 통째로 사라졌다**
+  // → 두 경로(프롤로그 종료·일반 출정)가 모두 지나는 한 자리로 모으고, 순서를 유물 → 진군로로 고정
+  _openRunStart() {
+    if (Meta.lvl('legacy') > 0) {
+      const pool = RELICS.filter((r) => r.rarity === 'common');
+      const picks = [];
+      while (picks.length < 3 && pool.length > 0) {
+        picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      }
+      if (picks.length > 0) {
+        this.relicCards = picks;
+        this._relicSource = 'legacy'; // 보스 보상 흐름(다음 층 문)을 타지 않는다
+        this.state = 'relic';
+        this.choiceLockT = 0.4;
+        return; // 진군로는 pickRelic이 이어서 연다
+      }
+    }
     this.openRouteChoice();
   },
 
@@ -337,23 +364,7 @@ const Game = {
       { text: '기억은 온전하다. 이유만 모른다 — 단서를 모아, 왕좌로.', color: '#8a1c2c' },
     ];
     this.state = 'play';
-    this.openRouteChoice();
-
-    // 유산 각인: 런 시작 시 커먼 유물 3택1 (기존 유물 선택 UI 재사용)
-    if (Meta.lvl('legacy') > 0) {
-      const commons = RELICS.filter((r) => r.rarity === 'common');
-      const picks = [];
-      const pool = [...commons];
-      while (picks.length < 3 && pool.length > 0) {
-        picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-      }
-      if (picks.length > 0) {
-        this.relicCards = picks;
-        this._relicSource = 'legacy'; // 보스 보상 흐름(다음 층 문)을 타지 않는다
-        this.state = 'relic';
-        this.choiceLockT = 0.4;
-      }
-    }
+    this._openRunStart();
   },
 
   onRoomBuilt(type) {
