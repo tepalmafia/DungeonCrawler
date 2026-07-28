@@ -2116,14 +2116,14 @@ const HUD = {
     });
 
     if (t > 1.3) this._drawShardReward(ctx, game, 352);
-    if (t > 1.5) this._drawUnlocks(ctx, game, 396);
+    if (t > 1.5) this._drawUnlocks(ctx, game, 394);
     if (game.dailyRun && t > 1.3) this._drawDailyBoard(ctx, Renderer.W - 150, 240); // 기록판 (v132)
-    this._drawRunTag(ctx, game, 508);
+    this._drawRunTag(ctx, game, 520);
 
     if (t > 1.6 && Math.floor(blinkT * 1.6) % 2 === 0) {
       ctx.font = 'bold 17px Galmuri11, monospace';
       ctx.fillStyle = '#5ce0e6';
-      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', cx, 442);
+      ctx.fillText('R — 새로운 런   ·   클릭/Space — 거점으로', cx, 440);
     }
     if (t > 1.6) {
       ctx.font = 'bold 16px Galmuri11, monospace';
@@ -2134,7 +2134,13 @@ const HUD = {
         4: 'C — 5막 왕도로 (빌드 유지, 41~50층: 마지막 열 층)',
       };
       ctx.fillStyle = cNext[act] ? '#c9d94a' : '#b13ae0';
-      ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 472);
+      ctx.fillText(cNext[act] || 'C — 왕도 가도로 계속 (무한 모드: 빌드 유지)', cx, 468);
+      // v163: 한 판이 길다. "오늘은 여기까지"를 골라도 30분 쌓은 빌드가 사라지지 않게
+      if (cNext[act]) {
+        ctx.font = 'bold 15px Galmuri11, monospace';
+        ctx.fillStyle = '#2ec4b6';
+        ctx.fillText('S — 저장하고 나중에 (거점의 「이어하기」로 이 빌드 그대로 복귀)', cx, 492);
+      }
     }
   },
 

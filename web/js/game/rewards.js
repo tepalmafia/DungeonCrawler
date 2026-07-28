@@ -163,7 +163,7 @@ const GameRewards = {
     this.shardAnimT = 0;
     Achieve.evaluate(this, !!victory); // 도전과제 일괄 평가 (중복 지급 없음)
     // 오클릭 방지: 전투 중 연타하던 클릭이 정산 화면을 바로 넘기지 않게 잠시 입력 잠금
-    this.overLockT = 1.2;
+    this.overLockT = 1.6; // v163: 전투 연타가 정산을 넘기는 사고가 1.2초로는 계속 났다
   },
 
   // 무한 모드 진입 — 2막 승리 화면에서 C: 정산은 유지하고 21층으로 계속 내려간다

@@ -195,6 +195,13 @@ const Dungeon = {
 
   build(type) {
     this.roomType = type;
+    // 방 시드 (v163): 이 방을 만든 난수 씨앗을 기억한다.
+    // 「저장하고 거점」 → 「이어하기」가 restart()를 거치면서 **런 시드를 새로 뽑았고**,
+    // 그 결과 이어하기가 방을 통째로 다시 굴렸다 — 불리한 방을 만나면 저장하고 나갔다
+    // 들어오는 것만으로 무한 리롤이 됐다. 이제 같은 씨앗으로 **같은 방**이 복원된다
+    if (this._forceSeed != null) { this.roomSeed = this._forceSeed >>> 0; this._forceSeed = null; }
+    else this.roomSeed = RNG.int(1, 0x7ffffffe);
+    RNG.seed(this.roomSeed);
     // 미니맵: 이 층에서 지나온 방 이력 (roomIndex 1이면 새 층 시작)
     if (this.roomIndex === 1 && type === 'combat') this.roomLog = [];
     (this.roomLog = this.roomLog || []).push(type);
