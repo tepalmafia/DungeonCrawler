@@ -912,6 +912,10 @@ const HUD = {
       ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#666a80';
       ctx.fillText(`도전 ${Meta.data.runs}회 · 최고 ${Meta.data.bestFloor}층 · 누적 처치 ${Meta.data.totalKills}`, 24, 36);
+      // v156: 빌드 버전 — 새로고침이 먹었는지 한눈에 (캐시된 구버전으로 테스트하는 사고 방지)
+      ctx.font = '10px Galmuri11, monospace';
+      ctx.fillStyle = '#4a4a5c';
+      ctx.fillText(`build v${typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '?'}`, 24, 52);
     }
 
     const cls = CLASSES[Meta.data.cls];

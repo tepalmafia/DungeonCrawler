@@ -1,5 +1,9 @@
 // 게임 루프 + 던전 진행 + 전투 판정 허브.
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
+// 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
+// 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
+const GAME_VERSION = 156;
+
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
   soul:  { color: '#b13ae0', r: 7, wavy: true },
@@ -112,8 +116,19 @@ const Game = {
       `보스 처치 (층: 소요, c=치트런): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
         .map(([f, ts]) => `${f}층 ${ts.join('/')}`).join(' · ') || '없음'}`,
       `런당 피격 평균: ${(hurts / log.length).toFixed(1)}`,
-      '── 최근 런 ──',
-      ...log.slice(-6).map((r) => `${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` + (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '')),
+      `── 최근 런 (최신이 맨 아래 · 현재 빌드 v${typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '?'}) ──`,
+      // v156: 시각·버전 표기 — 같은 문구의 런이 줄줄이라 '방금 것'을 못 찾던 문제 해소.
+      // 버전이 현재와 다르면 그 판은 캐시된 구버전에서 뛴 것 → 밸런스 근거에서 빼야 한다
+      ...log.slice(-6).map((r, i, arr) => {
+        const ago = r.ts ? (() => {
+          const m = Math.floor((Date.now() - r.ts) / 60000);
+          return m < 1 ? '방금' : m < 60 ? `${m}분 전` : `${Math.floor(m / 60)}시간 전`;
+        })() : '시각?';
+        const verTag = r.ver ? `v${r.ver}` : 'v?';
+        const newest = i === arr.length - 1 ? '  ◀ 방금 이 판' : '';
+        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}` +
+          (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '') + newest;
+      }),
     ].join('\n');
     console.log(text);
     this.banner = { text: '📋 플레이 리포트 복사됨 — 그대로 붙여넣어 주세요', life: 2.6, maxLife: 2.6, color: '#2ec4b6' };
