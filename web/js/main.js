@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 176;
+const GAME_VERSION = 177;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -781,6 +781,8 @@ const Game = {
     }
     // v176: 곡 선택 → 강도 적용 순서를 보장한다 (ensure가 덱을 만든 뒤 pulse가 레이어를 켠다)
     const pulse = this._musicPulse();
+    // v177: 소리의 기준점은 플레이어다 — 거리 감쇠·정위가 전부 여기서 갈린다
+    if (this.player) AudioSys.setListener(this.player.x, this.player.y);
     Music.ensure(this._musicKey());
     Music.pulse(pulse);
     // v174: 공간의 소리 — 막이 바뀌면 공기와 잔향이 함께 바뀐다.

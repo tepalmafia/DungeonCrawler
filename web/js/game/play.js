@@ -135,7 +135,7 @@ const GamePlay = {
     this.sigs.push(sig);
     this.sigWarnT = sig.tel;
     this.banner = { text: `⚠ ${boss.name} — 인장기!`, life: 1.4, maxLife: 1.4, color: '#e43b44' };
-    AudioSys.roar();
+    AudioSys.tellSigil(boss && boss.x, boss && boss.y); // v177: 절대 위협 — 예고 사다리 최상단
     Renderer.shake(3, 0.3);
   },
 

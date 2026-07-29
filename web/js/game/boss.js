@@ -790,6 +790,9 @@ function createBoss(floor, x, y) {
             this.state = 'windup';
             this.stateT = 0;
             this.aimDir = { x: dx / d, y: dy / d };
+            // v177: 보스 초식 예고 — 예고 사다리의 4급. 접촉(0.34초)보다 낮고 길다.
+            // 화면의 붉은 경고와 짝을 이룬다 (v159에서 예고를 판정과 일치시킨 그 초식이다)
+            AudioSys.tellBoss(this.x, this.y);
           }
           break;
         }
@@ -976,7 +979,7 @@ function createBoss(floor, x, y) {
         this._windMax = 0.34;
         this._windA = Math.atan2(p.y - this.y, p.x - this.x);
         this._windDmg = this.phase === 2 && Dungeon.floor >= 4 ? bossDmg() + 1 : bossDmg();
-        AudioSys.telegraph(this.x, true);
+        AudioSys.telegraph(this.x, true, this.y);
       }
     },
 
@@ -995,7 +998,7 @@ function createBoss(floor, x, y) {
         this.hitCd = (Dungeon.floor <= 3 ? 1.3 : Dungeon.floor <= 5 ? 1.0 : 0.8) + 0.35;
         this._whiffT = 0.5;
         Particles.text(this.x, this.y - this.r - 10, '헛손질', { color: '#9aa0b4', size: 12 });
-        AudioSys.whiff(this.x);
+        AudioSys.whiff(this.x, this.y);
       }
     },
 

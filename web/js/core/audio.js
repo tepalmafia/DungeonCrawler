@@ -177,19 +177,58 @@ const AudioSys = {
   // ── 출력 라우팅 (v174) ──────────────────────────────────────────────
   // 드라이는 정위(pan)를 거쳐 버스로, 웨트는 공유 리버브로 send. 노드는 소리마다
   // 최대 2개(panner + send gain)만 늘어난다 — Convolver는 하나를 공유하므로 비용이 고정이다
-  _out(node, { bus = 'sfx', pan = 0, send = 0 } = {}) {
+  // ── 거리 모형 (v177) ────────────────────────────────────────────────
+  // v174에서 좌우 정위를 열었지만 **거리는 여전히 없었다** — 방 반대편 골렘의 발소리가
+  // 내 발밑에서 나는 것과 똑같이 컸다. 그래서 화면에 소리가 열 개 겹치면 뭐가 나한테
+  // 오는 소리인지 못 가린다. 정위가 '어느 쪽'을 줬다면 거리는 '얼마나 급한가'를 준다.
+  //   · 가까우면 크고 밝고 건조하다 (내 일이다)
+  //   · 멀면 작고 어둡고 젖는다 (남의 일이다 — 하지만 방향은 안다)
+  // 방은 960×540 한 화면 고정이라 대각선 1101px가 최대 거리다
+  listener: { x: 480, y: 270 },
+  setListener(x, y) {
+    if (typeof x === 'number') this.listener.x = x;
+    if (typeof y === 'number') this.listener.y = y;
+  },
+
+  // 좌표 → {pan, gain, wet, cut}. 소리 함수들이 이걸 받아 쓴다
+  spat(x, y) {
+    if (x == null) return { pan: 0, gain: 1, wet: 1, cut: 0 };
+    const L = this.listener;
+    const dx = x - L.x, dy = (y == null ? L.y : y) - L.y;
+    const d = Math.hypot(dx, dy);
+    const REF = 130;   // 이 거리 안쪽은 감쇠 없음 — 내 몸 주변은 전부 '내 일'이다
+    const MAX = 760;   // 여기서 바닥. 화면 대각선(1101)보다 짧게 잡아 구석 소리도 들리게 둔다
+    const k = Math.max(0, Math.min(1, (d - REF) / (MAX - REF)));
+    return {
+      pan: this.panOf(x),
+      gain: 1 - 0.62 * k,          // 멀어도 0.38까지만 — 완전히 안 들리면 정보가 사라진다
+      wet: 1 + 1.7 * k,            // 멀수록 더 젖는다 (공간이 사이에 낀다)
+      cut: k > 0.25 ? 7000 - 5200 * k : 0, // 멀수록 고역이 깎인다 (공기 흡수). 0이면 안 건다
+    };
+  },
+
+  _out(node, { bus = 'sfx', pan = 0, send = 0, at = null } = {}) {
     const dst = (bus === 'music' && this.musicBus) || this.sfxBus || this.master;
     let tail = node;
-    if (pan && this.ctx.createStereoPanner) {
+    // 거리 로우패스 — 먼 소리는 벽 너머처럼 먹먹해진다
+    if (at && at.cut > 0) {
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = at.cut;
+      tail = tail.connect(lp);
+    }
+    const p2 = at ? at.pan : pan;
+    if (p2 && this.ctx.createStereoPanner) {
       const p = this.ctx.createStereoPanner();
-      p.pan.value = Math.max(-1, Math.min(1, pan));
-      tail = node.connect(p);
+      p.pan.value = Math.max(-1, Math.min(1, p2));
+      tail = tail.connect(p);
     }
     tail.connect(dst);
     // 음악·환경음은 젖은 채로 이미 설계되므로 send는 효과음 위주로 쓴다
-    if (send > 0 && this.revBus) {
+    const sd = send * (at ? at.wet : 1);
+    if (sd > 0 && this.revBus) {
       const s = this.ctx.createGain();
-      s.gain.value = send;
+      s.gain.value = Math.min(1, sd);
       tail.connect(s).connect(this.revBus);
     }
     return tail;
@@ -209,7 +248,7 @@ const AudioSys = {
   },
 
   _tone({ type = 'square', f0 = 440, f1 = null, dur = 0.1, vol = 0.4, delay = 0, bus = 'sfx',
-          pan = 0, send = 0, atk = 0.001, hold = 0, detune = 0 }) {
+          pan = 0, send = 0, atk = 0.001, hold = 0, detune = 0, at = null }) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
@@ -218,14 +257,14 @@ const AudioSys = {
     if (detune) osc.detune.value = detune;
     osc.frequency.setValueAtTime(f0, t);
     osc.frequency.exponentialRampToValueAtTime(Math.max(f1 ?? f0, 1), t + dur);
-    this._env(gain, t, { vol, dur, atk, hold });
-    this._out(osc.connect(gain), { bus, pan, send });
+    this._env(gain, t, { vol: vol * (at ? at.gain : 1), dur, atk, hold });
+    this._out(osc.connect(gain), { bus, pan, send, at });
     osc.start(t);
     osc.stop(t + dur + 0.05);
   },
 
   _noise({ dur = 0.08, vol = 0.3, freq = 1200, q = 1, delay = 0, bus = 'sfx',
-           pan = 0, send = 0, atk = 0.001, hold = 0, type = 'bandpass', freq1 = null }) {
+           pan = 0, send = 0, atk = 0.001, hold = 0, type = 'bandpass', freq1 = null, at = null }) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime + delay;
     const src = this.ctx.createBufferSource();
@@ -237,8 +276,8 @@ const AudioSys = {
     if (freq1 && freq1 !== freq) filter.frequency.exponentialRampToValueAtTime(Math.max(freq1, 20), t + dur);
     filter.Q.value = q;
     const gain = this.ctx.createGain();
-    this._env(gain, t, { vol, dur, atk, hold });
-    this._out(src.connect(filter).connect(gain), { bus, pan, send });
+    this._env(gain, t, { vol: vol * (at ? at.gain : 1), dur, atk, hold });
+    this._out(src.connect(filter).connect(gain), { bus, pan, send, at });
     src.start(t, Math.random() * 0.5, dur + 0.05);
   },
 
@@ -259,39 +298,39 @@ const AudioSys = {
   // 검격 (v174) — 계측: 전체 호출의 21%. 종전엔 밴드패스 잡음 한 겹 + 3타에만 저음.
   // 이제 **필터가 위에서 아래로 쓸린다**(쉭 → 스와악). 직업마다 휘두르는 물건이 다르다.
   // wep: 'blade'(기사 대검) 'bow'(궁수) 'staff'(마도사) 'flask'(연금술사)
-  slash(step = 0, wep = 'blade', x = null) {
-    const pan = this.panOf(x), s = this._slot(2);
+  slash(step = 0, wep = 'blade', x = null, y = null) {
+    const at = this.spat(x, y), s = this._slot(2);
     const fin = step === 2; // 마무리 3타 — 확실히 커야 한다
     if (wep === 'staff') {  // 지팡이 — 공기를 가르는 게 아니라 공간이 울린다
       const f = this._v([420, 500, 340][step] || 420, 0.08);
       this._tone({ type: 'sine', f0: f, f1: f * 2.2, dur: fin ? 0.22 : 0.15, vol: fin ? 0.26 : 0.17,
-        atk: 0.03, pan, send: 0.5 });
-      this._tone({ type: 'triangle', f0: f * 1.5, f1: f * 3, dur: 0.12, vol: 0.1, delay: 0.02, pan, send: 0.4 });
-      if (fin) this._tone({ type: 'sine', f0: 110, f1: 44, dur: 0.2, vol: 0.3, pan });
+        atk: 0.03, at, send: 0.5 });
+      this._tone({ type: 'triangle', f0: f * 1.5, f1: f * 3, dur: 0.12, vol: 0.1, delay: 0.02, at, send: 0.4 });
+      if (fin) this._tone({ type: 'sine', f0: 110, f1: 44, dur: 0.2, vol: 0.3, at });
       return;
     }
     if (wep === 'flask') {  // 독병 — 유리 부딪는 소리 + 찰랑임
-      this._noise({ dur: 0.05, vol: 0.16, freq: this._v(4800, 0.18), q: 3, pan, send: 0.35 });
-      this._tone({ type: 'triangle', f0: this._v(1150, 0.1), f1: 700, dur: 0.07, vol: 0.14, pan, send: 0.25 });
+      this._noise({ dur: 0.05, vol: 0.16, freq: this._v(4800, 0.18), q: 3, at, send: 0.35 });
+      this._tone({ type: 'triangle', f0: this._v(1150, 0.1), f1: 700, dur: 0.07, vol: 0.14, at, send: 0.25 });
       this._noise({ dur: fin ? 0.14 : 0.09, vol: fin ? 0.2 : 0.13, freq: 620, q: 0.5, freq1: 200,
-        atk: 0.01, pan, send: 0.2 });
-      if (fin) this._tone({ type: 'sine', f0: 130, f1: 48, dur: 0.16, vol: 0.28, pan });
+        atk: 0.01, at, send: 0.2 });
+      if (fin) this._tone({ type: 'sine', f0: 130, f1: 48, dur: 0.16, vol: 0.28, at });
       return;
     }
     if (wep === 'bow') {    // 활 — 시위 긴장(스웰) 후 튕김. 어택이 있어야 '당겼다 놓았다'가 들린다
-      this._tone({ type: 'sawtooth', f0: this._v(300, 0.1), f1: 96, dur: 0.07, vol: 0.16, atk: 0.018, pan });
-      this._noise({ dur: 0.06, vol: 0.2, freq: this._v(3600, 0.15), q: 1.2, freq1: 1400, pan, send: 0.25 });
-      if (fin) this._tone({ type: 'sine', f0: 120, f1: 45, dur: 0.15, vol: 0.28, pan });
+      this._tone({ type: 'sawtooth', f0: this._v(300, 0.1), f1: 96, dur: 0.07, vol: 0.16, atk: 0.018, at });
+      this._noise({ dur: 0.06, vol: 0.2, freq: this._v(3600, 0.15), q: 1.2, freq1: 1400, at, send: 0.25 });
+      if (fin) this._tone({ type: 'sine', f0: 120, f1: 45, dur: 0.15, vol: 0.28, at });
       return;
     }
     // 대검 — 무겁게 쓸린다. 슬롯 2개로 뼈대를 바꾼다
     const base = [2300, 2750, 3300][step] || 2400;
     this._noise({ dur: fin ? 0.13 : 0.085, vol: fin ? 0.3 : 0.21, freq: this._v(base, 0.12) * (s ? 1.12 : 0.9),
-      q: 0.8, freq1: 600, atk: fin ? 0.012 : 0.004, pan, send: fin ? 0.3 : 0.18 });
-    this._noise({ dur: 0.05, vol: 0.09, freq: 6800, q: 1.5, delay: 0.01, pan, send: 0.3 }); // 공기감 (계측 H: 6.4kHz+ 가 3/43뿐)
+      q: 0.8, freq1: 600, atk: fin ? 0.012 : 0.004, at, send: fin ? 0.3 : 0.18 });
+    this._noise({ dur: 0.05, vol: 0.09, freq: 6800, q: 1.5, delay: 0.01, at, send: 0.3 }); // 공기감 (계측 H: 6.4kHz+ 가 3/43뿐)
     if (fin) {
-      this._tone({ type: 'sine', f0: 145, f1: 46, dur: 0.17, vol: 0.32, pan });
-      this._tone({ type: 'sine', f0: 62, f1: 34, dur: 0.22, vol: 0.26, pan });  // 무게
+      this._tone({ type: 'sine', f0: 145, f1: 46, dur: 0.17, vol: 0.32, at });
+      this._tone({ type: 'sine', f0: 62, f1: 34, dur: 0.22, vol: 0.26, at });  // 무게
     }
   },
   // ── 타격음 재질 분기 (v162) ────────────────────────────────────────
@@ -325,70 +364,143 @@ const AudioSys = {
     return { knight: 'blade', archer: 'bow', mage: 'staff', alch: 'flask' }[cls] || 'blade';
   },
 
-  hit(mat = 'flesh', x = null) {
+  hit(mat = 'flesh', x = null, y = null) {
     if (!this._gate('hit', 45, 3)) return;
-    const pan = this.panOf(x), s = this._slot(3);
+    const at = this.spat(x, y), s = this._slot(3);
     if (mat === 'bone') {          // 마른 뼈 — 딱/우두둑/쩍. 고역을 연다
       const hi = [3400, 2600, 4200][s];
       this._noise({ dur: 0.035 + s * 0.008, vol: 0.32, freq: this._v(hi, 0.16), q: 1.4 + s * 0.5,
-        freq1: hi * 0.45, pan, send: 0.22 });
-      this._tone({ type: 'triangle', f0: this._v([560, 470, 640][s], 0.12), f1: 210, dur: 0.055, vol: 0.22, pan });
-      if (s === 2) this._noise({ dur: 0.09, vol: 0.1, freq: 7200, q: 0.8, delay: 0.01, pan, send: 0.3 }); // 파편 튐
+        freq1: hi * 0.45, at, send: 0.22 });
+      this._tone({ type: 'triangle', f0: this._v([560, 470, 640][s], 0.12), f1: 210, dur: 0.055, vol: 0.22, at });
+      if (s === 2) this._noise({ dur: 0.09, vol: 0.1, freq: 7200, q: 0.8, delay: 0.01, at, send: 0.3 }); // 파편 튐
     } else if (mat === 'stone') {  // 돌·판금 — 저역을 연다. 무게가 귀에 와야 한다
-      this._noise({ dur: 0.08, vol: 0.3, freq: this._v([420, 340, 520][s], 0.14), q: 0.5, pan, send: 0.26 });
-      this._tone({ f0: this._v([120, 96, 145][s], 0.1), f1: 40, dur: 0.15, vol: 0.42, pan });
-      this._tone({ type: 'sine', f0: this._v(58, 0.1), f1: 32, dur: 0.2, vol: 0.3, pan });   // 서브 — 계측 H: 60Hz 이하가 4/43뿐이었다
-      if (s !== 1) this._noise({ dur: 0.05, vol: 0.14, freq: 5200, q: 2, pan, send: 0.34 }); // 쇳소리 잔향
+      this._noise({ dur: 0.08, vol: 0.3, freq: this._v([420, 340, 520][s], 0.14), q: 0.5, at, send: 0.26 });
+      this._tone({ f0: this._v([120, 96, 145][s], 0.1), f1: 40, dur: 0.15, vol: 0.42, at });
+      this._tone({ type: 'sine', f0: this._v(58, 0.1), f1: 32, dur: 0.2, vol: 0.3, at });   // 서브 — 계측 H: 60Hz 이하가 4/43뿐이었다
+      if (s !== 1) this._noise({ dur: 0.05, vol: 0.14, freq: 5200, q: 2, at, send: 0.34 }); // 쇳소리 잔향
     } else if (mat === 'ooze') {   // 점액 — 물컹. 필터가 아래로 미끄러진다
       this._noise({ dur: 0.11, vol: 0.24, freq: this._v([300, 240, 360][s], 0.14), q: 0.4,
-        freq1: 90, atk: 0.006, pan, send: 0.14 });
-      this._tone({ type: 'sine', f0: this._v([160, 130, 190][s], 0.12), f1: 62, dur: 0.14, vol: 0.3, atk: 0.008, pan });
+        freq1: 90, atk: 0.006, at, send: 0.14 });
+      this._tone({ type: 'sine', f0: this._v([160, 130, 190][s], 0.12), f1: 62, dur: 0.14, vol: 0.3, atk: 0.008, at });
     } else if (mat === 'spirit') { // 혼 — 타격이 아니라 울림. 가장 젖는다
       const f = this._v([700, 620, 830][s], 0.1);
-      this._tone({ type: 'sine', f0: f, f1: f * 0.45, dur: 0.2, vol: 0.24, atk: 0.012, pan, send: 0.6 });
-      this._tone({ type: 'sine', f0: f * 1.5, f1: f * 0.7, dur: 0.13, vol: 0.13, delay: 0.02, pan, send: 0.5 });
-      this._noise({ dur: 0.05, vol: 0.09, freq: this._v(1500, 0.2), pan, send: 0.45 });
+      this._tone({ type: 'sine', f0: f, f1: f * 0.45, dur: 0.2, vol: 0.24, atk: 0.012, at, send: 0.6 });
+      this._tone({ type: 'sine', f0: f * 1.5, f1: f * 0.7, dur: 0.13, vol: 0.13, delay: 0.02, at, send: 0.5 });
+      this._noise({ dur: 0.05, vol: 0.09, freq: this._v(1500, 0.2), at, send: 0.45 });
     } else {                       // 살 — 젖은 퍽. 슬롯마다 무게가 다르다
       this._noise({ dur: 0.055 + s * 0.01, vol: 0.38, freq: this._v([900, 700, 1150][s], 0.15), q: 0.7,
-        freq1: 320, pan, send: 0.18 });
-      this._tone({ f0: this._v([185, 150, 215][s], 0.12), f1: 55, dur: 0.09, vol: 0.34, pan });
-      this._tone({ type: 'sine', f0: 70, f1: 38, dur: 0.11, vol: 0.2, pan }); // 무게
+        freq1: 320, at, send: 0.18 });
+      this._tone({ f0: this._v([185, 150, 215][s], 0.12), f1: 55, dur: 0.09, vol: 0.34, at });
+      this._tone({ type: 'sine', f0: 70, f1: 38, dur: 0.11, vol: 0.2, at }); // 무게
     }
   },
-  crit(x = null) {
+  crit(x = null, y = null) {
     if (!this._gate('crit')) return;
-    const pan = this.panOf(x);
-    this._noise({ dur: 0.08, vol: 0.42, freq: this._v(780), freq1: 300, pan, send: 0.3 });
-    this._tone({ f0: this._v(160), f1: 42, dur: 0.13, vol: 0.42, pan });                 // 묵직한 저음
-    this._tone({ type: 'sine', f0: 74, f1: 34, dur: 0.18, vol: 0.3, pan });              // 서브 — 크리는 배에 와야 한다
-    this._tone({ f0: this._v(520), f1: 1150, dur: 0.12, vol: 0.28, delay: 0.02, pan, send: 0.25 }); // 상승 임팩트
-    this._tone({ type: 'triangle', f0: this._v(1900), f1: 880, dur: 0.08, vol: 0.14, delay: 0.01, pan, send: 0.35 });
-    this._noise({ dur: 0.07, vol: 0.1, freq: 8200, q: 1.2, delay: 0.015, pan, send: 0.4 }); // 공기감
+    const at = this.spat(x, y);
+    this._noise({ dur: 0.08, vol: 0.42, freq: this._v(780), freq1: 300, at, send: 0.3 });
+    this._tone({ f0: this._v(160), f1: 42, dur: 0.13, vol: 0.42, at });                 // 묵직한 저음
+    this._tone({ type: 'sine', f0: 74, f1: 34, dur: 0.18, vol: 0.3, at });              // 서브 — 크리는 배에 와야 한다
+    this._tone({ f0: this._v(520), f1: 1150, dur: 0.12, vol: 0.28, delay: 0.02, at, send: 0.25 }); // 상승 임팩트
+    this._tone({ type: 'triangle', f0: this._v(1900), f1: 880, dur: 0.08, vol: 0.14, delay: 0.01, at, send: 0.35 });
+    this._noise({ dur: 0.07, vol: 0.1, freq: 8200, q: 1.2, delay: 0.015, at, send: 0.4 }); // 공기감
   },
   // 처형 (v174) — 즉사. 크리보다 확실히 커야 하고, 그 순간 음악이 물러난다
-  execute(x = null) {
-    const pan = this.panOf(x);
+  execute(x = null, y = null) {
+    const at = this.spat(x, y);
     this.ducker(0.3, 0.22, 0.6);
-    this._noise({ dur: 0.16, vol: 0.5, freq: 1400, q: 0.5, freq1: 220, pan, send: 0.45 });
-    this._tone({ type: 'sine', f0: 96, f1: 26, dur: 0.42, vol: 0.55, pan });
-    this._tone({ type: 'sine', f0: 48, f1: 20, dur: 0.5, vol: 0.4, delay: 0.02, pan });
-    this._tone({ type: 'triangle', f0: 2400, f1: 600, dur: 0.14, vol: 0.16, pan, send: 0.55 });
+    this._noise({ dur: 0.16, vol: 0.5, freq: 1400, q: 0.5, freq1: 220, at, send: 0.45 });
+    this._tone({ type: 'sine', f0: 96, f1: 26, dur: 0.42, vol: 0.55, at });
+    this._tone({ type: 'sine', f0: 48, f1: 20, dur: 0.5, vol: 0.4, delay: 0.02, at });
+    this._tone({ type: 'triangle', f0: 2400, f1: 600, dur: 0.14, vol: 0.16, at, send: 0.55 });
   },
   // 막힘 / 빗나감 (v174) — 종전엔 '막힘'만 clank 하나였고 헛손질은 소리가 없었다.
   // v168에서 적 헛손질에 반격의 창을 열었는데, 그게 **들리지 않으면 창이 있는 줄 모른다**
-  block(x = null) {
-    const pan = this.panOf(x);
-    this._noise({ dur: 0.06, vol: 0.3, freq: this._v(3200, 0.12), q: 2.5, pan, send: 0.3 });
-    this._tone({ type: 'square', f0: this._v(1300, 0.08), f1: 760, dur: 0.09, vol: 0.24, pan, send: 0.25 });
-    this._tone({ type: 'sine', f0: 150, f1: 70, dur: 0.1, vol: 0.2, pan });
+  block(x = null, y = null) {
+    const at = this.spat(x, y);
+    this._noise({ dur: 0.06, vol: 0.3, freq: this._v(3200, 0.12), q: 2.5, at, send: 0.3 });
+    this._tone({ type: 'square', f0: this._v(1300, 0.08), f1: 760, dur: 0.09, vol: 0.24, at, send: 0.25 });
+    this._tone({ type: 'sine', f0: 150, f1: 70, dur: 0.1, vol: 0.2, at });
   },
-  whiff(x = null) {
+  whiff(x = null, y = null) {
     if (!this._gate('whiff', 60, 2)) return;
-    const pan = this.panOf(x);
+    const at = this.spat(x, y);
     // 빈 공기를 가르는 소리 — 고역만, 저역이 없어야 '허탕'으로 들린다
     this._noise({ dur: 0.13, vol: 0.16, freq: this._v(2600, 0.15), q: 0.6, freq1: 5200,
-      atk: 0.02, pan, send: 0.28 });
+      atk: 0.02, at, send: 0.28 });
   },
+  // ── 예고 사다리 (v177) ──────────────────────────────────────────────
+  // 예고가 다 같은 소리면 "무언가 온다"까지만 알고 "얼마나 급한가"는 모른다.
+  // 급을 나눠 **한 소리 = 한 대응**이 되게 한다. 위로 갈수록 낮고·길고·크다:
+  //   접촉(잡몹) → 접촉(정예/보스) → 강타(장판) → 보스 초식 → 왕의 인장기(절대 위협)
+  // 전부 1.4~2.2kHz를 지나가는 상승 스윕이다 — 다른 소리가 거의 안 쓰는 대역(계측 H: 84%가 100~1200Hz)
+  tellStomp(x = null, y = null) {           // 강타·내려찍기: 바닥이 온다
+    const at = this.spat(x, y);
+    this._tone({ type: 'triangle', f0: 1400, f1: 2100, dur: 0.4, vol: 0.22, atk: 0.03, at, send: 0.2 });
+    this._tone({ type: 'sine', f0: 78, f1: 116, dur: 0.45, vol: 0.26, atk: 0.08, at });
+    this._noise({ dur: 0.35, vol: 0.1, freq: 300, q: 0.6, freq1: 900, atk: 0.15, at, send: 0.3 });
+  },
+  tellBoss(x = null, y = null) {            // 보스 초식: 크고 느리다
+    this.ducker(0.55, 0.12, 0.4);
+    const at = this.spat(x, y);
+    this._tone({ type: 'sawtooth', f0: 1300, f1: 1950, dur: 0.55, vol: 0.2, atk: 0.06, at, send: 0.3 });
+    this._tone({ type: 'sine', f0: 62, f1: 94, dur: 0.6, vol: 0.32, atk: 0.12, at });
+    this._noise({ dur: 0.5, vol: 0.12, freq: 240, q: 0.5, freq1: 700, atk: 0.2, at, send: 0.4 });
+  },
+  tellSigil(x = null, y = null) {           // 왕의 인장기: 절대 위협. 음악이 물러난다
+    this.ducker(0.22, 0.5, 0.7);
+    const at = this.spat(x, y);
+    for (let i = 0; i < 3; i++) {
+      this._tone({ type: 'triangle', f0: 1150 * (1 + i * 0.5), f1: 1750 * (1 + i * 0.5),
+        dur: 0.9 - i * 0.12, vol: 0.16 - i * 0.03, atk: 0.1 + i * 0.05, at, send: 0.45 });
+    }
+    this._tone({ type: 'sine', f0: 44, f1: 72, dur: 1.0, vol: 0.4, atk: 0.2, at });
+    this._noise({ dur: 0.85, vol: 0.14, freq: 200, q: 0.4, freq1: 1200, atk: 0.35, at, send: 0.55 });
+  },
+
+  // ── 직업 스킬 (v177) ────────────────────────────────────────────────
+  // 종전엔 spin/rainCast/meteorCast 세 개가 직업 넷을 나눠 썼다. 스킬은 그 직업의
+  // 서명인데 소리가 겹치면 "내가 뭘 했는지"가 안 남는다. 시전과 착탄을 나누고,
+  // 진화형(evolved)은 같은 소리의 **확대**로 — 다른 소리가 아니라 커진 소리여야 성장으로 읽힌다
+  skill(cls, evolved = false, x = null, y = null) {
+    const at = this.spat(x, y);
+    const g = evolved ? 1.35 : 1;
+    this.ducker(evolved ? 0.5 : 0.65, 0.1, 0.35);
+    if (cls === 'knight') {           // 참수 선회 — 쇳덩이가 원을 그린다
+      this._noise({ dur: 0.34 * g, vol: 0.26 * g, freq: 2600, q: 0.7, freq1: 700, atk: 0.05, at, send: 0.35 });
+      this._tone({ type: 'sawtooth', f0: 210, f1: 88, dur: 0.3 * g, vol: 0.24 * g, atk: 0.02, at });
+      this._tone({ type: 'sine', f0: 70, f1: 40, dur: 0.4 * g, vol: 0.3 * g, at });
+      if (evolved) this._noise({ dur: 0.5, vol: 0.14, freq: 5200, q: 1.2, delay: 0.06, at, send: 0.5 });
+    } else if (cls === 'archer') {    // 뼈화살 비 — 시위 다발이 한꺼번에 풀린다
+      for (let i = 0; i < (evolved ? 5 : 3); i++) {
+        this._tone({ type: 'sawtooth', f0: 340 - i * 30, f1: 110, dur: 0.09, vol: 0.14,
+          atk: 0.02, delay: i * 0.035, at });
+      }
+      this._noise({ dur: 0.4 * g, vol: 0.18 * g, freq: 3400, q: 0.8, freq1: 1100, atk: 0.06, at, send: 0.4 });
+    } else if (cls === 'mage') {      // 별의 심판 — 하늘에서 내려온다. 위에서 아래로
+      this._tone({ type: 'sine', f0: 1500 * g, f1: 240, dur: 0.55 * g, vol: 0.2 * g, atk: 0.04, at, send: 0.55 });
+      this._tone({ type: 'triangle', f0: 2250 * g, f1: 360, dur: 0.4, vol: 0.11, delay: 0.03, at, send: 0.5 });
+      this._noise({ dur: 0.45, vol: 0.1, freq: 900, q: 0.5, freq1: 4200, atk: 0.12, at, send: 0.45 });
+    } else {                          // 독배 — 유리와 액체
+      this._noise({ dur: 0.07, vol: 0.2, freq: 5000, q: 3.5, at, send: 0.4 });
+      this._noise({ dur: 0.36 * g, vol: 0.2 * g, freq: 520, q: 0.4, freq1: 150, atk: 0.05, at, send: 0.25 });
+      this._tone({ type: 'sine', f0: 150, f1: 62, dur: 0.34 * g, vol: 0.24 * g, atk: 0.03, at });
+      if (evolved) this._tone({ type: 'sine', f0: 96, f1: 46, dur: 0.5, vol: 0.22, delay: 0.05, at });
+    }
+  },
+
+  // 궁극기 「처형 선고」 — 이 게임에서 가장 큰 소리여야 한다. 종이 울리고 음악이 무릎 꿇는다
+  ultimate(x = null, y = null) {
+    this.ducker(0.14, 0.55, 0.9);
+    const at = this.spat(x, y);
+    // 종 — 배음 세 겹, 아주 길게
+    for (const [m, v, d] of [[1, 0.24, 2.6], [2.76, 0.09, 1.5], [5.4, 0.04, 0.9]]) {
+      this._tone({ type: 'sine', f0: 196 * m, dur: d, vol: v, atk: 0.004, at, send: 0.8 });
+    }
+    this._tone({ type: 'sine', f0: 52, f1: 22, dur: 1.4, vol: 0.5, at });        // 배를 치는 저음
+    this._tone({ type: 'sawtooth', f0: 130, f1: 44, dur: 0.7, vol: 0.3, delay: 0.02, at, send: 0.3 });
+    this._noise({ dur: 0.9, vol: 0.22, freq: 1800, q: 0.4, freq1: 220, at, send: 0.6 });
+  },
+
   hurt()   {
     this.ducker(0.6, 0.06, 0.3); // 맞는 순간 음악이 잠깐 물러난다 — 피격을 확실히 알린다
     this._tone({ type: 'sine', f0: 65, f1: 28, dur: 0.24, vol: 0.65 });                 // 몸에 꽂히는 저음
@@ -398,13 +510,16 @@ const AudioSys = {
   // 접촉 예고 (v174) — v168이 만든 0.25초의 창을 **귀로도 읽게 한다.**
   // ★ 이 소리는 다른 무엇보다 뚫고 들려야 한다: 1.6~2.2kHz는 다른 소리가 거의 안 쓰는 대역이고
   //   (계측 H: 84%가 100~1200Hz), 상승 스윕이라 '무언가 온다'로 읽힌다. 정위로 방향까지 준다
-  telegraph(x = null, elite = false) {
+  telegraph(x = null, elite = false, y = null) {
     if (!this._gate('tele', 70, 3)) return;
-    const pan = this.panOf(x);
+    // ★ 예고는 거리 감쇠를 **덜** 받는다. 멀리 있어도 나를 노리는 예고는 들려야 한다 —
+    // 이건 연출이 아니라 정보다. 감쇠를 절반만 적용하고 고역 컷도 걸지 않는다
+    const a0 = this.spat(x, y);
+    const at = { at: a0.at, gain: 0.5 + a0.gain * 0.5, wet: a0.wet, cut: 0 };
     const f = elite ? 1500 : 1750;
     this._tone({ type: 'triangle', f0: f, f1: f * 1.5, dur: elite ? 0.3 : 0.24, vol: 0.2,
-      atk: 0.02, pan, send: 0.15 });
-    if (elite) this._tone({ type: 'sine', f0: 92, f1: 128, dur: 0.3, vol: 0.22, atk: 0.05, pan });
+      atk: 0.02, at, send: 0.15 });
+    if (elite) this._tone({ type: 'sine', f0: 92, f1: 128, dur: 0.3, vol: 0.22, atk: 0.05, at });
   },
   // 처치음: 적 급에 따라 무게가 다르다 (정예는 굵게, 보스는 굉음)
   die(grade = 'small') {
