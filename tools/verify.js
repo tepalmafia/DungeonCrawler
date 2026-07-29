@@ -633,6 +633,73 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('report.recordsBuildAtk', logAtk.rec === logAtk.build && logAtk.recNow === logAtk.now,
     `리포트 기록 공${logAtk.rec} (빌드 ${logAtk.build}) · 임종 ${logAtk.recNow} (상태 ${logAtk.now})`);
 
+  // ── 사운드 개편 (v174) — 들을 수는 없지만 잴 수는 있다 ──
+  const audio = await page.evaluate(async () => {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const render = async (fn, sec = 1.2) => {
+      const oc = new OAC(2, Math.ceil(44100 * sec), 44100);
+      const save = AudioSys.ctx;
+      AudioSys.ctx = oc; AudioSys.muted = false;
+      AudioSys.limiter = oc.createDynamicsCompressor(); AudioSys.limiter.connect(oc.destination);
+      AudioSys.master = oc.createGain(); AudioSys.master.gain.value = 0.35; AudioSys.master.connect(AudioSys.limiter);
+      AudioSys.sfxBus = oc.createGain(); AudioSys.musicBus = oc.createGain();
+      AudioSys.duck = oc.createGain(); AudioSys.duck.gain.value = 1;
+      AudioSys.musicBus.connect(AudioSys.duck).connect(AudioSys.master);
+      AudioSys.sfxBus.connect(AudioSys.master);
+      AudioSys.sfxBus.gain.value = 0.8; AudioSys.musicBus.gain.value = 0.8;
+      AudioSys.revBus = oc.createGain();
+      AudioSys.conv = oc.createConvolver(); AudioSys.conv.normalize = false; AudioSys.conv.buffer = AudioSys._makeIR(1.6, 2.6);
+      AudioSys.revWet = oc.createGain(); AudioSys.revWet.gain.value = 0.34;
+      AudioSys.revHP = oc.createBiquadFilter(); AudioSys.revHP.type = 'highpass'; AudioSys.revHP.frequency.value = 320;
+      AudioSys.revBus.connect(AudioSys.revHP).connect(AudioSys.conv).connect(AudioSys.revWet).connect(AudioSys.master);
+      const n = oc.sampleRate;
+      AudioSys._noiseBuf = oc.createBuffer(1, n, oc.sampleRate);
+      const d = AudioSys._noiseBuf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      AudioSys.space = null; AudioSys._gates = {};
+      fn();
+      const buf = await oc.startRendering();
+      AudioSys.ctx = save;
+      return buf;
+    };
+    const zcr = (buf) => { const L = buf.getChannelData(0); let cz = 0, n = 0, prev = 0;
+      for (let i = 0; i < L.length; i++) { if (Math.abs(L[i]) < 0.0005) continue;
+        if ((L[i] > 0) !== (prev > 0) && n > 0) cz++; prev = L[i]; n++; }
+      return n ? (cz / n) * buf.sampleRate / 2 : 0; };
+    const bal = (buf) => { const L = buf.getChannelData(0), R = buf.getChannelData(1);
+      let el = 0, er = 0; for (let i = 0; i < L.length; i++) { el += L[i] * L[i]; er += R[i] * R[i]; }
+      return (el + er) ? (er - el) / (el + er) : 0; };
+    const tail = (buf) => { const L = buf.getChannelData(0); let last = 0;
+      for (let i = 0; i < L.length; i++) if (Math.abs(L[i]) > 0.0008) last = i;
+      return last / buf.sampleRate; };
+    const hz = [];
+    for (let i = 0; i < 12; i++) hz.push(zcr(await render(() => AudioSys.hit('flesh', 480))));
+    const mean = hz.reduce((a, c) => a + c, 0) / hz.length;
+    const sd = Math.sqrt(hz.reduce((a, c) => a + (c - mean) ** 2, 0) / hz.length);
+    return {
+      varPct: +(sd / mean * 100).toFixed(1),
+      left: +bal(await render(() => AudioSys.hit('bone', 60))).toFixed(2),
+      right: +bal(await render(() => AudioSys.hit('bone', 900))).toFixed(2),
+      mid: +bal(await render(() => AudioSys.hit('bone', 480))).toFixed(2),
+      tailHit: +tail(await render(() => AudioSys.hit('stone', 480))).toFixed(2),
+      shots: Object.keys(Ambience._SHOTS).length,
+      acts: Object.keys(Ambience._ACTS).length,
+      spaces: Object.keys(AudioSys._SPACES).length,
+      hasNew: ['telegraph', 'whiff', 'block', 'execute', 'ducker', 'setSpace'].every((k) => typeof AudioSys[k] === 'function'),
+    };
+  });
+  console.log('  사운드:', JSON.stringify(audio));
+  ok('audio.hitVaries', audio.varPct >= 10,
+    `같은 타격 12회 음색 중심 변주 SD ${audio.varPct}% (v173은 계측 중앙값 1.9% — 반음의 1/3)`);
+  ok('audio.stereoPan', audio.left <= -0.4 && audio.right >= 0.4 && Math.abs(audio.mid) < 0.15,
+    `좌 ${audio.left} / 중앙 ${audio.mid} / 우 ${audio.right} (v173은 모노 — 패닝 노드 0개)`);
+  ok('audio.hasReverbTail', audio.tailHit >= 0.4,
+    `타격 잔향 꼬리 ${audio.tailHit}초 (v173은 T60 중앙값 0.19초 = 무향실)`);
+  ok('audio.ambienceExists', audio.shots >= 12 && audio.acts >= 6 && audio.spaces >= 5,
+    `환경음 원샷 ${audio.shots}종 · 막 프리셋 ${audio.acts} · 공간 ${audio.spaces} (v173은 환경음 0개)`);
+  ok('audio.newLayers', audio.hasNew,
+    '예고음·헛손질·막힘·처형·덕킹·공간전환 신설 (예고는 게임플레이 — 화면을 안 봐도 읽혀야 한다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

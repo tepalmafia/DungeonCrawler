@@ -274,11 +274,11 @@ const GameCombat = {
         Particles.star(e.x, e.y, { size: 30, color: '#fff7c0' });
       }
       if (crit) {
-        AudioSys.crit();
+        AudioSys.crit(e.x); // v174: 어디서 터졌는지가 좌우로 실린다
         // 화면 섬광은 히트스톱과 같은 리듬으로만 — 고크리 빌드에서 연속 번쩍임(눈 아픔) 방지
         if (stopped) this.critFlash = 0.07;
       } else {
-        AudioSys.hit(AudioSys.mat(e.sprite)); // v162: 뼈/돌/살/점액/혼 — 무엇을 때렸는지가 들린다
+        AudioSys.hit(AudioSys.mat(e.sprite), e.x); // v162: 뼈/돌/살/점액/혼 · v174: 정위·잔향·변주 3슬롯
       }
 
       const p = this.player;
