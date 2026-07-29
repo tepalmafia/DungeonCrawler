@@ -109,7 +109,7 @@ const GameScreens = {
 
   _normalRef(f, cls) {
     const bag = Meta.data && Meta.data.normRef && Meta.data.normRef[cls];
-    const live = bag && bag[f];
+    const live = bag && bag[Math.round(f)];
     if (live && live.n >= 1) return { ...live, live: true };
     // 미측정 직업(마도사·연금술사)은 궁수 표로 대신한다 — 기사보다 저HP·저화력 쪽이 가깝다
     const T = this._FALLBACK[cls] || this._FALLBACK.archer;
@@ -142,9 +142,22 @@ const GameScreens = {
     // 그 위에서 잰 수치로 v155 보스 완화를 결정했다. 도구가 밸런스 판단을 오염시킨 세 번째 사례다.
     // 아래 계수는 전부 실측 중앙값에서 역산했다 (괄호: f=1/3/5/8 산출 → 실측):
     if (!p) return;
-    const ref = this._normalRef(f, p.classId); // v165: 손으로 박은 곡선 폐기 — 실측 기준선을 따른다
+    // ★ v171 (사장 제보 "보스로 바로가는데 레벨이 그대로인데?") — 결함 둘을 함께 고친다.
+    //  ① **기준선을 층 입구에서 쟀는데 B는 층 끝(보스방)으로 보낸다.**
+    //     normRef는 `roomIndex===1`(층에 막 들어선 순간)에 기록된다. 1층 입구의 정상 레벨은
+    //     당연히 1이다 — 그래서 1층에서 B를 누르면 targetLv 1 → 아무 일도 안 일어났다.
+    //     정상 플레이어가 **그 층의 보스와 싸울 때**의 몸은 다음 층 입구에 가깝다.
+    //     → f와 f+1 사이 0.8 지점을 기준으로 삼는다 (보스 보상 직전)
+    //  ② **레벨 가드가 전부를 막았다.** `level >= targetLv`면 특성·유물·화력까지 통째로 건너뛰었다.
+    //     축별로 "낮추지 않는다"만 지키면 되지, 하나가 충족됐다고 나머지를 포기할 이유가 없다
+    const refA = this._normalRef(f, p.classId);
+    const refB = this._normalRef(f + 1, p.classId);
+    const mix = (a, b) => a + (b - a) * 0.8;
+    const ref = {
+      lv: mix(refA.lv, refB.lv), hp: mix(refA.hp, refB.hp), atk: mix(refA.atk, refB.atk),
+      tr: mix(refA.tr, refB.tr), rel: mix(refA.rel, refB.rel), live: refA.live && refB.live, n: refA.n,
+    };
     const targetLv = Math.max(1, Math.round(ref.lv));
-    if (this.level >= targetLv) return;
     // v165 (사장 제보 "체력도 넘치고" · F9 실측 3층 HP14 vs 정상 6):
     //  ★ preHp를 **현재** maxHp로 잡아서, B를 누를 때마다 hpTarget이 그 위에 다시 쌓였다.
     //    1층에서 B → 6+1=7, 2층에서 B → 7+1=8, 3층에서 B → 8+2=10 … 누를수록 영구 상승.
@@ -153,7 +166,7 @@ const GameScreens = {
     //  → 첫 호출 시점의 HP를 기준선으로 고정한다. 이후 B는 같은 목표치로 수렴할 뿐 쌓이지 않는다
     if (p._cheatBaseHp == null) p._cheatBaseHp = p.maxHp;
     const preHp = p._cheatBaseHp;
-    this.level = targetLv;
+    this.level = Math.max(this.level, targetLv); // 빌드를 낮추지 않는다
     this.xp = 0; this.xpNext = Math.round(40 * Math.pow(1.25, targetLv));
     // HP — **직업 기본치 기준 상대 성장**. 종전은 기사 곡선(6+f/4)을 전 직업에 강제해
     // 마도사(기본 3)에게 6을 줬다: 정상 3.31 대비 181% 과다 — 사장의 "체력이 너무 많은데?"의 진짜 뿌리.
