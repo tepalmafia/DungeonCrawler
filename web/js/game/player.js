@@ -205,8 +205,7 @@ function createPlayer(x, y, classId = 'knight') {
       Particles.ring(this.x, this.y, { r0: 10, r1: 200, life: 0.45, color: '#e43b44', width: 5 });
       Particles.text(this.x, this.y - 40, '처형 선고!', { color: '#e43b44', size: 22 });
       if (executed > 0) Particles.text(this.x, this.y - 60, `${executed}명 집행`, { color: '#8a1c2c', size: 14 });
-      AudioSys.roar();
-      AudioSys.gameover?.();
+      AudioSys.ultimate(this.x, this.y); // v177: 종이 울리고 음악이 무릎 꿇는다
     },
 
     useSubSkill(game) {
@@ -390,7 +389,7 @@ function createPlayer(x, y, classId = 'knight') {
         this.spinT = this.skillEvolved ? 1.1 : 0.35;
         this._spinPulseT = this.skillEvolved ? 0.35 : 0;
         this.invuln = Math.max(this.invuln, this.skillEvolved ? 0.5 : 0.4);
-        AudioSys.spin();
+        AudioSys.skill('knight', this.skillEvolved, this.x, this.y); // v177
         Renderer.shake(4, 0.2);
         Particles.ring(this.x, this.y, { r0: 20, r1: 100, life: 0.3, color: '#4a6ede', width: 5 });
         Particles.ring(this.x, this.y, { r0: 10, r1: 70, life: 0.22, color: '#ffffff', width: 3 });
@@ -427,7 +426,7 @@ function createPlayer(x, y, classId = 'knight') {
       } else if (this.classId === 'archer') {
         // 화살비: 지점 광역 폭격 — [진화] 화살 폭풍: 범위·화살 수 대폭 증가
         const t = this._skillTarget(game);
-        AudioSys.rainCast();
+        AudioSys.skill('archer', this.skillEvolved, this.x, this.y); // v177
         game.rains.push({
           x: t.x, y: t.y, r: (this.skillEvolved ? 140 : 110) * (mod && mod.rMul ? mod.rMul : 1), t: 0, next: 0.25,
           shots: Math.round((this.skillEvolved ? 24 : 14) * (mod && mod.sMul ? mod.sMul : 1)), fired: 0,
@@ -439,7 +438,7 @@ function createPlayer(x, y, classId = 'knight') {
         // 휘발성 혼합물: 지점 대폭발 + 독·화상 동시 부여 — 반응(맹독 연소)을 스스로 만든다.
         // [진화] 대반응 폭탄: 감전까지 3원소 — 과부하·마비가 연쇄한다
         const t = this._skillTarget(game);
-        AudioSys.meteorCast();
+        AudioSys.skill('alch', this.skillEvolved, this.x, this.y); // v177
         const r = Math.min(240, (this.skillEvolved ? 132 : 100) * (this.flaskRadMul || 1) * (mod && mod.rMul ? mod.rMul : 1)); // 반경 상한 240px
         game._explode(t.x, t.y, r, Math.max(1, Math.round(this.currentAtk() * 2.5 * (mod && mod.dMul ? mod.dMul : 1))), ['#c9d94a', '#6ada8a', '#ff7043'], '#c9d94a');
         if (mod && mod.flag === 'pool') game.zones.push({ x: t.x, y: t.y, r: r * 1.15 * (game.sects && game.sects.venom >= 3 ? 1.4 : 1), life: 4.5, kind: 'poison', tickT: 0.4 }); // 독 3단
@@ -459,7 +458,7 @@ function createPlayer(x, y, classId = 'knight') {
       } else {
         // 메테오: 예고 후 대광역 낙하 — [진화] 쌍둥이 메테오: 두 번째 낙하가 뒤따른다
         const t = this._skillTarget(game);
-        AudioSys.meteorCast();
+        AudioSys.skill('mage', this.skillEvolved, this.x, this.y); // v177
         game.meteors.push({ x: t.x, y: t.y, t: 0.7 + (mod && mod.tAdd ? mod.tAdd : 0), r: 105 * (mod && mod.rMul ? mod.rMul : 1),
           dmgMul: mod && mod.dMul ? mod.dMul : 1, pull: !!(mod && mod.flag === 'pull') });
         if (this.skillEvolved) {
@@ -491,7 +490,7 @@ function createPlayer(x, y, classId = 'knight') {
         if (this._spin2T <= 0) {
           this.spinT = 0.3;
           this.invuln = Math.max(this.invuln, 0.3);
-          AudioSys.spin();
+          AudioSys.skill('knight', true, this.x, this.y); // v177: 2회전은 진화형 소리
           Particles.ring(this.x, this.y, { r0: 16, r1: 90, life: 0.25, color: '#4a6ede', width: 4 });
           const mod2 = skillModOf(this);
           const rr = 100 * (mod2 && mod2.rMul ? mod2.rMul : 1);
@@ -801,7 +800,7 @@ function createPlayer(x, y, classId = 'knight') {
         Particles.burst(e.x - hitDir.x * 12, e.y - hitDir.y * 12, {
           count: 5, colors: ['#5ce0e6', '#94a1b8'], speed: 90, life: 0.25, size: 2,
         });
-        AudioSys.block(e.x); // v174: 막힘은 그 자리에서 난다
+        AudioSys.block(e.x, e.y); // v174: 막힘은 그 자리에서 난다
         return 'blocked';
       }
 
@@ -1043,7 +1042,7 @@ function createPlayer(x, y, classId = 'knight') {
       const arc = finisher ? 2.4 : 1.9;
       const angle = Math.atan2(dir.y, dir.x);
       // v174: 직업마다 휘두르는 물건이 다르다 — 대검/활/지팡이/독병
-      AudioSys.slash(comboStep, AudioSys.wepOf(this.classId), this.x);
+      AudioSys.slash(comboStep, AudioSys.wepOf(this.classId), this.x, this.y);
       if (finisher) {
         // 마무리 일격: 살짝 파고들며 화면이 함께 울린다
         World.moveEntity(this, dir.x * 6, dir.y * 6);

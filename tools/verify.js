@@ -1107,6 +1107,105 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     guard.threw ? `크래시: ${guard.threw}` :
       '루프 도중 배열이 교체돼도 틱이 살아남는다 (v174는 TypeError가 새어 그 틱의 적 업데이트·방 클리어 판정·렌더가 통째로 건너뛰어졌다)');
 
+  // ── 거리 모형 · 예고 사다리 · 스킬 (v177) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const spa = await page.evaluate(async () => {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const KEYS = ['ctx', 'master', 'limiter', 'sfxBus', 'musicBus', 'duck', 'revBus', 'conv',
+      'revWet', 'revHP', '_noiseBuf', 'space', '_gates', 'musicLP', 'musicLvl', 'revMusIn',
+      'musicFx', 'reverbIn', 'revSend'];
+    const mt = Music._timer, at2 = Ambience._timer;
+    if (mt) { clearInterval(mt); Music._timer = null; }
+    if (at2) { clearInterval(at2); Ambience._timer = null; }
+    const render = async (fn, sec = 1.6) => {
+      const oc = new OAC(2, Math.ceil(44100 * sec), 44100);
+      const save = {};
+      for (const k of KEYS) save[k] = AudioSys[k];
+      AudioSys.ctx = oc; AudioSys.muted = false;
+      AudioSys.limiter = oc.createDynamicsCompressor(); AudioSys.limiter.connect(oc.destination);
+      AudioSys.master = oc.createGain(); AudioSys.master.gain.value = 0.35; AudioSys.master.connect(AudioSys.limiter);
+      AudioSys.sfxBus = oc.createGain(); AudioSys.musicBus = oc.createGain();
+      AudioSys.duck = oc.createGain(); AudioSys.duck.gain.value = 1;
+      AudioSys.musicBus.connect(AudioSys.duck).connect(AudioSys.master);
+      AudioSys.sfxBus.connect(AudioSys.master);
+      AudioSys.sfxBus.gain.value = 0.8; AudioSys.musicBus.gain.value = 0.8;
+      AudioSys.musicLP = null; AudioSys.musicLvl = null;
+      AudioSys.revMusIn = AudioSys.musicFx = AudioSys.reverbIn = AudioSys.revSend = null;
+      AudioSys.revBus = oc.createGain();
+      AudioSys.conv = oc.createConvolver(); AudioSys.conv.normalize = false;
+      AudioSys.conv.buffer = AudioSys._makeIR(1.6, 2.6);
+      AudioSys.revWet = oc.createGain(); AudioSys.revWet.gain.value = 0.34;
+      AudioSys.revHP = oc.createBiquadFilter(); AudioSys.revHP.type = 'highpass'; AudioSys.revHP.frequency.value = 320;
+      AudioSys.revBus.connect(AudioSys.revHP).connect(AudioSys.conv).connect(AudioSys.revWet).connect(AudioSys.master);
+      const n = oc.sampleRate;
+      AudioSys._noiseBuf = oc.createBuffer(1, n, oc.sampleRate);
+      const d = AudioSys._noiseBuf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      AudioSys.space = null; AudioSys._gates = {};
+      try { fn(); } catch (e) { /* 렌더 실패는 아래 지표로 잡힌다 */ }
+      const buf = await oc.startRendering();
+      for (const k of KEYS) AudioSys[k] = save[k];
+      return buf;
+    };
+    const rms = (buf) => { const L = buf.getChannelData(0), R = buf.getChannelData(1);
+      let sum = 0; for (let i = 0; i < L.length; i++) { const v = (L[i] + R[i]) / 2; sum += v * v; }
+      return Math.sqrt(sum / L.length); };
+    const hi = (buf) => { // 6kHz 이상 대략 에너지 — 인접 샘플 차분(1차 고역 통과)
+      const L = buf.getChannelData(0); let e = 0, t = 0;
+      for (let i = 1; i < L.length; i++) { const d2 = L[i] - L[i - 1]; e += d2 * d2; t += L[i] * L[i]; }
+      return t ? e / t : 0; };
+    AudioSys.setListener(480, 270);
+    const near = await render(() => AudioSys.hit('stone', 480, 270));
+    const far = await render(() => AudioSys.hit('stone', 480 + 700, 270));
+    const teleNear = await render(() => AudioSys.telegraph(480, true, 270));
+    const teleFar = await render(() => AudioSys.telegraph(480 + 700, true, 270));
+    const ladder = {};
+    for (const [k, fn] of [['contact', () => AudioSys.telegraph(480, true, 270)],
+      ['stomp', () => AudioSys.tellStomp(480, 270)], ['boss', () => AudioSys.tellBoss(480, 270)],
+      ['sigil', () => AudioSys.tellSigil(480, 270)]]) {
+      const b = await render(fn, 2.2);
+      let last = 0; const L = b.getChannelData(0);
+      for (let i = 0; i < L.length; i++) if (Math.abs(L[i]) > 0.0008) last = i;
+      ladder[k] = { rms: +rms(b).toFixed(5), dur: +(last / b.sampleRate).toFixed(2) };
+    }
+    const skills = {};
+    for (const c of ['knight', 'archer', 'mage', 'alch']) {
+      const b = await render(() => AudioSys.skill(c, false, 480, 270));
+      skills[c] = +rms(b).toFixed(5);
+    }
+    const ult = rms(await render(() => AudioSys.ultimate(480, 270), 3.0));
+    if (mt) Music._timer = setInterval(() => Music._tick(), 50);
+    if (at2) Ambience._timer = setInterval(() => Ambience._tick(), 500);
+    return {
+      nearRms: +rms(near).toFixed(5), farRms: +rms(far).toFixed(5),
+      nearHi: +hi(near).toFixed(4), farHi: +hi(far).toFixed(4),
+      teleDrop: +(rms(teleFar) / (rms(teleNear) || 1)).toFixed(2),
+      hitDrop: +(rms(far) / (rms(near) || 1)).toFixed(2),
+      ladder, skills, ult: +ult.toFixed(5),
+      hasNew: ['spat', 'setListener', 'tellStomp', 'tellBoss', 'tellSigil', 'skill', 'ultimate']
+        .every((k) => typeof AudioSys[k] === 'function'),
+    };
+  });
+  console.log('  공간:', JSON.stringify(spa));
+  ok('spatial.distanceAttenuates', spa.hitDrop < 0.8 && spa.hitDrop > 0.2,
+    `같은 타격 가까이 vs 700px 밖 = ${spa.hitDrop}배 (v176은 방 반대편 소리가 발밑 소리와 똑같이 컸다)`);
+  ok('spatial.farSoundsDuller', spa.farHi < spa.nearHi,
+    `고역 비율 가까이 ${spa.nearHi} → 멀리 ${spa.farHi} (거리만큼 공기가 고역을 먹는다)`);
+  ok('spatial.telegraphCarries', spa.teleDrop > spa.hitDrop,
+    `예고는 거리 감쇠를 덜 받는다 — 예고 ${spa.teleDrop}배 vs 타격 ${spa.hitDrop}배 ` +
+    '(멀어도 나를 노리는 예고는 들려야 한다 — 연출이 아니라 정보다)');
+  const lad = spa.ladder;
+  ok('tell.ladderAscends',
+    lad.contact.dur < lad.stomp.dur && lad.stomp.dur <= lad.boss.dur && lad.boss.dur < lad.sigil.dur &&
+    lad.sigil.rms > lad.contact.rms,
+    `예고 급별 길이 접촉 ${lad.contact.dur}s → 강타 ${lad.stomp.dur}s → 보스 ${lad.boss.dur}s → 인장기 ${lad.sigil.dur}s · ` +
+    `세기 ${lad.contact.rms} → ${lad.sigil.rms} (v176은 예고가 한 종류 — "얼마나 급한가"를 못 줬다)`);
+  ok('skill.perClassDistinct',
+    new Set(Object.values(spa.skills)).size === 4 && spa.ult > Math.max(...Object.values(spa.skills)),
+    `직업 스킬 4종 전부 다른 소리 ${JSON.stringify(spa.skills)} · 궁극기 ${spa.ult}가 최대 ` +
+    '(v176은 spin/rainCast/meteorCast 셋이 직업 넷을 나눠 썼다)');
+  ok('spatial.newLayers', spa.hasNew, 'spat·setListener·예고 3급·스킬·궁극기 신설');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

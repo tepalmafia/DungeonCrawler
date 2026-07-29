@@ -109,7 +109,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this._stompT = 0.55;
             this._stompCd = 4 + Math.random() * 2.5;
             Particles.text(this.x, this.y - this.r - 14, '!', { color: '#ff4757', size: 16 });
-            AudioSys.shard();
+            AudioSys.tellStomp(this.x, this.y); // v177: 접촉 예고보다 한 급 위 — 바닥이 온다
           }
         }
       }
@@ -134,7 +134,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         // v174: 예고를 귀로도 준다. v168이 만든 0.25초의 창은 **화면을 보고 있을 때만** 열려 있었다 —
         // 눈이 다른 적을 쫓는 동안 옆에서 들어오는 예고는 정보가 아니라 사고였다.
         // 정위(pan)로 방향까지 실린다: 왼쪽에서 나면 왼쪽 적이다
-        AudioSys.telegraph(this.x, this.elite || this.isMini);
+        AudioSys.telegraph(this.x, this.elite || this.isMini, this.y);
       }
     },
 
@@ -163,7 +163,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.hitCd = 1.15;
         this._whiffT = 0.5;
         Particles.text(this.x, this.y - 26, '헛손질', { color: '#9aa0b4', size: 11 });
-        AudioSys.whiff(this.x); // 반격의 창이 열렸다는 신호 — 글씨보다 귀가 빠르다
+        AudioSys.whiff(this.x, this.y); // 반격의 창이 열렸다는 신호 — 글씨보다 귀가 빠르다
       }
     },
 
@@ -1093,7 +1093,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             // v175: 형제 몹 skeleton은 같은 자리에서 '!'를 그리는데 이놈만 빠져 있었다.
             // 0.45초 예고 + 강넉백(430)인데 **화면에도 소리에도 단서가 0개**였다.
             // 반응 예산 자체는 걸어서 0.35초로 넉넉하다 — 순수하게 '안 알려줘서' 맞는 피해였다
-            AudioSys.telegraph(this.x, this.elite || this.isMini);
+            AudioSys.telegraph(this.x, this.elite || this.isMini, this.y);
           }
         } else if (this.state === 'bash') {
           if (this.stateT > 0.45) {
