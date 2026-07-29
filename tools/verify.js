@@ -179,7 +179,11 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   await boot(page, { cls: 'knight', heat: 0 });
   const cheat = await page.evaluate(() => {
     Dungeon.floor = 3; Game._cheatScaleToFloor();
-    const p = Game.player; const ref = Game._normalRef(3, 'knight');
+    const p = Game.player;
+    // v171: 기준은 층 입구가 아니라 **보스와 싸울 때의 몸** — f와 f+1 사이 0.8 지점
+    const a = Game._normalRef(3, 'knight'), b2 = Game._normalRef(4, 'knight');
+    const mx = (x, y) => x + (y - x) * 0.8;
+    const ref = { lv: mx(a.lv, b2.lv), hp: mx(a.hp, b2.hp), atk: mx(a.atk, b2.atk), tr: mx(a.tr, b2.tr), rel: mx(a.rel, b2.rel) };
     const hps = [];
     for (let i = 0; i < 5; i++) { Dungeon.floor = 1 + (i % 3); Game._cheatScaleToFloor(); hps.push(p.maxHp); }
     // 도구는 빌드를 **낮추지 않는다**(설계). 기준선이 직업 기본 HP보다 낮아도 기본치가 하한이다
@@ -192,6 +196,23 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `기사3층 HP${cheat.hp}/공${cheat.atk}/특${cheat.tr}/유${cheat.rel} ← 기준 HP${cheat.ref.hp}/공${cheat.ref.atk}/특${cheat.ref.tr}/유${cheat.ref.rel}`);
   ok('cheat.noHpRatchet', Math.max(...cheat.hps) - Math.min(...cheat.hps) <= 3,
     `B 5연타 HP ${cheat.hps.join('→')} (v164는 누를수록 영구 상승)`);
+
+  // v171: B가 **모든 층에서** 빌드를 올리는가 (1층 포함).
+  // v165~v170은 기준선을 층 **입구**에서 재는 바람에 1층 targetLv=1 → 아무 일도 안 일어났다
+  const bkey = await page.evaluate(() => {
+    const out = [];
+    for (const f of [1, 2, 3, 5, 8]) {
+      Game.restart(); Game.state = 'play'; Dungeon.floor = f;
+      const lv0 = Game.level, tr0 = Game.player.traits.length;
+      Game._cheatScaleToFloor();
+      out.push({ f, lv0, lv: Game.level, tr: Game.player.traits.length, rel: Game.player.relics.length });
+    }
+    return out;
+  });
+  ok('cheat.scalesEveryFloor', bkey.every((r) => r.lv > r.lv0 && r.tr > 0 && r.rel > 0),
+    bkey.map((r) => `${r.f}층 Lv${r.lv0}→${r.lv}/특${r.tr}/유${r.rel}`).join(' · '));
+  ok('cheat.monotonic', bkey.every((r, i) => i === 0 || r.lv >= bkey[i - 1].lv),
+    '깊은 층일수록 강한 빌드');
 
   const selfcal = await page.evaluate(() => {
     Game.testMode = false; Bot.enabled = false; delete Meta.data.normRef;
