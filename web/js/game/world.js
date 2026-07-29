@@ -1031,7 +1031,10 @@ const World = {
       this.map.push(row);
     }
 
-    const combatRoom = type === 'combat' || type === 'elite';
+    // v172: 습격(3파도 생존)·시련(강화전)도 **전투방**이다. 종전엔 템플릿 계통에서 빠져 있어
+    // 지형 1종(막는 칸 4.5%)으로 고정됐다 — 3파도를 버티는 방에 엄폐가 하나도 없었다.
+    // v168에서 접촉 예고와 적 분리력을 넣었는데, 물러설 지형이 없으면 그 결정이 성립하지 않는다
+    const combatRoom = type === 'combat' || type === 'elite' || type === 'siege' || type === 'trial';
     this.potSpots = [];
     this.crackSpots = [];
     this._noSpawn = null;
@@ -1093,6 +1096,30 @@ const World = {
       }
     }
 
+    // ── 보스방 엄폐 (v172) ─────────────────────────────────────────────
+    // 보스방은 막는 칸이 8칸(4.9%)뿐인 빈 결전장이었다. v159에서 휘두르기 예고를 판정과
+    // 일치시켰지만, **읽고 나서 갈 곳이 없으면 예고는 정보일 뿐 결정이 되지 못한다.**
+    // 네 귀퉁이 바깥 띠에만 기둥을 세운다 — 중앙 결전 공간(초식 궤도)은 건드리지 않는다.
+    // 벽꽂기(v168 분리력·v169 완력의 정점)와도 맞물려 "몰아붙일 곳"이 생긴다
+    if (type === 'boss') {
+      const midX = (this.cols - 1) / 2, midY = (this.rows - 1) / 2;
+      const spots = [[3, 2], [this.cols - 4, 2], [3, this.rows - 3], [this.cols - 4, this.rows - 3],
+        [5, this.rows - 3], [this.cols - 6, 2], [5, 2], [this.cols - 6, this.rows - 3],
+        [2, 3], [this.cols - 3, 3], [2, this.rows - 4], [this.cols - 3, this.rows - 4]];
+      // 순서를 섞고 3~5기를 세운다 — 고정 순서 6칸이면 결전장이 매번 같은 모양이 된다
+      for (let i = spots.length - 1; i > 0; i--) {
+        const j = RNG.int(0, i);
+        const t = spots[i]; spots[i] = spots[j]; spots[j] = t;
+      }
+      const want = RNG.int(3, 5);
+      let placed = 0;
+      for (const [tx, ty] of spots) {
+        if (placed >= want) break;
+        if (Math.hypot(tx - midX, ty - midY) < 5) continue; // 중앙 5칸 반경은 비운다
+        if (this.map[ty] && this.map[ty][tx] === 0) { this.map[ty][tx] = 1; placed++; }
+      }
+    }
+
     // 독 안개 지대 — 2층(입문)은 작고 적게, 7층(심층)은 본래 규모. 템플릿이 깔았으면 생략
     if (this.hazard === 'fog' && combatRoom && this.fogZones.length === 0) {
       const deep = floor >= 6;
@@ -1123,6 +1150,8 @@ const World = {
       }
     }
 
+    this._finalizeTerrain(); // 금빛 균열보다 먼저 — 봉인으로 벽이 될 칸 옆에 균열을 놓으면 못 닿는다
+
     // 비밀 금고 (맵 M3): 층당 한 번, 전투방 내부 벽 어딘가에 금빛 균열 — 부수면 금고방 문이 열린다
     this.goldCrackSpot = null;
     if (combatRoom && typeof Dungeon !== 'undefined' && !Dungeon.vaultCrackPlaced && RNG.chance(0.14)) {
@@ -1146,6 +1175,18 @@ const World = {
     this.doors = [];
     this.doorsActive = false;
     this._prerenderFloor();
+  },
+
+  // 방 하나가 다 깔린 뒤 딱 한 번 — 갇힌 칸이 하나도 없도록 정리한다 (v172).
+  // 종전엔 _applyTemplate 안에서만 돌아서, 템플릿을 안 쓰는 경로가 통째로 빠져 있었다:
+  //   · 무작위 잔해(12%) · 보스방 · 상점/휴식방 · 그리고 **실루엣·용암은 봉인 이후에** 깔렸다.
+  // 갇힌 칸은 그냥 낭비가 아니라 사고다 — 적이 그 안에 스폰되면 방이 영영 안 끝난다
+  _finalizeTerrain() {
+    this._sealAndMarkAlcoves();
+    // 봉인되며 벽이 된 자리에 남은 유령 배치물을 걷어낸다 (닿을 수 없는 항아리·꺼진 용암)
+    this.lavaTiles = this.lavaTiles.filter((t) => this.map[t.ty] && this.map[t.ty][t.tx] === 2);
+    this.potSpots = this.potSpots.filter((p) =>
+      !this.isSolidTile(Math.floor(p.x / TS), Math.floor((p.y - this.offsetY) / TS)));
   },
 
   // ── 템플릿 시스템 (M1~M4) ──
@@ -1201,15 +1242,30 @@ const World = {
         }
       }
     }
-    this._sealAndMarkAlcoves();
+    // 봉인은 여기서 하지 않는다 — 방이 다 깔린 뒤 _finalizeTerrain()이 한 번에 한다 (v172)
   },
 
   // 입구에서 도달 가능한지 BFS — passCracks=true면 균열 벽을 통과 가능으로 취급
   _flood(passCracks) {
     const seen = Array.from({ length: this.rows }, () => new Array(this.cols).fill(false));
     const cracks = new Set(this.crackSpots.map((s) => s.ty * 100 + s.tx));
-    const q = [[2, 5]]; // 플레이어 진입 지점 (중앙 통로 왼쪽 끝)
-    seen[5][2] = true;
+    // 플레이어 진입 지점(중앙 통로 왼쪽 끝). 실루엣·보스 기둥이 그 칸을 막았을 수 있어서,
+    // 막혔으면 가장 가까운 열린 칸에서 시작한다 — safeSpot이 플레이어를 밀어내는 곳과 같은 자리다.
+    // (종전엔 (2,5)를 무조건 seen으로 찍고 시작해서, 그 칸이 벽이면 방 전체가 봉인될 수 있었다)
+    let sx = 2, sy = 5;
+    if (this.isSolidTile(sx, sy)) {
+      let best = Infinity;
+      for (let ty = 1; ty < this.rows - 1; ty++) {
+        for (let tx = 1; tx < this.cols - 1; tx++) {
+          if (this.isSolidTile(tx, ty)) continue;
+          const d = Math.abs(tx - 2) + Math.abs(ty - 5);
+          if (d < best) { best = d; sx = tx; sy = ty; }
+        }
+      }
+      if (best === Infinity) return seen; // 열린 칸이 하나도 없다 — 손댈 게 없다
+    }
+    const q = [[sx, sy]];
+    seen[sy][sx] = true;
     while (q.length) {
       const [tx, ty] = q.pop();
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {

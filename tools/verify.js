@@ -456,14 +456,25 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     const allCap = TRAITS.reduce((a, t) => a + cap(t), 0);
     // 등장 분포 — 스탯이 카드 풀을 지배하지 않는가
     const p = Game.player;
-    let statSeen = 0, total = 0;
-    for (let i = 0; i < 400; i++) for (const c of rollTraitCards(p, 3)) { total++; if (c.tag === '스탯') statSeen++; }
-    return { statCap, allCap, statPct: Math.round(statSeen / total * 100), peaks: TRAITS.filter((t) => t.peak).length };
+    // v172: 층을 지정해서 잰다. 스탯 감쇠(×0.6)는 3층부터고, 1~2층은 일부러 안 누른다 —
+    // 온보딩에 뽑을 카드가 몇 장 없는데 스탯까지 누르면 화력을 얻을 창이 통째로 닫힌다.
+    // 종전엔 1층에서 재고 3층 기준(32%)으로 판정해서, **의도된 설계를 실패로 읽었다**
+    const share = (floor) => {
+      Dungeon.floor = floor;
+      let statSeen = 0, total = 0;
+      for (let i = 0; i < 400; i++) for (const c of rollTraitCards(p, 3)) { total++; if (c.tag === '스탯') statSeen++; }
+      return Math.round(statSeen / total * 100);
+    };
+    const early = share(1), mid = share(5);
+    Dungeon.floor = 1;
+    return { statCap, allCap, early, mid, peaks: TRAITS.filter((t) => t.peak).length };
   });
   ok('cards.statStackTrimmed', cards.statCap <= 30 && cards.allCap <= 100,
     `스탯 중복 상한 ${cards.statCap}장 (v168은 52) · 전체 ${cards.allCap}장 (121)`);
-  ok('cards.statNotDominant', cards.statPct <= 32,
-    `카드 3장 400회 중 스탯 비중 ${cards.statPct}%`);
+  ok('cards.statNotDominant', cards.mid <= 32,
+    `3층+ 카드 3장 400회 중 스탯 비중 ${cards.mid}% (1층은 ${cards.early}%)`);
+  ok('cards.statCarriesOnboarding', cards.early >= cards.mid,
+    `1층 스탯 비중 ${cards.early}% ≥ 3층+ ${cards.mid}% — 온보딩에서만 스탯을 안 누른다`);
 
   const peak = await page.evaluate(() => {
     const p = Game.player;
@@ -517,6 +528,75 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     chest.after.rel === chest.before.rel + 1 && chest.after.paidHp === chest.before.hp - 1 && chest.after.state === 'play',
     `대가 카드 선택 → 유물 +1 · 지불 시점 최대 HP ${chest.before.hp}→${chest.after.paidHp}` +
     (chest.after.hp !== chest.after.paidHp ? ` (유물 효과로 최종 ${chest.after.hp})` : ''));
+
+  // ── 지형 (v172) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const terrain = await page.evaluate(() => {
+    const solid = () => { let w = 0;
+      for (let y = 1; y < World.rows - 1; y++) for (let x = 1; x < World.cols - 1; x++) { const v = World.map[y][x]; if (v === 1 || v === 3) w++; }
+      return w; };
+    const fp = () => World.map.map((r) => r.join('')).join('/');
+    // 연결성: 지날 수 있는 칸이 전부 서로 닿는가 (갇힌 칸 = 소프트락).
+    // '지날 수 있다'는 World.isSolidTile의 정의를 그대로 쓴다 — 용암(2)은 아프지만 지나간다.
+    // 균열 벽(부수면 열리는 벽감)은 통과 취급 — 그건 사고가 아니라 M3 비밀 통로다
+    const connected = () => {
+      const cracks = new Set((World.crackSpots || []).map((s) => s.tx + ',' + s.ty));
+      const openAt = (x, y) => x > 0 && y > 0 && x < World.cols - 1 && y < World.rows - 1 &&
+        (!World.isSolidTile(x, y) || cracks.has(x + ',' + y));
+      let start = null;
+      for (let y = 1; y < World.rows - 1 && !start; y++) for (let x = 1; x < World.cols - 1; x++) if (openAt(x, y)) { start = [x, y]; break; }
+      if (!start) return true;
+      const seen = new Set([start.join(',')]); const q = [start];
+      while (q.length) { const [x, y] = q.pop();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, k = nx + ',' + ny;
+          if (!seen.has(k) && openAt(nx, ny)) { seen.add(k); q.push([nx, ny]); } } }
+      let total = 0;
+      for (let y = 1; y < World.rows - 1; y++) for (let x = 1; x < World.cols - 1; x++) if (openAt(x, y)) total++;
+      return seen.size === total;
+    };
+    const out = {};
+    for (const ty of ['combat', 'siege', 'trial', 'boss']) {
+      const seen = new Set(); const walls = []; const tags = {}; let bad = 0;
+      for (let i = 0; i < 120; i++) {
+        Dungeon.floor = 1 + (i % 10); Dungeon.roomIndex = 2 + (i % 6); Dungeon._forceSeed = null;
+        World.buildRoom(Dungeon.roomIndex, ty, Dungeon.floor);
+        seen.add(fp()); walls.push(solid());
+        tags[World.lastTemplateTag] = (tags[World.lastTemplateTag] || 0) + 1;
+        if (!connected()) bad++;
+      }
+      out[ty] = { uniq: seen.size, avg: +(walls.reduce((a, b) => a + b, 0) / walls.length).toFixed(1),
+        tags: Object.keys(tags).length, disconnected: bad };
+    }
+    return out;
+  });
+  console.log('  지형:', JSON.stringify(terrain));
+  ok('terrain.siegeHasCover', terrain.siege.uniq >= 40 && terrain.siege.avg >= 12 && terrain.siege.tags >= 3,
+    `습격방 고유맵 ${terrain.siege.uniq} · 막는 칸 ${terrain.siege.avg} · 태그 ${terrain.siege.tags}종 (v171은 고유맵 2 · 7.2칸 · 1종)`);
+  ok('terrain.bossHasCover', terrain.boss.uniq >= 50 && terrain.boss.avg >= 9,
+    `보스방 고유맵 ${terrain.boss.uniq} · 막는 칸 ${terrain.boss.avg} (v171은 41 · 8칸 — 예고를 읽어도 갈 곳이 없었다)`);
+  ok('terrain.allConnected',
+    ['combat', 'siege', 'trial', 'boss'].every((k) => terrain[k].disconnected === 0),
+    '전 방 타입 480개 표본에서 갇힌 칸 0 (소프트락 없음)');
+
+  // ── 온보딩 화력 안전망 (v172) ──
+  const fire = await page.evaluate(() => {
+    const DMG = new Set(['atk', 'aspd', 'crit', 'critdmg', 'combo']);
+    let stuck = 0; const N = 300;
+    Dungeon.floor = 1;
+    for (let r = 0; r < N; r++) {
+      const p = createPlayer(0, 0, 'knight');
+      for (let k = 0; k < 4; k++) {
+        const cards = rollTraitCards(p, 3);
+        const c = cards.find((x) => DMG.has(x.id)) || cards[0];
+        if (c) applyTrait(p, c);
+      }
+      if (p.currentAtk() <= 1) stuck++;
+    }
+    return { stuckPct: Math.round(stuck / N * 100) };
+  });
+  ok('onboard.firepowerFloor', fire.stuckPct === 0,
+    `1층 카드 4장 뒤 공격력 1 그대로: ${fire.stuckPct}% (v171은 67% — 공1로 95HP 보스를 만났다)`);
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 

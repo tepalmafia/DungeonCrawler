@@ -212,6 +212,17 @@ function applyTraitPeak(player, t) {
   return { atkPeak: '완력의 정점', hpPeak: '불굴', critPeak: '간파의 정점', dashPeak: '바람의 정점' }[t.peak];
 }
 
+// ── 온보딩 화력 안전망 (v172) ──────────────────────────────────────────
+// 게임이 플레이어를 방치하지 않는다. 1~3층에서 화력이 바닥이면 카드 한 자리를 화력으로 보장한다.
+// 실측: v169~v171에서 1층 카드 4장을 뽑고도 공격력이 1 그대로일 확률이 **67%**였다
+// (화력 카드가 한 번도 안 뜰 확률 31.8%). 그 몸으로 95HP 보스를 만나면 95타를 쳐야 한다.
+// 곡선이 아니라 **바닥**이다 — 이 선 위로는 아무것도 강제하지 않는다
+const DMG_TRAIT_IDS = ['atk', 'aspd', 'crit', 'critdmg', 'combo'];
+function _needsFirepower(player) {
+  if (typeof Dungeon === 'undefined' || Dungeon.floor > 3) return false;
+  return player.currentAtk() < 1 + Dungeon.floor * 0.5; // 1.5 / 2.0 / 2.5
+}
+
 function rollTraitCards(player, n = 3) {
   // 직업 전용 특성은 해당 직업에게만, 상한(max) 도달한 특성은 제외
   const countOf = (id) => player.traits.filter((x) => x === id).length;
@@ -239,7 +250,10 @@ function rollTraitCards(player, n = 3) {
     // v169: 스탯 카드 등장 가중 ×0.6. 보상을 1/3로 줄인 지금(v166), 남은 몇 장이 또
     // '공격력 +1'이면 그 런에는 **아무 결정도 없다**. 카드는 규칙을 바꿔야 한다.
     // 중복 상한도 함께 조였다 (스탯 총량 52장 → 22장) — 힘 단련 8장은 빌드가 아니라 곱셈이었다
-    if (t.tag === '스탯') w *= 0.6;
+    // v172 (사장 F9: 1층 보스에게 3연속 사망 · 실측 "카드 4장 뽑아도 공격력 1 그대로" 67%):
+    // 감쇠를 온보딩까지 적용한 게 잘못이었다. 1~2층은 뽑을 카드 자체가 몇 장 없어서,
+    // 스탯을 눌러버리면 **화력을 얻을 창이 통째로 닫힌다** — 공1로 95HP 보스를 만난다
+    if (t.tag === '스탯') w *= (typeof Dungeon !== 'undefined' && Dungeon.floor <= 2) ? 1 : 0.6;
     if (t.rare) w *= 0.42; // 희귀 (v151): 세 판에 한 번쯤 — 나왔을 때 '오늘 런의 방향'이 되는 빈도
     // 교차 원소 유도 (반응 노출 계측: 30분에 7회 발동 — 믹스가 안 나와서 반응이 묻혔다):
     // 원소 트리 하나를 2픽 이상 팠으면, 아직 안 판 다른 원소 카드가 더 자주 보인다
@@ -263,6 +277,21 @@ function rollTraitCards(player, n = 3) {
       if (roll <= 0) break;
     }
     cards.push(avail.splice(idx, 1)[0]);
+  }
+  // 화력 안전망 (v172): 1~3층에서 공격력이 바닥이면 한 자리를 화력으로 바꾼다.
+  // **힘 단련을 먼저** 찾는다 — 치명타·연격·공속은 곱셈이라, 곱해질 원판(공격력 1)이 없으면
+  // 네 장을 다 화력으로 골라도 보스 앞에서 여전히 1타 1딜이다.
+  // 그 자리를 맨 앞에 놓아 먼저 읽히게 한다. 고르는 건 여전히 플레이어다 — 바닥일 뿐 곡선이 아니다
+  if (cards.length && _needsFirepower(player)) {
+    const pick = (id) => avail.find((t) => t.id === id) || pool.find((t) => t.id === id && !cards.includes(t));
+    let swap = cards.some((c) => c.id === 'atk') ? null : pick('atk');
+    if (!swap && !cards.some((c) => DMG_TRAIT_IDS.includes(c.id))) {
+      for (const id of DMG_TRAIT_IDS) { swap = pick(id); if (swap) break; } // 힘 단련이 상한이면 차선책
+    }
+    if (swap) {
+      cards[cards.length - 1] = swap;
+      cards.unshift(cards.pop());
+    }
   }
   return cards;
 }
