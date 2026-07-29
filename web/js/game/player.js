@@ -801,7 +801,7 @@ function createPlayer(x, y, classId = 'knight') {
         Particles.burst(e.x - hitDir.x * 12, e.y - hitDir.y * 12, {
           count: 5, colors: ['#5ce0e6', '#94a1b8'], speed: 90, life: 0.25, size: 2,
         });
-        AudioSys.clank();
+        AudioSys.block(e.x); // v174: 막힘은 그 자리에서 난다
         return 'blocked';
       }
 
@@ -1042,7 +1042,8 @@ function createPlayer(x, y, classId = 'knight') {
       const range = (finisher ? 94 : 77) * this.rangeMul; // 밸런스: 근접 리스크 보상 (+10% 상향)
       const arc = finisher ? 2.4 : 1.9;
       const angle = Math.atan2(dir.y, dir.x);
-      AudioSys.slash(comboStep);
+      // v174: 직업마다 휘두르는 물건이 다르다 — 대검/활/지팡이/독병
+      AudioSys.slash(comboStep, AudioSys.wepOf(this.classId), this.x);
       if (finisher) {
         // 마무리 일격: 살짝 파고들며 화면이 함께 울린다
         World.moveEntity(this, dir.x * 6, dir.y * 6);

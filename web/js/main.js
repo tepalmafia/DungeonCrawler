@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 173;
+const GAME_VERSION = 174;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -727,6 +727,15 @@ const Game = {
       this.banner = { text: line.text, life: 2.8, maxLife: 2.8, color: line.color };
     }
     Music.ensure(this._musicKey());
+    // v174: 공간의 소리 — 막이 바뀌면 공기와 잔향이 함께 바뀐다.
+    // 거점/정산은 조용한 작은 방, 던전은 막별 앰비언스 + 그 막의 잔향 프리셋
+    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') {
+      Ambience.ensure('hub', null);
+    } else if (this.state === 'over' || this.state === 'victory') {
+      Ambience.stop();
+    } else {
+      Ambience.ensure(Math.min(5, Math.max(1, Math.ceil(Dungeon.floor / 10))), World.hazard || null);
+    }
     if (Bot.enabled) Bot.update(this, dt);
 
     if (this.state === 'hub') {

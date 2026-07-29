@@ -131,6 +131,10 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this._windMax = this._windT;
         this._windDmg = dmg;
         this._windA = Math.atan2(p.y - this.y, p.x - this.x);
+        // v174: 예고를 귀로도 준다. v168이 만든 0.25초의 창은 **화면을 보고 있을 때만** 열려 있었다 —
+        // 눈이 다른 적을 쫓는 동안 옆에서 들어오는 예고는 정보가 아니라 사고였다.
+        // 정위(pan)로 방향까지 실린다: 왼쪽에서 나면 왼쪽 적이다
+        AudioSys.telegraph(this.x, this.elite || this.isMini);
       }
     },
 
@@ -159,6 +163,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.hitCd = 1.15;
         this._whiffT = 0.5;
         Particles.text(this.x, this.y - 26, '헛손질', { color: '#9aa0b4', size: 11 });
+        AudioSys.whiff(this.x); // 반격의 창이 열렸다는 신호 — 글씨보다 귀가 빠르다
       }
     },
 
