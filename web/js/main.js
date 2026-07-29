@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 172;
+const GAME_VERSION = 173;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -128,8 +128,12 @@ const Game = {
         const newest = i === arr.length - 1 ? '  ◀ 방금 이 판' : '';
         // v160: 빌드 스냅샷 표기 — 같은 층·같은 사망이어도 HP6/공1 몸과 HP9/공3 몸은 다른 게임이다.
         // 이게 없으면 리포트로 난이도를 판정할 수 없다 (계측 오염의 마지막 구멍)
-        const build = r.mhp ? ` · HP${r.mhp}/공${r.atk}/특${r.tr}/유${r.rel}` : '';
+        // v173: 공은 **빌드 화력**(조건 다 끈 값). 임종 시점 실효 화력이 더 높았으면 괄호로 함께 보인다 —
+        // 그 차이가 곧 "상태 보너스로 버틴 판"이라는 뜻이다 (열기·잔여HP·골드·처치중첩)
+        const nowTag = r.atkNow != null && r.atkNow > r.atk ? `(임종 ${r.atkNow})` : '';
+        const build = r.mhp ? ` · HP${r.mhp}/공${r.atk}${nowTag}/특${r.tr}/유${r.rel}` : '';
         return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}${build}` +
+          (r.alt && /[1-9]/.test(r.alt) ? ` · 제단${r.alt}` : '') +
           (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '') + newest;
       }),
     ].join('\n');
@@ -382,7 +386,11 @@ const Game = {
       // 직업을 뭉뚱그리면 도구가 다시 어긋난다
       Meta.data.normRef = Meta.data.normRef || {};
       const bag = (Meta.data.normRef[p.classId] = Meta.data.normRef[p.classId] || {});
-      const cur = { lv: this.level, hp: p.maxHp, atk: +p.currentAtk().toFixed(1), tr: p.traits.length, rel: p.relics.length };
+      // v173: 기준선도 **빌드 화력**으로 잰다. 층 입구라 임종 보너스는 없지만 지속 항목
+      // (검은 초=열기×0.5 · 차용증=골드/60 · 관의 못=잃은 HP)은 그대로 섞였다 —
+      // 실측: 깨끗할 때 1이 지속 항목만 붙으면 **12.2**. v165에서 "게임이 자기를 계측하게" 만든
+      // 그 기준선 자체가 오염돼 있었고, 치트 곡선이 그 위에 서 있었다
+      const cur = { lv: this.level, hp: p.maxHp, atk: +p.buildAtk().toFixed(1), tr: p.traits.length, rel: p.relics.length };
       const prev = bag[Dungeon.floor];
       if (!prev) bag[Dungeon.floor] = { ...cur, n: 1 };
       else {

@@ -99,7 +99,11 @@ const GameRewards = {
         // v160 빌드 스냅샷 — 감사 지적: 지금 리포트로는 HP6/공1 세이브와 HP9/공3 세이브를
         // 구분할 수 없어 **앞으로의 모든 튜닝이 또 오염된다**. 제단 강화 상태까지 함께 남긴다
         mhp: this.player.maxHp,
-        atk: +this.player.currentAtk().toFixed(1),
+        // v173: atk는 **빌드 화력**(조건 다 끈 값). 종전엔 currentAtk()라 죽는 순간의 상태를 쟀고,
+        // 열기·잔여HP·골드에 따라 같은 빌드가 공2로도 공7로도 찍혔다 — 리포트로 난이도를 판정할 수 없었다.
+        // atkNow는 임종 시점의 실효 화력 — 둘을 나란히 둬야 "빌드가 약한 것"과 "상태가 좋았던 것"이 갈린다
+        atk: +this.player.buildAtk().toFixed(1),
+        atkNow: +this.player.currentAtk().toFixed(1),
         tr: this.player.traits.length,
         rel: this.player.relics.length,
         alt: (typeof Meta !== 'undefined' && Meta.lvl)

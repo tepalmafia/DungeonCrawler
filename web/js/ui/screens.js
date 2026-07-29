@@ -205,7 +205,10 @@ const GameScreens = {
     const atkTarget = Math.max(1, Math.round(ref.atk));
     const might = TRAITS.find((t) => t.id === 'atk');
     let guard = 0;
-    while (might && p.currentAtk() < atkTarget && guard++ < 12 &&
+    // v173: 비교도 **빌드 화력**으로. 종전엔 currentAtk()라, 현상금8(검은 초 +4)이나
+    // 다친 상태(관의 못)면 도구가 "이미 충분하다"고 판단해 화력을 아예 안 줬다 —
+    // 기준선을 buildAtk로 바꾼 지금 그대로 두면 사과와 오렌지를 비교하게 된다
+    while (might && p.buildAtk() < atkTarget && guard++ < 12 &&
            (p.traits.filter((x) => x === 'atk').length < (might.max || 8) || p.flags.unbound)) {
       applyTrait(p, might);
     }
@@ -223,7 +226,7 @@ const GameScreens = {
         if ((c.id === 'hp' || c.id === 'heavyplate') && p.maxHp >= hpCap) continue; // HP 상한
         // v166: 화력도 상한을 둔다. 순서를 유물→화력→특성으로 바꾼 뒤,
         // 마지막 특성 채우기가 힘 단련을 더 집어 기준선을 넘겼다 (궁수 3층 목표 공2에 공6)
-        if (c.id === 'atk' && p.currentAtk() >= atkTarget) continue;
+        if (c.id === 'atk' && p.buildAtk() >= atkTarget) continue;
         const s = (tagCount[c.tag] || 0) + (c.cls ? 0.5 : 0);
         if (s > bs) { bs = s; best = c; }
       }
@@ -242,7 +245,9 @@ const GameScreens = {
     // 도구가 조용히 다른 게임을 쥐여주면, 그 위에서 내리는 모든 난이도 판단이 오염된다
     // (v151·v153·v155·v158·v165 — 다섯 번째다). 이제 눈으로 확인할 수 있어야 한다
     this.banner = {
-      text: `⚑ 치트 빌드 ${f}층 HP${p.maxHp}/공${p.currentAtk().toFixed(1)}/특${p.traits.length}/유${p.relics.length}`
+      text: `⚑ 치트 빌드 ${f}층 HP${p.maxHp}/공${p.buildAtk().toFixed(1)}`
+        + (p.currentAtk() > p.buildAtk() ? `(지금 ${p.currentAtk().toFixed(1)})` : '')
+        + `/특${p.traits.length}/유${p.relics.length}`
         + `  ← 기준 HP${ref.hp}/공${ref.atk}/특${Math.round(ref.tr)}/유${Math.round(ref.rel)}`
         + (ref.live ? ` (내 실플레이 ${ref.n}판 기준)` : ' (실측 대역표)'),
       life: 4.5, maxLife: 4.5, color: '#f7b32b',

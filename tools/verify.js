@@ -598,6 +598,41 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('onboard.firepowerFloor', fire.stuckPct === 0,
     `1층 카드 4장 뒤 공격력 1 그대로: ${fire.stuckPct}% (v171은 67% — 공1로 95HP 보스를 만났다)`);
 
+  // ── 계측 오염 차단: 빌드 화력 vs 상태 화력 (v173) ──
+  await boot(page, { cls: 'archer', heat: 8 });
+  const atkSep = await page.evaluate(() => {
+    const p = Game.player;
+    p.bonusAtk = 0; p.floorAtk = 0; p.form = null; p.flags = {}; p.rflags = {}; p.relics = [];
+    p._vs = 0; p._chaliceT = 0; p._hornT = 0; p._vengeT = 0;
+    const b0 = p.buildAtk(), c0 = p.currentAtk();
+    // 죽기 직전 + 현상금8 + 골드 — 사장 F9의 궁수가 있던 그 상태
+    p.rflags.blackcandle = true; p.rflags.nail = true; p.rflags.berserkhelm = true;
+    p.rflags.debt = true; Game.gold = 300; p.maxHp = 10; p.hp = 1;
+    p.form = 'venge'; p._vs = 8;
+    const b1 = p.buildAtk(), c1 = p.currentAtk();
+    // 진짜 빌드 성장 (힘 단련 2장) 은 buildAtk에 반영돼야 한다
+    const might = TRAITS.find((t) => t.id === 'atk');
+    applyTrait(p, might); applyTrait(p, might);
+    return { b0, c0, b1: +b1.toFixed(1), c1: +c1.toFixed(1), b2: +p.buildAtk().toFixed(1) };
+  });
+  ok('atk.buildIgnoresState', atkSep.b1 === atkSep.b0 && atkSep.c1 > atkSep.c0 + 5,
+    `상태만 바꿨을 때 빌드화력 ${atkSep.b0}→${atkSep.b1} (불변) · 상태화력 ${atkSep.c0}→${atkSep.c1} ` +
+    `(v172는 리포트가 상태화력을 찍어 같은 빌드가 공2로도 공7로도 기록됐다)`);
+  ok('atk.buildTracksTraits', atkSep.b2 > atkSep.b1,
+    `힘 단련 2장 → 빌드화력 ${atkSep.b1}→${atkSep.b2} (진짜 성장은 잡는다)`);
+
+  const logAtk = await page.evaluate(() => {
+    const p = Game.player;
+    p.rflags.blackcandle = true; p.maxHp = 10; p.hp = 1; p.rflags.nail = true;
+    const build = +p.buildAtk().toFixed(1), now = +p.currentAtk().toFixed(1);
+    Meta.data.playLog = [];
+    Game.endRun(false, '검증');
+    const r = (Meta.data.playLog || [])[0] || {};
+    return { build, now, rec: r.atk, recNow: r.atkNow, alt: r.alt };
+  });
+  ok('report.recordsBuildAtk', logAtk.rec === logAtk.build && logAtk.recNow === logAtk.now,
+    `리포트 기록 공${logAtk.rec} (빌드 ${logAtk.build}) · 임종 ${logAtk.recNow} (상태 ${logAtk.now})`);
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
