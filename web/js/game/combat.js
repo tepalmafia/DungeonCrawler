@@ -427,6 +427,9 @@ const GameCombat = {
     }
     Renderer.shake(3, 0.15);
     AudioSys.die(e.isBoss ? 'boss' : e.elite ? 'elite' : 'small');
+    // v176: 보스가 쓰러지면 그 이름이 무너진다 — 모티프 역행 + 반음 아래 + 한 옥타브 아래.
+    // 그 뒤 2.6초(왕은 4.2초)의 정적은 _musicKey()가 지킨다
+    if (e.isBoss && typeof BossAudio !== 'undefined') BossAudio.fall(e.defId);
 
     const palettes = {
       slime: ['#38b764', '#a7f070', '#257179'],

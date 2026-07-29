@@ -1608,6 +1608,10 @@ const GamePlay = {
         return;
       }
       this.roomCleared = true;
+      // v176: 방을 다 치웠다 — 두드림을 멈추고 숨을 쉰다. 보스방은 조금 더 길게.
+      // ★ 이 지점이 정확한 이유: 습격방은 파도가 남아 있으면 위에서 return 하므로
+      //   파도 사이에는 여운이 걸리지 않는다. 진짜로 방이 끝났을 때만 울린다
+      Music.clearBreath(Dungeon.roomType === 'boss' ? 6.0 : 4.5);
       Meta.save(); // 도감 킬 기록 등 방 단위 저장
       // 습격 완주 보상: 파편 뭉치 + 정예급 특성 선택
       if (this._siege) {

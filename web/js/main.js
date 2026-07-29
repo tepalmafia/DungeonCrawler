@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 175;
+const GAME_VERSION = 176;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -678,7 +678,12 @@ const Game = {
       this.banner = null; // 카드가 화면을 갖는다 — 유언 배너는 카드가 걷힌 뒤
       this._storyQ = this._storyQ || [];
       this._storyQ.push({ text: boss.def.banner, color: '#e43b44' });
-      AudioSys.bossAppear();
+      // v176: 막마다 다른 위압 + 이 보스의 이름(시그니처 모티프).
+      // 종전 bossAppear()의 언어(바닥이 꺼지는 초저역 + 단2도 클러스터)는 그대로 유지된다 —
+      // "보스가 왔다"는 이미 학습된 소리라 버리면 안 된다
+      if (typeof BossAudio !== 'undefined') BossAudio.entrance(boss.defId);
+      else AudioSys.bossAppear();
+      Music.setBossPhase(1);   // 다음 틱(16ms)을 기다리지 않고 즉시 — 등장 연출과 겹치게
       Renderer.shake(5, 0.5);
     }
 
@@ -708,14 +713,62 @@ const Game = {
     return m;
   },
 
-  // 현재 상태에 맞는 BGM 테마 결정
+  // 현재 상태에 맞는 BGM 테마 결정 (v176)
+  // ★ 순서가 중요하다 — **보스 분기가 먼저, 층 분기가 나중**이다 (사양서 C6).
+  //   뒤집으면 보스방에서도 층 테마가 나가 보스곡 개편이 통째로 무력화된다
   _musicKey() {
-    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') return 'hub';
+    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes' || this.state === 'codex') return 'hub';
     if (this.state === 'over' || this.state === 'victory') return null;
-    if (Dungeon.roomType === 'boss' && this.enemies.some((e) => e.isBoss && !e.dead)) return 'boss';
-    // 층별 고유 테마 (1~10층), 무한 모드(11층+)는 심층 테마 순환
-    const f = Dungeon.floor <= 10 ? Dungeon.floor : ((Dungeon.floor - 11) % 5) + 6;
-    return 'f' + f;
+    // 보스 — 막별 보스 테마 5 + 왕 3페이즈. 층이 아니라 **킷**으로 막을 정하므로
+    // 51층+ 무한 순환에서도 "누구와 싸우는지"가 소리에 유지된다
+    if (Dungeon.roomType === 'boss') {
+      const b = this.enemies.find((e) => e.isBoss && !e.dead);
+      if (b) return Music.bossKey(b);
+      // 처치 직후의 정적도 소리다 — 여운이 끝나기 전엔 층 테마를 덮어씌우지 않는다
+      if (typeof BossAudio !== 'undefined' && BossAudio.inSilence()) return null;
+    }
+    // 층 — 1막 층별 고유 10곡 / 2~5막 막당 3변주 / 51층+ 무한 2변주
+    return Music.floorKey(Dungeon.floor);
+  },
+
+  // 현재 상태에 맞는 환경음(막). BGM과 별개 축이다 —
+  // BGM은 층마다 바뀌어도 되지만 공간은 막 단위로만 바뀐다 (1막 10개 층은 같은 땅속이다)
+  _ambKey() {
+    if (this.state === 'over' || this.state === 'victory') return null;
+    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes' || this.state === 'codex') return 'hub';
+    return Math.min(5, Math.max(1, Math.ceil(Dungeon.floor / 10)));
+  },
+
+  // 음악이 읽는 전황 (v176) — 적 수·정예·보스 페이즈·내 HP를 **한 번에** 훑는다.
+  // ★ 여기가 동적 음악의 유일한 입력 지점이다. 음악은 이 셋 말고 아무것도 안 본다 (사양서 C12)
+  _musicPulse() {
+    if (this.state !== 'play') return { intensity: 0, peril: 0, bossPhase: 0 };
+    let live = 0, elite = 0, boss = null;
+    for (const e of this.enemies) {
+      if (e.dead || e.neutral) continue;   // 항아리·균열 같은 중립 개체는 전황이 아니다
+      live++;
+      if (e.elite || e.isMini) elite++;
+      if (e.isBoss) boss = e;
+    }
+    // 0 탐색 / 1 접촉 / 2 격전(5마리+ 또는 정예) / 3 절정(보스)
+    let intensity = boss ? 3 : (live >= 5 || elite > 0) ? 2 : live > 0 ? 1 : 0;
+    if (this.roomCleared) intensity = 0;   // 문이 열렸으면 이미 끝난 방이다
+    // 보스 페이즈 — boss.phase / _onslaught 는 **래치된** 값이라 왔다갔다 하지 않는다.
+    // HP 비율은 보조 판정으로만 쓴다 (회복하는 보스가 있어도 페이즈가 되돌아가지 않게)
+    let bossPhase = 0;
+    if (boss) {
+      const r = boss.maxHp > 0 ? boss.hp / boss.maxHp : 1;
+      bossPhase = boss.spawnT > 0 ? 1
+        : boss._onslaught ? 3
+        : (boss.phase >= 2 || r <= 0.5) ? 2 : 1;
+    }
+    // 위기 — HP 30%부터 스며들어 8%에서 최대. 탐색 중엔 절반만 (혼자 걸을 땐 덜 조인다)
+    const p = this.player;
+    const hpr = p && p.maxHp > 0 ? p.hp / p.maxHp : 1;
+    let peril = hpr >= 0.30 ? 0 : Math.min(1, (0.30 - hpr) / 0.22);
+    if (peril > 0 && intensity === 0) peril *= 0.55;
+    if (!p || p.dead) peril = 0;
+    return { intensity, peril, bossPhase };
   },
 
   // ── 메인 틱 ──
@@ -726,16 +779,17 @@ const Game = {
       const line = this._storyQ.shift();
       this.banner = { text: line.text, life: 2.8, maxLife: 2.8, color: line.color };
     }
+    // v176: 곡 선택 → 강도 적용 순서를 보장한다 (ensure가 덱을 만든 뒤 pulse가 레이어를 켠다)
+    const pulse = this._musicPulse();
     Music.ensure(this._musicKey());
+    Music.pulse(pulse);
     // v174: 공간의 소리 — 막이 바뀌면 공기와 잔향이 함께 바뀐다.
     // 거점/정산은 조용한 작은 방, 던전은 막별 앰비언스 + 그 막의 잔향 프리셋
-    if (this.state === 'hub' || this.state === 'altar' || this.state === 'classes') {
-      Ambience.ensure('hub', null);
-    } else if (this.state === 'over' || this.state === 'victory') {
-      Ambience.stop();
-    } else {
-      Ambience.ensure(Math.min(5, Math.max(1, Math.ceil(Dungeon.floor / 10))), World.hazard || null);
-    }
+    const ak = this._ambKey();
+    if (ak == null) Ambience.stop();
+    else Ambience.ensure(ak, ak === 'hub' ? null : (World.hazard || null));
+    // 전황 판정은 한 곳에서만 — 환경음도 _musicPulse의 결과를 받는다 (사양서 C12)
+    if (Ambience.setCombat) Ambience.setCombat(pulse.intensity > 0);
     if (Bot.enabled) Bot.update(this, dt);
 
     if (this.state === 'hub') {
