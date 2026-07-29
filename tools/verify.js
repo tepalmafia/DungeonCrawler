@@ -640,8 +640,9 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     // master/sfxBus/revBus 등이 **죽은 오프라인 노드를 가리킨 채** 남아, 뒤에 오는 테스트의
     // 모든 소리가 'cannot connect to an AudioNode belonging to a different audio context'로 죽는다.
     // 계측 도구가 게임을 오염시키는 바로 그 패턴 — 전 필드를 저장·복구한다
-    const KEYS = ['ctx', 'master', 'limiter', 'sfxBus', 'musicBus', 'duck',
-      'revBus', 'conv', 'revWet', 'revHP', '_noiseBuf', 'space', '_gates'];
+    const KEYS = ['ctx', 'master', 'limiter', 'sfxBus', 'musicBus', 'duck', 'musicLP', 'musicLvl',
+      'revBus', 'revMusIn', 'musicFx', 'reverbIn', 'revSend', 'conv', 'revWet', 'revHP',
+      '_noiseBuf', 'space', '_gates'];
     const render = async (fn, sec = 1.2) => {
       const oc = new OAC(2, Math.ceil(44100 * sec), 44100);
       const save = {};
@@ -655,6 +656,12 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       AudioSys.sfxBus.connect(AudioSys.master);
       AudioSys.sfxBus.gain.value = 0.8; AudioSys.musicBus.gain.value = 0.8;
       AudioSys.revBus = oc.createGain();
+      // v176 신설 노드도 오프라인 사본으로 갈아끼운다 — 안 그러면 음악 send가
+      // **온라인 노드를 가리킨 채** 남아 교차 컨텍스트 연결로 죽는다
+      AudioSys.musicLP = oc.createBiquadFilter(); AudioSys.musicLP.type = 'lowpass'; AudioSys.musicLP.frequency.value = 16000;
+      AudioSys.musicLvl = oc.createGain(); AudioSys.musicLvl.gain.value = 0.85;
+      AudioSys.revMusIn = oc.createGain(); AudioSys.revMusIn.connect(AudioSys.revBus);
+      AudioSys.musicFx = AudioSys.musicBus; AudioSys.reverbIn = AudioSys.revMusIn; AudioSys.revSend = AudioSys.revBus;
       AudioSys.conv = oc.createConvolver(); AudioSys.conv.normalize = false; AudioSys.conv.buffer = AudioSys._makeIR(1.6, 2.6);
       AudioSys.revWet = oc.createGain(); AudioSys.revWet.gain.value = 0.34;
       AudioSys.revHP = oc.createBiquadFilter(); AudioSys.revHP.type = 'highpass'; AudioSys.revHP.frequency.value = 320;
@@ -706,6 +713,300 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `환경음 원샷 ${audio.shots}종 · 막 프리셋 ${audio.acts} · 공간 ${audio.spaces} (v173은 환경음 0개)`);
   ok('audio.newLayers', audio.hasNew,
     '예고음·헛손질·막힘·처형·덕킹·공간전환 신설 (예고는 게임플레이 — 화면을 안 봐도 읽혀야 한다)');
+
+  // ══ 음악 개편 (v176) ══════════════════════════════════════════════════
+  // 진단서가 잰 세 가지 병:
+  //   ① 50층 게임의 고유 음악 총량이 121.5초 — 12테마 전부 4마디 뒤 완전 반복
+  //   ② 게임의 80%(11~50층)가 f6~f10 5곡 순환. 그 5곡 상호거리 0.0918 =
+  //      **같은 곡 안 마디끼리의 거리(0.0801)의 1.15배** — "다른 곡"이 아니었다
+  //   ③ boss ↔ f4 거리 0.017 (66쌍 중 최소). 보스 23종·왕 3페이즈가 전부 같은 7.27초 루프
+  // 아래는 그 세 숫자를 **같은 방식으로 다시 재서** 되돌아가지 않았는지 본다.
+  // ★ 기준선을 하드코딩하지 않고 **같은 세션에서 함께 잰다** — 계측 방식이 바뀌어도 비교가 성립한다.
+  const music = await page.evaluate(async () => {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const KEYS = ['ctx', 'master', 'limiter', 'sfxBus', 'musicBus', 'duck', 'musicLP', 'musicLvl',
+      'revBus', 'revMusIn', 'musicFx', 'reverbIn', 'revSend', 'conv', 'revWet', 'revHP',
+      '_noiseBuf', 'space', '_gates'];
+    const R = {};
+
+    // ── A) 곡 존재 — 무음 구간이 생기지 않는가 (층 60 × 상태 7 × 방 4 전수) ──
+    {
+      const f0 = Dungeon.floor, rt0 = Dungeon.roomType, st0 = Game.state;
+      const bad = [];
+      for (let f = 1; f <= 60; f++) {
+        for (const st of ['play', 'hub', 'altar', 'classes', 'codex', 'over', 'victory']) {
+          for (const rt of ['combat', 'boss', 'shop', 'treasure', 'elite']) {
+            Dungeon.floor = f; Dungeon.roomType = rt; Game.state = st;
+            const k = Game._musicKey();
+            if (k !== null && !Music.themes[k]) bad.push(`${f}/${st}/${rt}=${k}`);
+          }
+        }
+      }
+      Dungeon.floor = f0; Dungeon.roomType = rt0; Game.state = st0;
+      R.keyBad = bad.slice(0, 4); R.keyBadN = bad.length;
+      R.themeN = Object.keys(Music.themes).length;
+      R.floorThemeN = Object.keys(Music.themes).filter((k) => !Music.themes[k].bossKit && k !== 'boss').length;
+    }
+
+    // ── 기존 12곡 회귀 — 사장 지시: "지금 곡을 싫어한 게 아니라 부족하다" ──
+    // bpm / roots / scale 이 v175와 한 글자도 달라지면 안 된다
+    {
+      const V175 = {
+        hub: '66|45,41,43,45|0,3,7,10', f1: '92|38,38,41,36|0,3,5,7', f2: '86|40,40,43,45|0,2,3,7',
+        f3: '102|36,36,39,41|0,1,5,7', f4: '118|38,38,36,34|0,3,6,7', f5: '82|33,33,36,32|0,1,3,7',
+        f6: '100|36,36,39,34|0,3,5,6', f7: '94|38,38,41,43|0,1,3,7', f8: '110|34,34,37,39|0,1,4,7',
+        f9: '126|36,36,34,32|0,3,6,10', f10: '76|31,31,34,30|0,1,6,7', boss: '132|36,36,34,39|0,1,6,7',
+      };
+      const drift = [];
+      for (const k in V175) {
+        const t = Music.themes[k];
+        const sig = t ? `${t.bpm}|${t.roots.join(',')}|${t.scale.join(',')}` : 'MISSING';
+        if (sig !== V175[k]) drift.push(`${k}: ${sig}`);
+      }
+      R.drift = drift;
+    }
+
+    // ── 렌더 하네스 ──────────────────────────────────────────────────────
+    // 게임 루프·라이브 스케줄러를 세운다. 안 세우면 그것들이 오프라인 컨텍스트에 음을 흘려
+    // 계측값이 매번 달라진다 (계측 도구가 대상을 오염시키는 바로 그 패턴)
+    const tick0 = Game.tick; Game.tick = () => {};
+    if (Music._timer) { clearInterval(Music._timer); Music._timer = null; }
+    if (Ambience._timer) { clearInterval(Ambience._timer); Ambience._timer = null; }
+    const chain0 = Music._chain; Music._chain = null;
+    const seeded = (s) => () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    const SR = 22050;
+
+    const renderTheme = async (key, sec, nodeCount) => {
+      const th = Music.themes[key];
+      const oc = new OAC(1, Math.ceil(SR * sec), SR);
+      const save = {}; for (const k of KEYS) save[k] = AudioSys[k];
+      const rnd0 = Math.random; Math.random = seeded(20240729);
+      const st0 = Music.step, lg0 = Music._layG, dg0 = Music._deckG, dt0 = Music._deckTail;
+      const i0 = Music.iCur, p0 = Music.perilCur;
+      let made = 0;
+      try {
+        AudioSys.ctx = oc; AudioSys.muted = false;
+        AudioSys.master = oc.createGain(); AudioSys.master.connect(oc.destination);
+        AudioSys.limiter = null; AudioSys.musicLP = null; AudioSys.musicLvl = null;
+        AudioSys.sfxBus = oc.createGain(); AudioSys.sfxBus.connect(AudioSys.master);
+        AudioSys.musicBus = oc.createGain(); AudioSys.musicBus.connect(AudioSys.master);
+        AudioSys.duck = oc.createGain();
+        AudioSys.revBus = oc.createGain(); AudioSys.revBus.connect(AudioSys.master);
+        AudioSys.revMusIn = oc.createGain(); AudioSys.revMusIn.connect(AudioSys.revBus);
+        AudioSys.musicFx = AudioSys.musicBus; AudioSys.reverbIn = AudioSys.revMusIn; AudioSys.revSend = AudioSys.revBus;
+        AudioSys.conv = null; AudioSys.revWet = null; AudioSys.revHP = null;
+        const nb = oc.createBuffer(1, SR, SR), nd = nb.getChannelData(0);
+        for (let i = 0; i < SR; i++) nd[i] = Math.random() * 2 - 1;
+        AudioSys._noiseBuf = nb; AudioSys.space = null; AudioSys._gates = {};
+        if (nodeCount) {
+          const o1 = oc.createOscillator.bind(oc), o2 = oc.createBufferSource.bind(oc), o3 = oc.createGain.bind(oc);
+          oc.createOscillator = () => { made++; return o1(); };
+          oc.createBufferSource = () => { made++; return o2(); };
+          oc.createGain = () => { made++; return o3(); };
+        }
+        // 편성을 전부 켠 상태로 비교한다 (레이어 게이팅은 별개 축이다)
+        Music._layG = { bass: 1, sub: 1, arp: 1, pad: 1, drum: 1, hat: 1, snare: 0, drive: 0,
+          tension: 0, fill: 1, tfill: 1, heart: 0, bell: 1, lead: 1, orn: 1, bossCore: 0, bossP2: 0, bossP3: 0 };
+        Music._deckG = 1; Music._deckTail = false; Music.iCur = 0; Music.perilCur = 0;
+        Music._nb = 0; Music._nbT = -1e9;
+        if (typeof BossAudio !== 'undefined') {
+          BossAudio._chains = null; BossAudio._chainKey = null; BossAudio.stage = 1; BossAudio.activeDefId = 1;
+        }
+        const stepDur = 60 / th.bpm / 4;
+        const n = Math.floor(sec / stepDur);
+        for (let i = 0; i < n; i++) { Music.step = i; Music._schedule(i * stepDur, th, null); }
+        const buf = await oc.startRendering();
+        return { d: buf.getChannelData(0), made, sec };
+      } finally {
+        Math.random = rnd0;
+        for (const k of KEYS) AudioSys[k] = save[k];
+        Music.step = st0; Music._layG = lg0; Music._deckG = dg0; Music._deckTail = dt0;
+        Music.iCur = i0; Music.perilCur = p0;
+        if (typeof BossAudio !== 'undefined') { BossAudio._chains = null; BossAudio._chainKey = null; }
+      }
+    };
+
+    // 32밴드 로그 스펙트럼 히스토그램 (radix-2 FFT) → L1/2 거리
+    const fft = (re, im) => {
+      const n = re.length;
+      for (let i = 1, j = 0; i < n; i++) {
+        let bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+      }
+      for (let len = 2; len <= n; len <<= 1) {
+        const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+        for (let i = 0; i < n; i += len) {
+          let cr = 1, ci = 0;
+          for (let k = 0; k < len / 2; k++) {
+            const ur = re[i + k], ui = im[i + k];
+            const vr = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci;
+            const vi = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr;
+            re[i + k] = ur + vr; im[i + k] = ui + vi;
+            re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi;
+            const ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+          }
+        }
+      }
+    };
+    const N = 1024, HOP = 512, NB = 32, FLO = 40, FHI = 10000, LG = Math.log(FHI / FLO);
+    const win = new Float64Array(N);
+    for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+    const spec = (d) => {
+      const bands = new Float64Array(NB);
+      for (let o = 0; o + N <= d.length; o += HOP) {
+        const re = new Float64Array(N), im = new Float64Array(N);
+        for (let i = 0; i < N; i++) re[i] = d[o + i] * win[i];
+        fft(re, im);
+        for (let k = 1; k < N / 2; k++) {
+          const f = k * SR / N;
+          if (f < FLO || f > FHI) continue;
+          bands[Math.min(NB - 1, Math.floor(NB * Math.log(f / FLO) / LG))] += re[k] * re[k] + im[k] * im[k];
+        }
+      }
+      let s = 0; for (let i = 0; i < NB; i++) s += bands[i];
+      if (s > 0) for (let i = 0; i < NB; i++) bands[i] /= s;
+      return bands;
+    };
+    const dist = (a, c) => { let d = 0; for (let i = 0; i < a.length; i++) d += Math.abs(a[i] - c[i]); return d / 2; };
+
+    try {
+      const keys = Object.keys(Music.themes);
+      const S = {}, MADE = {};
+      for (const k of keys) { const r = await renderTheme(k, 8, true); S[k] = spec(r.d); MADE[k] = +(r.made / r.sec).toFixed(1); }
+
+      // B) 막 구분 — 하강하며 겪는 연속 전환 거리 vs 종전 5곡 순환의 상호거리
+      const seq = []; let prev = null;
+      for (let f = 1; f <= 60; f++) {
+        const k = Music.floorKey(f);
+        if (prev && k !== prev) seq.push({ f, d: dist(S[prev], S[k]) });
+        prev = k;
+      }
+      const deep = seq.filter((s) => s.f >= 11).map((s) => s.d);
+      const old = ['f6', 'f7', 'f8', 'f9', 'f10'], op = [];
+      for (let i = 0; i < old.length; i++) for (let j = i + 1; j < old.length; j++) op.push(dist(S[old[i]], S[old[j]]));
+      R.oldCycleAvg = +(op.reduce((a, c) => a + c, 0) / op.length).toFixed(4);
+      R.deepMin = +Math.min(...deep).toFixed(4);
+      R.deepAvg = +(deep.reduce((a, c) => a + c, 0) / deep.length).toFixed(4);
+      R.allAvg = +(seq.reduce((a, c) => a + c.d, 0) / seq.length).toFixed(4);
+
+      // C) 보스곡 — 서로 다른 키 개수 + 층 테마와의 최소 거리
+      const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 45, 50, 60, 61, 62, 63, 64, 65, 66, 67];
+      const bset = {};
+      for (const id of ids) {
+        if (typeof BossAudio !== 'undefined') BossAudio.activeDefId = null;
+        bset[Music.bossKey({ defId: id, phase: 1, _onslaught: false })] = 1;
+      }
+      if (typeof BossAudio !== 'undefined') BossAudio.activeDefId = null;
+      const kp = [1, 2, 3].map((n) => Music.bossKey({ defId: 50, phase: n >= 2 ? 2 : 1, _onslaught: n === 3 }));
+      R.bossKeyN = Object.keys(bset).length;
+      R.kingDistinct = new Set(kp).size;
+      const bk = keys.filter((k) => Music.themes[k].bossKit);
+      const fk = keys.filter((k) => !Music.themes[k].bossKit && k !== 'boss');
+      let mn = 9, pair = '';
+      for (const a of bk) for (const c of fk) { const d = dist(S[a], S[c]); if (d < mn) { mn = d; pair = a + '↔' + c; } }
+      R.bossFloorMin = +mn.toFixed(4); R.bossFloorPair = pair;
+      R.bossFloorBase = +dist(S.boss, S.f4).toFixed(4);   // v175의 최소쌍 (진단서 66쌍 중 최소)
+      R.bossThemeN = bk.length;
+
+      // I) 노드 예산 — MV_BUDGET을 조이면 정말로 얇아지는가 (게이트가 살아 있는가)
+      const b0 = Music.MV_BUDGET;
+      R.maxRate = Math.max(...Object.values(MADE));
+      R.busiest = Object.keys(MADE).reduce((a, c) => (MADE[c] > MADE[a] ? c : a));
+      Music.MV_BUDGET = 6;
+      const lean = await renderTheme(R.busiest, 8, true);
+      Music.MV_BUDGET = b0;
+      R.leanRate = +(lean.made / lean.sec).toFixed(1);
+    } finally {
+      Game.tick = tick0; Music._chain = chain0;
+    }
+
+    // ── 동적 레이어 — 탐색/격전/위기가 실제로 편성을 바꾸는가 ──
+    {
+      const snap = (i, p, b) => {
+        Music.iCur = i; Music.perilCur = p; Music.bpCur = b; Music.bossPhase = b; Music._brCur = 0; Music._slamT = 0;
+        Music._calcLayers();
+        return { drum: +Music._lay('drum').toFixed(2), snare: +Music._lay('snare').toFixed(2),
+          sub: +Music._lay('sub').toFixed(2), arp: +Music._lay('arp').toFixed(2),
+          bell: +Music._lay('bell').toFixed(2), tension: +Music._lay('tension').toFixed(2),
+          tfill: +Music._lay('tfill').toFixed(2) };
+      };
+      R.explore = snap(0, 0, 0);
+      R.fight = snap(2, 0, 0);
+      R.peril = snap(3, 1, 3);
+      Music.iCur = 0; Music.perilCur = 0; Music.bpCur = 0; Music.bossPhase = 0; Music._calcLayers();
+      R.layerNames = Object.keys(Music._layG).length;
+      // _schedule 안에서 _lv를 통과하지 않는 vol이 있으면 레이어가 안 걸린다 — 소스로 확인
+      const src = Music._schedule.toString() + Music._drum.toString();
+      // ★ 부정 룩어헤드는 반드시 공백까지 안에 넣어야 한다 — `vol:\s*(?!…)` 로 쓰면
+      //   \s* 가 되감기(backtrack)해서 전부 매치돼 버린다 (이 단언이 처음에 41건을 오검출했다)
+      R.volN = (src.match(/vol:/g) || []).length;
+      R.rawVol = (src.match(/vol:(?!\s*this\._lv)/g) || []).length;
+      R.afford = (src.match(/_afford\(/g) || []).length;
+      R.hasDisconnect = /disconnect\(/.test(Music._initChain.toString());
+    }
+    return R;
+  });
+  console.log('  음악:', JSON.stringify(music));
+
+  ok('music.keyCoverage', music.keyBadN === 0 && music.themeN >= 34 && music.floorThemeN >= 25,
+    `테마 ${music.themeN}곡(층 ${music.floorThemeN} + 보스 ${music.themeN - music.floorThemeN}) · ` +
+    `층60×상태7×방5 전수에서 존재하지 않는 키 ${music.keyBadN}건 ${music.keyBad.join(' ')} ` +
+    `(v175는 12곡 — 11~50층 40개 층이 f6~f10 5곡 순환)`);
+  ok('music.legacyThemesIntact', music.drift.length === 0,
+    music.drift.length ? `바뀐 곡: ${music.drift.join(' / ')}`
+      : '기존 12곡(hub·f1~f10·boss)의 bpm/roots/scale 불변 — 사장은 지금 곡을 싫어한 게 아니라 부족하다고 했다');
+  ok('music.actIdentity', music.deepMin >= 0.094 && music.deepAvg >= 0.16 && music.deepMin > music.oldCycleAvg,
+    `11층 이후 연속 전환 거리 최소 ${music.deepMin} / 평균 ${music.deepAvg} · 전 구간 평균 ${music.allAvg} ` +
+    `vs 종전 5곡 순환 상호거리 평균 ${music.oldCycleAvg} (그 5곡은 "다른 곡"이 아니라 "같은 곡의 다른 마디"였다)`);
+  ok('music.bossSeparated',
+    music.bossKeyN >= 6 && music.kingDistinct === 3 && music.bossThemeN >= 8 &&
+    music.bossFloorMin >= 0.05 && music.bossFloorMin > music.bossFloorBase * 2,
+    `보스 23종 → 서로 다른 곡 ${music.bossKeyN}개 · 왕 페이즈 ${music.kingDistinct}종 · 보스 테마 ${music.bossThemeN}곡 · ` +
+    `보스곡↔층테마 최소거리 ${music.bossFloorMin}(${music.bossFloorPair}) vs 구 boss↔f4 ${music.bossFloorBase} ` +
+    `(v175는 이 쌍이 66쌍 중 최소 — 보스전 음악이 사실상 4층 배경음이었다)`);
+  ok('music.budgetGate', music.leanRate < music.maxRate * 0.75 && music.maxRate <= 95,
+    `가장 바쁜 곡 ${music.busiest} ${music.maxRate}노드/초 → MV_BUDGET 46→6 으로 조이면 ${music.leanRate}노드/초 ` +
+    `(예산 게이트가 안 걸리면 이 둘이 같다 = 상한이 없다)`);
+  ok('music.dynamicLayers',
+    music.explore.drum === 0 && music.fight.drum > 0 && music.peril.sub > 0 &&
+    music.explore.bell > 0 && music.explore.tfill > 0 && music.fight.snare > 0 && music.peril.tension > 0 &&
+    music.rawVol === 0 && music.volN >= 35 && music.afford >= 20 && !music.hasDisconnect,
+    `탐색 ${JSON.stringify(music.explore)} / 격전 ${JSON.stringify(music.fight)} / 위기+보스 ${JSON.stringify(music.peril)} · ` +
+    `레이어 ${music.layerNames}종 · 편성 ${music.volN}줄 중 _lv를 안 거친 vol ${music.rawVol}개 · _afford 게이트 ${music.afford}곳 · ` +
+    `_initChain에 disconnect ${music.hasDisconnect ? '있음(런타임 재배선 금지 위반)' : '없음'}`);
+
+  // 덱 크로스페이드 + 보스 체인 회수 — 실시간 경로 (오프라인 렌더로는 안 잡힌다)
+  const deck = await page.evaluate(async () => {
+    AudioSys.unlock();
+    const mk0 = Game._musicKey;
+    Game._musicKey = () => window.__vk || 'f1';
+    window.__vk = 'a3b'; Music.ensure('a3b');
+    await new Promise((r) => setTimeout(r, 500));
+    window.__vk = 'a3c'; Music.ensure('a3c');
+    await new Promise((r) => setTimeout(r, 250));
+    const mid = Music._decks.map((d) => ({ k: d.key, tail: d.tail }));
+    const both = Music._decks.filter((d) => d.key === 'a3b' || d.key === 'a3c').length;
+    // 등파워 곡선 — 두 덱의 위치가 서로 여집합일 때 총 에너지가 유지되는가
+    const c = Music._curve, e = +(c(0.5) * c(0.5) + c(0.5) * c(0.5)).toFixed(3);
+    // 보스곡 → 층곡: 보스 체인(지속 드론)이 덱 사망 시점에 걷히는가
+    window.__vk = 'bossA1'; Music.ensure('bossA1');
+    await new Promise((r) => setTimeout(r, 600));
+    const bossChains = !!(typeof BossAudio !== 'undefined' && BossAudio._chains);
+    window.__vk = 'f1'; Music.ensure('f1');
+    await new Promise((r) => setTimeout(r, 1600));
+    const released = !(typeof BossAudio !== 'undefined' && BossAudio._chains);
+    Game._musicKey = mk0;
+    return { mid, both, equalPower: e, bossChains, released, decks: Music._decks.length };
+  });
+  console.log('  덱:', JSON.stringify(deck));
+  ok('music.crossfade', deck.both === 2 && deck.equalPower === 1 && deck.decks <= 3,
+    `전환 중 덱 ${deck.both}개 공존 ${JSON.stringify(deck.mid)} · 등파워 sin²+cos²=${deck.equalPower} · 최대 덱 ${deck.decks} ` +
+    `(v175는 stop()→start()라 곡이 뚝 끊겼다. 선형 합성이면 가운데서 3dB 구멍이 난다)`);
+  ok('music.bossChainsReleased', deck.bossChains && deck.released,
+    `보스곡 진입 시 지속 체인 생성 ${deck.bossChains} → 덱이 죽는 시점에 회수 ${deck.released} ` +
+    `(Music.stop()에 넣으면 페이드 도중 드론만 뚝 끊긴다 — 시점이 다르다)`);
 
   // ── 예고 정직성 (v175) ──
   await boot(page, { cls: 'knight', heat: 0 });

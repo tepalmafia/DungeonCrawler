@@ -643,6 +643,8 @@ function createBoss(floor, x, y) {
         this._onslaught = true;
         game.banner = { text: this.def.rageText2 || `${this.name} — 최후의 맹공!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
         AudioSys.roar();
+        // v176: 리저 → 임팩트 → 반음 올라간 이름. 왕만 곡이 바뀌고 나머지 22종은 stage로 반응한다
+        if (typeof BossAudio !== 'undefined') BossAudio.phase(this, 3);
         Renderer.shake(6, 0.35);
         Particles.ring(this.x, this.y, { r0: 12, r1: 140, life: 0.6, color: '#e43b44', width: 5 });
       }
@@ -656,6 +658,7 @@ function createBoss(floor, x, y) {
         game.banner = { text: this.def.rageText, life: 1.6, maxLife: 1.6 };
         Renderer.shake(7, 0.4);
         AudioSys.roar();
+        if (typeof BossAudio !== 'undefined') BossAudio.phase(this, 2);   // v176
         Particles.burst(this.x, this.y, {
           count: 26, colors: this.def.deathPalette, speed: 200, life: 0.7, size: 4,
         });
@@ -1003,6 +1006,11 @@ function createBoss(floor, x, y) {
       const say = (txt) => { game.banner = { text: txt, life: 1.4, maxLife: 1.4, color: '#e8a13b' }; };
       const clampY = (y) => Math.min(Math.max(y, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5));
       const id = this.defId;
+      // v176: 이름이 기술과 함께 운다 — 이 보스의 시그니처 모티프를 얇게(lite) 한 번.
+      // 스로틀이 걸려 있어 연타해도 겹치지 않는다
+      if (typeof BossAudio !== 'undefined') {
+        BossAudio.motif(id, { vol: 0.55, lite: true, phase: this._onslaught ? 3 : this.phase });
+      }
       if (id === 1) {
         // 「생매장」 (무덤지기) — 발밑에 무덤이 파이고, 흙무더기가 날아든다
         say('생매장 — 파헤친 무덤을 벗어나라');
