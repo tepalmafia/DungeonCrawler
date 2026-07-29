@@ -636,9 +636,16 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   // ── 사운드 개편 (v174) — 들을 수는 없지만 잴 수는 있다 ──
   const audio = await page.evaluate(async () => {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    // ★ 오프라인 렌더는 AudioSys의 노드 참조를 통째로 갈아끼운다. 끝나고 ctx만 되돌리면
+    // master/sfxBus/revBus 등이 **죽은 오프라인 노드를 가리킨 채** 남아, 뒤에 오는 테스트의
+    // 모든 소리가 'cannot connect to an AudioNode belonging to a different audio context'로 죽는다.
+    // 계측 도구가 게임을 오염시키는 바로 그 패턴 — 전 필드를 저장·복구한다
+    const KEYS = ['ctx', 'master', 'limiter', 'sfxBus', 'musicBus', 'duck',
+      'revBus', 'conv', 'revWet', 'revHP', '_noiseBuf', 'space', '_gates'];
     const render = async (fn, sec = 1.2) => {
       const oc = new OAC(2, Math.ceil(44100 * sec), 44100);
-      const save = AudioSys.ctx;
+      const save = {};
+      for (const k of KEYS) save[k] = AudioSys[k];
       AudioSys.ctx = oc; AudioSys.muted = false;
       AudioSys.limiter = oc.createDynamicsCompressor(); AudioSys.limiter.connect(oc.destination);
       AudioSys.master = oc.createGain(); AudioSys.master.gain.value = 0.35; AudioSys.master.connect(AudioSys.limiter);
@@ -659,7 +666,7 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       AudioSys.space = null; AudioSys._gates = {};
       fn();
       const buf = await oc.startRendering();
-      AudioSys.ctx = save;
+      for (const k of KEYS) AudioSys[k] = save[k];
       return buf;
     };
     const zcr = (buf) => { const L = buf.getChannelData(0); let cz = 0, n = 0, prev = 0;
@@ -699,6 +706,105 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `환경음 원샷 ${audio.shots}종 · 막 프리셋 ${audio.acts} · 공간 ${audio.spaces} (v173은 환경음 0개)`);
   ok('audio.newLayers', audio.hasNew,
     '예고음·헛손질·막힘·처형·덕킹·공간전환 신설 (예고는 게임플레이 — 화면을 안 봐도 읽혀야 한다)');
+
+  // ── 예고 정직성 (v175) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const tele = await page.evaluate(() => {
+    // ① 예고가 몸 위에 그려지는가 — 적을 플레이어 위/아래에 두고 같은 프레임을 두 번 그려 픽셀 차분
+    const p = Game.player;
+    p.x = 480; p.y = 270; p.god = true;
+    const diffAt = (dy) => {
+      Game.enemies.length = 0;
+      const e = createEnemy('skeleton', 480, 270 + dy, 1);
+      Game.enemies.push(e);
+      e._windT = 0; Game.render();
+      const c = Renderer.canvas || document.querySelector('canvas');
+      const g = c.getContext('2d');
+      const a = g.getImageData(0, 0, c.width, c.height).data;
+      e._windT = 0.12; e._windMax = 0.25; e._windA = dy > 0 ? -Math.PI / 2 : Math.PI / 2;
+      Game.render();
+      const b = g.getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 0; i < a.length; i += 4) {
+        if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 24) n++;
+      }
+      return n;
+    };
+    const above = diffAt(-40), below = diffAt(40);
+    Game.enemies.length = 0;
+    // ② 강타 예고가 그려지는가
+    const st = (() => {
+      const e = createEnemy('skeleton', 480, 330, 1);
+      Game.enemies.push(e);
+      e._stompT = 0; Game.render();
+      const c = Renderer.canvas || document.querySelector('canvas');
+      const g = c.getContext('2d');
+      const a = g.getImageData(0, 0, c.width, c.height).data;
+      e._stompT = 0.3; Game.render();
+      const b = g.getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 0; i < a.length; i += 4) {
+        if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 24) n++;
+      }
+      Game.enemies.length = 0;
+      return n;
+    })();
+    return { above, below, stomp: st };
+  });
+  console.log('  예고:', JSON.stringify(tele));
+  ok('telegraph.notOccluded', tele.above >= tele.below * 0.6,
+    `위에서 오는 예고 ${tele.above}px vs 아래 ${tele.below}px — 비율 ${(tele.above / (tele.below || 1)).toFixed(2)} ` +
+    `(v174는 185 vs 937 = 0.20 — 위에서 오는 예고는 플레이어 몸에 덮여 20%만 보였다)`);
+  ok('telegraph.stompHasRadius', tele.stomp > 500,
+    `강타 예고 반경 렌더 ${tele.stomp}px (v174는 render-game.js에 _stompT 참조가 0건 — 사장의 사인이 안 보이는 기술이었다)`);
+
+  const bossTele = await page.evaluate(() => {
+    Dungeon.floor = 3; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    const b = Game.enemies.find((e) => e.isBoss);
+    const p = Game.player;
+    p.god = false; p.invuln = 0; p.hp = p.maxHp = 20;
+    b.x = 480; b.y = 270; p.x = 480; p.y = 270;   // 완전 밀착
+    // 등장 연출('enter')은 1.2초 뒤 'idle'로 넘어간다 — 그 전엔 접촉 판정이 안 돈다
+    b.state = 'idle'; b.stateT = 0; b.spawnT = 0;
+    b.hitCd = 0; b._windT = 0;
+    const hp0 = p.hp;
+    Game.tick(1 / 60);
+    const wind = b._windT;                         // 예고가 섰는가
+    const hpAfterWind = p.hp;                      // 예고 중엔 피해가 없어야 한다
+    for (let i = 0; i < 30; i++) { b.x = 480; b.y = 270; p.x = 480; p.y = 270; Game.tick(1 / 60); }
+    const hpAfter = p.hp;
+    // 물러나면 헛손질인가
+    b.hitCd = 0; b._windT = 0; b.state = 'idle'; p.hp = p.maxHp; p.invuln = 0;
+    b.x = 480; b.y = 270; p.x = 480; p.y = 270;
+    Game.tick(1 / 60);
+    for (let i = 0; i < 30; i++) { b.x = 480; b.y = 270; p.x = 900; p.y = 270; Game.tick(1 / 60); } // 예고 도중 도망
+    return { wind: +wind.toFixed(2), noDmgDuringWind: hpAfterWind === hp0, hit: hpAfter < hp0,
+      whiffed: p.hp === p.maxHp, whiffT: +(b._whiffT || 0).toFixed(2) };
+  });
+  console.log('  보스 예고:', JSON.stringify(bossTele));
+  ok('telegraph.bossHasWindup', bossTele.wind > 0 && bossTele.noDmgDuringWind && bossTele.hit,
+    `보스 접촉: 예고 ${bossTele.wind}초 → 예고 중 피해 없음 → 만료 시 명중 ` +
+    `(v174까지 보스만 예고 0초 — 공용 훅을 안 타서 v168에서 통째로 빠졌다)`);
+  ok('telegraph.bossCanWhiff', bossTele.whiffed,
+    `예고 중 물러나면 보스도 헛손질 (반격의 창 ${bossTele.whiffT}초)`);
+
+  const guard = await page.evaluate(() => {
+    // 루프 도중 배열 교체 — 종전엔 TypeError가 새어 그 틱의 나머지가 통째로 날아갔다
+    Dungeon.floor = 1; Dungeon.roomIndex = 2; Dungeon.build('combat');
+    const p = Game.player; p.god = false; p.invuln = 0; p.hp = p.maxHp = 20;
+    Game.arrows = [];
+    for (let i = 0; i < 5; i++) Game.arrows.push({ x: p.x, y: p.y, dir: { x: 1, y: 0 }, r: 6, life: 5, t: 0, dmg: 1, speed: 0, by: '검증' });
+    const orig = Game.hurtPlayer;
+    let swapped = false;
+    Game.hurtPlayer = function (...a) { if (!swapped) { swapped = true; Game.arrows = []; } return orig.apply(this, a); };
+    let threw = '';
+    try { Game.tick(1 / 60); } catch (e) { threw = e.message.slice(0, 80); }
+    Game.hurtPlayer = orig;
+    return { threw, swapped };
+  });
+  ok('loop.survivesArraySwap', guard.swapped && !guard.threw,
+    guard.threw ? `크래시: ${guard.threw}` :
+      '루프 도중 배열이 교체돼도 틱이 살아남는다 (v174는 TypeError가 새어 그 틱의 적 업데이트·방 클리어 판정·렌더가 통째로 건너뛰어졌다)');
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 

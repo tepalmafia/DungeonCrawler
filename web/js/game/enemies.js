@@ -1088,7 +1088,13 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'walk') {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          if (d < 70) { this.state = 'bash'; this.stateT = 0; }
+          if (d < 70) {
+            this.state = 'bash'; this.stateT = 0;
+            // v175: 형제 몹 skeleton은 같은 자리에서 '!'를 그리는데 이놈만 빠져 있었다.
+            // 0.45초 예고 + 강넉백(430)인데 **화면에도 소리에도 단서가 0개**였다.
+            // 반응 예산 자체는 걸어서 0.35초로 넉넉하다 — 순수하게 '안 알려줘서' 맞는 피해였다
+            AudioSys.telegraph(this.x, this.elite || this.isMini);
+          }
         } else if (this.state === 'bash') {
           if (this.stateT > 0.45) {
             this.state = 'walk'; this.stateT = 0;
@@ -1105,9 +1111,22 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         Renderer.drawSprite(this.skin(this.walkFrame(5)), this.x, this.y, { flip: this.flip, shadow: true });
-        ctx.save(); ctx.globalAlpha = 0.3; ctx.strokeStyle = '#3a7ca5'; ctx.lineWidth = 3;
+        // v175: 밀치기 중에는 방패가 붉게 달아오른다 — 종전엔 state 분기가 draw에 하나도 없어
+        // 걷는 중인지 후려칠 참인지 화면상 구분이 불가능했다
+        const bash = this.state === 'bash';
+        ctx.save();
+        ctx.globalAlpha = bash ? 0.9 : 0.3;
+        ctx.strokeStyle = bash ? '#ff4757' : '#3a7ca5';
+        ctx.lineWidth = bash ? 5 : 3;
         const a = Math.atan2(this.faceDir.y, this.faceDir.x);
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 6, a - 0.5, a + 0.5); ctx.stroke(); ctx.restore();
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 6, a - 0.5, a + 0.5); ctx.stroke();
+        ctx.restore();
+        if (bash) {
+          ctx.save();
+          ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
+          ctx.fillText('!', this.x, this.y - 26);
+          ctx.restore();
+        }
         this.drawStatus(ctx);
       },
     }),

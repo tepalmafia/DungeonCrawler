@@ -325,6 +325,10 @@ const GameRender = {
     // 충격파 링
     for (const ring of this.rings) {
       ctx.save();
+      // ★ v175: 그려진 선은 width×0.6(7.2px)인데 **판정은 ±width(24px)** — 3.3배였다.
+      // 링을 '보고 피했는데' 맞는 일이 여기서 났다 (사장의 사인 「정예의 강타」가 이 링이다).
+      // 얇은 코어 선은 이동감 때문에 유지하고, 진짜 위험 폭을 반투명 띠로 한 겹 덧그린다
+      const _bandA = 0.22 * (1 - ring.r / ring.maxR) + 0.08;
       ctx.globalAlpha = 0.7 * (1 - ring.r / ring.maxR) + 0.2;
       ctx.strokeStyle = '#e8e0cf';
       ctx.lineWidth = ring.width * 0.6;
@@ -335,6 +339,10 @@ const GameRender = {
       } else {
         ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
       }
+      ctx.stroke();
+      // 판정 밴드 — 실제로 맞는 폭(±width). 얇은 선 바깥 8px가 판정 안이었다
+      ctx.globalAlpha = _bandA;
+      ctx.lineWidth = ring.width * 2;
       ctx.stroke();
       ctx.restore();
     }
@@ -712,25 +720,6 @@ const GameRender = {
         ctx.restore();
       }
       d.draw(ctx);
-      // ── 접촉 예고 (v168): 때리기 **전에** 붉은 부채꼴이 자란다 ──
-      // 예고 없이 맞으면 그건 난이도가 아니라 정보 부족이다 (v159 보스 예고와 같은 원칙).
-      // 예고가 다 차기 전에 물러나면 헛손질 — 위치 선정이 그제야 '결정'이 된다
-      if (d._windT > 0 && !d.dead) {
-        const k = 1 - d._windT / (d._windMax || 0.25); // 0 → 1 로 자란다
-        const a0 = d._windA || 0;
-        const rr = d.r + 20;
-        ctx.save();
-        ctx.translate(d.x, d.y);
-        ctx.rotate(a0);
-        ctx.globalAlpha = 0.20 + 0.45 * k;
-        ctx.fillStyle = 'rgba(228,59,68,0.55)';
-        ctx.beginPath(); ctx.moveTo(0, 0);
-        ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.closePath(); ctx.fill();
-        ctx.globalAlpha = 0.5 + 0.5 * k;
-        ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.stroke();
-        ctx.restore();
-      }
       // 헛손질 경직 — 반격의 창이 열렸다는 신호
       if (d._whiffT > 0 && !d.dead) {
         ctx.save();
@@ -781,6 +770,55 @@ const GameRender = {
         ctx.globalAlpha = 1;
       }
     }
+
+    // ══ 예고 패스 (v175) — 몸 위에 따로 그린다 ══════════════════════════
+    // v168의 접촉 예고는 y정렬 drawables 루프 **안**에서 그려졌다. 그래서 적이 플레이어보다
+    // 위에 있으면 뒤이어 그려지는 플레이어 스프라이트(44x56px)가 예고를 덮었다 —
+    // 실측: 위쪽 185px vs 아래쪽 937px, **위에서 오는 예고는 20%만 보였다.**
+    // 예고가 화면에 없으면 그건 난이도가 아니라 정보 부족이다. 하물며 안 보이는 예고는
+    // "읽고 피하라"는 이 게임의 약속을 정면으로 깬다
+    for (const d of drawables) {
+      if (d.dead) continue;
+      // 접촉 예고 — 붉은 부채꼴이 자란다
+      if (d._windT > 0) {
+        const k = 1 - d._windT / (d._windMax || 0.25);
+        const rr = d.r + 20;
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d._windA || 0);
+        // 난전(3층 평균 10마리)에서 화면이 붉게 덮이지 않도록 알파를 종전보다 낮췄다.
+        // 대신 테두리를 살려 윤곽으로 읽히게 한다 — 겹쳐도 개수가 세어진다
+        ctx.globalAlpha = 0.15 + 0.35 * k;
+        ctx.fillStyle = 'rgba(228,59,68,0.55)';
+        ctx.beginPath(); ctx.moveTo(0, 0);
+        ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 0.55 + 0.45 * k;
+        ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.stroke();
+        ctx.restore();
+      }
+      // 강타·내려찍기 예고 (v175 신설) — 저장소에 렌더가 **0건**이었다.
+      // 훨씬 약한 접촉 공격에는 부채꼴을 그려주면서, 사장을 죽인 「정예의 강타」는
+      // 느낌표 하나와 파티클이 전부였다. 위험 반경 125px(실측 도달 137~138px)를 바닥에 그린다.
+      // 색은 접촉 예고와 같은 붉은 계열 — 하나의 색 = 하나의 대응
+      // 정예의 강타(_stompT 0.55초 · 링 maxR 125)와 골렘 내려찍기(state 'slam' 0.7초 · maxR 120).
+      // 두 반경은 실측 137/138px로 1px 차 — 구분할 차이가 없으니 **같은 문법으로** 그린다
+      let st = 0, stMax = 0.55, stR = 125;
+      if (d._stompT > 0) { st = d._stompT; }
+      else if (d.state === 'slam' && d.stateT != null && d.stateT < 0.7) { st = 0.7 - d.stateT; stMax = 0.7; stR = 120; }
+      if (st > 0) {
+        const k = Math.max(0, Math.min(1, 1 - st / stMax));
+        ctx.save();
+        ctx.globalAlpha = 0.10 + 0.25 * k;
+        ctx.fillStyle = '#e43b44';
+        ctx.beginPath(); ctx.arc(d.x, d.y, stR * (0.35 + 0.65 * k), 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.45 + 0.45 * k;
+        ctx.strokeStyle = '#ff4757'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(d.x, d.y, stR, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
 
     // 투사체 — 위험 헤일로: 모든 적 탄환에 공통 붉은 테 (아이템·XP 보석과 즉시 구분되는 위험 색 언어)
     for (const a of this.arrows) {

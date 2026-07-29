@@ -153,7 +153,9 @@ const GamePlay = {
   _tickSignatures(dt) {
     if (!this.sigs || !this.sigs.length) return;
     const p = this.player;
+    const _sigs0 = this.sigs; // 배열 교체 가드 (v175) — 위 링/화살 루프와 같은 이유
     for (let i = this.sigs.length - 1; i >= 0; i--) {
+      if (this.sigs !== _sigs0 || !this.sigs[i]) break;
       const s = this.sigs[i];
       s.t += dt;
       if (s.type === 'brandZone' && s.t < s.tel) { // 낙인진은 발밑을 따라온다 (마지막 0.45s 고정)
@@ -867,7 +869,9 @@ const GamePlay = {
     }
 
     // ── 장판 (적 피해: 감전/독구름) ──
+    const _zones0 = this.zones; // 배열 교체 가드 (v175) — 위 링/화살 루프와 같은 이유
     for (let i = this.zones.length - 1; i >= 0; i--) {
+      if (this.zones !== _zones0 || !this.zones[i]) break;
       const z = this.zones[i];
       if (z.r > 300) z.r = 300; // 전역 하드 클램프 — 어떤 생성 경로도 화면을 뒤덮을 수 없다
       z.life -= dt;
@@ -910,7 +914,9 @@ const GamePlay = {
     }
 
     // ── 불길/독 장판 수명 (플레이어 피해는 위에서) ──
+    const _firePatches0 = this.firePatches; // 배열 교체 가드 (v175) — 위 링/화살 루프와 같은 이유
     for (let i = this.firePatches.length - 1; i >= 0; i--) {
+      if (this.firePatches !== _firePatches0 || !this.firePatches[i]) break;
       const fp = this.firePatches[i];
       fp.life -= dt;
       if (fp.life <= 0) this.firePatches.splice(i, 1);
@@ -942,8 +948,17 @@ const GamePlay = {
     }
 
     // ── 충격파 링 ──
+    // ★ 배열 교체 가드 (v175) — 이 루프 안에서 hurtPlayer가 불리고, 그 안에서 죽으면
+    // rewards.js onBossDead / main.js onRoomBuilt 가 this.rings·this.arrows 를 **통째로 새 배열로 갈아끼운다.**
+    // 그러면 옛 인덱스가 undefined가 되어 TypeError가 나고, 그 예외가 Game.tick 밖으로 새어
+    // **그 틱의 나머지(적 업데이트·방 클리어 판정·렌더)가 통째로 건너뛰어진다.**
+    // 계측자 둘이 각각 '12런에 1회' '25~36런에 1~2회'로 같은 줄의 크래시를 보고했는데 원인을 못 찾았다 —
+    // 도구가 아니라 게임 자체가 가끔 한 틱을 잃고 있었던 것이다
+    const _rings0 = this.rings;
     for (let i = this.rings.length - 1; i >= 0; i--) {
+      if (this.rings !== _rings0) break;
       const ring = this.rings[i];
+      if (!ring) break;
       ring.r += ring.speed * dt;
       const pd = Math.hypot(p.x - ring.x, p.y - ring.y);
       // 간극 링 (P2): 안전 부채꼴 안에 있으면 통과
@@ -963,8 +978,11 @@ const GamePlay = {
     }
 
     // ── 투사체 ──
+    const _arrows0 = this.arrows;
     for (let i = this.arrows.length - 1; i >= 0; i--) {
+      if (this.arrows !== _arrows0) break; // 위 링 루프와 같은 이유 (v175)
       const a = this.arrows[i];
+      if (!a) break;
       a.life -= dt;
       a.t += dt;
       // 추적탄 (공허의 눈): 플레이어를 향해 천천히 선회 — 직각으로 대시하면 뿌리칠 수 있다
@@ -1011,13 +1029,17 @@ const GamePlay = {
       }
     }
 
+    const _bossSlashes0 = this.bossSlashes; // 배열 교체 가드 (v175) — 위 링/화살 루프와 같은 이유
     for (let i = this.bossSlashes.length - 1; i >= 0; i--) {
+      if (this.bossSlashes !== _bossSlashes0 || !this.bossSlashes[i]) break;
       this.bossSlashes[i].life -= dt;
       if (this.bossSlashes[i].life <= 0) this.bossSlashes.splice(i, 1);
     }
 
     // ── 플레이어 투사체 (궁수 화살 / 마도사 유도 마탄) ──
+    const _pbolts0 = this.pbolts; // 배열 교체 가드 (v175) — 위 링/화살 루프와 같은 이유
     for (let i = this.pbolts.length - 1; i >= 0; i--) {
+      if (this.pbolts !== _pbolts0 || !this.pbolts[i]) break;
       const b = this.pbolts[i];
       b.life -= dt;
 

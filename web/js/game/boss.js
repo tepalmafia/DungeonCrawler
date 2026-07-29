@@ -394,6 +394,7 @@ function createBoss(floor, x, y) {
     attack: null,     // 현재 공격 {kind, opt}
     _patN: 0,          // v150 패턴 문법: 초식 카운터 — 4수마다 고유기가 온다
     _echoes: [],       // v150 echo 잔상 분신
+    _windT: 0, _windMax: 0.34, _windA: 0, _windDmg: 1, _whiffT: 0, // v175 접촉 예고 (잡몹과 같은 필드명 — 렌더가 공용 패스로 그린다)
     // 기믹 상태 (끈질긴 어픽스: 철갑 +1, 무기믹 보스는 cap 1 부여)
     // v160: 어픽스 「끈질긴」이 armorCap에 +1을 하던 것을 폐기 — 효과가 **정반대로** 걸려 있었다.
     //  · 철갑 보스: cap 2 → 3 = 경감이 약해진다 (어픽스인데 보스가 약해짐)
@@ -425,6 +426,11 @@ function createBoss(floor, x, y) {
       this.animT += dt;
       if (this.flash > 0) this.flash -= dt;
       if (this.hitCd > 0) this.hitCd -= dt;
+      if (this._whiffT > 0) this._whiffT -= dt;
+      if (this._windT > 0) {
+        this._windT -= dt;
+        if (this._windT <= 0) this._resolveWind(Game); // v175: 접촉 예고 만료
+      }
       // v150 echo 잔상 감쇠
       for (let i = this._echoes.length - 1; i >= 0; i--) {
         this._echoes[i].t -= dt;
@@ -955,9 +961,38 @@ function createBoss(floor, x, y) {
       // 접촉 데미지 (장막 중 제외) — 2페이즈부터는 몸 자체가 흉기다
       // v155: 접촉 쿨다운도 3단 계단 — 근접은 몸통에 붙어 있어야 하는 직업이라 접촉이 상시 과금된다
       // (1층 실측 피해의 32%). 1~3층 1.3 / 4~5층 1.0 / 6층+ 0.8 (본 난이도 불변)
-      if (this.state !== 'veil' && this.hitCd <= 0 && Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
+      // ★ v175: 예고를 세운다. v168이 잡몹 접촉에 0.25초 윈드업을 심을 때 **보스는 빠졌다** —
+      // 보스는 공용 훅(enemies.js touchPlayer)을 안 타고 여기서 직접 피해를 줬기 때문이다.
+      // 그래서 근접 직업이 딜을 넣으려면 서 있어야 하는 바로 그 자리에서, 1층 1뎀부터
+      // 31층+ 6뎀까지 **윈드업도 부채꼴도 헛손질도 없이** 맞았다.
+      // 기획서 §14 "텔레그래프 없는 죽음 0건"을 정면으로 위반하던 마지막 구멍이다.
+      // 보스는 예고를 조금 길게 준다(0.34초) — 피해가 크므로 읽을 시간도 그만큼 있어야 한다
+      if (this.state !== 'veil' && this.hitCd <= 0 && this._windT <= 0 &&
+          Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
+        this._windT = 0.34;
+        this._windMax = 0.34;
+        this._windA = Math.atan2(p.y - this.y, p.x - this.x);
+        this._windDmg = this.phase === 2 && Dungeon.floor >= 4 ? bossDmg() + 1 : bossDmg();
+        AudioSys.telegraph(this.x, true);
+      }
+    },
+
+    // 예고 만료 — tickTimers에서 돈다 (잡몹과 같은 이유: 여기서 처리해야 플레이어가
+    // 물러난 순간에도 판정이 끊기지 않는다)
+    _resolveWind(game) {
+      const p = game.player;
+      this._windT = 0;
+      const dx = p.x - this.x, dy = p.y - this.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < p.r + this.r + 10) {
         this.hitCd = Dungeon.floor <= 3 ? 1.3 : Dungeon.floor <= 5 ? 1.0 : 0.8;
-        game.hurtPlayer(this.phase === 2 && Dungeon.floor >= 4 ? bossDmg() + 1 : bossDmg(), { x: dx / d, y: dy / d }); // 접촉 2는 3층부터
+        game.hurtPlayer(this._windDmg || 1, { x: dx / d, y: dy / d }, 260, this.name);
+      } else {
+        // 물러섰다 — 헛손질. 잡몹과 같은 문법으로 반격의 창을 연다
+        this.hitCd = (Dungeon.floor <= 3 ? 1.3 : Dungeon.floor <= 5 ? 1.0 : 0.8) + 0.35;
+        this._whiffT = 0.5;
+        Particles.text(this.x, this.y - this.r - 10, '헛손질', { color: '#9aa0b4', size: 12 });
+        AudioSys.whiff(this.x);
       }
     },
 
