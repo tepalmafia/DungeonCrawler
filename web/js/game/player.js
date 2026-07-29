@@ -764,6 +764,18 @@ function createPlayer(x, y, classId = 'knight') {
       return target;
     },
 
+    // ── 빌드 화력 (v173) ────────────────────────────────────────────────
+    // currentAtk()는 **빌드가 아니라 그 순간의 상태**다. 조건부 항목 12개가 붙는데
+    // 실측 최대 +36.5 — 빌드가 하나도 없어도 상태만으로 그만큼 오른다:
+    //   관의 못 +6.3(잃은 HP) · 차용증 +5(골드) · 수집가 +5(유물) · 광란의 투구 +4(HP≤3)
+    //   검은 초 +4(열기8) · 복수귀 +3.2(처치 중첩) · 원한 폭주 +3 …
+    // 사장 F9 실측: 궁수 3층 공7 vs 기사 3층 공2. 궁수는 현상금8(검은 초)에 죽기 직전(관의 못)이라
+    // **두 숫자가 애초에 같은 것을 재고 있지 않았다.** 그 위에 "기사 화력이 낮다"는 진단을 세울 뻔했다.
+    // → 리포트와 기준선(normRef)은 **조건이 다 꺼진 화력**을 쓴다. 여섯 번째 계측 오염을 여기서 끊는다
+    buildAtk() {
+      return 1 + this.bonusAtk + (this.flags.collector ? Math.floor(this.relics.length / 2) : 0);
+    },
+
     currentAtk() {
       let atk = 1 + this.bonusAtk + (this.floorAtk || 0); // floorAtk: 모닥불 담금질 (이번 층 한정)
       if (this.form === 'venge') atk += Math.min(8, this._vs || 0) * 0.4; // 복수귀: 원한 중첩
