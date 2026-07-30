@@ -7,7 +7,46 @@ const Sprites = (() => {
   const tints = new Map();
   const OUTLINE = '#0d0b14';
 
-  function make(rows, pal, { outline = true } = {}) {
+  // ── 광원 통일 패스 (v200) ────────────────────────────────────────────────
+  // 계측: 스프라이트 93종 중 좌상단 광원 규칙을 지키는 건 14종(15%)뿐이었다.
+  //       34종은 정반대(우상단), 41종은 방향이 아예 없었다. 그래서 아무리 잘 그려도
+  //       한 화면에 모아놓으면 따로 논다 — 맵에 규칙을 세워도 그 위의 것들이 안 지켰다.
+  //
+  // 93종을 손으로 다시 그리는 대신, **모든 스프라이트가 지나는 단일 관문**인 make()에서
+  // 실루엣으로부터 면의 방향을 읽어 빛을 다시 얹는다.
+  //   · 좌·상이 비어 있는 픽셀 = 빛을 받는 모서리  → 따뜻한 쪽으로
+  //   · 우·하가 비어 있는 픽셀 = 그늘진 모서리     → 차가운 쪽으로
+  // 색상(hue)은 건드리지 않는다. 원화가 의도한 색은 그대로 두고 **명암의 방향만** 통일한다.
+  const LIT = [255, 214, 150];   // 따뜻한 하이라이트
+  const SHA = [38, 28, 66];      // 차가운 그림자 — 밝기만 낮추면 회색으로 죽는다
+  function relight(base, w, h, strength) {
+    const ctx = base.getContext('2d');
+    const im = ctx.getImageData(0, 0, w, h);
+    const d = im.data;
+    const src = new Uint8ClampedArray(d);          // 원본 참조 (연쇄 오염 방지)
+    const solid = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : (src[(y * w + x) * 4 + 3] > 127 ? 1 : 0);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (src[i + 3] < 128) continue;
+      // 좌상 3방향 노출 − 우하 3방향 노출 → −1(그늘) … +1(빛)
+      const up = (1 - solid(x, y - 1)) + (1 - solid(x - 1, y)) + (1 - solid(x - 1, y - 1));
+      const dn = (1 - solid(x, y + 1)) + (1 - solid(x + 1, y)) + (1 - solid(x + 1, y + 1));
+      const k = (up - dn) / 3;
+      if (k === 0) continue;
+      const t = Math.min(1, Math.abs(k)) * strength;
+      const tgt = k > 0 ? LIT : SHA;
+      for (let c = 0; c < 3; c++) d[i + c] = src[i + c] + (tgt[c] - src[i + c]) * t;
+    }
+    ctx.putImageData(im, 0, 0);
+  }
+
+  // ?relight=0 으로 패스를 꺼서 전/후를 같은 자로 비교할 수 있게 한다 (tools/relight-ab.js)
+  const RELIGHT = (() => {
+    const m = typeof location !== 'undefined' && /[?&]relight=([\d.]+)/.exec(location.search);
+    return m ? parseFloat(m[1]) : 0.45;
+  })();
+
+  function make(rows, pal, { outline = true, relightStrength = RELIGHT } = {}) {
     const h = rows.length;
     const w = rows[0].length;
     for (const r of rows) {
@@ -28,6 +67,10 @@ const Sprites = (() => {
         bctx.fillRect(x, y, 1, 1);
       }
     }
+    // 광원 통일 — 아웃라인을 붙이기 **전에** 한다.
+    // 붙인 뒤에 하면 아웃라인(불투명)이 실루엣을 메워 면의 방향을 못 읽는다
+    if (relightStrength > 0) relight(base, w, h, relightStrength);
+
     if (!outline) return base;
 
     // 실루엣을 8방향으로 찍어 1px 아웃라인 자동 생성
@@ -2523,7 +2566,7 @@ const Sprites = (() => {
     ctx.imageSmoothingEnabled = false;
     const h = img.height, w = img.width;
     for (let y = 0; y < h; y++) {
-      const t = h > 1 ? y / (h - 1) : 0;
+      const t = h > 1 ? y / (h - 1) : 0.45;
       const d = fn(t) || {};
       const dx = Math.round(d.dx || 0), dy = Math.round(d.dy || 0);
       const sx = d.sx == null ? 1 : d.sx;
@@ -2660,11 +2703,20 @@ const Sprites = (() => {
     const poseBase = (cur && cur.walk && cur.walk[0]) || img;
     const gen = deriveFrames(poseBase);
     // ★ 손으로 그린 프레임은 **절대 덮어쓰지 않는다** — 자동 생성이 사람 손보다 못하다는 걸 알고 쓴다
+    //
+    // ★ v200: 다만 손으로 그린 attack 에도 **앞으로 쏟아지는 기울기**는 얹는다.
+    //   계측에서 골렘이 걸렸다 — 예고는 기본자세 대비 53% 다른데 타격은 20%뿐이라,
+    //   「젖혔다 → 쏟아졌다」의 한 쌍이 성립하지 않았다. 손그림의 형태는 그대로 두고
+    //   전신 기울기만 더한다 (warp 은 픽셀을 다시 그리는 게 아니라 행을 밀어내는 연산이다).
+    const authored = cur && cur.attack;
+    const strikeF = authored
+      ? warp(authored, (t) => ({ dx: (1 - t) * 3.2, dy: t < 0.4 ? -1 : 0, sx: 1 + (1 - t) * 0.07 }))
+      : gen.strike;
     sprites.enemyFrames[key] = {
       walk: (cur && cur.walk) || gen.walk,
-      attack: (cur && cur.attack) || gen.strike,
+      attack: strikeF,
       wind: gen.wind,
-      strike: (cur && cur.attack) || gen.strike,
+      strike: strikeF,
       hurt: gen.hurt,
       die: gen.die,
       derived: !(cur && cur.walk),   // 계측용
