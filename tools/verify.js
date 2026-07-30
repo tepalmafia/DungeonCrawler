@@ -1422,6 +1422,43 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('light.hasDirection', lit.dirDiffers && lit.rimBaked,
     '광원 방향이 좌우로 갈리고 림 캐시가 스프라이트 크기와 맞는다 (빛 받는 쪽 가장자리만 밝다)');
 
+  // ── 후광 금지 (v184) — 사장 스크린샷: "캐릭터 윤각이 두껍게 테두리가 생겼잔아" ──
+  // make()는 실루엣을 8방향으로 찍어 **1px 검은 아웃라인**을 자동으로 두른다.
+  // v180의 조명이 그 아웃라인까지 밝게 칠해서 **흰 후광**이 생겼다.
+  // 픽셀아트는 윤곽선이 살아 있어야 형태가 읽힌다 — 아웃라인은 어두운 채로 남아야 한다
+  const halo = await page.evaluate(() => {
+    const img = Sprites.knight || Sprites.skeleton;
+    const c = document.createElement('canvas');
+    c.width = 160; c.height = 160;
+    const g = c.getContext('2d');
+    const saveCtx = Renderer.ctx, saveL = Renderer.lights;
+    Renderer.ctx = g;
+    // 아웃라인 픽셀 = 원본에서 '가장 어두운 불투명 화소' (make의 OUTLINE '#0d0b14')
+    const shot = (lights) => {
+      Renderer.lights = lights;
+      g.clearRect(0, 0, c.width, c.height);
+      Renderer.drawSprite(img, 80, 80, { light: lights.length ? Renderer.lightAt(80, 80) : null });
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let out = 0, on = 0, body = 0, bn = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 40) continue;
+        const lum = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        if (lum < 46) { out += lum; on++; } else { body += lum; bn++; }
+      }
+      return { outline: on ? out / on : 0, body: bn ? body / bn : 0, outlinePx: on };
+    };
+    const off = shot([]);
+    const on2 = shot([{ x: 40, y: 40, r: 400, warm: true, i: 1.3 }]);
+    Renderer.ctx = saveCtx; Renderer.lights = saveL;
+    return { offOut: +off.outline.toFixed(1), onOut: +on2.outline.toFixed(1),
+      offBody: +off.body.toFixed(1), onBody: +on2.body.toFixed(1), px: off.outlinePx };
+  });
+  console.log('  후광:', JSON.stringify(halo));
+  ok('light.noHalo', halo.px > 20 && halo.onOut < 60 && halo.onBody > halo.offBody * 1.05,
+    `강한 조명에서 아웃라인 밝기 ${halo.offOut} → ${halo.onOut} (60 미만이어야 어두운 윤곽) · ` +
+    `몸통은 ${halo.offBody} → ${halo.onBody}로 밝아진다 ` +
+    '(v183은 흰 실루엣을 lighter로 얹어 **검은 테두리가 흰 후광이 됐다**)');
+
   // ── 무리와 진형 (v181) ──
   await boot(page, { cls: 'knight', heat: 0 });
   const pack = await page.evaluate(() => {
@@ -1449,13 +1486,24 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     };
     const front = dOf('shieldSkeleton'), back = dOf('sniper'), flank = dOf('charger');
     // ③ 지형 질의가 실제로 다른 자리를 고르는가
-    const bx = 480, by = 270;
-    const cs = World.coverSpot(bx, by, 110), ch = World.chokeSpot(bx, by, 110), op = World.openSpot(bx, by, 110);
+    // ★ 한 방·한 지점만 보면 방이 무작위라 판정이 흔들린다(엄폐 자리 주변 벽 0이 나올 수 있다).
+    // 여러 방 × 여러 지점의 **평균 경향**을 본다 — 지형 질의는 확률이 아니라 경향의 문제다
     const wallsAt = (q) => q ? World._wallsAround(Math.floor(q.x / 48), Math.floor((q.y - World.offsetY) / 48)) : -1;
+    let cw = 0, ow = 0, n2 = 0, chokeN = 0, diffN = 0;
+    for (let r = 0; r < 24; r++) {
+      Dungeon.floor = 1 + (r % 8); Dungeon.roomIndex = 2 + (r % 5); Dungeon.build('combat');
+      for (const [bx, by] of [[300, 220], [480, 270], [660, 330]]) {
+        const cs = World.coverSpot(bx, by, 110), ch = World.chokeSpot(bx, by, 110), op = World.openSpot(bx, by, 110);
+        if (!cs || !op) continue;
+        cw += wallsAt(cs); ow += wallsAt(op); n2++;
+        if (ch) chokeN++;
+        if (cs.x !== op.x || cs.y !== op.y) diffN++;
+      }
+    }
     return { setPct: Math.round(setUsed / N * 100), packsAvg: +(packSum / N).toFixed(2),
-      front, back, flank,
-      coverWalls: wallsAt(cs), openWalls: wallsAt(op), chokeFound: !!ch,
-      terrainDiffers: !!(cs && op && (cs.x !== op.x || cs.y !== op.y)) };
+      front, back, flank, samples: n2,
+      coverWalls: +(cw / (n2 || 1)).toFixed(2), openWalls: +(ow / (n2 || 1)).toFixed(2),
+      chokeFound: chokeN >= n2 * 0.8, terrainDiffers: diffN >= n2 * 0.7 };
   });
   console.log('  무리:', JSON.stringify(pack));
   ok('pack.handmadeIsDefault', pack.setPct >= 95 && pack.packsAvg >= 1.5,
@@ -1465,7 +1513,8 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `진형 거리 전열 ${pack.front}px < 측면 ${pack.flank}px < 후열 ${pack.back}px ` +
     '(v180은 전부 randomSpawnPos — 방 아무 데나 흩뿌려서 무리를 깨는 순서가 없었다)');
   ok('terrain.roleAwareSpots', pack.terrainDiffers && pack.coverWalls > pack.openWalls,
-    `엄폐 자리 주변 벽 ${pack.coverWalls} > 트인 자리 ${pack.openWalls} · 좁은 목 탐색 ${pack.chokeFound ? '성공' : '실패'} ` +
+    `${pack.samples}개 표본 평균 — 엄폐 자리 주변 벽 ${pack.coverWalls} > 트인 자리 ${pack.openWalls} · ` +
+    `좁은 목 탐색 ${pack.chokeFound ? '성공' : '실패'} · 두 자리가 다름 ${pack.terrainDiffers ? '확인' : '실패'} ` +
     '(지형이 진형에 값을 매긴다 — 저격수는 벽을 등지고, 돌진은 트인 길에 선다)');
 
   // ── E 스킬 · 속성 궁극기 (v182) ──

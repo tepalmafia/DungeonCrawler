@@ -99,20 +99,20 @@ const Renderer = {
       // ① 몸 전체가 빛을 받는다 — **이게 substance고 림은 detail이다.**
       // 실측 교훈: 가장자리만 밝히면 화면 변화가 0.04%라 "작동하지만 안 보인다".
       // 횃불 옆 해골은 테두리만이 아니라 **몸이 따뜻해져야** 장면 안에 있는 것으로 읽힌다
-      if (Sprites.white) {
-        ctx.globalAlpha = alpha * Math.min(0.26, light.k * 0.34);
-        ctx.globalCompositeOperation = 'lighter';
-        const sil = Sprites.white(img);
-        ctx.save();
-        ctx.drawImage(sil, Math.round(-w / 2), Math.round(-h / 2), w, h);
-        ctx.restore();
-      }
+      // ★ v184: **흰 실루엣이 아니라 스프라이트 자신**을 겹친다.
+      // `Sprites.white()`는 자동 생성된 검은 아웃라인까지 흰색으로 만들기 때문에,
+      // 그걸 `lighter`로 얹으면 **테두리가 흰 후광이 된다**(사장 스크린샷으로 발각).
+      // 자기 자신을 겹치면 밝은 곳은 더 밝아지고 **검은 아웃라인은 검은 채로 남는다** —
+      // 픽셀아트의 윤곽선이 살아 있어야 형태가 읽힌다
+      ctx.globalAlpha = alpha * Math.min(0.3, light.k * 0.38);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(img, Math.round(-w / 2), Math.round(-h / 2), w, h);
       // ② 광원 쪽 가장자리 (rim)
       // flip 상태에서는 좌우가 뒤집히므로 방향도 뒤집어야 빛이 같은 쪽에 남는다
       const ang = flip ? Math.PI - light.a : light.a;
       const n = Sprites.RIM_DIRS || 8;
       const di = ((Math.round((ang / (Math.PI * 2)) * n) % n) + n) % n;
-      ctx.globalAlpha = alpha * Math.min(0.55, light.k * 0.8);
+      ctx.globalAlpha = alpha * Math.min(0.34, light.k * 0.5);
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(Sprites.rim(img, di, !!light.warm), Math.round(-w / 2), Math.round(-h / 2), w, h);
     }

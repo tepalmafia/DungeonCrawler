@@ -2593,6 +2593,31 @@ const Sprites = (() => {
   // ══════════════════════════════════════════════════════════════════════
   const rims = new Map();
   const RIM_DIRS = 8;
+  // 실루엣을 n픽셀 깎는다 — 림이 **자동 생성된 검은 아웃라인 위에 얹히지 않게** 하는 장치.
+  // v180의 림은 아웃라인을 포함한 이미지에서 만들어져서, `lighter` 합성이
+  // **검은 테두리를 흰 후광으로** 바꿨다 (사장 스크린샷: "캐릭터 윤각이 두껍게 테두리가 생겼잔아").
+  // make()가 실루엣을 8방향으로 찍어 1px 테두리를 두르므로, 2px 깎으면 안쪽 살만 남는다
+  const eroded = new Map();
+  function erodeOf(img, n) {
+    const key = img.width + 'x' + img.height + '#' + n;
+    let byImg = eroded.get(img);
+    if (!byImg) { byImg = new Map(); eroded.set(img, byImg); }
+    if (byImg.has(key)) return byImg.get(key);
+    let cur = img;
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d');
+      x.imageSmoothingEnabled = false;
+      x.drawImage(cur, 0, 0);
+      x.globalCompositeOperation = 'destination-in';
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) x.drawImage(cur, dx, dy);
+      cur = c;
+    }
+    byImg.set(key, cur);
+    return cur;
+  }
+
   function rimOf(img, dir, warm) {
     const key = (warm ? 'w' : 'c') + dir;
     let byImg = rims.get(img);
@@ -2600,15 +2625,16 @@ const Sprites = (() => {
     const hit = byImg.get(key);
     if (hit) return hit;
     const a = (dir / RIM_DIRS) * Math.PI * 2;
-    const dx = Math.round(Math.cos(a) * 2.4), dy = Math.round(Math.sin(a) * 2.4);
+    const dx = Math.round(Math.cos(a) * 1.6), dy = Math.round(Math.sin(a) * 1.6);
+    const src = erodeOf(img, 2);   // ★ 아웃라인 2px를 깎아낸 '안쪽 살'에서만 림을 만든다
     const c = document.createElement('canvas');
     c.width = img.width; c.height = img.height;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0);
-    // 광원 반대쪽으로 민 자기 자신을 빼면 빛 받는 쪽 테두리만 남는다
+    ctx.drawImage(src, 0, 0);
+    // 광원 반대쪽으로 민 자기 자신을 빼면 빛 받는 쪽 가장자리만 남는다
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.drawImage(img, -dx, -dy);
+    ctx.drawImage(src, -dx, -dy);
     // 그 테두리를 빛 색으로 칠한다 (불빛은 주황, 달빛은 창백한 청백)
     ctx.globalCompositeOperation = 'source-in';
     ctx.fillStyle = warm ? '#ffb45c' : '#bcd0e8';
