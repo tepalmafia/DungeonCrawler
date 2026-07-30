@@ -3690,6 +3690,119 @@ const Sprites = (() => {
     for (let k = 0; k < 8; k++) P.put(g, 8 + k * 2.7, 30 + (k % 2), 'c');   // 흘러내린 용암
   }, { C: '#ffd866', c: '#e25822', n: '#7a1010', B: '#fff4c8' });
 
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  주인공 4직업 재조립 (v200) — 사장: "모든 플레이어 몬스터를 시제품처럼"
+  //  플레이어는 화면에 **항상** 있다. 가장 오래 보는 그림이므로 몬스터보다 더 밀어야 한다.
+  //  프레임 5장(걷기3·공격·피격)을 같은 조립 함수에서 pose 만 바꿔 만든다 —
+  //  손으로 5장을 따로 찍으면 프레임 사이에 몸이 미묘하게 어긋난다 (종전 그림의 실제 문제)
+  // ══════════════════════════════════════════════════════════════════════
+  function hero(w, h, build, ov) {
+    // pose: 0 정지 · 1/2 걷기 · 3 공격(앞으로 쏟아짐) · 4 피격(뒤로 젖혀짐)
+    return [0, 1, 2, 3, 4].map((pose) => {
+      const g = canvasGrid(w, h);
+      build(g, pose);
+      return make(P.rows(g), { ...KIT, ...ov });
+    });
+  }
+  // 걷기 다리 — pose 에 따라 앞뒤로 벌어진다. 상체는 거의 고정(걸음의 무게 이동)
+  function heroLegs(g, cx, y0, pose, { hi = 'a', lo = 'n', boot = 'h' } = {}) {
+    const sw = pose === 1 ? 1 : pose === 2 ? -1 : 0;
+    for (const sgn of [-1, 1]) {
+      const off = sgn === sw ? 1 : 0;
+      const bend = sgn === -sw ? 1 : 0;
+      for (let k = 0; k < 6 - bend; k++) {
+        P.span(g, y0 + k, cx + sgn * 2 - 1 + off, cx + sgn * 2 + 1 + off, hi);
+        P.put(g, cx + sgn * 2 - 1 + off, y0 + k, sgn < 0 ? hi : lo);
+      }
+      P.span(g, y0 + 6 - bend, cx + sgn * 2 - 2 + off, cx + sgn * 2 + 2 + off, boot);
+      P.span(g, y0 + 7 - bend, cx + sgn * 2 - 2 + off, cx + sgn * 2 + 2 + off, 'n');
+    }
+  }
+
+  // 가레스 — 판금 투구 · 방패 · 검. 실루엣의 정체성은 **방패와 어깨**
+  sprites.playerFrames.player = hero(38, 40, (g, pose) => {
+    const lean = pose === 3 ? 2 : pose === 4 ? -2 : 0;
+    const cx = 18 + lean;
+    heroLegs(g, 18, 30, pose, { hi: 'S', lo: 's', boot: 'h' });
+    for (let y = 0; y < 13; y++) {                               // 흉갑 — 어깨 넓고 허리 좁게
+      const wd = Math.round(8 - y * 0.28);
+      P.span(g, 17 + y, cx - wd, cx + wd, 'S');
+      P.put(g, cx - wd, 17 + y, 'K'); P.put(g, cx - wd + 1, 17 + y, 'K');
+      P.put(g, cx + wd, 17 + y, 's');
+    }
+    P.span(g, 24, cx - 7, cx + 7, 'G'); P.put(g, cx, 24, 'C');   // 허리띠
+    for (let y = 0; y < 9; y++) { const wd = Math.round(3 + y * 0.7);   // 붉은 망토
+      P.span(g, 20 + y, cx - wd - 7, cx - wd - 4, 'A'); P.put(g, cx - wd - 7, 20 + y, 'C'); }
+    P.head(g, cx, 10, 1, { helm: true, eye: 'C' });
+    P.span(g, 8, cx - 6, cx + 6, 's'); P.put(g, cx, 6, 'C');     // 투구 볏
+    if (pose === 3) { P.sword(g, cx + 15, 22, 1, 13); P.limb(g, cx + 11, 17, 1, { hi: 'K', mid: 'S', lo: 's', dx: 0.4, len: 3, thick: 3 }); }
+    else { P.sword(g, cx + 12, 26, 1, 12); P.limb(g, cx + 9, 18, 1, { hi: 'K', mid: 'S', lo: 's', dx: 0.2, len: 3, thick: 3 }); }
+    P.shield(g, cx - 12, 22, 1.1);                                // 방패는 맨 앞
+  }, { K: '#e2e8f4', S: '#93a0b4', s: '#4a5266', A: '#a8202c', a: '#7a1620', n: '#3a0c12',
+       G: '#c9a24a', g: '#8a6b3c', h: '#4a3620', C: '#ffd866', F: '#e8c9a0', f: '#c9a179', p: '#8a6a4e' });
+
+  // 레나 — 두건 · 활 · 화살통. 정체성은 **몸 앞을 가로지르는 큰 활**
+  sprites.playerFrames.playerArcher = hero(38, 40, (g, pose) => {
+    const lean = pose === 3 ? 2 : pose === 4 ? -2 : 0;
+    const cx = 18 + lean;
+    heroLegs(g, 18, 30, pose, { hi: 'a', lo: 'n', boot: 'h' });
+    P.rect(g, cx + 6, 12, 4, 10, 'h');                            // 등에 멘 화살통
+    for (let k = 0; k < 4; k++) P.put(g, cx + 6 + k, 11 - k * 0.5, 'G');
+    for (let y = 0; y < 13; y++) { const wd = Math.round(6.5 - y * 0.1);
+      P.span(g, 17 + y, cx - wd, cx + wd, 'a');
+      P.put(g, cx - wd, 17 + y, 'A'); P.put(g, cx + wd, 17 + y, 'n'); }
+    P.span(g, 25, cx - 6, cx + 6, 'h'); P.put(g, cx, 25, 'G');
+    P.head(g, cx, 10, 1, { hood: true, eye: 'C' });
+    P.limb(g, cx - 8, 18, 1, { dx: -0.2, len: 3, thick: 3 });
+    P.bow(g, cx + 11, 21, 1, { drawn: pose === 3 });
+  }, { A: '#5e7a4a', a: '#3e5630', n: '#1e2c16', C: '#8ad8ff', G: '#c9a24a', g: '#8a6b3c', h: '#4a3620',
+       F: '#e8c9a0', f: '#c9a179', p: '#8a6a4e' });
+
+  // 오르빈 — 로브 · 지팡이 · 수염. 정체성은 **긴 로브와 빛나는 정수**
+  sprites.playerFrames.playerMage = hero(38, 42, (g, pose) => {
+    const lean = pose === 3 ? 2 : pose === 4 ? -2 : 0;
+    const cx = 18 + lean;
+    heroLegs(g, 18, 32, pose, { hi: 'a', lo: 'n', boot: 'h' });
+    P.cloak(g, cx, 16, 1.15, 17);
+    P.head(g, cx, 10, 1, { hood: true, eye: 'C' });
+    for (let y = 0; y < 6; y++) {                                 // 수염 — 마법사의 정체성
+      const wd = Math.round(4 - y * 0.5);
+      P.span(g, 14 + y, cx - wd, cx + wd, y < 2 ? 'B' : 'b');
+    }
+    P.limb(g, cx - 9, 19, 1, { dx: -0.2, len: 3, thick: 3 });
+    P.staff(g, cx + 12, pose === 3 ? 30 : 34, 1, 22);
+  }, { A: '#4a3a6c', a: '#31264a', n: '#170f28', C: '#b16aff', c: '#7a2fb8',
+       B: '#f4eeda', b: '#c8c0b0', F: '#e8c9a0', f: '#c9a179', p: '#8a6a4e', G: '#c9a24a', g: '#8a6b3c' });
+
+  // 이졸데 — 코트 · 고글 · 허리의 약병들. 정체성은 **주렁주렁 매단 유리병**
+  sprites.playerFrames.playerAlch = hero(38, 40, (g, pose) => {
+    const lean = pose === 3 ? 2 : pose === 4 ? -2 : 0;
+    const cx = 18 + lean;
+    heroLegs(g, 18, 30, pose, { hi: 'a', lo: 'n', boot: 'h' });
+    for (let y = 0; y < 16; y++) { const wd = Math.round(6.5 + y * 0.16);   // 긴 코트
+      P.span(g, 17 + y, cx - wd, cx + wd, 'a');
+      P.put(g, cx - wd, 17 + y, 'A'); P.put(g, cx - wd + 1, 17 + y, 'A');
+      P.put(g, cx + wd, 17 + y, 'n');
+      if (y > 2 && (y + cx) % 4 === 0) P.put(g, cx - 1, 17 + y, 'n'); }
+    for (let y = 0; y < 16; y++) { P.put(g, cx, 17 + y, 'n'); P.put(g, cx + 1, 17 + y, 'A'); }  // 여밈선
+    for (let k = 0; k < 5; k++) { P.put(g, cx + 2, 19 + k * 3, 'G'); }                          // 단추
+    for (let k = 0; k < 5; k++) { P.put(g, cx - 4 + k, 17 + k, 'A'); P.put(g, cx + 4 - k, 17 + k, 'A'); }  // 깃(라펠)
+    P.head(g, cx, 10, 1, { eye: 'C' });
+    P.span(g, 8, cx - 6, cx + 6, 'S'); P.span(g, 9, cx - 6, cx + 6, 'K');   // 이마의 고글
+    P.put(g, cx - 3, 9, 'C'); P.put(g, cx + 3, 9, 'C');
+    for (const [dx, col] of [[-7, 'C'], [-4, 'P'], [7, 'r']]) {             // 허리의 약병
+      P.rect(g, cx + dx, 25, 3, 4, col); P.put(g, cx + dx + 1, 24, 'S');
+      P.put(g, cx + dx, 25, 'B');
+    }
+    P.limb(g, cx - 9, 19, 1, { dx: -0.2, len: 3, thick: 3 });
+    if (pose === 3) { P.shade(g, cx + 13, 16, 3.5, 3.5, 'B', 'P', 'c'); P.limb(g, cx + 9, 17, 1, { dx: 0.4, len: 3, thick: 3 }); }
+    else P.limb(g, cx + 9, 19, 1, { dx: 0.2, len: 3, thick: 3 });
+  }, { A: '#3f5a6a', a: '#2a3d4a', n: '#131e26', C: '#8ad8ff', c: '#3a7ab0', P: '#8adf76',
+       S: '#9aa2b8', K: '#d8e0f0', B: '#ffffff', r: '#e43b44', F: '#e8c9a0', f: '#c9a179', p: '#8a6a4e', h: '#3a2c1a' });
+
+  for (const k of ['player', 'playerArcher', 'playerMage', 'playerAlch']) sprites[k] = sprites.playerFrames[k][0];
+
   sprites.deriveFrames = deriveFrames;
   // UI·투사체·아이템은 자세가 없다 — 걸으면 안 된다
   const NO_POSE = /^(arrow|heart|coin|chest|orb|icon|shard|door|torch|pot|crack|rune|bolt|proj|white|tint)/i;
