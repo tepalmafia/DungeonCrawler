@@ -1,0 +1,47 @@
+// ══════════════════════════════════════════════════════════════════════════
+//  버전 올리기 — GAME_VERSION 과 index.html 캐시버스트를 **한 번에** 맞춘다.
+//    node tools/bump-version.js 190     (지정)
+//    node tools/bump-version.js         (현재 GAME_VERSION 으로 index.html만 동기화)
+//
+//  ★ 왜 도구가 필요한가 (v190 실사고)
+//    v187·v188·v189 세 번의 빌드 동안 index.html 의 `?v=` 25개가 전부 186에 멈춰 있었다.
+//    GAME_VERSION 은 main.js 에 있고 캐시버스트는 index.html 에 있어서, 버전을 올릴 때마다
+//    한쪽만 올라갔다. 그러면 브라우저가 파일마다 제각각 갱신돼
+//    **main.js 는 v189인데 enemies.js 는 v186** 인 상태가 만들어질 수 있다 —
+//    화면에는 v189라고 찍히면서 그 버전의 변경은 적용되지 않는다.
+//    "체감이 없다"는 보고가 코드가 아니라 여기서 나올 수 있었다.
+//    두 값이 한 명령으로만 움직이게 하고, 회귀(release.cacheBustMatchesVersion)가 어긋남을 잡는다.
+// ══════════════════════════════════════════════════════════════════════════
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const MAIN = path.join(ROOT, 'web/js/main.js');
+const HTML = path.join(ROOT, 'web/index.html');
+
+let main = fs.readFileSync(MAIN, 'utf8');
+const cur = parseInt((main.match(/const GAME_VERSION = (\d+)/) || [, '0'])[1], 10);
+const want = parseInt(process.argv[2] || String(cur), 10);
+if (!Number.isFinite(want) || want <= 0) {
+  console.error('사용법: node tools/bump-version.js [버전번호]');
+  process.exit(1);
+}
+
+if (want !== cur) {
+  main = main.replace(/const GAME_VERSION = \d+/, `const GAME_VERSION = ${want}`);
+  fs.writeFileSync(MAIN, main);
+}
+
+let html = fs.readFileSync(HTML, 'utf8');
+const before = [...html.matchAll(/\?v=(\d+)/g)].map((m) => m[1]);
+html = html.replace(/\?v=\d+/g, `?v=${want}`);
+fs.writeFileSync(HTML, html);
+
+const uniqBefore = [...new Set(before)];
+console.log(`GAME_VERSION ${cur} → ${want}`);
+console.log(`index.html 캐시버스트 ${before.length}개: ${uniqBefore.join(',')} → ${want}`);
+if (uniqBefore.length === 1 && uniqBefore[0] === String(cur) && want === cur) {
+  console.log('  (이미 일치)');
+} else if (!uniqBefore.includes(String(cur))) {
+  console.log(`  ⚠ 어긋나 있었다 — 캐시버스트가 ${uniqBefore.join(',')} 인데 게임은 v${cur} 였다`);
+}
