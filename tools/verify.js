@@ -1369,6 +1369,45 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       .map(([k, v]) => `${k} ${(v.windVsStrike * 100).toFixed(0)}%`).join(' / ') +
     ' (기본자세 대비보다 서로가 더 멀어야 "젖혔다 → 쏟아졌다"로 읽힌다)');
 
+  // ── 스프라이트 조명 (v180) ──
+  const lit = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 200; c.height = 120;
+    const g = c.getContext('2d');
+    const saveCtx = Renderer.ctx, saveL = Renderer.lights;
+    Renderer.ctx = g;
+    const img = Sprites.skeleton;
+    const shot = (lights, x) => {
+      Renderer.lights = lights;
+      g.clearRect(0, 0, c.width, c.height);
+      Renderer.drawSprite(img, 60, 60, { light: lights.length ? Renderer.lightAt(60, 60) : null });
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let lum = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) { if (d[i + 3] > 24) { lum += (d[i] + d[i + 1] + d[i + 2]) / 3; n++; } }
+      return { lum: n ? +(lum / n).toFixed(1) : 0, px: n };
+    };
+    const off = shot([], 0);
+    const near = shot([{ x: 20, y: 20, r: 300, warm: true, i: 1 }], 0);
+    const far = shot([{ x: 20, y: 20, r: 300, warm: true, i: 1 }], 0);
+    // 거리별 — 같은 광원에서 멀어지면 어두워지는가
+    Renderer.lights = [{ x: 20, y: 20, r: 300, warm: true, i: 1 }];
+    const kNear = Renderer.lightAt(40, 40).k, kFar = Renderer.lightAt(260, 200).k;
+    // 광원 반경(300) **안쪽**의 좌우 두 점 — 밖이면 둘 다 기본광으로 떨어져 방향이 같아진다
+    const dirL = Renderer.lightAt(150, 20).a, dirR = Renderer.lightAt(-100, 20).a;
+    Renderer.ctx = saveCtx; Renderer.lights = saveL;
+    return { off: off.lum, near: near.lum, kNear: +kNear.toFixed(2), kFar: +kFar.toFixed(2),
+      dirDiffers: Math.abs(dirL - dirR) > 1,
+      rimBaked: typeof Sprites.rim === 'function' && Sprites.rim(img, 0, true).width === img.width };
+  });
+  console.log('  조명:', JSON.stringify(lit));
+  ok('light.spritesRespond', lit.near > lit.off * 1.06,
+    `광원 옆 스프라이트 평균 휘도 ${lit.off} → ${lit.near} (v179까지는 횃불 한가운데 선 해골과 ` +
+    '암흑 속 해골이 **똑같이 밝았다** — 캐릭터가 배경 안이 아니라 위에 얹혀 있었다)');
+  ok('light.fallsOffWithDistance', lit.kNear > lit.kFar,
+    `광원 세기 가까이 ${lit.kNear} → 멀리 ${lit.kFar} (거리에 따라 꺼진다)`);
+  ok('light.hasDirection', lit.dirDiffers && lit.rimBaked,
+    '광원 방향이 좌우로 갈리고 림 캐시가 스프라이트 크기와 맞는다 (빛 받는 쪽 가장자리만 밝다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

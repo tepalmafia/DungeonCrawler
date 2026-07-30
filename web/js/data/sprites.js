@@ -2579,6 +2579,46 @@ const Sprites = (() => {
     };
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  림라이트 (v180) — 스프라이트를 장면 **안**에 놓는다
+  //
+  //  계측: 어둠 패스·횃불 구멍·층 색보정·비네트는 이미 있다. 없던 것은
+  //  **스프라이트가 광원에 반응하지 않는다**는 것 — 횃불 옆에 선 해골과
+  //  방 구석의 해골이 똑같이 밝다. 그래서 캐릭터가 배경 '안'이 아니라 '위'에 얹혀 보인다.
+  //
+  //  픽셀아트의 정석 기법: 광원 쪽 가장자리 1~2px만 밝게(rim). 실루엣을 광원 반대로
+  //  밀어 원본에서 빼면 **빛 받는 쪽 테두리**만 남는다.
+  //  방향 8종 × 색 2종(따뜻한 불빛/차가운 달빛)을 **처음 쓸 때 구워** 캐시한다 —
+  //  사운드에서 쓴 "render once, play many"와 같은 수법이다
+  // ══════════════════════════════════════════════════════════════════════
+  const rims = new Map();
+  const RIM_DIRS = 8;
+  function rimOf(img, dir, warm) {
+    const key = (warm ? 'w' : 'c') + dir;
+    let byImg = rims.get(img);
+    if (!byImg) { byImg = new Map(); rims.set(img, byImg); }
+    const hit = byImg.get(key);
+    if (hit) return hit;
+    const a = (dir / RIM_DIRS) * Math.PI * 2;
+    const dx = Math.round(Math.cos(a) * 2.4), dy = Math.round(Math.sin(a) * 2.4);
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+    // 광원 반대쪽으로 민 자기 자신을 빼면 빛 받는 쪽 테두리만 남는다
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.drawImage(img, -dx, -dy);
+    // 그 테두리를 빛 색으로 칠한다 (불빛은 주황, 달빛은 창백한 청백)
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = warm ? '#ffb45c' : '#bcd0e8';
+    ctx.fillRect(0, 0, c.width, c.height);
+    byImg.set(key, c);
+    return c;
+  }
+  sprites.rim = rimOf;
+  sprites.RIM_DIRS = RIM_DIRS;
+
   sprites.deriveFrames = deriveFrames;
   // UI·투사체·아이템은 자세가 없다 — 걸으면 안 된다
   const NO_POSE = /^(arrow|heart|coin|chest|orb|icon|shard|door|torch|pot|crack|rune|bolt|proj|white|tint)/i;

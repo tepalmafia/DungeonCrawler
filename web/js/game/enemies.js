@@ -253,7 +253,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'crouch') squash = 0.55 + this.stateT * 0.2;      // 납작
         if (this.state === 'leap') squash = 1.45;                            // 쭉 늘어남
         Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y, {
-          flip: this.flip, squashX: 2 - squash, squashY: squash, shadow: true,
+          flip: this.flip, squashX: 2 - squash, squashY: squash, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         if (this.state === 'crouch') {
           ctx.fillStyle = '#ff4757';
@@ -324,7 +324,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
         const bob = Math.sin(this.animT * 7) * 2;
         const img = this.state === 'aim' ? this.attackFrame() : this.walkFrame(6);
-        Renderer.drawSprite(this.skin(img), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(img), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -399,7 +399,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'charge') rot = this.flip ? -0.08 : 0.08;
         const img = this.state === 'charge' ? this.walkFrame(16)
           : this.walkFrame(this.state === 'wander' ? 7 : 5);
-        Renderer.drawSprite(this.skin(img), this.x + shakeX, this.y, { flip: this.flip, rot, shadow: true });
+        Renderer.drawSprite(this.skin(img), this.x + shakeX, this.y, { flip: this.flip, rot, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.state === 'stunned') {
           ctx.fillStyle = '#f7b32b';
           for (let i = 0; i < 3; i++) {
@@ -459,7 +459,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const inflate = this.state === 'puff' ? 1 + this.stateT * 0.5 : 1 + Math.sin(this.animT * 3) * 0.04;
         const img = this.state === 'puff' ? Sprites.mushroom : this.walkFrame(4);
         Renderer.drawSprite(this.skin(img), this.x, this.y, {
-          flip: this.flip, squashX: inflate, squashY: inflate, shadow: true,
+          flip: this.flip, squashX: inflate, squashY: inflate, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         this.drawStatus(ctx);
       },
@@ -510,7 +510,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const flap = this.state === 'dive' ? 1.4 : 1 + Math.sin(this.animT * 18) * 0.25;
         const jitter = this.state === 'aim' ? (Math.random() - 0.5) * 3 : 0;
         Renderer.drawSprite(this.skin(Sprites.bat), this.x + jitter, this.y + Math.sin(this.animT * 9) * 3, {
-          flip: this.flip, squashX: flap, squashY: 2 - flap, shadow: true,
+          flip: this.flip, squashX: flap, squashY: 2 - flap, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         if (this.state === 'aim') {
           ctx.fillStyle = '#ff4757';
@@ -557,7 +557,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const crouch = this.state === 'spin' ? 0.75 : 1;
         const img = this.state === 'spin' ? Sprites.spider : this.walkFrame(10);
         Renderer.drawSprite(this.skin(img), this.x, this.y, {
-          flip: this.flip, squashY: crouch, squashX: 2 - crouch, shadow: true,
+          flip: this.flip, squashY: crouch, squashX: 2 - crouch, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         if (this.state === 'spin') {
           ctx.fillStyle = '#ff4757';
@@ -617,7 +617,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const lift = this.state === 'slam' ? -this.stateT * 8 : 0;
         const img = this.state === 'slam' ? this.attackFrame() : this.walkFrame(3.5);
-        Renderer.drawSprite(this.skin(img), this.x, this.y + lift, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(img), this.x, this.y + lift, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         // 방패 방향 표시 (전방 호)
         ctx.save();
         ctx.globalAlpha = 0.35;
@@ -731,7 +731,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const bob = Math.sin(this.animT * 4) * 4;
         const heat = this.state === 'cast' ? 1 + this.stateT * 0.3 : 1;
         Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y - bob, {
-          flip: this.flip, squashX: heat, squashY: heat, shadow: true,
+          flip: this.flip, squashX: heat, squashY: heat, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         if (Math.random() < 0.3) {
           Particles.burst(this.x, this.y - bob + 10, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 25, life: 0.4, size: 3, gravity: -120 });
@@ -780,7 +780,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const bob = Math.sin(this.animT * 4) * 2;
         const raise = this.state === 'summon' ? -this.stateT * 6 : 0;
         const img = this.state === 'summon' ? this.attackFrame() : this.walkFrame(5);
-        Renderer.drawSprite(this.skin(img), this.x, this.y - bob + raise, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(img), this.x, this.y - bob + raise, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.state === 'summon') {
           ctx.fillStyle = '#38b764';
           ctx.globalAlpha = 0.5 + Math.sin(this.animT * 15) * 0.3;
@@ -832,7 +832,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const puff = fusing ? 1 + (0.8 - this.fuseT) * 0.45 : 1 + Math.sin(this.animT * 8) * 0.06;
         const img = fusing && Math.floor(this.fuseT * 12) % 2 === 0
           ? Sprites.white(Sprites.bomber) : this.skin(Sprites.bomber);
-        Renderer.drawSprite(img, this.x, this.y, { flip: this.flip, squashX: puff, squashY: puff, shadow: true });
+        Renderer.drawSprite(img, this.x, this.y, { flip: this.flip, squashX: puff, squashY: puff, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (fusing) {
           ctx.save();
           ctx.globalAlpha = 0.22 + Math.sin(this.animT * 24) * 0.08;
@@ -882,7 +882,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const crouch = this.state === 'windup' ? 1 - this.stateT * 0.3
           : this.state === 'burst' ? 1.15 : 1 + Math.sin(this.animT * 2.5) * 0.04;
         Renderer.drawSprite(this.skin(Sprites.thornPlant), this.x, this.y, {
-          flip: this.flip, squashY: crouch, squashX: 2 - crouch, shadow: true,
+          flip: this.flip, squashY: crouch, squashX: 2 - crouch, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         if (this.state === 'windup') {
           ctx.fillStyle = '#ff4757';
@@ -957,7 +957,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
         const lift = this.state === 'raise' ? -this.stateT * 10 : 0;
         const drop = this.state === 'recover' && this.stateT < 0.2 ? 6 : 0;
-        Renderer.drawSprite(this.skin(Sprites.executioner), this.x, this.y + lift + drop, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.executioner), this.x, this.y + lift + drop, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -985,7 +985,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'crouch') squash = 0.55;
         if (this.state === 'leap') squash = 1.45;
         Renderer.drawSprite(this.skin(Sprites.magmaSlime), this.x, this.y, {
-          flip: this.flip, squashX: (2 - squash) * 0.62, squashY: squash * 0.62, shadow: true,
+          flip: this.flip, squashX: (2 - squash) * 0.62, squashY: squash * 0.62, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         this.drawStatus(ctx);
       },
@@ -1037,7 +1037,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const bob = Math.sin(this.animT * 3.2) * 5;
         const charge = this.castT < 0.4 ? 1 + (0.4 - this.castT) * 0.5 : 1;
         Renderer.drawSprite(this.skin(Sprites.voidEye), this.x, this.y - bob, {
-          flip: this.flip, squashX: charge, squashY: charge, shadow: true,
+          flip: this.flip, squashX: charge, squashY: charge, shadow: true, light: Renderer.lightAt(this.x, this.y),
         });
         this.drawStatus(ctx);
       },
@@ -1068,7 +1068,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const lean = this.state === 'ready' ? -3 : this.state === 'stab' ? 4 : 0;
-        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x + (this.flip ? -lean : lean), this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x + (this.flip ? -lean : lean), this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.state === 'ready') { ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center'; ctx.fillText('!', this.x, this.y - 26); }
         this.drawStatus(ctx);
       },
@@ -1116,7 +1116,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         return dot > 0.6;
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(this.walkFrame(5)), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(this.walkFrame(5)), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         // v175: 밀치기 중에는 방패가 붉게 달아오른다 — 종전엔 state 분기가 draw에 하나도 없어
         // 걷는 중인지 후려칠 참인지 화면상 구분이 불가능했다
         const bash = this.state === 'bash';
@@ -1172,7 +1172,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.lineTo(this.x + this.aimDir.x * 700, this.y + this.aimDir.y * 700); ctx.stroke();
           ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.sniper), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.sniper), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1193,7 +1193,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.touchPlayer(game, 1);
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(Sprites.swarm), this.x, this.y + Math.sin(this.animT * 12) * 2, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.swarm), this.x, this.y + Math.sin(this.animT * 12) * 2, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1224,7 +1224,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const sq = this.state === 'crouch' ? 0.7 : this.state === 'hop' ? 1.3 : 1 + Math.sin(this.animT * 3) * 0.05;
         const air = this.state === 'hop' ? -Math.sin(this.stateT / 0.4 * Math.PI) * 22 : 0;
-        Renderer.drawSprite(this.skin(Sprites.frog), this.x, this.y + air, { flip: this.flip, squashY: sq, squashX: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.frog), this.x, this.y + air, { flip: this.flip, squashY: sq, squashX: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1266,7 +1266,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const wig = 1 + Math.sin(this.animT * 10) * 0.25;
         const sqx = this.coilT > 0 ? 0.55 : this.springT > 0 ? 1.6 : wig;
         const sqy = this.coilT > 0 ? 1.5 : this.springT > 0 ? 0.7 : 2 - wig;
-        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true });
+        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1318,7 +1318,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.beginPath(); ctx.moveTo(this.x, this.y);
           ctx.lineTo(this.x + this.aimDir.x * 280, this.y + this.aimDir.y * 280); ctx.stroke(); ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.frostArcher), this.x, this.y - Math.sin(this.animT * 7) * 2, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.frostArcher), this.x, this.y - Math.sin(this.animT * 7) * 2, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1361,7 +1361,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const roaring = this.roarT > 0;
         const shakeX = roaring ? (Math.random() - 0.5) * 4 : enraged ? (Math.random() - 0.5) * 2.5 : 0;
         Renderer.drawSprite(this.skin(Sprites.berserker), this.x + shakeX, this.y, {
-          flip: this.flip, shadow: true, squashY: roaring ? 1.12 : 1, rot: this.rushT > 0 ? (this.flip ? -0.1 : 0.1) : 0,
+          flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y), squashY: roaring ? 1.12 : 1, rot: this.rushT > 0 ? (this.flip ? -0.1 : 0.1) : 0,
         });
         if (roaring || enraged) {
           ctx.fillStyle = '#e43b44'; ctx.font = 'bold 12px Galmuri11, monospace'; ctx.textAlign = 'center';
@@ -1458,7 +1458,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.beginPath(); ctx.moveTo(this.x, this.y - 8);
           ctx.lineTo(this.healTarget.x, this.healTarget.y); ctx.stroke(); ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.shaman), this.x, this.y - Math.sin(this.animT * 4) * 2, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.shaman), this.x, this.y - Math.sin(this.animT * 4) * 2, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1482,7 +1482,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(Sprites.crystal), this.x, this.y - Math.sin(this.animT * 3.5) * 4, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.crystal), this.x, this.y - Math.sin(this.animT * 3.5) * 4, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1547,7 +1547,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         let hunch = 1 + Math.sin(this.animT * 8) * 0.06;
         if (this._crouchT > 0) hunch = 0.72; // 웅크림 — 덮치기 직전
         if (this._lungeT > 0) hunch = 1.3;
-        Renderer.drawSprite(this.skin(Sprites.ghoul), this.x, this.y, { flip: this.flip, squashY: hunch, squashX: this._lungeT > 0 ? 1.25 : 1, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.ghoul), this.x, this.y, { flip: this.flip, squashY: hunch, squashX: this._lungeT > 0 ? 1.25 : 1, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this._crouchT > 0) {
           ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 26);
@@ -1591,7 +1591,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const shakeX = this.state === 'windup' ? (Math.random() - 0.5) * 3 : 0;
-        Renderer.drawSprite(this.skin(Sprites.charger), this.x + shakeX, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.charger), this.x + shakeX, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.state === 'windup') { ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center'; ctx.fillText('!', this.x, this.y - 22); }
         this.drawStatus(ctx);
       },
@@ -1617,7 +1617,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const chg = this.fireT > 1.3 ? 1 + (this.fireT - 1.3) * 0.5 : 1;
-        Renderer.drawSprite(this.skin(Sprites.turret), this.x, this.y, { squashX: chg, squashY: chg, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.turret), this.x, this.y, { squashX: chg, squashY: chg, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1650,11 +1650,11 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         if (this.state === 'dormant') {
-          Renderer.drawSprite(this.skin(Sprites.chest), this.x, this.y, { shadow: true });
+          Renderer.drawSprite(this.skin(Sprites.chest), this.x, this.y, { shadow: true, light: Renderer.lightAt(this.x, this.y) });
           return;
         }
         const chomp = 1 + Math.abs(Math.sin(this.animT * 8)) * 0.25;
-        Renderer.drawSprite(this.skin(Sprites.mimic), this.x, this.y, { flip: this.flip, squashY: chomp, squashX: 2 - chomp, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.mimic), this.x, this.y, { flip: this.flip, squashY: chomp, squashX: 2 - chomp, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1707,7 +1707,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           Renderer.drawSprite(this.skin(Sprites.stalker), this.x, this.y, { flip: this.flip, alpha: 0.4 + this.stateT, shadow: false });
           return;
         }
-        Renderer.drawSprite(this.skin(Sprites.stalker), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.stalker), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1756,7 +1756,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.restore();
         }
         const lift = this.state === 'windup' ? -this.stateT * 6 : 0;
-        Renderer.drawSprite(this.skin(Sprites.brute), this.x, this.y + lift, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.brute), this.x, this.y + lift, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1791,7 +1791,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.touchPlayer(game, 1);
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(Sprites.imp), this.x, this.y - Math.sin(this.animT * 6) * 3, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.imp), this.x, this.y - Math.sin(this.animT * 6) * 3, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1836,7 +1836,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         let sq = 1 + Math.sin(this.animT * 4) * 0.05;
         if (this.state === 'inhale') sq = 1.15 + Math.sin(this.animT * 20) * 0.05;
         if (this.state === 'bite') sq = 0.8;
-        Renderer.drawSprite(this.skin(Sprites.glutton), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.glutton), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.state === 'inhale') {
           ctx.save(); ctx.globalAlpha = 0.25; ctx.strokeStyle = '#8a6a9a'; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.arc(this.x, this.y, 60 + Math.sin(this.animT * 12) * 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
@@ -1864,7 +1864,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const bob = Math.sin(this.animT * 3) * 4;
-        Renderer.drawSprite(this.skin(Sprites.sporePuff), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.sporePuff), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1888,7 +1888,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const sq = 1 + Math.sin(this.animT * 2.5) * 0.08;
-        Renderer.drawSprite(this.skin(Sprites.acidSnail), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.acidSnail), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1940,7 +1940,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.lineTo(this.x + this.aimDir.x * 290, this.y + this.aimDir.y * 290); ctx.stroke();
           ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.jailer), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.jailer), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -1982,7 +1982,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#a8d8ee';
           ctx.beginPath(); ctx.arc(this.x, this.y - 16, 4 + (0.4 - this.castCd) * 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.frostMage), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.frostMage), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2026,7 +2026,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const sq = 1 + Math.sin(this.animT * 10) * 0.15;
-        Renderer.drawSprite(this.skin(Sprites.cinder), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.cinder), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2062,7 +2062,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const heat = this.spitT > 0 ? 1 + (0.5 - this.spitT) * 0.3 : 1;
         Renderer.drawSprite(this.skin(Sprites.ashWalker), this.x, this.y, {
-          flip: this.flip, shadow: true, squashX: heat, squashY: heat,
+          flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y), squashX: heat, squashY: heat,
         });
         if (this.spitT > 0 && Math.random() < 0.5) {
           Particles.burst(this.x, this.y - 8, { count: 1, colors: ['#ff9a3c', '#ffd866'], speed: 40, life: 0.3, size: 3, gravity: -80 });
@@ -2109,7 +2109,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.fillStyle = '#ff4757'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 22);
         }
-        Renderer.drawSprite(this.skin(Sprites.emberMoth), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.emberMoth), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2150,7 +2150,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.restore();
         }
         const bob = Math.sin(this.animT * 2.4) * 3;
-        Renderer.drawSprite(this.skin(Sprites.acolyte), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.acolyte), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2226,7 +2226,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.save(); ctx.globalAlpha = 0.35; ctx.strokeStyle = '#4a6ede'; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.arc(this.x, this.y - bob, 18 + (0.5 - this.novaCd) * 20, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.gazer), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.gazer), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2275,7 +2275,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = this.aimT > 0 ? 0 : Math.sin(this.animT * 10) * 5; // 조준 중엔 날갯짓이 멎는다
         Renderer.drawSprite(this.skin(Sprites.bloodBat), this.x, this.y - bob, {
-          flip: this.flip, shadow: true, squashX: this.dartT > 0 ? 1.3 : 1,
+          flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y), squashX: this.dartT > 0 ? 1.3 : 1,
         });
         if (this.aimT > 0) {
           ctx.fillStyle = '#ff4757';
@@ -2304,7 +2304,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         game.enemies.push(pile);
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.revived) { ctx.fillStyle = '#ff4757'; ctx.fillRect(this.x - 1, this.y - 20, 3, 3); }
         this.drawStatus(ctx);
       },
@@ -2336,12 +2336,12 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         if (!this.risen) {
           // 더미 상태: 납작하게 눌린 스프라이트 + 재조립 게이지
-          Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y + 6, { flip: this.flip, squashX: 1.5, squashY: 0.45, shadow: true });
+          Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y + 6, { flip: this.flip, squashX: 1.5, squashY: 0.45, shadow: true, light: Renderer.lightAt(this.x, this.y) });
           const w = 22, frac = 1 - this.riseT / 2.6;
           ctx.fillStyle = 'rgba(13,11,20,0.6)'; ctx.fillRect(this.x - w / 2, this.y - 22, w, 3);
           ctx.fillStyle = '#e8dfc8'; ctx.fillRect(this.x - w / 2, this.y - 22, w * frac, 3);
         } else {
-          Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y, { flip: this.flip, shadow: true });
+          Renderer.drawSprite(this.skin(Sprites.boneHeap), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         }
         this.drawStatus(ctx);
       },
@@ -2387,7 +2387,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.beginPath(); ctx.moveTo(this.x, this.y);
           ctx.arc(this.x, this.y, 95, this.faceA - 0.75, this.faceA + 0.75); ctx.closePath(); ctx.fill(); ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.venomLasher), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.venomLasher), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2418,7 +2418,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const sq = 1 + Math.sin(this.animT * 2.2) * 0.07;
-        Renderer.drawSprite(this.skin(Sprites.sporeMother), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.sporeMother), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2458,7 +2458,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.beginPath(); ctx.arc(g.x, g.y, 36 * (1 - g.t / 0.9) + 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
         }
         const sq = 1 + Math.sin(this.animT * 2) * 0.08;
-        Renderer.drawSprite(this.skin(Sprites.acidSlug), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.acidSlug), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2506,7 +2506,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.fillStyle = '#ff4757'; ctx.font = 'bold 15px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 28);
         }
-        Renderer.drawSprite(this.skin(Sprites.warden), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.warden), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         // 방패 표시: 정면 호
         const fa = Math.atan2(this.faceDir.y, this.faceDir.x);
         ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = '#5ce0e6'; ctx.lineWidth = 3;
@@ -2589,7 +2589,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         let sq = 1;
         if (this.state === 'raise') sq = 1.12 + this.stateT * 0.1;
-        Renderer.drawSprite(this.skin(Sprites.frostGolem), this.x, this.y, { flip: this.flip, squashX: 2 - sq, squashY: sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.frostGolem), this.x, this.y, { flip: this.flip, squashX: 2 - sq, squashY: sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         if (this.state === 'raise') {
           ctx.fillStyle = '#5ce0e6'; ctx.font = 'bold 14px Galmuri11, monospace'; ctx.textAlign = 'center';
           ctx.fillText('!', this.x, this.y - 30);
@@ -2616,7 +2616,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
       },
       draw(ctx) {
-        Renderer.drawSprite(this.skin(Sprites.obsidianBeast), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.obsidianBeast), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2659,7 +2659,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.beginPath(); ctx.arc(g.x, g.y, 30 * (1 - g.t / 0.8) + 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
         }
         const bob = Math.sin(this.animT * 3) * 3;
-        Renderer.drawSprite(this.skin(Sprites.flameJuggler), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.flameJuggler), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2707,7 +2707,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.restore();
         }
         const sq = 1 + Math.sin(this.animT * 5) * 0.06;
-        Renderer.drawSprite(this.skin(Sprites.lavaBurster), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.lavaBurster), this.x, this.y, { flip: this.flip, squashX: sq, squashY: 2 - sq, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2731,7 +2731,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       },
       draw(ctx) {
         const bob = Math.sin(this.animT * 8) * 3;
-        Renderer.drawSprite(this.skin(Sprites.voidSpawn), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.voidSpawn), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2785,7 +2785,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.beginPath(); ctx.arc(rf.x, rf.y, 14 + (1.0 - rf.t) * 10, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
         }
         const bob = Math.sin(this.animT * 2.6) * 4;
-        Renderer.drawSprite(this.skin(Sprites.riftCaster), this.x, this.y - bob, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.riftCaster), this.x, this.y - bob, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         this.drawStatus(ctx);
       },
     }),
@@ -2839,7 +2839,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           ctx.strokeStyle = '#e8ecf4'; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
         }
-        Renderer.drawSprite(this.skin(Sprites.mirrorKnight), this.x, this.y, { flip: this.flip, shadow: true });
+        Renderer.drawSprite(this.skin(Sprites.mirrorKnight), this.x, this.y, { flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y) });
         const fa = Math.atan2(this.faceDir.y, this.faceDir.x);
         ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = '#c8d4e4'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(this.x, this.y, this.r + 5, fa - 0.8, fa + 0.8); ctx.stroke(); ctx.restore();
@@ -2913,7 +2913,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     draw(ctx) {
       const heat = this.spitT > 0 ? 1 + (0.5 - this.spitT) * 0.3 : 1;
       Renderer.drawSprite(this.skin(Sprites.rotWalker), this.x, this.y, {
-        flip: this.flip, shadow: true, squashX: heat, squashY: heat,
+        flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y), squashX: heat, squashY: heat,
       });
       if (this.spitT > 0 && Math.random() < 0.5) {
         Particles.burst(this.x, this.y - 8, { count: 1, colors: ['#c9d94a', '#8adf76'], speed: 40, life: 0.3, size: 3, gravity: -80 });
@@ -2960,7 +2960,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     draw(ctx) {
       const puff = this.screamT > 0 ? 1 + (0.6 - this.screamT) * 0.5 : 1;
       Renderer.drawSprite(this.skin(Sprites.glowShrieker), this.x, this.y - Math.sin(this.animT * 4) * 2, {
-        flip: this.flip, shadow: true, squashX: puff, squashY: puff,
+        flip: this.flip, shadow: true, light: Renderer.lightAt(this.x, this.y), squashX: puff, squashY: puff,
       });
       if (this.screamT > 0) {
         ctx.fillStyle = '#8adf76'; ctx.font = 'bold 16px Galmuri11, monospace'; ctx.textAlign = 'center';
