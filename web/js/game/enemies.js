@@ -130,7 +130,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       const d = Math.hypot(p.x - this.x, p.y - this.y);
       if (d < p.r + this.r) {
         // v185: 흔들리는 무리는 예고가 길어진다 — 리더를 끊은 보상이 시간으로 온다
-        this._windT = ((this.elite || this.isMini) ? 0.30 : 0.25) * (this._shakenT > 0 ? 1.6 : 1);
+        // ★ v188 — 예고 0.25 → 0.42초. 사장: "전혀 손 맛과 회피 등 내가 뭔가 했다는 생각이 안드네."
+        // 원인은 「회피가 없어서」가 아니라 **숫자가 회피를 막고 있어서**였다.
+        // 완벽 회피(판정 창 0.24초, 슬로모+확정 크리)는 v169부터 이미 구현돼 있었는데,
+        // 예고가 0.25초 = 인간 반응 시간(약 0.25초)과 같아서 **보고 나서 누르면 물리적으로 늦었다.**
+        // 외워서 미리 누르는 것만 가능했으니 완벽 회피는 의도가 아니라 우연으로 터졌고,
+        // 우연히 터진 것은 "내가 했다"가 아니다.
+        // 0.42초면 반응 0.25초를 쓰고도 0.17초가 남는다 — 그때부터 회피는 결정이 된다
+        this._windT = ((this.elite || this.isMini) ? 0.50 : 0.42) * (this._shakenT > 0 ? 1.5 : 1);
         this._windMax = this._windT;
         this._windDmg = dmg;
         this._windA = Math.atan2(p.y - this.y, p.x - this.x);
@@ -151,7 +158,13 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       this._strikeT = 0.22;
       this._strikeA = Math.atan2(dir.y, dir.x);
       if (d < p.r + this.r + 8) {
-        this.hitCd = 0.8;
+        // v188: 예고를 늘리면 그것만으로는 **쉬워진다** — 적이 공격을 덜 하게 되니까.
+        // 사장은 "너무 쉽고"라고도 했다. 그래서 늘린 만큼 재공격을 당긴다:
+        //   맞으면  0.42 + 0.55 = 0.97초 만에 또 온다 (종전 1.05초보다 빠르다)
+        //   피하면  0.42 + 1.15 = 1.57초를 번다 (종전 1.40초)
+        // 회피의 값이 0.35초 → 0.60초로 71% 커진다. 실력이 곧 시간이 되는 구조다.
+        // 1~2층만 0.72로 완화 — 배우는 구간에 절벽을 세우지 않는다 (v166 교훈)
+        this.hitCd = Dungeon.floor <= 2 ? 0.72 : 0.55;
         let dmg = this._windDmg || 1;
         // 심층 압박 (R1): 7층+ 정예·우두머리의 접촉은 2 — 후반에도 죽음이 가깝다
         if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);

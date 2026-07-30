@@ -141,8 +141,11 @@ const GameCombat = {
     return { skipCorpse: prof.kind === 'bone' };
   },
 
-  _applyHitstop(v) {
-    if (this.time - (this._lastStopT ?? -9) > 0.35) {
+  // v188: 간격을 인자로 받는다. 종전엔 0.35초 고정이라 **일반 타격에 히트스톱을 걸 수가 없었다** —
+  // 초당 3~4회 휘두르는 손에 0.35초 관문을 세우면 넷 중 하나만 통과한다.
+  // 한 번의 휘두름이 여러 적을 때려도 멈춤은 하나여야 하므로 관문 자체는 필요하다 (0.11초)
+  _applyHitstop(v, gap = 0.35) {
+    if (this.time - (this._lastStopT ?? -9) > gap) {
       this.hitstop = Math.max(this.hitstop, v);
       this._lastStopT = this.time;
       return true;
@@ -280,10 +283,14 @@ const GameCombat = {
     }
 
     if (feel) {
-      // 히트스톱은 크리티컬에만, 그것도 짧게 — 일반 연타마다 멈추면 '탁탁' 끊기는 스터터가 된다.
-      // 일반 타격의 손맛은 흔들림 + 파티클 + 사운드가 담당한다.
-      const stopped = crit ? this._applyHitstop(0.055) : false;
-      Renderer.shake(crit ? 4 : 2.5, 0.13);
+      // ★ v188 — 일반 타격에 히트스톱을 돌려준다. 사장: "전혀 손 맛과 ... 생각이 안드네."
+      // 종전 주석은 "일반 연타마다 멈추면 '탁탁' 끊기는 스터터가 된다"며 크리에만 걸었다.
+      // 그 걱정은 맞지만 답이 틀렸다 — 답은 **짧게 + 관문**이지 **없음**이 아니다.
+      // 잡몹을 벨 때 화면이 단 한 프레임도 멈추지 않으면 벤 것과 허공을 가른 것이 같아진다.
+      // 40ms(2.4프레임) + 0.11초 관문 = 초당 최대 ~9회, 실제 연타 속도에선 휘두름당 1회.
+      // 처치는 더 길게 — 끝났다는 것은 몸으로 알아야 한다
+      const stopped = this._applyHitstop(crit ? 0.075 : 0.040, 0.11);
+      Renderer.shake(crit ? 5 : 3.4, 0.14);
       // 고어 (기획 §7): 방향성 피 분무 + 바닥 혈흔 — 벨 때마다 피가 남는다
       Particles.burst(e.x, e.y, {
         count: crit ? 7 : 4, colors: ['#8a1c2c', '#5a1016', '#c22030'],
@@ -439,8 +446,8 @@ const GameCombat = {
       const bc = Meta.codexOf('boss' + (e.defId || Dungeon.floor));
       this._lastBossOutro = (bc && bc.last) || (e.def && e.def.outro) || null;
     }
-    if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
-    else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
+    if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.12); // 굵직한 처치는 항상 강조
+    else this._applyHitstop(0.065, 0.06); // v188: 잡몹 처치도 타격보다는 길게 — '끝'이 손에 남아야 한다
     // 골드 (G1): 굵직한 처치에서만 떨어진다 — 상인에게만 쓰는 런 화폐
     {
       const pl = this.player;

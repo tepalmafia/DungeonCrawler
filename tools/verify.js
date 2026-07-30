@@ -409,14 +409,18 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     const hp0 = p.hp;
     e.touchPlayer(Game, 1);
     const wound = { wind: e._windT, hpSame: p.hp === hp0 };
+    // v188: 25프레임(0.417초) 고정은 예고가 0.25초일 때만 통하는 매직 넘버였다.
+    // 예고를 0.42초로 늘리자 **예고가 해소되기 직전에 측정**해서 세 항목이 한꺼번에 터졌다.
+    // 앞으로 예고 길이를 또 바꿔도 안 깨지도록 **해소될 때까지** 굴린다
+    const runWind = (en) => { for (let i = 0; i < 240 && en._windT > 0; i++) en.tickTimers(1 / 60); };
     // ② 예고 동안 물러나면 헛손질
     e.x = p.x + 400;                       // 플레이어가 벗어난 것과 같은 상황
-    for (let i = 0; i < 25; i++) e.tickTimers(1 / 60);
+    runWind(e);
     const whiff = { hp: p.hp, whiffT: e._whiffT, cd: +e.hitCd.toFixed(2) };
     // ③ 버티면 맞는다
     e.x = p.x + 10; e.hitCd = 0; e._whiffT = 0; e._windT = 0;
     e.touchPlayer(Game, 1);
-    for (let i = 0; i < 25; i++) e.tickTimers(1 / 60);
+    runWind(e);
     const hit = { hp: p.hp };
     return { wound, whiff, hit, hp0 };
   });
@@ -1660,6 +1664,10 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
         const e = createEnemy('skeleton', bx + (k % 3) * 30, by + Math.floor(k / 3) * 30, 3);
         e.spawnT = 0; e.hp = e.maxHp = 999; e.pack = 1; Game.enemies.push(e); out.push(e);
       }
+      // v188: 히트스톱이 일반 타격에도 걸리게 되면서 **Game.tick 한 번이 통째로 먹혔다** —
+      // hitstop > 0 이면 tick 은 감쇠만 하고 조기 return 하므로 군집 틱이 영영 안 돌았다.
+      // 이건 히트스톱의 정상 동작(세계가 멈춘다)이지, 결함이 아니다. 계측만 비켜서면 된다
+      Game.hitstop = 0;
       Game._cohesionT = 0;
       Game.tick(1 / 60);
       return out;
@@ -1857,6 +1865,77 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('pack.mitigationIsVisible', !feel.hadGroup || feel.mitSaid,
     `경감 ${feel.mit} 적을 때렸을 때 「무리 방어」 표시 ${feel.mitSaid} ` +
     '(v185~186은 14~30%가 **조용히** 깎였다. 보이지 않는 경감은 없는 것과 같다)');
+
+  // ── 손맛과 회피 (v188) ─────────────────────────────────────────────────
+  // 사장: "너무 쉽고, 전혀 손 맛과 회피 등 내가 뭔가 했다는 생각이 안드네."
+  // 실측이 원인을 지목했다 — 완벽 회피(v169)는 **이미 구현돼 있었는데** 예고가 0.25초,
+  // 즉 인간 반응 시간(약 0.25초)과 같아서 보고 나서 누르면 물리적으로 늦었다.
+  // 실측: v187에서 반응 250·300·350ms 전부 완벽 회피 0회. 200ms(사람보다 빠름)에서만 성립.
+  // 이 두 항목은 그 회귀를 못박는다 — 예고를 다시 줄이거나 히트스톱을 빼면 여기서 걸린다.
+  await boot(page, { cls: 'knight', heat: 0 });
+  const feelv = await page.evaluate(() => {
+    // ① 예고 창이 인간이 닿는 길이인가 + 250ms 반응으로 완벽 회피가 실제로 성립하는가
+    const trial = (react) => {
+      Game.restart(555);
+      Dungeon.floor = 3; Dungeon.roomIndex = 3; Game.state = 'play';
+      const p = Game.player;
+      p.god = false; p.hp = p.maxHp = 99; p.invuln = 0; p.pdodgeCrit = false;
+      World.buildRoom('combat'); Game.onRoomBuilt('combat');
+      Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
+      p.x = 480; p.y = 270;
+      const e = createEnemy('skeleton', 506, 270, false, 1);
+      e.spawnT = 0; e._aware = true; e.hp = e.maxHp = 9999; e.speed = 0;
+      Game.enemies.push(e);
+      let seen = -1, dashed = false, pd = 0, t = 0, win = 0;
+      const hp0 = p.hp;
+      for (let i = 0; i < 360; i++) {
+        if (e.hitCd <= 0 && e._windT <= 0) e.touchPlayer(Game, 1);
+        if (e._windT > 0 && seen < 0) { seen = t; win = e._windMax; }
+        if (seen >= 0 && !dashed && t - seen >= react) {
+          dashed = true;
+          p.dashCharges = Math.max(1, p.dashCharges) - 1;
+          p.dashTimer = 0.16; p.invuln = Math.max(p.invuln, 0.22);
+          p.dashDir = { x: -1, y: 0 }; p._pdodged = false; p._dashWin = 0.24;
+          p.dashHit = new Set();
+        }
+        const b4 = p.pdodgeCrit;
+        Game.tick(1 / 60); t += 1 / 60;
+        if (p.pdodgeCrit && !b4) pd++;
+        if (seen >= 0 && e._windT <= 0 && e.hitCd > 0) break;
+      }
+      return { win: +win.toFixed(3), pd, dmg: hp0 - p.hp };
+    };
+    const r = {};
+    for (const x of [0.25, 0.30, 0.35]) r['r' + Math.round(x * 1000)] = trial(x);
+    // ② 일반 타격(크리 아님)에 히트스톱이 걸리는가 — v187은 크리에만 걸었다
+    Game.restart(777);
+    Dungeon.floor = 2; Dungeon.roomIndex = 2; Game.state = 'play'; Game.player.god = true;
+    World.buildRoom('combat'); Game.onRoomBuilt('combat');
+    Game.enemies.length = 0;
+    const t1 = createEnemy('skeleton', 520, 270, false, 1);
+    t1.spawnT = 0; t1.hp = t1.maxHp = 99999; Game.enemies.push(t1);
+    let stops = 0, ms = 0, swings = 0;
+    Game.time = 0; Game._lastStopT = -9; Game.hitstop = 0;
+    for (let i = 0; i < 240; i++) {
+      if (i % 18 === 0) {                       // 초당 약 3.3회 = 실제 연타 속도
+        swings++;
+        const h0 = Game.hitstop;
+        Game.damageEnemy(t1, 3, { x: 1, y: 0 }, { feel: true, crit: false });
+        if (Game.hitstop > h0) { stops++; ms += Game.hitstop * 1000; }
+      }
+      Game.tick(1 / 60);
+    }
+    return { ...r, swings, stops, stopMs: +(ms / Math.max(1, stops)).toFixed(1) };
+  });
+  console.log('  손맛·회피:', JSON.stringify(feelv));
+  ok('feel.dodgeWindowIsHuman',
+    feelv.r250.win >= 0.36 && feelv.r250.pd > 0 && feelv.r300.pd > 0 && feelv.r250.dmg === 0,
+    `예고 ${Math.round(feelv.r250.win * 1000)}ms · 반응 250ms에서 완벽 회피 ${feelv.r250.pd}회(피해 ${feelv.r250.dmg}) · 300ms ${feelv.r300.pd}회 ` +
+    '(v187은 예고 250ms = 인간 반응 시간이라 250·300·350ms 전부 0회였다 — 기능은 있는데 사람이 닿을 수 없었다)');
+  ok('feel.normalHitStops', feelv.stops >= feelv.swings * 0.9 && feelv.stopMs >= 30 && feelv.stopMs <= 60,
+    `일반 타격 ${feelv.swings}회 중 ${feelv.stops}회 히트스톱 · 평균 ${feelv.stopMs}ms ` +
+    '(v187은 크리에만 걸어 일반 타격은 **0회** — 잡몹을 벨 때 화면이 한 프레임도 안 멈췄다. ' +
+    '상한 60ms: 길면 학살 중 스터터가 된다)');
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
