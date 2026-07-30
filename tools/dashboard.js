@@ -45,6 +45,26 @@ const RELIC_N = (read('web/js/data/relics.js').match(/\{\s*id:/g) || []).length 
 const TRAIT_N = (read('web/js/data/traits.js').match(/\{\s*id:/g) || []).length;
 
 // 검증 항목
+// v192 — 적 행동 설계와 보스 패턴을 **코드에서** 뽑는다 (손으로 적은 표는 낡는다)
+const playSrc = read('web/js/game/play.js');
+const bossSrc = read('web/js/game/boss.js');
+const IDLE = evalObject(playSrc.replace(/  IDLE_ACTS:/, 'const IDLE_ACTS ='), 'IDLE_ACTS') || {};
+const BOSSP = (() => {
+  const out = [];
+  const re = /(\d+):\s*\{[\s\S]*?name:\s*(['"])(.*?)\2[\s\S]*?hp:\s*(\d+)[\s\S]*?p1:\s*(\[[^\]]*\])[\s\S]*?p2:\s*(\[[^\]]*\])/g;
+  let m;
+  while ((m = re.exec(bossSrc))) {
+    try { out.push({ floor: +m[1], name: m[3], hp: +m[4],
+      p1: new Function('return ' + m[5])(), p2: new Function('return ' + m[6])() }); } catch (e) {}
+  }
+  return out;
+})();
+const PAT_KO = { sweep: '낫질(부채꼴 참격)', fan: '탄 부채꼴', 'fan:rock': '뼛조각 부채꼴',
+  'fan:spore': '포자 부채꼴', 'fan:soul': '원혼 부채꼴', spiral: '나선 탄막', ring: '충격파 링',
+  'ring:gap': '틈 있는 링', pulse: '연쇄 파동', beam: '광선', echo: '메아리', mortar: '유성우(박격)',
+  'mortar:poison': '독 유성우', geyser: '간헐천', 'geyser:poison': '독 간헐천', summon: '부하 소환',
+  curse: '저주 표식', charge: '돌진', snare: '사슬 속박', uniq: '고유기', volley: '연발' };
+
 const ASSERTS = [...verSrc.matchAll(/ok\('([a-zA-Z0-9_.]+)'/g)].map((m) => m[1]);
 
 // 커밋 이력 — 버전 태그가 붙은 것만
@@ -98,7 +118,9 @@ const ROADMAP = [
   { v: 'v188', t: '손맛과 회피 — 예고 420ms · 일반 타격 히트스톱', s: 'done' },
   { v: 'v189', t: '맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일', s: 'done' },
   { v: 'v190', t: '캐시버스트 수리 — v187~189가 사장 브라우저에 안 닿을 수 있었다', s: 'done' },
-  { v: 'v190+', t: '재기획서 실행 — 타격 정산기 · 포위도 · 문에서 들어오는 파도', s: 'now' },
+  { v: 'v191', t: '벽 솟음 — 2.5D 첫 삽 (미로·아이소는 사장 지시로 폐기)', s: 'done' },
+  { v: 'v192', t: '1층 재설계 — 우두머리·소환·유성우·무기화 투사체·사연 행동', s: 'done' },
+  { v: 'v193', t: '보스 패턴 조사 결과 반영 → 2층부터 규격 복제', s: 'now' },
   { v: '이후', t: '스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정', s: 'todo' },
 ];
 
@@ -118,6 +140,21 @@ const MAPDIAG = [
   { k: '방 외곽', v: '42/42 완전 폐쇄', n: '문은 벽 구멍이 아니라 바닥 위 자립 아치' },
   { k: '방당 위협 0 직선 이동', v: '4.14초', n: '+ 암전 0.67초 = 방당 4.8초 × 450회' },
   { k: '층 이동 연출', v: '없음 (floor++ 한 줄)', n: '50층 탑인데 오르는 장면이 0회' },
+];
+
+const IDLE_KO = { feed: ['시체를 파먹는다', '굶주려 죽은 것들 · 시체를 먹고 자란 것들', '#a71f26'],
+  patrol: ['정찰한다', '좌우 44px를 오가며 몸을 돌린다 — 등이 생긴다', '#96690f'],
+  toil: ['생전의 일을 반복한다', '수의 짓던 침모 · 무덤 파던 관리인 · 열쇠 쥔 간수', '#8a7f70'],
+  roam: ['묻힐 자리를 찾아 떠돈다', '이름이 지워진 혼', '#12707a'] };
+
+const FLOOR1 = [
+  { k: '1층 우두머리 등장', was: '0회 (게이트가 floor>=2)', is: '1.00회 (HP 배율 7→4.5)', why: '층에 오르내림이 없었다' },
+  { k: '1층 보스 HP', was: '59 · 8~16초 처치', is: '118', why: '이미 2페이즈인데 **페이즈 2를 5초만 봤다**' },
+  { k: '보스 p1 패턴', was: '3종 (낫질·돌 부채꼴만)', is: '5종 (+부하 소환 +유성우)', why: '소환·유성우는 이미 있었고 1층만 안 썼다' },
+  { k: '적 투사체', was: 'ctx.arc() 원 + 뒤에 작은 원', is: '뼛조각(회전) · 불꽃(펄럭임)', why: '색만 다른 동그라미 11종이었다' },
+  { k: '소환수 무리 배선', was: 'pack·leader 안 넘김 (v186과 동일 결함)', is: '보스가 리더 · 제 발밑에서 소환', why: '응집·밴드·호령을 하나도 안 탔다' },
+  { k: '인지 전 행동', was: 'animT += dt*0.45; continue;', is: '사연대로 산다 (4종 행태)', why: '사연을 도감에 적어두고 행동은 안 시켰다' },
+  { k: '시야', was: '전방위 230px', is: '정면 230 / 등 뒤 150px', why: '정찰병에게 등이 생긴다 — 잠입의 여지' },
 ];
 
 const STEAM = [
@@ -288,7 +325,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <nav><div class="inner">
   <a href="#now">현재</a><a href="#feel">손맛·회피</a><a href="#room">방 규격</a>
-  <a href="#map">맵</a><a href="#floors">50층</a><a href="#enemies">적 ${ENEMIES.length}종</a>
+  <a href="#design">기획안</a><a href="#map">맵</a><a href="#floors">50층</a><a href="#enemies">적 ${ENEMIES.length}종</a>
   <a href="#clues">증거</a><a href="#verify">검증</a><a href="#history">이력</a><a href="#steam">스팀</a>
 </div></nav>
 
@@ -363,6 +400,60 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
       <td class="mono small">${esc((t.units || []).join(' · '))}</td>
       <td class="dim small">${esc(t.wants || '')}</td></tr>`).join('')}</tbody>
   </table></div>
+</section>
+
+<section id="design">
+  <h2>v192 · 1층 재설계 기획안</h2>
+  <p class="lede">「한 층 한 층이 전부 컨트롤과 긴장감을 주는 거지.」 — 이 한 줄이 판정 기준이다.</p>
+  <div class="scroll" style="margin-bottom:20px"><table>
+    <thead><tr><th>항목</th><th>v191</th><th>v192</th><th>왜</th></tr></thead>
+    <tbody>${FLOOR1.map((f) => `<tr><td>${esc(f.k)}</td><td class="was small">${esc(f.was)}</td>
+      <td class="is small">${esc(f.is)}</td><td class="small dim">${esc(f.why)}</td></tr>`).join('')}</tbody>
+  </table></div>
+
+  <h3>적 행동 설계 — 사연을 행동으로</h3>
+  <p>도감의 사연(89종)을 <b>인지 전 행동</b>으로 옮긴다. 나를 보면 그만두고 덤빈다.
+  리더가 나를 보면 그 순간이 곧 호령이다 — 무리 전체가 <b>같은 순간</b> 각성하고 돌격한다(「적이다! 쳐라!」).</p>
+  <div class="grid" style="margin-bottom:14px">
+    ${Object.entries(IDLE_KO).map(([k, [t, d, c]]) => `<div class="card" style="border-left:3px solid ${c}">
+      <div class="k">${esc(k)}</div><div class="v" style="font-size:17px">${esc(t)}</div>
+      <div class="s">${esc(d)}</div>
+      <div class="s mono" style="margin-top:6px;color:var(--ink3)">${Object.keys(IDLE).filter((x) => IDLE[x] === k).length}종</div></div>`).join('')}
+  </div>
+  <details><summary>적별 행태 배정 (${Object.keys(IDLE).length}종)</summary>
+  <div class="scroll" style="margin-top:10px"><table>
+    <thead><tr><th>적</th><th>행태</th><th>사연</th></tr></thead>
+    <tbody>${Object.entries(IDLE).map(([id, k]) => {
+      const e = ENEMIES.find((x) => x.id === id) || {};
+      const kk = IDLE_KO[k] || ['?', '', '#888'];
+      return `<tr><td>${esc(e.name || id)}</td>
+        <td><span class="tag" style="color:${kk[2]};border-color:${kk[2]}">${esc(kk[0])}</span></td>
+        <td class="small dim">${esc(e.lore || '')}</td></tr>`;
+    }).join('')}</tbody>
+  </table></div></details>
+
+  <h3>보스 패턴 라이브러리</h3>
+  <p>보스 ${BOSSP.length}종의 페이즈별 패턴. <b>「부하 소환」과 「유성우」는 이미 구현돼 있었고 1층 보스만 안 썼다</b> — v192에서 배선했다.</p>
+  <div class="scroll" style="max-height:520px;overflow-y:auto"><table>
+    <thead><tr><th>층</th><th>보스</th><th>HP</th><th>1페이즈</th><th>2페이즈</th></tr></thead>
+    <tbody>${BOSSP.map((b2) => {
+      const ko = (list) => list.map((x) => {
+        const base = x.split('>').map((y) => {
+          const key = y.split(':').slice(0, 2).join(':');
+          return PAT_KO[key] || PAT_KO[y.split(':')[0]] || y;
+        }).join(' → ');
+        return base;
+      }).join(' · ');
+      return `<tr${b2.floor === 1 ? ' style="background:var(--raise)"' : ''}>
+        <td class="num mono">${b2.floor}</td><td class="small"><b>${esc(b2.name)}</b></td>
+        <td class="num mono">${b2.hp}</td>
+        <td class="small dim">${esc(ko(b2.p1))}</td>
+        <td class="small dim">${esc(ko(b2.p2))}</td></tr>`;
+    }).join('')}</tbody>
+  </table></div>
+  <div class="note"><b>다음.</b> 로그라이크 호평 보스 패턴 조사(Hades·Dead Cells·Gungeon·Isaac·Risk of Rain·Skul 등)가
+  돌고 있다. 결과가 나오면 <b>보스 23종 × 무기 배정표</b>와 층별 패턴 확장을 이 표에 채운다.
+  1층에서 검증된 규격을 2층부터 복제한다.</div>
 </section>
 
 <section id="map">

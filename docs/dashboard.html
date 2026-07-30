@@ -113,7 +113,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <nav><div class="inner">
   <a href="#now">현재</a><a href="#feel">손맛·회피</a><a href="#room">방 규격</a>
-  <a href="#map">맵</a><a href="#floors">50층</a><a href="#enemies">적 89종</a>
+  <a href="#design">기획안</a><a href="#map">맵</a><a href="#floors">50층</a><a href="#enemies">적 89종</a>
   <a href="#clues">증거</a><a href="#verify">검증</a><a href="#history">이력</a><a href="#steam">스팀</a>
 </div></nav>
 
@@ -121,11 +121,11 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 <header>
   <h1><small>무덤에서 왕좌까지 · DUNGEONCRAWLER</small>개발 대시보드</h1>
   <div class="meta">
-    <span class="pill">현재 빌드 <b>v190</b></span>
+    <span class="pill">현재 빌드 <b>v192</b></span>
     <span class="pill">적 <b>89</b>종 (보스 23)</span>
     <span class="pill">층 <b>50</b></span>
     <span class="pill">회귀 검증 <b>114</b>항목</span>
-    <span class="pill">코드 <b>27,134</b>줄</span>
+    <span class="pill">코드 <b>27,325</b>줄</span>
     <a class="pill play" href="https://tepalmafia.github.io/DungeonCrawler/" target="_blank" rel="noopener">▶ 플레이</a>
   </div>
 </header>
@@ -134,7 +134,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
   <h2>지금</h2>
   <p class="lede">v188까지 배포됨. 다음은 카메라 이동으로 「이어진 맵」.</p>
   <div class="rail">
-    <div class="step done"><div class="v">v185</div><div class="t">리더·사기·군집 오라</div></div><div class="step done"><div class="v">v186</div><div class="t">무리 행태 — 배치가 아니라 행동</div></div><div class="step done"><div class="v">v187</div><div class="t">기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서</div></div><div class="step done"><div class="v">v188</div><div class="t">손맛과 회피 — 예고 420ms · 일반 타격 히트스톱</div></div><div class="step done"><div class="v">v189</div><div class="t">맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일</div></div><div class="step done"><div class="v">v190</div><div class="t">캐시버스트 수리 — v187~189가 사장 브라우저에 안 닿을 수 있었다</div></div><div class="step now"><div class="v">v190+</div><div class="t">재기획서 실행 — 타격 정산기 · 포위도 · 문에서 들어오는 파도</div></div><div class="step todo"><div class="v">이후</div><div class="t">스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정</div></div>
+    <div class="step done"><div class="v">v185</div><div class="t">리더·사기·군집 오라</div></div><div class="step done"><div class="v">v186</div><div class="t">무리 행태 — 배치가 아니라 행동</div></div><div class="step done"><div class="v">v187</div><div class="t">기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서</div></div><div class="step done"><div class="v">v188</div><div class="t">손맛과 회피 — 예고 420ms · 일반 타격 히트스톱</div></div><div class="step done"><div class="v">v189</div><div class="t">맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일</div></div><div class="step done"><div class="v">v190</div><div class="t">캐시버스트 수리 — v187~189가 사장 브라우저에 안 닿을 수 있었다</div></div><div class="step done"><div class="v">v191</div><div class="t">벽 솟음 — 2.5D 첫 삽 (미로·아이소는 사장 지시로 폐기)</div></div><div class="step done"><div class="v">v192</div><div class="t">1층 재설계 — 우두머리·소환·유성우·무기화 투사체·사연 행동</div></div><div class="step now"><div class="v">v193</div><div class="t">보스 패턴 조사 결과 반영 → 2층부터 규격 복제</div></div><div class="step todo"><div class="v">이후</div><div class="t">스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정</div></div>
   </div>
   <div class="note" style="border-left-color:var(--blood)"><b>한 줄 규격 (재기획서 §0).</b>
   <b style="color:var(--gold)">몰려오는 무리를 한자리로 모아 한 번에 쓸어버린다. 잘못 모으면 포위당해 1.9초에 죽는다.</b><br>
@@ -251,6 +251,148 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
       <td class="mono small">voidEye · voidSpawn · voidSpawn · voidSpawn · riftCaster</td>
       <td class="dim small">open</td></tr></tbody>
   </table></div>
+</section>
+
+<section id="design">
+  <h2>v192 · 1층 재설계 기획안</h2>
+  <p class="lede">「한 층 한 층이 전부 컨트롤과 긴장감을 주는 거지.」 — 이 한 줄이 판정 기준이다.</p>
+  <div class="scroll" style="margin-bottom:20px"><table>
+    <thead><tr><th>항목</th><th>v191</th><th>v192</th><th>왜</th></tr></thead>
+    <tbody><tr><td>1층 우두머리 등장</td><td class="was small">0회 (게이트가 floor&gt;=2)</td>
+      <td class="is small">1.00회 (HP 배율 7→4.5)</td><td class="small dim">층에 오르내림이 없었다</td></tr><tr><td>1층 보스 HP</td><td class="was small">59 · 8~16초 처치</td>
+      <td class="is small">118</td><td class="small dim">이미 2페이즈인데 **페이즈 2를 5초만 봤다**</td></tr><tr><td>보스 p1 패턴</td><td class="was small">3종 (낫질·돌 부채꼴만)</td>
+      <td class="is small">5종 (+부하 소환 +유성우)</td><td class="small dim">소환·유성우는 이미 있었고 1층만 안 썼다</td></tr><tr><td>적 투사체</td><td class="was small">ctx.arc() 원 + 뒤에 작은 원</td>
+      <td class="is small">뼛조각(회전) · 불꽃(펄럭임)</td><td class="small dim">색만 다른 동그라미 11종이었다</td></tr><tr><td>소환수 무리 배선</td><td class="was small">pack·leader 안 넘김 (v186과 동일 결함)</td>
+      <td class="is small">보스가 리더 · 제 발밑에서 소환</td><td class="small dim">응집·밴드·호령을 하나도 안 탔다</td></tr><tr><td>인지 전 행동</td><td class="was small">animT += dt*0.45; continue;</td>
+      <td class="is small">사연대로 산다 (4종 행태)</td><td class="small dim">사연을 도감에 적어두고 행동은 안 시켰다</td></tr><tr><td>시야</td><td class="was small">전방위 230px</td>
+      <td class="is small">정면 230 / 등 뒤 150px</td><td class="small dim">정찰병에게 등이 생긴다 — 잠입의 여지</td></tr></tbody>
+  </table></div>
+
+  <h3>적 행동 설계 — 사연을 행동으로</h3>
+  <p>도감의 사연(89종)을 <b>인지 전 행동</b>으로 옮긴다. 나를 보면 그만두고 덤빈다.
+  리더가 나를 보면 그 순간이 곧 호령이다 — 무리 전체가 <b>같은 순간</b> 각성하고 돌격한다(「적이다! 쳐라!」).</p>
+  <div class="grid" style="margin-bottom:14px">
+    <div class="card" style="border-left:3px solid #a71f26">
+      <div class="k">feed</div><div class="v" style="font-size:17px">시체를 파먹는다</div>
+      <div class="s">굶주려 죽은 것들 · 시체를 먹고 자란 것들</div>
+      <div class="s mono" style="margin-top:6px;color:var(--ink3)">0종</div></div><div class="card" style="border-left:3px solid #96690f">
+      <div class="k">patrol</div><div class="v" style="font-size:17px">정찰한다</div>
+      <div class="s">좌우 44px를 오가며 몸을 돌린다 — 등이 생긴다</div>
+      <div class="s mono" style="margin-top:6px;color:var(--ink3)">0종</div></div><div class="card" style="border-left:3px solid #8a7f70">
+      <div class="k">toil</div><div class="v" style="font-size:17px">생전의 일을 반복한다</div>
+      <div class="s">수의 짓던 침모 · 무덤 파던 관리인 · 열쇠 쥔 간수</div>
+      <div class="s mono" style="margin-top:6px;color:var(--ink3)">0종</div></div><div class="card" style="border-left:3px solid #12707a">
+      <div class="k">roam</div><div class="v" style="font-size:17px">묻힐 자리를 찾아 떠돈다</div>
+      <div class="s">이름이 지워진 혼</div>
+      <div class="s mono" style="margin-top:6px;color:var(--ink3)">0종</div></div>
+  </div>
+  <details><summary>적별 행태 배정 (0종)</summary>
+  <div class="scroll" style="margin-top:10px"><table>
+    <thead><tr><th>적</th><th>행태</th><th>사연</th></tr></thead>
+    <tbody></tbody>
+  </table></div></details>
+
+  <h3>보스 패턴 라이브러리</h3>
+  <p>보스 23종의 페이즈별 패턴. <b>「부하 소환」과 「유성우」는 이미 구현돼 있었고 1층 보스만 안 썼다</b> — v192에서 배선했다.</p>
+  <div class="scroll" style="max-height:520px;overflow-y:auto"><table>
+    <thead><tr><th>층</th><th>보스</th><th>HP</th><th>1페이즈</th><th>2페이즈</th></tr></thead>
+    <tbody><tr style="background:var(--raise)">
+        <td class="num mono">1</td><td class="small"><b>무덤지기 오스문드</b></td>
+        <td class="num mono">190</td>
+        <td class="small dim">낫질(부채꼴 참격) → 낫질(부채꼴 참격) · 뼛조각 부채꼴 · 부하 소환 · 유성우(박격) · 뼛조각 부채꼴</td>
+        <td class="small dim">낫질(부채꼴 참격) → 뼛조각 부채꼴 · 유성우(박격) → 부하 소환 · 뼛조각 부채꼴 · 저주 표식 → 낫질(부채꼴 참격) → 뼛조각 부채꼴 · 부하 소환 → 뼛조각 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">2</td><td class="small"><b>시체 짐꾼 '삯꾼 몰레'</b></td>
+        <td class="num mono">170</td>
+        <td class="small dim">포자 부채꼴 · 충격파 링 → 부하 소환 · 포자 부채꼴</td>
+        <td class="small dim">포자 부채꼴 · 포자 부채꼴 → 충격파 링 · 독 유성우 · 저주 표식 → 포자 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">3</td><td class="small"><b>간수장 바르곤</b></td>
+        <td class="num mono">190</td>
+        <td class="small dim">돌진 → 충격파 링 · 뼛조각 부채꼴 · 뼛조각 부채꼴 · 고유기</td>
+        <td class="small dim">돌진 → 충격파 링 → 뼛조각 부채꼴 · 연쇄 파동 · 충격파 링 → 뼛조각 부채꼴 · 뼛조각 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">4</td><td class="small"><b>방화대장 '그을음 브란트'</b></td>
+        <td class="num mono">430</td>
+        <td class="small dim">탄 부채꼴 → 돌진 · 저주 표식 · 탄 부채꼴 · 고유기</td>
+        <td class="small dim">돌진 → 탄 부채꼴 · 유성우(박격) · 탄 부채꼴 → 돌진 · 탄 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">5</td><td class="small"><b>교수대의 그림자</b></td>
+        <td class="num mono">700</td>
+        <td class="small dim">낫질(부채꼴 참격) → 원혼 부채꼴 · 틈 있는 링 · 원혼 부채꼴 · 고유기</td>
+        <td class="small dim">틈 있는 링 → 낫질(부채꼴 참격) → 원혼 부채꼴 · 연쇄 파동 · 원혼 부채꼴 → 충격파 링 · 부하 소환 · 고유기</td></tr><tr>
+        <td class="num mono">6</td><td class="small"><b>되살아난 오스문드</b></td>
+        <td class="num mono">550</td>
+        <td class="small dim">낫질(부채꼴 참격) → 나선 탄막 · 저주 표식 · 원혼 부채꼴 · 고유기</td>
+        <td class="small dim">저주 표식 → 나선 탄막 → 낫질(부채꼴 참격) · 메아리 · 낫질(부채꼴 참격) → 낫질(부채꼴 참격) · 부하 소환 → 나선 탄막 · 고유기</td></tr><tr>
+        <td class="num mono">7</td><td class="small"><b>물에 불은 몰레</b></td>
+        <td class="num mono">680</td>
+        <td class="small dim">포자 부채꼴 · 충격파 링 → 부하 소환 · 독 간헐천 · 고유기</td>
+        <td class="small dim">독 간헐천 → 포자 부채꼴 · 독 유성우 · 포자 부채꼴 → 독 간헐천 · 포자 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">8</td><td class="small"><b>사슬에 얽힌 바르곤</b></td>
+        <td class="num mono">650</td>
+        <td class="small dim">돌진 → 사슬 속박 · 뼛조각 부채꼴 → 충격파 링 · 뼛조각 부채꼴 · 고유기</td>
+        <td class="small dim">사슬 속박 → 돌진 · 연쇄 파동 → 사슬 속박 · 돌진 → 사슬 속박 → 뼛조각 부채꼴 · 사슬 속박 → 뼛조각 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">9</td><td class="small"><b>재가 된 브란트</b></td>
+        <td class="num mono">850</td>
+        <td class="small dim">탄 부채꼴 → 간헐천 · 돌진 → 충격파 링 · 고유기</td>
+        <td class="small dim">간헐천 → 돌진 · 광선 · 유성우(박격) · 돌진 → 간헐천 · 고유기</td></tr><tr>
+        <td class="num mono">10</td><td class="small"><b>왕실 처형인 '무거운 손'</b></td>
+        <td class="num mono">1300</td>
+        <td class="small dim">낫질(부채꼴 참격) → 나선 탄막 · 틈 있는 링 → 저주 표식 · 원혼 부채꼴 · 고유기</td>
+        <td class="small dim">틈 있는 링 → 나선 탄막 → 원혼 부채꼴 · 광선 · 연쇄 파동 · 낫질(부채꼴 참격) → 저주 표식 → 원혼 부채꼴 · 부하 소환 → 나선 탄막 · 고유기</td></tr><tr>
+        <td class="num mono">20</td><td class="small"><b>관문 사령관 '철벽 로트가르'</b></td>
+        <td class="num mono">1600</td>
+        <td class="small dim">포자 부채꼴 → 충격파 링 · 부하 소환 → 나선 탄막 · 독 간헐천 → 포자 부채꼴 · 고유기</td>
+        <td class="small dim">틈 있는 링 → 나선 탄막 · 독 유성우 · 부하 소환 → 포자 부채꼴 · 포자 부채꼴 → 독 간헐천 → 충격파 링 · 고유기</td></tr><tr>
+        <td class="num mono">30</td><td class="small"><b>대재판관 '발디아 공작'</b></td>
+        <td class="num mono">2100</td>
+        <td class="small dim">뼛조각 부채꼴 → 충격파 링 · 사슬 속박 → 뼛조각 부채꼴 · 돌진 → 충격파 링 → 뼛조각 부채꼴 · 고유기</td>
+        <td class="small dim">사슬 속박 → 돌진 → 뼛조각 부채꼴 · 광선 · 틈 있는 링 → 뼛조각 부채꼴 · 독 간헐천 → 사슬 속박 → 충격파 링 · 고유기</td></tr><tr>
+        <td class="num mono">40</td><td class="small"><b>대주교 '이노첸시오'</b></td>
+        <td class="num mono">3200</td>
+        <td class="small dim">원혼 부채꼴 → 충격파 링 · 광선 · 저주 표식 → 나선 탄막 · 부하 소환 → 원혼 부채꼴 · 고유기</td>
+        <td class="small dim">틈 있는 링 → 나선 탄막 → 원혼 부채꼴 · 광선 → 원혼 부채꼴 · 저주 표식 → 부하 소환 → 충격파 링 · 낫질(부채꼴 참격) → 저주 표식 → 나선 탄막 · 고유기</td></tr><tr>
+        <td class="num mono">45</td><td class="small"><b>근위대장 '흰 늑대'</b></td>
+        <td class="num mono">3600</td>
+        <td class="small dim">돌진 → 충격파 링 · 낫질(부채꼴 참격) → 낫질(부채꼴 참격) → 뼛조각 부채꼴 · 사슬 속박 → 돌진 · 고유기</td>
+        <td class="small dim">돌진 → 사슬 속박 → 뼛조각 부채꼴 · 메아리 · 낫질(부채꼴 참격) → 낫질(부채꼴 참격) → 충격파 링 · 뼛조각 부채꼴 → 돌진 · 고유기</td></tr><tr>
+        <td class="num mono">50</td><td class="small"><b>왕 바르텐 3세</b></td>
+        <td class="num mono">5000</td>
+        <td class="small dim">낫질(부채꼴 참격) → 낫질(부채꼴 참격) · 돌진 → 충격파 링 · 뼛조각 부채꼴 → 낫질(부채꼴 참격) · 고유기</td>
+        <td class="small dim">나선 탄막 → 틈 있는 링 · 연쇄 파동 · 독 간헐천 → 탄 부채꼴 · 부하 소환 → 나선 탄막 · 저주 표식 → 낫질(부채꼴 참격) → 원혼 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">60</td><td class="small"><b>수문장 '갈고리 브람'</b></td>
+        <td class="num mono">620</td>
+        <td class="small dim">사슬 속박 → 돌진 · 뼛조각 부채꼴 → 사슬 속박 · 돌진 → 충격파 링 · 고유기</td>
+        <td class="small dim">사슬 속박 → 돌진 → 뼛조각 부채꼴 · 연쇄 파동 · 충격파 링 → 사슬 속박 → 돌진 · 돌진 → 사슬 속박 → 돌진 · 고유기</td></tr><tr>
+        <td class="num mono">61</td><td class="small"><b>뱃사공 '침묵의 요른'</b></td>
+        <td class="num mono">700</td>
+        <td class="small dim">낫질(부채꼴 참격) → 나선 탄막 · 나선 탄막 → 충격파 링 · 원혼 부채꼴 → 낫질(부채꼴 참격) · 고유기</td>
+        <td class="small dim">나선 탄막 → 낫질(부채꼴 참격) → 충격파 링 · 연쇄 파동 · 틈 있는 링 → 나선 탄막 · 낫질(부채꼴 참격) → 원혼 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">62</td><td class="small"><b>위증 서기장 '퀼른'</b></td>
+        <td class="num mono">560</td>
+        <td class="small dim">부하 소환 → 원혼 부채꼴 · 저주 표식 → 원혼 부채꼴 · 원혼 부채꼴 → 저주 표식 · 고유기</td>
+        <td class="small dim">부하 소환 → 저주 표식 → 원혼 부채꼴 · 유성우(박격) · 원혼 부채꼴 → 부하 소환 · 저주 표식 → 원혼 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">63</td><td class="small"><b>사병대장 '철퇴 가로크'</b></td>
+        <td class="num mono">760</td>
+        <td class="small dim">돌진 → 충격파 링 · 충격파 링 → 뼛조각 부채꼴 · 낫질(부채꼴 참격) → 낫질(부채꼴 참격) → 충격파 링 · 고유기</td>
+        <td class="small dim">돌진 → 충격파 링 → 뼛조각 부채꼴 · 유성우(박격) · 충격파 링 → 충격파 링 · 낫질(부채꼴 참격) → 돌진 → 충격파 링 · 고유기</td></tr><tr>
+        <td class="num mono">64</td><td class="small"><b>역병 의사 '부리가면 코르부스'</b></td>
+        <td class="num mono">640</td>
+        <td class="small dim">독 간헐천 → 포자 부채꼴 · 부하 소환 → 충격파 링 · 포자 부채꼴 → 독 간헐천 · 고유기</td>
+        <td class="small dim">저주 표식 → 독 간헐천 → 포자 부채꼴 · 독 유성우 · 포자 부채꼴 → 부하 소환 · 독 간헐천 → 틈 있는 링 · 고유기</td></tr><tr>
+        <td class="num mono">65</td><td class="small"><b>소각로장 '재의 우르쉬'</b></td>
+        <td class="num mono">720</td>
+        <td class="small dim">돌진 → 간헐천 · 탄 부채꼴 → 돌진 · 간헐천 → 충격파 링 · 고유기</td>
+        <td class="small dim">간헐천 → 돌진 → 탄 부채꼴 · 광선 · 탄 부채꼴 → 간헐천 · 돌진 → 충격파 링 → 탄 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">66</td><td class="small"><b>왕실 마법장 '별지기 오벨'</b></td>
+        <td class="num mono">660</td>
+        <td class="small dim">나선 탄막 → 저주 표식 · 광선 · 원혼 부채꼴 → 틈 있는 링 · 틈 있는 링 → 원혼 부채꼴 · 고유기</td>
+        <td class="small dim">저주 표식 → 나선 탄막 → 원혼 부채꼴 · 메아리 · 부하 소환 → 틈 있는 링 · 나선 탄막 → 원혼 부채꼴 · 고유기</td></tr><tr>
+        <td class="num mono">67</td><td class="small"><b>검은 창기병 '무언의 기수'</b></td>
+        <td class="num mono">740</td>
+        <td class="small dim">돌진 → 돌진 · 낫질(부채꼴 참격) → 돌진 · 뼛조각 부채꼴 → 돌진 · 고유기</td>
+        <td class="small dim">돌진 → 돌진 → 돌진 · 메아리 → 돌진 · 낫질(부채꼴 참격) → 돌진 → 충격파 링 · 돌진 → 뼛조각 부채꼴 → 돌진 · 고유기</td></tr></tbody>
+  </table></div>
+  <div class="note"><b>다음.</b> 로그라이크 호평 보스 패턴 조사(Hades·Dead Cells·Gungeon·Isaac·Risk of Rain·Skul 등)가
+  돌고 있다. 결과가 나오면 <b>보스 23종 × 무기 배정표</b>와 층별 패턴 확장을 이 표에 채운다.
+  1층에서 검증된 규격을 2층부터 복제한다.</div>
 </section>
 
 <section id="map">
@@ -928,7 +1070,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <section id="verify">
   <h2>회귀 검증 · 114항목</h2>
-  <p class="lede">고친 결함이 되살아나지 않도록 못박은 것들. <span class="mono small">./tools/run-verify.sh 190</span></p>
+  <p class="lede">고친 결함이 되살아나지 않도록 못박은 것들. <span class="mono small">./tools/run-verify.sh 192</span></p>
   <p>새 몹에 사연을 빼먹으면 <span class="mono small">lore.everyEnemyHasOne</span>이 잡고,
   예고를 다시 인간 반응 시간 아래로 줄이면 <span class="mono small">feel.dodgeWindowIsHuman</span>이 잡는다.
   <b>이게 규격이 50층까지 확장되는 방식이다.</b></p>
@@ -980,10 +1122,12 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <section id="history">
   <h2>이력</h2>
-  <p class="lede">버전 18개.</p>
+  <p class="lede">버전 20개.</p>
   <div class="scroll" style="max-height:460px;overflow-y:auto"><table>
     <thead><tr><th>버전</th><th>날짜</th><th>내용</th></tr></thead>
-    <tbody><tr><td class="mono num">v189</td><td class="dim mono small">2026-07-30</td>
+    <tbody><tr><td class="mono num">v192</td><td class="dim mono small">2026-07-30</td>
+   <td class="small">1층 재설계 — 「한 층 한 층이 전부 컨트롤과 긴장감」</td></tr><tr><td class="mono num">v190</td><td class="dim mono small">2026-07-30</td>
+   <td class="small">캐시버스트 수리 — 고쳐도 사장 화면에 안 닿을 수 있었다</td></tr><tr><td class="mono num">v189</td><td class="dim mono small">2026-07-30</td>
    <td class="small">맵 연결 기반 — 이어져 있다고 느끼려면 먼저 이어져 있어야 한다</td></tr><tr><td class="mono num">v188</td><td class="dim mono small">2026-07-30</td>
    <td class="small">손맛과 회피 — 기능이 없던 게 아니라 사람이 닿을 수 없었다</td></tr><tr><td class="mono num">v187</td><td class="dim mono small">2026-07-30</td>
    <td class="small">기준 구간(1~3층) 규격 — 사연은 만나는 순간에, 무리는 대비로</td></tr><tr><td class="mono num">v186</td><td class="dim mono small">2026-07-30</td>
@@ -1015,7 +1159,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 </section>
 
 <footer>
-  생성 2026-07-30 11:43 · 빌드 v190 · <span class="mono">node tools/dashboard.js</span> 로 갱신<br>
+  생성 2026-07-30 12:35 · 빌드 v192 · <span class="mono">node tools/dashboard.js</span> 로 갱신<br>
   데이터는 저장소 코드에서 직접 뽑는다 — 손으로 적은 숫자는 낡는다.
 </footer>
 </div>
