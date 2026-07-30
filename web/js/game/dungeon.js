@@ -445,24 +445,30 @@ const Dungeon = {
     // (createMiniboss 가 1층에서 HP 배율을 7 → 4.5 로 내린다).
     // 확정 보장을 3층 → 1층으로 내리되 2층만 예외로 둔다 —
     // 2층 확정은 과거에 검사 사망을 1→11회로 만든 전력이 있다 (v166 실측).
-    if (this.floor >= 1) {
-      const roomsLeft = this.totalRooms - 1 - this.roomIndex; // 보스방 전까지 남은 방 수
-      // ★ v193 — 사장: "잡몹만 나오는데? 1층 처음부터"
-      // 실측이 확인했다: v192에서 1층 우두머리 1.00회가 맞긴 한데 **20런 중 15번이 4번 방 한 곳**이었다.
-      // 방 1~3은 5~10%뿐이고, 4번 방에서 확정으로 걸리면 miniSeen 이 켜져 뒷방 확률이 0이 된다.
-      // 즉 「층당 1회」가 아니라 「4번 방에 1회」였다 — 앞쪽 방을 도는 사장은 90% 확률로 잡몹만 봤다.
-      // 1층은 확정 시점을 방 2로 당기고, 그 뒤에도 두 번째가 나오게 한다 (「잡몹 + 보스 조합」)
-      const force = !this.miniSeen && roomsLeft <= (this.floor === 1 ? 6 : 4) && this.floor !== 2;
-      // 심층 2번째 우두머리 12→20% (2026-07 몬스터 확장 — 중간보스 조우 상향)
-      let chance = this.miniSeen
-        ? ((this.floor >= 6 || this.shortcutHot) ? 0.2 : this.floor === 1 ? 0.12 : 0)
-        : (this.shortcutHot ? 0.25 : this.floor === 2 ? 0.08 : this.floor === 1 ? 0.30 : 0.14);
-      if (force || RNG.chance(chance)) {
-        // 소형 쫄은 우두머리 감이 아니다 (거대화해도 위협 패턴이 빈약)
-        const MINI_EXCLUDE = ['swarm', 'sporePuff', 'cinder', 'voidSpawn', 'bat', 'bloodBat'];
-        const pool = data.enemies.filter((t) => !MINI_EXCLUDE.includes(t));
+    // ★ v194 — 사장: "각 단계별로 잡몹+보스 나오게 하라니깐?"
+    // v192·v193 은 「층당」 1~1.35기였다. 사장이 말한 건 「방마다」다 —
+    // 전투방 하나하나가 「잡몹 무리 + 패턴을 가진 보스급」이 되어야 한다.
+    // 그래야 방마다 「패턴을 피하고 · 스킬을 쓰고 · 쓸어담는」 리듬이 선다.
+    // 난이도는 물량으로 갚지 않는다: 우두머리 몸값을 7배 → 2.6배(1~2층)로 낮추고,
+    // 잡몹 수를 2기 덜어 위협 예산을 보존한다 (v187 규격과 같은 원리)
+    {
+      const MINI_EXCLUDE = ['swarm', 'sporePuff', 'cinder', 'voidSpawn', 'bat', 'bloodBat'];
+      const pool = data.enemies.filter((t) => !MINI_EXCLUDE.includes(t));
+      // 보스방 직전 방은 비운다 — 보스 앞에서 숨 고를 자리 하나는 남긴다
+      const beforeBoss = this.roomIndex >= this.totalRooms - 1;
+      if (!beforeBoss) {
+        // 잡몹 2기를 덜어낸다 (뒤에서부터 — 무리의 리더는 남긴다)
+        for (let k = 0; k < 2 && comp.length > 3; k++) {
+          const idx = comp.map((u, i) => (u.leader ? -1 : i)).filter((i) => i >= 0).pop();
+          if (idx == null || idx < 0) break;
+          comp.splice(idx, 1);
+        }
         comp.push({ type: RNG.pick(pool.length ? pool : data.enemies), elite: false, mini: true });
         this.miniSeen = true;
+        // 심층은 두 번째 우두머리 — 방이 곧 소규모 보스전이 된다
+        if (this.floor >= 6 && RNG.chance(0.25)) {
+          comp.push({ type: RNG.pick(pool.length ? pool : data.enemies), elite: false, mini: true });
+        }
       }
     }
     return comp;
