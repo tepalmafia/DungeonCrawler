@@ -869,18 +869,25 @@ const GameRender = {
       // 그대로 두면 화면이 또 거짓말을 한다 (겨눈 곳과 다른 곳에 표시)
       const t = this.player._aimTarget && !this.player._aimTarget.dead ? this.player._aimTarget : null;
       if (t) {
-        const r = t.r + 8;
-        const L = 6;
+        // ★ v183 (사장: "npc 테두리 나오는건 고쳤어? 보기싫어")
+        // 종전엔 붉은 모서리 브래킷 4개를 적 몸 위에 씌웠다 — **HUD 상자를 세계 위에 얹은 꼴**이라
+        // 픽셀아트 화면에서 이물감이 컸다. 정보(어느 놈을 겨누는가)는 지키되 표현을 바꾼다:
+        // 발밑에 얕은 호(弧) 하나. 세계 안의 그림자처럼 읽히고, 스프라이트를 가리지 않는다
+        const r = t.r + 6;
         ctx.save();
-        ctx.strokeStyle = 'rgba(228,59,68,0.75)';
-        ctx.lineWidth = 2;
-        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-          ctx.beginPath();
-          ctx.moveTo(t.x + sx * r, t.y + sy * r - sy * L);
-          ctx.lineTo(t.x + sx * r, t.y + sy * r);
-          ctx.lineTo(t.x + sx * r - sx * L, t.y + sy * r);
-          ctx.stroke();
-        }
+        ctx.globalAlpha = 0.5 + Math.sin(this.blinkT * 5) * 0.12;
+        ctx.strokeStyle = '#e8e0cf';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(t.x, t.y + t.r * 0.72, r * 0.82, r * 0.3, 0, Math.PI * 0.12, Math.PI * 0.88);
+        ctx.stroke();
+        // 머리 위 작은 쐐기 — 난전에서 발밑 호가 겹쳐도 어느 놈인지 한 번에 짚인다
+        ctx.globalAlpha = 0.66;
+        ctx.fillStyle = '#e8e0cf';
+        const ty = t.y - t.r - 10;
+        ctx.beginPath();
+        ctx.moveTo(t.x, ty + 5); ctx.lineTo(t.x - 3.5, ty); ctx.lineTo(t.x + 3.5, ty);
+        ctx.closePath(); ctx.fill();
         ctx.restore();
       }
     }
