@@ -3589,6 +3589,107 @@ const Sprites = (() => {
     for (let k = 0; k < 6; k++) { const x = 16 + k * 2.6; P.put(g, x, 9, 'B'); P.put(g, x, 10, 'B'); }
   }, { F: '#c8a06a', f: '#96703f', p: '#563e20', n: '#2a1008', B: '#f4eeda', r: '#e43b44' });
 
+
+  // ── 4차 배치 (v200) — 잡몹 마무리 8종 ──
+  sprites.wraith = mob(34, 38, (g) => {
+    P.shade(g, 17, 11, 6.5, 6, 'A', 'a', 'n');
+    P.put(g, 14, 11, 'C'); P.put(g, 20, 11, 'C');
+    P.span(g, 15, 14, 20, 'n');
+    for (let y = 17; y < 36; y++) {                                   // 흩어지는 하반신
+      const w = Math.round(7 - (y - 17) * 0.16);
+      for (let x = 17 - w; x <= 17 + w; x++)
+        if ((x * 7 + y * 13) % (y > 29 ? 3 : 11) !== 0) P.put(g, x, y, x < 17 ? 'a' : 'n');
+      if (y % 4 === 0) P.put(g, 17 - w, y, 'A');
+    }
+    for (let k = 0; k < 6; k++) { P.put(g, 6 + k * 0.4, 16 + k, 'a'); P.put(g, 28 - k * 0.4, 16 + k, 'n'); }  // 늘어진 소매
+  }, { A: '#8a7ab0', a: '#4e4070', n: '#241b3a', C: '#8ad8ff' });
+
+  sprites.ashWalker = mob(36, 40, (g) => {
+    P.legs(g, 17, 30, 1, 6, { hi: 'a', lo: 'n' });
+    for (let y = 0; y < 15; y++) { const w = Math.round(7 - y * 0.1);   // 재로 굳은 몸
+      P.span(g, 15 + y, 17 - w, 17 + w, 'a');
+      P.put(g, 17 - w, 15 + y, 'A'); P.put(g, 17 + w, 15 + y, 'n'); }
+    for (const [x, y] of [[13, 19], [21, 23], [16, 26], [22, 17]])      // 갈라진 틈에서 새는 불
+      { P.put(g, x, y, 'C'); P.put(g, x, y + 1, 'c'); P.put(g, x + 1, y, 'c'); }
+    P.limb(g, 8, 17, 1, { hi: 'A', mid: 'a', lo: 'n', dx: -0.2, len: 4, thick: 3 });
+    P.limb(g, 26, 17, 1, { hi: 'A', mid: 'a', lo: 'n', dx: 0.2, len: 4, thick: 3 });
+    P.head(g, 17, 8, 1, { eye: 'C' });
+    for (let k = 0; k < 5; k++) P.put(g, 13 + k * 2, 1 + (k % 2), 'c');  // 피어오르는 재
+  }, { A: '#7a6e6a', a: '#4a423e', n: '#231e1c', C: '#ff9a3c', c: '#c0392b', F: '#6a5e58', f: '#443c38', p: '#241e1c' });
+
+  sprites.boneHeap = mob(34, 26, (g) => {
+    // 뼈 무더기 — 서 있지 않다. 바닥에 쌓인 실루엣이라 다른 몹과 즉시 갈린다
+    for (let y = 0; y < 12; y++) { const w = Math.round(4 + y * 1.05);
+      P.span(g, 12 + y, 17 - w, 17 + w, y < 3 ? 'b' : 'd');
+      P.put(g, 17 - w, 12 + y, 'B'); }
+    for (const [x, y, len] of [[6, 16, 7], [22, 14, 6], [10, 21, 8], [20, 20, 5]]) {   // 삐져나온 뼈
+      for (let k = 0; k < len; k++) P.put(g, x + k, y - (k % 2) * 0.5, 'b');
+      P.put(g, x, y - 1, 'B'); P.put(g, x + len, y - 1, 'B');
+    }
+    P.skull(g, 12, 9, 0.85, { jaw: false });
+    for (let k = 0; k < 4; k++) P.put(g, 24 + k, 11 - (k % 2), 'd');
+  }, { B: '#f4eeda', b: '#d8d0b8', d: '#9a917c', e: '#1a1622', r: '#ffd866' });
+
+  sprites.venomLasher = mob(38, 36, (g) => {
+    P.blob(g, 15, 22, 1.05);
+    for (let k = 0; k < 16; k++) {                                     // 채찍처럼 뻗은 촉수
+      const t = k / 15;
+      P.put(g, 20 + k * 1.1, 20 - Math.sin(t * 3.1) * 12, t < 0.5 ? 'c' : 'C');
+      P.put(g, 20 + k * 1.1, 21 - Math.sin(t * 3.1) * 12, 'n');
+    }
+    for (let k = 0; k < 3; k++) P.put(g, 35 - k, 6 + k, 'B');           // 독침
+  }, { C: '#b6f06a', c: '#6ab04c', n: '#2e5c26', B: '#ffffff' });
+
+  sprites.sporeMother = mob(44, 42, (g) => {
+    P.blob(g, 22, 26, 1.6);                                             // 거대한 몸
+    for (const [x, y, r] of [[12, 12, 5], [31, 10, 6], [22, 6, 4.5], [6, 20, 3.5], [37, 20, 4]]) {
+      P.shade(g, x, y, r, r * 0.8, 'B', 'C', 'c');                      // 등에 돋은 포자낭
+      P.put(g, x - 1, y - 1, 'B');
+      for (let k = 0; k < 3; k++) P.put(g, x + k - 1, y - r - 1 - k, 'C');
+    }
+    for (let k = 0; k < 5; k++) P.put(g, 8 + k * 7, 40, 'n');
+  }, { C: '#c8f078', c: '#7ab04c', n: '#3a5c22', B: '#f0ffd0' });
+
+  sprites.frostGolem = mob(42, 42, (g) => {
+    const block = (x0, y0, w, h) => {
+      for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+        const ex = Math.min(x - x0, x0 + w - 1 - x), ey = Math.min(y - y0, y0 + h - 1 - y);
+        if (ex + ey === 0 && ((x * 7 + y * 13) % 3)) continue;
+        const lit = (x === x0 || y === y0), dark = (x === x0 + w - 1 || y === y0 + h - 1);
+        P.put(g, x, y, lit ? 'K' : dark ? 's' : ((x * 5 + y * 11) % 6 ? 'S' : 'K'));
+      }
+    };
+    block(12, 4, 16, 10); block(8, 15, 24, 14);
+    block(2, 16, 6, 13); block(32, 16, 6, 13);
+    block(12, 30, 7, 8); block(22, 30, 7, 8);
+    // ★ 눈과 고드름은 **맨 마지막에**. 블록보다 먼저 그리면 덮여 사라진다.
+    //   그리고 눈 색이 몸 색과 가까우면 안 보인다 — 한랭 팔레트 안에서 대비를 만든다
+    P.rect(g, 14, 7, 4, 3, 'C'); P.rect(g, 22, 7, 4, 3, 'C');
+    P.rect(g, 14, 6, 4, 1, 'r'); P.rect(g, 22, 6, 4, 1, 'r');
+    for (let k = 0; k < 6; k++) P.put(g, 12 + k * 3, 20 + (k % 2), 'C');   // 가슴 서리결
+    for (const [x, y, h] of [[9, 28, 6], [31, 26, 5], [17, 28, 4], [25, 27, 5]])
+      for (let k = 0; k < h; k++) P.put(g, x, y + k, k === h - 1 ? 'B' : k > h - 3 ? 'C' : 'K');
+  }, { K: '#cfeaff', S: '#5f96bc', s: '#1d3a56', C: '#5ce0ff', B: '#ffffff', r: '#1a4a6a' });
+
+  sprites.obsidianBeast = mob(42, 34, (g) => {
+    P.beast(g, 21, 17, 1.2, { hi: 'K', mid: 'S', lo: 's' });
+    P.snout(g, 32, 15, 1.05, { hi: 'K', mid: 'S', lo: 's', tusk: true });
+    for (let k = 0; k < 8; k++) {                                       // 등에 솟은 흑요석 가시
+      const x = 10 + k * 2.6, h = 4 + (k % 3);
+      for (let j = 0; j < h; j++) P.put(g, x + j * 0.3, 10 - j, j > h - 2 ? 'C' : 'S');
+    }
+    for (const [x, y] of [[16, 18], [24, 20]]) { P.put(g, x, y, 'C'); P.put(g, x + 1, y + 1, 'C'); }
+  }, { K: '#6a6480', S: '#3a3550', s: '#1a1628', C: '#e43b44', B: '#c8ccd8', r: '#ff5c6c' });
+
+  sprites.lavaBurster = mob(36, 34, (g) => {
+    P.blob(g, 18, 20, 1.25);
+    for (const [x, y, r] of [[11, 12, 3], [25, 11, 3.5], [18, 8, 2.6]]) {  // 터지기 직전의 혹
+      P.shade(g, x, y, r, r * 0.85, 'B', 'C', 'c');
+      P.put(g, x - 1, y - 1, 'B');
+    }
+    for (let k = 0; k < 8; k++) P.put(g, 8 + k * 2.7, 30 + (k % 2), 'c');   // 흘러내린 용암
+  }, { C: '#ffd866', c: '#e25822', n: '#7a1010', B: '#fff4c8' });
+
   sprites.deriveFrames = deriveFrames;
   // UI·투사체·아이템은 자세가 없다 — 걸으면 안 된다
   const NO_POSE = /^(arrow|heart|coin|chest|orb|icon|shard|door|torch|pot|crack|rune|bolt|proj|white|tint)/i;
