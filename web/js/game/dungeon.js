@@ -484,7 +484,11 @@ const Dungeon = {
     comp.push({ type: RNG.pick(data.enemies), elite: false });
     comp.push({ type: RNG.pick(data.enemies), elite: false });
     comp.push({ type: RNG.pick(data.enemies), elite: false });
-    comp.push({ type: RNG.pick(data.enemies), elite: false });
+    // ★ v196 — 사장: "왜 자꾸 안나오는거야? 전체 방에서 나오라고"
+    // v194·v195 는 combatComp 에만 넣었다. 실제 경로 실측으로 전투방은 92.5%였는데
+    // **전체 방 대비 51%**였다 — 정예방이 전체의 24%인데 eliteComp 를 타서 우두머리가 없었다.
+    // 적이 나오는 방은 전부 「잡몹 + 보스급」이어야 한다
+    comp.push({ type: RNG.pick(data.enemies), elite: false, mini: true });
     return comp;
   },
 };
