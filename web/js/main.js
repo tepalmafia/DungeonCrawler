@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 188;
+const GAME_VERSION = 189;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -960,14 +960,28 @@ const Game = {
     }
     if (this.state === 'transition') {
       const tr = this.transition;
-      tr.t += dt * 3;
+      // v189: 666ms → 435ms. 런당 450회 × 666ms = 300초(5분)를 검정 화면에 쓰고 있었다.
+      // 그리고 그 시간을 '암전'이 아니라 '이동'으로 채운다 — 나온 방은 왼쪽으로 밀려나고,
+      // 새 방이 오른쪽에서 들어온다. 위 문으로 나갔으면 살짝 위에서 들어온다
+      tr.t += dt * 4.6;
+      {
+        const k = Math.min(1, Math.max(0, tr.t));
+        const ease = tr.phase === 'out' ? k * k : 1 - (1 - k) * (1 - k); // 나갈 땐 가속, 들어올 땐 감속
+        const vy = (tr.dy || 0) * Renderer.H * 0.22;
+        Renderer.panX = tr.phase === 'out' ? -Renderer.W * ease : Renderer.W * (1 - ease);
+        Renderer.panY = tr.phase === 'out' ? vy * ease : vy * (1 - ease);
+      }
       if (tr.phase === 'out' && tr.t >= 1) {
         Dungeon.pendingMod = tr.mod || null; // 문 수식어를 다음 방에 전달
+        // v189: 나온 문의 높이·방향을 다음 방에 넘긴다 — 진입점과 지도 좌표가 여기서 갈린다
+        Dungeon.entryY = tr.doorY != null ? tr.doorY : null;
+        Dungeon.pendingDy = tr.dy || 0;
         Dungeon.advance(tr.type);
         tr.phase = 'in';
         tr.t = 0;
       } else if (tr.phase === 'in' && tr.t >= 1) {
         this.transition = null;
+        Renderer.panX = 0; Renderer.panY = 0;   // 반드시 되돌린다 — 남으면 월드가 통째로 어긋난다
         this.state = 'play';
         if (this.pendingChoices > 0) this.openTraitChoice('levelup');
         // 막 시작 독백 (v120 ④): 비차단 하단 텍스트 — 전환 시간은 1초도 늘리지 않는다

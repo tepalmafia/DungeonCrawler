@@ -1741,11 +1741,21 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     const back = hold('archer');
     const front = hold('skeleton');
     // 리더가 실제 스폰 경로를 타고 나오는가 (v185는 combatComp만 검사해 0기를 놓쳤다)
-    Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
-    for (let i = 0; i < 120; i++) Game.tick(1 / 60);
-    const leaders = Game.enemies.filter((e) => !e.dead && e.isLeader).length;
-    const alive = Game.enemies.filter((e) => !e.dead).length;
-    return { dist, back, front, leaders, alive };
+    // ★ v189 — 방 하나만 보면 안 된다. v187부터 **홑몸 방 25%는 무리도 리더도 없는 게 설계**다.
+    // 종전엔 시드 운으로 통과하다가 v189에서 진입점이 바뀌며 스폰 난수가 밀리자 홑몸 방에
+    // 걸려 터졌다. 재는 대상은 「방마다 리더가 있는가」가 아니라 **「무리 방의 리더가
+    // 스폰 경로를 타고 나오는가」**다 — 그게 v185에서 죽어 있던 것이다
+    let leaders = 0, alive = 0, packRooms = 0, soloRooms = 0;
+    for (let r = 0; r < 8; r++) {
+      Dungeon.floor = 3; Dungeon.roomIndex = 2 + (r % 5); Dungeon.build('combat');
+      for (let i = 0; i < 120; i++) Game.tick(1 / 60);
+      const live = Game.enemies.filter((e) => !e.dead);
+      if (Game._roomKind === 'solo') { soloRooms++; continue; }
+      packRooms++;
+      leaders += live.filter((e) => e.isLeader).length;
+      alive += live.length;
+    }
+    return { dist, back, front, leaders, alive, packRooms, soloRooms };
   });
   console.log('  무리행태:', JSON.stringify(behav));
   ok('role.coversRoster', behav.dist.flank >= 12 && behav.dist.back >= 8 && behav.dist.front >= 15,
@@ -1756,8 +1766,8 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     '(v185까지 진형은 **스폰 배치**일 뿐이라 1~2초면 대열이 녹아 전부 얼굴로 몰려왔다)');
   ok('behav.meleeStillCloses', behav.front.d1 <= behav.front.d0 * 1.3,
     `전열은 그대로 붙는다 ${behav.front.d0} → ${behav.front.d1}px (근접은 붙는 게 맞다 — 역할이 다르다)`);
-  ok('behav.leadersSpawn', behav.leaders >= 1 && behav.alive > 0,
-    `실제 스폰 경로에서 리더 ${behav.leaders}기 / 적 ${behav.alive} ` +
+  ok('behav.leadersSpawn', behav.packRooms > 0 && behav.leaders >= behav.packRooms && behav.alive > 0,
+    `무리 방 ${behav.packRooms}개(홑몸 ${behav.soloRooms}개 제외)에서 리더 ${behav.leaders}기 / 적 ${behav.alive} ` +
     '(v185는 main.js가 pack·leader를 안 넘겨 **실전 8개 방 전부 0기**였다 — 사기 시스템이 통째로 죽어 있었다)');
 
   // ── 사연 (v187) ────────────────────────────────────────────────────────
@@ -1936,6 +1946,67 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `일반 타격 ${feelv.swings}회 중 ${feelv.stops}회 히트스톱 · 평균 ${feelv.stopMs}ms ` +
     '(v187은 크리에만 걸어 일반 타격은 **0회** — 잡몹을 벨 때 화면이 한 프레임도 안 멈췄다. ' +
     '상한 60ms: 길면 학살 중 스터터가 된다)');
+
+  // ── 맵 연결감 기반 (v189) ──────────────────────────────────────────────
+  // 사장: "맵도 계속 이어져 있다는 느낌이 들어야해."
+  // 실측이 원인 넷을 지목했다: ①Dungeon에 좌표가 0개 ②진입점 49/49 상수
+  // ③방향 없는 666ms 검정 페이드(런당 300초) ④같은 층 밝기 2~6개(3배 차)
+  await boot(page, { cls: 'knight', heat: 0 });
+  const mapf = await page.evaluate(() => {
+    // ① 좌표계 — advance 가 실제로 공간을 옮기는가
+    Game.restart(9);
+    const before = Dungeon.mapNodes.length;
+    for (let i = 0; i < 8; i++) { Dungeon.pendingDy = [-1, 0, 1][i % 3]; Dungeon.advance('combat'); }
+    const coord = { nodes: Dungeon.mapNodes.length - before, edges: Dungeon.mapEdges.length,
+      uniq: new Set(Dungeon.mapNodes.map((n) => n.x + ',' + n.y)).size,
+      branched: Dungeon.mapEdges.filter((e) => e.y0 !== e.y1).length };
+    // ② 진입점 — 나온 문 높이가 다음 방에 이어지는가
+    Game.restart(24680); Game.state = 'play'; Game.player.god = true;
+    const ys = [], dirs = [], frames = [], pans = [];
+    for (let room = 0; room < 20; room++) {
+      Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
+      Game.roomCleared = true;
+      World.openDoors(Dungeon.doorOptions());
+      const doors = World.doors.filter((d) => d.opt.type !== 'boss');
+      if (!doors.length) break;
+      const door = doors[room % doors.length];
+      Game.player.x = door.x; Game.player.y = door.y;
+      Game._tickPlay(1 / 60);
+      if (Game.state !== 'transition') continue;
+      dirs.push(Game.transition.dy);
+      let f = 0;
+      while (Game.state === 'transition' && f < 200) { Game.tick(1 / 60); f++; pans.push(Math.abs(Renderer.panX)); }
+      frames.push(f);
+      ys.push(Math.round(Game.player.y));
+      Game.state = 'play';
+    }
+    // ④ 밝기 — 같은 층 안에서 불의 총량이 튀는가
+    const lit = [];
+    for (const fl of [1, 2, 3, 5, 8]) for (let i = 0; i < 8; i++) {
+      Dungeon.floor = fl; Dungeon.roomIndex = 1 + i;
+      World.buildRoom('combat'); lit.push(World.torches.length);
+    }
+    return { coord, entryUniq: new Set(ys).size, entrySamples: ys.length,
+      dirs: [...new Set(dirs)].sort(), ms: Math.round(frames.reduce((a, b) => a + b, 0) / Math.max(1, frames.length) / 60 * 1000),
+      maxPan: Math.round(Math.max(...pans, 0)), panLeft: Math.round(Math.abs(Renderer.panX) + Math.abs(Renderer.panY)),
+      litMin: Math.min(...lit), litMax: Math.max(...lit) };
+  });
+  console.log('  맵기반:', JSON.stringify(mapf));
+  ok('map.hasCoordinates', mapf.coord.nodes >= 8 && mapf.coord.edges >= 8 && mapf.coord.uniq >= 8 && mapf.coord.branched > 0,
+    `방 ${mapf.coord.nodes}칸 이동 · 간선 ${mapf.coord.edges} · 고유 좌표 ${mapf.coord.uniq} · 상하 분기 ${mapf.coord.branched} ` +
+    '(v188까지 Dungeon의 공간 정보는 roomIndex 정수 하나뿐이었다 — 「다음 방」만 있고 「옆방」이 없었다)');
+  ok('map.doorDecidesEntry', mapf.entryUniq >= 3 && mapf.dirs.length >= 2,
+    `문 ${mapf.entrySamples}개 통과 → 진입 높이 ${mapf.entryUniq}종 · 문 방향 ${JSON.stringify(mapf.dirs)} ` +
+    '(v188까지 49/49 표본 전부 (81.6, 270) 한 점이었다 — 위 문을 고르든 아래 문을 고르든 똑같은 왼쪽 한가운데)');
+  ok('map.transitionMoves', mapf.maxPan >= 700 && mapf.ms <= 520 && mapf.panLeft === 0,
+    `전환 ${mapf.ms}ms · 최대 이동 ${mapf.maxPan}px · 전환 후 카메라 잔여 ${mapf.panLeft} ` +
+    '(v188은 666ms 방향 없는 검정 페이드 × 450회 = 런당 300초가 검정 화면이었다. ' +
+    '잔여 0은 필수 — 남으면 월드가 통째로 어긋난다)');
+  ok('map.evenLighting', mapf.litMax - mapf.litMin <= 2 && mapf.litMin >= 3,
+    `같은 층 횃불 ${mapf.litMin}~${mapf.litMax}개 ` +
+    '(v188은 2~6개로 3배 차 — 어두운 방→밝은 방이 무작위로 오면 「같은 복도를 걷는다」가 아니라 ' +
+    '「순간이동했다」로 읽힌다. ★ 이 값을 고치려고 생성 루프의 RNG.chance를 지우면 난수 스트림이 ' +
+    '밀려 방 생성 전체가 바뀐다 — 실제로 겪었다. 총량은 생성 이후에 맞춘다)');
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 

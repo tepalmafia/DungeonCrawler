@@ -1453,7 +1453,16 @@ const World = {
   },
 
   playerStart() {
-    return { x: TS * 1.7, y: (this.rows / 2) * TS + this.offsetY };
+    const cx = TS * 1.7;
+    const mid = (this.rows / 2) * TS + this.offsetY;
+    // v189: 나온 문의 높이로 들어선다 — 오른쪽 벽에서 나갔으니 다음 방 왼쪽 벽 같은 높이로.
+    // 위 문을 골랐으면 위에서, 아래 문을 골랐으면 아래에서 걷기 시작한다.
+    // 종전엔 49/49 전부 이 함수가 돌려주는 상수 한 점이었다 — 그러니 "내가 골랐다"가
+    // 화면에 남을 자리가 없었다
+    const want = (typeof Dungeon !== 'undefined' && Dungeon.entryY != null) ? Dungeon.entryY : mid;
+    // 벽 안이면 안 된다 — 가장 가까운 열린 자리로 붙인다 (템플릿마다 좌측 벽 두께가 다르다)
+    const spot = this.safeSpot ? this.safeSpot(cx, want) : { x: cx, y: want };
+    return { x: spot.x, y: spot.y };
   },
 
   _wallAt(tx, ty) {
@@ -1781,6 +1790,10 @@ const World = {
         }
 
         // 횃불 배치: 정면 벽에 일정 간격으로
+        // ★ v189 주의: 이 RNG.chance(0.85)를 **지우면 안 된다.**
+        // 처음엔 밝기를 통일하려고 이 확률을 걷어냈는데, 그러면 난수 소비가 하나 줄어
+        // **뒤따르는 방 생성 전체가 다른 스트림을 타고** 실루엣·템플릿이 통째로 바뀐다
+        // (실측: 모든 방 횃불이 2개로 붕괴). 생성기는 그대로 두고 총량만 아래에서 맞춘다
         if (faceDown && tx % 5 === 2 && RNG.chance(0.85)) {
           this.torches.push({ x: x + TS / 2, y: y + TS - 16, seed: RNG.next() * 10 });
         }
@@ -1818,10 +1831,14 @@ const World = {
     }
 
     // 5) 광원 보장 (v124): 방마다 최소 2개의 불 — 초점 없는 균일 어둠 방지
-    if (this.torches.length < 2) {
-      const spots = [[0.3, 0.35], [0.7, 0.65]];
+    // v189: 하한만 있고 상한이 없어서 같은 층 안에서 2~6개(최대 3배)로 튀었다.
+    // 어두운 방 → 밝은 방 → 어두운 방이 무작위로 오면 "같은 복도를 걷는다"가 아니라
+    // "다른 장소로 순간이동했다"로 읽힌다 — 통일돼야 할 것이 통일돼 있지 않았다.
+    // 하한을 2 → 3으로 올리고 상한 5를 세운다 (아래 5-b)
+    if (this.torches.length < 3) {
+      const spots = [[0.3, 0.35], [0.7, 0.65], [0.5, 0.2]];
       for (const [fxr, fyr] of spots) {
-        if (this.torches.length >= 2) break;
+        if (this.torches.length >= 3) break;
         let tx0 = Math.round(this.cols * fxr), ty0 = Math.round(this.rows * fyr);
         let found = null;
         for (let rr = 0; rr < 5 && !found; rr++) {
@@ -1832,6 +1849,15 @@ const World = {
         }
         if (found) this.torches.push({ x: found[0] * TS + TS / 2, y: found[1] * TS + TS / 2, seed: RNG.next() * 10, stand: true });
       }
+    }
+
+    // 5-b) 밝기 상한 (v189): 5개를 넘으면 고르게 솎아낸다 — 간격을 유지해 한쪽으로 몰리지 않게.
+    // ★ RNG를 쓰지 않는다. 여기서 난수를 뽑으면 뒤따르는 생성이 통째로 다른 스트림을 탄다
+    const TORCH_MAX = 5;
+    if (this.torches.length > TORCH_MAX) {
+      const src = this.torches, keep = [];
+      for (let i = 0; i < TORCH_MAX; i++) keep.push(src[Math.round(i * (src.length - 1) / (TORCH_MAX - 1))]);
+      this.torches = keep;
     }
 
     this._floorCanvas = c;

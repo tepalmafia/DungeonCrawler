@@ -120,6 +120,38 @@ const Dungeon = {
   totalRooms: 9,
   roomType: 'combat',
 
+  // ── 방 좌표계 (v189) ──────────────────────────────────────────────────
+  // 사장: "맵도 계속 이어져 있다는 느낌이 들어야해."
+  // 실측이 근본 원인을 지목했다 — **Dungeon에 좌표가 한 개도 없었다.**
+  // 비함수 키 전수 확인 결과 공간 정보는 roomIndex 정수 하나가 전부였고,
+  // 그건 '다음 방'만 있고 '옆방'이 없다는 뜻이다. 이어져 있다고 느끼려면
+  // 먼저 **이어져 있어야** 한다. 오른쪽 문으로 나가면 오른쪽 칸으로 간다.
+  mapPos: { x: 0, y: 0 },
+  mapNodes: [],      // [{x, y, type, index, floor}] — 지나온 방의 실제 배치
+  mapEdges: [],      // [{x0, y0, x1, y1}] — 어느 방이 어느 방에 붙어 있는가
+  entryY: null,      // 이번 방에 들어설 세로 위치 (나온 문의 높이를 그대로 잇는다)
+  pendingDy: 0,      // 마지막으로 고른 문의 상하 방향 (-1 위 / 0 정면 / +1 아래)
+
+  _resetMap() {
+    this.mapPos = { x: 0, y: 0 };
+    this.mapNodes = [];
+    this.mapEdges = [];
+    this.entryY = null;
+    this.pendingDy = 0;
+  },
+
+  // 방 한 칸 이동 — 오른쪽으로 한 칸, 고른 문에 따라 위/아래로.
+  // 층 첫 방(step=false)은 이동 없이 자리에만 찍는다
+  _stepMap(type, step) {
+    if (step) {
+      this.mapPos = { x: this.mapPos.x + 1, y: this.mapPos.y + (this.pendingDy || 0) };
+      const prev = this.mapNodes[this.mapNodes.length - 1];
+      if (prev) this.mapEdges.push({ x0: prev.x, y0: prev.y, x1: this.mapPos.x, y1: this.mapPos.y });
+    }
+    this.mapNodes.push({ x: this.mapPos.x, y: this.mapPos.y, type, index: this.roomIndex, floor: this.floor });
+    if (this.mapNodes.length > 400) this.mapNodes.splice(0, this.mapNodes.length - 400);
+  },
+
   newRun() {
     this.floor = 1;
     this.roomIndex = 1;
@@ -135,6 +167,8 @@ const Dungeon = {
     this.vaultCrackPlaced = false;
     this.miniSeen = false;
     this.shortcutHot = false;
+    this._resetMap();          // v189: 런이 새로 시작하면 지도도 비운다
+    this._noStep = true;
     this.build('combat');
   },
 
@@ -152,6 +186,11 @@ const Dungeon = {
     this.vaultCrackPlaced = false;
     this.miniSeen = false;
     this.shortcutHot = false; // 지름길 효과는 도착 층에서만
+    // v189: 층을 오르면 지도에서 **한 줄 위로** 옮겨 앉는다 — 50층 탑이 세로로 쌓인다
+    this.mapPos = { x: 0, y: this.mapPos.y - 3 };
+    this.pendingDy = 0;
+    this.entryY = null;
+    this._noStep = true;
     this.build('combat');
   },
 
@@ -201,6 +240,9 @@ const Dungeon = {
 
   build(type) {
     this.roomType = type;
+    // v189: 좌표를 먼저 옮긴다 — 방을 짓기 전에 그 방이 '어디'인지 정해져 있어야 한다
+    this._stepMap(type, !this._noStep);
+    this._noStep = false;
     // 방 시드 (v163): 이 방을 만든 난수 씨앗을 기억한다.
     // 「저장하고 거점」 → 「이어하기」가 restart()를 거치면서 **런 시드를 새로 뽑았고**,
     // 그 결과 이어하기가 방을 통째로 다시 굴렸다 — 불리한 방을 만나면 저장하고 나갔다

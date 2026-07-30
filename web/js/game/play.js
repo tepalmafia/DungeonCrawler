@@ -1892,7 +1892,15 @@ const GamePlay = {
       for (const door of World.doors) {
         if (Math.hypot(p.x - door.x, p.y - door.y) < 30) {
           this.state = 'transition';
-          this.transition = { phase: 'out', t: 0, type: door.opt.type, mod: door.opt.mod || null };
+          // v189: **어느 문으로 나갔는지를 다음 방으로 들고 간다.**
+          // 종전엔 이 door 객체를 손에 쥐고도 transition에 안 실었고, 그래서
+          // 진입점이 49/49 전부 (81.6, 270) 상수였다 — 위 문을 골라도, 아래 문을
+          // 골라도 똑같은 왼쪽 한가운데. 내가 고른 방향이 세계에 반영되지 않았다.
+          // 이제 나온 높이가 다음 방 들어서는 높이가 된다 (오른쪽 벽 = 다음 방 왼쪽 벽)
+          const mid = World.rows * 0.5 * TS + World.offsetY;
+          const dy = door.y < mid - TS ? -1 : door.y > mid + TS ? 1 : 0;
+          this.transition = { phase: 'out', t: 0, type: door.opt.type, mod: door.opt.mod || null,
+            doorY: door.y, dy };
           AudioSys.dash();
           break;
         }
