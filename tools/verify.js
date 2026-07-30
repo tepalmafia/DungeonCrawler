@@ -2008,6 +2008,24 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     '「순간이동했다」로 읽힌다. ★ 이 값을 고치려고 생성 루프의 RNG.chance를 지우면 난수 스트림이 ' +
     '밀려 방 생성 전체가 바뀐다 — 실제로 겪었다. 총량은 생성 이후에 맞춘다)');
 
+  // ── 배포 (v190) ────────────────────────────────────────────────────────
+  // 실사고: v187·v188·v189 세 번의 빌드 동안 index.html 의 `?v=` 25개가 전부 186에 멈춰 있었다.
+  // GAME_VERSION 은 main.js, 캐시버스트는 index.html — 두 곳이라 매번 한쪽만 올라갔다.
+  // 그러면 브라우저가 파일마다 제각각 갱신돼 **main.js 는 v189인데 enemies.js 는 v186** 인
+  // 상태가 만들어질 수 있다. 화면에는 최신 버전이 찍히면서 그 버전의 변경은 적용되지 않는다.
+  // 「체감이 없다」는 보고가 코드가 아니라 여기서 나올 수 있었다 — 검증 도구 다음으로 위험한 자리다.
+  const rel = await page.evaluate(async () => {
+    const html = await (await fetch('index.html', { cache: 'no-store' })).text();
+    const tags = [...html.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]);
+    return { ver: GAME_VERSION, tags: [...new Set(tags)], n: tags.length };
+  });
+  console.log('  배포:', JSON.stringify(rel));
+  ok('release.cacheBustMatchesVersion',
+    rel.n > 0 && rel.tags.length === 1 && rel.tags[0] === rel.ver,
+    `index.html 캐시버스트 ${rel.n}개 = v${rel.tags.join(',')} · GAME_VERSION = v${rel.ver} ` +
+    '(node tools/bump-version.js <버전> 으로 한 번에 올린다. ' +
+    '어긋나면 사장 브라우저가 옛 JS를 계속 쓴다 — 고쳐도 안 닿는다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

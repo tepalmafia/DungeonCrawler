@@ -121,10 +121,10 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 <header>
   <h1><small>무덤에서 왕좌까지 · DUNGEONCRAWLER</small>개발 대시보드</h1>
   <div class="meta">
-    <span class="pill">현재 빌드 <b>v189</b></span>
+    <span class="pill">현재 빌드 <b>v190</b></span>
     <span class="pill">적 <b>89</b>종 (보스 23)</span>
     <span class="pill">층 <b>50</b></span>
-    <span class="pill">회귀 검증 <b>113</b>항목</span>
+    <span class="pill">회귀 검증 <b>114</b>항목</span>
     <span class="pill">코드 <b>27,134</b>줄</span>
     <a class="pill play" href="https://tepalmafia.github.io/DungeonCrawler/" target="_blank" rel="noopener">▶ 플레이</a>
   </div>
@@ -134,9 +134,14 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
   <h2>지금</h2>
   <p class="lede">v188까지 배포됨. 다음은 카메라 이동으로 「이어진 맵」.</p>
   <div class="rail">
-    <div class="step done"><div class="v">v185</div><div class="t">리더·사기·군집 오라</div></div><div class="step done"><div class="v">v186</div><div class="t">무리 행태 — 배치가 아니라 행동</div></div><div class="step done"><div class="v">v187</div><div class="t">기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서</div></div><div class="step done"><div class="v">v188</div><div class="t">손맛과 회피 — 예고 420ms · 일반 타격 히트스톱</div></div><div class="step done"><div class="v">v189</div><div class="t">맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일</div></div><div class="step now"><div class="v">v189b</div><div class="t">카메라 + 큰 방 + 격자 미니맵 (자산 절차적 재생성)</div></div><div class="step todo"><div class="v">이후</div><div class="t">스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정</div></div>
+    <div class="step done"><div class="v">v185</div><div class="t">리더·사기·군집 오라</div></div><div class="step done"><div class="v">v186</div><div class="t">무리 행태 — 배치가 아니라 행동</div></div><div class="step done"><div class="v">v187</div><div class="t">기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서</div></div><div class="step done"><div class="v">v188</div><div class="t">손맛과 회피 — 예고 420ms · 일반 타격 히트스톱</div></div><div class="step done"><div class="v">v189</div><div class="t">맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일</div></div><div class="step done"><div class="v">v190</div><div class="t">캐시버스트 수리 — v187~189가 사장 브라우저에 안 닿을 수 있었다</div></div><div class="step now"><div class="v">v190+</div><div class="t">재기획서 실행 — 타격 정산기 · 포위도 · 문에서 들어오는 파도</div></div><div class="step todo"><div class="v">이후</div><div class="t">스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정</div></div>
   </div>
-  <div class="note"><b>기준 원칙.</b> 최종 판정은 사장의 실제 플레이 F9 리포트다.
+  <div class="note" style="border-left-color:var(--blood)"><b>한 줄 규격 (재기획서 §0).</b>
+  <b style="color:var(--gold)">몰려오는 무리를 한자리로 모아 한 번에 쓸어버린다. 잘못 모으면 포위당해 1.9초에 죽는다.</b><br>
+  이 한 줄이 사장이 말한 4축을 전부 정의한다 — ①손맛=쓸어버린 감각(타격 정산기·처형 임계)
+  ②회피=타이밍이 아니라 <b>자리</b>(포위도·돌파 보상) ③난이도=몰리면 죽는다 ④맵=<b>무리가 옆방에서 문으로 밀려온다</b>.
+  ④가 장식이 아니라는 게 핵심이다 — <b>적이 문으로 들어오는 순간 맵은 이어진다.</b></div>
+  <div class="note"> 최종 판정은 사장의 실제 플레이 F9 리포트다.
   봇 수치와 회귀 검증은 결함을 잡는 도구일 뿐, 성공을 선언할 권한이 없다.
   그리고 <b>「작동한다」 ≠ 「보인다」 ≠ 「보기 좋다」</b> — 회귀가 통과해도 화면에서 안 읽히면 없는 것이다.</div>
 </section>
@@ -922,8 +927,8 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 </section>
 
 <section id="verify">
-  <h2>회귀 검증 · 113항목</h2>
-  <p class="lede">고친 결함이 되살아나지 않도록 못박은 것들. <span class="mono small">./tools/run-verify.sh 189</span></p>
+  <h2>회귀 검증 · 114항목</h2>
+  <p class="lede">고친 결함이 되살아나지 않도록 못박은 것들. <span class="mono small">./tools/run-verify.sh 190</span></p>
   <p>새 몹에 사연을 빼먹으면 <span class="mono small">lore.everyEnemyHasOne</span>이 잡고,
   예고를 다시 인간 반응 시간 아래로 줄이면 <span class="mono small">feel.dodgeWindowIsHuman</span>이 잡는다.
   <b>이게 규격이 50층까지 확장되는 방식이다.</b></p>
@@ -968,16 +973,18 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
     <ul><li class="mono small">sectOpensIt</li></ul></div><div class="agroup"><h4>aimMark <span class="dim">1</span></h4>
     <ul><li class="mono small">notOverBody</li></ul></div><div class="agroup"><h4>role <span class="dim">1</span></h4>
     <ul><li class="mono small">coversRoster</li></ul></div><div class="agroup"><h4>codex <span class="dim">1</span></h4>
-    <ul><li class="mono small">readableWithoutMouse</li></ul></div><div class="agroup"><h4>noPageErrors <span class="dim">1</span></h4>
+    <ul><li class="mono small">readableWithoutMouse</li></ul></div><div class="agroup"><h4>release <span class="dim">1</span></h4>
+    <ul><li class="mono small">cacheBustMatchesVersion</li></ul></div><div class="agroup"><h4>noPageErrors <span class="dim">1</span></h4>
     <ul><li class="mono small">noPageErrors</li></ul></div></div>
 </section>
 
 <section id="history">
   <h2>이력</h2>
-  <p class="lede">버전 17개.</p>
+  <p class="lede">버전 18개.</p>
   <div class="scroll" style="max-height:460px;overflow-y:auto"><table>
     <thead><tr><th>버전</th><th>날짜</th><th>내용</th></tr></thead>
-    <tbody><tr><td class="mono num">v188</td><td class="dim mono small">2026-07-30</td>
+    <tbody><tr><td class="mono num">v189</td><td class="dim mono small">2026-07-30</td>
+   <td class="small">맵 연결 기반 — 이어져 있다고 느끼려면 먼저 이어져 있어야 한다</td></tr><tr><td class="mono num">v188</td><td class="dim mono small">2026-07-30</td>
    <td class="small">손맛과 회피 — 기능이 없던 게 아니라 사람이 닿을 수 없었다</td></tr><tr><td class="mono num">v187</td><td class="dim mono small">2026-07-30</td>
    <td class="small">기준 구간(1~3층) 규격 — 사연은 만나는 순간에, 무리는 대비로</td></tr><tr><td class="mono num">v186</td><td class="dim mono small">2026-07-30</td>
    <td class="small">무리 「행태」 — 배치가 아니라 행동</td></tr><tr><td class="mono num">v185</td><td class="dim mono small">2026-07-30</td>
@@ -1008,7 +1015,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 </section>
 
 <footer>
-  생성 2026-07-30 11:29 · 빌드 v189 · <span class="mono">node tools/dashboard.js</span> 로 갱신<br>
+  생성 2026-07-30 11:43 · 빌드 v190 · <span class="mono">node tools/dashboard.js</span> 로 갱신<br>
   데이터는 저장소 코드에서 직접 뽑는다 — 손으로 적은 숫자는 낡는다.
 </footer>
 </div>
