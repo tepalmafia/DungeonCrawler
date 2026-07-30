@@ -463,17 +463,36 @@ function createBoss(floor, x, y) {
       const list = (this._onslaught && this.def.p3) ? this.def.p3 : this.phase === 2 ? this.def.p2 : this.def.p1;
       let pool = list;
       if (d != null) {
+        // ★ v199 결함① (기획안 §1-2) — 거리 필터가 패턴 풀을 **1개로 붕괴**시켰다.
+        // 근접(d<150)에서 60% 확률로 ring|sweep|charge|pulse|echo 만 남기는데,
+        // 1층 오스문드 p1 5개 중 통과가 sweep>sweep 하나뿐이다.
+        // 게다가 풀이 1개가 되면 아래 「직전 반복 회피」 가드(pool.length > 1)가 통째로 꺼져
+        // **같은 초식이 무한 반복**된다. 실측: 1페이즈 3회 중 2회가 휘두르기 4연속,
+        // 사장 페이스(13초)에서 목격 패턴 4.0개 — 저작된 6.87개의 58%만 화면에 닿았다.
+        // p1 풀이 1개로 붕괴하는 보스 11/23. 사장이 기사(근접)로 붙어 싸우니 정확히 여기 걸린다.
+        //
+        // 고침: 필터는 **선호**지 배제가 아니다. 최소 3개는 남긴다 — 남는 게 그보다 적으면
+        // 원래 목록에서 채워 넣는다. 거리에 맞는 초식이 자주 나오되, 다른 그림도 계속 온다
+        const prefer = (re) => {
+          const sub = list.filter((c) => re.test(c));
+          if (!sub.length) return null;
+          if (sub.length >= 3) return sub;
+          const rest = list.filter((c) => !sub.includes(c));
+          return sub.concat(rest.slice(0, 3 - sub.length));   // 선호 + 보충 = 최소 3
+        };
         if (d > 300 && Math.random() < 0.75) {
-          const sub = list.filter((c) => /snipe|geyser|spiral|summon|curse|beam|mortar/.test(c));
-          if (sub.length) pool = sub;
+          pool = prefer(/snipe|geyser|spiral|summon|curse|beam|mortar/) || pool;
         } else if (d < 150 && Math.random() < 0.6) {
-          const sub = list.filter((c) => /ring|sweep|charge|pulse|echo/.test(c));
-          if (sub.length) pool = sub;
+          pool = prefer(/ring|sweep|charge|pulse|echo/) || pool;
         }
       }
       let idx = Math.floor(Math.random() * pool.length);
       if (pool.length > 1 && list.indexOf(pool[idx]) === this._lastPatIdx) idx = (idx + 1) % pool.length;
       this._lastPatIdx = list.indexOf(pool[idx]);
+      // ★ v199 결함② — patternIdx 가 0으로 초기화된 뒤 **어디서도 증가하지 않았다.**
+      // spiral 의 회전각이 patternIdx*0.45 라 영원히 0 → 나선 탄막이 매번 **완전히 같은 눈송이**.
+      // 「나선」이라는 이름이 거짓말이었다. 초식을 고를 때마다 올린다 (7종 보스가 쓴다)
+      this.patternIdx = (this.patternIdx || 0) + 1;
       const steps = pool[idx].split('>');
       this._comboQueue = steps.slice(1);
       return this._parseStep(steps[0]);
@@ -735,8 +754,15 @@ function createBoss(floor, x, y) {
           //  ② 구 경계(3→4층)에서 0.221→0.402(+82%)의 절벽 + 4층부터 보스 피해 1→2 배가가 겹쳐
           //     실효 생존이 급락 — 문제를 1층에서 4층으로 옮기는 꼴이라 계단을 하나 더 놓는다
           const f = Dungeon.floor;
-          const base = f <= 2 ? (this.phase === 2 ? 0.62 : 1.0)
-            : f <= 5 ? (this.phase === 2 ? 0.48 : 0.78)
+          // ★ v199 — 승인된 지표는 「13초 안에 목격하는 서로 다른 그림 수」다 (4.0 → 6.0).
+          // 결함 3개를 고친 뒤 재보니 1층이 여전히 2.7개였는데, 원인이 다양성이 아니라 **빈도**였다:
+          // 휴지 1.0 × 근접 보정 1.15 = 1.15초, 예고까지 사이클 2.9초 → 13초에 **시전 4.5회**.
+          // 풀을 아무리 넓혀도 목격 상한이 4.5개다.
+          // v155에서 1~3층을 늦춘 건 근접 기사가 3전 3사했기 때문인데, 그 뒤 v188에서
+          // 접촉 예고를 0.25→0.42초로 늘려 **인간 반응으로 회피가 성립**하게 됐다.
+          // 이제 조여도 된다 — 밀도는 올리되 예고는 그대로다 (읽을 시간은 안 뺏는다)
+          const base = f <= 2 ? (this.phase === 2 ? 0.48 : 0.72)
+            : f <= 5 ? (this.phase === 2 ? 0.40 : 0.62)
             : (this.phase === 2 ? 0.35 : 0.55);
           // v153 거리 비대칭 보정 (실플레이: "근접은 첫 보스도 벽, 원거리는 순항"):
           // 칼끝 거리(<130)는 휴지 +15% — 근접의 자리값. 원거리 농성(>300)은 가속 유지 + 응징 임계 단축
@@ -1355,7 +1381,10 @@ function createBoss(floor, x, y) {
             if (gapIdx >= 0 && (i === gapIdx || i === gapIdx + 1)) continue; // 의도된 안전 틈
             const a = ang + (i - (n - 1) / 2) * spread;
             game.spawnProjectile(projKind, this.x, this.y, { x: Math.cos(a), y: Math.sin(a) }, {
-              speed: baseSpeed * spdMul, dmg: 1,
+              // ★ v199 결함③ — 본탄이 dmg:1 하드코딩이라 **50층에서도 1뎀**이었다.
+              // fan 은 23/23 보스가 가장 많이 쓰는 패턴(전체 스텝의 25%)인데 층 스케일을 안 탔다.
+              // 후속탄(_delayed)은 bossDmg() 를 쓰고 있었다 — 본탄만 빠져 있었던 것이다
+              speed: baseSpeed * spdMul, dmg: bossDmg(),
             });
           }
         };
