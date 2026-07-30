@@ -83,6 +83,8 @@ const AudioSys = {
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
+    // v178: 음색 굽기 — 첫 입력 직후 비동기로. 굽는 동안에도 게임은 실시간 합성으로 소리를 낸다
+    if (!this._baking) setTimeout(() => this.bake(), 60);
     // 언락 전에 요청된 BGM이 있으면 이제 시작
     if (typeof Music !== 'undefined' && Music.pending && !Music.current) {
       Music.start(Music.pending);
@@ -357,6 +359,233 @@ const AudioSys = {
   // 그런데 변주 폭 중앙값이 반음의 1/3(1.9%)이라 3분이면 귀가 지친다 — 사장 지적 그대로.
   // 처방 셋: ① 변주 슬롯 3개를 돌린다(같은 재질이어도 매번 다른 뼈대) ② 좌우 정위(어디서 때렸나)
   // ③ 리버브 send(공간). 그리고 위아래 대역을 연다 — 계측 H: 84%가 100~1200Hz에 눌려 있었다
+  // ══════════════════════════════════════════════════════════════════════
+  //  음색 엔진 (v178) — "실시간이라 노드 4개가 한계"를 깬다
+  //
+  //  사장 지적: "사운드 퀄리티가 상당히 떨어지는데 고퀄로는 못 만드나?"
+  //  맞다. 원인은 튜닝이 아니라 **기법의 천장**이었다. 계측:
+  //    · 오실레이터 4파형(sine/saw/tri/square) + 백색잡음이 전부
+  //    · createWaveShaper 0회 · createPeriodicWave 0회 · 모달 합성 0회
+  //    · 소리 하나당 노드 2~4개 — 동시 11겹이 울리니 실시간에선 이 이상 못 쓴다
+  //
+  //  해법: **로드할 때 굽는다(bake).** 오프라인 렌더는 실시간의 50~100배로 도니
+  //  소리 하나에 노드를 **40~60개** 써도 된다. 재생은 BufferSource 하나 —
+  //  **지금보다 오히려 가볍다.** 게임 오디오의 정석 "render once, play many"다.
+  //
+  //  그 예산으로 무엇을 사는가:
+  //   ① 모달 합성 — 물체를 때리면 그 물체의 **고유 진동 모드**가 울린다.
+  //      공진 필터 6~10개 뱅크를 짧은 임펄스로 때린다. 뼈와 돌과 살의 진짜 차이가 여기서 난다
+  //   ② 비조화 배음 — 실제 물체의 배음은 정수배가 아니다(종은 2.76배). 정수배는 '악기'로 들리고
+  //      비정수배라야 '물건'으로 들린다
+  //   ③ 대역별 감쇠 — 고역이 저역보다 빨리 죽는다(실제 물리). 종전엔 전 대역이 같은 지수감쇠였다
+  //   ④ 새추레이션 — 배음을 더해 두껍게. WaveShaper 사용 0회였다
+  //   ⑤ 변주를 베이킹 시점에 — 같은 소리를 6종 구워두고 랜덤 재생
+  // ══════════════════════════════════════════════════════════════════════
+
+  // 새추레이션 커브 — tanh 곡선. k가 클수록 배음이 많아진다(=두꺼워진다)
+  _satCurve(k = 2.2, n = 1024) {
+    const c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      c[i] = Math.tanh(x * k) / Math.tanh(k);
+    }
+    return c;
+  },
+
+  // ── 모달 합성 ─────────────────────────────────────────────────────
+  // 짧은 임펄스(노이즈 버스트)로 공진 필터 뱅크를 때린다. 각 모드는 자기 주파수·Q·감쇠를 갖는다.
+  // modes: [{f: 배수, q: 공진, a: 세기, d: 감쇠초}] — f는 base 대비 배수(비정수여야 '물건'이 된다)
+  _modal(ctx, dest, t0, { base, modes, vol = 0.3, exDur = 0.006, exFreq = 3000, exQ = 0.5, sat = 0 }) {
+    let bus = ctx.createGain();
+    bus.gain.value = vol;
+
+    // ① 트랜지언트 — 때리는 순간의 '탁'. 이게 없으면 물체가 아니라 신디사이저가 된다
+    const ex = ctx.createBufferSource();
+    ex.buffer = this._noiseBuf;
+    const exf = ctx.createBiquadFilter();
+    exf.type = 'bandpass'; exf.frequency.value = exFreq; exf.Q.value = exQ;
+    const exg = ctx.createGain();
+    exg.gain.setValueAtTime(0.0001, t0);
+    exg.gain.exponentialRampToValueAtTime(0.85, t0 + 0.0008);
+    exg.gain.exponentialRampToValueAtTime(0.0001, t0 + exDur);
+    ex.connect(exf).connect(exg).connect(bus);
+    ex.start(t0, Math.random() * 0.4, exDur + 0.02);
+
+    // ② 공진 모드 — **가산 합성**으로 간다.
+    // 필터 공진(bandpass)으로 하면 링 시간이 Q/(π·f)에 묶여, 700Hz·Q40이면 0.018초밖에 안 운다.
+    // 0.5초를 울리려면 Q가 1100이어야 하는데 BiquadFilter는 그 영역에서 불안정하다.
+    // 오프라인으로 굽는 지금은 모드마다 오실레이터를 하나씩 줘도 된다 — 감쇠를 정확히 지정할 수 있고,
+    // 실제 물체처럼 **모드마다 다른 속도로** 죽는다
+    for (const m of modes) {
+      const f = base * m.f;
+      if (f > ctx.sampleRate / 2 - 500) continue;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t0);
+      // 실제 물체는 진폭이 줄면서 음정이 살짝 내려간다 (장력 완화)
+      o.frequency.exponentialRampToValueAtTime(Math.max(f * 0.985, 20), t0 + m.d);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(Math.max(m.a, 0.0002), t0 + 0.0012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + m.d);
+      o.connect(g).connect(bus);
+      o.start(t0); o.stop(t0 + m.d + 0.02);
+      // 맥놀이(beating) — 실제 물체의 모드는 완벽히 하나가 아니라 아주 가까운 둘이다.
+      // 이 미세한 어긋남이 '살아 있는 소리'와 '전자음'을 가른다
+      if (m.beat) {
+        const o2 = ctx.createOscillator();
+        o2.type = 'sine';
+        o2.frequency.value = f * (1 + m.beat);
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.0001, t0);
+        g2.gain.exponentialRampToValueAtTime(Math.max(m.a * 0.6, 0.0002), t0 + 0.0012);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t0 + m.d * 0.85);
+        o2.connect(g2).connect(bus);
+        o2.start(t0); o2.stop(t0 + m.d + 0.02);
+      }
+    }
+
+    // ③ 새추레이션 — 배음을 더해 두껍게. 종전엔 WaveShaper 사용 0회였다
+    if (sat > 0 && ctx.createWaveShaper) {
+      const ws = ctx.createWaveShaper();
+      ws.curve = this._satCurve(1 + sat * 3);
+      ws.oversample = '2x';
+      bus = bus.connect(ws);
+      const trim = ctx.createGain();
+      trim.gain.value = 1 / (1 + sat * 0.5); // 새추레이션이 올린 레벨을 되돌린다
+      bus = bus.connect(trim);
+    }
+    bus.connect(dest);
+    return bus;
+  },
+
+  // 몸통 노이즈 — 대역별로 다른 감쇠를 준다 (고역이 먼저 죽는 실제 물리)
+  _body(ctx, dest, t0, bands, vol = 0.3) {
+    const src = ctx.createBufferSource();
+    src.buffer = this._noiseBuf;
+    const out = ctx.createGain();
+    out.gain.value = vol;
+    for (const b of bands) {
+      const f = ctx.createBiquadFilter();
+      f.type = b.type || 'bandpass';
+      f.frequency.setValueAtTime(b.f, t0);
+      if (b.f1) f.frequency.exponentialRampToValueAtTime(Math.max(b.f1, 30), t0 + b.d);
+      f.Q.value = b.q || 1;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(Math.max(b.a, 0.0002), t0 + (b.atk || 0.001));
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + b.d);
+      src.connect(f).connect(g).connect(out);
+    }
+    out.connect(dest);
+    src.start(t0, Math.random() * 0.4, Math.max(...bands.map((b) => b.d)) + 0.05);
+    return out;
+  },
+
+  // ── 재질 모드 표 ───────────────────────────────────────────────────
+  // 배수가 **비정수**라는 게 핵심이다. 정수배(1,2,3…)는 악기로 들리고, 비정수배라야 물건으로 들린다.
+  // 감쇠(d)는 고역일수록 짧다 — 실제 물체가 그렇다
+  _MODES: {
+    // 마른 뼈 — 짧고 건조하고 높다. 비조화가 심하다
+    bone: { base: 540, sat: 0.4, exFreq: 4600, exQ: 0.7, exDur: 0.004, dur: 0.4,
+      modes: [{ f: 1, a: 0.9, d: 0.16, beat: 0.008 }, { f: 2.41, a: 0.55, d: 0.11 },
+        { f: 3.93, a: 0.34, d: 0.085, beat: 0.011 }, { f: 5.71, a: 0.2, d: 0.06 },
+        { f: 7.88, a: 0.11, d: 0.04 }, { f: 10.6, a: 0.06, d: 0.028 }],
+      bands: [{ f: 1800, f1: 520, q: 0.45, a: 0.5, d: 0.055 }, { f: 3600, f1: 900, q: 0.9, a: 0.45, d: 0.04 }, { f: 8600, q: 1.4, a: 0.2, d: 0.022 }] },
+    // 돌·판금 — 낮고 무겁다. 저역 모드 하나가 길게 남는다
+    stone: { base: 152, sat: 0.55, exFreq: 950, exQ: 0.4, exDur: 0.009, dur: 0.7,
+      modes: [{ f: 0.41, a: 0.75, d: 0.45, beat: 0.004 }, { f: 1, a: 0.9, d: 0.3, beat: 0.006 },
+        { f: 1.76, a: 0.5, d: 0.2 }, { f: 2.98, a: 0.28, d: 0.13, beat: 0.009 },
+        { f: 4.67, a: 0.14, d: 0.08 }, { f: 7.1, a: 0.07, d: 0.05 }],
+      bands: [{ f: 900, f1: 260, q: 0.35, a: 0.55, d: 0.09 }, { f: 430, f1: 120, q: 0.5, a: 0.5, d: 0.12 }, { f: 2800, q: 1.1, a: 0.15, d: 0.035 }] },
+    // 금속 — 가장 길고 비조화가 가장 심하다 (종의 2.76배 계열)
+    metal: { base: 640, sat: 0.65, exFreq: 5400, exQ: 1.1, exDur: 0.003, dur: 1.5,
+      modes: [{ f: 1, a: 0.85, d: 1.1, beat: 0.005 }, { f: 1.41, a: 0.45, d: 0.9 },
+        { f: 2.76, a: 0.6, d: 0.8, beat: 0.007 }, { f: 5.4, a: 0.35, d: 0.55 },
+        { f: 8.93, a: 0.2, d: 0.35, beat: 0.012 }, { f: 13.3, a: 0.1, d: 0.2 }],
+      bands: [{ f: 2400, f1: 800, q: 0.4, a: 0.4, d: 0.09 }, { f: 6800, q: 1.6, a: 0.26, d: 0.06 }] },
+    // 살 — 배음이 거의 없다. 노이즈 몸통이 주인공
+    flesh: { base: 98, sat: 0.35, exFreq: 750, exQ: 0.35, exDur: 0.012, dur: 0.45,
+      modes: [{ f: 0.56, a: 0.7, d: 0.2 }, { f: 1, a: 0.85, d: 0.14, beat: 0.01 },
+        { f: 2.13, a: 0.3, d: 0.08 }],
+      bands: [{ f: 480, f1: 150, q: 0.4, a: 0.6, d: 0.09 }, { f: 980, f1: 240, q: 0.6, a: 0.8, d: 0.07 }, { f: 190, f1: 60, q: 0.8, a: 0.62, d: 0.13 }] },
+    // 점액 — 물컹. 필터가 아래로 미끄러진다
+    ooze: { base: 134, sat: 0.2, exFreq: 440, exQ: 0.3, exDur: 0.016, dur: 0.5,
+      modes: [{ f: 1, a: 0.8, d: 0.22, beat: 0.014 }, { f: 1.93, a: 0.28, d: 0.13 }],
+      bands: [{ f: 700, f1: 180, q: 0.35, a: 0.45, d: 0.1, atk: 0.004 }, { f: 350, f1: 85, q: 0.4, a: 0.85, d: 0.16, atk: 0.007 }] },
+    // 혼 — 물건이 아니다. 배음이 조화에 가깝고 아주 길게 운다
+    spirit: { base: 700, sat: 0.15, exFreq: 1900, exQ: 0.6, exDur: 0.018, dur: 1.6,
+      modes: [{ f: 1, a: 0.8, d: 1.2, beat: 0.003 }, { f: 1.5, a: 0.45, d: 1.0, beat: 0.004 },
+        { f: 2.0, a: 0.28, d: 0.8 }, { f: 3.0, a: 0.15, d: 0.6, beat: 0.006 },
+        { f: 4.02, a: 0.08, d: 0.45 }],
+      bands: [{ f: 3000, f1: 900, q: 0.5, a: 0.2, d: 0.14, atk: 0.02 }, { f: 1600, q: 1.2, a: 0.12, d: 0.09, atk: 0.014 }] },
+  },
+
+  // ── 베이킹 ────────────────────────────────────────────────────────
+  // 첫 사용자 입력 뒤 비동기로 굽는다. 다 구워지기 전엔 종전 실시간 합성으로 떨어진다(무중단)
+  _pcm: {},
+  _baking: false,
+  _VARIANTS: 6,   // 같은 소리를 6종 구워 랜덤 재생 — 반복 피로의 근본 해결
+
+  async bake() {
+    if (this._baking || !this.ctx || !window.OfflineAudioContext) return;
+    this._baking = true;
+    const OAC = window.OfflineAudioContext;
+    const sr = 44100;
+    const jobs = [];
+    for (const [mat, spec] of Object.entries(this._MODES)) {
+      jobs.push([`hit_${mat}`, spec.dur || 0.62, (oc, v) => {
+        // 변주: 기본 주파수를 반음 폭으로 흔들고, 모드 세기를 미세하게 바꾼다
+        const jitter = 1 + (v / (this._VARIANTS - 1) - 0.5) * 0.19;
+        const modes = spec.modes.map((m, i) => ({ ...m, a: m.a * (1 + ((v * 7 + i * 3) % 5 - 2) * 0.06) }));
+        const save = this._noiseBuf;
+        this._noiseBuf = this._mkNoise(oc);
+        this._modal(oc, oc.destination, 0, { base: spec.base * jitter, modes, vol: 0.5,
+          exDur: spec.exDur, exFreq: spec.exFreq * jitter, exQ: spec.exQ, sat: spec.sat });
+        // 모드는 '무엇으로 만들어졌나'(음정)를, 노이즈 몸통은 '어떻게 부딪혔나'(질감)를 준다.
+        // 계측 교훈: 모드만 남기면 '악기'가 되고 노이즈만 남기면 '잡음'이 된다 — 둘 다 필요하다
+        if (spec.bands) this._body(oc, oc.destination, 0, spec.bands.map((b) => ({ ...b, f: b.f * jitter })), 0.85);
+        this._noiseBuf = save;
+      }]);
+    }
+    try {
+      for (const [name, dur, render] of jobs) {
+        const bufs = [];
+        for (let v = 0; v < this._VARIANTS; v++) {
+          const oc = new OAC(1, Math.ceil(sr * dur), sr);
+          render(oc, v);
+          bufs.push(await oc.startRendering());
+        }
+        this._pcm[name] = bufs;
+      }
+    } catch (e) {
+      this._pcm = {}; // 베이킹 실패는 조용히 실시간 합성으로 되돌아간다
+    }
+  },
+
+  _mkNoise(ctx) {
+    const n = ctx.sampleRate;
+    const b = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  },
+
+  // 구운 소리 재생 — 노드 3개(source + gain + pan)면 끝난다. 실시간 합성보다 가볍다
+  play(name, { vol = 1, at = null, rate = 1, send = 0, delay = 0 } = {}) {
+    const bank = this._pcm[name];
+    if (!bank || !bank.length || !this.ctx || this.muted) return false;
+    const t = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource();
+    src.buffer = bank[Math.floor(Math.random() * bank.length)];
+    src.playbackRate.value = rate * (0.96 + Math.random() * 0.08); // 재생 속도로 한 겹 더 변주
+    const g = this.ctx.createGain();
+    g.gain.value = vol * (at ? at.gain : 1);
+    this._out(src.connect(g), { pan: at ? at.pan : 0, send, at });
+    src.start(t);
+    return true;
+  },
+
   _slot(n) { return Math.floor(Math.random() * n); },
 
   // 직업 → 휘두르는 물건. 가레스는 대검, 레나는 활, 오르빈은 지팡이, 이졸데는 독병
@@ -367,6 +596,13 @@ const AudioSys = {
   hit(mat = 'flesh', x = null, y = null) {
     if (!this._gate('hit', 45, 3)) return;
     const at = this.spat(x, y), s = this._slot(3);
+    // v178: 구워둔 모달 음색이 있으면 그걸 쓴다. 노드 3개로 끝나고 품질은 비교가 안 된다.
+    // 아직 안 구워졌으면(로드 직후) 아래 실시간 합성으로 떨어진다 — 무중단
+    if (this.play(`hit_${mat}`, { at, vol: 0.9, send: mat === 'spirit' ? 0.55 : 0.24 })) {
+      if (mat === 'stone') this._tone({ type: 'sine', f0: this._v(56, 0.1), f1: 30, dur: 0.2, vol: 0.26, at });
+      if (mat === 'flesh') this._tone({ type: 'sine', f0: 68, f1: 36, dur: 0.11, vol: 0.18, at });
+      return;
+    }
     if (mat === 'bone') {          // 마른 뼈 — 딱/우두둑/쩍. 고역을 연다
       const hi = [3400, 2600, 4200][s];
       this._noise({ dur: 0.035 + s * 0.008, vol: 0.32, freq: this._v(hi, 0.16), q: 1.4 + s * 0.5,
