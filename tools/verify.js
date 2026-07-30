@@ -1603,6 +1603,73 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     '(v182는 붉은 모서리 브래킷 4개를 몸 위에 씌워 HUD 상자를 세계에 얹은 꼴이었다 — ' +
     '표식은 발밑 호와 머리 위 쐐기로, 정보는 지키되 스프라이트를 가리지 않는다)');
 
+  // ── 리더 · 사기 · 군집 오라 (v185) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const morale = await page.evaluate(() => {
+    // ① 무리마다 리더가 하나씩 붙는가
+    let packs = 0, leaders = 0;
+    for (let i = 0; i < 120; i++) {
+      Dungeon.floor = 1 + (i % 10); Dungeon.roomIndex = 2 + (i % 5);
+      const c = Dungeon.combatComp(2 + (i % 4));
+      const ids = new Set(c.filter((u) => u.pack).map((u) => u.pack));
+      packs += ids.size;
+      leaders += c.filter((u) => u.leader).length;
+    }
+    // ② 뭉치면 단단해지는가 — 같은 적을 혼자 / 다섯이 뭉쳤을 때
+    Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
+    const p = Game.player; p.god = true; p.x = 100; p.y = 100;
+    const spawn = (n, bx, by) => {
+      Game.enemies.length = 0;
+      const out = [];
+      for (let k = 0; k < n; k++) {
+        const e = createEnemy('skeleton', bx + (k % 3) * 30, by + Math.floor(k / 3) * 30, 3);
+        e.spawnT = 0; e.hp = e.maxHp = 999; e.pack = 1; Game.enemies.push(e); out.push(e);
+      }
+      Game._cohesionT = 0;
+      Game.tick(1 / 60);
+      return out;
+    };
+    const solo = spawn(1, 480, 270)[0];
+    const soloMit = solo._packMit || 0;
+    const s0 = solo.hp; Game.damageEnemy(solo, 20, { x: 1, y: 0 }, { feel: true });
+    const soloDmg = s0 - solo.hp;
+    const grp = spawn(5, 480, 270);
+    const grpMit = grp[0]._packMit || 0;
+    const g0 = grp[0].hp; Game.damageEnemy(grp[0], 20, { x: 1, y: 0 }, { feel: true });
+    const grpDmg = g0 - grp[0].hp;
+    // ③ 장판·화상(feel:false)은 경감을 안 받는가 — 흩어놓을 수단이 남아야 한다
+    const g1 = grp[1].hp; Game.damageEnemy(grp[1], 20, { x: 1, y: 0 }, { feel: false });
+    const dotDmg = g1 - grp[1].hp;
+    // ④ 리더가 죽으면 무리가 흔들리는가
+    Game.enemies.length = 0;
+    const L = createEnemy('skeleton', 480, 270, 3); L.spawnT = 0; L.isLeader = true; L.pack = 7;
+    L.hp = L.maxHp = 5; Game.enemies.push(L);
+    const mates = [];
+    for (let k = 0; k < 3; k++) {
+      const m = createEnemy('skeleton', 520 + k * 30, 270, 3);
+      m.spawnT = 0; m.pack = 7; m.hp = m.maxHp = 99; Game.enemies.push(m); mates.push(m);
+    }
+    const spdBefore = mates[0].effSpeed();
+    Game.killEnemy(L, { x: 1, y: 0 });
+    const shaken = mates.filter((m) => m._shakenT > 0).length;
+    const spdAfter = mates[0].effSpeed();
+    return { packsAvg: +(packs / 120).toFixed(2), leadersAvg: +(leaders / 120).toFixed(2),
+      soloMit: +soloMit.toFixed(2), grpMit: +grpMit.toFixed(2),
+      soloDmg, grpDmg, dotDmg, shaken, spdBefore: Math.round(spdBefore), spdAfter: Math.round(spdAfter) };
+  });
+  console.log('  무리사기:', JSON.stringify(morale));
+  ok('pack.hasLeaders', morale.leadersAvg >= 1 && Math.abs(morale.leadersAvg - morale.packsAvg) < 0.6,
+    `방당 무리 ${morale.packsAvg}개 · 리더 ${morale.leadersAvg}기 (무리마다 매듭이 하나씩)`);
+  ok('pack.cohesionMitigates', morale.grpMit > morale.soloMit && morale.grpDmg < morale.soloDmg,
+    `혼자 경감 ${morale.soloMit} → 다섯이 뭉치면 ${morale.grpMit} · 같은 20피해가 ${morale.soloDmg} → ${morale.grpDmg} ` +
+    '(뭉치면 단단해진다 — 흩어놓는 것이 플레이어의 수가 된다)');
+  ok('pack.dotIgnoresAura', morale.dotDmg >= morale.soloDmg,
+    `장판·화상(feel:false)은 경감을 안 받는다 — 직격 ${morale.grpDmg} vs 지속피해 ${morale.dotDmg} ` +
+    '(흩어놓을 수단이 남아야 한다. 전부 막으면 결정이 아니라 벽이다)');
+  ok('pack.leaderDeathShakes', morale.shaken === 3 && morale.spdAfter < morale.spdBefore,
+    `리더 사망 → 동료 ${morale.shaken}기 동요 · 이동속도 ${morale.spdBefore} → ${morale.spdAfter} ` +
+    '(매듭을 먼저 칠지 방패부터 걷을지가 결정이 된다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

@@ -328,18 +328,26 @@ const Dungeon = {
       return matched.length && RNG.chance(0.75) ? RNG.pick(matched) : RNG.pick(sets);
     };
     if (sets.length) {
-      // 첫 무리 — 지형에 맞는 조합이 뼈대가 된다
+      // 첫 무리 — 지형에 맞는 조합이 뼈대가 된다.
+      // v185: 무리마다 **번호와 리더**를 붙인다. 리더는 무리를 묶는 매듭이고, 끊으면 무리가 흔들린다
+      let packId = 0;
+      const stamp = (units, wants) => {
+        const id = ++packId;
+        const start = comp.length;
+        for (const t of units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5), pack: id });
+        // 리더는 무리의 첫 유닛 — THREAT_SETS는 앞쪽이 그 무리의 성격을 대표한다
+        if (comp.length > start + 1) comp[start].leader = true;
+        return { units: units.length, wants };
+      };
       const set = pickSet();
-      for (const t of set.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
       comp.setUsed = true;
-      comp.packs = [{ units: set.units.length, wants: set.wants }];
+      comp.packs = [stamp(set.units, set.wants)];
       // 자리가 남으면 **또 다른 무리**를 부른다 — 낱개로 채우지 않는다.
       // 두 무리가 같은 방에 있으면 "어느 쪽부터"가 생긴다
       let guard = 0;
       while (comp.length < n - 1 && guard++ < 4) {
         const s2 = pickSet();
-        for (const t of s2.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
-        comp.packs.push({ units: s2.units.length, wants: s2.wants });
+        comp.packs.push(stamp(s2.units, s2.wants));
       }
     }
     // 그래도 모자란 한두 자리만 낱개로 (세트가 없는 층 대비)

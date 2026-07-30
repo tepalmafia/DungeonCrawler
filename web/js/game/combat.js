@@ -152,6 +152,13 @@ const GameCombat = {
 
   damageEnemy(e, dmg, dir, { feel = true, crit = false, kb = 190, color } = {}) {
     if (e.dead || e.phased) return;
+    // ── 군집 경감 (v185) — 뭉치면 단단해진다 ──
+    // 직접 타격(feel)에만 건다. 장판·연쇄·화상은 그대로 들어가야 **흩어놓는 수단**이 남는다.
+    // 상한 30%(+리더 곁 8%)로 낮게 잡았다 — 세게 하면 "무리를 못 깨면 못 이긴다"가 되어
+    // 결정이 아니라 벽이 된다. 흩어놓으면 즉시 사라지는 값이어야 한다
+    if (feel && e._packMit > 0 && !e.isBoss) {
+      dmg = Math.max(1, dmg * (1 - e._packMit));
+    }
     // 기믹: 중장갑 — 직접 타격만 경감. 화상/중독 틱, 폭발·연쇄·장판(feel=false)은 무시
     // v161: **보스에게는 하드 클램프가 아니라 비율 경감**이다.
     // 사장 v159 리포트가 범인을 지목했다 — 보스 처치 시간이 1층50s 2층31s **3층99s**
@@ -348,6 +355,25 @@ const GameCombat = {
   killEnemy(e, dir, brutal = false) {
     if (e.dead) return;
     e.dead = true;
+    // ── 사기 붕괴 (v185) — 매듭을 끊으면 무리가 흔들린다 ──
+    // 리더를 먼저 칠지, 앞의 방패부터 걷을지가 **결정**이 되게 하는 장치.
+    // 흔들림은 굳음(0.5초) + 둔화 + 예고 지연이고, 영구가 아니라 3초짜리다
+    if (e.isLeader && e.pack) {
+      let shaken = 0;
+      for (const o of this.enemies) {
+        if (o.dead || o === e || o.pack !== e.pack || o.isBoss) continue;
+        o._shakenT = 3.0;
+        o.hitCd = Math.max(o.hitCd || 0, 0.5);
+        o._windT = 0;                       // 걸려 있던 예고가 풀린다 — 그 틈이 보상이다
+        shaken++;
+        Particles.text(o.x, o.y - 30, '동요', { color: '#9aa0b4', size: 11 });
+      }
+      if (shaken > 0) {
+        this.banner = { text: `무리의 매듭이 끊겼다 — ${shaken}이 흔들린다`, life: 1.6, maxLife: 1.6, color: '#c9d94a' };
+        AudioSys.sub('sh_warcry', e.x, e.y);
+        Renderer.shake(3, 0.2);
+      }
+    }
     // 드라마 AI: 항복한 자를 베었다 — 처형. 정상 처치로 취급 (고어·집계·드랍 전부)
     if (e._surrender != null) {
       e.neutral = false;

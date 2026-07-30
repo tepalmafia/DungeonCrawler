@@ -563,7 +563,8 @@ const GamePlay = {
         } else {
           pos = World.randomSpawnPos(this.player);
         }
-        this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, omen: s.omen, t: s.mini ? 1.1 : 0.7 });
+        this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, omen: s.omen,
+          pack: s.pack, leader: s.leader, t: s.mini ? 1.1 : 0.7 });
         this.pendingSpawns.splice(i, 1);
       }
     }
@@ -578,6 +579,12 @@ const GamePlay = {
         if (this.pacts.speed) e.speed *= 1.15;
         if (this.pacts.wrath) e.speed *= 1.08; // 왕의 진노
         if (m.omen) { e._aware = true; e.speed *= 1.1; e.flash = 0.5; } // 어둠의 눈이 되살린 것 — 이미 깨어 있다
+        // ── 무리 소속 (v185) ──
+        e.pack = m.pack || 0;
+        if (m.leader) {
+          e.isLeader = true;
+          e.maxHp = Math.round(e.maxHp * 1.35); e.hp = e.maxHp;  // 매듭은 조금 더 질기다
+        }
         // 발견 체계 (드라마 AI): 경보 전이면 비인지 상태로 배치 — 침입자를 아직 모른다.
         // 매복형·보스방·경보 후 증원은 제외 (=== false 게이트: 소환수 등 직접 push된 개체는 그대로)
         if (this._drama && !this._roomAlert && !m.mini && !AMBUSH_TYPES.has(m.type) && !e.isBoss) e._aware = false;
@@ -590,6 +597,36 @@ const GamePlay = {
         }
         Particles.burst(m.x, m.y, { count: m.mini ? 16 : 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });
         this.markers.splice(i, 1);
+      }
+    }
+
+    // ══ 군집 오라 · 사기 (v185) ══════════════════════════════════════════
+    // 사장 지적: "잡몹도 뭉치면 강한 모습을 보이거나. 긴장감이 전혀 없어"
+    // v181에서 무리로 세웠으니 이제 **뭉침에 값**을 매긴다:
+    //  · 곁에 동료가 많을수록 단단해진다 → **흩어놓는 것이 플레이어의 수(手)가 된다**
+    //  · 리더 반경 안이면 한 겹 더 (매듭)
+    //  · 리더가 죽으면 그 무리가 **흔들린다** — 잠깐 굳고, 느려지고, 예고가 길어진다
+    // 적 18마리 상한이라 O(N²)=324 검사, 60fps에서 무해하다
+    this._cohesionT = (this._cohesionT || 0) - dt;
+    if (this._cohesionT <= 0) {
+      this._cohesionT = 0.12; // 초당 8회면 충분하다 — 매 프레임 돌 이유가 없다
+      const es = this.enemies;
+      const leaders = {};
+      for (const e of es) if (!e.dead && e.isLeader && e.pack) leaders[e.pack] = e;
+      for (const e of es) {
+        if (e.dead || e.neutral || e.isBoss) continue;
+        let n = 0;
+        for (const o of es) {
+          if (o === e || o.dead || o.neutral) continue;
+          const dx = o.x - e.x, dy = o.y - e.y;
+          if (dx * dx + dy * dy < 115 * 115) n++;
+        }
+        e._cohesion = n;
+        const L = e.pack && leaders[e.pack];
+        e._led = !!(L && Math.hypot(L.x - e.x, L.y - e.y) < 190);
+        // 경감은 최대 30% — 흩어놓으면 사라지는 값이라 상한을 낮게 둔다.
+        // 여기서 세면 "무리를 못 깨면 못 이긴다"가 되어 결정이 아니라 벽이 된다
+        e._packMit = Math.min(0.30, n * 0.055) + (e._led ? 0.08 : 0);
       }
     }
 
@@ -841,6 +878,7 @@ const GamePlay = {
         this.startSignature(e, 'miniSig');
       }
       if (!e.dead) e.update(dt, this);
+      if (e._shakenT > 0) e._shakenT -= dt;
       if (!e.dead) this._steer(e, dt, p);
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
