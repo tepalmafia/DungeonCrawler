@@ -15,8 +15,8 @@ const KEYS = process.argv.slice(2).length ? process.argv.slice(2)
   await p.goto(`${BASE}/?test=1&bot=1`);
   await p.waitForFunction(() => typeof Sprites !== 'undefined' && typeof Game !== 'undefined' && Game.state);
   const png = await p.evaluate((keys) => {
-    const Z = 4, CW = 170, CH = 190;
-    const cols = Math.min(keys.length, 7);
+    const Z = 4, CW = 250, CH = 270;
+    const cols = Math.min(keys.length, 5);
     const rows = Math.ceil(keys.length / cols);
     const cv = document.createElement('canvas');
     cv.width = cols * CW + 20; cv.height = rows * CH + 40;
@@ -30,7 +30,7 @@ const KEYS = process.argv.slice(2).length ? process.argv.slice(2)
       g.fillStyle = 'rgba(255,255,255,0.035)'; g.fillRect(cx, cy, CW - 8, CH - 14);
       if (img && img.width) {
         const w = img.width * Z, h = img.height * Z;
-        g.drawImage(img, cx + (CW - 8 - w) / 2, cy + (CH - 34 - h) / 2, w, h);
+        g.drawImage(img, cx + (CW - 8 - w) / 2, cy + (CH - 44 - h) / 2, w, h);
       }
       g.fillStyle = '#c8c2d4'; g.font = '11px sans-serif';
       g.fillText(k + (img && img.width ? ` ${img.width}×${img.height}` : ' 없음'), cx + 6, cy + CH - 20);
