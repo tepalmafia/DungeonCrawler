@@ -42,11 +42,20 @@ const Renderer = {
     }
   },
 
+  // ── 카메라 (v189) ──────────────────────────────────────────────────────
+  // 사장: "맵도 계속 이어져 있다는 느낌이 들어야해."
+  // 실측: 방 전환 450회가 전부 방향 없는 666ms 검정 페이드였고, 런당 300초(5분)가
+  // 검정 화면이었다. 방 사이에 '이동'이 없고 '암전'이 있었다.
+  // panX/panY는 그 암전을 **이동**으로 바꾸는 최소 장치이자, 앞으로 들어올
+  // 스크롤 카메라가 앉을 자리다 — 월드 변환 지점은 여기 한 곳뿐이다
+  panX: 0,
+  panY: 0,
+
   begin() {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.fillStyle = '#08080f';
     this.ctx.fillRect(0, 0, this.W, this.H);
-    this.ctx.translate(Math.round(this.offsetX), Math.round(this.offsetY));
+    this.ctx.translate(Math.round(this.offsetX + this.panX), Math.round(this.offsetY + this.panY));
   },
 
   // 스프라이트를 중심 기준으로 그린다. squash: 스쿼시&스트레치, shadow: 발밑 그림자

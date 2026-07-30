@@ -113,7 +113,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <nav><div class="inner">
   <a href="#now">현재</a><a href="#feel">손맛·회피</a><a href="#room">방 규격</a>
-  <a href="#floors">50층</a><a href="#enemies">적 89종</a>
+  <a href="#map">맵</a><a href="#floors">50층</a><a href="#enemies">적 89종</a>
   <a href="#clues">증거</a><a href="#verify">검증</a><a href="#history">이력</a><a href="#steam">스팀</a>
 </div></nav>
 
@@ -121,11 +121,11 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 <header>
   <h1><small>무덤에서 왕좌까지 · DUNGEONCRAWLER</small>개발 대시보드</h1>
   <div class="meta">
-    <span class="pill">현재 빌드 <b>v188</b></span>
+    <span class="pill">현재 빌드 <b>v189</b></span>
     <span class="pill">적 <b>89</b>종 (보스 23)</span>
     <span class="pill">층 <b>50</b></span>
-    <span class="pill">회귀 검증 <b>109</b>항목</span>
-    <span class="pill">코드 <b>27,032</b>줄</span>
+    <span class="pill">회귀 검증 <b>113</b>항목</span>
+    <span class="pill">코드 <b>27,134</b>줄</span>
     <a class="pill play" href="https://tepalmafia.github.io/DungeonCrawler/" target="_blank" rel="noopener">▶ 플레이</a>
   </div>
 </header>
@@ -134,7 +134,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
   <h2>지금</h2>
   <p class="lede">v188까지 배포됨. 다음은 카메라 이동으로 「이어진 맵」.</p>
   <div class="rail">
-    <div class="step done"><div class="v">v185</div><div class="t">리더·사기·군집 오라</div></div><div class="step done"><div class="v">v186</div><div class="t">무리 행태 — 배치가 아니라 행동</div></div><div class="step done"><div class="v">v187</div><div class="t">기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서</div></div><div class="step done"><div class="v">v188</div><div class="t">손맛과 회피 — 예고 420ms · 일반 타격 히트스톱</div></div><div class="step now"><div class="v">v189</div><div class="t">카메라 이동 — 이어진 맵 (사장 결정)</div></div><div class="step todo"><div class="v">이후</div><div class="t">스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정</div></div>
+    <div class="step done"><div class="v">v185</div><div class="t">리더·사기·군집 오라</div></div><div class="step done"><div class="v">v186</div><div class="t">무리 행태 — 배치가 아니라 행동</div></div><div class="step done"><div class="v">v187</div><div class="t">기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서</div></div><div class="step done"><div class="v">v188</div><div class="t">손맛과 회피 — 예고 420ms · 일반 타격 히트스톱</div></div><div class="step done"><div class="v">v189</div><div class="t">맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일</div></div><div class="step now"><div class="v">v189b</div><div class="t">카메라 + 큰 방 + 격자 미니맵 (자산 절차적 재생성)</div></div><div class="step todo"><div class="v">이후</div><div class="t">스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정</div></div>
   </div>
   <div class="note"><b>기준 원칙.</b> 최종 판정은 사장의 실제 플레이 F9 리포트다.
   봇 수치와 회귀 검증은 결함을 잡는 도구일 뿐, 성공을 선언할 권한이 없다.
@@ -246,6 +246,39 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
       <td class="mono small">voidEye · voidSpawn · voidSpawn · voidSpawn · riftCaster</td>
       <td class="dim small">open</td></tr></tbody>
   </table></div>
+</section>
+
+<section id="map">
+  <h2>v189 · 맵 연결 기반</h2>
+  <p class="lede">사장 지적의 원인은 「방마다 인상이 달라서」가 아니었다 — 실측은 정반대를 가리켰다.</p>
+  <p><b>방들은 너무 같은데, 이동했다는 증거가 화면에 0이었다.</b> 팔레트도 같고 상자 모양도 같고 내 위치도 같았다.
+  화면이 바뀌었는데 바뀐 게 없었다.</p>
+  <div class="scroll" style="margin-bottom:18px"><table>
+    <thead><tr><th>실측 진단</th><th>값</th><th>메모</th></tr></thead>
+    <tbody><tr><td>층당 테마</td><td class="mono" style="color:var(--blood)">1종</td>
+      <td class="small dim">7개 층 전수</td></tr><tr><td>연속 방 실내 변화</td><td class="mono" style="color:var(--blood)">평균 13.5%</td>
+      <td class="small dim">최소 0% · 162칸 기준</td></tr><tr><td>방 실루엣이 직전 방과 동일</td><td class="mono" style="color:var(--blood)">49%</td>
+      <td class="small dim">실루엣 9종뿐</td></tr><tr><td>방 외곽</td><td class="mono" style="color:var(--blood)">42/42 완전 폐쇄</td>
+      <td class="small dim">문은 벽 구멍이 아니라 바닥 위 자립 아치</td></tr><tr><td>방당 위협 0 직선 이동</td><td class="mono" style="color:var(--blood)">4.14초</td>
+      <td class="small dim">+ 암전 0.67초 = 방당 4.8초 × 450회</td></tr><tr><td>층 이동 연출</td><td class="mono" style="color:var(--blood)">없음 (floor++ 한 줄)</td>
+      <td class="small dim">50층 탑인데 오르는 장면이 0회</td></tr></tbody>
+  </table></div>
+  <h3>고친 것</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>항목</th><th>v188</th><th>v189</th><th>메모</th></tr></thead>
+    <tbody><tr><td>Dungeon 방 좌표</td><td class="was mono small">0개 (roomIndex 정수 하나)</td>
+      <td class="is mono small">노드·간선·상하 분기</td><td class="small dim">「다음 방」만 있고 「옆방」이 없었다</td></tr><tr><td>플레이어 진입점</td><td class="was mono small">49/49 전부 (81.6, 270)</td>
+      <td class="is mono small">나온 문 높이를 잇는다 (5종)</td><td class="small dim">어느 문을 고르든 같은 자리였다</td></tr><tr><td>방 전환 시간</td><td class="was mono small">666ms</td>
+      <td class="is mono small">467ms</td><td class="small dim">450회 × 666ms = 런당 300초가 검정 화면</td></tr><tr><td>전환 연출</td><td class="was mono small">방향 없는 검정 페이드</td>
+      <td class="is mono small">화면 통째 960px 이동</td><td class="small dim">나온 방향으로 밀려나고 새 방이 들어온다</td></tr><tr><td>완전 암전</td><td class="was mono small">알파 1.0 (83ms)</td>
+      <td class="is mono small">알파 0.42 (암전 없음)</td><td class="small dim">검정은 방 사이 틈만 메운다</td></tr><tr><td>같은 층 밝기</td><td class="was mono small">횃불 2~6개 (3배 차)</td>
+      <td class="is mono small">3~5개</td><td class="small dim">밝기가 튀면 「순간이동했다」로 읽힌다</td></tr></tbody>
+  </table></div>
+  <div class="note"><b>카메라 비용은 코드가 아니라 자산이다.</b>
+  <code>Renderer.offsetX/Y</code>를 읽는 곳은 3군데(전부 조준)뿐이고 UI는 이미 21군데에서 화면 좌표로 복귀한다 — 카메라 자체는 싸다.
+  비싼 건 <code>World.cols/rows</code>를 건드리는 순간 <b>SILHOUETTES 10장 + ROOM_TEMPLATES 39개</b>가
+  20×11 / 18×9로 하드코딩돼 있어 손제작 자산 49개를 전부 다시 그려야 한다는 것이다.
+  v189b는 이걸 손그림 대신 <b>절차적 생성</b>으로 푼다.</div>
 </section>
 
 <section id="floors">
@@ -889,8 +922,8 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 </section>
 
 <section id="verify">
-  <h2>회귀 검증 · 109항목</h2>
-  <p class="lede">고친 결함이 되살아나지 않도록 못박은 것들. <span class="mono small">./tools/run-verify.sh 188</span></p>
+  <h2>회귀 검증 · 113항목</h2>
+  <p class="lede">고친 결함이 되살아나지 않도록 못박은 것들. <span class="mono small">./tools/run-verify.sh 189</span></p>
   <p>새 몹에 사연을 빼먹으면 <span class="mono small">lore.everyEnemyHasOne</span>이 잡고,
   예고를 다시 인간 반응 시간 아래로 줄이면 <span class="mono small">feel.dodgeWindowIsHuman</span>이 잡는다.
   <b>이게 규격이 50층까지 확장되는 방식이다.</b></p>
@@ -904,7 +937,8 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
     <ul><li class="mono small">notOccluded</li><li class="mono small">stompHasRadius</li><li class="mono small">bossHasWindup</li><li class="mono small">bossCanWhiff</li></ul></div><div class="agroup"><h4>spatial <span class="dim">4</span></h4>
     <ul><li class="mono small">distanceAttenuates</li><li class="mono small">farSoundsDuller</li><li class="mono small">telegraphCarries</li><li class="mono small">newLayers</li></ul></div><div class="agroup"><h4>tone <span class="dim">4</span></h4>
     <ul><li class="mono small">bakedIsRicher</li><li class="mono small">bakedRingsLonger</li><li class="mono small">variantsBaked</li><li class="mono small">engineExists</li></ul></div><div class="agroup"><h4>light <span class="dim">4</span></h4>
-    <ul><li class="mono small">spritesRespond</li><li class="mono small">fallsOffWithDistance</li><li class="mono small">hasDirection</li><li class="mono small">noHalo</li></ul></div><div class="agroup"><h4>input <span class="dim">3</span></h4>
+    <ul><li class="mono small">spritesRespond</li><li class="mono small">fallsOffWithDistance</li><li class="mono small">hasDirection</li><li class="mono small">noHalo</li></ul></div><div class="agroup"><h4>map <span class="dim">4</span></h4>
+    <ul><li class="mono small">hasCoordinates</li><li class="mono small">doorDecidesEntry</li><li class="mono small">transitionMoves</li><li class="mono small">evenLighting</li></ul></div><div class="agroup"><h4>input <span class="dim">3</span></h4>
     <ul><li class="mono small">buffer</li><li class="mono small">hitstopFreeze</li><li class="mono small">holdFire</li></ul></div><div class="agroup"><h4>cap <span class="dim">3</span></h4>
     <ul><li class="mono small">ironhideSoftens</li><li class="mono small">relicMultipliesCap</li><li class="mono small">armorNotPollutedByAffix</li></ul></div><div class="agroup"><h4>over <span class="dim">3</span></h4>
     <ul><li class="mono small">unlockDrawn</li><li class="mono small">tabAndSettings</li><li class="mono small">graceTopAndSynced</li></ul></div><div class="agroup"><h4>aim <span class="dim">3</span></h4>
@@ -940,10 +974,11 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <section id="history">
   <h2>이력</h2>
-  <p class="lede">버전 16개.</p>
+  <p class="lede">버전 17개.</p>
   <div class="scroll" style="max-height:460px;overflow-y:auto"><table>
     <thead><tr><th>버전</th><th>날짜</th><th>내용</th></tr></thead>
-    <tbody><tr><td class="mono num">v187</td><td class="dim mono small">2026-07-30</td>
+    <tbody><tr><td class="mono num">v188</td><td class="dim mono small">2026-07-30</td>
+   <td class="small">손맛과 회피 — 기능이 없던 게 아니라 사람이 닿을 수 없었다</td></tr><tr><td class="mono num">v187</td><td class="dim mono small">2026-07-30</td>
    <td class="small">기준 구간(1~3층) 규격 — 사연은 만나는 순간에, 무리는 대비로</td></tr><tr><td class="mono num">v186</td><td class="dim mono small">2026-07-30</td>
    <td class="small">무리 「행태」 — 배치가 아니라 행동</td></tr><tr><td class="mono num">v185</td><td class="dim mono small">2026-07-30</td>
    <td class="small">리더·사기·군집 오라 — 「뭉치면 강하다」에 값을 매기다</td></tr><tr><td class="mono num">v184</td><td class="dim mono small">2026-07-30</td>
@@ -973,7 +1008,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 </section>
 
 <footer>
-  생성 2026-07-30 10:06 · 빌드 v188 · <span class="mono">node tools/dashboard.js</span> 로 갱신<br>
+  생성 2026-07-30 11:29 · 빌드 v189 · <span class="mono">node tools/dashboard.js</span> 로 갱신<br>
   데이터는 저장소 코드에서 직접 뽑는다 — 손으로 적은 숫자는 낡는다.
 </footer>
 </div>

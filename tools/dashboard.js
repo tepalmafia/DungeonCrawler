@@ -96,8 +96,27 @@ const ROADMAP = [
   { v: 'v186', t: '무리 행태 — 배치가 아니라 행동', s: 'done' },
   { v: 'v187', t: '기준 구간(1~3층) 규격 · 사연 89종 · 도감 커서', s: 'done' },
   { v: 'v188', t: '손맛과 회피 — 예고 420ms · 일반 타격 히트스톱', s: 'done' },
-  { v: 'v189', t: '카메라 이동 — 이어진 맵 (사장 결정)', s: 'now' },
+  { v: 'v189', t: '맵 연결 기반 — 방 좌표계·문↔진입점·방향 전환·밝기 통일', s: 'done' },
+  { v: 'v189b', t: '카메라 + 큰 방 + 격자 미니맵 (자산 절차적 재생성)', s: 'now' },
   { v: '이후', t: '스팀 출시 준비 — 데스크톱 빌드·도전과제·조작 설정', s: 'todo' },
+];
+
+const MAP = [
+  { k: 'Dungeon 방 좌표', was: '0개 (roomIndex 정수 하나)', is: '노드·간선·상하 분기', note: '「다음 방」만 있고 「옆방」이 없었다' },
+  { k: '플레이어 진입점', was: '49/49 전부 (81.6, 270)', is: '나온 문 높이를 잇는다 (5종)', note: '어느 문을 고르든 같은 자리였다' },
+  { k: '방 전환 시간', was: '666ms', is: '467ms', note: '450회 × 666ms = 런당 300초가 검정 화면' },
+  { k: '전환 연출', was: '방향 없는 검정 페이드', is: '화면 통째 960px 이동', note: '나온 방향으로 밀려나고 새 방이 들어온다' },
+  { k: '완전 암전', was: '알파 1.0 (83ms)', is: '알파 0.42 (암전 없음)', note: '검정은 방 사이 틈만 메운다' },
+  { k: '같은 층 밝기', was: '횃불 2~6개 (3배 차)', is: '3~5개', note: '밝기가 튀면 「순간이동했다」로 읽힌다' },
+];
+
+const MAPDIAG = [
+  { k: '층당 테마', v: '1종', n: '7개 층 전수' },
+  { k: '연속 방 실내 변화', v: '평균 13.5%', n: '최소 0% · 162칸 기준' },
+  { k: '방 실루엣이 직전 방과 동일', v: '49%', n: '실루엣 9종뿐' },
+  { k: '방 외곽', v: '42/42 완전 폐쇄', n: '문은 벽 구멍이 아니라 바닥 위 자립 아치' },
+  { k: '방당 위협 0 직선 이동', v: '4.14초', n: '+ 암전 0.67초 = 방당 4.8초 × 450회' },
+  { k: '층 이동 연출', v: '없음 (floor++ 한 줄)', n: '50층 탑인데 오르는 장면이 0회' },
 ];
 
 const STEAM = [
@@ -268,7 +287,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
 
 <nav><div class="inner">
   <a href="#now">현재</a><a href="#feel">손맛·회피</a><a href="#room">방 규격</a>
-  <a href="#floors">50층</a><a href="#enemies">적 ${ENEMIES.length}종</a>
+  <a href="#map">맵</a><a href="#floors">50층</a><a href="#enemies">적 ${ENEMIES.length}종</a>
   <a href="#clues">증거</a><a href="#verify">검증</a><a href="#history">이력</a><a href="#steam">스팀</a>
 </div></nav>
 
@@ -338,6 +357,29 @@ details summary{cursor:pointer;color:var(--ink2);font-size:14px;padding:6px 0}
       <td class="mono small">${esc((t.units || []).join(' · '))}</td>
       <td class="dim small">${esc(t.wants || '')}</td></tr>`).join('')}</tbody>
   </table></div>
+</section>
+
+<section id="map">
+  <h2>v189 · 맵 연결 기반</h2>
+  <p class="lede">사장 지적의 원인은 「방마다 인상이 달라서」가 아니었다 — 실측은 정반대를 가리켰다.</p>
+  <p><b>방들은 너무 같은데, 이동했다는 증거가 화면에 0이었다.</b> 팔레트도 같고 상자 모양도 같고 내 위치도 같았다.
+  화면이 바뀌었는데 바뀐 게 없었다.</p>
+  <div class="scroll" style="margin-bottom:18px"><table>
+    <thead><tr><th>실측 진단</th><th>값</th><th>메모</th></tr></thead>
+    <tbody>${MAPDIAG.map((m) => `<tr><td>${esc(m.k)}</td><td class="mono" style="color:var(--blood)">${esc(m.v)}</td>
+      <td class="small dim">${esc(m.n)}</td></tr>`).join('')}</tbody>
+  </table></div>
+  <h3>고친 것</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>항목</th><th>v188</th><th>v189</th><th>메모</th></tr></thead>
+    <tbody>${MAP.map((m) => `<tr><td>${esc(m.k)}</td><td class="was mono small">${esc(m.was)}</td>
+      <td class="is mono small">${esc(m.is)}</td><td class="small dim">${esc(m.note)}</td></tr>`).join('')}</tbody>
+  </table></div>
+  <div class="note"><b>카메라 비용은 코드가 아니라 자산이다.</b>
+  <code>Renderer.offsetX/Y</code>를 읽는 곳은 3군데(전부 조준)뿐이고 UI는 이미 21군데에서 화면 좌표로 복귀한다 — 카메라 자체는 싸다.
+  비싼 건 <code>World.cols/rows</code>를 건드리는 순간 <b>SILHOUETTES 10장 + ROOM_TEMPLATES 39개</b>가
+  20×11 / 18×9로 하드코딩돼 있어 손제작 자산 49개를 전부 다시 그려야 한다는 것이다.
+  v189b는 이걸 손그림 대신 <b>절차적 생성</b>으로 푼다.</div>
 </section>
 
 <section id="floors">

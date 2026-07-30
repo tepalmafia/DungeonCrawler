@@ -1391,9 +1391,12 @@ const GameRender = {
     if (this.state === 'confession') HUD.drawConfession(ctx, this);
 
     if (this.transition) {
+      // v189: 암막 알파 1.0 → 0.42. 종전엔 5프레임(83ms) 완전 암전이 있었고,
+      // 그 순간 세계는 아예 사라졌다. 이제 미는 것은 Renderer.pan 이고 검정은
+      // 옆방과 옆방 사이의 '틈'을 메우는 역할만 한다 — 이동이 보여야 이어진다
       const a = this.transition.phase === 'out' ? this.transition.t : 1 - this.transition.t;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalAlpha = Math.min(1, a);
+      ctx.globalAlpha = Math.min(0.42, a * 0.42);
       ctx.fillStyle = '#08080f';
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
       ctx.globalAlpha = 1;
