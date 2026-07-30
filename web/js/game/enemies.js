@@ -93,7 +93,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       // 이제 우두머리도 강타를 쓴다. 더 자주, 더 길게 예고해서 「피하는 것」이 되게 한다
       if ((this.elite || this.isMini) && !this.isBoss && !this.neutral && !this.dead && this.spawnT <= 0 &&
           typeof Game !== 'undefined' && Game.player && Game.state === 'play') {
-        if (this._stompCd == null) this._stompCd = this.isMini ? 1.6 + Math.random() * 1.2 : 2.5 + Math.random() * 2;
+        // v195: 첫 강타는 **빨리** 온다 — 등장하자마자 「이놈은 패턴이 있다」를 알려야 한다
+        if (this._stompCd == null) this._stompCd = this.isMini ? 0.8 + Math.random() * 0.7 : 2.5 + Math.random() * 2;
         if (this._stompT > 0) {
           this._stompT -= dt;
           if (Math.random() < 0.5) {
@@ -114,7 +115,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (Math.hypot(p.x - this.x, p.y - this.y) < (this.isMini ? 240 : 170)) {
             // 우두머리는 예고 0.75초 — 인간 반응(0.25초)에 여유를 크게 준다. 피하라고 만든 패턴이다
             this._stompT = this.isMini ? 0.75 : 0.55;
-            this._stompCd = this.isMini ? 2.6 + Math.random() * 1.6 : 4 + Math.random() * 2.5;
+            this._stompCd = this.isMini ? 2.0 + Math.random() * 1.2 : 4 + Math.random() * 2.5;
             Particles.text(this.x, this.y - this.r - 14, '!', { color: '#ff4757', size: 16 });
             AudioSys.tellStomp(this.x, this.y); // v177: 접촉 예고보다 한 급 위 — 바닥이 온다
           }
@@ -3129,7 +3130,17 @@ function createMiniboss(type, x, y, floorScale) {
   // 7배는 2층 이상 기준으로 잡힌 값이고, 1층은 플레이어가 특성 2~3장뿐인 구간이다
   // v194: 이제 **방마다** 나온다 — 층당 1기 기준의 7배는 벽이 된다.
   // 몸값을 낮추고 대신 패턴(강타)으로 위협을 준다. 위협 예산은 잡몹 수에서 뺀다
-  e.hp = e.maxHp = Math.ceil(e.hp * (Dungeon.floor <= 2 ? 2.6 : Dungeon.floor <= 5 ? 3.4 : 4.2));
+  // ★ v195 — 사장: "너무 쉽잔아. 보스랑 싸우지도 못하고 죽어"
+  // v194에서 ×7 → ×2.6 으로 내린 게 과했다. 패턴(강타 쿨다운 2.6초)을 만들어놓고
+  // **쓸 시간을 안 줬다** — 사장 화력이면 첫 강타가 돌기 전에 죽는다.
+  // 보스급은 「오래 버티는 것」이 아니라 「패턴을 두세 번 보여줄 만큼」 살아야 한다
+  // ★ v195 — 사장: "너무 쉽잔아. 보스랑 싸우지도 못하고 죽어"
+  // **배율 방식이 근본 한계였다.** 1층 잡몹 base HP 가 4라 ×5.5 를 해도 22 —
+  // 사장 화력(공4)이면 1.5초에 죽고 강타를 딱 한 번 본다.
+  // 「보스급」은 배율이 아니라 **바닥값**으로 정한다. 층당 목표 생존 4~6초 =
+  // 강타 2~3회를 반드시 보여줄 수 있는 길이. 잡몹 원본이 더 세면 그쪽을 쓴다
+  const MINI_FLOOR_HP = 46 + Dungeon.floor * 11;
+  e.hp = e.maxHp = Math.max(Math.ceil(e.hp * 3), Math.round(MINI_FLOOR_HP * (floorScale || 1)));
   e.r *= 1.4;
   e.xpVal *= 8;
   e.speed *= 0.92;
