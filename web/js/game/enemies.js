@@ -28,7 +28,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
 
     effSpeed() {
-      return this.speed * (this.status.shock > 0 ? 0.55 : 1) * (this.hasteT > 0 ? 1.4 : 1);
+      // v185: 리더를 잃고 흔들리는 동안엔 걸음이 무너진다 (사기)
+      return this.speed * (this.status.shock > 0 ? 0.55 : 1) * (this.hasteT > 0 ? 1.4 : 1)
+        * (this._shakenT > 0 ? 0.6 : 1);
     },
 
     applyKnockback(dt) {
@@ -127,7 +129,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       if (this.hitCd > 0 || this._windT > 0) return;
       const d = Math.hypot(p.x - this.x, p.y - this.y);
       if (d < p.r + this.r) {
-        this._windT = (this.elite || this.isMini) ? 0.30 : 0.25;
+        // v185: 흔들리는 무리는 예고가 길어진다 — 리더를 끊은 보상이 시간으로 온다
+        this._windT = ((this.elite || this.isMini) ? 0.30 : 0.25) * (this._shakenT > 0 ? 1.6 : 1);
         this._windMax = this._windT;
         this._windDmg = dmg;
         this._windA = Math.atan2(p.y - this.y, p.x - this.x);

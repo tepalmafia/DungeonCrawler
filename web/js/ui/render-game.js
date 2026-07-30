@@ -793,6 +793,40 @@ const GameRender = {
     // "읽고 피하라"는 이 게임의 약속을 정면으로 깬다
     for (const d of drawables) {
       if (d.dead) continue;
+      // ── 무리 표시 (v185) — 몸 위에 얹지 않는다 (v183 원칙: 표식은 세계 안에) ──
+      if (d._packMit > 0.1 && !d.isBoss) {
+        // 군집 오라 — 발밑이 옅게 물든다. 진할수록 단단하다. 흩어놓으면 사라진다
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.3, d._packMit * 0.7);
+        ctx.fillStyle = d._led ? '#c9d94a' : '#8a8074';
+        ctx.beginPath();
+        ctx.ellipse(d.x, d.y + d.r * 0.78, d.r * 1.15, d.r * 0.42, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      if (d.isLeader && !d.isBoss) {
+        // 리더 — 머리 위 작은 깃. 매듭이 어디 있는지 한눈에
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#c9d94a';
+        const ly = d.y - d.r - 13;
+        ctx.fillRect(d.x - 0.5, ly, 1.5, 11);
+        ctx.beginPath();
+        ctx.moveTo(d.x + 1, ly); ctx.lineTo(d.x + 9, ly + 3); ctx.lineTo(d.x + 1, ly + 6);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      if (d._shakenT > 0) {
+        // 동요 — 흔들리는 동안 발밑이 어긋난다
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.5, d._shakenT * 0.25);
+        ctx.strokeStyle = '#9aa0b4'; ctx.lineWidth = 1.5;
+        const w = Math.sin(this.blinkT * 22) * 3;
+        ctx.beginPath();
+        ctx.ellipse(d.x + w, d.y + d.r * 0.8, d.r * 0.9, d.r * 0.3, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       // 접촉 예고 — 붉은 부채꼴이 자란다
       if (d._windT > 0) {
         const k = 1 - d._windT / (d._windMax || 0.25);
