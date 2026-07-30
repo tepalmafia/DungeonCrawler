@@ -1670,6 +1670,51 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `리더 사망 → 동료 ${morale.shaken}기 동요 · 이동속도 ${morale.spdBefore} → ${morale.spdAfter} ` +
     '(매듭을 먼저 칠지 방패부터 걷을지가 결정이 된다)');
 
+  // ── 무리 행태 (v186) — 사장: "군집이나 기타 몹들의 행태에 변화를 못 느끼겠는데?" ──
+  const behav = await page.evaluate(() => {
+    Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
+    const p = Game.player; p.god = true; p.x = 480; p.y = 270;
+    // 역할 분류가 63종을 실제로 덮는가 (v185는 이름 목록뿐이라 대부분 'front'로 떨어졌다)
+    const types = [...new Set(CODEX_ENEMIES.map((c) => c.id))];
+    const dist = { front: 0, back: 0, flank: 0 };
+    for (const t of types) {
+      let e = null; try { e = createEnemy(t, 0, 0, false, 1); } catch (x) { continue; }
+      if (e) dist[roleOf(t, e)]++;
+    }
+    // 역할별로 자기 밴드를 지키는가 — 플레이어 코앞(60px)에 세우고 2초
+    const hold = (type) => {
+      Game.enemies.length = 0;
+      const e = createEnemy(type, p.x + 60, p.y, false, 1);
+      e.spawnT = 0; e.hp = e.maxHp = 999; Game.enemies.push(e);
+      e._aware = true;
+      const d0 = Math.hypot(e.x - p.x, e.y - p.y);
+      for (let i = 0; i < 120; i++) { p.x = 480; p.y = 270; Game.tick(1 / 60); }
+      const d1 = Math.hypot(e.x - p.x, e.y - p.y);
+      Game.enemies.length = 0;
+      return { role: roleOf(type, e), d0: Math.round(d0), d1: Math.round(d1) };
+    };
+    const back = hold('archer');
+    const front = hold('skeleton');
+    // 리더가 실제 스폰 경로를 타고 나오는가 (v185는 combatComp만 검사해 0기를 놓쳤다)
+    Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
+    for (let i = 0; i < 120; i++) Game.tick(1 / 60);
+    const leaders = Game.enemies.filter((e) => !e.dead && e.isLeader).length;
+    const alive = Game.enemies.filter((e) => !e.dead).length;
+    return { dist, back, front, leaders, alive };
+  });
+  console.log('  무리행태:', JSON.stringify(behav));
+  ok('role.coversRoster', behav.dist.flank >= 12 && behav.dist.back >= 8 && behav.dist.front >= 15,
+    `역할 분류 전열 ${behav.dist.front} · 후열 ${behav.dist.back} · 측면 ${behav.dist.flank} ` +
+    '(v185는 이름 목록뿐이라 측면이 실전 8개 방에서 0마리였다 — 목록에 없으면 사거리·속도로 판정한다)');
+  ok('behav.rangedKeepsDistance', behav.back.role === 'back' && behav.back.d1 > behav.back.d0 * 1.4,
+    `후열을 코앞(${behav.back.d0}px)에 세우면 2초 뒤 ${behav.back.d1}px로 물러난다 ` +
+    '(v185까지 진형은 **스폰 배치**일 뿐이라 1~2초면 대열이 녹아 전부 얼굴로 몰려왔다)');
+  ok('behav.meleeStillCloses', behav.front.d1 <= behav.front.d0 * 1.3,
+    `전열은 그대로 붙는다 ${behav.front.d0} → ${behav.front.d1}px (근접은 붙는 게 맞다 — 역할이 다르다)`);
+  ok('behav.leadersSpawn', behav.leaders >= 1 && behav.alive > 0,
+    `실제 스폰 경로에서 리더 ${behav.leaders}기 / 적 ${behav.alive} ` +
+    '(v185는 main.js가 pack·leader를 안 넘겨 **실전 8개 방 전부 0기**였다 — 사기 시스템이 통째로 죽어 있었다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
