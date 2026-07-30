@@ -1521,6 +1521,39 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('sub.shrineReachable', sub.firstShrine <= 2 && sub.shrines >= 6,
     `보조 스킬 사당 ${sub.shrines}개 층 · 첫 등장 ${sub.firstShrine}층 (v181은 5·15·25층뿐 = 8층까지 가도 평생 1번)`);
 
+  // ── 조준 표식 (v183) — 사장: "npc 테두리 나오는건 고쳤어? 보기싫어" ──
+  const mark = await page.evaluate(() => {
+    Dungeon.floor = 1; Dungeon.roomIndex = 3; Dungeon.build('combat');
+    const p = Game.player; p.god = true; p.x = 200; p.y = 300;
+    Game.enemies.length = 0;
+    const e = createEnemy('skeleton', 480, 270, 1); e.spawnT = 0; Game.enemies.push(e);
+    const c = Renderer.canvas || document.querySelector('canvas');
+    const g = c.getContext('2d');
+    const box = { x: Math.round(e.x - 40), y: Math.round(e.y - 46), w: 80, h: 92 };
+    const grab = () => g.getImageData(box.x, box.y, box.w, box.h).data;
+    p._aimTarget = null; Game.render();
+    const A = grab();
+    p._aimTarget = e; Game.render();
+    const B = grab();
+    // 표식이 그린 픽셀의 위치 분포 — 스프라이트 **몸통 위**를 덮는가
+    const bodyTop = 46 - Math.round(e.r) - 6, bodyBot = 46 + Math.round(e.r) * 0.6;
+    let total = 0, onBody = 0;
+    for (let i = 0; i < A.length; i += 4) {
+      const d = Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]);
+      if (d <= 20) continue;
+      total++;
+      const px = (i / 4) % box.w, py = Math.floor((i / 4) / box.w);
+      if (py >= bodyTop && py <= bodyBot && px > 14 && px < box.w - 14) onBody++;
+    }
+    p._aimTarget = null;
+    return { total, onBody, onBodyPct: total ? Math.round(onBody / total * 100) : 0 };
+  });
+  console.log('  조준표식:', JSON.stringify(mark));
+  ok('aimMark.notOverBody', mark.total > 20 && mark.onBodyPct <= 35,
+    `조준 표식 픽셀 ${mark.total} 중 적 몸통을 덮는 비율 ${mark.onBodyPct}% ` +
+    '(v182는 붉은 모서리 브래킷 4개를 몸 위에 씌워 HUD 상자를 세계에 얹은 꼴이었다 — ' +
+    '표식은 발밑 호와 머리 위 쐐기로, 정보는 지키되 스프라이트를 가리지 않는다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
