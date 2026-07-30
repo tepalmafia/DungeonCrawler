@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 186;
+const GAME_VERSION = 187;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -58,7 +58,9 @@ const Game = {
 
   roomCleared: false,
   transition: null,
-  codexTab: 0, // 도감 탭 (0 몬스터 / 1 유물 / 2 특성)
+  codexTab: 0, // 도감 탭 (0 몬스터 / 1 유물 / 2 특성 / 3 증거)
+  codexPage: 0,
+  codexSel: 0, // 도감 커서 (v187) — 호버 없는 기기에서 사연을 여는 유일한 수단
   testMode: false, // 테스트 모드 (거점에서 T, 또는 ?test=1)
   showInventory: false, // 획득 목록 (Tab)
   choiceLockT: 0,   // 카드 UI 오클릭 방지 잠금 시간
@@ -256,6 +258,7 @@ const Game = {
       this._heatNotice = { text: `☠ 현상금 ${this.heat}단계 — 왕국이 너를 노린다 (거점 우측 상단 [−][+]로 조절)`, color: '#e43b44' };
     }
     this._freshUnlocks = null; // 지난 런의 해금 소식은 정산 화면과 함께 접는다 (v160)
+    this._metRun = {}; this._meetQ = []; this._meet = null; // 첫 조우 사연 (v187) — 런마다 다시 만난다
     this.gold = 0; // 런 화폐 — 무덤까지 못 가져간다 (상인에게만 쓴다)
     this.player = createPlayer(0, 0, Meta.data.cls);
     this.player.rerolls = Meta.lvl('reroll'); // 환생 각인: 런당 카드 리롤 횟수
@@ -560,11 +563,15 @@ const Game = {
     this._roleN = null; // v181 진형 역할 카운터 — 방마다 새로 센다
 
     if (type === 'combat') {
-      Dungeon.combatComp(depth).forEach((s, i) => {
+      const comp = Dungeon.combatComp(depth);
+      this._roomKind = comp.roomKind || null; // v187 방 성격 — 검증·연출이 같은 값을 본다
+      comp.forEach((s, i) => {
         // v186: pack·leader를 여기서 안 넘겨서 **리더가 한 기도 안 생겼다** (실측 8개 방 전부 0기).
         // v185의 사기 시스템이 통째로 죽어 있었다 — 회귀는 combatComp만 봤지 스폰 경로를 안 봤다
+        // v187: hpMul(위협 예산 배분)도 함께 넘긴다 — v186과 같은 실수(필드 누락으로
+        // 기능이 통째로 죽는)를 반복하지 않도록 회귀 검증이 이 경로를 직접 본다
         this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini,
-          pack: s.pack, leader: s.leader });
+          pack: s.pack, leader: s.leader, hpMul: s.hpMul });
       });
       // M2: 탈영병 (선함) — 1~4막 7%: 싸우지 않는 병사가 다가와 무언가를 건네고 사라진다
       if (Dungeon.floor >= 2 && Dungeon.floor <= 40 && RNG.chance(0.07)) {
@@ -681,7 +688,11 @@ const Game = {
       this.enemies.push(boss);
       // 보스 등장 카드 (v142): 이름·기믹을 정면으로 — 싸우기 전에 "누구인지"부터 각인
       boss.spawnT = 1.2;
-      this._bossIntro = { t: 2.4, name: boss.name, label: [boss.affixLabel, boss.def.mechanic ? boss.def.mechanic.label : ''].filter(Boolean).join(' · ') };
+      // v187: 이름·기믹 밑에 **죄목** 한 줄. 이 보스가 나에게 무슨 짓을 했는지가
+      // 싸우기 전에 화면에 있어야 한다 — 사장 지적 "보스에게 사연을 못 느끼고"
+      const bcx = Meta.codexOf('boss' + boss.defId);
+      this._bossIntro = { t: 2.8, name: boss.name, crime: bcx ? bcx.lore : '',
+        label: [boss.affixLabel, boss.def.mechanic ? boss.def.mechanic.label : ''].filter(Boolean).join(' · ') };
       this.banner = null; // 카드가 화면을 갖는다 — 유언 배너는 카드가 걷힌 뒤
       this._storyQ = this._storyQ || [];
       this._storyQ.push({ text: boss.def.banner, color: '#e43b44' });
@@ -1032,7 +1043,10 @@ Object.assign(Game, GameCombat, GameRewards, GamePlay, GameScreens, GameRender);
     last = now;
     acc += dt;
     // 게임패드 폴링 — 키 입력으로 번역 (선택 화면에선 십자키 = 번호)
-    const MENU_STATES = ['levelup', 'relic', 'route', 'skillmod', 'hub', 'over', 'victory', 'title'];
+    // v187: 'codex'·'altar'·'classes' 추가 — 패드로 거점에 들어가면 도감·제단·직업 선택에서
+    // 입력이 끊겼다. 사연을 도감에 넣어도 패드로는 닿을 수 없었다는 뜻이다
+    const MENU_STATES = ['levelup', 'relic', 'route', 'skillmod', 'hub', 'over', 'victory', 'title',
+      'codex', 'altar', 'classes'];
     Input.pollGamepad(MENU_STATES.includes(Game.state) || Game.paused);
     while (acc >= STEP) {
       // 배속 (?ff=N): 프레임당 N틱 — 봇 소크 테스트용

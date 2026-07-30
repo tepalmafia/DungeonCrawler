@@ -213,7 +213,12 @@ const HUD = {
       const t = b.life / b.maxLife;
       ctx.globalAlpha = Math.min(1, t * 3);
       ctx.textAlign = 'center';
+      // v187: 화면 폭에 맞춰 줄인다. 종전엔 38px 고정이라 긴 배너
+      // (「스킬 사당이 빛난다 — …」, 보스 유언 등)가 좌우로 잘려 나갔다
       ctx.font = 'bold 38px Galmuri11, monospace';
+      const maxW = Renderer.W - 48;
+      const bw = ctx.measureText(b.text).width;
+      if (bw > maxW) ctx.font = `bold ${Math.max(15, Math.floor(38 * maxW / bw))}px Galmuri11, monospace`;
       ctx.fillStyle = '#08080f';
       ctx.fillText(b.text, Renderer.W / 2 + 3, 173);
       ctx.fillStyle = b.color || '#f7b32b';
@@ -1417,7 +1422,7 @@ const HUD = {
       ctx.textAlign = 'right';
       ctx.font = '12px Galmuri11, monospace';
       ctx.fillStyle = '#8f8577';
-      ctx.fillText(`◀ ${game.codexPage + 1} / ${pages} ▶  (←→ 페이지)`, Renderer.W - 24, 122);
+      ctx.fillText(`◀ ${game.codexPage + 1} / ${pages} ▶  (Q·E 쪽 넘김 · 방향키 선택)`, Renderer.W - 24, 122);
     }
     return game.codexPage * pageSize;
   },
@@ -1426,6 +1431,27 @@ const HUD = {
     const w = 124, h = 34, gap = 10;
     const x0 = (Renderer.W - (4 * w + 3 * gap)) / 2;
     return [0, 1, 2, 3].map((i) => ({ x: x0 + i * (w + gap), y: 84, w, h }));
+  },
+
+  // ── 도감 격자 규격 (v187) ────────────────────────────────────────────────
+  // 종전엔 사연이 **마우스 호버로만** 열렸다. 폰·패드에는 호버가 없다 = 사연이 없다.
+  // 그래서 격자를 좌측으로 몰고 우측에 상설 상세 패널을 세운다.
+  // 셀 좌표를 여기 한 곳에서 계산해 렌더와 입력(_tickCodex)이 같은 표를 본다
+  CODEX_GRID: {
+    0: { cols: 8, rows: 6, cw: 82, chh: 56 },   // 몬스터 89종 → 48칸/쪽 = 2쪽
+    1: { cols: 5, rows: 4, cw: 131, chh: 84 },  // 유물
+    2: { cols: 6, rows: 5, cw: 109, chh: 67 },  // 특성
+  },
+  codexGeom(tab) {
+    const g = this.CODEX_GRID[tab];
+    if (!g) return null;
+    return { ...g, page: g.cols * g.rows, x0: 14, y0: 132, panelX: 686, panelW: 260 };
+  },
+  codexCellRect(tab, i) {
+    const g = this.codexGeom(tab);
+    if (!g) return null;
+    return { x: g.x0 + (i % g.cols) * g.cw + 3, y: g.y0 + Math.floor(i / g.cols) * g.chh,
+      w: g.cw - 6, h: g.chh - 6 };
   },
 
   // 스프라이트를 지정한 상자 안에 픽셀 퍼펙트로 맞춰 그린다
@@ -1464,63 +1490,76 @@ const HUD = {
     });
 
     let hovered = null;
+    // v187: 커서 선택 — 호버가 없는 기기(폰·패드)에서도 사연이 열린다.
+    // 마우스가 셀 위에 있으면 커서도 그리로 따라간다 (두 입력이 같은 상태를 본다)
+    const geom = this.codexGeom(game.codexTab);
+    let selDetail = null;
+    const cell = (i, items, build) => {
+      const r = this.codexCellRect(game.codexTab, i);
+      const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
+      if (hover) game.codexSel = i;
+      const sel = game.codexSel === i;
+      if (sel) selDetail = build();
+      ctx.fillStyle = sel ? '#242438' : '#141420';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      return { r, sel };
+    };
 
     if (game.codexTab === 0) {
-      // 몬스터: 10열 컴팩트 그리드 — 89종+ 페이지네이션 (한 화면 6행 = 60칸)
       const found = CODEX_ENEMIES.filter((e) => codex.kills[e.id.startsWith('boss') ? 'boss' + e.id.slice(4) : e.id] > 0).length;
       this._codexHeader(ctx, found, CODEX_ENEMIES.length);
-      const cols = 10, cw = 94, chh = 59;
-      const x0 = (Renderer.W - cols * cw) / 2;
-      const start = this._codexPager(ctx, game, CODEX_ENEMIES.length, 60);
-      CODEX_ENEMIES.slice(start, start + 60).forEach((e, i) => {
+      const start = this._codexPager(ctx, game, CODEX_ENEMIES.length, geom.page);
+      const page = CODEX_ENEMIES.slice(start, start + geom.page);
+      game.codexSel = Math.min(Math.max(0, game.codexSel || 0), page.length - 1);
+      page.forEach((e, i) => {
         const killKey = e.boss ? 'boss' + e.id.slice(4) : e.id;
         const kills = codex.kills[killKey] || 0;
-        const r = { x: x0 + (i % cols) * cw + 3, y: 132 + Math.floor(i / cols) * chh, w: cw - 6, h: chh - 6 };
-        const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
-        if (hover) hovered = { name: kills > 0 ? `${e.name} (처치 ${kills})` : '???', desc: kills > 0 ? e.desc : '아직 만나지 못했다...' };
-        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.strokeStyle = kills > 0 ? (e.boss ? '#e43b44' : '#4a4a5c') : '#26262f';
-        ctx.lineWidth = 1;
+        const { r, sel } = cell(i, page, () => ({
+          name: kills > 0 ? e.name : '???', sprite: kills > 0 ? e.sprite : null,
+          side: kills > 0 ? e.side : null, boss: e.boss,
+          lore: kills > 0 ? e.lore : '아직 만나지 못했다. 무덤 어딘가에서 기다리고 있다.',
+          desc: kills > 0 ? e.desc : '', foot: kills > 0 ? `처치 ${kills}` : '미발견',
+          last: kills > 0 ? e.last : null,
+        }));
+        ctx.strokeStyle = sel ? '#f7b32b' : kills > 0 ? (e.boss ? '#e43b44' : '#4a4a5c') : '#26262f';
+        ctx.lineWidth = sel ? 2 : 1;
         ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.textAlign = 'center';
         if (kills > 0) {
-          this._fitSprite(ctx, Sprites[e.sprite], r.x + r.w / 2, r.y + 22, 30);
-          ctx.font = '10px Galmuri11, monospace';
+          this._fitSprite(ctx, Sprites[e.sprite], r.x + r.w / 2, r.y + 21, 28);
+          ctx.font = '8.5px Galmuri11, monospace';
           ctx.fillStyle = e.boss ? '#e43b44' : '#e8e0cf';
-          ctx.textAlign = 'center';
-          ctx.fillText(e.name.length > 7 ? e.name.slice(0, 7) : e.name, r.x + r.w / 2, r.y + r.h - 6);
+          ctx.fillText(e.name.length > 8 ? e.name.slice(0, 8) : e.name, r.x + r.w / 2, r.y + r.h - 5);
         } else {
           ctx.font = 'bold 18px Galmuri11, monospace';
           ctx.fillStyle = '#33333f';
-          ctx.textAlign = 'center';
           ctx.fillText('?', r.x + r.w / 2, r.y + r.h / 2 + 6);
         }
       });
     } else if (game.codexTab === 1) {
-      // 유물: 등급색 테두리
       const found = RELICS.filter((rl) => codex.relics[rl.id]).length;
       this._codexHeader(ctx, found, RELICS.length);
-      const cols = 7, cw = 128, chh = 96;
-      const x0 = (Renderer.W - cols * cw) / 2;
-      const start = this._codexPager(ctx, game, RELICS.length, 21);
-      RELICS.slice(start, start + 21).forEach((rl, i) => {
+      const start = this._codexPager(ctx, game, RELICS.length, geom.page);
+      const page = RELICS.slice(start, start + geom.page);
+      game.codexSel = Math.min(Math.max(0, game.codexSel || 0), page.length - 1);
+      page.forEach((rl, i) => {
         const owned = !!codex.relics[rl.id];
         const rar = RARITY[rl.rarity];
-        const r = { x: x0 + (i % cols) * cw + 4, y: 138 + Math.floor(i / cols) * chh, w: cw - 8, h: chh - 8 };
-        const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
-        if (hover) hovered = { name: owned ? `[${rar.label}] ${rl.name}` : '???', desc: owned ? rl.desc : '아직 발견하지 못했다...' };
-        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.strokeStyle = owned ? rar.color : '#26262f';
-        ctx.lineWidth = owned && rl.rarity === 'legendary' ? 2 : 1;
+        const { r, sel } = cell(i, page, () => ({
+          name: owned ? rl.name : '???', icon: owned ? Icons.relic(rl.id) : null,
+          lore: owned ? (rl.lore || rl.desc) : '아직 발견하지 못했다.',
+          desc: owned && rl.lore ? rl.desc : '', foot: owned ? rar.label : '미발견',
+          tint: rar.color,
+        }));
+        ctx.strokeStyle = sel ? '#f7b32b' : owned ? rar.color : '#26262f';
+        ctx.lineWidth = sel ? 2 : owned && rl.rarity === 'legendary' ? 2 : 1;
         ctx.strokeRect(r.x, r.y, r.w, r.h);
         ctx.textAlign = 'center';
         if (owned) {
-          const ic = Icons.relic(rl.id);
-          ctx.drawImage(ic, r.x + r.w / 2 - 21, r.y + 12, 42, 42);
-          ctx.font = '11px Galmuri11, monospace';
+          ctx.drawImage(Icons.relic(rl.id), r.x + r.w / 2 - 19, r.y + 10, 38, 38);
+          ctx.font = '10px Galmuri11, monospace';
           ctx.fillStyle = '#e8e0cf';
-          ctx.fillText(rl.name, r.x + r.w / 2, r.y + r.h - 12);
+          ctx.fillText(rl.name.length > 9 ? rl.name.slice(0, 9) : rl.name, r.x + r.w / 2, r.y + r.h - 10);
         } else {
           ctx.font = 'bold 24px Galmuri11, monospace';
           ctx.fillStyle = '#33333f';
@@ -1528,31 +1567,29 @@ const HUD = {
         }
       });
     } else if (game.codexTab === 2) {
-      // 특성: 획득 횟수 표시
       const found = TRAITS.filter((t) => codex.traits[t.id] > 0).length;
       this._codexHeader(ctx, found, TRAITS.length);
-      const cols = 8, cw = 112, chh = 82;
-      const x0 = (Renderer.W - cols * cw) / 2;
-      const start = this._codexPager(ctx, game, TRAITS.length, 32);
-      TRAITS.slice(start, start + 32).forEach((t, i) => {
+      const start = this._codexPager(ctx, game, TRAITS.length, geom.page);
+      const page = TRAITS.slice(start, start + geom.page);
+      game.codexSel = Math.min(Math.max(0, game.codexSel || 0), page.length - 1);
+      page.forEach((t, i) => {
         const picks = codex.traits[t.id] || 0;
-        const r = { x: x0 + (i % cols) * cw + 3, y: 138 + Math.floor(i / cols) * chh, w: cw - 6, h: chh - 6 };
-        const hover = mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
-        if (hover) hovered = { name: picks > 0 ? `[${t.tag}] ${t.name}` : '???', desc: picks > 0 ? t.desc : '아직 선택하지 못했다...' };
-        ctx.fillStyle = hover ? '#1d1d2e' : '#141420';
-        ctx.fillRect(r.x, r.y, r.w, r.h);
-        ctx.strokeStyle = picks > 0 ? t.color : '#26262f';
-        ctx.lineWidth = 1;
+        const { r, sel } = cell(i, page, () => ({
+          name: picks > 0 ? t.name : '???', icon: picks > 0 ? Icons.trait(t.id) : null,
+          lore: picks > 0 ? t.desc : '아직 선택하지 못했다.', desc: '',
+          foot: picks > 0 ? `[${t.tag}] 선택 ${picks}회` : '미발견', tint: t.color,
+        }));
+        ctx.strokeStyle = sel ? '#f7b32b' : picks > 0 ? t.color : '#26262f';
+        ctx.lineWidth = sel ? 2 : 1;
         ctx.strokeRect(r.x, r.y, r.w, r.h);
         ctx.textAlign = 'center';
         if (picks > 0) {
-          const ic = Icons.trait(t.id);
-          ctx.drawImage(ic, r.x + r.w / 2 - 16, r.y + 7, 32, 32);
-          ctx.font = '10px Galmuri11, monospace';
+          ctx.drawImage(Icons.trait(t.id), r.x + r.w / 2 - 15, r.y + 6, 30, 30);
+          ctx.font = '9px Galmuri11, monospace';
           ctx.fillStyle = '#e8e0cf';
-          ctx.fillText(t.name, r.x + r.w / 2, r.y + r.h - 20);
+          ctx.fillText(t.name.length > 8 ? t.name.slice(0, 8) : t.name, r.x + r.w / 2, r.y + r.h - 16);
           ctx.fillStyle = '#666a80';
-          ctx.fillText(`x${picks}`, r.x + r.w / 2, r.y + r.h - 8);
+          ctx.fillText(`x${picks}`, r.x + r.w / 2, r.y + r.h - 5);
         } else {
           ctx.font = 'bold 20px Galmuri11, monospace';
           ctx.fillStyle = '#33333f';
@@ -1611,7 +1648,8 @@ const HUD = {
       ctx.textAlign = 'center';
     }
 
-    // 하단 상세 정보
+    // 상세 패널 (v187) — 격자 오른쪽에 상설. 호버 없이도 커서가 가리키는 것이 늘 열려 있다
+    if (geom) this._codexPanel(ctx, geom, selDetail);
     if (hovered) {
       ctx.textAlign = 'center';
       ctx.font = 'bold 14px Galmuri11, monospace';
@@ -1623,6 +1661,84 @@ const HUD = {
     }
 
     this._drawBackButton(ctx);
+  },
+
+  // 상세 패널 — 커서가 가리키는 항목의 「사연」이 주인공이고, 공략은 그 아래 각주다.
+  // 사장 지적("적들 사연을 도감에서 보여주는건?" / "사연을 못 느끼고")의 직접 답:
+  // 종전 하단 한 줄은 공략 힌트였고 그나마 마우스가 있어야 열렸다
+  _codexPanel(ctx, g, d) {
+    const x = g.panelX, y = g.y0, w = g.panelW, h = 336;
+    ctx.fillStyle = '#12121c';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#3a3a48';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    let ty = y + 16;
+    if (!d) {
+      ctx.textAlign = 'center';
+      ctx.font = '12px Galmuri11, monospace';
+      ctx.fillStyle = '#4a4a5c';
+      ctx.fillText('←→↑↓ 로 고르면', x + w / 2, y + h / 2 - 8);
+      ctx.fillText('여기에 사연이 열린다', x + w / 2, y + h / 2 + 12);
+      return;
+    }
+    // 초상
+    const img = d.sprite ? Sprites[d.sprite] : d.icon;
+    if (img) {
+      const box = 76;
+      const s = Math.max(1, Math.floor(box / Math.max(img.width, img.height)));
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, Math.round(x + w / 2 - img.width * s / 2), ty, img.width * s, img.height * s);
+      ty += Math.min(box, img.height * s) + 14;
+    } else {
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 40px Galmuri11, monospace';
+      ctx.fillStyle = '#2a2a36';
+      ctx.fillText('?', x + w / 2, ty + 54);
+      ty += 78;
+    }
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px Galmuri11, monospace';
+    ctx.fillStyle = d.boss ? '#e43b44' : d.tint || '#e8e0cf';
+    this._wrapText(ctx, d.name, x + w / 2, ty, w - 20, 18);
+    ty += d.name.length > 11 ? 36 : 20;
+    // 진영 — 이 나라에서 어느 쪽이었나
+    if (d.side) {
+      ctx.font = '11px Galmuri11, monospace';
+      ctx.fillStyle = Meta.sideColor(d.side);
+      ctx.fillText(`— ${Meta.sideLabel(d.side)} —`, x + w / 2, ty);
+      ty += 18;
+    }
+    if (d.foot) {
+      ctx.font = '10px Galmuri11, monospace';
+      ctx.fillStyle = '#666a80';
+      ctx.fillText(d.foot, x + w / 2, ty);
+      ty += 20;
+    }
+    ctx.strokeStyle = '#2a2a36';
+    ctx.beginPath(); ctx.moveTo(x + 18, ty - 6); ctx.lineTo(x + w - 18, ty - 6); ctx.stroke();
+    ty += 6;
+    // 사연 — 이 패널의 주인공
+    ctx.textAlign = 'left';
+    ctx.font = '11.5px Galmuri11, monospace';
+    ctx.fillStyle = '#c8c2b4';
+    const loreLines = this._wrapLines(ctx, d.lore || '', w - 32);
+    for (const ln of loreLines) { ctx.fillText(ln, x + 16, ty); ty += 16; }
+    // 유언 (보스)
+    if (d.last) {
+      ty += 8;
+      ctx.font = 'italic 11px Galmuri11, monospace';
+      ctx.fillStyle = '#9a86c8';
+      for (const ln of this._wrapLines(ctx, `"${d.last}"`, w - 32)) { ctx.fillText(ln, x + 16, ty); ty += 15; }
+    }
+    // 공략은 각주
+    if (d.desc) {
+      ty += 10;
+      ctx.font = '10.5px Galmuri11, monospace';
+      ctx.fillStyle = '#6f7488';
+      for (const ln of this._wrapLines(ctx, '▸ ' + d.desc, w - 32)) { ctx.fillText(ln, x + 16, ty); ty += 14; }
+    }
+    ctx.textAlign = 'center';
   },
 
   _codexHeader(ctx, found, total) {

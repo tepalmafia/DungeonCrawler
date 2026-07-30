@@ -1462,13 +1462,32 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   // ── 무리와 진형 (v181) ──
   await boot(page, { cls: 'knight', heat: 0 });
   const pack = await page.evaluate(() => {
-    // ① 구성: 손제작 무리가 뼈대인가 (종전엔 45%만 세트, 55%는 순수 랜덤)
+    // ① 구성: 방마다 성격이 갈리는가 (v187 방 규격).
+    // v186까지는 "손제작 무리가 100%"였고, 그게 곧 문제였다 — 항상 무리면 무리가 안 보인다.
+    // 이제 재는 것은 '무리가 있느냐'가 아니라 **홑몸 방과 무리 방이 실제로 다르냐**다
     let setUsed = 0, packSum = 0, N = 200;
+    const kinds = {}, bodies = {}, kpacks = {};
     for (let i = 0; i < N; i++) {
       Dungeon.floor = 1 + (i % 10); Dungeon.roomIndex = 2 + (i % 5);
       const c = Dungeon.combatComp(2 + (i % 4));
       if (c.setUsed) setUsed++;
       if (c.packs) packSum += c.packs.length;
+      const k = c.roomKind || '?';
+      kinds[k] = (kinds[k] || 0) + 1;
+      bodies[k] = (bodies[k] || 0) + c.length;
+      kpacks[k] = (kpacks[k] || 0) + (c.packs ? c.packs.length : 0);
+    }
+    const avgBody = (k) => kinds[k] ? +(bodies[k] / kinds[k]).toFixed(2) : 0;
+    const avgPack = (k) => kinds[k] ? +(kpacks[k] / kinds[k]).toFixed(2) : 0;
+    // 위협 예산 보존 확인: 무리 방은 개체가 약해야 한다 (hpMul이 실제로 실렸는가)
+    Dungeon.floor = 3; Dungeon.roomIndex = 3;
+    let mulMin = 9, mulMax = 0;
+    for (let i = 0; i < 60; i++) {
+      for (const s of Dungeon.combatComp(3)) {
+        const m = s.hpMul == null ? 1 : s.hpMul;
+        if (m < mulMin) mulMin = m;
+        if (m > mulMax) mulMax = m;
+      }
     }
     // ② 배치: 역할이 거리로 갈리는가
     Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
@@ -1501,14 +1520,24 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       }
     }
     return { setPct: Math.round(setUsed / N * 100), packsAvg: +(packSum / N).toFixed(2),
+      kinds, soloPacks: avgPack('solo'), packPacks: avgPack('pack'), duoPacks: avgPack('duo'),
+      soloBody: avgBody('solo'), packBody: avgBody('pack'), mulMin: +mulMin.toFixed(2), mulMax: +mulMax.toFixed(2),
       front, back, flank, samples: n2,
       coverWalls: +(cw / (n2 || 1)).toFixed(2), openWalls: +(ow / (n2 || 1)).toFixed(2),
       chokeFound: chokeN >= n2 * 0.8, terrainDiffers: diffN >= n2 * 0.7 };
   });
   console.log('  무리:', JSON.stringify(pack));
-  ok('pack.handmadeIsDefault', pack.setPct >= 95 && pack.packsAvg >= 1.5,
+  ok('room.kindsContrast', pack.soloPacks === 0 && pack.packPacks >= 1 && pack.packBody > pack.soloBody * 1.5,
+    `홑몸 방 무리 ${pack.soloPacks}개·몸 ${pack.soloBody} vs 무리 방 무리 ${pack.packPacks}개·몸 ${pack.packBody} ` +
+    `(분포 ${JSON.stringify(pack.kinds)}) — v186은 24개 방 **전부** 무리 1개·리더 1기였다. ` +
+    '무리가 죽어 있던 게 아니라 상수였고, 상수는 아무것도 안 보여준다');
+  ok('room.budgetShifts', pack.mulMin < 0.8 && pack.mulMax > 1.2,
+    `개체 강도 배수 ${pack.mulMin} ~ ${pack.mulMax} — 몸을 늘린 방은 개체가 약해진다 ` +
+    '(위협 예산 보존: 대비는 만들되 난이도 곡선은 건드리지 않는다. 이 값이 전부 1이면 물량만 늘린 것)');
+  ok('pack.handmadeIsDefault', pack.setPct >= 60 && pack.packsAvg >= 0.7,
     `손제작 무리가 뼈대인 방 ${pack.setPct}% · 방당 무리 ${pack.packsAvg}개 ` +
-    '(v180은 45%만 세트, 나머지 55%는 RNG.pick 순수 랜덤 = 무리가 아니라 개체 N개였다)');
+    '(v180은 45%만 세트, 나머지 55%는 RNG.pick 순수 랜덤 = 무리가 아니라 개체 N개였다. ' +
+    'v187부터 홑몸 방 25%는 **의도적으로** 무리가 없으므로 100%가 아닌 것이 정상이다)');
   ok('pack.rolesFormRanks', pack.back > pack.front && pack.flank > pack.front,
     `진형 거리 전열 ${pack.front}px < 측면 ${pack.flank}px < 후열 ${pack.back}px ` +
     '(v180은 전부 randomSpawnPos — 방 아무 데나 흩뿌려서 무리를 깨는 순서가 없었다)');
@@ -1607,13 +1636,19 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   await boot(page, { cls: 'knight', heat: 0 });
   const morale = await page.evaluate(() => {
     // ① 무리마다 리더가 하나씩 붙는가
-    let packs = 0, leaders = 0;
+    let packs = 0, leaders = 0, badPacks = 0;
     for (let i = 0; i < 120; i++) {
       Dungeon.floor = 1 + (i % 10); Dungeon.roomIndex = 2 + (i % 5);
       const c = Dungeon.combatComp(2 + (i % 4));
       const ids = new Set(c.filter((u) => u.pack).map((u) => u.pack));
       packs += ids.size;
       leaders += c.filter((u) => u.leader).length;
+      // v187: 홑몸 방은 무리가 0인 것이 **설계**다. 그러니 "방마다 무리가 있는가"는
+      // 더 이상 불변식이 아니다. 진짜 불변식은 **무리 하나에 매듭 하나** —
+      // 리더 없는 무리(끊을 곳이 없다)도, 리더 둘인 무리(어느 쪽이 매듭인지 모른다)도 결함이다
+      const perPack = {};
+      for (const u of c) if (u.pack) perPack[u.pack] = (perPack[u.pack] || 0) + (u.leader ? 1 : 0);
+      for (const k in perPack) if (perPack[k] !== 1) badPacks++;
     }
     // ② 뭉치면 단단해지는가 — 같은 적을 혼자 / 다섯이 뭉쳤을 때
     Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
@@ -1653,13 +1688,15 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     Game.killEnemy(L, { x: 1, y: 0 });
     const shaken = mates.filter((m) => m._shakenT > 0).length;
     const spdAfter = mates[0].effSpeed();
-    return { packsAvg: +(packs / 120).toFixed(2), leadersAvg: +(leaders / 120).toFixed(2),
+    return { packsAvg: +(packs / 120).toFixed(2), leadersAvg: +(leaders / 120).toFixed(2), badPacks,
       soloMit: +soloMit.toFixed(2), grpMit: +grpMit.toFixed(2),
       soloDmg, grpDmg, dotDmg, shaken, spdBefore: Math.round(spdBefore), spdAfter: Math.round(spdAfter) };
   });
   console.log('  무리사기:', JSON.stringify(morale));
-  ok('pack.hasLeaders', morale.leadersAvg >= 1 && Math.abs(morale.leadersAvg - morale.packsAvg) < 0.6,
-    `방당 무리 ${morale.packsAvg}개 · 리더 ${morale.leadersAvg}기 (무리마다 매듭이 하나씩)`);
+  ok('pack.hasLeaders', morale.badPacks === 0 && morale.leadersAvg > 0.5,
+    `방당 무리 ${morale.packsAvg}개 · 리더 ${morale.leadersAvg}기 · 매듭이 하나가 아닌 무리 ${morale.badPacks}개 ` +
+    '(v187: 홑몸 방은 무리 0이 설계다. 불변식은 「무리 하나에 리더 하나」 — ' +
+    '리더 없는 무리는 끊을 곳이 없고, 리더 둘인 무리는 어느 쪽이 매듭인지 알 수 없다)');
   ok('pack.cohesionMitigates', morale.grpMit > morale.soloMit && morale.grpDmg < morale.soloDmg,
     `혼자 경감 ${morale.soloMit} → 다섯이 뭉치면 ${morale.grpMit} · 같은 20피해가 ${morale.soloDmg} → ${morale.grpDmg} ` +
     '(뭉치면 단단해진다 — 흩어놓는 것이 플레이어의 수가 된다)');
@@ -1714,6 +1751,112 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('behav.leadersSpawn', behav.leaders >= 1 && behav.alive > 0,
     `실제 스폰 경로에서 리더 ${behav.leaders}기 / 적 ${behav.alive} ` +
     '(v185는 main.js가 pack·leader를 안 넘겨 **실전 8개 방 전부 0기**였다 — 사기 시스템이 통째로 죽어 있었다)');
+
+  // ── 사연 (v187) ────────────────────────────────────────────────────────
+  // 사장: "전체 잡몹들이나 보스에게 사연을 못 느끼고"
+  // 사연은 89종 전부 있었지만 **도감 안에, 마우스 호버로만** 있었다. 폰에는 호버가 없다.
+  // 그러니 여기서 재는 것은 "데이터가 있느냐"가 아니라 **마우스 없이 닿느냐**다
+  await boot(page, { cls: 'knight', heat: 0 });
+  const lore = await page.evaluate(() => {
+    const miss = CODEX_ENEMIES.filter((e) => !e.lore || !e.side);
+    const bosses = CODEX_ENEMIES.filter((e) => e.boss);
+    const missLast = bosses.filter((e) => !e.last);
+    // 사연과 공략이 실제로 다른 문장인가 (같으면 사연을 '추가'한 게 아니라 이름만 바꾼 것)
+    const same = CODEX_ENEMIES.filter((e) => e.lore === e.desc).length;
+    // 첫 조우 카드가 플레이 중 실제로 뜨는가 — 스폰 경로를 직접 태운다
+    Dungeon.floor = 1; Dungeon.roomIndex = 2;
+    Game.state = 'play'; Game._metRun = {}; Game._meetQ = []; Game._meet = null;
+    Game.banner = null;
+    World.buildRoom('combat'); Game.onRoomBuilt('combat');
+    let meetShown = null;
+    for (let i = 0; i < 300 && !meetShown; i++) {
+      Game.tick(1 / 60);
+      Game.banner = null;                 // 배너가 줄을 막지 않게 (카드는 배너 뒤에 선다)
+      if (Game._meet) meetShown = { name: Game._meet.c.name, lore: Game._meet.c.lore };
+    }
+    // 두 번째 조우에서는 조용한가 (도배 방지)
+    const beforeQ = (Game._meetQ || []).length;
+    Game.noteFirstMeet(meetShown ? Game.enemies.find((e) => !e.dead).type : 'slime');
+    const repeat = (Game._meetQ || []).length - beforeQ;
+    return { total: CODEX_ENEMIES.length, miss: miss.length, bosses: bosses.length,
+      missLast: missLast.length, same, meetShown, repeat };
+  });
+  console.log('  사연:', JSON.stringify(lore));
+  ok('lore.everyEnemyHasOne', lore.miss === 0 && lore.missLast === 0,
+    `사연 없는 적 ${lore.miss}/${lore.total} · 유언 없는 보스 ${lore.missLast}/${lore.bosses} ` +
+    '(새 몹을 넣을 때 사연을 빼먹으면 여기서 걸린다 — 규격이 50층까지 확장되는 방식이다)');
+  ok('lore.differsFromTactics', lore.same === 0,
+    `사연과 공략이 같은 문장인 항목 ${lore.same} ` +
+    '(종전 desc는 「조준선이 붉어지면 발사된다」 — 그건 사연이 아니라 힌트다. 둘은 다른 칸이어야 한다)');
+  ok('lore.firstMeetShowsInPlay', !!lore.meetShown && lore.repeat === 0,
+    lore.meetShown ? `플레이 중 첫 조우 카드 — 「${lore.meetShown.name}」 ${lore.meetShown.lore.slice(0, 24)}… · 재조우 침묵 ${lore.repeat === 0}`
+      : '첫 조우 카드가 뜨지 않았다');
+
+  const codexNav = await page.evaluate(() => {
+    // 마우스를 화면 밖으로 치우고 **키보드만으로** 사연을 여는 경로
+    Input.mouse.x = -999; Input.mouse.y = -999;
+    Game.state = 'codex'; Game.codexTab = 0; Game.codexPage = 0; Game.codexSel = 0;
+    Meta.data.codex.kills = {};
+    for (const e of CODEX_ENEMIES.slice(0, 12)) Meta.data.codex.kills[e.boss ? 'boss' + e.id.slice(4) : e.id] = 3;
+    const c = Renderer.ctx;
+    const drawn = [];
+    const orig = c.fillText.bind(c);
+    c.fillText = (t, x, y) => { drawn.push(String(t)); return orig(t, x, y); };
+    HUD.drawCodex(c, 0, Game);
+    // 커서를 오른쪽으로 두 칸 — 방향키만으로 다른 항목이 열려야 한다
+    const first = drawn.slice();
+    const press = (code) => { Input.justPressed[code] = true; Game._tickCodex(); Input.justPressed = {}; };
+    press('ArrowRight'); press('ArrowRight');
+    drawn.length = 0;
+    HUD.drawCodex(c, 0, Game);
+    const second = drawn.slice();
+    c.fillText = orig;
+    const loreOf = (arr, e) => arr.some((t) => e.lore && t.length > 4 && e.lore.indexOf(t) === 0);
+    const e0 = CODEX_ENEMIES[0], e2 = CODEX_ENEMIES[2];
+    // 패드가 도감에 닿는가 (MENU_STATES 누락이면 입력 자체가 안 들어온다)
+    const padReaches = ['codex', 'altar', 'classes'].every((s) =>
+      ['levelup', 'relic', 'route', 'skillmod', 'hub', 'over', 'victory', 'title', 'codex', 'altar', 'classes'].includes(s));
+    return { sel: Game.codexSel, first: loreOf(first, e0), second: loreOf(second, e2),
+      moved: Game.codexSel === 2, padReaches };
+  });
+  console.log('  도감조작:', JSON.stringify(codexNav));
+  ok('codex.readableWithoutMouse', codexNav.moved && codexNav.first && codexNav.second,
+    `마우스를 치운 채 방향키 2회 → 커서 ${codexNav.sel}번 · 사연이 패널에 그려짐(처음 ${codexNav.first} / 이동 후 ${codexNav.second}) ` +
+    '(v186까지 사연은 `if (hover)` 안에 있었다 — 폰으로 하는 사장에게는 존재하지 않는 기능이었다)');
+
+  // ── 무리 체감 (v187) ───────────────────────────────────────────────────
+  const feel = await page.evaluate(() => {
+    Game.restart(4242);
+    Dungeon.floor = 2; Dungeon.roomIndex = 3;
+    Game.state = 'play'; Game.player.god = true;
+    World.buildRoom('combat'); Game.onRoomBuilt('combat');
+    for (let i = 0; i < 240; i++) Game.tick(1 / 60);
+    for (const e of Game.enemies) e._aware = true;
+    // 호령이 실제로 도는가 — 리더가 있는 방에서 8초
+    let rallied = 0;
+    for (let i = 0; i < 480; i++) {
+      Game.tick(1 / 60);
+      for (const e of Game.enemies) e._aware = true;
+      if (Game.enemies.some((e) => !e.isLeader && e._rallyT > 0.5)) rallied++;
+    }
+    const leaders = Game.enemies.filter((e) => !e.dead && e.isLeader).length;
+    // 「무리 방어」가 화면에 뜨는가 — Particles.text 를 가로채 확인
+    const said = [];
+    const op = Particles.text.bind(Particles);
+    Particles.text = (x, y, t, o) => { said.push(String(t)); return op(x, y, t, o); };
+    const grp = Game.enemies.find((e) => e._packMit >= 0.18 && !e.dead);
+    if (grp) Game.damageEnemy(grp, 3, { x: 1, y: 0 }, { feel: true });
+    Particles.text = op;
+    return { leaders, rallied, mitSaid: said.some((t) => t.indexOf('무리 방어') === 0),
+      hadGroup: !!grp, mit: grp ? +grp._packMit.toFixed(2) : 0 };
+  });
+  console.log('  무리체감:', JSON.stringify(feel));
+  ok('pack.rallyFires', feel.leaders === 0 || feel.rallied > 0,
+    `리더 ${feel.leaders}기 · 호령 발생 ${feel.rallied}회/8초 ` +
+    '(무리로 보이게 하는 건 숫자가 아니라 **동시성**이다 — 넷이 제각각 걸어오면 넷이고, 동시에 밀면 무리다)');
+  ok('pack.mitigationIsVisible', !feel.hadGroup || feel.mitSaid,
+    `경감 ${feel.mit} 적을 때렸을 때 「무리 방어」 표시 ${feel.mitSaid} ` +
+    '(v185~186은 14~30%가 **조용히** 깎였다. 보이지 않는 경감은 없는 것과 같다)');
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 

@@ -167,6 +167,36 @@ const GamePlay = {
     }
   },
 
+  // ── 첫 조우 사연 (v187) ────────────────────────────────────────────────
+  // 사장 지적: "전체 잡몹들이나 보스에게 사연을 못 느끼고" — 사연은 89종 전부 있었지만
+  // **도감 안에, 그것도 마우스 호버로만** 있었다. 폰으로 하는 사람에게는 없는 것과 같다.
+  // 사연은 만나는 순간 나와야 한다. 종류당 런당 한 번, 3초. 두 번째부터는 조용하다.
+  noteFirstMeet(type) {
+    if (!type) return;
+    this._metRun = this._metRun || {};
+    if (this._metRun[type]) return;
+    this._metRun[type] = true;
+    const c = Meta.codexOf(type);
+    if (!c || !c.lore || c.boss) return;   // 보스는 등장 카드가 따로 맡는다
+    this._meetQ = this._meetQ || [];
+    if (this._meetQ.length >= 2) return;    // 한 방에 셋씩 밀리면 카드가 전투를 가린다
+    this._meetQ.push(c);
+  },
+
+  tickFirstMeet(dt) {
+    if (this._meet) {
+      this._meet.t -= dt;
+      if (this._meet.t <= 0) this._meet = null;
+      return;
+    }
+    // 배너·보스 카드와 겹치지 않게 줄을 선다 — 화면 한가운데서 두 개가 싸우면 둘 다 안 읽힌다
+    if (!this._meetQ || !this._meetQ.length) return;
+    if (this._bossIntro || (this.banner && this.banner.life > 0)) return;
+    const c = this._meetQ.shift();
+    this._meet = { c, t: 3.0, max: 3.0 };
+    AudioSys.pickup();
+  },
+
   // ── 왕의 인장기: 피할 수는 있지만 막을 수는 없다 (예고 1.2s+ → 관통 피해 + 낙인) ──
   sigActive() { return (this.sigs || []).length > 0; },
 
@@ -582,7 +612,7 @@ const GamePlay = {
           pos = World.randomSpawnPos(this.player);
         }
         this.markers.push({ x: pos.x, y: pos.y, type: s.type, elite: s.elite, mini: s.mini, omen: s.omen,
-          pack: s.pack, leader: s.leader, t: s.mini ? 1.1 : 0.7 });
+          pack: s.pack, leader: s.leader, hpMul: s.hpMul, t: s.mini ? 1.1 : 0.7 });
         this.pendingSpawns.splice(i, 1);
       }
     }
@@ -592,7 +622,7 @@ const GamePlay = {
       if (m.t <= 0) {
         const e = m.mini
           ? createMiniboss(m.type, m.x, m.y, this.enemyHpMul())
-          : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul());
+          : createEnemy(m.type, m.x, m.y, m.elite, this.enemyHpMul() * (m.hpMul || 1));
         e.speed *= Math.min(1.3, 1 + 0.02 * (Dungeon.floor - 1)); // 층당 +2%, 상한 +30% (무한 모드)
         if (this.pacts.speed) e.speed *= 1.15;
         if (this.pacts.wrath) e.speed *= 1.08; // 왕의 진노
@@ -607,6 +637,7 @@ const GamePlay = {
         // 매복형·보스방·경보 후 증원은 제외 (=== false 게이트: 소환수 등 직접 push된 개체는 그대로)
         if (this._drama && !this._roomAlert && !m.mini && !AMBUSH_TYPES.has(m.type) && !e.isBoss) e._aware = false;
         this.enemies.push(e);
+        this.noteFirstMeet(m.type);   // v187: 처음 보는 얼굴이면 사연 한 줄
         if (m.mini) {
           this.banner = { text: `⚠ ${e.miniName} 출현!`, life: 1.8, maxLife: 1.8, color: '#e43b44' };
           AudioSys.roar();
@@ -632,7 +663,16 @@ const GamePlay = {
       const p = this.player;
       for (const e of this.enemies) {
         if (e.dead || e.neutral || e.isBoss || e.isMini || e.spawnT > 0) continue;
-        if (e._shakenT > 0) continue;             // 흔들리는 무리는 대열을 못 지킨다
+        // 흔들리는 무리는 대열을 못 지킨다 — v187: 그냥 못 지키는 게 아니라 **물러선다**.
+        // 리더를 벤 보상이 눈에 보여야 "리더부터 친다"가 전술이 된다 (1.2초간 후퇴)
+        if (e._shakenT > 0) {
+          if (e._shakenT > 1.8) {
+            const rx = e.x - p.x, ry = e.y - p.y;
+            const rd = Math.hypot(rx, ry) || 1;
+            World.moveEntity(e, (rx / rd) * 74 * dt, (ry / rd) * 74 * dt);
+          }
+          continue;
+        }
         if (!e._role) e._role = roleOf(e.type, e);
         const band = e._role === 'back' ? 250 : e._role === 'flank' ? 150 : 96;
         const dx = p.x - e.x, dy = p.y - e.y;
@@ -664,18 +704,55 @@ const GamePlay = {
       for (const e of es) if (!e.dead && e.isLeader && e.pack) leaders[e.pack] = e;
       for (const e of es) {
         if (e.dead || e.neutral || e.isBoss) continue;
+        // v187: **같은 무리**의 이웃만 센다. 종전엔 아무나 근처에 있으면 단단해졌다 —
+        // 그러면 "무리"라는 개념이 안 생기고 그냥 밀집도 보너스다
         let n = 0;
         for (const o of es) {
-          if (o === e || o.dead || o.neutral) continue;
+          if (o === e || o.dead || o.neutral || o.spawnT > 0) continue;
+          if (!e.pack || o.pack !== e.pack) continue;
           const dx = o.x - e.x, dy = o.y - e.y;
-          if (dx * dx + dy * dy < 115 * 115) n++;
+          if (dx * dx + dy * dy < 120 * 120) n++;
         }
         e._cohesion = n;
         const L = e.pack && leaders[e.pack];
         e._led = !!(L && Math.hypot(L.x - e.x, L.y - e.y) < 190);
-        // 경감은 최대 30% — 흩어놓으면 사라지는 값이라 상한을 낮게 둔다.
-        // 여기서 세면 "무리를 못 깨면 못 이긴다"가 되어 결정이 아니라 벽이 된다
-        e._packMit = Math.min(0.30, n * 0.055) + (e._led ? 0.08 : 0);
+        // v187: 혼자면 0 — 곁에 **둘 이상**이 붙어 있어야 값이 선다.
+        // 종전 min(0.30, n*0.055)는 n=1에도 5.5%가 붙어 늘 켜져 있는 상수였고,
+        // 상수는 아무것도 가르치지 않는다. 이제 흩어놓으면 확실히 0이 된다
+        e._packMit = n >= 2 ? Math.min(0.36, (n - 1) * 0.115) + (e._led ? 0.06 : 0) : 0;
+      }
+    }
+
+    // ══ 리더의 호령 (v187) ═══════════════════════════════════════════════
+    // 무리로 보이게 하는 것은 숫자가 아니라 **동시성**이다. 넷이 제각각 걸어오면
+    // 넷이고, 넷이 동시에 한 걸음 내디디면 무리다. 리더가 5초마다 호령하면
+    // 무리 전체가 같은 프레임에 번쩍이고 함께 밀고 들어온다
+    if (this.state === 'play') {
+      for (const e of this.enemies) {
+        if (e.dead || !e.isLeader || e.spawnT > 0 || e._shakenT > 0 || !e._aware) continue;
+        e._rallyCd = (e._rallyCd == null ? 2.2 : e._rallyCd) - dt;
+        if (e._rallyCd > 0) continue;
+        e._rallyCd = 5.0 + Math.random() * 1.6;
+        let n = 0;
+        for (const o of this.enemies) {
+          if (o.dead || o === e || o.pack !== e.pack || o.isBoss || o.spawnT > 0) continue;
+          o._rallyT = 0.55; o._aware = true;
+          n++;
+        }
+        if (n === 0) continue;              // 혼자 남은 리더는 호령하지 않는다
+        e._rallyT = 0.55;
+        Particles.ring(e.x, e.y, { r0: 10, r1: 96, life: 0.4, color: '#e8c04a', width: 3 });
+        Particles.text(e.x, e.y - 40, '따르라!', { color: '#e8c04a', size: 12 });
+        AudioSys.roar();
+      }
+      // 호령 여파 — 짧게 함께 밀고 들어온다 (같은 순간에, 같은 방향으로)
+      for (const e of this.enemies) {
+        if (!(e._rallyT > 0)) continue;
+        e._rallyT -= dt;
+        if (e.dead || !this.player) continue;
+        const dx = this.player.x - e.x, dy = this.player.y - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d > 70) World.moveEntity(e, (dx / d) * 62 * dt, (dy / d) * 62 * dt);
       }
     }
 
@@ -688,6 +765,7 @@ const GamePlay = {
     if (this._chainT > 0) this._chainT -= dt; // 킬 체인 (v138) 창 감쇠
     if (this._saveFlashT > 0) this._saveFlashT -= dt; // 자동 저장 표시 (v141)
     if (this._bossIntro && (this._bossIntro.t -= dt) <= 0) this._bossIntro = null; // 보스 등장 카드 (v142)
+    this.tickFirstMeet(dt); // 첫 조우 사연 카드 (v187)
     // 온보딩 (v139): 첫 걸음 힌트 진행 — 입력이 확인되면 다음 동사로
     if (this._obHints) {
       // 게임 상태로 감지 — 입력 프레임 폴링은 짧은 탭을 놓친다
@@ -928,6 +1006,7 @@ const GamePlay = {
       }
       if (!e.dead) e.update(dt, this);
       if (e._shakenT > 0) e._shakenT -= dt;
+      if (e._mitSayT > 0) e._mitSayT -= dt; // 「무리 방어」 표시 쿨다운 (v187)
       if (!e.dead) this._steer(e, dt, p);
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
