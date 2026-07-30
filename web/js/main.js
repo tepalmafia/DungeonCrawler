@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 197;
+const GAME_VERSION = 198;
 
 // v192 — 사장: "기존처럼 동그라미를 날리는 공격만 가지지말고,
 //                동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
@@ -13,14 +13,14 @@ const GAME_VERSION = 197;
 //   flame 불꽃: 흔들리는 불길 혓바닥 + 잔불
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
-  soul:  { color: '#b13ae0', r: 7, wavy: true },
-  spore: { color: '#8a5ac2', r: 6 },
+  soul:  { color: '#b13ae0', r: 7, wavy: true, shape: 'wisp' },
+  spore: { color: '#7ab04c', r: 6, shape: 'blob' },
   fire:  { color: '#ff7043', r: 6, patchOnEnd: true, shape: 'flame' },
   rock:  { color: '#cfc6ad', r: 6, shape: 'bone' },
   web:   { color: '#e8e0cf', r: 5 },
-  thorn: { color: '#7ab04c', r: 5 },
+  thorn: { color: '#8fbf5a', r: 5, shape: 'shard' },
   voidorb: { color: '#b13ae0', r: 8, wavy: false },
-  ice:   { color: '#a9e3ff', r: 5 },
+  ice:   { color: '#a9e3ff', r: 5, shape: 'shard' },
   shard: { color: '#c9b8e8', r: 4 },
   mana:  { color: '#b89ae8', r: 5 },
 };

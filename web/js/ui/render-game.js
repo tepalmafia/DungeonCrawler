@@ -160,6 +160,48 @@ const GameRender = {
       ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.35)';                 // 위쪽 하이라이트
       ctx.fillRect(-L / 2 + 1, -K / 2, L - 2, 1.5);
+    } else if (style.shape === 'wisp') {
+      // 원혼 — 꼬리가 늘어지는 혼불. 진행 반대로 흩어진다
+      ctx.rotate(ang);
+      const w = a.r * 2.8, h = a.r * 1.6;
+      const f = Math.sin(a.t * 15 + (a.seed || 0)) * 0.28;
+      for (const [k, col] of [[1.0, 'rgba(60,20,80,0.5)'], [0.7, style.color], [0.36, '#e2b6ff']]) {
+        ctx.beginPath();
+        ctx.moveTo(a.r * 0.9 * k, 0);
+        ctx.quadraticCurveTo(-w * 0.1, h * 0.55 * k * (1 + f), -w * 0.7 * k, 0);
+        ctx.quadraticCurveTo(-w * 0.1, -h * 0.55 * k * (1 - f), a.r * 0.9 * k, 0);
+        ctx.closePath();
+        ctx.fillStyle = col;
+        ctx.fill();
+      }
+    } else if (style.shape === 'blob') {
+      // 오물·포자 덩어리 — 꿈틀거리며 날아간다
+      ctx.rotate(a.t * 3.5 + (a.seed || 0));
+      const N = 7;
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const an = (i / N) * Math.PI * 2;
+        const rr = a.r * (0.82 + 0.3 * Math.sin(an * 3 + a.t * 9 + (a.seed || 0)));
+        const px = Math.cos(an) * rr, py = Math.sin(an) * rr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = style.color; ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath(); ctx.arc(a.r * 0.22, a.r * 0.22, a.r * 0.34, 0, Math.PI * 2); ctx.fill();
+    } else if (style.shape === 'shard') {
+      // 파편 — 뾰족한 조각. 날아가며 돈다
+      ctx.rotate(ang + a.t * 6);
+      const L = a.r * 2.2, W2 = a.r * 0.9;
+      ctx.beginPath();
+      ctx.moveTo(L * 0.5, 0); ctx.lineTo(-L * 0.3, W2 * 0.5);
+      ctx.lineTo(-L * 0.5, 0); ctx.lineTo(-L * 0.3, -W2 * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = style.color; ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath();
+      ctx.moveTo(L * 0.5, 0); ctx.lineTo(-L * 0.3, -W2 * 0.5); ctx.lineTo(-L * 0.1, 0);
+      ctx.closePath(); ctx.fill();
     } else if (style.shape === 'flame') {
       // 불꽃 — 진행 방향으로 눕고 꼬리가 펄럭인다
       ctx.rotate(ang);

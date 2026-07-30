@@ -41,7 +41,8 @@ const BOSS_DEFS = {
     banner: "시체 짐꾼 '삯꾼 몰레'",
     // 분산 귀속 (열기5): 소환수는 경량 늪 거품 유지 — 기믹(부하 처치=재생 정지) 계측 근거 보존
     punish: 'volley', punishProj: 'spore',
-    p1: ['fan:spore', 'ring>summon:sporePuff', 'fan:spore:snipe'],
+    // v198: 1층 규격 확대 — 소환·유성우를 1페이즈로 내린다 (2페이즈를 못 보고 끝나기 때문)
+    p1: ['fan:spore', 'ring>summon:sporePuff', 'mortar:poison', 'summon:frog', 'fan:spore:snipe'],
     p2: ['fan:spore:cross', 'fan:spore:snipe>ring', 'mortar:poison', 'curse>fan:spore', 'uniq'],
     rageText: '몰레가 수레를 뒤엎는다!',
     intro: '밤마다 수레 하나 값이었지. 비켜라 — 오늘은 짐이 밀렸다.', outro: '버린 게 아니야… 나른 것뿐… 시킨 놈은… 위에…',
@@ -53,7 +54,8 @@ const BOSS_DEFS = {
     mechanic: { type: 'armor', cap: 2, label: '간수의 철갑 — 강한 일격을 경감한다' },
     banner: '간수장 바르곤',
     punish: 'charge',
-    p1: ['charge>ring', 'fan:rock', 'fan:rock:snipe', 'uniq'],
+    // v198: 간수장이 제 옥지기들을 부른다 — 죄목과 맞물리는 소환
+    p1: ['charge>ring', 'fan:rock', 'summon:shieldSkeleton', 'mortar', 'fan:rock:snipe', 'uniq'],
     // 매트릭스 계측: 이중 돌진 금지 유지 (열기0 3층 스파이크 귀속) — 연계는 돌진 1회까지만
     p2: ['charge>ring>fan:rock', 'pulse', 'ring>fan:rock', 'fan:rock:gap', 'uniq'],
     rageText: '바르곤의 사슬이 풀렸다!',
@@ -66,7 +68,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'rage', label: '불장난 — 시간이 지날수록 달아오른다' },
     banner: "방화대장 '그을음 브란트'",
     punish: 'charge', punishTrail: true,
-    p1: ['fan:fire>charge:trail', 'curse:fire', 'fan:fire:snipe', 'uniq'],
+    p1: ['fan:fire>charge:trail', 'curse:fire', 'fan:fire:snipe', 'uniq', 'summon:cinder', 'mortar'],
     p2: ['charge:trail>fan:fire', 'mortar:fire', 'fan:fire:snipe>charge:trail', 'fan:fire:cross', 'uniq'],
     rageText: '브란트가 기름통을 비운다!',
     intro: '장부가 있던 농가? 내가 태웠다. 종이는 잘 타지 — 너는 어떨까.', outro: '불은… 명령이었다… 나는 그저…',
@@ -78,7 +80,7 @@ const BOSS_DEFS = {
     mechanic: { type: 'veil', label: '목매단 원한 — 영혼 구슬을 파괴하라' },
     banner: '교수대의 그림자',
     punish: 'volley', punishProj: 'soul',
-    p1: ['sweep>fan:soul', 'ring:gap', 'fan:soul:snipe', 'uniq'],
+    p1: ['sweep>fan:soul', 'ring:gap', 'fan:soul:snipe', 'uniq', 'summon:shade', 'mortar'],
     p2: ['ring:gap>sweep>fan:soul', 'pulse', 'fan:soul:cross>ring', 'summon:wraith:elite', 'uniq'],
     rageText: '목매단 자들의 원한이 깨어난다!',
     intro: '이 언덕에 매달린 자, 셀 수 없다. 너도 그중 하나였을 뿐.', outro: '우리는… 전부… 죄가 없었다…',
