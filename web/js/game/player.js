@@ -105,6 +105,7 @@ function createPlayer(x, y, classId = 'knight') {
     subSkill: null, // 보조 스킬 id (스킬 사당에서 획득)
     subCd: 0,
     tonicT: 0, // 응급 조제 이속 버프
+    ultKind: null, // v182: 'exec'(처형 선고) 또는 계열 키(fire/volt/venom/guard/blood)
     ult: 0,       // 궁극기 (P2): 0=없음 / 1=처형 선고(10층 보스 전리품) / 2=강화(20층)
     ultGauge: 0,  // 처치로 충전 (잡몹 1 / 정예·우두머리 4 / 보스 10)
     ultMax: 45,
@@ -176,10 +177,84 @@ function createPlayer(x, y, classId = 'knight') {
       return (SUBSKILLS[this.classId] || []).find((x) => x.id === this.subSkill) || null;
     },
 
+    // ── 속성 궁극기 (v182) — 계열 3단의 종막 ──
+    // 처형 선고가 '심판'이라면 이쪽은 '그 원소가 할 수 있는 최대'다.
+    // 같은 게이지를 쓰되 색·모양·소리가 전부 다르다 — 무엇을 끝까지 모았는지가 화면에 남는다
+    _sectUlt(game) {
+      const k = this.ultKind;
+      const S = (typeof SECTS !== 'undefined' && SECTS[k]) || { name: '?', color: '#ffffff' };
+      this.ultGauge = 0;
+      this.invuln = Math.max(this.invuln, 1.0);
+      this.attackPoseT = 0.3;
+      const atk = this.currentAtk();
+      const NAME = { fire: '대화재', volt: '뇌명', venom: '역병의 숨', guard: '불괴', blood: '피의 만찬' }[k] || '종막';
+      const R = 300;
+      const near = [];
+      for (const e of game.enemies) {
+        if (e.dead || e.neutral) continue;
+        const dx = e.x - this.x, dy = e.y - this.y, d = Math.hypot(dx, dy) || 1;
+        if (d <= R) near.push({ e, dir: { x: dx / d, y: dy / d }, d });
+      }
+      if (k === 'fire') {
+        // 대화재 — 전방위 화염. 맞은 자리마다 불길이 남는다
+        for (const t of near) {
+          game.hitEnemy(t.e, atk * 4, t.dir, { kb: 200, crit: true });
+          t.e.status = t.e.status || {}; t.e.status.burn = Math.max(t.e.status.burn || 0, 6);
+        }
+        for (let i = 0; i < 5; i++) {
+          const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 200;
+          game.zones.push({ x: this.x + Math.cos(a) * r, y: this.y + Math.sin(a) * r, r: 62, life: 6, kind: 'fire', tickT: 0, hit: null });
+        }
+      } else if (k === 'volt') {
+        // 뇌명 — 연쇄. 가장 가까운 적부터 차례로 튄다
+        let chain = near.sort((a, b) => a.d - b.d).slice(0, 12);
+        chain.forEach((t, i) => {
+          game.hitEnemy(t.e, atk * (5 - i * 0.2), t.dir, { kb: 150, crit: true });
+          t.e.status = t.e.status || {}; t.e.status.shock = Math.max(t.e.status.shock || 0, 5);
+          Particles.ring(t.e.x, t.e.y, { r0: 4, r1: 46, life: 0.22, color: S.color, width: 3 });
+        });
+      } else if (k === 'venom') {
+        // 역병의 숨 — 넓은 독구름 + 중독 전이
+        for (const t of near) {
+          game.hitEnemy(t.e, atk * 3, t.dir, { kb: 120 });
+          t.e.status = t.e.status || {}; t.e.status.poison = Math.max(t.e.status.poison || 0, 8);
+        }
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2;
+          game.zones.push({ x: this.x + Math.cos(a) * 110, y: this.y + Math.sin(a) * 110, r: 96, life: 8, kind: 'poison', tickT: 0, hit: null });
+        }
+      } else if (k === 'guard') {
+        // 불괴 — 밀어내고 굳는다. 공격이 아니라 **버티기**의 종막
+        for (const t of near) game.hitEnemy(t.e, atk * 2.5, t.dir, { kb: 420 });
+        this.invuln = Math.max(this.invuln, 3.2);
+        this.shieldT = Math.max(this.shieldT || 0, 8);
+        if (this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 2);
+      } else {
+        // 피의 만찬 — 때린 만큼 돌려받는다
+        let heal = 0;
+        for (const t of near) {
+          game.hitEnemy(t.e, atk * 4.5, t.dir, { kb: 180, crit: true });
+          if (t.e.dead) heal++;
+        }
+        if (heal > 0) this.hp = Math.min(this.maxHp, this.hp + Math.min(3, Math.ceil(heal / 2)));
+      }
+      game.hurtFlash = 0.22;
+      Renderer.shake(8, 0.45);
+      Particles.ring(this.x, this.y, { r0: 20, r1: R, life: 0.55, color: S.color, width: 7 });
+      Particles.ring(this.x, this.y, { r0: 10, r1: R * 0.6, life: 0.4, color: '#ffffff', width: 4 });
+      Particles.text(this.x, this.y - 40, NAME + '!', { color: S.color, size: 22 });
+      AudioSys.ultimate(this.x, this.y);
+    },
+
     // ── 궁극기 (P2): '처형 선고' — 무거운 손의 도끼를 빼앗아 그의 일을 대신한다.
     // 게이지형(처치 충전): 쿨다운이 아니라 "잘 싸우면 빨리 온다". 2단(20층 로트가르)은 위력 강화
     useUltimate(game) {
       if (this.ult <= 0 || this.ultGauge < this.ultMax) return;
+      // ★ v182 속성 궁극기 — 한 계열을 끝까지 민 자에게 그 계열의 종막이 열린다.
+      // 종전 궁극기는 **10층 보스 전리품**뿐이라, 최고 8층인 사장은 이 게임에서 가장 큰 소리를
+      // **한 번도 못 들었다.** 계열 3단(같은 태그 6장)은 3~5층에 닿는 지점이고,
+      // v137 계열 공명·v169 정점과 같은 질문("무엇을 끝까지 모을까")에 답이 하나 더 생긴다
+      if (this.ultKind && this.ultKind !== 'exec') { this._sectUlt(game); return; }
       this.ultGauge = 0;
       this.invuln = Math.max(this.invuln, 1.0);
       this.attackPoseT = 0.3;
@@ -213,7 +288,16 @@ function createPlayer(x, y, classId = 'knight') {
       if (!def) return;
       this.subCd = def.cd;
       this.attackPoseT = 0.18;
-      const dir = { ...this.facing };
+      // v182: 전용 소리 + 임팩트. 종전엔 12종이 전부 빌려온 소리였다
+      AudioSys.sub(def.id, this.x, this.y);
+      Renderer.shake(3, 0.16);
+      Particles.ring(this.x, this.y, { r0: 8, r1: 62, life: 0.24, color: '#c9d94a', width: 3 });
+      Particles.text(this.x, this.y - 34, def.name, { color: '#c9d94a', size: 13 });
+      // ★ v182 — 조준 방향으로 나간다. v167에서 조준을 플레이어에게 돌려줬는데(자동 조준 폐지)
+      // **보조 스킬만 빠져서** 여전히 `facing`(이동 방향)으로 나갔다.
+      // 마우스로 겨눠도 캐릭터가 걷는 쪽으로 나가면 쓸 수가 없다 —
+      // 사장 지적 "E 스킬은 임펙트도 없고 유명무실하고 사용을 안 하는데?"의 첫 번째 원인
+      const dir = this.aimDir(game) || { ...this.facing };
       const atk = this.currentAtk();
       const cone = (r, arc, fn) => {
         const base = Math.atan2(dir.y, dir.x);

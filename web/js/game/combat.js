@@ -48,6 +48,22 @@ const GameCombat = {
       for (const th of SECT_THRESH) if (cnt >= th) lv++;
       const prev = this.sects[k] || 0;
       this.sects[k] = lv;
+      // ★ v182 — 계열 3단은 그 계열의 **종막**을 연다.
+      // 종전 궁극기는 10층 보스 전리품뿐이라, 8층까지 간 사람도 한 번을 못 썼다.
+      // 이미 「처형 선고」를 가진 사람은 그대로 둔다 (전리품이 속성보다 위다)
+      if (lv >= 3 && this.player && this.player.ultKind !== 'exec') {
+        if (!this.player.ultKind) {
+          this.player.ultKind = k;
+          this.player.ult = Math.max(1, this.player.ult);
+          this.player.ultGauge = this.player.ultMax; // 첫 한 방은 바로 — 열린 걸 알아야 쓴다
+          const s2 = SECTS[k];
+          const nm = { fire: '대화재', volt: '뇌명', venom: '역병의 숨', guard: '불괴', blood: '피의 만찬' }[k] || '종막';
+          if (!silent) {
+            this.banner = { text: `「${s2.name}」의 종막 — 「${nm}」 개방 (R키)`, life: 3.4, maxLife: 3.4, color: s2.color };
+            AudioSys.ultimate(this.player.x, this.player.y);
+          }
+        }
+      }
       if (!silent && lv > prev) {
         const s = SECTS[k];
         this.banner = { text: `「${s.name}」의 길 ${lv}단 — ${s.tiers[lv - 1]}`, life: 2.6, maxLife: 2.6, color: s.color };

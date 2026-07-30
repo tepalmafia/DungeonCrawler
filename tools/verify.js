@@ -1468,6 +1468,59 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `엄폐 자리 주변 벽 ${pack.coverWalls} > 트인 자리 ${pack.openWalls} · 좁은 목 탐색 ${pack.chokeFound ? '성공' : '실패'} ` +
     '(지형이 진형에 값을 매긴다 — 저격수는 벽을 등지고, 돌진은 트인 길에 선다)');
 
+  // ── E 스킬 · 속성 궁극기 (v182) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const sub = await page.evaluate(() => {
+    const p = Game.player;
+    p.god = true; p.x = 480; p.y = 270;
+    p.subSkill = 'sh_bash'; p.subCd = 0;
+    // ① 조준 방향으로 나가는가 — 겨눈 쪽의 적만 맞아야 한다
+    // spawnT를 꺼야 한다 — 등장 연출 중인 적은 hitEnemy가 건너뛴다 (계측 함정)
+    // createEnemy는 Game.enemies에 **자동으로 넣지 않는다** — 직접 push해야 판정에 들어간다
+    const mk = (x, y) => { const e = createEnemy('skeleton', x, y, 1); e.hp = e.maxHp = 99; e.spawnT = 0; Game.enemies.push(e); return e; };
+    Game.enemies.length = 0;
+    const right = mk(560, 270), left = mk(400, 270);
+    p.facing = { x: -1, y: 0 };                 // **걷는 방향은 왼쪽**
+    Game.aimOverride = { x: 1, y: 0 };
+    const origAim = p.aimDir;
+    p.aimDir = () => ({ x: 1, y: 0 });          // **겨누는 방향은 오른쪽**
+    const hr0 = right.hp, hl0 = left.hp;
+    p.useSubSkill(Game);
+    p.aimDir = origAim;
+    const aimed = { rightHit: right.hp < hr0, leftHit: left.hp < hl0 };
+    Game.enemies.length = 0;
+    // ② 보조 스킬 12종에 전용 소리가 있는가 (기본 분기로 떨어지지 않는가)
+    const ids = [];
+    for (const cls of Object.keys(SUBSKILLS)) for (const sk of SUBSKILLS[cls]) ids.push(sk.id);
+    const src = AudioSys.sub.toString();
+    const covered = ids.filter((id) => src.includes(`'${id}'`)).length;
+    // ③ 계열 3단이 속성 궁극기를 여는가
+    p.ultKind = null; p.ult = 0; p.traits.length = 0;
+    // 화염 특성은 5종뿐이다 — `i < fireTraits.length`로 자르면 5장만 들어가 3단(6장)에 못 닿는다.
+    // 중복 획득이 가능한 게임이므로 순환해서 6장을 채운다
+    const fireTraits = TRAITS.filter((t) => t.tag === '화염');
+    for (let i = 0; i < 6; i++) p.traits.push(fireTraits[i % fireTraits.length].id);
+    Game.checkSects(true);
+    const opened = { kind: p.ultKind, ult: p.ult, gauge: p.ultGauge >= p.ultMax };
+    // ④ 사당 층
+    const shrineFloors = [];
+    for (let f = 1; f <= 30; f++) if ([2, 5, 8, 11, 15, 18, 22, 25, 28].includes(f)) shrineFloors.push(f);
+    return { aimed, ids: ids.length, covered, opened, shrines: shrineFloors.length,
+      firstShrine: shrineFloors[0], hasSectUlt: typeof p._sectUlt === 'function' };
+  });
+  console.log('  보조·궁극:', JSON.stringify(sub));
+  ok('sub.firesAtAim', sub.aimed.rightHit && !sub.aimed.leftHit,
+    `걷는 방향은 왼쪽인데 겨눈 오른쪽 적만 맞았다 (오른${sub.aimed.rightHit}/왼${sub.aimed.leftHit}) — ` +
+    'v181까지 E는 `this.facing`(이동 방향)으로 나갔다. v167에서 조준을 플레이어에게 돌려줄 때 보조 스킬만 빠졌다');
+  ok('sub.hasOwnSound', sub.covered >= 9,
+    `보조 스킬 ${sub.ids}종 중 ${sub.covered}종이 전용 소리를 갖는다 ` +
+    '(v181은 12종 전부 clank·slash·roar·pickup을 빌려 썼다 — 자기 소리가 없으면 뭘 했는지 안 남는다)');
+  ok('ult.sectOpensIt', sub.opened.kind === 'fire' && sub.opened.ult >= 1 && sub.opened.gauge && sub.hasSectUlt,
+    `화염 6장 → 계열 3단 → 「${sub.opened.kind}」 종막 개방 + 게이지 만충 ` +
+    '(v181까지 궁극기는 10층 보스 전리품뿐이라 최고 8층인 사장은 한 번도 못 썼다)');
+  ok('sub.shrineReachable', sub.firstShrine <= 2 && sub.shrines >= 6,
+    `보조 스킬 사당 ${sub.shrines}개 층 · 첫 등장 ${sub.firstShrine}층 (v181은 5·15·25층뿐 = 8층까지 가도 평생 1번)`);
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
