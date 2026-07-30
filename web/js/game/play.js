@@ -183,6 +183,11 @@ const GamePlay = {
     spider: 'toil', necro: 'toil', bomber: 'toil', brute: 'toil', jailer: 'toil',
     executioner: 'patrol', stalker: 'patrol', warden: 'patrol', shaman: 'patrol',
     berserker: 'patrol', frostArcher: 'patrol', acolyte: 'toil', golem: 'patrol',
+    // v198: 2~5층 로스터까지 사연대로 살게 한다 (1층 규격 확대)
+    sporePuff: 'toil', acidSnail: 'roam', iceSlime: 'feed', fireSpirit: 'roam',
+    lavaHound: 'patrol', cinder: 'roam', ashWalker: 'roam', emberMoth: 'roam',
+    crystal: 'toil', gazer: 'patrol', wisp: 'roam', shade: 'roam', necro: 'toil',
+    frostMage: 'patrol', sniper: 'patrol', jailer: 'toil',
   },
   IDLE_LOOK: {
     feed:   { text: '…', color: '#8a1c2c', puff: ['#8a1c2c', '#5a1016'] },
