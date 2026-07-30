@@ -3103,6 +3103,11 @@ const Sprites = (() => {
   sprites.bodyH = bodyH;
   // 몸 반경 r 인 적을 화면에서 얼마나 크게 그릴 것인가.
   // 중앙값 r=13 이 종전 백골과 비슷한 크기로 나오도록 잡았다 (r13 → 약 46px)
+  // 보스 전용 — 보스는 def.scale 을 squash 로 곱해 쓴다. 그 곱까지 상쇄해야 r 비율이 맞는다
+  sprites.bossScaleFor = (img, r, defScale) => {
+    const h = bodyH(img);
+    return h > 0 ? Math.max(0.8, Math.min(3.4, (r * 3.5) / (h * (defScale || 1)))) : 2;
+  };
   sprites.scaleFor = (img, r) => {
     const h = bodyH(img);
     return h > 0 ? Math.max(1.1, Math.min(3.4, (r * 3.5) / h)) : SCALE_DEFAULT;
@@ -3970,6 +3975,219 @@ const Sprites = (() => {
       for (let k = 0; k < hh; k++) P.put(g, 27 + ox + (k % 2), oy - k, k < 2 ? 'C' : 'B');
   }, { A: '#c05a30', a: '#8a3a18', n: '#4a1608', B: '#fff4c8', C: '#ffd866', c: '#ff9a3c', r: '#ffd866',
        F: '#8a6a58', f: '#5c4038', p: '#2e1e18' });
+
+
+  // ── 보스 10~67 (14종) — 각자 「한 가지 과장」이 실루엣이다 ──
+  // 공통 조립기: 사람 보스는 몸통·다리·팔이 같은 문법이므로 함수 하나로 세우고
+  // 개성(무기·머리·부속물)만 콜백으로 얹는다. 손으로 14번 반복하면 반드시 어긋난다
+  function bossBody(g, cx, { w = 12, top = 24, len = 20, legY = 46, cloak = 0 } = {}) {
+    heroLegs(g, cx, legY, 0, { hi: 'a', lo: 'n', boot: 'h' });
+    if (cloak) P.cloak(g, cx, top - 2, cloak, len + 2);
+    for (let y = 0; y < len; y++) { const ww = Math.round(w - y * 0.18);
+      P.span(g, top + y, cx - ww, cx + ww, 'a');
+      P.put(g, cx - ww, top + y, 'A'); P.put(g, cx - ww + 1, top + y, 'A');
+      P.put(g, cx + ww, top + y, 'n');
+      // 단색 판이면 '나무토막'이 된다. 세로 주름을 넣어 천·갑옷의 결을 만든다
+      if (y > 1 && y < len - 2) for (const fx of [-6, -2, 3, 7])
+        if (Math.abs(fx) < ww - 1 && (y + fx) % 5 !== 0) P.put(g, cx + fx, top + y, (y + fx) % 3 ? 'n' : 'A');
+    }
+    P.span(g, top - 1, cx - w + 1, cx + w - 1, 'A');                    // 어깨선
+    P.span(g, top + 1, cx - 5, cx + 5, 'n'); P.span(g, top + 2, cx - 3, cx + 3, 'n');  // 깃
+    const by = top + Math.round(len * 0.55);                             // 허리띠
+    P.span(g, by, cx - w + 1, cx + w - 1, 'h');
+    P.span(g, by + 1, cx - w + 1, cx + w - 1, 'n');
+    P.rect(g, cx - 2, by - 1, 4, 3, 'G'); P.put(g, cx - 2, by - 1, 'C');
+  }
+
+  sprites.bossVoid = mob(58, 60, (g) => {            // 왕실 처형인 '무거운 손' — 거대한 참수도끼
+    bossBody(g, 26, { w: 13, cloak: 1.45 });
+    P.limb(g, 10, 27, 1.3, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 5, thick: 5 });
+    P.head(g, 26, 15, 1.5, { hood: true, eye: 'r' });
+    P.span(g, 17, 18, 34, 'n'); P.span(g, 18, 18, 34, 'n');
+    P.put(g, 21, 17, 'r'); P.put(g, 31, 17, 'r');
+    P.axe(g, 44, 54, 1.9);
+    P.limb(g, 40, 26, 1.3, { hi: 'F', mid: 'f', lo: 'p', dx: 0.1, len: 5, thick: 5 });
+  }, { A: '#3a2c34', a: '#241a20', n: '#120b10', F: '#c08a5c', f: '#8f6038', p: '#54371f',
+       K: '#e6ecff', S: '#9aa2b8', s: '#4a5266', G: '#c9a24a', g: '#8a6b3c', h: '#3a2c1a', r: '#e43b44' });
+
+  sprites.bossQueen = mob(62, 60, (g) => {           // 관문 사령관 '철벽 로트가르' — 성문 같은 대형 방패
+    bossBody(g, 30, { w: 13 });
+    P.head(g, 30, 14, 1.5, { helm: true, eye: 'r' });
+    P.limb(g, 46, 26, 1.3, { hi: 'K', mid: 'S', lo: 's', dx: 0.2, len: 5, thick: 5 });
+    P.spear(g, 52, 54, 1.4, 36);
+    // 성문 방패 — 1차는 회색 사각형 더미였다. 세로 판자 + 못 + 쇠테가 있어야 '문'으로 읽힌다
+    for (let y = 14; y < 52; y++) {
+      const w = Math.round(12 - Math.abs(y - 33) * 0.08);
+      for (let x = 13 - w; x <= 13 + w; x++) {
+        const plank = Math.floor((x + 40) / 4) % 2;
+        P.put(g, x, y, (x + 40) % 4 === 0 ? 'h' : plank ? 'g' : 'G');
+      }
+      P.put(g, 13 - w, y, 'G'); P.put(g, 13 + w, y, 'h');
+    }
+    for (const y of [20, 33, 46]) { P.span(g, y, 1, 25, 'S'); P.span(g, y - 1, 1, 25, 'K');   // 쇠테
+      for (let x = 3; x < 25; x += 5) P.put(g, x, y, 'K'); }                                  // 못
+  }, { A: '#5a5468', a: '#38344a', n: '#1a1826', K: '#b8c0d0', S: '#6a7286', s: '#33394a',
+       G: '#a8814a', g: '#7a5c34', h: '#3e2c18', r: '#ffd866', C: '#ffd866',
+       F: '#c8b89a', f: '#9a8a6e', p: '#5e5242' });
+
+  sprites.bossValdia = mob(58, 60, (g) => {          // 대재판관 '발디아 공작' — 법복과 판결 저울
+    bossBody(g, 26, { w: 11, cloak: 1.6, len: 22 });
+    P.head(g, 26, 15, 1.4, { eye: 'r' });
+    for (let y = 0; y < 7; y++) P.span(g, 5 + y, 18 - y, 34 + y, y < 2 ? 'K' : 'S');   // 법관 가발
+    P.span(g, 12, 14, 38, 'K');
+    P.limb(g, 10, 27, 1.2, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 4, thick: 4 });
+    for (let k = 0; k < 12; k++) P.put(g, 44, 16 + k, k % 4 === 3 ? 'G' : 'g');        // 저울대
+    P.span(g, 16, 36, 52, 'G');
+    for (const x of [37, 51]) { for (let k = 0; k < 4; k++) P.put(g, x, 17 + k, 'g');
+      P.span(g, 21, x - 3, x + 3, 'G'); P.span(g, 22, x - 2, x + 2, 'g'); }
+  }, { A: '#4a2030', a: '#2e1220', n: '#160810', K: '#f0ece0', S: '#c0bcb0',
+       G: '#c9a24a', g: '#8a6b3c', F: '#c8b89a', f: '#9a8a6e', p: '#5e5242', h: '#3a2c1a', r: '#e43b44' });
+
+  sprites.bossBishop = mob(58, 62, (g) => {          // 대주교 '이노첸시오' — 주교관과 성화 지팡이
+    bossBody(g, 26, { w: 11, cloak: 1.7, len: 24 });
+    P.head(g, 26, 18, 1.4, { eye: 'C' });
+    for (let y = 0; y < 14; y++) { const w = Math.round(2 + y * 0.55);                 // 주교관(미트라)
+      P.span(g, 2 + y, 26 - w, 26 + w, y < 4 ? 'K' : 'S');
+      P.put(g, 26 - w, 2 + y, 'K'); }
+    P.span(g, 16, 18, 34, 'G');
+    for (let y = 0; y < 16; y++) P.span(g, 28 + y, 24, 28, 'K');                        // 흰 스톨
+    P.limb(g, 10, 29, 1.2, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 4, thick: 4 });
+    P.staff(g, 44, 56, 1.5, 34);
+    for (let a = 0; a < 6.3; a += 0.3) P.put(g, 44 + Math.cos(a) * 7, 18 + Math.sin(a) * 7, 'C');
+  }, { A: '#d8c8a8', a: '#a89878', n: '#5e5240', K: '#fff8e8', S: '#d0c8b0',
+       G: '#c9a24a', g: '#8a6b3c', C: '#ffd866', c: '#d4691e', F: '#c8b89a', f: '#9a8a6e', p: '#5e5242', h: '#3a2c1a' });
+
+  sprites.bossWolf = mob(58, 58, (g) => {            // 근위대장 '흰 늑대' — 늑대 투구와 장검
+    bossBody(g, 26, { w: 12, cloak: 1.35 });
+    P.head(g, 26, 15, 1.4, { helm: true, eye: 'C' });
+    for (const sgn of [-1, 1]) for (let k = 0; k < 6; k++)                              // 늑대 귀
+      P.put(g, 26 + sgn * (7 + k * 0.4), 8 - k, k < 2 ? 'K' : 'S');
+    P.span(g, 18, 20, 32, 's');
+    for (let k = 0; k < 5; k++) P.put(g, 22 + k * 2, 19, 'K');                          // 이빨
+    P.limb(g, 10, 27, 1.2, { hi: 'K', mid: 'S', lo: 's', dx: -0.2, len: 4, thick: 4 });
+    P.sword(g, 44, 40, 1.6, 26);
+    P.limb(g, 40, 26, 1.2, { hi: 'K', mid: 'S', lo: 's', dx: 0.1, len: 4, thick: 4 });
+  }, { A: '#e8ecf4', a: '#b0b8c8', n: '#5a6272', K: '#ffffff', S: '#a8b0c0', s: '#4a5266',
+       C: '#8ad8ff', G: '#c9a24a', g: '#8a6b3c', h: '#3a2c1a' });
+
+  sprites.bossKing = mob(62, 64, (g) => {            // 왕 바르텐 3세 — 왕관·성배·가장 크다
+    bossBody(g, 28, { w: 14, cloak: 1.85, len: 26, legY: 50 });
+    P.head(g, 28, 18, 1.6, { eye: 'r' });
+    for (let y = 0; y < 6; y++) P.span(g, 8 + y, 18, 38, y < 2 ? 'G' : 'g');            // 왕관
+    for (const x of [18, 24, 28, 32, 38]) for (let k = 0; k < 5; k++) P.put(g, x, 7 - k, k > 3 ? 'C' : 'G');
+    P.span(g, 14, 16, 40, 'G');
+    for (let y = 0; y < 20; y++) P.span(g, 28 + y, 25, 31, 'K');                        // 금 스톨
+    P.limb(g, 10, 30, 1.4, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 5, thick: 5 });
+    P.limb(g, 46, 30, 1.4, { hi: 'F', mid: 'f', lo: 'p', dx: 0.2, len: 5, thick: 5 });
+    P.shade(g, 50, 44, 6, 7, 'C', 'G', 'g');                                            // 성배
+    P.span(g, 51, 44, 56, 'G'); P.span(g, 37, 45, 55, 'C');
+  }, { A: '#8a1c2c', a: '#5c1018', n: '#2a060c', G: '#e8c86a', g: '#a8843a', K: '#ffd866',
+       C: '#fff4c8', F: '#d8c8a8', f: '#a89878', p: '#6a5c48', h: '#3a2c1a', r: '#ffd866' });
+
+  sprites.bossBram = mob(58, 58, (g) => {            // 수문장 '갈고리 브람' — 긴 갈고리 장대
+    bossBody(g, 24, { w: 12 });
+    P.head(g, 24, 15, 1.4, { hood: true, eye: 'r' });
+    P.limb(g, 8, 27, 1.2, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 4, thick: 4 });
+    for (let k = 0; k < 34; k++) P.put(g, 44, 54 - k, k % 5 === 4 ? 'G' : 'g');         // 장대
+    // 1차는 갈고리가 1px 흰 곡선이라 안 보였다. 굵기 2px + 안쪽으로 당겨 실루엣에 붙인다
+    for (let a = 1.0; a < 4.4; a += 0.12) {
+      const x = 44 + Math.cos(a) * 9, y = 26 + Math.sin(a) * 9;
+      P.put(g, x, y, 'K'); P.put(g, x + 1, y, 'S'); P.put(g, x, y + 1, 'S');
+    }
+    for (let k = 0; k < 5; k++) { P.put(g, 36 - k * 0.6, 20 - k, 'K'); P.put(g, 37 - k * 0.6, 20 - k, 'S'); }  // 갈고리 끝
+    for (let k = 0; k < 7; k++) P.put(g, 12 - k * 0.3, 34 + k * 2, 'c');                 // 물이 뚝뚝
+  }, { A: '#3a5a5c', a: '#243a3e', n: '#101e22', K: '#c8d0e0', S: '#7a8296', G: '#8a6b3c', g: '#5e4728',
+       C: '#8ad8ff', c: '#3a7ab0', F: '#a8b8b0', f: '#788880', p: '#3e4a46', h: '#2a2018', r: '#ffd866' });
+
+  sprites.bossJorn = mob(58, 62, (g) => {            // 뱃사공 '침묵의 요른' — 삿대와 등불
+    bossBody(g, 24, { w: 10, cloak: 1.55, len: 24 });
+    P.head(g, 24, 16, 1.4, { hood: true, eye: 'C' });
+    P.ell(g, 24, 17, 6, 5, 'n');                                                          // 얼굴 없음
+    for (let k = 0; k < 40; k++) P.put(g, 44, 58 - k, k % 6 === 5 ? 'G' : 'g');           // 삿대
+    P.shade(g, 10, 24, 5, 6, 'C', 'c', 'n');                                              // 등불
+    for (let k = 0; k < 8; k++) P.put(g, 10, 10 + k, 'g');
+    P.span(g, 18, 6, 14, 'G');
+  }, { A: '#2e3a4a', a: '#1c2430', n: '#0b1018', C: '#8ad8ff', c: '#3a7ab0',
+       G: '#8a6b3c', g: '#5e4728', F: '#8a94a0', f: '#5a646e', p: '#2e343a', h: '#241c14' });
+
+  sprites.bossQuill = mob(56, 58, (g) => {           // 위증 서기장 '퀼른' — 펜과 흩날리는 장부
+    bossBody(g, 24, { w: 10, cloak: 1.4, len: 22 });
+    P.head(g, 24, 15, 1.3, { eye: 'C' });
+    P.span(g, 10, 16, 32, 'K'); P.span(g, 11, 18, 30, 'S');                               // 서기 모자
+    P.limb(g, 8, 26, 1.1, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 4, thick: 3 });
+    for (let k = 0; k < 16; k++) P.put(g, 42 + k * 0.3, 34 - k, k > 12 ? 'K' : 'B');      // 거대한 깃펜
+    for (let k = 0; k < 5; k++) P.put(g, 41 + k, 34 + k * 0.4, 'S');
+    for (const [x, y] of [[8, 12], [46, 44], [14, 46], [50, 14]]) {                        // 흩날리는 장부
+      P.rect(g, x, y, 6, 5, 'K'); P.put(g, x, y, 'B');
+      for (let k = 1; k < 4; k++) P.span(g, y + k, x + 1, x + 4, 's');
+    }
+  }, { A: '#3a3448', a: '#241f30', n: '#100c18', K: '#f0ece0', S: '#b8b4a8', s: '#6a6660',
+       B: '#ffffff', C: '#ffd866', F: '#c8b89a', f: '#9a8a6e', p: '#5e5242', h: '#3a2c1a' });
+
+  sprites.bossGarok = mob(60, 58, (g) => {           // 사병대장 '철퇴 가로크' — 거대한 철퇴
+    bossBody(g, 26, { w: 14 });
+    P.head(g, 26, 14, 1.5, { helm: true, eye: 'r' });
+    P.limb(g, 8, 27, 1.4, { hi: 'F', mid: 'f', lo: 'p', dx: -0.3, len: 5, thick: 5 });
+    for (let k = 0; k < 16; k++) P.span(g, 40 - k, 44, 47, k % 4 === 3 ? 'G' : 'g');      // 자루
+    P.shade(g, 46, 16, 10, 9, 'K', 'S', 's');                                             // 철퇴 머리
+    for (const [dx, dy] of [[-9, 0], [9, 0], [0, -9], [0, 9], [-7, -7], [7, 7], [-7, 7], [7, -7]])
+      { P.put(g, 46 + dx, 16 + dy, 'K'); P.put(g, 46 + dx * 1.15, 16 + dy * 1.15, 'S'); }
+    P.limb(g, 42, 26, 1.4, { hi: 'F', mid: 'f', lo: 'p', dx: 0.1, len: 4, thick: 5 });
+  }, { A: '#4a3830', a: '#2e2220', n: '#160f10', K: '#b8c0d0', S: '#6a7286', s: '#33394a',
+       G: '#c9a24a', g: '#8a6b3c', F: '#c08a5c', f: '#8f6038', p: '#54371f', h: '#3a2c1a', r: '#e43b44' });
+
+  sprites.bossCorvus = mob(56, 60, (g) => {          // 역병 의사 '부리가면 코르부스' — 부리 가면
+    bossBody(g, 25, { w: 11, cloak: 1.55, len: 23 });
+    P.head(g, 25, 15, 1.4, { eye: 'C' });
+    for (let y = 0; y < 8; y++) { const w = Math.round(7 - y * 0.4);                       // 부리
+      P.span(g, 16 + y, 18 - y * 1.4, 18 - y * 1.4 + 4, y < 3 ? 'K' : 'S'); }
+    P.span(g, 9, 17, 33, 'K'); P.span(g, 10, 15, 35, 'S');                                 // 챙 모자
+    P.put(g, 21, 14, 'C'); P.put(g, 29, 14, 'C');                                          // 유리 눈
+    P.limb(g, 9, 27, 1.2, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 4, thick: 4 });
+    for (let k = 0; k < 12; k++) P.put(g, 42, 22 + k, k % 4 === 3 ? 'G' : 'g');            // 지팡이
+    for (const [x, y] of [[46, 40], [50, 46], [44, 48]]) P.ell(g, x, y, 2.5, 3, 'P');      // 약병
+  }, { A: '#2e2a38', a: '#1c1924', n: '#0c0a12', K: '#d8c8a8', S: '#a89878', C: '#8ad8ff',
+       G: '#c9a24a', g: '#8a6b3c', P: '#8adf76', F: '#c8b89a', f: '#9a8a6e', p: '#5e5242', h: '#241c14' });
+
+  sprites.bossUrsh = mob(58, 60, (g) => {            // 소각로장 '재의 우르쉬' — 등에 진 소각로
+    bossBody(g, 24, { w: 12 });
+    P.head(g, 24, 15, 1.4, { eye: 'r' });
+    P.span(g, 11, 16, 32, 'S'); P.span(g, 12, 16, 32, 'K');                                // 용접 가면
+    P.put(g, 20, 16, 'C'); P.put(g, 28, 16, 'C');
+    for (let y = 0; y < 22; y++) { const w = Math.round(9 - Math.abs(y - 11) * 0.15);       // 등에 진 소각로
+      P.span(g, 20 + y, 42 - w, 42 + w, 'S'); P.put(g, 42 - w, 20 + y, 'K'); P.put(g, 42 + w, 20 + y, 's'); }
+    P.rect(g, 38, 28, 8, 7, 'c'); P.rect(g, 39, 29, 6, 5, 'C');                             // 화구
+    for (let k = 0; k < 6; k++) P.put(g, 44 + (k % 2), 16 - k, k < 2 ? 'C' : 'c');          // 연통 불꽃
+    P.limb(g, 8, 27, 1.2, { hi: 'F', mid: 'f', lo: 'p', dx: -0.2, len: 4, thick: 4 });
+  }, { A: '#4a3830', a: '#2e2220', n: '#160f10', K: '#8a94b0', S: '#5e6880', s: '#333b52',
+       C: '#ffd866', c: '#ff7043', F: '#c08a5c', f: '#8f6038', p: '#54371f', h: '#3a2c1a', r: '#ffd866' });
+
+  sprites.bossObel = mob(58, 62, (g) => {            // 왕실 마법장 '별지기 오벨' — 떠 있는 성좌
+    bossBody(g, 25, { w: 10, cloak: 1.6, len: 24 });
+    P.head(g, 25, 17, 1.35, { hood: true, eye: 'C' });
+    for (let y = 0; y < 12; y++) { const w = Math.round(1 + y * 0.6);                        // 뾰족 모자
+      P.span(g, 4 + y, 25 - w + 2, 25 + w + 2, y < 3 ? 'A' : 'a'); }
+    P.span(g, 16, 15, 37, 'A');
+    for (const [x, y] of [[8, 12], [14, 22], [44, 10], [50, 20], [46, 34], [10, 40]]) {      // 떠 있는 별
+      P.put(g, x, y, 'C'); P.put(g, x - 1, y, 'c'); P.put(g, x + 1, y, 'c');
+      P.put(g, x, y - 1, 'c'); P.put(g, x, y + 1, 'c');
+    }
+    for (const [x0, y0, x1, y1] of [[8, 12, 14, 22], [44, 10, 50, 20], [50, 20, 46, 34]])    // 성좌 선
+      for (let t = 0; t <= 1; t += 0.12) P.put(g, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 'c');
+    P.staff(g, 42, 56, 1.4, 30);
+  }, { A: '#3a3068', a: '#241d44', n: '#0f0b20', C: '#ffd866', c: '#8ad8ff',
+       G: '#c9a24a', g: '#8a6b3c', F: '#c8b89a', f: '#9a8a6e', p: '#5e5242', h: '#241c14' });
+
+  sprites.bossLancer = mob(60, 58, (g) => {          // 검은 창기병 '무언의 기수' — 긴 창과 투구
+    bossBody(g, 24, { w: 12, cloak: 1.45 });
+    P.head(g, 24, 14, 1.45, { helm: true, eye: 'C' });
+    P.span(g, 18, 17, 31, 's');
+    for (let k = 0; k < 5; k++) P.put(g, 24, 4 - k, k > 2 ? 'C' : 'K');                      // 투구 첨탑
+    P.limb(g, 8, 26, 1.2, { hi: 'K', mid: 'S', lo: 's', dx: -0.2, len: 4, thick: 4 });
+    P.spear(g, 48, 56, 1.5, 40);                                                             // 화면을 가르는 긴 창
+    P.limb(g, 44, 26, 1.2, { hi: 'K', mid: 'S', lo: 's', dx: 0.1, len: 4, thick: 4 });
+  }, { A: '#26222e', a: '#17141d', n: '#0a080e', K: '#8a94b0', S: '#4a5266', s: '#232838',
+       C: '#e43b44', G: '#5e4728', g: '#3e3018', h: '#241c14' });
 
   sprites.deriveFrames = deriveFrames;
   // UI·투사체·아이템은 자세가 없다 — 걸으면 안 된다

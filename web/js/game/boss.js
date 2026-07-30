@@ -1689,6 +1689,16 @@ function createBoss(floor, x, y) {
       }
 
       const bob = Math.sin(this.animT * 2.2) * 4;
+      // ── 크기 비율 (v200) ────────────────────────────────────────────
+      // 보스도 몸 크기 r 을 선언한다(26~33). 원본을 48~64px로 다시 그렸으니
+      // 화면 크기는 잡몹과 **같은 자**(화면높이 = r×3.5)로 맞춘다.
+      // 보스는 def.scale 을 squash 로 곱해 쓰므로 그 곱까지 상쇄해서 물린다
+      {
+        const bi = Sprites[this.def.sprite];
+        if (bi && bi.width && !bi.__dsSet && Sprites.bossScaleFor) {
+          bi.__ds = Sprites.bossScaleFor(bi, this.r, this.def.scale); bi.__dsSet = 1;
+        }
+      }
       const img = this.flash > 0 ? Sprites.white(Sprites[this.def.sprite]) : Sprites[this.def.sprite];
 
       // ── 위압감 연출: 고동치는 오라 (2페이즈·맹공에서 격화) ──
