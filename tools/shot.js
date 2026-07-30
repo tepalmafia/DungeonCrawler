@@ -17,8 +17,8 @@ const KIND = process.argv[4] || 'combat';
     Dungeon.floor = f;
     Dungeon.roomIndex = k === 'boss' ? Dungeon.totalRooms : 1;
     Dungeon.build(k);
-    if (k !== 'boss') Game.enemies.length = 0;
-  }, [FLOOR, KIND]);
+    if (k === 'empty') { Game.enemies.length = 0; Dungeon.build('combat'); Game.enemies.length = 0; }
+  }, [FLOOR, KIND === 'empty' ? 'combat' : KIND]);
   await p.waitForTimeout(KIND === 'boss' ? 3000 : 700);
   await p.screenshot({ path: OUT });
   await b.close();

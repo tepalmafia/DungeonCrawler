@@ -5,8 +5,7 @@ const { chromium } = require('playwright-core');
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137';
 const OUT = 'docs/audit/relight-ab.png';
-const PICKS = ['knight', 'archer', 'mage', 'skeleton', 'ghoul', 'golem', 'wisp', 'slime',
-  'boss', 'bossGolem', 'bossSpore', 'bossIgnis', 'bossAbyss', 'bossKing', 'warden', 'executioner'];
+const PICKS = ['skeleton', 'boneHeap', 'shieldSkeleton', 'knight', 'ghoul', 'golem', 'archer', 'mage'];
 
 (async () => {
   const b = await chromium.launch({ executablePath: CHROME });
@@ -35,7 +34,7 @@ const PICKS = ['knight', 'archer', 'mage', 'skeleton', 'ghoul', 'golem', 'wisp',
     await p.close();
     return url;
   };
-  const A = await grab(0), B = await grab(0.5);
+  const A = await grab(0.45), B = await grab(0.45);
   const p = await b.newPage({ viewport: { width: 1000, height: 620 } });
   await p.goto(`${BASE}/?test=1&bot=1`);
   await p.waitForFunction(() => typeof Sprites !== 'undefined');

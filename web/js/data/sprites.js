@@ -46,7 +46,10 @@ const Sprites = (() => {
     return m ? parseFloat(m[1]) : 0.45;
   })();
 
-  function make(rows, pal, { outline = true, relightStrength = RELIGHT } = {}) {
+  // ds(draw scale): 원본 해상도를 올린 스프라이트가 화면에서 거인이 되지 않게 하는 고유 배율.
+  // 예) 백골을 20×19 → 32×34 로 다시 그리면 기본 배율 2에서 화면 64px = 보스만 해진다.
+  //     ds 1.35 를 물려 화면 43px 로 맞춘다 — **디테일만 2.6배, 크기는 그대로**
+  function make(rows, pal, { outline = true, relightStrength = RELIGHT, ds = 0 } = {}) {
     const h = rows.length;
     const w = rows[0].length;
     for (const r of rows) {
@@ -71,7 +74,7 @@ const Sprites = (() => {
     // 붙인 뒤에 하면 아웃라인(불투명)이 실루엣을 메워 면의 방향을 못 읽는다
     if (relightStrength > 0) relight(base, w, h, relightStrength);
 
-    if (!outline) return base;
+    if (!outline) { if (ds) base.__ds = ds; return base; }
 
     // 실루엣을 8방향으로 찍어 1px 아웃라인 자동 생성
     const sil = document.createElement('canvas');
@@ -91,6 +94,7 @@ const Sprites = (() => {
       ctx.drawImage(sil, dx, dy);
     }
     ctx.drawImage(base, 1, 1);
+    if (ds) c.__ds = ds;
     return c;
   }
 
@@ -1055,30 +1059,55 @@ const Sprites = (() => {
   // ══════════════ 확장 몬스터 20종 (신규 원화 + 신규 행동) ══════════════
 
   // 해골 병사: 녹슨 검 — 찌르기 돌진
-  const SKELETON_ROWS = pad([ // 깨어난 백골 (v121 A안) — 붉은 눈·갈비뼈 틈·녹슨 검
-    '......oBBBBo........',
-    '.....oBBBBBBo.......',
-    '....oBBeBBeBBo......',
-    '....oBBBBBBBBo......',
-    '.....oBbbbbBo.......',
-    '......oBBBBo........',
-    '....oBBbBBbBBo..oRo.',
-    '...oBoBBBBBBoBo.oro.',
-    '..oBooBbBBbBooBooro.',
-    '..oBo.oBBBBo..oBro..',
-    '..oo..oBbbBo...oo...',
-    '......oBBBBo........',
-    '.....oBb..bBo.......',
-    '.....oB....Bo.......',
-    '.....oBb..bBo.......',
-    '....ooBo..oBoo......',
-    '....obbo..obbo......',
-    '...oobboo.oobboo....',
-    '...ooooo...ooooo....',
+  // ★ v200 — 사장: "너가 만든 시제품이 더 나은데 왜 이렇게 안만들어?"
+  // 맞는 지적이었다. 시제품(32×34)을 만들어놓고 전역 조명 패스라는 싸고 체계적인 길로
+  // 도망쳤다. 모서리 45% 틴트는 22×21 막대기를 갈비뼈 있는 백골로 바꾸지 못한다.
+  // 종전(20×19)에 없던 것: 갈비뼈 4단 · 흉골 · 눈확 · 이빨 · 골반 ·
+  //                        날/코등이/손잡이가 있는 검 (종전엔 2px 갈색 막대)
+  // 화면 크기는 ds 1.35 로 유지한다 — 디테일만 2.6배, 덩치는 그대로
+  const SKELETON_ROWS = pad([ // 깨어난 백골 (v200 시제품 채택)
+    '.......................K........',
+    '......................KKs.......',
+    '........BBBBBBBBB.....SKs.......',
+    '.......BBBBBBBBBBB....SKs.......',
+    '.......bbbbbbbbbbb....SKs.......',
+    '.......bbbbbbbbbbb....SKs.......',
+    '.......beeebbbeeeb....SKs.......',
+    '......bberebbberebb...SKs.......',
+    '.......beeebbbeeeb....SKs.......',
+    '.......bbbbbbbbbbb....SKs.......',
+    '.......bbbbbbbbbbb....SKs.......',
+    '........bBdBdBdBb.....SKs.......',
+    '..........bbbbb.....ggggggg.....',
+    '..........ddddd.....bGGGGG......',
+    '........ddddBdddd..bb.hhh.......',
+    '.....b.bbbbbBbbbbb.bb.hhh.......',
+    '....bb.dddddBddddd.bb.hhh.......',
+    '....bb.bbbbbBbbbbb.b..hhh.......',
+    '....bbddddddBdddddd..ggggg......',
+    '....bb.bbbbbBbbbbb..............',
+    '....b..dddddBddddd..............',
+    '...bbb.bbbbbBbbbbb..............',
+    '........ddddBdddd...............',
+    '........bbbbbbbbb...............',
+    '........ddddddddd...............',
+    '........db.....bd...............',
+    '........db.....bd...............',
+    '........db.....bd...............',
+    '........db.....bd...............',
+    '........db.....bd...............',
+    '........db.....bd...............',
+    '........db.....bd...............',
+    '.......bbbb...bbbb..............',
+    '.......dddd...dddd..............',
   ]);
-  sprites.skeleton = make(SKELETON_ROWS, {
-    o: '#16121f', B: '#e8dfc8', b: '#b8ae96', e: '#e43b44', r: '#8a6a4a', R: '#a88a5a',
-  });
+  // 뼈 3단(B 하이라이트 / b 기본 / d 그늘) + 검 3단(K 날 / S 중간 / s 그늘) + 금속 코등이
+  const BONE_PAL = {
+    b: '#d8d0b8', B: '#f4eeda', d: '#9a917c', e: '#1a1622', r: '#e43b44',
+    S: '#9aa2b8', K: '#e6ecff', s: '#6a7086', g: '#8a6b3c', G: '#c0994e', h: '#4a3620',
+    o: '#16121f', R: '#a88a5a', w: '#e8dfc8', m: '#b8ae96',
+  };
+  sprites.skeleton = make(SKELETON_ROWS, BONE_PAL, { ds: 1.35 });
 
   // 방패 해골: 전면 대형 방패
   const SHIELD_ROWS = pad([ // 백골 방패병 (v122 A안) — v121 백골과 같은 뼈 언어 + 타워 방패
@@ -1416,7 +1445,10 @@ const Sprites = (() => {
   sprites.shade = make(STALKER_ROWS, { k: '#101018', r: '#5c7cff', s: '#2a2a44' });
   sprites.gazer = make(VOIDEYE_ROWS, { k: '#182448', w: '#a8c0f0', R: '#4a6ede', r: '#080c1e', t: '#2c3c6e' });
   sprites.bloodBat = make(BAT_ROWS, { w: '#8a2430', b: '#5a1424', k: '#ffd866', f: '#ff4757' });
-  sprites.boneHeap = make(SKELETON_ROWS, { o: '#16121f', B: '#d8cfb8', b: '#a89e86', e: '#ffd866', r: '#6a4a2a', R: '#7a5a3a' });
+  // 뼈무더기 — 같은 픽셀맵에 죽은 색을 입힌다 (팔레트 스왑). 새 문자 전부를 덮어야 한다
+  sprites.boneHeap = make(SKELETON_ROWS, { ...BONE_PAL,
+    B: '#d8cfb8', b: '#a89e86', d: '#6e6656', e: '#ffd866', r: '#6a4a2a', R: '#7a5a3a',
+    S: '#5a5448', K: '#8a8272', s: '#3e3a30', g: '#4a3a22', G: '#6a5432', h: '#2e2216' }, { ds: 1.35 });
   sprites.venomLasher = make(GHOUL_ROWS, { g: '#3f6a35', G: '#6a9a48', d: '#2a4a24', r: '#c9d94a', m: '#1d3318', b: '#55702a' });
   sprites.sporeMother = make(MUSHROOM_ROWS, { m: '#a04a7a', M: '#e8b8d0', D: '#702a52', s: '#c9b89a', k: '#1a1c2c' });
   sprites.acidSlug = make(LEECH_ROWS, { r: '#6a7a1a', R: '#9aa82a', W: '#d8e858', k: '#141a06' });

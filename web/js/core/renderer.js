@@ -75,6 +75,9 @@ const Renderer = {
   },
 
   drawSprite(img, x, y, { flip = false, alpha = 1, squashX = 1, squashY = 1, rot = 0, scale = SCALE, shadow = false, light = null } = {}) {
+    // 고유 배율(__ds): 원본 해상도를 올린 스프라이트가 화면에서 거인이 되지 않게 한다.
+    // 호출부가 배율을 명시하지 않은 경우에만 적용한다 (보스 def.scale 등은 그대로 존중)
+    if (scale === SCALE && img && img.__ds) scale = img.__ds;
     // 프레임 누락 방어 (v147): undefined가 오면 이 프레임의 렌더 전체가 예외로 죽는다 (소크에서 간헐 관측).
     // 스킵하고 호출 스택을 기록해 원인 스프라이트를 추적한다
     if (!img) {
