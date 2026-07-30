@@ -684,6 +684,20 @@ const GameRender = {
       ctx.restore();
     }
 
+    // ── 광원 목록 (v180) — 프레임당 한 번만 모은다 ──
+    // 횃불·용암·모닥불이 실제로 스프라이트를 비춘다. 종전엔 바닥만 밝히고
+    // 그 위에 선 캐릭터는 아무 영향을 안 받아서, 배경과 인물이 따로 놀았다
+    Renderer.lights = [];
+    for (const t of World.torches || []) {
+      Renderer.lights.push({ x: t.x, y: t.y + World.offsetY - 4, r: t.stand ? 150 : 118, warm: true, i: 1 });
+    }
+    for (const lt of World.lavaTiles || []) {
+      Renderer.lights.push({ x: lt.tx * 48 + 24, y: lt.ty * 48 + 24 + World.offsetY, r: 120, warm: true, i: 0.85 });
+    }
+    for (const it of this.interactables || []) {
+      if (it.kind === 'campfire' || it.kind === 'fire') Renderer.lights.push({ x: it.x, y: it.y, r: 165, warm: true, i: 1.1 });
+    }
+
     const drawables = [...this.enemies];
     if (this.state !== 'over') drawables.push(this.player);
     drawables.sort((a, b) => a.y - b.y);

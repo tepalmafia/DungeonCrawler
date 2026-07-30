@@ -50,7 +50,22 @@ const Renderer = {
   },
 
   // 스프라이트를 중심 기준으로 그린다. squash: 스쿼시&스트레치, shadow: 발밑 그림자
-  drawSprite(img, x, y, { flip = false, alpha = 1, squashX = 1, squashY = 1, rot = 0, scale = SCALE, shadow = false } = {}) {
+  // 이 지점을 비추는 가장 센 광원 → {a: 방향, k: 세기, warm}
+  // 광원이 없으면 약한 상단광(달빛)으로 떨어진다 — 완전 무광이면 실루엣이 납작해진다
+  lights: [],
+  lightAt(x, y) {
+    let best = null, bk = 0;
+    for (const L of this.lights) {
+      const dx = L.x - x, dy = L.y - y;
+      const d = Math.hypot(dx, dy);
+      if (d > L.r) continue;
+      const k = (1 - d / L.r) * (L.i || 1);
+      if (k > bk) { bk = k; best = { a: Math.atan2(dy, dx), k: Math.min(0.8, k * 0.95), warm: !!L.warm }; }
+    }
+    return best || { a: -Math.PI / 2, k: 0.2, warm: false }; // 위에서 오는 창백한 기본광
+  },
+
+  drawSprite(img, x, y, { flip = false, alpha = 1, squashX = 1, squashY = 1, rot = 0, scale = SCALE, shadow = false, light = null } = {}) {
     // 프레임 누락 방어 (v147): undefined가 오면 이 프레임의 렌더 전체가 예외로 죽는다 (소크에서 간헐 관측).
     // 스킵하고 호출 스택을 기록해 원인 스프라이트를 추적한다
     if (!img) {
@@ -77,6 +92,30 @@ const Renderer = {
     if (rot) ctx.rotate(rot);
     if (flip) ctx.scale(-1, 1);
     ctx.drawImage(img, Math.round(-w / 2), Math.round(-h / 2), w, h);
+    // ── 림라이트 (v180) — 광원 쪽 가장자리만 밝다 ──
+    // 이게 없으면 횃불 옆 해골과 구석 해골이 똑같이 밝아, 캐릭터가 배경 '위'에 얹혀 보인다.
+    // light = {a: 광원 방향(rad), k: 세기 0~1, warm: 불빛인가}
+    if (light && light.k > 0.02 && typeof Sprites !== 'undefined' && Sprites.rim) {
+      // ① 몸 전체가 빛을 받는다 — **이게 substance고 림은 detail이다.**
+      // 실측 교훈: 가장자리만 밝히면 화면 변화가 0.04%라 "작동하지만 안 보인다".
+      // 횃불 옆 해골은 테두리만이 아니라 **몸이 따뜻해져야** 장면 안에 있는 것으로 읽힌다
+      if (Sprites.white) {
+        ctx.globalAlpha = alpha * Math.min(0.26, light.k * 0.34);
+        ctx.globalCompositeOperation = 'lighter';
+        const sil = Sprites.white(img);
+        ctx.save();
+        ctx.drawImage(sil, Math.round(-w / 2), Math.round(-h / 2), w, h);
+        ctx.restore();
+      }
+      // ② 광원 쪽 가장자리 (rim)
+      // flip 상태에서는 좌우가 뒤집히므로 방향도 뒤집어야 빛이 같은 쪽에 남는다
+      const ang = flip ? Math.PI - light.a : light.a;
+      const n = Sprites.RIM_DIRS || 8;
+      const di = ((Math.round((ang / (Math.PI * 2)) * n) % n) + n) % n;
+      ctx.globalAlpha = alpha * Math.min(0.55, light.k * 0.8);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(Sprites.rim(img, di, !!light.warm), Math.round(-w / 2), Math.round(-h / 2), w, h);
+    }
     ctx.restore();
   },
 };

@@ -1124,7 +1124,7 @@ function createPlayer(x, y, classId = 'knight') {
 
       Renderer.drawSprite(flash ? Sprites.white(img) : img,
         this.x, this.y - bob, {
-          flip: this.flip, rot, shadow: true,
+          flip: this.flip, rot, shadow: true, light: Renderer.lightAt(this.x, this.y),
           alpha: this.invuln > 0 ? 0.8 : 1,
         });
 
