@@ -1001,6 +1001,10 @@ const DECAL_PAINTERS = {
 };
 
 const World = {
+  // v191: 벽이 위로 솟는 높이(px). 0이면 v190까지의 평면 벽.
+  // 위 칸이 solid 일 때만 적용된다 — 바닥을 덮으면 걸어다닐 자리가 사라진다
+  WALL_RISE: 22,
+
   cols: 20,
   rows: 11,
   offsetY: 6,
@@ -1700,9 +1704,16 @@ const World = {
         const faceDown = !this._wallAt(tx, ty + 1); // 아래가 바닥 → 벽 정면이 보임
 
         if (faceDown) {
+          // ── 벽 솟음 (v191) ────────────────────────────────────────────
+          // 지금 벽은 자기 타일 48px 안에만 그려진다. 그래서 「위에서 내려다본 두께」로만
+          // 읽히고 「서 있는 벽」으로 안 읽힌다 — 2.5D 입체감이 여기서 죽는다.
+          // 위 칸이 **이미 solid** 일 때만 그 위로 rise 만큼 얼굴을 끌어올린다.
+          // (위가 바닥이면 걸어다닐 자리를 덮게 되므로 절대 올리지 않는다)
+          const solidAbove = this._wallAt(tx, ty - 1);
+          const rise = solidAbove ? World.WALL_RISE : 0;
           // 정면: 벽돌 쌓기 + 윗면 캡 + 아래 어두운 립
           ctx.fillStyle = th.wallBase;
-          ctx.fillRect(x, y, TS, TS);
+          ctx.fillRect(x, y - rise, TS, TS + rise);
           // 벽돌 단위 명암 (v124): 벽돌 하나하나가 다른 돌이다 — 평면 스트립 탈피
           {
             const bh = Math.floor((TS - 14) / 2); // 벽돌 2단
@@ -1715,23 +1726,31 @@ const World = {
                 if (cw <= 0) continue;
                 let bv = ((tx * 7 + col * 13 + row * 29 + ty * 3) % 5);
                 ctx.fillStyle = th.wallFace;
-                ctx.fillRect(cx2, y + 8 + row * (bh + 2), cw, bh);
+                ctx.fillRect(cx2, y - rise + 8 + row * (bh + 2), cw, bh + rise * (row ? 1 : 0));
                 ctx.fillStyle = bv === 0 ? 'rgba(0,0,0,0.14)' : bv === 1 ? 'rgba(0,0,0,0.07)' : bv === 4 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0)';
-                ctx.fillRect(cx2, y + 8 + row * (bh + 2), cw, bh);
+                ctx.fillRect(cx2, y - rise + 8 + row * (bh + 2), cw, bh + rise * (row ? 1 : 0));
               }
             }
           }
-          // 윗면 캡
+          // 윗면 캡 — 솟은 만큼 위로 올라간다 (벽의 '꼭대기'가 여기다)
           ctx.fillStyle = th.roof;
-          ctx.fillRect(x, y, TS, 8);
+          ctx.fillRect(x, y - rise, TS, 8);
           ctx.fillStyle = 'rgba(255,255,255,0.07)';
-          ctx.fillRect(x, y + 7, TS, 1);
+          ctx.fillRect(x, y - rise + 7, TS, 1);
+          // v191: 꼭대기 아래로 떨어지는 그늘 — 높이가 있어야 생기는 음영이다
+          if (rise > 0) {
+            const g = ctx.createLinearGradient(0, y - rise + 8, 0, y - rise + 8 + Math.min(26, rise + 10));
+            g.addColorStop(0, 'rgba(0,0,0,0.34)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(x, y - rise + 8, TS, Math.min(26, rise + 10));
+          }
           // 아래 립
           ctx.fillStyle = th.wallDark;
           ctx.fillRect(x, y + TS - 6, TS, 6);
-          // 벽돌 하이라이트
+          // 벽돌 하이라이트 — 꼭대기 모서리에 얹는다
           ctx.fillStyle = 'rgba(255,255,255,0.05)';
-          ctx.fillRect(x + 2, y + 9, TS / 2 - 3, 2);
+          ctx.fillRect(x + 2, y - rise + 9, TS / 2 - 3, 2);
           // 막별 벽 표정 (비주얼 1차) — 같은 벽돌이라도 막의 이야기가 묻어 있다
           if (this.act === 1) { // 묘지: 돌 틈의 이끼
             if ((tx * 7 + ty * 5) % 3 === 0) {

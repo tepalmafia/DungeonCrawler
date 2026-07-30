@@ -136,6 +136,49 @@ const GameRender = {
     ctx.globalAlpha = 1;
   },
 
+  // ── 무기화된 투사체 (v192) ──────────────────────────────────────────────
+  // 사장: "동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
+  // 도형으로 그린다 — 스프라이트를 새로 만들지 않는다. 픽셀 스타일과 어울리게
+  // 각을 살리고(뼈), 프레임마다 형태가 흔들리게(불꽃) 한다
+  _drawWeaponProj(ctx, a, style) {
+    const ang = Math.atan2(a.dir.y, a.dir.x);
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    if (style.shape === 'bone') {
+      // 뼛조각 — 날아가며 돈다. 무덤지기가 퍼올려 던지는 것
+      ctx.rotate(a.t * 11 + (a.seed || 0));
+      const L = a.r * 1.9, K = a.r * 0.62;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(-L / 2 + 1, -K / 2 + 1.5, L, K);           // 밑그림자 (두께감)
+      ctx.fillStyle = style.color;
+      ctx.fillRect(-L / 2, -K / 2, L, K);                      // 뼈 몸통
+      ctx.beginPath();                                          // 양 끝 관절 혹
+      ctx.arc(-L / 2, -K * 0.55, K * 0.75, 0, Math.PI * 2);
+      ctx.arc(-L / 2, K * 0.55, K * 0.75, 0, Math.PI * 2);
+      ctx.arc(L / 2, -K * 0.55, K * 0.75, 0, Math.PI * 2);
+      ctx.arc(L / 2, K * 0.55, K * 0.75, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';                 // 위쪽 하이라이트
+      ctx.fillRect(-L / 2 + 1, -K / 2, L - 2, 1.5);
+    } else if (style.shape === 'flame') {
+      // 불꽃 — 진행 방향으로 눕고 꼬리가 펄럭인다
+      ctx.rotate(ang);
+      const w = a.r * 2.4, h = a.r * 1.5;
+      const f = Math.sin(a.t * 26 + (a.seed || 0)) * 0.3;
+      for (const [k, col] of [[1.0, '#8a2a10'], [0.72, style.color], [0.42, '#ffd866'], [0.2, '#fff6c8']]) {
+        ctx.beginPath();
+        ctx.moveTo(w * 0.5 * k, 0);
+        ctx.quadraticCurveTo(0, h * 0.5 * k * (1 + f), -w * 0.62 * k, h * 0.22 * k);
+        ctx.quadraticCurveTo(-w * 0.24 * k, 0, -w * 0.62 * k, -h * 0.22 * k);
+        ctx.quadraticCurveTo(0, -h * 0.5 * k * (1 - f), w * 0.5 * k, 0);
+        ctx.closePath();
+        ctx.fillStyle = col;
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  },
+
   render() {
     const ctx = Renderer.ctx;
     Renderer.begin();
@@ -923,6 +966,8 @@ const GameRender = {
       ctx.restore();
       if (style.sprite) {
         Renderer.drawSprite(Sprites.arrow, a.x, a.y, { rot: Math.atan2(a.dir.y, a.dir.x), scale: 3 });
+      } else if (style.shape) {
+        this._drawWeaponProj(ctx, a, style);
       } else {
         ctx.fillStyle = style.color;
         ctx.beginPath();

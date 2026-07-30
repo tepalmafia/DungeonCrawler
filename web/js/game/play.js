@@ -167,6 +167,58 @@ const GamePlay = {
     }
   },
 
+  // ── 유휴 행동 (v192) — 사연대로 산다 ────────────────────────────────────
+  // 사장: "모든 사연과 스토리에 맞게 적들도 디자인해줘."
+  // 도감의 사연(v187, 89종)을 **행동으로** 옮긴다. 인지 전에만 돈다 — 나를 보면 그만둔다.
+  //   feed  시체를 파먹는다 (굶주려 죽은 것들 · 시체를 먹고 자란 것들)
+  //   patrol 정찰한다 — 좌우로 순찰하며 방향을 바꾼다 (왕의 손, 병사)
+  //   toil  생전의 일을 반복한다 (수의 짓던 침모 · 무덤 파던 관리인 · 열쇠 쥔 간수)
+  //   roam  묻힐 자리를 찾아 떠돈다 (이름이 지워진 혼)
+  IDLE_ACTS: {
+    // 1막 · 죄인의 묘지 (1층 로스터 전종)
+    slime: 'feed', toxicSlime: 'feed', swarm: 'feed', bat: 'feed', ghoul: 'feed',
+    leech: 'feed', bloodBat: 'feed', glutton: 'feed', frog: 'feed', mushroom: 'toil',
+    archer: 'patrol', sniper: 'patrol', skeleton: 'patrol', shieldSkeleton: 'patrol',
+    boar: 'roam', charger: 'roam', wraith: 'roam', wisp: 'roam', shade: 'roam',
+    spider: 'toil', necro: 'toil', bomber: 'toil', brute: 'toil', jailer: 'toil',
+    executioner: 'patrol', stalker: 'patrol', warden: 'patrol', shaman: 'patrol',
+    berserker: 'patrol', frostArcher: 'patrol', acolyte: 'toil', golem: 'patrol',
+  },
+  IDLE_LOOK: {
+    feed:   { text: '…', color: '#8a1c2c', puff: ['#8a1c2c', '#5a1016'] },
+    patrol: { text: '…', color: '#9aa0b4', puff: null },
+    toil:   { text: '…', color: '#8a8074', puff: ['#6e675c', '#8a8074'] },
+    roam:   { text: '…', color: '#5ce0e6', puff: ['#5ce0e6'] },
+  },
+
+  tickIdleAct(e, dt) {
+    if (e._idle === undefined || e._idle === null) {
+      const kind = this.IDLE_ACTS[e.type] || (roleOf(e.type, e) === 'back' ? 'patrol' : 'roam');
+      // 순찰 방향·주기를 개체마다 다르게 — 같은 박자로 움직이면 기계로 보인다
+      e._idle = { kind, t: Math.random() * 3, dir: Math.random() < 0.5 ? -1 : 1, home: e.x };
+    }
+    const id = e._idle;
+    id.t += dt;
+    if (id.kind === 'patrol') {
+      // 정찰 — 자기 자리 좌우 44px를 오간다. 끝에서 몸을 돌린다(등이 생긴다)
+      const span = 44;
+      const nx = e.x + id.dir * e.speed * 0.30 * dt;
+      if (Math.abs(nx - id.home) > span) { id.dir *= -1; }
+      else { World.moveEntity(e, id.dir * e.speed * 0.30 * dt, 0); e.flip = id.dir < 0; }
+    } else if (id.kind === 'roam') {
+      if (id.t > 1.6) { id.t = 0; id.ang = Math.random() * Math.PI * 2; }
+      if (id.ang != null) World.moveEntity(e, Math.cos(id.ang) * e.speed * 0.16 * dt, Math.sin(id.ang) * e.speed * 0.16 * dt);
+    }
+    // feed·toil 은 제자리 — 대신 자기 일의 흔적이 발밑에 튄다
+    const look = this.IDLE_LOOK[id.kind];
+    if (look && look.puff && id.t - (id.puffT || 0) > 0.55) {
+      id.puffT = id.t;
+      Particles.burst(e.x + (Math.random() - 0.5) * e.r, e.y + e.r * 0.5, {
+        count: 2, colors: look.puff, speed: 26, life: 0.4, size: 2, gravity: 40,
+      });
+    }
+  },
+
   // ── 첫 조우 사연 (v187) ────────────────────────────────────────────────
   // 사장 지적: "전체 잡몹들이나 보스에게 사연을 못 느끼고" — 사연은 89종 전부 있었지만
   // **도감 안에, 그것도 마우스 호버로만** 있었다. 폰으로 하는 사람에게는 없는 것과 같다.
@@ -815,15 +867,45 @@ const GamePlay = {
         continue;
       }
 
-      // ── 드라마 AI: 발견 체계 — 아직 침입자를 모르는 병사는 제자리를 지킨다 ──
+      // ── 드라마 AI: 발견 체계 ──────────────────────────────────────────
+      // ★ v192 — 사장: "시체를 먹고 있다가 덤비다던지. 사연과 서사 스토리가 있어야해."
+      //            "병사 같은 경우는 수색하거나 정찰하다가 플레이어를 발견해서
+      //             경비대장과 같이 공격한다던지."
+      // 종전 이 자리는 `animT += dt*0.45; continue;` 가 전부였다 — **모르는 동안 아무것도 안 했다.**
+      // 사연은 도감(v187)에 다 적어뒀는데, 정작 그 사연대로 **행동하는** 순간이 없었다.
+      // 이제 인지 전에는 자기 사연을 산다: 파리떼는 시체 위를 맴돌고, 궁수는 정찰하고,
+      // 침모는 실을 짜고, 무덤지기는 땅을 판다. 그러다 나를 본다.
       if (e._aware === false) {
         e.animT += dt * 0.45;
+        this.tickIdleAct(e, dt);
         const dP = Math.hypot(e.x - p.x, e.y - p.y);
-        if (this._roomAlert || dP < 230) {
+        // 등 뒤는 늦게 본다 — 정찰 중인 병사에게 뒤가 있다는 뜻이고, 그게 잠입의 여지가 된다
+        const facingMe = (p.x - e.x) * (e.flip ? -1 : 1) > 0;
+        const sight = facingMe ? 230 : 150;
+        if (this._roomAlert || dP < sight) {
           e._aware = true;
           e._alertT = dP < 150 ? 0.25 : 0.25 + Math.random() * 0.45; // 전파 스태거
+          e._idle = null;
           if (!this._roomAlert) { this._roomAlert = true; AudioSys.shoot(); }
           Particles.text(e.x, e.y - 30, '!', { color: '#e43b44', size: 18 });
+          // 「경비대장과 같이 공격한다」 — 매듭이 나를 보면 무리 전체가 **같은 순간** 움직인다.
+          // v187 호령을 여기에 배선한다: 발견이 곧 호령이다
+          if (e.isLeader && e.pack) {
+            let called = 0;
+            for (const o of this.enemies) {
+              if (o.dead || o === e || o.pack !== e.pack || o.isBoss) continue;
+              o._aware = true; o._rallyT = 0.55;
+              o._alertT = Math.max(o._alertT || 0, 0.2 + Math.random() * 0.25);
+              o._idle = null;
+              called++;
+            }
+            if (called > 0) {
+              e._rallyT = 0.55;
+              Particles.text(e.x, e.y - 46, '적이다! 쳐라!', { color: '#e8c04a', size: 12 });
+              Particles.ring(e.x, e.y, { r0: 10, r1: 96, life: 0.4, color: '#e8c04a', width: 3 });
+              AudioSys.roar();
+            }
+          }
         } else {
           continue;
         }

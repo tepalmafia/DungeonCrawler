@@ -3120,7 +3120,9 @@ function createMiniboss(type, x, y, floorScale) {
   }
   e.isMini = true;
   e.affixes = picked;
-  e.hp = e.maxHp = Math.ceil(e.hp * 7);
+  // v192: 1층 우두머리를 처음으로 등장시키면서 배율을 층별로 나눈다.
+  // 7배는 2층 이상 기준으로 잡힌 값이고, 1층은 플레이어가 특성 2~3장뿐인 구간이다
+  e.hp = e.maxHp = Math.ceil(e.hp * (Dungeon.floor <= 1 ? 4.5 : 7));
   e.r *= 1.4;
   e.xpVal *= 8;
   e.speed *= 0.92;
