@@ -87,9 +87,13 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       // ── 정예 공용 동사 (v152): 대지 강타 — 정예가 '색만 다른 몹'이 아니라 다른 리듬이 되게.
       // 모든 정예(근접·원거리 불문)가 근거리에서 예고(0.55s) 후 충격파 링을 터뜨린다.
       // tickTimers는 전 몹이 매 프레임 부르는 유일한 공용 훅 — 킷별 update 수정 없이 전 층에 깔린다
-      if (this.elite && !this.isBoss && !this.isMini && !this.neutral && !this.dead && this.spawnT <= 0 &&
+      // ★ v194 — 사장: "각 단계별로 잡몹+보스 나오게 하라니깐? 패턴을 피하고 특성 스킬을 쓰고 손맛이 있도록"
+      // 여기 `!this.isMini` 가 **우두머리를 패턴에서 통째로 제외**하고 있었다.
+      // 그래서 우두머리는 예고도 패턴도 없는 **뚱뚱한 잡몹**이었다 — 나와도 보스로 안 읽힌다.
+      // 이제 우두머리도 강타를 쓴다. 더 자주, 더 길게 예고해서 「피하는 것」이 되게 한다
+      if ((this.elite || this.isMini) && !this.isBoss && !this.neutral && !this.dead && this.spawnT <= 0 &&
           typeof Game !== 'undefined' && Game.player && Game.state === 'play') {
-        if (this._stompCd == null) this._stompCd = 2.5 + Math.random() * 2;
+        if (this._stompCd == null) this._stompCd = this.isMini ? 1.6 + Math.random() * 1.2 : 2.5 + Math.random() * 2;
         if (this._stompT > 0) {
           this._stompT -= dt;
           if (Math.random() < 0.5) {
@@ -107,9 +111,10 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           this._stompCd -= dt;
         } else {
           const p = Game.player;
-          if (Math.hypot(p.x - this.x, p.y - this.y) < 170) {
-            this._stompT = 0.55;
-            this._stompCd = 4 + Math.random() * 2.5;
+          if (Math.hypot(p.x - this.x, p.y - this.y) < (this.isMini ? 240 : 170)) {
+            // 우두머리는 예고 0.75초 — 인간 반응(0.25초)에 여유를 크게 준다. 피하라고 만든 패턴이다
+            this._stompT = this.isMini ? 0.75 : 0.55;
+            this._stompCd = this.isMini ? 2.6 + Math.random() * 1.6 : 4 + Math.random() * 2.5;
             Particles.text(this.x, this.y - this.r - 14, '!', { color: '#ff4757', size: 16 });
             AudioSys.tellStomp(this.x, this.y); // v177: 접촉 예고보다 한 급 위 — 바닥이 온다
           }
@@ -3122,7 +3127,9 @@ function createMiniboss(type, x, y, floorScale) {
   e.affixes = picked;
   // v192: 1층 우두머리를 처음으로 등장시키면서 배율을 층별로 나눈다.
   // 7배는 2층 이상 기준으로 잡힌 값이고, 1층은 플레이어가 특성 2~3장뿐인 구간이다
-  e.hp = e.maxHp = Math.ceil(e.hp * (Dungeon.floor <= 1 ? 4.5 : 7));
+  // v194: 이제 **방마다** 나온다 — 층당 1기 기준의 7배는 벽이 된다.
+  // 몸값을 낮추고 대신 패턴(강타)으로 위협을 준다. 위협 예산은 잡몹 수에서 뺀다
+  e.hp = e.maxHp = Math.ceil(e.hp * (Dungeon.floor <= 2 ? 2.6 : Dungeon.floor <= 5 ? 3.4 : 4.2));
   e.r *= 1.4;
   e.xpVal *= 8;
   e.speed *= 0.92;

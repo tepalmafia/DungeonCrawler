@@ -2055,6 +2055,45 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `(클릭 소비 ${meet.shown ? meet.c1.ate : '?'} · 공격 안 나감 ${meet.shown ? meet.c1.noAtk : '?'}) ` +
     '(v187 카드는 3초간 화면 중앙 위를 덮었다. 클릭을 소비하지 않으면 「읽으려다 헛손질」이 된다)');
 
+  // ── 방마다 보스급 (v194) ───────────────────────────────────────────────
+  // 사장: "각 단계별로 잡몹+보스 나오게 하라니깐? 패턴을 피하고 특성 스킬을 쓰고 손맛이 있도록"
+  // v192·v193 은 「층당」 1~1.35기였고(그마저 4번 방에 몰림), 게다가 우두머리는
+  // enemies.js:90 의 `!this.isMini` 때문에 **패턴에서 통째로 제외**돼 있었다 —
+  // 예고도 패턴도 없는 뚱뚱한 잡몹이라 나와도 보스로 안 읽혔다.
+  await boot(page, { cls: 'knight', heat: 0 });
+  const stage = await page.evaluate(() => {
+    let rooms = 0, withMini = 0, stomps = 0, bodies = 0;
+    for (let r = 0; r < 6; r++) {
+      Game.restart(3000 + r * 29); Game.state = 'play'; Game.player.god = true;
+      Dungeon.floor = 1; Dungeon.miniSeen = false;
+      for (let room = 1; room <= 7; room++) {
+        Dungeon.roomIndex = room;
+        Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
+        World.buildRoom('combat'); Game.onRoomBuilt('combat');
+        for (let i = 0; i < 300; i++) Game.tick(1 / 60);
+        const live = Game.enemies.filter((e) => !e.dead);
+        const mini = live.filter((e) => e.isMini);
+        rooms++; bodies += live.length;
+        if (!mini.length) continue;
+        withMini++;
+        const m = mini[0];
+        for (let i = 0; i < 360; i++) {
+          Game.tick(1 / 60); Game.player.x = m.x + 120; Game.player.y = m.y;
+          if (m._stompT > 0) { stomps++; break; }
+        }
+      }
+    }
+    return { rooms, withMini, stomps, bodies: +(bodies / rooms).toFixed(2) };
+  });
+  console.log('  단계별보스:', JSON.stringify(stage));
+  ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
+    `전투방 ${stage.rooms}개 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
+    '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  ok('stage.miniHasPattern', stage.withMini === 0 || stage.stomps >= stage.withMini * 0.9,
+    `보스급 ${stage.withMini}기 중 ${stage.stomps}기가 예고 패턴(강타 0.75초)을 실제로 시전 ` +
+    '(v193까지 enemies.js 가 `!this.isMini` 로 우두머리를 패턴에서 제외했다 — ' +
+    '예고 없는 뚱뚱한 잡몹은 보스가 아니다. 「패턴을 피하고」가 성립할 자리가 없었다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
