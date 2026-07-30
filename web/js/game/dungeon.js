@@ -447,11 +447,16 @@ const Dungeon = {
     // 2층 확정은 과거에 검사 사망을 1→11회로 만든 전력이 있다 (v166 실측).
     if (this.floor >= 1) {
       const roomsLeft = this.totalRooms - 1 - this.roomIndex; // 보스방 전까지 남은 방 수
-      const force = !this.miniSeen && roomsLeft <= 4 && this.floor !== 2;
+      // ★ v193 — 사장: "잡몹만 나오는데? 1층 처음부터"
+      // 실측이 확인했다: v192에서 1층 우두머리 1.00회가 맞긴 한데 **20런 중 15번이 4번 방 한 곳**이었다.
+      // 방 1~3은 5~10%뿐이고, 4번 방에서 확정으로 걸리면 miniSeen 이 켜져 뒷방 확률이 0이 된다.
+      // 즉 「층당 1회」가 아니라 「4번 방에 1회」였다 — 앞쪽 방을 도는 사장은 90% 확률로 잡몹만 봤다.
+      // 1층은 확정 시점을 방 2로 당기고, 그 뒤에도 두 번째가 나오게 한다 (「잡몹 + 보스 조합」)
+      const force = !this.miniSeen && roomsLeft <= (this.floor === 1 ? 6 : 4) && this.floor !== 2;
       // 심층 2번째 우두머리 12→20% (2026-07 몬스터 확장 — 중간보스 조우 상향)
       let chance = this.miniSeen
-        ? ((this.floor >= 6 || this.shortcutHot) ? 0.2 : 0)
-        : (this.shortcutHot ? 0.25 : this.floor === 2 ? 0.08 : 0.14);
+        ? ((this.floor >= 6 || this.shortcutHot) ? 0.2 : this.floor === 1 ? 0.12 : 0)
+        : (this.shortcutHot ? 0.25 : this.floor === 2 ? 0.08 : this.floor === 1 ? 0.30 : 0.14);
       if (force || RNG.chance(chance)) {
         // 소형 쫄은 우두머리 감이 아니다 (거대화해도 위협 패턴이 빈약)
         const MINI_EXCLUDE = ['swarm', 'sporePuff', 'cinder', 'voidSpawn', 'bat', 'bloodBat'];

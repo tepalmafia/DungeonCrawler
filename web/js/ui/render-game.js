@@ -1294,35 +1294,52 @@ const GameRender = {
       const mt = this._meet;
       const c = mt.c;
       const a = Math.min(1, mt.t * 2.2) * Math.min(1, (mt.max - mt.t) * 4);
-      const w = 680, h = 74, x = (Renderer.W - w) / 2, y = 84;
       const side = Meta.sideColor(c.side);
+      const r = this.meetRect();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = a;
       ctx.fillStyle = 'rgba(6,5,12,0.9)';
-      ctx.fillRect(x, y, w, h);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
       ctx.fillStyle = side;
-      ctx.fillRect(x, y, 3, h);                       // 진영 색 띠 — 누구 편이었는지가 한눈에
+      ctx.fillRect(r.x, r.y, 3, r.h);                 // 진영 색 띠 — 누구 편이었는지가 한눈에
       ctx.strokeStyle = 'rgba(120,114,100,0.5)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
       const img = Sprites[c.sprite];
-      if (img) {
-        const s = Math.max(1, Math.floor(38 / Math.max(img.width, img.height)));
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, Math.round(x + 30 - img.width * s / 2), Math.round(y + h / 2 - img.height * s / 2),
-          img.width * s, img.height * s);
+      if (!mt.open) {
+        // ★ v193 접힌 막대 — 사장: "사연이 화면을 가리니깐 클릭하면 시작되도록"
+        // 전투를 가리지 않는 26px 한 줄. 누르지 않으면 조용히 사라진다
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, Math.round(r.x + 14), Math.round(r.y + r.h / 2 - img.height / 2), img.width, img.height);
+        }
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 11px Galmuri11, monospace';
+        ctx.fillStyle = '#e8e0cf';
+        ctx.fillText(c.name, r.x + 34, r.y + 17);
+        ctx.font = '10px Galmuri11, monospace';
+        ctx.fillStyle = '#8f8577';
+        ctx.textAlign = 'right';
+        ctx.fillText('클릭 — 사연', r.x + r.w - 12, r.y + 17);
+      } else {
+        if (img) {
+          const s2 = Math.max(1, Math.floor(38 / Math.max(img.width, img.height)));
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, Math.round(r.x + 30 - img.width * s2 / 2), Math.round(r.y + r.h / 2 - img.height * s2 / 2),
+            img.width * s2, img.height * s2);
+        }
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 16px Galmuri11, monospace';
+        ctx.fillStyle = '#e8e0cf';
+        ctx.fillText(c.name, r.x + 60, r.y + 25);
+        const nameW = ctx.measureText(c.name).width;
+        ctx.font = '11px Galmuri11, monospace';
+        ctx.fillStyle = side;
+        ctx.fillText(`— ${Meta.sideLabel(c.side)}`, r.x + 70 + nameW, r.y + 25);
+        ctx.font = '12px Galmuri11, monospace';
+        ctx.fillStyle = '#a8a294';
+        HUD._wrapText(ctx, c.lore, r.x + 60, r.y + 46, r.w - 78, 16);
       }
-      ctx.textAlign = 'left';
-      ctx.font = 'bold 16px Galmuri11, monospace';
-      ctx.fillStyle = '#e8e0cf';
-      ctx.fillText(c.name, x + 60, y + 25);
-      const nameW = ctx.measureText(c.name).width;   // 반드시 이름을 쓴 폰트로 잰다
-      ctx.font = '11px Galmuri11, monospace';
-      ctx.fillStyle = side;
-      ctx.fillText(`— ${Meta.sideLabel(c.side)}`, x + 70 + nameW, y + 25);
-      ctx.font = '12px Galmuri11, monospace';
-      ctx.fillStyle = '#a8a294';
-      HUD._wrapText(ctx, c.lore, x + 60, y + 46, w - 78, 16);
       ctx.globalAlpha = 1;
     }
     // 보스 등장 카드 (v142): 상하 암막 + 이름·기믹 대문 — 결전의 문턱을 몸으로 느끼게

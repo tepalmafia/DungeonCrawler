@@ -2026,6 +2026,35 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     '(node tools/bump-version.js <버전> 으로 한 번에 올린다. ' +
     '어긋나면 사장 브라우저가 옛 JS를 계속 쓴다 — 고쳐도 안 닿는다)');
 
+  // ── 사연 카드 클릭 (v193) ──────────────────────────────────────────────
+  // 사장: "몹마다 사연이 화면을 가리니깐 클릭하면 시작되도록 해줘"
+  // 새로 만든 입력 경로다 — 회귀가 없으면 조용히 죽는다 (v186·v192가 그렇게 당했다)
+  await boot(page, { cls: 'knight', heat: 0 });
+  const meet = await page.evaluate(() => {
+    Game.restart(5); Dungeon.floor = 1; Dungeon.roomIndex = 2; Game.state = 'play'; Game.player.god = true;
+    Game._metRun = {}; Game._meetQ = []; Game._meet = null; Game.banner = null;
+    World.buildRoom('combat'); Game.onRoomBuilt('combat');
+    for (let i = 0; i < 300 && !Game._meet; i++) { Game.tick(1 / 60); Game.banner = null; }
+    if (!Game._meet) return { shown: false };
+    const c0 = { open: Game._meet.open, h: Game.meetRect().h };
+    const r = Game.meetRect();
+    Input.mouse.x = r.x + r.w / 2; Input.mouse.y = r.y + r.h / 2; Input.mouse.justDown = true;
+    const atk0 = Game.player.attackCd;
+    Game._tickPlay(1 / 60);
+    const c1 = { open: !!(Game._meet && Game._meet.open), h: Game.meetRect().h,
+      ate: Input.mouse.justDown === false, noAtk: Game.player.attackCd <= atk0 + 0.001 };
+    const r2 = Game.meetRect();
+    Input.mouse.x = r2.x + r2.w / 2; Input.mouse.y = r2.y + r2.h / 2; Input.mouse.justDown = true;
+    Game._tickPlay(1 / 60);
+    return { shown: true, c0, c1, closed: Game._meet === null };
+  });
+  console.log('  사연카드:', JSON.stringify(meet));
+  ok('lore.cardOpensOnClick',
+    meet.shown && !meet.c0.open && meet.c1.open && meet.c1.h > meet.c0.h && meet.c1.ate && meet.c1.noAtk && meet.closed,
+    `접힘 h${meet.shown ? meet.c0.h : '?'} → 클릭 → 펼침 h${meet.shown ? meet.c1.h : '?'} → 다시 클릭 → 닫힘 ` +
+    `(클릭 소비 ${meet.shown ? meet.c1.ate : '?'} · 공격 안 나감 ${meet.shown ? meet.c1.noAtk : '?'}) ` +
+    '(v187 카드는 3초간 화면 중앙 위를 덮었다. 클릭을 소비하지 않으면 「읽으려다 헛손질」이 된다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();

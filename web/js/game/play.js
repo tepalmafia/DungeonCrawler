@@ -235,6 +235,12 @@ const GamePlay = {
     this._meetQ.push(c);
   },
 
+  // 사연 막대/카드의 화면 영역 — 렌더(render-game)와 입력(_tickPlay)이 같은 값을 본다
+  meetRect() {
+    if (this._meet && this._meet.open) return { x: (Renderer.W - 680) / 2, y: 84, w: 680, h: 74 };
+    return { x: (Renderer.W - 300) / 2, y: 84, w: 300, h: 26 };
+  },
+
   tickFirstMeet(dt) {
     if (this._meet) {
       this._meet.t -= dt;
@@ -245,7 +251,10 @@ const GamePlay = {
     if (!this._meetQ || !this._meetQ.length) return;
     if (this._bossIntro || (this.banner && this.banner.life > 0)) return;
     const c = this._meetQ.shift();
-    this._meet = { c, t: 3.0, max: 3.0 };
+    // ★ v193 — 사장: "몹마다 사연이 화면을 가리니깐 클릭하면 시작되도록 해줘"
+    // v187 카드는 3초 동안 화면 중앙 위를 덮었다. 전투 중에 이건 방해다.
+    // 접힌 막대 하나로 시작하고, **누를 때만** 펼친다. 안 누르면 조용히 사라진다
+    this._meet = { c, t: 6.0, max: 6.0, open: false };
     AudioSys.pickup();
   },
 
@@ -491,6 +500,17 @@ const GamePlay = {
   },
 
   _tickPlay(dt) {
+    // v193: 사연 막대 클릭을 **공격 입력보다 먼저** 처리하고 그 클릭을 먹는다.
+    // 나중에 처리하면 같은 클릭이 공격으로도 나가서 "읽으려다 헛손질"이 된다
+    if (this._meet && Input.mouse.justDown) {
+      const r = this.meetRect();
+      if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+          Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) {
+        if (this._meet.open) { this._meet = null; }
+        else { this._meet.open = true; this._meet.t = 5.0; this._meet.max = 5.0; AudioSys.orb(); }
+        Input.mouse.justDown = false;   // 이 클릭은 여기서 끝난다
+      }
+    }
     // 완벽 회피 슬로모 — 세계가 0.35배로 늘어진다 (보상의 손맛)
     if (this.slowmoT > 0) {
       this.slowmoT -= dt;
