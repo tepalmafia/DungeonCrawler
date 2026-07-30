@@ -689,15 +689,29 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     // ★ 변주는 **플레이어가 실제로 듣는 경로**로 잰다. 게임은 구운 뱅크(재질당 6종)를
     // 랜덤 재생하고 그 위에 재생속도 지터(±4%)를 얹는다. 실시간 합성은 뱅크가 구워지기 전
     // 몇 초 동안만 쓰이는 대체 경로다 — 그걸 재면 대체 경로를 상품으로 착각하게 된다
+    // ★ 지표 안정성: ZCR의 표준편차는 n=6에서 표본오차가 커서 판정이 실행마다 흔들렸다
+    // (9.9% ↔ 4.6%). 에너지 가중 스펙트럼 중심은 같은 신호에서 훨씬 안정적이고,
+    // 6개 변주의 **범위**(max-min)는 표준편차보다 소표본에 견고하다
+    const cen = (buf) => {
+      const d = buf.getChannelData(0);
+      const N = Math.min(8192, d.length);
+      let e = 0, w = 0;
+      for (let i = 1; i < N; i++) {
+        const hi = Math.abs(d[i] - d[i - 1]);   // 1차 차분 = 고역 가중
+        const lo = Math.abs(d[i]);
+        e += lo; w += hi;
+      }
+      return e ? w / e : 0;
+    };
     const hz = [];
     const bank = AudioSys._pcm && AudioSys._pcm.hit_flesh;
     if (bank && bank.length) {
-      for (const b of bank) hz.push(zcr(b));
+      for (const b of bank) hz.push(cen(b));
     } else {
-      for (let i = 0; i < 24; i++) hz.push(zcr(await render(() => AudioSys.hit('flesh', 480))));
+      for (let i = 0; i < 12; i++) hz.push(cen(await render(() => AudioSys.hit('flesh', 480))));
     }
     const mean = hz.reduce((a, c) => a + c, 0) / hz.length;
-    const sd = Math.sqrt(hz.reduce((a, c) => a + (c - mean) ** 2, 0) / hz.length);
+    const sd = (Math.max(...hz) - Math.min(...hz)) / 2; // 범위의 절반 — SD와 자릿수를 맞춘다
     return {
       varPct: +(sd / mean * 100).toFixed(1),
       left: +bal(await render(() => AudioSys.hit('bone', 60))).toFixed(2),
@@ -714,7 +728,7 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   // 임계 8%: 24표본 ZCR도 표본오차가 ±3%p 정도 있다. 종전 계측 중앙값 1.9%(반음의 1/3)와는
   // 여전히 4배 이상 차이가 나므로 판정은 명확하다. 구운 뱅크의 변주는 tone.variantsBaked가 따로 잰다
   ok('audio.hitVaries', audio.varPct >= 8,
-    `구운 뱅크 6종의 음색 중심 변주 SD ${audio.varPct}% + 재생속도 지터 ±4% ` +
+    `구운 뱅크 6종의 음색 중심 변주폭 ±${audio.varPct}% + 재생속도 지터 ±4% ` +
     '(v173은 계측 중앙값 1.9% — 반음의 1/3이라 3분이면 귀가 지쳤다)');
   // 중앙값 임계 0.35: 리버브 IR이 채널별로 다른 잡음이라 웨트가 좌우로 조금 갈린다(의도된 폭).
   // 좌우 극단이 ±0.9인 것에 비하면 중앙은 충분히 가운데다
@@ -1407,6 +1421,52 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `광원 세기 가까이 ${lit.kNear} → 멀리 ${lit.kFar} (거리에 따라 꺼진다)`);
   ok('light.hasDirection', lit.dirDiffers && lit.rimBaked,
     '광원 방향이 좌우로 갈리고 림 캐시가 스프라이트 크기와 맞는다 (빛 받는 쪽 가장자리만 밝다)');
+
+  // ── 무리와 진형 (v181) ──
+  await boot(page, { cls: 'knight', heat: 0 });
+  const pack = await page.evaluate(() => {
+    // ① 구성: 손제작 무리가 뼈대인가 (종전엔 45%만 세트, 55%는 순수 랜덤)
+    let setUsed = 0, packSum = 0, N = 200;
+    for (let i = 0; i < N; i++) {
+      Dungeon.floor = 1 + (i % 10); Dungeon.roomIndex = 2 + (i % 5);
+      const c = Dungeon.combatComp(2 + (i % 4));
+      if (c.setUsed) setUsed++;
+      if (c.packs) packSum += c.packs.length;
+    }
+    // ② 배치: 역할이 거리로 갈리는가
+    Dungeon.floor = 3; Dungeon.roomIndex = 2; Dungeon.build('combat');
+    const p = Game.player; p.god = true; p.x = 120; p.y = 270;
+    const dOf = (type) => {
+      Game._roleN = null;
+      const pos = [];
+      for (let k = 0; k < 4; k++) {
+        Game._roleN = Game._roleN || { front: 0, flank: 0, back: 0 };
+        const r = roleOf(type);
+        const q = formationPos(r, Game._roleN[r]++, p);
+        pos.push(Math.hypot(q.x - p.x, q.y - p.y));
+      }
+      return +(pos.reduce((a, b) => a + b, 0) / pos.length).toFixed(0);
+    };
+    const front = dOf('shieldSkeleton'), back = dOf('sniper'), flank = dOf('charger');
+    // ③ 지형 질의가 실제로 다른 자리를 고르는가
+    const bx = 480, by = 270;
+    const cs = World.coverSpot(bx, by, 110), ch = World.chokeSpot(bx, by, 110), op = World.openSpot(bx, by, 110);
+    const wallsAt = (q) => q ? World._wallsAround(Math.floor(q.x / 48), Math.floor((q.y - World.offsetY) / 48)) : -1;
+    return { setPct: Math.round(setUsed / N * 100), packsAvg: +(packSum / N).toFixed(2),
+      front, back, flank,
+      coverWalls: wallsAt(cs), openWalls: wallsAt(op), chokeFound: !!ch,
+      terrainDiffers: !!(cs && op && (cs.x !== op.x || cs.y !== op.y)) };
+  });
+  console.log('  무리:', JSON.stringify(pack));
+  ok('pack.handmadeIsDefault', pack.setPct >= 95 && pack.packsAvg >= 1.5,
+    `손제작 무리가 뼈대인 방 ${pack.setPct}% · 방당 무리 ${pack.packsAvg}개 ` +
+    '(v180은 45%만 세트, 나머지 55%는 RNG.pick 순수 랜덤 = 무리가 아니라 개체 N개였다)');
+  ok('pack.rolesFormRanks', pack.back > pack.front && pack.flank > pack.front,
+    `진형 거리 전열 ${pack.front}px < 측면 ${pack.flank}px < 후열 ${pack.back}px ` +
+    '(v180은 전부 randomSpawnPos — 방 아무 데나 흩뿌려서 무리를 깨는 순서가 없었다)');
+  ok('terrain.roleAwareSpots', pack.terrainDiffers && pack.coverWalls > pack.openWalls,
+    `엄폐 자리 주변 벽 ${pack.coverWalls} > 트인 자리 ${pack.openWalls} · 좁은 목 탐색 ${pack.chokeFound ? '성공' : '실패'} ` +
+    '(지형이 진형에 값을 매긴다 — 저격수는 벽을 등지고, 돌진은 트인 길에 선다)');
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 

@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 180;
+const GAME_VERSION = 181;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -554,6 +554,7 @@ const Game = {
     this._formation = this._drama && Dungeon.floor >= 3 && RNG.chance(0.6) &&
       (World.lastTemplateTag === 'corridor' || World.lastTemplateTag === 'pillars');
     this._formN = 0;
+    this._roleN = null; // v181 진형 역할 카운터 — 방마다 새로 센다
 
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {

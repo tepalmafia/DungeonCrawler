@@ -1323,6 +1323,50 @@ const World = {
 
   // 배치 안전 지점: 원하는 좌표가 벽/용암/봉인 벽감이면 가장 가까운 열린 타일 중앙으로 밀어낸다
   // (계측: '경비' 수식어 상자가 템플릿 중앙 기둥 안에 박혀 열 수 없는 방이 나왔다 — 하드 스톨의 범인)
+  // ── 진형을 위한 지형 질의 (v181) ────────────────────────────────────
+  // 사장 지적: "맵도 거기에 맞게 디자인해야지?"
+  // 진형만 세우면 반쪽이다. **지형이 그 자리에 값을 매겨야** 방패벽이 뜻을 갖는다:
+  // 좁은 목을 막고 있으니 뚫기 어렵고, 엄폐 뒤에 있으니 저격수를 못 치고,
+  // 트인 길에 있으니 돌진이 속도를 붙인다. 그때 비로소 **"어디부터 깰까"**가 결정이 된다
+  _tileOpen(tx, ty) {
+    return tx > 0 && ty > 0 && tx < this.cols - 1 && ty < this.rows - 1 && !this.isSolidTile(tx, ty)
+      && !(this._noSpawn && this._noSpawn[ty] && this._noSpawn[ty][tx]);
+  },
+  // 사방 이웃 중 막힌 칸 수 — 0이면 트임, 3이면 막다른 목
+  _wallsAround(tx, ty) {
+    let n = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.isSolidTile(tx + dx, ty + dy)) n++;
+    return n;
+  },
+  // 기준점 주변 r픽셀 안에서 조건을 가장 잘 만족하는 열린 칸을 고른다
+  _bestSpot(x, y, r, score) {
+    const cx = Math.floor(x / TS), cy = Math.floor((y - this.offsetY) / TS);
+    const rad = Math.max(1, Math.round(r / TS));
+    let best = null, bs = -Infinity;
+    for (let ty = cy - rad; ty <= cy + rad; ty++) {
+      for (let tx = cx - rad; tx <= cx + rad; tx++) {
+        if (!this._tileOpen(tx, ty)) continue;
+        const d = Math.hypot(tx - cx, ty - cy);
+        if (d > rad) continue;
+        const sc = score(tx, ty) - d * 0.35; // 기준점에서 멀수록 감점 — 진형이 흩어지지 않게
+        if (sc > bs) { bs = sc; best = { x: tx * TS + TS / 2, y: ty * TS + TS / 2 + this.offsetY }; }
+      }
+    }
+    return best;
+  },
+  // 엄폐 — 벽을 등진 자리 (후열: 원거리·주술)
+  coverSpot(x, y, r = 96) { return this._bestSpot(x, y, r, (tx, ty) => this._wallsAround(tx, ty) * 2); },
+  // 좁은 목 — 양옆이 막혀 지나가려면 여기를 지나야 하는 자리 (전열: 방패)
+  chokeSpot(x, y, r = 110) {
+    return this._bestSpot(x, y, r, (tx, ty) => {
+      const h = this.isSolidTile(tx, ty - 1) && this.isSolidTile(tx, ty + 1); // 상하 막힘 = 가로 통로
+      const v = this.isSolidTile(tx - 1, ty) && this.isSolidTile(tx + 1, ty); // 좌우 막힘 = 세로 통로
+      return (h || v) ? 6 : this._wallsAround(tx, ty);
+    });
+  },
+  // 트인 길 — 사방이 비어 속도를 붙일 수 있는 자리 (측면: 돌진·기습)
+  openSpot(x, y, r = 110) { return this._bestSpot(x, y, r, (tx, ty) => -this._wallsAround(tx, ty) * 2); },
+
   safeSpot(x, y) {
     const ok = (tx, ty) => {
       if (tx <= 0 || ty <= 0 || tx >= this.cols - 1 || ty >= this.rows - 1) return false;

@@ -11,6 +11,51 @@ const ACT_MORALE = { 1: 0.35, 2: 0.25, 3: 0.18, 4: 0.15, 5: 0.06 }; // 왕좌에
 const ROUT_CRY = ['살려줘…!', '도, 도망쳐!', '이건 사람이 아니야!', '괴물이다—!', '왕이고 뭐고…!'];
 const SURR_CRY = ['하, 항복이다! 제발…', '살려주시오…!', '집에 아이가 있소…', '자비를…!'];
 const AMBUSH_TYPES = new Set(['mimic', 'turret', 'thornPlant']); // 매복형은 원래 행동 유지
+
+// ── 진형 (v181) ───────────────────────────────────────────────────────
+// 사장 지적: "잡몹들이 랜덤으로 흩어져서 나오는데 … 긴장감이 전혀 없어"
+// 종전 배치는 `World.randomSpawnPos()` — 말 그대로 방 아무 데나 흩뿌렸다.
+// 그러면 무리를 **깨는 순서**가 없다. 다섯이 각자 걸어올 뿐이다.
+//
+// 역할을 나눠 세운다: 방패는 앞, 원거리·주술은 뒤, 돌진·기습은 측면.
+// 그래야 "방패를 돌아 뒤를 칠까, 정면으로 뚫을까"가 **결정**이 된다
+const ROLE_FRONT = new Set(['shieldSkeleton', 'warden', 'golem', 'frostGolem', 'obsidianBeast',
+  'mirrorKnight', 'jailer', 'executioner', 'skeleton', 'ghoul', 'ashWalker']);
+const ROLE_BACK = new Set(['archer', 'sniper', 'frostArcher', 'frostMage', 'necro', 'shaman',
+  'acolyte', 'gazer', 'crystal', 'turret', 'riftCaster', 'voidEye', 'sporeMother', 'flameJuggler']);
+const ROLE_FLANK = new Set(['boar', 'charger', 'bomber', 'stalker', 'shade', 'bloodBat',
+  'emberMoth', 'spider', 'swarm', 'imp', 'voidSpawn', 'cinder', 'lavaHound', 'chainWraith']);
+
+function roleOf(type) {
+  if (ROLE_BACK.has(type)) return 'back';
+  if (ROLE_FLANK.has(type)) return 'flank';
+  if (ROLE_FRONT.has(type)) return 'front';
+  return 'front';
+}
+
+// 무리의 진형 좌표 — 플레이어 반대편(방 안쪽)을 기준으로 대열을 세운다.
+// idx는 같은 역할 안에서의 순번
+function formationPos(role, idx, player) {
+  const cx = (World.cols / 2) * TS;
+  const cy = (World.rows / 2) * TS + World.offsetY;
+  // 플레이어에서 방 중심으로 향하는 방향 = 무리가 바라보는 쪽의 반대
+  const dx = cx - player.x, dy = cy - player.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const ux = dx / d, uy = dy / d;          // 안쪽 방향
+  const px = -uy, py = ux;                 // 그 수직 (좌우)
+  const lane = { front: 210, flank: 265, back: 330 }[role] || 240;
+  const spread = role === 'flank' ? 150 : 62;
+  const side = (idx % 2 === 0 ? 1 : -1) * (Math.floor(idx / 2) + (role === 'flank' ? 1 : 0.5));
+  const bx = player.x + ux * lane + px * side * spread;
+  const by = player.y + uy * lane + py * side * spread;
+  // ★ 지형이 진형에 값을 매긴다 (사장 지적: "맵도 거기에 맞게 디자인해야지?")
+  //  · 후열(원거리·주술)은 **엄폐 뒤**에 선다 — 벽을 등지면 저격수가 뒤에 있을 이유가 생긴다
+  //  · 전열(방패)은 **좁은 목**에 선다 — 지나가려면 그 앞을 지나야 하는 자리
+  //  · 측면(돌진)은 **트인 길**에 선다 — 속도를 붙일 수 있어야 돌진이 위협이 된다
+  if (role === 'back') return World.coverSpot(bx, by, 96) || World.safeSpot(bx, by);
+  if (role === 'front') return World.chokeSpot(bx, by, 110) || World.safeSpot(bx, by);
+  return World.openSpot(bx, by, 110) || World.safeSpot(bx, by);
+}
 // M2: 장교 — 도망치는 부하를 왕법으로 처형한다. 왕의 군대엔 의리가 없다
 const OFFICERS = new Set(['executioner', 'warden', 'mirrorKnight']);
 const DESERT_CRY = ['난 처음부터 반대였어… 이걸 받아.', '명단을 봤어… 전부 조작이야. 받아 둬.', '너희에게 빚이 있다… 이거라도.'];
@@ -505,6 +550,16 @@ const GamePlay = {
           const k = this._formN++;
           const col = Math.floor(k / 3), row = k % 3;
           pos = World.safeSpot(TS * (World.cols - 5) + col * 34, TS * 5.5 + World.offsetY + (row - 1) * 56);
+        } else if (!s.mini && this.player) {
+          // ★ v181 진형 배치 — 역할대로 선다. 방패는 앞, 원거리는 뒤, 돌진은 측면.
+          // 종전엔 전부 randomSpawnPos로 흩뿌려서 **무리를 깨는 순서가 없었다**
+          const role = roleOf(s.type);
+          this._roleN = this._roleN || { front: 0, flank: 0, back: 0 };
+          pos = formationPos(role, this._roleN[role]++, this.player);
+          // 진형 자리가 플레이어에 너무 붙으면(좁은 방) 종전 방식으로 물러난다
+          if (Math.hypot(pos.x - this.player.x, pos.y - this.player.y) < 130) {
+            pos = World.randomSpawnPos(this.player);
+          }
         } else {
           pos = World.randomSpawnPos(this.player);
         }
