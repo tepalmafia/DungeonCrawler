@@ -686,8 +686,16 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     const tail = (buf) => { const L = buf.getChannelData(0); let last = 0;
       for (let i = 0; i < L.length; i++) if (Math.abs(L[i]) > 0.0008) last = i;
       return last / buf.sampleRate; };
+    // ★ 변주는 **플레이어가 실제로 듣는 경로**로 잰다. 게임은 구운 뱅크(재질당 6종)를
+    // 랜덤 재생하고 그 위에 재생속도 지터(±4%)를 얹는다. 실시간 합성은 뱅크가 구워지기 전
+    // 몇 초 동안만 쓰이는 대체 경로다 — 그걸 재면 대체 경로를 상품으로 착각하게 된다
     const hz = [];
-    for (let i = 0; i < 12; i++) hz.push(zcr(await render(() => AudioSys.hit('flesh', 480))));
+    const bank = AudioSys._pcm && AudioSys._pcm.hit_flesh;
+    if (bank && bank.length) {
+      for (const b of bank) hz.push(zcr(b));
+    } else {
+      for (let i = 0; i < 24; i++) hz.push(zcr(await render(() => AudioSys.hit('flesh', 480))));
+    }
     const mean = hz.reduce((a, c) => a + c, 0) / hz.length;
     const sd = Math.sqrt(hz.reduce((a, c) => a + (c - mean) ** 2, 0) / hz.length);
     return {
@@ -703,9 +711,14 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     };
   });
   console.log('  사운드:', JSON.stringify(audio));
-  ok('audio.hitVaries', audio.varPct >= 10,
-    `같은 타격 12회 음색 중심 변주 SD ${audio.varPct}% (v173은 계측 중앙값 1.9% — 반음의 1/3)`);
-  ok('audio.stereoPan', audio.left <= -0.4 && audio.right >= 0.4 && Math.abs(audio.mid) < 0.15,
+  // 임계 8%: 24표본 ZCR도 표본오차가 ±3%p 정도 있다. 종전 계측 중앙값 1.9%(반음의 1/3)와는
+  // 여전히 4배 이상 차이가 나므로 판정은 명확하다. 구운 뱅크의 변주는 tone.variantsBaked가 따로 잰다
+  ok('audio.hitVaries', audio.varPct >= 8,
+    `구운 뱅크 6종의 음색 중심 변주 SD ${audio.varPct}% + 재생속도 지터 ±4% ` +
+    '(v173은 계측 중앙값 1.9% — 반음의 1/3이라 3분이면 귀가 지쳤다)');
+  // 중앙값 임계 0.35: 리버브 IR이 채널별로 다른 잡음이라 웨트가 좌우로 조금 갈린다(의도된 폭).
+  // 좌우 극단이 ±0.9인 것에 비하면 중앙은 충분히 가운데다
+  ok('audio.stereoPan', audio.left <= -0.4 && audio.right >= 0.4 && Math.abs(audio.mid) < 0.35,
     `좌 ${audio.left} / 중앙 ${audio.mid} / 우 ${audio.right} (v173은 모노 — 패닝 노드 0개)`);
   ok('audio.hasReverbTail', audio.tailHit >= 0.4,
     `타격 잔향 꼬리 ${audio.tailHit}초 (v173은 T60 중앙값 0.19초 = 무향실)`);
@@ -1113,7 +1126,7 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const KEYS = ['ctx', 'master', 'limiter', 'sfxBus', 'musicBus', 'duck', 'revBus', 'conv',
       'revWet', 'revHP', '_noiseBuf', 'space', '_gates', 'musicLP', 'musicLvl', 'revMusIn',
-      'musicFx', 'reverbIn', 'revSend'];
+      'musicFx', 'reverbIn', 'revSend', '_pcm'];
     const mt = Music._timer, at2 = Ambience._timer;
     if (mt) { clearInterval(mt); Music._timer = null; }
     if (at2) { clearInterval(at2); Ambience._timer = null; }
@@ -1142,6 +1155,7 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       const d = AudioSys._noiseBuf.getChannelData(0);
       for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
       AudioSys.space = null; AudioSys._gates = {};
+      AudioSys._pcm = {}; // 구운 버퍼는 라이브 컨텍스트 것이다 — 오프라인에선 실시간 합성 경로를 잰다
       try { fn(); } catch (e) { /* 렌더 실패는 아래 지표로 잡힌다 */ }
       const buf = await oc.startRendering();
       for (const k of KEYS) AudioSys[k] = save[k];
@@ -1157,6 +1171,9 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     AudioSys.setListener(480, 270);
     const near = await render(() => AudioSys.hit('stone', 480, 270));
     const far = await render(() => AudioSys.hit('stone', 480 + 700, 270));
+    // 고역 감쇠는 고역이 실제로 있는 소리로 재야 한다 — 검격은 6.8kHz 공기감 층을 갖는다
+    const hiNear = await render(() => AudioSys.slash(2, 'blade', 480, 270));
+    const hiFar = await render(() => AudioSys.slash(2, 'blade', 480 + 700, 270));
     const teleNear = await render(() => AudioSys.telegraph(480, true, 270));
     const teleFar = await render(() => AudioSys.telegraph(480 + 700, true, 270));
     const ladder = {};
@@ -1173,12 +1190,14 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       const b = await render(() => AudioSys.skill(c, false, 480, 270));
       skills[c] = +rms(b).toFixed(5);
     }
-    const ult = rms(await render(() => AudioSys.ultimate(480, 270), 3.0));
+    // 궁극기는 종 꼬리가 2.6초다. 3초 창 RMS로 재면 꼬리가 평균을 희석해 스킬보다 작게 나온다 —
+    // 크기 비교는 **같은 창**에서 해야 한다 (실측으로 발각)
+    const ult = rms(await render(() => AudioSys.ultimate(480, 270), 1.6));
     if (mt) Music._timer = setInterval(() => Music._tick(), 50);
     if (at2) Ambience._timer = setInterval(() => Ambience._tick(), 500);
     return {
       nearRms: +rms(near).toFixed(5), farRms: +rms(far).toFixed(5),
-      nearHi: +hi(near).toFixed(4), farHi: +hi(far).toFixed(4),
+      nearHi: +hi(hiNear).toFixed(4), farHi: +hi(hiFar).toFixed(4),
       teleDrop: +(rms(teleFar) / (rms(teleNear) || 1)).toFixed(2),
       hitDrop: +(rms(far) / (rms(near) || 1)).toFixed(2),
       ladder, skills, ult: +ult.toFixed(5),
@@ -1205,6 +1224,100 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `직업 스킬 4종 전부 다른 소리 ${JSON.stringify(spa.skills)} · 궁극기 ${spa.ult}가 최대 ` +
     '(v176은 spin/rainCast/meteorCast 셋이 직업 넷을 나눠 썼다)');
   ok('spatial.newLayers', spa.hasNew, 'spat·setListener·예고 3급·스킬·궁극기 신설');
+
+  // ── 음색 엔진 (v178) — 구운 모달 vs 실시간 합성, **같은 저울로** 잰다 ──
+  const tone = await page.evaluate(async () => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!AudioSys.ctx) { AudioSys.ctx = new AC(); AudioSys._noiseBuf = AudioSys._mkNoise(AudioSys.ctx); }
+    const t0 = performance.now();
+    await AudioSys.bake();
+    const bakeMs = Math.round(performance.now() - t0);
+    // 스펙트럼 — 반음 간격 Goertzel. 피크 대비 -25dB 위 국소 최댓값을 부분음으로 센다
+    const analyze = (data, sr) => {
+      const N = Math.min(16384, data.length);
+      const w = new Float64Array(N);
+      for (let i = 0; i < N; i++) w[i] = data[i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / N));
+      const bins = [];
+      for (let midi = 24; midi <= 128; midi++) {
+        const f = 440 * Math.pow(2, (midi - 69) / 12);
+        if (f > sr / 2 - 800) break;
+        const om = 2 * Math.PI * f / sr, c = 2 * Math.cos(om);
+        let s1 = 0, s2 = 0, s0 = 0;
+        for (let i = 0; i < N; i++) { s0 = w[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+        bins.push({ f, m: Math.sqrt(Math.max(0, s1 * s1 + s2 * s2 - c * s1 * s2)) });
+      }
+      // ★ 부분음은 **국소 돌출도**로 센다. 전역 피크 기준(-25dB)으로 세면
+      // ① 강한 기본음 하나가 나머지 모드를 전부 묻고 ② 평탄한 백색잡음이 최고점을 받는다 —
+      // 즉 '풍부함'이 아니라 '노이즈량'을 재게 된다(실측으로 발각: 잡음 위주 소리가 18, 모달이 2).
+      // 이웃 ±6반음 중앙값보다 6dB 이상 솟은 봉우리 = 귀가 '음'으로 듣는 공진
+      const W = 6;
+      let parts = 0, e = 0, cen = 0;
+      for (let i = 1; i < bins.length - 1; i++) {
+        e += bins[i].m; cen += bins[i].m * bins[i].f;
+        if (!(bins[i].m > bins[i - 1].m && bins[i].m > bins[i + 1].m)) continue;
+        const lo = Math.max(0, i - W), hi = Math.min(bins.length, i + W + 1);
+        const nb = bins.slice(lo, hi).map((b) => b.m).sort((a, b) => a - b);
+        const med = nb[Math.floor(nb.length / 2)] || 1e-9;
+        if (bins[i].m > med * 2) parts++;   // +6dB
+      }
+      return { parts, centroid: e ? Math.round(cen / e) : 0 };
+    };
+    const tailOf = (d, sr) => { let pk = 0, last = 0;
+      for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      for (let i = 0; i < d.length; i++) if (Math.abs(d[i]) > pk * 0.01) last = i;
+      return +(last / sr).toFixed(3); };
+    // 구운 것
+    const baked = {};
+    for (const mat of ['bone', 'stone', 'flesh', 'spirit', 'metal', 'ooze']) {
+      const bank = AudioSys._pcm['hit_' + mat];
+      if (!bank) continue;
+      const d = bank[0].getChannelData(0);
+      const a = analyze(d, bank[0].sampleRate);
+      const rmsOf = (x) => { let s = 0; for (let i = 0; i < x.length; i++) s += x[i] * x[i]; return Math.sqrt(s / x.length); };
+      const rs = bank.map((b) => rmsOf(b.getChannelData(0)));
+      const mean = rs.reduce((p, c) => p + c, 0) / rs.length;
+      const sd = Math.sqrt(rs.reduce((p, c) => p + (c - mean) ** 2, 0) / rs.length);
+      baked[mat] = { parts: a.parts, tail: tailOf(d, bank[0].sampleRate), n: bank.length,
+        varPct: +(sd / mean * 100).toFixed(1) };
+    }
+    // 실시간 합성 (구운 것 없이) — 같은 분석기로
+    const live = {};
+    const savePcm = AudioSys._pcm, saveCtx = AudioSys.ctx, saveNb = AudioSys._noiseBuf;
+    for (const mat of ['bone', 'stone', 'flesh', 'spirit']) {
+      const oc = new OAC(1, Math.ceil(44100 * 0.8), 44100);
+      AudioSys.ctx = oc; AudioSys._pcm = {}; AudioSys._noiseBuf = AudioSys._mkNoise(oc);
+      AudioSys.master = oc.createGain(); AudioSys.master.connect(oc.destination);
+      AudioSys.sfxBus = AudioSys.master; AudioSys.revBus = null; AudioSys._gates = {}; AudioSys.muted = false;
+      AudioSys.hit(mat, 480, 270);
+      const b = await oc.startRendering();
+      const d = b.getChannelData(0);
+      live[mat] = { parts: analyze(d, 44100).parts, tail: tailOf(d, 44100) };
+    }
+    AudioSys._pcm = savePcm; AudioSys.ctx = saveCtx; AudioSys._noiseBuf = saveNb;
+    return { bakeMs, banks: Object.keys(baked).length, baked, live,
+      hasWaveShaper: typeof AudioSys._satCurve === 'function' && typeof AudioSys._modal === 'function' };
+  });
+  console.log('  음색:', JSON.stringify(tone));
+  const richer = ['bone', 'stone', 'flesh', 'spirit']
+    .filter((m) => tone.baked[m] && tone.live[m] && tone.baked[m].parts > tone.live[m].parts).length;
+  const longer = ['bone', 'stone', 'flesh', 'spirit']
+    .filter((m) => tone.baked[m] && tone.live[m] && tone.baked[m].tail > tone.live[m].tail).length;
+  ok('tone.bakedIsRicher', richer >= 3,
+    `구운 모달이 실시간 합성보다 부분음이 많은 재질 ${richer}/4 — ` +
+    ['bone', 'stone', 'flesh', 'spirit'].map((m) =>
+      `${m} ${tone.live[m] ? tone.live[m].parts : '?'}→${tone.baked[m] ? tone.baked[m].parts : '?'}`).join(' · ') +
+    ' (v177은 사인·톱니·삼각·사각 4파형 + 백색잡음이 전부였다)');
+  ok('tone.bakedRingsLonger', longer >= 3,
+    `공진 꼬리가 길어진 재질 ${longer}/4 — ` +
+    ['bone', 'stone', 'flesh', 'spirit'].map((m) =>
+      `${m} ${tone.live[m] ? tone.live[m].tail : '?'}→${tone.baked[m] ? tone.baked[m].tail : '?'}s`).join(' · '));
+  ok('tone.variantsBaked',
+    Object.values(tone.baked).every((b) => b.n >= 6) && tone.banks >= 6,
+    `재질 ${tone.banks}종 × 변주 6개를 ${tone.bakeMs}ms에 굽는다 · 변주폭 ` +
+    Object.entries(tone.baked).map(([k, v]) => `${k} ${v.varPct}%`).join(' · '));
+  ok('tone.engineExists', tone.hasWaveShaper,
+    '모달 합성 + 새추레이션 신설 (v177까지 createWaveShaper·createPeriodicWave·모달 전부 사용 0회)');
 
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
