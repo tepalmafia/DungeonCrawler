@@ -148,40 +148,67 @@ const HUD = {
     ctx.fillStyle = '#9aa0b4';
     ctx.fillText(`처치 ${game.kills}`, Renderer.W - 16, 26);
 
-    // ── 미니맵: 이 층의 여정 — 지나온 방(색 마름모) · 남은 방(점) · 보스(☠) ──
-    if (Dungeon.roomLog && Dungeon.roomLog.length && Dungeon.roomType !== 'boss') {
-      const cells = Dungeon.roomLog.map((t, i) => ({ t, seen: true, cur: i === Dungeon.roomLog.length - 1 }));
-      for (let i = 0, n = Math.max(0, Dungeon.totalRooms - Dungeon.roomIndex - 1); i < n; i++) cells.push({ t: null });
-      cells.push({ t: 'boss' });
-      const cw = 15;
-      let mx = Renderer.W / 2 - (cells.length * cw) / 2 + cw / 2;
-      const my = 40;
-      for (const c of cells) {
-        if (c.t === 'boss') {
-          ctx.textAlign = 'center';
-          ctx.font = '12px Galmuri11, monospace';
-          ctx.fillStyle = '#e43b44';
-          ctx.fillText('☠', mx, my + 4);
-        } else if (!c.t) {
-          ctx.fillStyle = '#3a3a4c'; // 아직 모르는 방
-          ctx.fillRect(mx - 2, my - 2, 4, 4);
-        } else {
-          ctx.save();
-          ctx.translate(mx, my);
-          ctx.rotate(Math.PI / 4);
-          ctx.fillStyle = (ROOM_META[c.t] || ROOM_META.combat).color;
-          ctx.globalAlpha = c.cur ? 1 : 0.55;
-          const s = c.cur ? 5 : 4;
-          ctx.fillRect(-s / 2, -s / 2, s, s);
-          if (c.cur) {
-            ctx.strokeStyle = '#e8e0cf';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(-4.5, -4.5, 9, 9);
-          }
-          ctx.restore();
-        }
-        mx += cw;
+    // ── 층 격자 지도 (v197) ────────────────────────────────────────────────
+    // 사장: "층 별로 맵이 다 이어지게 디자인해줘"
+    // 종전은 1행 9칸 **진행 막대**였다 — 내가 어느 문으로 갔는지, 방들이 어떻게 붙어
+    // 있는지가 한 글자도 없었다. v189에서 깔아둔 좌표계(mapNodes·mapEdges)를 그대로 그린다.
+    // 이제 위 문으로 가면 지도에서도 위로 붙고, 층을 오르면 한 줄 위에서 다시 시작한다 —
+    // 「이어져 있다」가 데이터에 있었으니 화면에 꺼내기만 하면 된다
+    if (Dungeon.mapNodes && Dungeon.mapNodes.length && Dungeon.roomType !== 'boss') {
+      const ns = Dungeon.mapNodes;
+      const cur = ns[ns.length - 1];
+      // 현재 층 + 바로 아래 층까지만 — 위로 오른 흔적이 보이되 화면을 안 먹는다
+      const shown = ns.filter((n) => n.floor >= Dungeon.floor - 1);
+      const minX = Math.min(...shown.map((n) => n.x)), maxX = Math.max(...shown.map((n) => n.x));
+      const minY = Math.min(...shown.map((n) => n.y)), maxY = Math.max(...shown.map((n) => n.y));
+      const CS = 11;                                   // 칸 간격
+      const gw = (maxX - minX) * CS, gh = (maxY - minY) * CS;
+      const ox = Renderer.W / 2 - gw / 2 - minX * CS;
+      const oy = 34 - minY * CS + (gh > 44 ? 0 : 0);
+      ctx.save();
+      // 간선 — 방과 방이 붙어 있다는 증거
+      ctx.strokeStyle = 'rgba(150,140,120,0.45)';
+      ctx.lineWidth = 1;
+      for (const e of Dungeon.mapEdges) {
+        if (e.y0 < minY - 1 || e.y1 < minY - 1) continue;
+        ctx.beginPath();
+        ctx.moveTo(ox + e.x0 * CS, oy + e.y0 * CS);
+        ctx.lineTo(ox + e.x1 * CS, oy + e.y1 * CS);
+        ctx.stroke();
       }
+      for (const n of shown) {
+        const px = ox + n.x * CS, py = oy + n.y * CS;
+        const isCur = n === cur;
+        const dim = n.floor < Dungeon.floor;          // 지나온 층은 흐리게
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(Math.PI / 4);
+        ctx.globalAlpha = isCur ? 1 : dim ? 0.28 : 0.6;
+        ctx.fillStyle = (ROOM_META[n.type] || ROOM_META.combat).color;
+        const sz = isCur ? 6 : 4.5;
+        ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
+        if (isCur) {
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = '#e8e0cf';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(-5, -5, 10, 10);
+        }
+        ctx.restore();
+      }
+      // 아직 안 간 방 + 보스 — 오른쪽으로 남은 만큼
+      const left = Math.max(0, Dungeon.totalRooms - 1 - Dungeon.roomIndex);
+      for (let i = 1; i <= left; i++) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = '#3a3a4c';
+        ctx.fillRect(ox + (cur.x + i) * CS - 2, oy + cur.y * CS - 2, 4, 4);
+      }
+      ctx.globalAlpha = 0.85;
+      ctx.textAlign = 'center';
+      ctx.font = '12px Galmuri11, monospace';
+      ctx.fillStyle = '#e43b44';
+      ctx.fillText('☠', ox + (cur.x + left + 1) * CS, oy + cur.y * CS + 4);
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
 
     // ── 보스 체력바 ──

@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 196;
+const GAME_VERSION = 197;
 
 // v192 — 사장: "기존처럼 동그라미를 날리는 공격만 가지지말고,
 //                동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
@@ -970,13 +970,23 @@ const Game = {
       // v189: 666ms → 435ms. 런당 450회 × 666ms = 300초(5분)를 검정 화면에 쓰고 있었다.
       // 그리고 그 시간을 '암전'이 아니라 '이동'으로 채운다 — 나온 방은 왼쪽으로 밀려나고,
       // 새 방이 오른쪽에서 들어온다. 위 문으로 나갔으면 살짝 위에서 들어온다
-      tr.t += dt * 4.6;
+      tr.t += dt * ((tr.type === 'nextfloor' || tr.type === 'shortcut') ? 3.0 : 4.6);
       {
         const k = Math.min(1, Math.max(0, tr.t));
         const ease = tr.phase === 'out' ? k * k : 1 - (1 - k) * (1 - k); // 나갈 땐 가속, 들어올 땐 감속
-        const vy = (tr.dy || 0) * Renderer.H * 0.22;
-        Renderer.panX = tr.phase === 'out' ? -Renderer.W * ease : Renderer.W * (1 - ease);
-        Renderer.panY = tr.phase === 'out' ? vy * ease : vy * (1 - ease);
+        // ★ v197 — 사장: "층 별로 맵이 다 이어지게 디자인해줘"
+        // 층 이동은 종전에 floor++ 한 줄이었고 연출이 일반 방 전환과 100% 같았다.
+        // **50층 탑인데 오르는 장면이 한 번도 없었다.** 계단은 옆이 아니라 위로 간다 —
+        // 화면이 아래로 밀리면 내가 위로 오른 것으로 읽힌다
+        const climb = tr.type === 'nextfloor' || tr.type === 'shortcut';
+        if (climb) {
+          Renderer.panX = 0;
+          Renderer.panY = tr.phase === 'out' ? Renderer.H * ease : -Renderer.H * (1 - ease);
+        } else {
+          const vy = (tr.dy || 0) * Renderer.H * 0.22;
+          Renderer.panX = tr.phase === 'out' ? -Renderer.W * ease : Renderer.W * (1 - ease);
+          Renderer.panY = tr.phase === 'out' ? vy * ease : vy * (1 - ease);
+        }
       }
       if (tr.phase === 'out' && tr.t >= 1) {
         Dungeon.pendingMod = tr.mod || null; // 문 수식어를 다음 방에 전달

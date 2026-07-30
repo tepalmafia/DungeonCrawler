@@ -1999,6 +1999,12 @@ const GamePlay = {
           // 진입점이 49/49 전부 (81.6, 270) 상수였다 — 위 문을 골라도, 아래 문을
           // 골라도 똑같은 왼쪽 한가운데. 내가 고른 방향이 세계에 반영되지 않았다.
           // 이제 나온 높이가 다음 방 들어서는 높이가 된다 (오른쪽 벽 = 다음 방 왼쪽 벽)
+          // v197: 층 이동은 「오른다」 — 전용 소리와 배너로 장면을 만든다
+          if (door.opt.type === 'nextfloor' || door.opt.type === 'shortcut') {
+            AudioSys.chest();
+            this.banner = { text: `${Dungeon.floor + (door.opt.type === 'shortcut' ? 2 : 1)}층으로 오른다`,
+              life: 2.0, maxLife: 2.0, color: '#38b764' };
+          }
           const mid = World.rows * 0.5 * TS + World.offsetY;
           const dy = door.y < mid - TS ? -1 : door.y > mid + TS ? 1 : 0;
           this.transition = { phase: 'out', t: 0, type: door.opt.type, mod: door.opt.mod || null,
