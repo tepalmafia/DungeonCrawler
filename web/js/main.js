@@ -2,14 +2,21 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 191;
+const GAME_VERSION = 192;
 
+// v192 — 사장: "기존처럼 동그라미를 날리는 공격만 가지지말고,
+//                동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
+// 실측이 지적을 그대로 확인했다: render-game.js 의 적 투사체 렌더는 화살(sprite:true)을 빼면
+// **ctx.arc() 원 하나 + 뒤에 작은 원 하나**가 전부였다. 색만 다른 동그라미 11종.
+// shape 를 주면 그 kind 는 전용 렌더를 탄다 — 무엇에 맞았는지가 화면에 남는다.
+//   bone  뼛조각: 회전하는 뼈 마디 (무덤지기가 던지는 것)
+//   flame 불꽃: 흔들리는 불길 혓바닥 + 잔불
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
   soul:  { color: '#b13ae0', r: 7, wavy: true },
   spore: { color: '#8a5ac2', r: 6 },
-  fire:  { color: '#ff7043', r: 6, patchOnEnd: true },
-  rock:  { color: '#6b7a94', r: 6 },
+  fire:  { color: '#ff7043', r: 6, patchOnEnd: true, shape: 'flame' },
+  rock:  { color: '#cfc6ad', r: 6, shape: 'bone' },
   web:   { color: '#e8e0cf', r: 5 },
   thorn: { color: '#7ab04c', r: 5 },
   voidorb: { color: '#b13ae0', r: 8, wavy: false },

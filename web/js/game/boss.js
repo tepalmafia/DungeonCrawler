@@ -14,11 +14,22 @@
 // 그리고 저주에 되삼켜진 그들(6~9) → 마지막에 벤 손, 처형인(10)이 기다린다.
 const BOSS_DEFS = {
   1: {
-    name: '무덤지기 오스문드', sprite: 'boss', scale: 1.35, r: 26, hp: 95, speed: 42,
+    // ★ v192 — 사장: "잡몹만 잡는거 너무 지루하니깐 … 보스는 부하를 소환하거나 유성우를 소환하거나"
+    //            "한층 한층이 전부 컨트롤과 긴장감을 주는 거지."
+    // 실측이 문제를 지목했다: 1층 보스 HP 59, 사장 기록 8~16초 처치.
+    // 보스는 **이미 2페이즈인데 페이즈 2를 5초만 본다** — 패턴이 있어도 읽을 시간이 없었다.
+    // 그리고 p1이 낫질 2종 + 돌 부채꼴 2종뿐이라 1페이즈 내내 같은 그림이었다.
+    // 소환(summon:)과 유성우(mortar)는 **이미 구현돼 있었고 1층 보스만 안 썼다** — 깊은 층 전용이었다.
+    //
+    // 무덤지기는 묘지의 관리인이다. 그가 부르는 부하는 **그가 묻은 것들**이어야 한다 —
+    // summon:skeleton 은 서사와 정확히 맞물린다(1층 로스터에 이미 있다).
+    // mortar 는 무덤 흙과 뼈를 퍼올려 쏟아붓는 것으로 읽힌다.
+    name: '무덤지기 오스문드', sprite: 'boss', scale: 1.35, r: 26, hp: 190, speed: 42,
     banner: '무덤지기 오스문드',
     punish: 'volley', punishProj: 'rock', // 인간의 손 — 뼛조각과 무덤 흙을 던진다 (원혼 부채꼴은 되살아난 후의 것)
-    p1: ['sweep>sweep', 'fan:rock', 'fan:rock:snipe'],
-    p2: ['sweep>fan:rock', 'curse>sweep>fan:rock', 'fan:rock:cross', 'mortar', 'uniq'], // 입문 보스: 고유기는 2페이즈부터
+    p1: ['sweep>sweep', 'fan:rock', 'summon:skeleton', 'mortar', 'fan:rock:snipe'],
+    p2: ['sweep>fan:rock', 'mortar>summon:skeleton', 'fan:rock:cross', 'curse>sweep>fan:rock',
+      'summon:skeleton>fan:rock:cross', 'uniq'],
     rageText: '오스문드가 낫을 고쳐쥔다!',
     intro: '죄인은 무덤 밖으로 못 나간다. 그게 내 밥줄이야.', outro: '네 관은… 비어 있었지… 이상하다 했어…',
     deathPalette: ['#c9a24a', '#3a3226', '#e8e0cf'],
@@ -1381,13 +1392,30 @@ function createBoss(floor, x, y) {
         }
         this._endMove();
       } else if (kind === 'summon') {
+        // ★ v192 — 사장: "잡몹 + 보스는, 군집하고 전략적으로 플레이어를 공격할 수 있도록 해야해."
+        // 결함이 v186과 **똑같은 모양**이었다: 여기서 markers 에 pack·leader 를 안 넘겨서
+        // 소환수가 무리 기계(v185 응집·사기 / v186 밴드 유지 / v187 호령)를 하나도 안 탔다.
+        // 보스가 부른 부하가 제각각 걸어오면 그건 소환이 아니라 그냥 증원이다.
+        //
+        // 이제 **보스 자신이 그 무리의 리더**가 된다. 그러면 공짜로 셋이 따라온다:
+        //   · 부하끼리 붙어 있으면 경감(뭉치면 단단하다) — 흩어놓는 것이 플레이어의 수가 된다
+        //   · 역할 밴드 유지 — 전열은 붙고 후열은 물러나 보스를 가린다
+        //   · 보스의 호령에 부하가 **같은 순간** 밀고 들어온다 (전략적 협공의 실체)
+        // 그리고 보스를 베면 남은 부하가 흔들린다 — 이미 있는 사기 붕괴가 그대로 걸린다
         const mType = opt[0] || 'slime';
         const isElite = opt.includes('elite');
         const minions = game.enemies.filter((e) => !e.isBoss && !e.dead).length;
-        for (let i = 0; i < Math.min(2, 5 - minions); i++) {
-          const pos = World.randomSpawnPos(p, 140);
-          game.markers.push({ x: pos.x, y: pos.y, type: mType, elite: isElite, t: 0.7 });
+        if (!this.pack) { this.pack = 900 + (this.defId || 0); this.isLeader = true; }
+        // v192: 보스 **주위**에서 일으킨다. 종전엔 randomSpawnPos(플레이어 기준)이라
+        // 부하가 방 아무 데나 떨어져 리더 권역(190px) 밖으로 나갔고, 그러면 무리가 안 된다.
+        // 무덤지기는 제 발밑 무덤에서 부른다 — 서사도 이쪽이 맞다
+        const cnt = Math.min(2, 5 - minions);
+        for (let i = 0; i < cnt; i++) {
+          const a = (i / Math.max(1, cnt)) * Math.PI * 2 + this.patternIdx * 0.7;
+          const pos = World.safeSpot(this.x + Math.cos(a) * 96, this.y + Math.sin(a) * 78);
+          game.markers.push({ x: pos.x, y: pos.y, type: mType, elite: isElite, t: 0.7, pack: this.pack });
         }
+        Particles.text(this.x, this.y - this.r - 26, '일어나라!', { color: '#c9a24a', size: 13 });
         AudioSys.roar();
         this._endMove();
       } else if (kind === 'spiral') {
