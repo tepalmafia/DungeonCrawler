@@ -318,15 +318,31 @@ const Dungeon = {
     // 층 귀속 (min~max) — 무한 모드는 순환 테마의 유효 층으로 매칭
     const ef = this.floor <= 10 ? this.floor : ((this.floor - 11) % 5) + 6;
     const sets = THREAT_SETS.filter((s) => ef >= s.min && ef <= (s.max || 99));
-    if (sets.length && RNG.chance(0.45)) {
-      // 지형 커플링 (맵 M1): 템플릿 태그에 맞는 세트를 75% 우선 — 저격수는 기둥 뒤에서,
-      // 돌진수는 회랑에서 만난다. 손제작 지형과 손제작 무리가 서로를 알게 하는 연결부
-      const tag = (typeof World !== 'undefined' && World.lastTemplateTag) || 'open';
+    // ★ v181 — 무리가 기본이고 랜덤이 예외다 (사장 지적: "랜덤으로 흩어져서 나오는데 …
+    // 긴장감이 전혀 없어"). 종전엔 손제작 세트가 **45%**만 걸리고 나머지 55%는
+    // `RNG.pick(적_목록)`으로 채웠다 — 그러면 무리가 아니라 **개체 5개**가 각자 걸어온다.
+    // 무리를 깨는 순서가 문제가 되려면, 먼저 무리여야 한다
+    const tag = (typeof World !== 'undefined' && World.lastTemplateTag) || 'open';
+    const pickSet = () => {
       const matched = sets.filter((s) => s.wants === tag);
-      const set = matched.length && RNG.chance(0.75) ? RNG.pick(matched) : RNG.pick(sets);
+      return matched.length && RNG.chance(0.75) ? RNG.pick(matched) : RNG.pick(sets);
+    };
+    if (sets.length) {
+      // 첫 무리 — 지형에 맞는 조합이 뼈대가 된다
+      const set = pickSet();
       for (const t of set.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
       comp.setUsed = true;
+      comp.packs = [{ units: set.units.length, wants: set.wants }];
+      // 자리가 남으면 **또 다른 무리**를 부른다 — 낱개로 채우지 않는다.
+      // 두 무리가 같은 방에 있으면 "어느 쪽부터"가 생긴다
+      let guard = 0;
+      while (comp.length < n - 1 && guard++ < 4) {
+        const s2 = pickSet();
+        for (const t of s2.units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5) });
+        comp.packs.push({ units: s2.units.length, wants: s2.wants });
+      }
     }
+    // 그래도 모자란 한두 자리만 낱개로 (세트가 없는 층 대비)
     while (comp.length < n) {
       const type = RNG.pick(data.enemies);
       comp.push({ type, elite: RNG.chance(eliteChance) });
