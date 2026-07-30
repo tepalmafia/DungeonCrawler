@@ -190,12 +190,35 @@ const CRAFT = {
     return cv;
   },
 
+  // ── 결(grain) ── 구조를 건드리지 않고 질감만 얹는 반투명 노이즈.
+  // 벽은 이미 v191 「벽 솟음」과 벽돌 단위 명암이라는 좋은 구조를 갖고 있다.
+  // 그걸 갈아엎지 않고 **결만** 덧입힌다 — 통짜 면이 사라지는 게 목적이다.
+  _grainTile(seed) {
+    const S = this.SRC, W = S;
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(S, S), d = img.data;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const n = this.hash(x, y, seed);
+      const i = (y * W + x) * 4;
+      // 밝은 알갱이는 따뜻하게, 어두운 알갱이는 차갑게 — 여기서도 색온도를 가른다
+      if (n > 0.90)      { d[i] = 255; d[i+1] = 226; d[i+2] = 176; d[i+3] = 26; }
+      else if (n > 0.80) { d[i] = 255; d[i+1] = 236; d[i+2] = 206; d[i+3] = 12; }
+      else if (n < 0.10) { d[i] = 22;  d[i+1] = 16;  d[i+2] = 40;  d[i+3] = 46; }
+      else if (n < 0.22) { d[i] = 30;  d[i+1] = 24;  d[i+2] = 52;  d[i+3] = 22; }
+      else d[i+3] = 0;
+    }
+    g.putImageData(img, 0, 0);
+    return cv;
+  },
+
   // 테마별 세트 — 한 번만 굽고 캐시한다
   set(th, key) {
     if (this._cache[key]) return this._cache[key];
-    const s = { floor: [], face: [], top: [] };
+    const s = { floor: [], face: [], top: [], grain: [] };
     for (let i = 0; i < this.VARIANTS; i++) s.floor.push(this._floorTile(th, i * 97 + 11));
     for (let i = 0; i < 6; i++) { s.face.push(this._wallFaceTile(th, i * 53 + 7)); s.top.push(this._wallTopTile(th, i * 31 + 3)); }
+    for (let i = 0; i < 8; i++) s.grain.push(this._grainTile(i * 41 + 19));
     this._cache[key] = s;
     return s;
   },
@@ -1959,6 +1982,18 @@ const World = {
           // 아래 립
           ctx.fillStyle = th.wallDark;
           ctx.fillRect(x, y + TS - 6, TS, 6);
+          // ── v200 결 + 광원 규칙 ──
+          // 벽돌 구조(v124)와 벽 솟음(v191)은 좋은 설계라 건드리지 않는다.
+          // 통짜 면만 없앤다: 반투명 노이즈를 얹고, 빛을 좌상단으로 통일한다
+          {
+            const gi = Math.floor(CRAFT.hash(tx, ty, 3) * 8) % 8;
+            const gt = craft.grain[gi];
+            for (let gy = y - rise; gy < y + TS; gy += TS) ctx.drawImage(gt, x, gy, TS, TS);
+            ctx.fillStyle = 'rgba(255,222,170,0.055)';        // 좌측 모서리에 걸린 빛
+            ctx.fillRect(x, y - rise + 8, 1, TS + rise - 8);
+            ctx.fillStyle = 'rgba(18,12,34,0.34)';            // 우측은 그늘 (광원 반대쪽)
+            ctx.fillRect(x + TS - 2, y - rise + 8, 2, TS + rise - 8);
+          }
           // 벽돌 하이라이트 — 꼭대기 모서리에 얹는다
           ctx.fillStyle = 'rgba(255,255,255,0.05)';
           ctx.fillRect(x + 2, y - rise + 9, TS / 2 - 3, 2);
@@ -2012,6 +2047,8 @@ const World = {
           for (let i = 0; i < 3; i++) {
             ctx.fillRect(x + RNG.int(2, TS - 8), y + RNG.int(2, TS - 4), RNG.int(3, 6), 1);
           }
+          // v200 결 — 윗면도 통짜 면이면 배경 어둠과 같아진다
+          ctx.drawImage(craft.grain[Math.floor(CRAFT.hash(tx, ty, 7) * 8) % 8], x, y, TS, TS);
           // 바닥과 접한 전 방향 모서리 — 벽 실루엣이 어둠 속에서도 읽힌다
           ctx.fillStyle = 'rgba(255,255,255,0.075)';
           if (!this._wallAt(tx - 1, ty)) ctx.fillRect(x, y, 2, TS);
