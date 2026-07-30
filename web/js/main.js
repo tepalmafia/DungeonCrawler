@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 195;
+const GAME_VERSION = 196;
 
 // v192 — 사장: "기존처럼 동그라미를 날리는 공격만 가지지말고,
 //                동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
