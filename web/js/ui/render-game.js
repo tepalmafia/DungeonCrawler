@@ -854,20 +854,35 @@ const GameRender = {
       }
       // 접촉 예고 — 붉은 부채꼴이 자란다
       if (d._windT > 0) {
-        const k = 1 - d._windT / (d._windMax || 0.25);
+        const k = 1 - d._windT / (d._windMax || 0.42);
         const rr = d.r + 20;
+        // ★ v188 — 「언제 누를지」를 준다. 예고를 0.25→0.42초로 늘렸지만,
+        // 긴 예고에 타이밍 신호가 없으면 "위험하다"만 길어질 뿐 회피는 여전히 찍기다.
+        // 마지막 34%(약 0.14초)에 색이 붉음→백열로 넘어가고, 바깥에서 고리가 좁혀 들어와
+        // 몸에 닿는 순간이 곧 타격 순간이다. 이 고리가 **누르는 시점**이다
+        const imminent = k > 0.66;
         ctx.save();
         ctx.translate(d.x, d.y);
         ctx.rotate(d._windA || 0);
         // 난전(3층 평균 10마리)에서 화면이 붉게 덮이지 않도록 알파를 종전보다 낮췄다.
         // 대신 테두리를 살려 윤곽으로 읽히게 한다 — 겹쳐도 개수가 세어진다
         ctx.globalAlpha = 0.15 + 0.35 * k;
-        ctx.fillStyle = 'rgba(228,59,68,0.55)';
+        ctx.fillStyle = imminent ? 'rgba(255,238,170,0.6)' : 'rgba(228,59,68,0.55)';
         ctx.beginPath(); ctx.moveTo(0, 0);
         ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.closePath(); ctx.fill();
         ctx.globalAlpha = 0.55 + 0.45 * k;
-        ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 2;
+        ctx.strokeStyle = imminent ? '#fff6c8' : '#ffd866';
+        ctx.lineWidth = imminent ? 3 : 2;
         ctx.beginPath(); ctx.arc(0, 0, rr * (0.55 + 0.45 * k), -0.62, 0.62); ctx.stroke();
+        ctx.restore();
+        // 조여드는 고리 — 회전과 무관하게 몸 중심을 기준으로 (방향이 아니라 **시점**을 말한다)
+        ctx.save();
+        ctx.globalAlpha = 0.30 + 0.55 * k;
+        ctx.strokeStyle = imminent ? '#fff6c8' : '#ffd866';
+        ctx.lineWidth = imminent ? 2.5 : 1.5;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r + 6 + (1 - k) * 46, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.restore();
       }
       // 강타·내려찍기 예고 (v175 신설) — 저장소에 렌더가 **0건**이었다.
