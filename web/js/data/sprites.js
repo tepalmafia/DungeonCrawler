@@ -4189,6 +4189,113 @@ const Sprites = (() => {
   }, { A: '#26222e', a: '#17141d', n: '#0a080e', K: '#8a94b0', S: '#4a5266', s: '#232838',
        C: '#e43b44', G: '#5e4728', g: '#3e3018', h: '#241c14' });
 
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  아이템·투사체 재조립 (v200) — 같은 3규칙(광원 좌상단·고정 팔레트·직선 금지)
+  //  ★ 하트·보석은 drawImage(고정 크기)로 그린다. 원본을 **화면 크기와 1:1**로 맞추면
+  //    확대·축소가 아예 없어져 픽셀이 깨끗해진다 (종전 8×6 → 24×18 = 2.4배 비정수 확대였다)
+  // ══════════════════════════════════════════════════════════════════════
+
+  // 하트 — 화면 24×18. 아웃라인 2px을 빼면 22×16.
+  // ★ 곡선을 수식으로 뽑았더니 두 봉우리가 안 생기고 역삼각형이 됐다.
+  //   이 크기(22×16)는 픽셀 하나가 전체의 5%다 — **손으로 찍는 게 맞다.**
+  {
+    const heartRows = [
+      '....RRRR......RRRR....',
+      '..RRAAAARR..RRrrrrRR..',
+      '.RAAWWWAAArRRrrrrrrrR.',
+      'RAAWWWWAAArrrrrrrrrrrR',
+      'RAAWWWAAArrrrrrrrrrrrR',
+      'RAAAAAArrrrrrrrrrrrrrR',
+      'RrAAAArrrrrrrrrrrrrrrR',
+      'RrrrrrrrrrrrrrrrrrrrrR',
+      '.RrrrrrrrrrrrrrrrrrrR.',
+      '.RRrrrrrrrrrrrrrrrrRR.',
+      '..RRrrrrrrrrrrrrrrRR..',
+      '...RRrrrrrrrrrrrrRR...',
+      '....RRrrrrrrrrrrRR....',
+      '......RRrrrrrrRR......',
+      '........RRrrRR........',
+      '..........RR..........',
+    ];
+    sprites.heart = make(heartRows, { r: '#e43b44', R: '#8a1c2c', A: '#f5817e', W: '#ffd8d4' });
+    sprites.heartEmpty = make(heartRows, { r: '#3a3a4a', R: '#22222e', A: '#4e4e60', W: '#6a6a7c' });
+  }
+
+  // 보석 — 화면 14×14 (아웃라인 제외 12×12). 브릴리언트 컷: 위 테이블 면 + 아래 파빌리온.
+  // 수식 테이퍼로 뽑았더니 **네 갈래 별**이 됐다 — 면(facet) 경계는 손으로 그어야 한다
+  sprites.gem = make([
+    '..BBBBBBBB..',
+    '.BWWWBBBBCB.',
+    'BWWBBBBBBCCB',
+    'BBBBBBBBBCCB',
+    'cBBBBBBBBCCn',
+    '.cCBBBBCCnn.',
+    '.ccCCCCCnnn.',
+    '..ccCCCnnn..',
+    '..ccCCnnn...',
+    '...ccCnn....',
+    '....ccn.....',
+    '.....c......',
+  ], { B: '#5fe4d8', C: '#2ec4b6', c: '#1a8c82', n: '#0d4a46', W: '#ffffff' });
+
+  // 화살 — 촉(금속 3단) · 대(나무) · 깃(3갈래)이 다 보여야 화살로 읽힌다
+  sprites.arrow = make([
+    'f...............',
+    '.ff...........s.',
+    'ffgggggggggggSKK',
+    '.ff...........s.',
+    'f...............',
+  ], { g: '#8a6b3c', S: '#9aa2b8', K: '#e6ecff', s: '#5a6076', f: '#c8ccd8' }, { outline: false });
+
+  // 궤짝 — 둥근 뚜껑 + 세로 판자 + 쇠테 + 자물쇠.
+  // 1차는 뚜껑 돔이 납작해져 **초가지붕**이 됐다 → 곡률을 키우고 뚜껑을 몸통보다 좁게
+  {
+    const chestRows = (open) => {
+      const R = [];
+      const W = 28, H = 24;
+      const g = canvasGrid(W, H);
+      // 몸통 — 세로 판자 + 좌측 밝음
+      const top = 11;
+      for (let y = top; y < 21; y++) for (let x = 4; x < 24; x++) {
+        const plank = Math.floor((x - 4) / 4) % 2;
+        P.put(g, x, y, (x - 4) % 4 === 3 ? 'h' : plank ? 'g' : 'G');
+      }
+      for (let y = top; y < 21; y++) { P.put(g, 4, y, 'G'); P.put(g, 5, y, 'G'); P.put(g, 23, y, 'h'); }
+      P.span(g, 21, 4, 23, 'h'); P.span(g, 22, 5, 22, 'n');
+      for (const x of [8, 19]) for (let y = top; y < 21; y++) P.put(g, x, y, y % 3 ? 'S' : 'K');  // 세로 쇠테
+      if (open) {
+        // 열린 뚜껑 — 뒤로 젖혀져 위쪽에 얇게 보인다
+        for (let y = 1; y < 6; y++) { const w = Math.round(9 - (5 - y) * 0.6);
+          P.span(g, y, 14 - w, 14 + w, y < 3 ? 'G' : 'g');
+          P.put(g, 14 - w, y, 'G'); P.put(g, 14 + w, y, 'h'); }
+        P.span(g, 6, 5, 22, 'K'); P.span(g, 7, 5, 22, 'S');
+        P.span(g, 8, 5, 22, 'n'); P.span(g, 9, 5, 22, 'n'); P.span(g, 10, 5, 22, 'n');   // 빈 속
+        for (const [x, y] of [[10, 9], [16, 8], [13, 10], [19, 9]]) { P.put(g, x, y, 'C'); P.put(g, x + 1, y, 'W'); }
+      } else {
+        // 닫힌 뚜껑 — 반원. 곡률을 크게 줘야 '지붕'이 아니라 '뚜껑'으로 읽힌다
+        for (let y = 0; y < 9; y++) {
+          const t = (8 - y) / 8;
+          const w = Math.round(Math.sqrt(Math.max(0, 1 - t * t)) * 9.5);
+          if (w <= 0) continue;
+          for (let x = 14 - w; x <= 14 + w; x++) {
+            const plank = Math.floor((x - 4) / 4) % 2;
+            P.put(g, x, 2 + y, (x - 4) % 4 === 3 ? 'h' : plank ? 'g' : 'G');
+          }
+          P.put(g, 14 - w, 2 + y, 'G'); P.put(g, 14 + w, 2 + y, 'h');
+          if (y < 3) for (let x = 14 - w; x <= 14 + w; x++) if ((x + y) % 3) P.put(g, x, 2 + y, 'G');
+        }
+        P.span(g, 11, 4, 23, 'K'); P.span(g, 12, 4, 23, 'S');                              // 뚜껑 쇠테
+        P.rect(g, 12, 10, 5, 6, 'K'); P.rect(g, 13, 12, 3, 3, 'n'); P.put(g, 12, 10, 'W'); // 자물쇠
+      }
+      return P.rows(g);
+    };
+    const cpal = { G: '#c9a24a', g: '#8a6b3c', h: '#4a3620', n: '#1a1008',
+                   K: '#d8e0f0', S: '#7a8296', C: '#ffd866', W: '#ffffff' };
+    sprites.chest = make(chestRows(false), cpal, { ds: 1.7 });
+    sprites.chestOpen = make(chestRows(true), cpal, { ds: 1.7 });
+  }
+
   sprites.deriveFrames = deriveFrames;
   // UI·투사체·아이템은 자세가 없다 — 걸으면 안 된다
   const NO_POSE = /^(arrow|heart|coin|chest|orb|icon|shard|door|torch|pot|crack|rune|bolt|proj|white|tint)/i;
