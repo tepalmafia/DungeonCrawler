@@ -2089,6 +2089,81 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 속성·상태이상 (v200) ══════════════════════════════════════════════
+  // 사장: "상대를 얼리거나 화상을 입히거나 속성도 없고 뭐하는거야?"
+  // ★ 「걸린다」와 「보인다」를 **따로** 검사한다.
+  //   v185~192에서 세 번 겪었다 — 기능은 작동하는데 화면에 안 나와서 없는 것과 같았다.
+  const stat = await page.evaluate(async () => {
+    const R = { elems: {}, applied: [], zoneKinds: [], hud: 0, dashFrozen: false, healCut: false, curseNeedsMinion: false };
+    // ① 23종 전부 속성이 배정돼 있는가
+    for (const f of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 45, 50, 60, 61, 62, 63, 64, 65, 66, 67]) {
+      const b = createBoss(f, 300, 200);
+      R.elems[f] = (b.elems || []).slice();
+    }
+    // ② 플레이어가 5종 전부 받을 수 있는가 + 화면에 나오는가
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    const p = Game.player; p.god = false;
+    for (const k of ['burn', 'freeze', 'poison', 'shock', 'curse']) {
+      Game.applyStatus(k, 4);
+      const F = { burn: 'burnT', freeze: 'freezeT', poison: 'poisonT', shock: 'shockT', curse: 'curseT' }[k];
+      if ((p[F] || 0) > 0) R.applied.push(k);
+    }
+    // ③ HUD 칩이 실제로 그려지는가 — 그리기 호출을 세서 확인 (상태 없을 때와 비교)
+    const cnt = () => { let n = 0; const g = Renderer.ctx; const _f = g.fillText.bind(g);
+      g.fillText = function (t, x, y) { if (['화상', '빙결', '중독', '감전', '저주'].includes(t)) n++; return _f(t, x, y); };
+      HUD.draw(g, Game); g.fillText = _f; return n; };
+    R.hud = cnt();
+    // ④ ❄빙결이 대시 충전을 정지시키는가 (회피 자원 박탈이 이 설계의 심장이다)
+    p.burnT = p.poisonT = p.shockT = p.curseT = 0;
+    p.freezeT = 3; p.dashCharges = 0; p.dashRegenT = 0;
+    for (let i = 0; i < 90; i++) p.update(1 / 60, Game);
+    R.dashFrozen = p.dashCharges === 0;
+    p.freezeT = 0; p.dashRegenT = 0;
+    // 재충전 시간은 특성·유물로 변한다 — 고정 프레임을 쓰면 검사 창이 모자라 거짓 실패가 난다
+    const need = Math.ceil(p.dashRegenTime() * 60) + 20;
+    for (let i = 0; i < need; i++) p.update(1 / 60, Game);
+    R.dashThaws = p.dashCharges > 0;
+    R.regenSec = +p.dashRegenTime().toFixed(2);
+    // ⑤ 🕯저주는 부하가 살아 있으면 안 풀린다
+    p.curseT = 5;
+    Game.enemies.push(Object.assign(createEnemy('skeleton', 400, 300, false, 1), { summoned: true }));
+    for (let i = 0; i < 120; i++) p.update(1 / 60, Game);
+    const withMinion = p.curseT;
+    Game.enemies.forEach((e) => { if (e.summoned) e.dead = true; });
+    for (let i = 0; i < 120; i++) p.update(1 / 60, Game);
+    R.curseNeedsMinion = withMinion > 4.0 && p.curseT < withMinion - 1;
+    // ⑥ 보스가 바닥에 흔적을 남기는가 (계측에서 boss.js zones.push 는 0회였다)
+    Game.zones.length = 0;
+    const bs = Game.enemies.find((e) => e.isBoss);
+    if (bs) { bs.strike(Game, 400, 300, { status: false }); }
+    R.zoneKinds = Game.zones.filter((z) => z.byBoss).map((z) => z.elem);
+    return R;
+  });
+  console.log('  속성:', JSON.stringify({ applied: stat.applied, hud: stat.hud, zones: stat.zoneKinds,
+    dashFrozen: stat.dashFrozen, dashThaws: stat.dashThaws, regenSec: stat.regenSec, curse: stat.curseNeedsMinion }));
+  const elemN = Object.values(stat.elems).filter((a) => a && a.length).length;
+  const elemKinds = new Set(Object.values(stat.elems).flat());
+  ok('elem.everyBossHasOne', elemN === 23 && elemKinds.size === 5,
+    `보스 ${elemN}/23 종에 속성 배정 · 쓰인 속성 ${elemKinds.size}종 (${[...elemKinds].join(',')}) ` +
+    '(v199까지 boss.js 가 거는 상태이상은 감속 한 곳(1.6초)뿐이었다 — 속성이 없다는 사장 지적이 정확했다)');
+  ok('elem.playerReceivesAll', stat.applied.length === 5,
+    `플레이어가 받을 수 있는 상태 ${stat.applied.length}/5종 (${stat.applied.join(',')}) ` +
+    '(종전 플레이어 필드는 slowT/brandT 둘뿐 — status:{burn,shock,poison} 은 **적 쪽에만** 있어 시스템이 한 방향이었다)');
+  ok('elem.visibleOnScreen', stat.hud >= 5,
+    `HUD 상태 칩 ${stat.hud}개가 실제로 그려진다 ` +
+    '(★ 「걸린다」와 「보인다」는 다르다 — v185 무리 경감, v186 리더, v192 우두머리에서 세 번 겪었다. ' +
+    '보이지 않는 상태이상은 없는 것과 같다)');
+  ok('elem.freezeStopsDash', stat.dashFrozen && stat.dashThaws,
+    `빙결 중 대시 충전 정지 ${stat.dashFrozen} · 해제 후 재충전 ${stat.dashThaws} (재충전 ${stat.regenSec}초) ` +
+    '(이 설계의 심장 — v188에서 세운 **회피 자원**을 정면으로 빼앗는다. 숫자가 아니라 손에서 느껴진다)');
+  ok('elem.curseNeedsMinionKill', stat.curseNeedsMinion,
+    `저주는 부하가 살아 있는 동안 안 풀리고, 처치하면 풀린다 (${stat.curseNeedsMinion}) ` +
+    '(종전 소환 부하는 무시해도 그만이었다 — 처리할 이유를 만든다)');
+  ok('elem.bossLeavesResidue', stat.zoneKinds.length > 0,
+    `보스가 남긴 바닥 잔여물 ${stat.zoneKinds.length}개 (${stat.zoneKinds.join(',')}) ` +
+    '(계측: boss.js 의 zones.push 는 **0회**였다 — 보스전 3분 동안 방이 처음 모습 그대로였다. ' +
+    '이제 방이 시간에 따라 변하고, HP 인플레 없이 후반 압박이 생긴다)');
+
   ok('stage.miniHasPattern', stage.withMini === 0 || stage.stomps >= stage.withMini * 0.9,
     `보스급 ${stage.withMini}기 중 ${stage.stomps}기가 예고 패턴(강타 0.75초)을 실제로 시전 ` +
     '(v193까지 enemies.js 가 `!this.isMini` 로 우두머리를 패턴에서 제외했다 — ' +

@@ -4,6 +4,8 @@
 // ── 인간 드라마 AI (M1) — 산 자만이 죽음을 두려워한다 ──
 // 왕의 병사는 기계가 아니다: 침입자를 발견하고(!), 동료의 죽음에 무너지고, 도망치고, 항복하고,
 // 때로는 거짓 항복으로 배신한다. 늦게 잡으면 전령이 증원을 부른다. 언데드·광신도·정예는 동요하지 않는다.
+// 속성별 지속 시간 (v200) — 보스 장판이 플레이어에게 거는 상태의 길이
+const ELEM_SEC = { burn: 2.2, freeze: 2.0, poison: 3.5, shock: 2.0, curse: 5.0 };
 const HUMAN_FEAR = new Set(['sniper', 'berserker', 'brute', 'bomber', 'frostArcher', 'frostMage',
   'shaman', 'jailer', 'flameJuggler', 'stalker', 'glowShrieker']);
 const FORM_UNITS = new Set([...HUMAN_FEAR, 'skeleton', 'shieldSkeleton', 'warden', 'executioner', 'acolyte', 'mirrorKnight']);
@@ -655,6 +657,7 @@ const GamePlay = {
           if (Math.hypot(p.x - fp.x, p.y - fp.y) < fp.r) {
             if (fp.kind === 'ice') {
               p.slowT = Math.max(p.slowT, 0.35); // 빙판: 피해 없이 미끄러운 감속
+          if (this.applyStatus) this.applyStatus('freeze', 1.2);
             } else {
               this.hurtPlayer(1, { x: 0, y: 0 }, 60, fp.by || (fp.kind === 'poison' ? '독 웅덩이' : '불길'));
               break;
@@ -706,6 +709,7 @@ const GamePlay = {
         if (m.omen) { e._aware = true; e.speed *= 1.1; e.flash = 0.5; } // 어둠의 눈이 되살린 것 — 이미 깨어 있다
         // ── 무리 소속 (v185) ──
         e.pack = m.pack || 0;
+        e.summoned = !!m.summoned;   // 🕯저주 해제 조건 — 보스가 부른 것만 센다 (v200)
         if (m.leader) {
           e.isLeader = true;
           e.maxHp = Math.round(e.maxHp * 1.35); e.hp = e.maxHp;  // 매듭은 조금 더 질기다
@@ -1204,6 +1208,20 @@ const GamePlay = {
       if (z.r > 300) z.r = 300; // 전역 하드 클램프 — 어떤 생성 경로도 화면을 뒤덮을 수 없다
       z.life -= dt;
       if (z.life <= 0) { this.zones.splice(i, 1); continue; }
+      // ── 보스 장판은 **플레이어**에게 건다 (v200) ─────────────────────────
+      // 종전 zones 는 전부 '적에게 거는' 장판이었다 — 시스템이 한 방향이었다.
+      // byBoss 장판만 플레이어를 대상으로 하고, 아군 장판은 종전대로 적을 친다
+      if (z.byBoss) {
+        z.tickT -= dt;
+        if (z.tickT <= 0) {
+          z.tickT = 0.45;
+          const pl = this.player;
+          if (pl && Math.hypot(pl.x - z.x, pl.y - z.y) < z.r + pl.r) {
+            this.applyStatus(z.elem, (ELEM_SEC[z.elem] || 2));
+          }
+        }
+        continue;
+      }
       if (z.kind === 'smoke') {
         // 연막 (연금 보조 스킬): 피해 없음 — 안의 적을 크게 둔화 (지속 갱신)
         z.tickT -= dt;
@@ -1591,7 +1609,9 @@ const GamePlay = {
       }
       if (Math.hypot(p.x - pk.x, p.y - pk.y) < p.r + pk.r) {
         // 마시다 만 해독제 (이졸데 유품): 하트 회복량 +1 — 낙인 중에는 회복이 막힌다
-        const heal = 1 + (p.heartBonus || 0) + (p.form === 'chalice' ? 1 : 0);
+        let heal = 1 + (p.heartBonus || 0) + (p.form === 'chalice' ? 1 : 0);
+        // ☠ 중독 — 회복량이 줄어든다. 「하트를 먹었는데 안 찬다」가 곧 상태 인지다
+        if (p.poisonT > 0) { heal = Math.max(0, heal - 1); Particles.text(p.x, p.y - 44, '중독 — 회복 감소', { color: '#6ab04c', size: 12 }); }
         if (p.form === 'chalice') { p._chaliceT = 4; Particles.text(p.x, p.y - 42, '성배의 힘 +1', { color: '#ffd866', size: 12 }); }
         if (p.brandT > 0) Particles.text(p.x, p.y - 30, '낙인 — 회복 불가', { color: '#e43b44', size: 12 });
         else if (p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + heal);
@@ -1725,7 +1745,8 @@ const GamePlay = {
           Particles.burst(it.x, it.y - 10, { count: 14, colors: ['#f7b32b', '#ffd866'], speed: 150, life: 0.5, size: 3, gravity: 200 });
         } else if (it.kind === 'camp') {
           AudioSys.pickup();
-          const heal = this.pacts.heal ? 1 : 2; // 서약 '메마른 샘': 모닥불 회복 감소
+          let heal = this.pacts.heal ? 1 : 2; // 서약 '메마른 샘': 모닥불 회복 감소
+          if (p.poisonT > 0) { heal = Math.max(0, heal - 1); Particles.text(p.x, p.y - 44, '중독 — 회복 감소', { color: '#6ab04c', size: 12 }); }
           p.hp = Math.min(p.maxHp, p.hp + heal);
           Particles.text(p.x, p.y - 28, '+' + heal, { color: '#e43b44', size: 18 });
           Particles.burst(it.x, it.y, { count: 12, colors: ['#ff7043', '#ffd866'], speed: 80, life: 0.6, size: 3, gravity: -120 });

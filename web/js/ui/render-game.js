@@ -95,6 +95,49 @@ const GameRender = {
       ctx.globalAlpha = alpha * (0.5 + 0.5 * Math.sin(t * 5 + seed));
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x + Math.cos(seed) * r * 0.4 - 1, y + Math.sin(seed) * r * 0.3 - 1, 2, 2);
+    } else if (kind === 'shock') {
+      // ⚡ 전류 지대 (v200) — 지지직 튀는 가지. 정적인 원이 아니라 **매 프레임 다른 모양**
+      ctx.globalAlpha = alpha * 0.55;
+      const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r);
+      g.addColorStop(0, 'rgba(120,96,20,0.6)');
+      g.addColorStop(0.7, 'rgba(90,72,16,0.32)');
+      g.addColorStop(1, 'rgba(90,72,16,0)');
+      ctx.fillStyle = g; blob(r, 0.1); ctx.fill();
+      ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 5; i++) {
+        const a0 = seed * 1.7 + i * 1.26 + t * 2.1;
+        ctx.globalAlpha = alpha * (0.5 + 0.5 * Math.sin(t * 22 + i * 2));
+        ctx.beginPath();
+        let px = x, py = y;
+        ctx.moveTo(px, py);
+        for (let k = 1; k <= 4; k++) {
+          const rr = (r / 4) * k;
+          px = x + Math.cos(a0 + Math.sin(t * 9 + k + i) * 0.5) * rr;
+          py = y + Math.sin(a0 + Math.sin(t * 9 + k + i) * 0.5) * rr * 0.55;
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+    } else if (kind === 'curse') {
+      // 🕯 저주 지대 (v200) — 바닥에서 피어오르는 손. 보라 안개 + 솟는 획
+      ctx.globalAlpha = alpha * 0.8;
+      const g = ctx.createRadialGradient(x, y, r * 0.12, x, y, r);
+      g.addColorStop(0, 'rgba(48,16,72,0.92)');
+      g.addColorStop(0.6, 'rgba(96,36,140,0.62)');
+      g.addColorStop(1, 'rgba(140,60,200,0)');
+      ctx.fillStyle = g; blob(r, 0.16); ctx.fill();
+      for (let i = 0; i < 6; i++) {
+        const ph = ((t * 0.55 + i * 0.17 + seed * 0.11) % 1);
+        const ha = seed * 2.3 + i * 1.05;
+        const hx = x + Math.cos(ha) * r * (0.2 + (i % 3) * 0.24);
+        const hy = y + Math.sin(ha) * r * 0.45;
+        ctx.globalAlpha = alpha * (1 - ph) * 0.9;
+        ctx.strokeStyle = '#c88aff'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx + Math.sin(t * 3 + i) * 3, hy - 6 - ph * 14);
+        ctx.stroke();
+      }
     } else if (kind === 'smoke') {
       // 연막: 겹치는 회색 뭉게 — 느리게 소용돌이
       for (let i = 0; i < 5; i++) {

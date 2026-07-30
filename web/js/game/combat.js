@@ -781,8 +781,40 @@ const GameCombat = {
     return name;
   },
 
-  hurtPlayer(dmg, dir, kb = 260, src = null) {
+  // ── 상태이상 부여 (v200) ────────────────────────────────────────────────
+  // 한 곳에서만 건다. 여기저기서 필드를 직접 만지면 「걸렸는지」를 셀 수가 없다
+  // (v185~192에서 세 번 겪은 실패 — 생성기만 고치고 소비자를 안 고쳤다)
+  applyStatus(kind, sec) {
     const p = this.player;
+    if (!p || p.god || p.hp <= 0) return false;
+    const F = { burn: 'burnT', freeze: 'freezeT', poison: 'poisonT', shock: 'shockT', curse: 'curseT' }[kind];
+    if (!F) return false;
+    const first = p[F] <= 0;
+    p[F] = Math.max(p[F], sec);
+    if (kind === 'burn' && first) p.burnTick = 0.35;
+    if (kind === 'poison' && first) p.poisonTick = 0.6;
+    if (first) {
+      // 「보이지 않는 것은 없는 것과 같다」 — 걸리는 순간을 반드시 화면에 낸다
+      const L = { burn: ['화상', '#ff7043'], freeze: ['빙결 — 대시 정지', '#b6e8ff'],
+        poison: ['중독 — 회복 감소', '#6ab04c'], shock: ['감전 — 피해 증가', '#ffd866'],
+        curse: ['저주 — 부하를 처치하라', '#b13ae0'] }[kind];
+      Particles.text(p.x, p.y - 40, L[0], { color: L[1], size: 14 });
+      Particles.ring(p.x, p.y, { r0: 6, r1: 40, life: 0.35, color: L[1], width: 3 });
+      this.statusFlash = { c: L[1], t: 0.4 };
+    }
+    (this.statusSeen || (this.statusSeen = {}))[kind] = (this.statusSeen[kind] || 0) + 1;  // 계측용
+    return true;
+  },
+
+  hurtPlayer(dmg, dir, kb = 260, src = null, opt = null) {
+    const p = this.player;
+    // 감전·저주는 **받는 피해**를 늘린다. 도트 자신은 증폭 대상이 아니다(무한 증폭 방지)
+    if (!(opt && opt.noStatus) && p && !p.god) {
+      let mul = 1;
+      if (p.shockT > 0) mul += 0.3;
+      if (p.curseT > 0) mul += 0.25;
+      if (mul > 1) dmg = Math.max(1, Math.round(dmg * mul));
+    }
     if (p.god) return; // 테스트 모드 무적
     if (p.invuln > 0 || this.state !== 'play') {
       // 완벽 회피 (P1) — 대시 무적 중에 공격이 스쳤다: 시간이 늘어지고 다음 일격이 확정 크리.

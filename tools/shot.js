@@ -6,6 +6,7 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137';
 const OUT = process.argv[2] || 'docs/audit/live-map-now.png';
 const FLOOR = parseInt(process.argv[3] || '1', 10);
 const KIND = process.argv[4] || 'combat';
+const STATUS = process.argv[5] || '';   // 상태이상을 걸어놓고 찍는다 (표시 확인용)
 (async () => {
   const b = await chromium.launch({ executablePath: CHROME });
   const p = await b.newPage({ viewport: { width: 960, height: 540 } });
@@ -19,7 +20,10 @@ const KIND = process.argv[4] || 'combat';
     Dungeon.build(k);
     if (k === 'empty') { Game.enemies.length = 0; Dungeon.build('combat'); Game.enemies.length = 0; }
   }, [FLOOR, KIND === 'empty' ? 'combat' : KIND]);
+  if (STATUS) await p.evaluate((st) => { for (const k of st.split(',')) Game.applyStatus(k, 6); }, STATUS);
   await p.waitForTimeout(KIND === 'boss' ? 3000 : 700);
+  if (STATUS) await p.evaluate((st) => { for (const k of st.split(',')) Game.applyStatus(k, 6); }, STATUS);
+  await p.waitForTimeout(150);
   await p.screenshot({ path: OUT });
   await b.close();
   console.log('ok ' + OUT + (errs.length ? '  ⚠ ' + errs[0] : ''));
