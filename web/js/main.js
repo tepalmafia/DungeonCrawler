@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 181;
+const GAME_VERSION = 182;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -177,7 +177,7 @@ const Game = {
         time: this.time, gold: this.gold,
         traits: [...p.traits], relics: [...p.relics],
         hp: p.hp, maxHp: p.maxHp, bonusAtk: p.bonusAtk, rerolls: p.rerolls || 0,
-        sub: p.subSkill || null, shrineSeen: this._shrineSeen || 0, skillMod: p.skillMod || null, modSeen: this._modSeen || 0,
+        sub: p.subSkill || null, ultKind: p.ultKind || null, shrineSeen: this._shrineSeen || 0, skillMod: p.skillMod || null, modSeen: this._modSeen || 0,
         ult: p.ult || 0, ultG: p.ultGauge || 0,
         floorAtk: p.floorAtk || 0, reviveUsed: !!p.reviveUsed,
       }));
@@ -224,7 +224,7 @@ const Game = {
     // 스칼라는 저장값이 진실 (기연·제단·상점의 흔적 포함)
     p.maxHp = s.maxHp; p.hp = s.hp; p.bonusAtk = s.bonusAtk;
     p.rerolls = s.rerolls; p.floorAtk = s.floorAtk; p.reviveUsed = s.reviveUsed;
-    p.subSkill = s.sub || null; this._shrineSeen = s.shrineSeen || 0;
+    p.subSkill = s.sub || null; p.ultKind = s.ultKind || null; this._shrineSeen = s.shrineSeen || 0;
     p.ult = s.ult || 0; p.ultGauge = s.ultG || 0;
     this.sects = {}; this.checkSects(true); // 계열 (v137): 복원분 무연출 동기화
     Dungeon.floor = s.floor; Dungeon.roomIndex = s.roomIndex;
@@ -526,7 +526,10 @@ const Game = {
     }
 
     // 스킬 사당 (P1): 5·15·25층의 첫 방에 무조건 선다 — 문 선택과 무관하게 킷이 자란다
-    if ([5, 15, 25].includes(Dungeon.floor) && Dungeon.roomIndex === 1 && this._shrineSeen !== Dungeon.floor) {
+    // ★ v182 — 사당을 2층부터. 종전엔 5·15·25층뿐이라 최고 8층인 사장은 **평생 딱 한 번**(5층)
+    // 보조 스킬을 만났다. 한 번 고르고 끝이면 그건 빌드가 아니라 배급이다.
+    // 2층에서 처음 만나고, 그 뒤로 3층마다 다시 고를 기회가 온다 (바꿔 쓰는 재미)
+    if ([2, 5, 8, 11, 15, 18, 22, 25, 28].includes(Dungeon.floor) && Dungeon.roomIndex === 1 && this._shrineSeen !== Dungeon.floor) {
       this._shrineSeen = Dungeon.floor;
       const sc = World.safeSpot(World.center().x, World.center().y - 90);
       this.interactables.push({ kind: 'skillShrine', x: sc.x, y: sc.y, r: 30, used: false, t: 0 });

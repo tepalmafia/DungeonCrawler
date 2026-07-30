@@ -536,8 +536,10 @@ const AudioSys = {
     for (const [mat, spec] of Object.entries(this._MODES)) {
       jobs.push([`hit_${mat}`, spec.dur || 0.62, (oc, v) => {
         // 변주: 기본 주파수를 반음 폭으로 흔들고, 모드 세기를 미세하게 바꾼다
-        const jitter = 1 + (v / (this._VARIANTS - 1) - 0.5) * 0.19;
-        const modes = spec.modes.map((m, i) => ({ ...m, a: m.a * (1 + ((v * 7 + i * 3) % 5 - 2) * 0.06) }));
+        // 변주 폭 ±9.5% → ±17% (약 2.8반음). 종전 폭은 계측 임계에 걸쳐서
+        // 판정이 실행마다 뒤집혔다 — **임계를 낮추는 대신 실제 변주를 넓힌다**
+        const jitter = 1 + (v / (this._VARIANTS - 1) - 0.5) * 0.34;
+        const modes = spec.modes.map((m, i) => ({ ...m, a: m.a * (1 + ((v * 7 + i * 3) % 5 - 2) * 0.14), d: m.d * (1 + ((v * 3 + i) % 4 - 1.5) * 0.12) }));
         const save = this._noiseBuf;
         this._noiseBuf = this._mkNoise(oc);
         this._modal(oc, oc.destination, 0, { base: spec.base * jitter, modes, vol: 0.5,
@@ -721,6 +723,84 @@ const AudioSys = {
       this._noise({ dur: 0.36 * g, vol: 0.2 * g, freq: 520, q: 0.4, freq1: 150, atk: 0.05, at, send: 0.25 });
       this._tone({ type: 'sine', f0: 150, f1: 62, dur: 0.34 * g, vol: 0.24 * g, atk: 0.03, at });
       if (evolved) this._tone({ type: 'sine', f0: 96, f1: 46, dur: 0.5, vol: 0.22, delay: 0.05, at });
+    }
+  },
+
+  // ── 보조 스킬 (v182) ────────────────────────────────────────────────
+  // 사장 지적: "현재 e 스킬은 임펙트도 없고 유명무실하고 사용을 안 하는데?"
+  // 계측: 12종이 전부 **빌려온 소리**였다 — clank(막힘)·slash(기본 검격)·roar(보스 포효)·
+  // pickup(아이템 줍기)·bow. v177에서 직업 스킬 4종엔 전용 소리를 줬는데 보조만 빠졌다.
+  // 자기 소리가 없으면 "내가 뭘 했는지"가 안 남고, 안 남으면 안 쓴다
+  sub(id, x = null, y = null) {
+    const at = this.spat(x, y);
+    this.ducker(0.7, 0.06, 0.25);
+    const T = (o) => this._tone({ ...o, at });
+    const N = (o) => this._noise({ ...o, at });
+    switch (id) {
+      // ── 기사 ──
+      case 'sh_bash':      // 방패 올려치기 — 쇠판이 아래에서 위로 퍼올린다
+        N({ dur: 0.09, vol: 0.32, freq: 2400, q: 1.2, freq1: 5600, send: 0.3 });
+        T({ type: 'square', f0: 160, f1: 420, dur: 0.16, vol: 0.3, send: 0.2 });   // 상승 = 쳐올림
+        T({ type: 'sine', f0: 78, f1: 44, dur: 0.22, vol: 0.34 });
+        break;
+      case 'sh_execute':   // 처형 찌르기 — 짧고 날카롭게 파고든다
+        N({ dur: 0.055, vol: 0.28, freq: 5200, q: 2.4, freq1: 1600, send: 0.28 });
+        T({ type: 'sawtooth', f0: 900, f1: 180, dur: 0.13, vol: 0.26, send: 0.2 });
+        T({ type: 'sine', f0: 110, f1: 40, dur: 0.2, vol: 0.3, delay: 0.04 });
+        break;
+      case 'sh_warcry':    // 전장의 포효 — 사람 목소리의 저역, 넓게 퍼진다
+        T({ type: 'sawtooth', f0: 128, f1: 92, dur: 0.5, vol: 0.34, atk: 0.05, send: 0.6 });
+        T({ type: 'sawtooth', f0: 192, f1: 140, dur: 0.42, vol: 0.16, atk: 0.06, detune: 14, send: 0.6 });
+        N({ dur: 0.55, vol: 0.16, freq: 520, q: 0.5, freq1: 200, atk: 0.1, send: 0.5 });
+        break;
+      // ── 궁수 ──
+      case 'ar_trap':      // 올가미 덫 — 쇠가 물린다. 짧은 금속 클릭 두 번
+        for (let i = 0; i < 2; i++) N({ dur: 0.04, vol: 0.22, freq: 3800 + i * 900, q: 4, delay: i * 0.05, send: 0.3 });
+        T({ type: 'triangle', f0: 620, f1: 240, dur: 0.1, vol: 0.16, delay: 0.05, send: 0.25 });
+        break;
+      case 'ar_tumble':    // 텀블링 사격 — 구르는 옷깃 + 3연발
+        N({ dur: 0.18, vol: 0.2, freq: 900, q: 0.5, freq1: 2600, atk: 0.03, send: 0.3 });
+        for (let i = 0; i < 3; i++) {
+          T({ type: 'sawtooth', f0: 330 - i * 24, f1: 105, dur: 0.06, vol: 0.15, atk: 0.012, delay: 0.08 + i * 0.055 });
+        }
+        break;
+      case 'ar_volley':    // 관통 일제사 — 시위를 끝까지 당겼다 놓는다
+        T({ type: 'sawtooth', f0: 240, f1: 70, dur: 0.1, vol: 0.24, atk: 0.05 });   // 긴 어택 = 당김
+        N({ dur: 0.22, vol: 0.24, freq: 4200, q: 0.9, freq1: 900, delay: 0.05, send: 0.4 });
+        T({ type: 'sine', f0: 96, f1: 46, dur: 0.24, vol: 0.26, delay: 0.05 });
+        break;
+      // ── 마도사 ──
+      case 'mg_blink':     // 점멸 — 사라지고(하강) 나타난다(상승)
+        T({ type: 'sine', f0: 1400, f1: 260, dur: 0.11, vol: 0.2, send: 0.5 });
+        T({ type: 'sine', f0: 300, f1: 1800, dur: 0.13, vol: 0.22, delay: 0.1, send: 0.55 });
+        N({ dur: 0.16, vol: 0.14, freq: 2400, q: 0.7, delay: 0.09, send: 0.5 });
+        break;
+      case 'mg_nova':      // 서리 고리 — 유리가 얼어붙는 소리
+        N({ dur: 0.3, vol: 0.2, freq: 6400, q: 1.6, freq1: 2200, atk: 0.02, send: 0.55 });
+        T({ type: 'triangle', f0: 1900, f1: 700, dur: 0.28, vol: 0.16, send: 0.5 });
+        T({ type: 'sine', f0: 120, f1: 62, dur: 0.32, vol: 0.24 });
+        break;
+      case 'mg_lance':     // 마력 창 — 일직선. 좁고 길게 뻗는다
+        T({ type: 'sawtooth', f0: 520, f1: 1560, dur: 0.22, vol: 0.24, atk: 0.02, send: 0.35 });
+        T({ type: 'sine', f0: 1040, f1: 3120, dur: 0.16, vol: 0.1, delay: 0.02, send: 0.4 });
+        T({ type: 'sine', f0: 88, f1: 44, dur: 0.24, vol: 0.24 });
+        break;
+      // ── 연금술사 ──
+      case 'al_smoke': case 'al_veil':   // 연막 — 새어 나오는 압력
+        N({ dur: 0.7, vol: 0.2, freq: 1800, q: 0.4, freq1: 500, atk: 0.06, send: 0.45 });
+        T({ type: 'sine', f0: 200, f1: 90, dur: 0.3, vol: 0.14, atk: 0.04 });
+        break;
+      case 'al_acid': case 'al_flask':   // 산 — 유리 깨짐 + 끓음
+        N({ dur: 0.05, vol: 0.26, freq: 6200, q: 3.5, send: 0.4 });
+        for (let i = 0; i < 4; i++) {
+          const f = 150 + Math.random() * 160;
+          T({ type: 'sine', f0: f, f1: f * 2.1, dur: 0.13, vol: 0.1, delay: 0.05 + i * 0.06, send: 0.3 });
+        }
+        break;
+      default:             // 미정의 보조기 — 최소한 자기 소리를 갖는다
+        N({ dur: 0.1, vol: 0.24, freq: this._v(2600, 0.2), q: 1, freq1: 800, send: 0.3 });
+        T({ type: 'triangle', f0: this._v(420, 0.15), f1: 160, dur: 0.16, vol: 0.22, send: 0.25 });
+        T({ type: 'sine', f0: 92, f1: 46, dur: 0.2, vol: 0.24 });
     }
   },
 
