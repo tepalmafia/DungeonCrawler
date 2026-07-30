@@ -26,10 +26,28 @@ const ROLE_BACK = new Set(['archer', 'sniper', 'frostArcher', 'frostMage', 'necr
 const ROLE_FLANK = new Set(['boar', 'charger', 'bomber', 'stalker', 'shade', 'bloodBat',
   'emberMoth', 'spider', 'swarm', 'imp', 'voidSpawn', 'cinder', 'lavaHound', 'chainWraith']);
 
-function roleOf(type) {
+// v186: 이름 목록만으로는 63종을 못 덮는다 — 실측에서 **측면 역할이 한 마리도 안 나왔고**
+// 대부분이 기본값 'front'로 떨어졌다. 목록에 없으면 **적의 성질로 판정**한다:
+//  사거리가 길면 후열 · 빠르면 측면 · 느리고 단단하면 전열
+// 타입별 표본 하나를 만들어 캐시한다 (스폰 시점엔 아직 인스턴스가 없다)
+const _probeCache = {};
+function _roleProbe(type) {
+  if (type in _probeCache) return _probeCache[type];
+  let v = null;
+  try { v = createEnemy(type, 0, 0, false, 1); } catch (err) { v = null; }
+  _probeCache[type] = v;
+  return v;
+}
+
+function roleOf(type, e) {
   if (ROLE_BACK.has(type)) return 'back';
   if (ROLE_FLANK.has(type)) return 'flank';
   if (ROLE_FRONT.has(type)) return 'front';
+  const probe = e || _roleProbe(type);
+  if (probe) {
+    if (probe.shootRange || probe.range > 140 || probe.aimT != null) return 'back';
+    if ((probe.speed || 60) >= 78) return 'flank';
+  }
   return 'front';
 }
 
@@ -597,6 +615,37 @@ const GamePlay = {
         }
         Particles.burst(m.x, m.y, { count: m.mini ? 16 : 8, colors: ['#5c1e5e', '#8a3a8c'], speed: 90, life: 0.35, size: 3 });
         this.markers.splice(i, 1);
+      }
+    }
+
+    // ══ 무리 행태 (v186) — 배치가 아니라 **행동** ═══════════════════════
+    // 사장: "군집이나 기타 몹들의 행태에 변화를 못 느끼겠는데?"
+    // 실측이 사장 말을 확인했다: 진형은 **스폰 배치**일 뿐이고 적 AI는 여전히
+    // "플레이어에게 걸어간다"라, 전열 거리가 8초에 걸쳐 591→348px로 계속 줄었다.
+    // 1~2초면 대열이 녹아 v180 이전과 똑같은 그림이 된다.
+    //
+    // 그래서 **유지 거리**를 준다. 각 역할이 자기 자리를 지키려 하고,
+    // 그 결과 "앞의 방패를 뚫을까, 돌아서 후열을 칠까"가 매 순간의 문제가 된다.
+    // 구현은 위치 보정 — 적의 update가 끝난 뒤 자기 밴드 밖이면 밀어 넣는다.
+    // AI를 통째로 다시 쓰지 않고 **행동의 결과만** 고친다 (63종을 다 건드릴 수 없다)
+    if (this.player && this.state === 'play') {
+      const p = this.player;
+      for (const e of this.enemies) {
+        if (e.dead || e.neutral || e.isBoss || e.isMini || e.spawnT > 0) continue;
+        if (e._shakenT > 0) continue;             // 흔들리는 무리는 대열을 못 지킨다
+        if (!e._role) e._role = roleOf(e.type, e);
+        const band = e._role === 'back' ? 250 : e._role === 'flank' ? 150 : 96;
+        const dx = p.x - e.x, dy = p.y - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d >= band - 8) continue;               // 밴드 밖이면 평소대로 접근한다
+        // 너무 붙었다 — 자기 자리로 물러난다. 후열일수록 강하게
+        const push = (e._role === 'back' ? 46 : e._role === 'flank' ? 26 : 14) * dt;
+        if (e._role === 'flank') {
+          // 측면은 물러나는 대신 **돈다** — 옆으로 파고드는 압박이 유지된다
+          World.moveEntity(e, (-dy / d) * push * 2.2, (dx / d) * push * 2.2);
+        } else {
+          World.moveEntity(e, (-dx / d) * push, (-dy / d) * push);
+        }
       }
     }
 

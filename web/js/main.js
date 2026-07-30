@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 185;
+const GAME_VERSION = 186;
 
 const PROJ_STYLES = {
   arrow: { color: '#a99e8c', sprite: true },
@@ -561,7 +561,10 @@ const Game = {
 
     if (type === 'combat') {
       Dungeon.combatComp(depth).forEach((s, i) => {
-        this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini });
+        // v186: pack·leader를 여기서 안 넘겨서 **리더가 한 기도 안 생겼다** (실측 8개 방 전부 0기).
+        // v185의 사기 시스템이 통째로 죽어 있었다 — 회귀는 combatComp만 봤지 스폰 경로를 안 봤다
+        this.pendingSpawns.push({ delay: 0.4 + i * 0.3, type: s.type, elite: s.elite, mini: s.mini,
+          pack: s.pack, leader: s.leader });
       });
       // M2: 탈영병 (선함) — 1~4막 7%: 싸우지 않는 병사가 다가와 무언가를 건네고 사라진다
       if (Dungeon.floor >= 2 && Dungeon.floor <= 40 && RNG.chance(0.07)) {
