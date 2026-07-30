@@ -2498,5 +2498,114 @@ const Sprites = (() => {
   ]), { g: '#b08d4a', w: '#d8d3c5', e: '#1a1c2c', r: '#e43b44' });
   sprites.obsidianBeast = make(HORSE_ROWS, { o: '#16141e', H: '#2c2434', G: '#443a54', p: '#b13ae0', e: '#b13ae0', k: '#181220' }); // v121: 무너진 왕의 기마상
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  절차 프레임 생성 (v179) — "97종 중 걷기 7종·공격 2종·피격/죽음 0종"을 깬다
+  //
+  //  사장 질문: "몬스터 캐릭 맵 퀄러티 개편은?"
+  //  계측: 스프라이트 97종 중 걷기 프레임 7종(7%) · 공격 2종(2%) · 피격/죽음 **0종**.
+  //  적 63종 중 61종이 **정지 이미지**다. 움직여 보이던 건 전부 회전·눌림·반전 트릭이었다.
+  //
+  //  이건 그림 문제이자 게임플레이 문제다. v175에서 방패 해골을 고칠 때 적은 기록:
+  //  "밀치기 중인지 걷는 중인지 화면상 구분이 불가능했다." 붉은 부채꼴은 **위험하다**를 말하고,
+  //  자세는 **무엇이 오는가**를 말한다. 지금까지 후자가 없었다.
+  //
+  //  61종을 손으로 그릴 수는 없다. 대신 **한 장에서 자세를 만들어낸다** —
+  //  실루엣을 행 구간별로 전단·이동·압축하면 관절이 있는 것처럼 보인다.
+  //  ★ 정직하게: 자동 생성은 사람이 그린 무게 이동과 예비 동작을 못 만든다.
+  //    "0에서 그럴듯한 것"까지가 이 기법의 한계다. 그 구간이 큰 도약이라 간다
+  // ══════════════════════════════════════════════════════════════════════
+
+  // 행 구간별로 다르게 변형한다. fn(t) → {dx, dy, sx} (t: 0=머리 1=발)
+  function warp(img, fn) {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const h = img.height, w = img.width;
+    for (let y = 0; y < h; y++) {
+      const t = h > 1 ? y / (h - 1) : 0;
+      const d = fn(t) || {};
+      const dx = Math.round(d.dx || 0), dy = Math.round(d.dy || 0);
+      const sx = d.sx == null ? 1 : d.sx;
+      ctx.save();
+      ctx.translate(w / 2 + dx, 0);
+      ctx.scale(sx, 1);
+      ctx.drawImage(img, 0, y, w, 1, -w / 2, y + dy, w, 1); // 픽셀아트라 보간 없이 정수 이동만
+      ctx.restore();
+    }
+    return c;
+  }
+
+  // 명도·투명도 조정 — 피격(밝게)·죽음(어둡고 옅게)
+  function shade(img, mul, alpha) {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+    if (mul !== 1) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.globalAlpha = Math.min(0.8, Math.abs(mul - 1));
+      ctx.fillStyle = mul > 1 ? '#ffffff' : '#000000';
+      ctx.fillRect(0, 0, c.width, c.height);
+    }
+    if (alpha != null && alpha < 1) {
+      const out = document.createElement('canvas');
+      out.width = c.width; out.height = c.height;
+      const o = out.getContext('2d');
+      o.imageSmoothingEnabled = false;
+      o.globalAlpha = alpha;
+      o.drawImage(c, 0, 0);
+      return out;
+    }
+    return c;
+  }
+
+  // 한 장에서 자세를 만든다.
+  //  walk 2장 — 상체는 거의 고정, 하체가 좌우로 흔들린다 (걸음의 무게 이동)
+  //  wind    — 뒤로 젖히고 웅크린다 (예고: "온다")
+  //  strike  — 앞으로 쏟아지며 가로로 늘어난다 (타격: "왔다") — 예고와 **반대 방향**이라 한 쌍으로 읽힌다
+  //  hurt    — 뒤로 꺾이고 밝아진다      die — 세로로 무너진다
+  function deriveFrames(img) {
+    return {
+      walk: [
+        warp(img, (t) => ({ dx: t > 0.55 ? (t - 0.55) * 3.2 : 0, dy: t < 0.3 ? -1 : 0 })),
+        warp(img, (t) => ({ dx: t > 0.55 ? -(t - 0.55) * 3.2 : 0, dy: t < 0.3 ? 1 : 0 })),
+      ],
+      wind: warp(img, (t) => ({ dx: -(1 - t) * 3.4, dy: t < 0.4 ? 1 : 0, sx: 1 - (1 - t) * 0.06 })),
+      strike: warp(img, (t) => ({ dx: (1 - t) * 4.6, dy: t < 0.4 ? -1 : 0, sx: 1 + (1 - t) * 0.1 })),
+      hurt: shade(warp(img, (t) => ({ dx: -(1 - t) * 2.2, dy: t < 0.5 ? 1 : 0 })), 1.45),
+      die: shade(warp(img, (t) => ({ dy: (1 - t) * 4.5, sx: 1 + t * 0.3 })), 0.72, 0.85),
+    };
+  }
+
+  sprites.deriveFrames = deriveFrames;
+  // UI·투사체·아이템은 자세가 없다 — 걸으면 안 된다
+  const NO_POSE = /^(arrow|heart|coin|chest|orb|icon|shard|door|torch|pot|crack|rune|bolt|proj|white|tint)/i;
+  let derivedN = 0;
+  for (const key of Object.keys(sprites)) {
+    const img = sprites[key];
+    if (!img || !img.width || typeof img.getContext !== 'function') continue;
+    if (NO_POSE.test(key)) continue;
+    const cur = sprites.enemyFrames[key];
+    // ★ 손으로 그린 걷기가 있으면 **그 걷기 프레임에서** 자세를 파생한다.
+    // 기본 스프라이트에서 뽑으면 안 된다 — 거미는 기본이 웅크린 모습이고 걷기가 펼친 모습이라,
+    // 기본에서 예고·타격을 만들면 **다른 생물이 찌그러진 그림**이 나왔다 (자세 시트로 발각)
+    const poseBase = (cur && cur.walk && cur.walk[0]) || img;
+    const gen = deriveFrames(poseBase);
+    // ★ 손으로 그린 프레임은 **절대 덮어쓰지 않는다** — 자동 생성이 사람 손보다 못하다는 걸 알고 쓴다
+    sprites.enemyFrames[key] = {
+      walk: (cur && cur.walk) || gen.walk,
+      attack: (cur && cur.attack) || gen.strike,
+      wind: gen.wind,
+      strike: (cur && cur.attack) || gen.strike,
+      hurt: gen.hurt,
+      die: gen.die,
+      derived: !(cur && cur.walk),   // 계측용
+    };
+    if (!(cur && cur.walk)) derivedN++;
+  }
+  sprites.frameStats = { total: Object.keys(sprites.enemyFrames).length, derived: derivedN };
+
   return { ...sprites, white: whiteOf, tint: tintOf };
 })();

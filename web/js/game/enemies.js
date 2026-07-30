@@ -173,10 +173,16 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       return baseImg;
     },
 
-    // 걷기 프레임 선택 (프레임이 정의된 적만; rate = 발걸음 속도)
+    // 자세 프레임 선택 (v179) — 걷기뿐 아니라 **상태가 자세로 보인다**.
+    // v175에서 예고를 화면에 세웠지만 붉은 부채꼴은 '위험하다'만 말한다.
+    // 자세는 '무엇이 오는가'를 말한다 — 예고 중엔 젖히고, 때릴 땐 쏟아진다.
+    // 그 둘이 반대 방향이라 한 쌍으로 읽힌다
     walkFrame(rate = 6) {
       const fr = Sprites.enemyFrames[this.sprite];
       if (!fr) return Sprites[this.sprite];
+      if (this._whiffT > 0 && fr.hurt) return fr.hurt;       // 헛손질 = 무너진 자세 (반격의 창)
+      if (this._strikeT > 0 && fr.strike) return fr.strike;  // 때리는 순간
+      if ((this._windT > 0 || this._stompT > 0) && fr.wind) return fr.wind; // 예고 — 뒤로 젖힌다
       return fr.walk[Math.floor(this.animT * rate) % 2];
     },
 
@@ -246,7 +252,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         let squash = 1 + Math.sin(this.animT * 6) * 0.15;
         if (this.state === 'crouch') squash = 0.55 + this.stateT * 0.2;      // 납작
         if (this.state === 'leap') squash = 1.45;                            // 쭉 늘어남
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y, {
+        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y, {
           flip: this.flip, squashX: 2 - squash, squashY: squash, shadow: true,
         });
         if (this.state === 'crouch') {
@@ -392,7 +398,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'windup') shakeX = (Math.random() - 0.5) * 4;
         if (this.state === 'charge') rot = this.flip ? -0.08 : 0.08;
         const img = this.state === 'charge' ? this.walkFrame(16)
-          : this.state === 'wander' ? this.walkFrame(7) : Sprites[this.sprite];
+          : this.walkFrame(this.state === 'wander' ? 7 : 5);
         Renderer.drawSprite(this.skin(img), this.x + shakeX, this.y, { flip: this.flip, rot, shadow: true });
         if (this.state === 'stunned') {
           ctx.fillStyle = '#f7b32b';
@@ -679,7 +685,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = Math.sin(this.animT * 3) * 4;
         const wind = this.windT > 0;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x + (wind ? (Math.random() - 0.5) * 3 : 0), this.y - bob, {
+        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x + (wind ? (Math.random() - 0.5) * 3 : 0), this.y - bob, {
           flip: this.flip, alpha: this.phased ? 0.35 : wind ? 0.6 : 0.95, shadow: !this.phased,
           squashX: this.lungeT > 0 ? 1.35 : 1,
         });
@@ -724,7 +730,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       draw(ctx) {
         const bob = Math.sin(this.animT * 4) * 4;
         const heat = this.state === 'cast' ? 1 + this.stateT * 0.3 : 1;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y - bob, {
+        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y - bob, {
           flip: this.flip, squashX: heat, squashY: heat, shadow: true,
         });
         if (Math.random() < 0.3) {
@@ -1260,7 +1266,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         const wig = 1 + Math.sin(this.animT * 10) * 0.25;
         const sqx = this.coilT > 0 ? 0.55 : this.springT > 0 ? 1.6 : wig;
         const sqy = this.coilT > 0 ? 1.5 : this.springT > 0 ? 0.7 : 2 - wig;
-        Renderer.drawSprite(this.skin(Sprites[this.sprite]), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true });
+        Renderer.drawSprite(this.skin(this.walkFrame(6)), this.x, this.y, { flip: this.flip, squashX: sqx, squashY: sqy, shadow: true });
         this.drawStatus(ctx);
       },
     }),

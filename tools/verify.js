@@ -1319,6 +1319,56 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('tone.engineExists', tone.hasWaveShaper,
     '모달 합성 + 새추레이션 신설 (v177까지 createWaveShaper·createPeriodicWave·모달 전부 사용 0회)');
 
+  // ── 자세 프레임 (v179) ──
+  const frames = await page.evaluate(() => {
+    const F = Sprites.enemyFrames, st = Sprites.frameStats || {};
+    // 두 캔버스의 픽셀 차이 비율 — 자세가 실제로 달라졌는가.
+    // ★ 프레임이 '있다'와 '다르다'는 다르다. 같은 그림 두 장은 애니메이션이 아니다
+    const diff = (a, b) => {
+      if (!a || !b || a.width !== b.width || a.height !== b.height) return -1;
+      const g = (c) => c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const A = g(a), B = g(b);
+      let d = 0, n = 0;
+      for (let i = 0; i < A.length; i += 4) {
+        const aOn = A[i + 3] > 24, bOn = B[i + 3] > 24;
+        if (aOn || bOn) n++;
+        if (aOn !== bOn) d++;
+        else if (aOn && (Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]) > 40)) d++;
+      }
+      return n ? +(d / n).toFixed(3) : 0;
+    };
+    const keys = Object.keys(F);
+    const pick = ['skeleton', 'shieldSkeleton', 'sniper', 'golem'].filter((k) => F[k]);
+    const samples = {};
+    for (const k of pick) {
+      const f = F[k], base = Sprites[k];
+      samples[k] = { walk: diff(f.walk[0], f.walk[1]), wind: diff(base, f.wind),
+        strike: diff(base, f.strike), windVsStrike: diff(f.wind, f.strike), hurt: diff(base, f.hurt) };
+    }
+    // 전 스프라이트 커버리지
+    let full = 0;
+    for (const k of keys) {
+      const f = F[k];
+      if (f.walk && f.walk.length === 2 && f.wind && f.strike && f.hurt && f.die) full++;
+    }
+    return { total: keys.length, full, derived: st.derived || 0, samples };
+  });
+  console.log('  자세:', JSON.stringify(frames));
+  ok('pose.coverage', frames.full >= 60 && frames.total >= 60,
+    `자세 6종(걷기2·예고·타격·피격·죽음)을 갖춘 스프라이트 ${frames.full}/${frames.total} · 자동 생성 ${frames.derived}종 ` +
+    '(v178은 97종 중 걷기 7 · 공격 2 · 피격/죽음 0 — 적 63종 중 61종이 정지 이미지였다)');
+  const sv = Object.values(frames.samples);
+  ok('pose.actuallyDiffers',
+    sv.length >= 3 && sv.every((v) => v.walk > 0.02 && v.wind > 0.05 && v.strike > 0.05),
+    '자세가 실제로 다르다 — ' + Object.entries(frames.samples)
+      .map(([k, v]) => `${k} 걷기 ${(v.walk * 100).toFixed(0)}% · 예고 ${(v.wind * 100).toFixed(0)}% · 타격 ${(v.strike * 100).toFixed(0)}%`).join(' / ') +
+    ' (프레임이 있다와 다르다는 다르다 — 같은 그림 두 장은 애니메이션이 아니다)');
+  ok('pose.windOpposesStrike',
+    sv.every((v) => v.windVsStrike > v.wind && v.windVsStrike > v.strike),
+    '예고와 타격이 서로 반대 방향 — ' + Object.entries(frames.samples)
+      .map(([k, v]) => `${k} ${(v.windVsStrike * 100).toFixed(0)}%`).join(' / ') +
+    ' (기본자세 대비보다 서로가 더 멀어야 "젖혔다 → 쏟아졌다"로 읽힌다)');
+
   ok('noPageErrors', errs.length === 0, errs.slice(0, 3).join(' | '));
 
   await browser.close();
