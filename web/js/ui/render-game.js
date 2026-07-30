@@ -805,15 +805,40 @@ const GameRender = {
         ctx.restore();
       }
       if (d.isLeader && !d.isBoss) {
-        // 리더 — 머리 위 작은 깃. 매듭이 어디 있는지 한눈에
+        // 리더 — 머리 위 깃 + 이름. v185의 1.5px 막대는 사장이 못 봤다(당연하다).
+        // 「누구를 먼저 쳐야 하는가」가 전술이 되려면 그게 화면에서 즉시 읽혀야 한다
         ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = '#c9d94a';
-        const ly = d.y - d.r - 13;
-        ctx.fillRect(d.x - 0.5, ly, 1.5, 11);
+        const ly = d.y - d.r - 22;
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#e8c04a';
+        ctx.fillRect(d.x - 1, ly, 2, 16);
         ctx.beginPath();
-        ctx.moveTo(d.x + 1, ly); ctx.lineTo(d.x + 9, ly + 3); ctx.lineTo(d.x + 1, ly + 6);
+        ctx.moveTo(d.x + 1, ly); ctx.lineTo(d.x + 13, ly + 4.5); ctx.lineTo(d.x + 1, ly + 9);
         ctx.closePath(); ctx.fill();
+        // 발밑 지휘 고리 — 무리가 어디를 중심으로 도는지
+        ctx.globalAlpha = 0.5 + Math.sin(this.blinkT * 3) * 0.12;
+        ctx.strokeStyle = '#e8c04a'; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(d.x, d.y + d.r * 0.8, d.r * 1.35, d.r * 0.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.9;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 9px Galmuri11, monospace';
+        ctx.fillStyle = '#08080f';
+        ctx.fillText('무리 지휘', d.x + 1, ly - 3);
+        ctx.fillStyle = '#e8c04a';
+        ctx.fillText('무리 지휘', d.x, ly - 4);
+        ctx.restore();
+      }
+      // 호령 여파 (v187) — 무리 전체가 **같은 순간에** 번쩍인다.
+      // 동시성이 무리를 무리로 보이게 한다. 제각각 걸어오면 그냥 개체 넷이다
+      if (d._rallyT > 0 && !d.isBoss) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.55, d._rallyT * 1.1);
+        ctx.strokeStyle = '#e8c04a'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(d.x, d.y + d.r * 0.75, d.r * (1.1 + (0.55 - d._rallyT) * 1.6), d.r * 0.45, 0, 0, Math.PI * 2);
+        ctx.stroke();
         ctx.restore();
       }
       if (d._shakenT > 0) {
@@ -1203,10 +1228,47 @@ const GameRender = {
       ctx.fillStyle = '#4a4a5c';
       ctx.fillText(`시드 ${this.runSeed.toString(36).toUpperCase()}${this.heat > 0 ? ' · 열기 ' + this.heat : ''}`, Renderer.W / 2, Renderer.H - 12);
     }
+    // 첫 조우 사연 카드 (v187): 처음 보는 얼굴에게 이름과 사연을 준다.
+    // 도감에 묻어두면 아무도 안 읽는다 — 만나는 순간이 유일하게 읽히는 순간이다
+    if (this._meet && this.state === 'play') {
+      const mt = this._meet;
+      const c = mt.c;
+      const a = Math.min(1, mt.t * 2.2) * Math.min(1, (mt.max - mt.t) * 4);
+      const w = 680, h = 74, x = (Renderer.W - w) / 2, y = 84;
+      const side = Meta.sideColor(c.side);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(6,5,12,0.9)';
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = side;
+      ctx.fillRect(x, y, 3, h);                       // 진영 색 띠 — 누구 편이었는지가 한눈에
+      ctx.strokeStyle = 'rgba(120,114,100,0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      const img = Sprites[c.sprite];
+      if (img) {
+        const s = Math.max(1, Math.floor(38 / Math.max(img.width, img.height)));
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, Math.round(x + 30 - img.width * s / 2), Math.round(y + h / 2 - img.height * s / 2),
+          img.width * s, img.height * s);
+      }
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 16px Galmuri11, monospace';
+      ctx.fillStyle = '#e8e0cf';
+      ctx.fillText(c.name, x + 60, y + 25);
+      const nameW = ctx.measureText(c.name).width;   // 반드시 이름을 쓴 폰트로 잰다
+      ctx.font = '11px Galmuri11, monospace';
+      ctx.fillStyle = side;
+      ctx.fillText(`— ${Meta.sideLabel(c.side)}`, x + 70 + nameW, y + 25);
+      ctx.font = '12px Galmuri11, monospace';
+      ctx.fillStyle = '#a8a294';
+      HUD._wrapText(ctx, c.lore, x + 60, y + 46, w - 78, 16);
+      ctx.globalAlpha = 1;
+    }
     // 보스 등장 카드 (v142): 상하 암막 + 이름·기믹 대문 — 결전의 문턱을 몸으로 느끼게
     if (this._bossIntro && this.state === 'play') {
       const bi = this._bossIntro;
-      const k = Math.min(1, (2.4 - bi.t) * 3);          // 진입 페이드
+      const k = Math.min(1, (2.8 - bi.t) * 3);          // 진입 페이드
       const out = bi.t < 0.5 ? bi.t / 0.5 : 1;           // 퇴장 페이드
       const a = k * out;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1226,6 +1288,12 @@ const GameRender = {
         ctx.font = '14px Galmuri11, monospace';
         ctx.fillStyle = '#c8c2b4';
         ctx.fillText(bi.label, Renderer.W / 2, Renderer.H / 2 + 16);
+      }
+      // v187 죄목 — 이 자가 나에게 한 짓. 기믹보다 이게 먼저 기억에 남아야 한다
+      if (bi.crime) {
+        ctx.font = '13px Galmuri11, monospace';
+        ctx.fillStyle = '#8f8577';
+        HUD._wrapText(ctx, bi.crime, Renderer.W / 2, Renderer.H / 2 + (bi.label ? 44 : 26), 700, 18);
       }
       ctx.globalAlpha = 1;
     }

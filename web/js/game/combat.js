@@ -158,6 +158,13 @@ const GameCombat = {
     // 결정이 아니라 벽이 된다. 흩어놓으면 즉시 사라지는 값이어야 한다
     if (feel && e._packMit > 0 && !e.isBoss) {
       dmg = Math.max(1, dmg * (1 - e._packMit));
+      // v187: **보이지 않는 경감은 없는 것과 같다.** 사장이 v185~186의 무리를 못 느낀
+      // 이유의 절반이 이것 — 14~30%가 조용히 깎이고 있었다. 이제 화면이 말한다.
+      // 0.35초 쿨다운: 연사 직업(궁수·연금)이 "막힘" 도배가 되지 않도록
+      if (e._packMit >= 0.18 && !(e._mitSayT > 0)) {
+        e._mitSayT = 0.35;
+        Particles.text(e.x, e.y - 30, `무리 방어 ${Math.round(e._packMit * 100)}%`, { color: '#c9b98a', size: 11 });
+      }
     }
     // 기믹: 중장갑 — 직접 타격만 경감. 화상/중독 틱, 폭발·연쇄·장판(feel=false)은 무시
     // v161: **보스에게는 하드 클램프가 아니라 비율 경감**이다.
@@ -426,7 +433,12 @@ const GameCombat = {
     }
     // 보스 도감 키: createBoss가 새긴 실제 킷 id — 층 산식은 순환 보스 개편으로 폐기
     Meta.codexKill(e.isBoss ? 'boss' + (e.defId || Dungeon.floor) : (e.codexType || e.type));
-    if (e.isBoss && e.def) this._lastBossOutro = e.def.outro; // 마이크로 서사: onBossDead 끝에서 출력
+    // 마이크로 서사: onBossDead 끝에서 출력.
+    // v187 — 유언은 도감의 last를 우선한다 (23보스 전원 보유). def.outro는 일부만 있었다
+    if (e.isBoss) {
+      const bc = Meta.codexOf('boss' + (e.defId || Dungeon.floor));
+      this._lastBossOutro = (bc && bc.last) || (e.def && e.def.outro) || null;
+    }
     if (e.isBoss || e.isMini || e.elite) this.hitstop = Math.max(this.hitstop, 0.09); // 굵직한 처치는 항상 강조
     else this._applyHitstop(0.05); // 잡몹 처치는 짧게 — 학살 중 '탁탁' 끊김 방지
     // 골드 (G1): 굵직한 처치에서만 떨어진다 — 상인에게만 쓰는 런 화폐

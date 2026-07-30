@@ -314,6 +314,29 @@ const Dungeon = {
     if (Game.pacts && Game.pacts.wrath) eliteChance = Math.min(0.65, eliteChance + 0.10); // 왕의 진노
     if (this.shortcutHot) eliteChance = Math.min(0.5, eliteChance * 2); // 지름길 층: 정예 2배
 
+    // ══ 방 규격 (v187) — 기준 구간 1~3층에서 잡고 50층까지 그대로 쓴다 ═══════
+    // 사장: "적들도 군집이나 여러 행동들에 대한 체감이 없는데?"
+    // 실측이 원인을 지목했다 — 1~3층 24개 방 **전부** 무리 1개·리더 1기·적 3.5마리.
+    // 즉 무리가 죽어 있던 게 아니라 **상수**였다. 항상 무리면 무리가 안 보인다.
+    //
+    // 그래서 방에 성격을 준다. 그리고 난이도를 건드리지 않기 위해
+    // **위협 예산을 보존**한다: 몸 수를 늘리면 개체를 그만큼 약하게 만든다.
+    //   홑몸 — 몸 0.65배 / 개체 1.50배 : 조용한 방. 하나하나가 무겁다
+    //   무리 — 몸 1.40배 / 개체 0.62배 : 떼로 몰려온다. 광역기의 밥
+    //   이중 — 몸 1.20배 / 개체 0.78배 : 두 무리, "어느 쪽부터"가 문제
+    // 이 규칙은 층 번호를 파라미터로만 받으므로 1층과 50층에서 똑같이 동작한다
+    const ROOM_KINDS = [
+      { id: 'solo', p: 0.25, bodies: 0.65, unit: 1.50, packs: 0 },
+      { id: 'pack', p: 0.45, bodies: 1.40, unit: 0.62, packs: 1 },
+      { id: 'duo',  p: 0.25, bodies: 1.20, unit: 0.78, packs: 2 },
+      { id: 'host', p: 0.05, bodies: 1.55, unit: 0.58, packs: 1 }, // 대무리 — 드물게 오는 압도
+    ];
+    let roll = RNG.next(), kind = ROOM_KINDS[1];
+    for (const k of ROOM_KINDS) { if (roll < k.p) { kind = k; break; } roll -= k.p; }
+    const bodyN = Math.max(2, Math.min(20, Math.round(n * kind.bodies)));
+    const unitMul = kind.unit;
+    comp.roomKind = kind.id;
+
     // 설계된 위협 세트 (R2): 45% 확률로 손제작 조합이 무리의 뼈대가 된다
     // 층 귀속 (min~max) — 무한 모드는 순환 테마의 유효 층으로 매칭
     const ef = this.floor <= 10 ? this.floor : ((this.floor - 11) % 5) + 6;
@@ -327,14 +350,14 @@ const Dungeon = {
       const matched = sets.filter((s) => s.wants === tag);
       return matched.length && RNG.chance(0.75) ? RNG.pick(matched) : RNG.pick(sets);
     };
-    if (sets.length) {
+    if (sets.length && kind.packs > 0) {
       // 첫 무리 — 지형에 맞는 조합이 뼈대가 된다.
       // v185: 무리마다 **번호와 리더**를 붙인다. 리더는 무리를 묶는 매듭이고, 끊으면 무리가 흔들린다
       let packId = 0;
       const stamp = (units, wants) => {
         const id = ++packId;
         const start = comp.length;
-        for (const t of units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5), pack: id });
+        for (const t of units) comp.push({ type: t, elite: RNG.chance(eliteChance * 0.5), pack: id, hpMul: unitMul });
         // 리더는 무리의 첫 유닛 — THREAT_SETS는 앞쪽이 그 무리의 성격을 대표한다
         if (comp.length > start + 1) comp[start].leader = true;
         return { units: units.length, wants };
@@ -342,21 +365,30 @@ const Dungeon = {
       const set = pickSet();
       comp.setUsed = true;
       comp.packs = [stamp(set.units, set.wants)];
-      // 자리가 남으면 **또 다른 무리**를 부른다 — 낱개로 채우지 않는다.
-      // 두 무리가 같은 방에 있으면 "어느 쪽부터"가 생긴다
+      // v187: 무리 방은 **한 무리를 크게** 키운다 (같은 세트를 겹쳐 붙인다) —
+      // 넷은 무리로 안 보이고 여덟은 보인다. 이중 방만 서로 다른 무리를 부른다
       let guard = 0;
-      while (comp.length < n - 1 && guard++ < 4) {
-        const s2 = pickSet();
-        comp.packs.push(stamp(s2.units, s2.wants));
+      while (comp.length < bodyN - 1 && guard++ < 6) {
+        const s2 = kind.packs >= 2 ? pickSet() : set;
+        if (kind.packs >= 2 && comp.packs.length < 2) comp.packs.push(stamp(s2.units, s2.wants));
+        else {
+          // 같은 무리에 몸을 더 붙인다 — 리더는 그대로 하나
+          const id = comp.packs.length ? 1 : 0;
+          for (const t of s2.units) {
+            if (comp.length >= bodyN) break;
+            comp.push({ type: t, elite: RNG.chance(eliteChance * 0.4), pack: id || 1, hpMul: unitMul });
+          }
+          comp.packs[comp.packs.length - 1].units += s2.units.length;
+        }
       }
     }
-    // 그래도 모자란 한두 자리만 낱개로 (세트가 없는 층 대비)
-    while (comp.length < n) {
+    // 홑몸 방(무리 없음)과, 세트가 없는 층의 남는 자리는 낱개로 — 무리 번호를 주지 않는다
+    while (comp.length < bodyN) {
       const type = RNG.pick(data.enemies);
-      comp.push({ type, elite: RNG.chance(eliteChance) });
+      comp.push({ type, elite: RNG.chance(eliteChance), hpMul: unitMul });
       // 벌레 떼는 4마리씩 몰려온다 (1마리 몫으로 취급)
       if (type === 'swarm') {
-        for (let k = 0; k < 3; k++) comp.push({ type: 'swarm', elite: false });
+        for (let k = 0; k < 3; k++) comp.push({ type: 'swarm', elite: false, hpMul: unitMul });
       }
     }
     // 중간보스 (우두머리): 층당 최소 1회 보장 — 12% 운빨로는 절반의 층을 그냥 지나쳤다 (기대 0.6회/층)

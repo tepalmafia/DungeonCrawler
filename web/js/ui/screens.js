@@ -473,10 +473,45 @@ const GameScreens = {
     if (Input.pressed('Digit2')) this.codexTab = 1;
     if (Input.pressed('Digit3')) this.codexTab = 2;
     if (Input.pressed('Digit4')) this.codexTab = 3;
-    if (this.codexTab !== prevTab) this.codexPage = 0;
-    // 페이지 넘김 (←→) — 도감이 89종을 넘으며 한 화면에 다 안 들어간다
-    if (Input.pressed('ArrowLeft', 'KeyA')) { this.codexPage = Math.max(0, (this.codexPage || 0) - 1); AudioSys.orb(); }
-    if (Input.pressed('ArrowRight', 'KeyD')) { this.codexPage = (this.codexPage || 0) + 1; AudioSys.orb(); }
+    if (Input.pressed('Tab')) { this.codexTab = (this.codexTab + 1) % 4; AudioSys.orb(); } // 패드 어깨버튼 대용
+    if (this.codexTab !== prevTab) { this.codexPage = 0; this.codexSel = 0; }
+
+    // ── 커서 선택 (v187) ──────────────────────────────────────────────
+    // 종전엔 사연이 **마우스 호버로만** 열렸다. 폰에는 호버가 없다 — 사장은 사연을
+    // 볼 방법이 아예 없었다. 방향키/패드 d-pad로 칸을 고르고, 화면 끝에서 쪽이 넘어간다
+    const g = HUD.codexGeom(this.codexTab);
+    if (g) {
+      const move = (dx, dy) => {
+        let s = this.codexSel || 0;
+        const col = s % g.cols, row = Math.floor(s / g.cols);
+        if (dx) {
+          if (col + dx < 0) {                       // 왼쪽 끝 → 이전 쪽 오른쪽 끝
+            if ((this.codexPage || 0) > 0) { this.codexPage--; s = row * g.cols + (g.cols - 1); }
+          } else if (col + dx >= g.cols) {          // 오른쪽 끝 → 다음 쪽 왼쪽 끝
+            this.codexPage = (this.codexPage || 0) + 1; s = row * g.cols;
+          } else s += dx;
+        }
+        if (dy) {
+          const nr = row + dy;
+          if (nr < 0) { if ((this.codexPage || 0) > 0) { this.codexPage--; s = (g.rows - 1) * g.cols + col; } }
+          else if (nr >= g.rows) { this.codexPage = (this.codexPage || 0) + 1; s = col; }
+          else s += dy * g.cols;
+        }
+        this.codexSel = Math.max(0, s);
+        AudioSys.orb();
+      };
+      if (Input.pressed('ArrowLeft', 'KeyA')) move(-1, 0);
+      if (Input.pressed('ArrowRight', 'KeyD')) move(1, 0);
+      if (Input.pressed('ArrowUp', 'KeyW')) move(0, -1);
+      if (Input.pressed('ArrowDown', 'KeyS')) move(0, 1);
+      if (Input.pressed('KeyQ')) { this.codexPage = Math.max(0, (this.codexPage || 0) - 1); this.codexSel = 0; AudioSys.orb(); }
+      if (Input.pressed('KeyE')) { this.codexPage = (this.codexPage || 0) + 1; this.codexSel = 0; AudioSys.orb(); }
+    } else {
+      // 증거 탭은 격자가 없다 — 종전대로 쪽 넘김만
+      if (Input.pressed('ArrowLeft', 'KeyA', 'KeyQ')) { this.codexPage = Math.max(0, (this.codexPage || 0) - 1); AudioSys.orb(); }
+      if (Input.pressed('ArrowRight', 'KeyD', 'KeyE')) { this.codexPage = (this.codexPage || 0) + 1; AudioSys.orb(); }
+    }
+
     if (Input.mouse.justDown) {
       const back = HUD.backButtonRect();
       if (Input.mouse.x >= back.x && Input.mouse.x <= back.x + back.w &&
@@ -488,9 +523,22 @@ const GameScreens = {
         if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
             Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) {
           this.codexTab = i;
+          this.codexSel = 0;
           AudioSys.orb();
         }
       });
+      // 터치 = 탭해서 고르기. 폰에는 호버가 없으므로 이 경로가 유일한 선택 수단이다
+      if (g) {
+        for (let i = 0; i < g.cols * g.rows; i++) {
+          const r = HUD.codexCellRect(this.codexTab, i);
+          if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+              Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) {
+            this.codexSel = i;
+            AudioSys.orb();
+            break;
+          }
+        }
+      }
     }
   },
 
