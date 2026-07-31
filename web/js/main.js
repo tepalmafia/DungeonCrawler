@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 207;
+const GAME_VERSION = 208;
 
 // v192 — 사장: "기존처럼 동그라미를 날리는 공격만 가지지말고,
 //                동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
@@ -301,7 +301,7 @@ const Game = {
     this.bossRush = false; // 보스 러시는 startBossRush()로만
     this.deathInfo = null;
     this._camp = null; // 모닥불 대화 — 다음 거점 방문 때 새 대화
-    this._runHurts = 0; this._hurtWhy = {}; this._tell = null; this._runBossLog = []; // 플레이 리포트 (v144) 런 집계 리셋
+    this._runHurts = 0; this._hurtWhy = {}; this._tell = null; this._tells = []; this._dashAt = -9; this._moveAt = -9; this._runBossLog = []; // 플레이 리포트 (v144) 런 집계 리셋
     this._graceRevived = false; // 망자의 가호 (v145) — 런당 1회
     // 온보딩 (v139): 생애 첫 런만 — 걷기→베기→대시 순서로 몸을 깨운다
     this._obHints = Meta.data.runs === 0 && Meta.data.wins === 0;

@@ -212,10 +212,10 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if ((this.elite || this.isMini) && Dungeon.floor >= 7) dmg = Math.max(dmg, 2);
         if (p.invuln > 0) {
           // 무적 중 접촉은 피해가 없지만 — 대시 무적이라면 '완벽 회피' 판정 기회다
-          if (p._dashWin > 0) game.hurtPlayer(dmg, dir);
+          if (p._dashWin > 0) game.hurtPlayer(dmg, dir, 260, this.name ? this.name + ' 강타' : '잡몹 강타');
           return;
         }
-        game.hurtPlayer(dmg, dir);
+        game.hurtPlayer(dmg, dir, 260, this.name ? this.name + ' 강타' : '잡몹 강타');
       } else {
         // 물러섰다 — 헛손질. 경직을 길게 줘서 반격의 창을 연다 (회피가 이득이 되도록)
         this.hitCd = 1.15;
@@ -436,7 +436,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             game.firePatches.push({ x: this.x, y: this.y, r: 22, life: 1.4, kind: 'fire' });
           }
           if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r + 2) { // 완벽 회피 판정 연결 (무적은 hurtPlayer가 처리)
-            game.hurtPlayer(1, this.chargeDir, 420);
+            game.hurtPlayer(1, this.chargeDir, 420, '멧돼지 돌진');
           }
           if (hit.x || hit.y) {
             this.state = 'stunned';
@@ -990,7 +990,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             const along = rx * this.slamDir.x + ry * this.slamDir.y;
             const perp = Math.abs(-rx * this.slamDir.y + ry * this.slamDir.x);
             if (along > -10 && along < this.slamLen && perp < this.slamHalfW + p.r) {
-              game.hurtPlayer(2, this.slamDir, 380);
+              game.hurtPlayer(2, this.slamDir, 380, '처형인 내려찍기');
             }
             for (let i = 0; i < 8; i++) {
               const t = (i + 1) / 8;
@@ -1169,7 +1169,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (this.stateT > 0.45) {
             this.state = 'walk'; this.stateT = 0;
             if (Math.hypot(p.x - this.x, p.y - this.y) < 60) {
-              game.hurtPlayer(1, this.faceDir, 430); // 강넉백 밀치기
+              game.hurtPlayer(1, this.faceDir, 430, '방패 밀치기');
             }
           }
         }
@@ -1800,7 +1800,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             while (ang > Math.PI) ang -= Math.PI * 2;
             while (ang < -Math.PI) ang += Math.PI * 2;
             if (p.invuln <= 0 && pd < 78 + p.r && Math.abs(ang) < 1.1) {
-              game.hurtPlayer(2, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 400);
+              game.hurtPlayer(2, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 400, '거구 휘두르기');
             }
             for (let i = 0; i < 6; i++) {
               const a = this.swingA + (i / 5 - 0.5) * 2.2;
@@ -2510,7 +2510,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this.globs.splice(i, 1);
             game.firePatches.push({ x: g.x, y: g.y, r: 36, life: 3.0, kind: 'poison' });
             const pd = Math.hypot(p.x - g.x, p.y - g.y);
-            if (pd < 42 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 200);
+            if (pd < 42 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 200, '산성 덩어리');
             Particles.burst(g.x, g.y, { count: 10, colors: ['#c9d94a', '#6a7a1a'], speed: 100, life: 0.35, size: 3 });
           }
         }
@@ -2711,7 +2711,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this.globs.splice(i, 1);
             game.firePatches.push({ x: g.x, y: g.y, r: 30, life: 1.8, kind: 'fire' });
             const pd = Math.hypot(p.x - g.x, p.y - g.y);
-            if (pd < 36 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 220);
+            if (pd < 36 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 220, '불덩이');
             Particles.burst(g.x, g.y, { count: 10, colors: ['#ff9a3c', '#ffd866'], speed: 110, life: 0.3, size: 3 });
           }
         }
@@ -2753,7 +2753,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             this.geysers.splice(i, 1);
             game.firePatches.push({ x: g.x, y: g.y, r: 26, life: 1.2, kind: 'fire' });
             const pd = Math.hypot(p.x - g.x, p.y - g.y);
-            if (pd < 40 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 260);
+            if (pd < 40 + p.r) game.hurtPlayer(1, { x: (p.x - g.x) / (pd || 1), y: (p.y - g.y) / (pd || 1) }, 260, '용암 분출');
             Particles.burst(g.x, g.y, { count: 14, colors: ['#ff7043', '#ffd866', '#e43b44'], speed: 150, life: 0.4, size: 4, gravity: -160 });
             Renderer.shake(2, 0.1);
             AudioSys.thud();
@@ -3079,7 +3079,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   if (elite) {
     // v166: 정예 배수 2.5 → 3.2. 실측 정예 필요 타수가 3~14타로 편차가 크고
     // 4·6·10층은 3~5타에 그쳐 '정예'라는 이름값을 못 했다 (목표 8~15타)
-    e.hp = Math.ceil(e.hp * 3.2);
+    // ★ v208 — 배수만으로는 「정예」가 이름값을 못 한다.
+    // 1층 전체 계측: 정예방 평균 **4.0초**, 일반 전투방 10.5초 — 「강적 — 특성 보상」이라고
+    // 써 붙인 방이 그 층에서 **가장 쉬운 방**이었다. 원인은 배수가 아니라 **분모**다:
+    // 잡몹 원본 HP 가 작은 종(archer 2 · swarm 1)이 정예로 뽑히면 ×3.2 해도 7·4 —
+    // 같은 방의 일반 잡몹(3~5)과 구분이 안 된다. 우두머리는 32인데 정예가 7이었다.
+    // 층에 걸린 **하한**을 둬서 정예는 언제 뽑혀도 잡몹과 우두머리 사이에 선다
+    const eliteFloorHp = 12 + (typeof Dungeon !== 'undefined' ? Dungeon.floor : 1) * 3;
+    e.hp = Math.max(Math.ceil(e.hp * 3.2), Math.round(eliteFloorHp * (floorScale || 1)));
     e.speed *= 1.15;
     e.r *= 1.15;
     // v207: 배율을 제곱근으로 완만하게 — 기준 크기는 v199 그대로 두고 **위계만** 읽히게 한다
@@ -3148,7 +3155,7 @@ const MINI_AFFIXES = {
       const d = Math.hypot(p.x - e.x, p.y - e.y);
       game._explode(e.x, e.y, 90, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
       if (p.invuln <= 0 && d < 90 + p.r) {
-        game.hurtPlayer(1, { x: (p.x - e.x) / (d || 1), y: (p.y - e.y) / (d || 1) }, 320);
+        game.hurtPlayer(1, { x: (p.x - e.x) / (d || 1), y: (p.y - e.y) / (d || 1) }, 320, '자폭');
       }
     } },
   splitter: { name: '분열', color: '#a7f070',
@@ -3332,10 +3339,15 @@ function createBoomFuse(x, y) {
     type: 'boomFuse', neutral: true, noDrops: true,
     x, y, r: 1, hp: 999, maxHp: 999, speed: 0, xpVal: 0,
     dead: false, phased: true, elite: false, isBoss: false, isMini: false,
-    flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0, fuseT: 0.5,
+    // ★ v208 — 심지 0.5초는 인간 반응 시간(약 0.25초)의 두 배가 채 안 된다.
+    //   게다가 **폭발 반경이 화면에 없었다** — 「터진다」는 알아도 「어디까지」를 모르면 못 피한다.
+    //   1층 전체 계측에서 무예고 피격 6회 전부가 이 항아리였다(전체의 40%).
+    //   v205 정예 발구르기와 같은 결함이다: 예고가 없거나, 있어도 반경이 없다
+    flash: 0, kbx: 0, kby: 0, hitCd: 0, spawnT: 0, flip: false, animT: 0, fuseT: 0.75, fuseMax: 0.75,
     status: { burn: 0, burnTick: 0, shock: 0, poison: 0, poisonTick: 0 },
     update(dt, game) {
       this.fuseT -= dt;
+      if (game && game.noteTell) game.noteTell(this.x, this.y, this);   // 심지가 타는 내내가 예고다
       if (Math.random() < 0.5) {
         Particles.burst(this.x, this.y - 10, { count: 1, colors: ['#ffd866', '#ff7043'], speed: 50, life: 0.2, size: 2, gravity: -120 });
       }
@@ -3352,12 +3364,32 @@ function createBoomFuse(x, y) {
         const p = game.player;
         const pd = Math.hypot(p.x - this.x, p.y - this.y);
         if (pd < 70 + p.r) {
-          game.hurtPlayer(1, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 300);
+          game.hurtPlayer(1, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 300, '폭탄 도화선');
         }
         Renderer.shake(4, 0.18);
       }
     },
     draw(ctx) {
+      // ── 폭발 반경 예고 (v208) ──
+      // 판정과 **같은 수치**로 그린다 (70 + 플레이어 반경 13 = 83). 과하게 그릴지언정
+      // 안전하다고 거짓말하지 않는다 — v159 보스 휘두르기에서 세운 원칙 그대로다
+      const R = 83;
+      const k = 1 - Math.max(0, this.fuseT) / (this.fuseMax || 0.75);   // 0 → 1
+      ctx.save();
+      ctx.globalAlpha = 0.16 + k * 0.16;
+      ctx.fillStyle = '#ff7043';
+      ctx.beginPath(); ctx.ellipse(this.x, this.y, R, R * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.55 + k * 0.4;
+      ctx.strokeStyle = k > 0.72 ? '#ffffff' : '#ff4757';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath(); ctx.ellipse(this.x, this.y, R, R * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 안쪽으로 조여드는 고리 — 「언제」를 반경으로 읽게 한다
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath(); ctx.ellipse(this.x, this.y, R * k, R * 0.62 * k, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = 1;
       // 심지가 타들어가는 항아리 잔해
       ctx.fillStyle = '#5a1c1c';
       ctx.fillRect(this.x - 6, this.y - 3, 12, 8);
