@@ -87,6 +87,14 @@ const GameRewards = {
         deathBy: victory ? null : (this.deathInfo ? this.deathInfo.src : this._lastHurtBy) || null,
         hurts: this._runHurts || 0,
         why: this._hurtWhy || {},   // v205 피격 원인 분포 — 「몇 대 맞았나」보다 「왜 맞았나」
+        // ★ v208b — **무예고의 출처**를 남긴다. 사장 F9 (v208)에 「무예고 2」가 남았는데
+        //   리포트에 출처가 없어 어느 공격인지 알 수 없었다. 분포만으로는 고칠 자리를 못 찾는다 —
+        //   억울한 피격은 반드시 이름을 달고 와야 한다. (무예고만 담아 리포트를 가볍게 유지)
+        unfair: (() => {
+          const s = this._hurtSrc || {}, o = {};
+          for (const k of Object.keys(s)) if (k.startsWith('무예고 / ')) o[k.slice(6).trim()] = s[k];
+          return o;
+        })(),
         // v148: 사본 저장 — 무한 모드 진입 시 같은 런이 두 번 정산되는데(1막 완주 + 최종 도달),
         // 참조 공유면 첫 기록의 보스 목록이 소급 성장해 리포트가 전부 이중 집계된다 (사장 F9 실측)
         bosses: (this._runBossLog || []).slice(),

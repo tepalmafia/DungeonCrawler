@@ -69,6 +69,17 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       }
     },
 
+    // ── 예고 등록 (v208b) ────────────────────────────────────────────────
+    // 사장: "계속 나에게 테스트를 맡겨야해?"
+    // 전 층 쓸기에서 3~10층에 예고 없는 경로가 7종 남아 있었다. 전부 **예고는 이미 있었다** —
+    // 도화선 0.8초·잠복 0.4초·흡입 1.1초·갈고리 0.75초·채찍 0.55초·돌진 0.7초 …
+    // 등록하는 자리가 게임 전체에 6곳뿐이라, 화면엔 있는 예고가 계기엔 없었다.
+    // 이제 예고를 **시작하는 자리에서** 이 한 줄을 부른다. 부르는 곳이 곧 「여기서 경고한다」는 선언이다
+    tell(game) {
+      const g = game || (typeof Game !== 'undefined' ? Game : null);
+      if (g && g.noteTell) g.noteTell(this.x, this.y);
+    },
+
     tickTimers(dt) {
       this.animT += dt;
       // ── 몸 분리 (v206) ─────────────────────────────────────────────────
@@ -361,7 +372,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           const hit = World.moveEntity(this, vx * spd * dt, vy * spd * dt);
           if (hit.x || hit.y) this.strafe *= -1;
-          if (this.stateT > 1.1) { this.state = 'aim'; this.stateT = 0; }
+          if (this.stateT > 1.1) { this.state = 'aim'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'aim') {
           if (this.stateT < 0.45) this.aimDir = { x: dx / d, y: dy / d };
           if (this.stateT > 0.7) {
@@ -418,7 +429,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           World.moveEntity(this, this.wanderDir.x * spd * dt, this.wanderDir.y * spd * dt);
           this.flip = this.wanderDir.x < 0;
-          if (d < 300) { this.state = 'windup'; this.stateT = 0; }
+          if (d < 300) { this.state = 'windup'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'windup') {
           this.chargeDir = { x: dx / d, y: dy / d };
           this.flip = dx < 0;
@@ -551,7 +562,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const vlen = Math.hypot(vx, vy) || 1;
           const spd = this.effSpeed();
           World.moveEntity(this, (vx / vlen) * spd * dt, (vy / vlen) * spd * dt);
-          if (d < 200 && d > 70 && this.diveCd <= 0) { this.state = 'aim'; this.stateT = 0; }
+          if (d < 200 && d > 70 && this.diveCd <= 0) { this.state = 'aim'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'aim') {
           // 텔레그래프: 공중 정지 + 파르르 (0.4초) 후 급강하
           if (this.stateT > 0.4) {
@@ -659,7 +670,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'walk') {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          if (d < 95) { this.state = 'slam'; this.stateT = 0; }
+          if (d < 95) { this.state = 'slam'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'slam') {
           // 텔레그래프: 들어올리기 (0.7초) → 충격파 링
           if (this.stateT > 0.7) {
@@ -872,7 +883,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'chase') {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          if (d < 58) { this.state = 'fuse'; this.fuseT = 0.8; AudioSys.shoot(); }
+          if (d < 58) { this.state = 'fuse'; this.fuseT = 0.8; AudioSys.shoot(); this.tell(game); }
         } else {
           // 심지에 불이 붙었다 — 제자리에서 부풀며 0.8초 후 폭발
           this.fuseT -= dt;
@@ -884,7 +895,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             game.killEnemy(this, { x: 0, y: -1 });
             game._explode(this.x, this.y, 70, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
             if (d < 70 + p.r) {
-              game.hurtPlayer(2, { x: dx / d, y: dy / d }, 340);
+              game.hurtPlayer(2, { x: dx / d, y: dy / d }, 340, '자폭병 폭발');
             }
             return;
           }
@@ -924,7 +935,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.flip = dx < 0;
 
         if (this.state === 'idle') {
-          if (this.stateT > 1.5 && d < 420) { this.state = 'windup'; this.stateT = 0; }
+          if (this.stateT > 1.5 && d < 420) { this.state = 'windup'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'windup') {
           // 텔레그래프: 웅크렸다가 (0.6초) 산탄 3연발
           if (this.stateT > 0.6) { this.state = 'burst'; this.stateT = 0; this.volleys = 0; }
@@ -1160,6 +1171,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           if (d < 70) {
             this.state = 'bash'; this.stateT = 0;
+            this.tell(game);   // v208b: 예고(소리·자세)는 v175에 넣었는데 **등록을 안 했다** — 3층 무예고 전부가 이것
             // v175: 형제 몹 skeleton은 같은 자리에서 '!'를 그리는데 이놈만 빠져 있었다.
             // 0.45초 예고 + 강넉백(430)인데 **화면에도 소리에도 단서가 0개**였다.
             // 반응 예산 자체는 걸어서 0.35초로 넉넉하다 — 순수하게 '안 알려줘서' 맞는 피해였다
@@ -1213,7 +1225,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'drift') {
           const spd = this.effSpeed();
           if (d < 300) World.moveEntity(this, (-dx / d) * spd * dt, (-dy / d) * spd * dt);
-          if (this.stateT > 1.4) { this.state = 'aim'; this.stateT = 0; }
+          if (this.stateT > 1.4) { this.state = 'aim'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'aim') {
           if (this.stateT < 1.1) this.aimDir = { x: dx / d, y: dy / d };
           if (this.stateT > 1.5) {
@@ -1316,14 +1328,14 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (this.springCd <= 0 && d > 90 && d < 190 &&
               !game.enemies.some((e) => e !== this && !e.dead && e.type === 'leech' && (e.coilT > 0 || e.springT > 0))) {
             // 무리 스태거: 동시에 한 마리만 도약한다 — 회피선이 남아있어야 공정하다
-            this.coilT = 0.42; this.springCd = 3.0;
+            this.coilT = 0.42; this.springCd = 3.0; this.tell(game);
             this.springDir = { x: dx / d, y: dy / d }; // 예고 시작에 방향 고정
           }
         }
         // 접촉 쿨이 짧다 — 붙어있으면 계속 아프다
         if (this.hitCd <= 0 && d < p.r + this.r) {
           this.hitCd = 0.7; // 2층 절벽 완화
-          game.hurtPlayer(1, { x: dx / d, y: dy / d }, 120);
+          game.hurtPlayer(1, { x: dx / d, y: dy / d }, 120, '거머리 흡혈');
         }
       },
       draw(ctx) {
@@ -1361,7 +1373,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           const hit = World.moveEntity(this, vx * spd * dt, vy * spd * dt);
           if (hit.x || hit.y) this.strafe *= -1;
-          if (this.stateT > 1.3) { this.state = 'aim'; this.stateT = 0; }
+          if (this.stateT > 1.3) { this.state = 'aim'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'aim') {
           if (this.stateT < 0.5) this.aimDir = { x: dx / d, y: dy / d };
           if (this.stateT > 0.75) {
@@ -1636,7 +1648,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           this.flip = dx < 0;
-          if (d < 260) { this.state = 'windup'; this.stateT = 0; this.dashes = 0; }
+          if (d < 260) { this.state = 'windup'; this.stateT = 0; this.dashes = 0; this.tell(game); }
         } else if (this.state === 'windup') {
           this.dashDir = { x: dx / d, y: dy / d };
           this.flip = dx < 0;
@@ -1646,7 +1658,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (this.stateT > 0.3) {
             this.dashes++;
             if (this.dashes >= 3) { this.state = 'rest'; this.stateT = 0; }
-            else { this.state = 'windup'; this.stateT = 0; }
+            else { this.state = 'windup'; this.stateT = 0; this.tell(game); }
           }
         } else if (this.state === 'rest') {
           if (this.stateT > 1.1) { this.state = 'walk'; this.stateT = 0; }
@@ -1746,7 +1758,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             const back = Math.hypot(p.facing.x, p.facing.y) > 0 ? p.facing : { x: 1, y: 0 };
             this.ambushPos = { x: p.x - back.x * 64, y: p.y - back.y * 64 };
             this.x = this.ambushPos.x; this.y = this.ambushPos.y;
-            this.state = 'ambush'; this.stateT = 0;
+            this.state = 'ambush'; this.stateT = 0; this.tell(game);
           }
         } else if (this.state === 'ambush') {
           // 그림자 텔레그래프 0.4초 후 실체화 + 베기
@@ -1756,7 +1768,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             Particles.burst(this.x, this.y, { count: 8, colors: ['#b13ae0'], speed: 100, life: 0.3, size: 3 });
             const dd = Math.hypot(p.x - this.x, p.y - this.y) || 1;
             if (p.invuln <= 0 && dd < 52) {
-              game.hurtPlayer(1, { x: (p.x - this.x) / dd, y: (p.y - this.y) / dd }, 260);
+              game.hurtPlayer(1, { x: (p.x - this.x) / dd, y: (p.y - this.y) / dd }, 260, '잠복 베기');
             }
           }
         }
@@ -1788,7 +1800,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           this.flip = dx < 0;
-          if (d < 85) { this.state = 'windup'; this.stateT = 0; this.swingA = Math.atan2(dy, dx); }
+          if (d < 85) { this.state = 'windup'; this.stateT = 0; this.swingA = Math.atan2(dy, dx); this.tell(game); }
         } else if (this.state === 'windup') {
           if (this.stateT > 0.7) {
             this.state = 'recover'; this.stateT = 0;
@@ -1872,7 +1884,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'walk') {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
-          if (d < 200 && this.stateT > 1.5) { this.state = 'inhale'; this.stateT = 0; }
+          if (d < 200 && this.stateT > 1.5) { this.state = 'inhale'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'inhale') {
           // 1.1초간 플레이어를 빨아들인다 — 이동/대시로 저항
           if (d < 260 && p.dashTimer <= 0) {
@@ -1887,7 +1899,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (this.stateT > 1.1) {
             this.state = 'bite'; this.stateT = 0;
             if (p.invuln <= 0 && d < 62) {
-              game.hurtPlayer(2, { x: dx / d, y: dy / d }, 300);
+              game.hurtPlayer(2, { x: dx / d, y: dy / d }, 300, '포식자 물기');
             }
             AudioSys.thud();
           }
@@ -1971,7 +1983,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           if (d > 240) World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           else if (d < 150) World.moveEntity(this, (-dx / d) * spd * 0.7 * dt, (-dy / d) * spd * 0.7 * dt);
-          if (this.hookCd <= 0 && d < 300 && d > 100) { this.state = 'aim'; this.stateT = 0; }
+          if (this.hookCd <= 0 && d < 300 && d > 100) { this.state = 'aim'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'aim') {
           // 조준 0.75초 — 0.5초에 조준 고정 (사슬 궤도가 보인다)
           if (this.stateT < 0.5) this.aimDir = { x: dx / d, y: dy / d };
@@ -1986,7 +1998,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             }
             AudioSys.thud();
             if (along > 0 && along < 290 && perp < 26 + p.r) {
-              game.hurtPlayer(1, { x: -this.aimDir.x, y: -this.aimDir.y }, 520);
+              game.hurtPlayer(1, { x: -this.aimDir.x, y: -this.aimDir.y }, 520, '사슬 갈고리');
               Particles.text(p.x, p.y - 30, '사슬!', { color: '#5ce0e6', size: 13 });
             }
           }
@@ -2423,7 +2435,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.flip = dx < 0;
         if (this.state === 'chase') {
           if (d > 75) World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
-          if (d < 95 && this.lashCd <= 0) { this.state = 'windup'; this.stateT = 0; this.faceA = Math.atan2(dy, dx); }
+          if (d < 95 && this.lashCd <= 0) { this.state = 'windup'; this.stateT = 0; this.faceA = Math.atan2(dy, dx); this.tell(game); }
         } else if (this.state === 'windup') {
           if (this.stateT > 0.55) {
             this.state = 'chase'; this.lashCd = 2.2;
@@ -2438,7 +2450,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             }
             AudioSys.thud();
             if (d < 95 + p.r && Math.abs(diff) < 0.75) {
-              game.hurtPlayer(1, { x: dx / d, y: dy / d }, 300);
+              game.hurtPlayer(1, { x: dx / d, y: dy / d }, 300, '채찍질');
               p.slowT = Math.max(p.slowT, 1.0);
             }
           }
@@ -2505,6 +2517,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
         for (let i = this.globs.length - 1; i >= 0; i--) {
           const g = this.globs[i];
+          // v208b: 던져진 것은 **떨어질 때까지 내내 예고**다 (화살과 같은 규칙).
+          //   착탄 순간만 보면 예고가 없는 공격이 된다 — 7·9층 무예고의 정체가 이것이었다
+          if (game && game.noteTell) game.noteTell(g.x, g.y, g);
           g.t -= dt;
           if (g.t <= 0) {
             this.globs.splice(i, 1);
@@ -2596,6 +2611,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           this.snareCd = 3.6;
           this.snares.push({ x: p.x, y: p.y, t: 0.9 });
           AudioSys.shoot();
+          if (game && game.noteTell) game.noteTell(p.x, p.y);   // v208b: 발밑에 깔리는 순간이 예고다
         }
         for (let i = this.snares.length - 1; i >= 0; i--) {
           const s = this.snares[i];
@@ -2606,7 +2622,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             Particles.burst(s.x, s.y, { count: 12, colors: ['#c05060', '#8a8a9a'], speed: 90, life: 0.35, size: 3 });
             AudioSys.thud();
             if (pd < 55 + p.r) {
-              game.hurtPlayer(1, { x: 0, y: 0 }, 40);
+              game.hurtPlayer(1, { x: 0, y: 0 }, 40, '포자 터짐');
               p.slowT = Math.max(p.slowT, 1.6);
               Particles.text(p.x, p.y - 30, '속박!', { color: '#c05060', size: 13 });
             }
@@ -2706,6 +2722,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
         for (let i = this.globs.length - 1; i >= 0; i--) {
           const g = this.globs[i];
+          // v208b: 던져진 것은 **떨어질 때까지 내내 예고**다 (화살과 같은 규칙).
+          //   착탄 순간만 보면 예고가 없는 공격이 된다 — 7·9층 무예고의 정체가 이것이었다
+          if (game && game.noteTell) game.noteTell(g.x, g.y, g);
           g.t -= dt;
           if (g.t <= 0) {
             this.globs.splice(i, 1);
@@ -2748,6 +2767,9 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         }
         for (let i = this.geysers.length - 1; i >= 0; i--) {
           const g = this.geysers[i];
+          // v208b: 던져진 것은 **떨어질 때까지 내내 예고**다 (화살과 같은 규칙).
+          //   착탄 순간만 보면 예고가 없는 공격이 된다 — 7·9층 무예고의 정체가 이것이었다
+          if (game && game.noteTell) game.noteTell(g.x, g.y, g);
           g.t -= dt;
           if (g.t <= 0) {
             this.geysers.splice(i, 1);
@@ -3150,13 +3172,15 @@ const MINI_AFFIXES = {
       }
     } },
   volatile: { name: '폭발', color: '#ff7043',
+    // ★ v208b — 종전엔 **죽는 순간 즉발**이었다. 반경 90인데 예고할 시간이 물리적으로 없다 —
+    //   잡으면 맞는 구조였고, 그건 난이도가 아니라 세금이다.
+    //   심지를 단다: 시체가 0.75초 타들어가고 그동안 폭발 반경이 화면에 그려진다.
+    //   물러서면 안 맞고, 남아 있는 적은 대신 맞는다 — **처치 위치가 결정이 된다**
     death(e, game) {
-      const p = game.player;
-      const d = Math.hypot(p.x - e.x, p.y - e.y);
-      game._explode(e.x, e.y, 90, 2, ['#ff7043', '#ffd866', '#e43b44'], '#ff7043');
-      if (p.invuln <= 0 && d < 90 + p.r) {
-        game.hurtPlayer(1, { x: (p.x - e.x) / (d || 1), y: (p.y - e.y) / (d || 1) }, 320, '자폭');
-      }
+      const f = createBoomFuse(e.x, e.y);
+      f.by = '자폭';
+      game.enemies.push(f);
+      Particles.text(e.x, e.y - 30, '터진다!', { color: '#ff7043', size: 13 });
     } },
   splitter: { name: '분열', color: '#a7f070',
     death(e, game) {
@@ -3364,7 +3388,7 @@ function createBoomFuse(x, y) {
         const p = game.player;
         const pd = Math.hypot(p.x - this.x, p.y - this.y);
         if (pd < 70 + p.r) {
-          game.hurtPlayer(1, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 300, '폭탄 도화선');
+          game.hurtPlayer(1, { x: (p.x - this.x) / (pd || 1), y: (p.y - this.y) / (pd || 1) }, 300, this.by || '폭탄 도화선');
         }
         Renderer.shake(4, 0.18);
       }

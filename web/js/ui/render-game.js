@@ -1060,18 +1060,21 @@ const GameRender = {
     }
     ctx.globalAlpha = 1;
 
-    // 투사체 — 위험 헤일로: 모든 적 탄환에 공통 붉은 테 (아이템·XP 보석과 즉시 구분되는 위험 색 언어)
+    // ── 투사체 (v208b) ────────────────────────────────────────────────────
+    // 사장: "적이 나를 원거리 공격할때 빨간 동그라미 보기 싫어. 스킬 모양만 보이도록해"
+    // 종전엔 **모든 적 탄환에 공통 붉은 테**(위험 헤일로)를 둘렀다. 아이템·XP 보석과
+    // 구분하려던 것인데, 그 테가 정작 **탄 모양 자체를 덮었다** — 원혼탄·불꽃·파편·오물이
+    // 전부 「빨간 동그라미 안의 무언가」로 보였다. 기술을 읽으라면서 기술을 가린 셈이다.
+    // 붉은 테를 걷고, 대신 **바닥 그림자**로 띄운다: 색이 아니라 깊이로 구분한다.
+    // (아이템·보석은 바닥에 놓여 그림자가 없다 — 떠 있는 것이 곧 날아오는 것이다)
     for (const a of this.arrows) {
       const style = PROJ_STYLES[a.kind] || PROJ_STYLES.arrow;
-      const hr = (style.r || 6) + 5;
       ctx.save();
-      ctx.globalAlpha = 0.16 + Math.sin(a.t * 12) * 0.05;
-      ctx.fillStyle = '#e43b44';
-      ctx.beginPath(); ctx.arc(a.x, a.y, hr + 2, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 0.65;
-      ctx.strokeStyle = '#e43b44';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(a.x, a.y, hr, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = '#0d0a12';
+      ctx.beginPath();
+      ctx.ellipse(a.x, a.y + (style.r || 6) + 7, (style.r || 6) * 0.9, (style.r || 6) * 0.34, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
       if (style.sprite) {
         Renderer.drawSprite(Sprites.arrow, a.x, a.y, { rot: Math.atan2(a.dir.y, a.dir.x), scale: 3 });

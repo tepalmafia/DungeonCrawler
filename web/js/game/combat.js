@@ -876,9 +876,14 @@ const GameCombat = {
     const now = this.time || 0;
     if (kind === 'dash') this._dashAt = now; else this._moveAt = now;
   },
-  _hurtCause(src) {
+  _hurtCause(src, opt) {
     if (src === '화상' || src === '중독') return null;      // 도트는 피격이 아니다
-    if (typeof src === 'string' && /장판|용암|가시|독무|빙판|전류|저주 지대/.test(src)) return '장판';
+    // ★ v208b — 바닥 위험은 **이름이 아니라 깃발**로 판정한다.
+    //   종전엔 출처 이름을 정규식으로 훑었는데(`/장판|용암|가시|.../`), 2층 전수 계측에서
+    //   「독 웅덩이」·「독 안개」가 그 목록에 없어 **무예고 34%** 로 찍혔다.
+    //   이름이 늘거나 바뀌면 조용히 깨지는 판정이었다 — 부르는 쪽이 「바닥이다」라고 말하게 한다
+    if (opt && opt.ground) return '장판';
+    if (typeof src === 'string' && /장판|용암|가시|독무|빙판|전류|저주 지대|웅덩이|안개|불길/.test(src)) return '장판';
     const now = this.time || 0;
     const L = this._tells || [];
     let oldest = null;
@@ -1006,7 +1011,7 @@ const GameCombat = {
     if ((Meta.data.opts && Meta.data.opts.grace) >= 0.5 && dmg >= 2) dmg -= 1;
     this._runHurts = (this._runHurts || 0) + 1; // 플레이 리포트 (v144): 런당 피격 집계
     {
-      const why = this._hurtCause(src);
+      const why = this._hurtCause(src, opt);
       if (why) {
         this._hurtWhy = this._hurtWhy || {};
         this._hurtWhy[why] = (this._hurtWhy[why] || 0) + 1;
