@@ -11,7 +11,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8137/';
 (async () => {
   const b = await chromium.launch({ executablePath: CHROME });
   const ctx = await b.newContext({
-    viewport: { width: 412, height: 915 },            // 갤럭시 S 계열 논리 해상도
+    viewport: process.argv[3] === 'landscape' ? { width: 915, height: 412 } : { width: 412, height: 915 },
     deviceScaleFactor: 2.6,
     isMobile: true,
     hasTouch: true,
@@ -21,7 +21,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8137/';
   const errs = [];
   p.on('pageerror', (e) => errs.push(e.message.slice(0, 200)));
 
-  console.log('\n════ 모바일 점검 (412×915 · 터치 · 키보드 없음) ════');
+  console.log('\n════ 모바일 점검 (' + (process.argv[3] === 'landscape' ? '915×412 가로' : '412×915 세로') + ' · 터치 · 키보드 없음) ════');
   await p.goto(URL, { waitUntil: 'load', timeout: 45000 });
   await p.waitForFunction(() => typeof Game !== 'undefined' && Game.state, { timeout: 20000 }).catch(() => {});
 
@@ -38,13 +38,36 @@ const URL = process.argv[2] || 'http://127.0.0.1:8137/';
   }).catch(() => null);
   console.log('  입력 모듈: ' + JSON.stringify(listeners));
 
+  // ★ 캔버스 실제 위치를 먼저 잡는다. 1차에 화면 좌표로 탭했더니 캔버스 **밖**을 눌렀다 —
+  //   세로 폰에서 960×540 가로 캔버스는 화면의 일부만 차지한다 (레터박스)
+  const box = await p.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const r = c.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height, cw: c.width, ch: c.height };
+  });
+  console.log('  캔버스 배치: ' + JSON.stringify({ ...box, x: Math.round(box.x), y: Math.round(box.y),
+    w: Math.round(box.w), h: Math.round(box.h) }));
+  // 게임 내부 좌표(960×540) → 화면 좌표
+  const toScreen = (gx, gy) => [box.x + (gx / box.cw) * box.w, box.y + (gy / box.ch) * box.h];
+
   // ② 프롤로그를 탭으로 뚫는다
   const trail = [];
   for (let i = 0; i < 30; i++) {
     const st = await p.evaluate(() => Game.state).catch(() => null);
     trail.push(st);
     if (st === 'play') break;
-    await p.touchscreen.tap(206, 460);
+    // ★ 화면 한가운데를 눌러도 버튼이 아니면 아무 일도 안 난다.
+    //   게임이 스스로 아는 버튼 위치를 물어서 그 자리를 누른다 (사람은 버튼을 본다)
+    const target = await p.evaluate(() => {
+      if (typeof HUD === 'undefined') return null;
+      const st = Game.state;
+      let r = null;
+      if (st === 'hub' && HUD.hubButtonRects) r = HUD.hubButtonRects()[0];
+      if (!r && HUD.cardRects) r = HUD.cardRects(3)[0];
+      return r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
+    }).catch(() => null);
+    const [tx, ty] = target ? toScreen(target.x, target.y) : toScreen(480, 300);
+    await p.touchscreen.tap(tx, ty);
     await p.waitForTimeout(400);
   }
   const seq = []; for (const s of trail) if (seq[seq.length - 1] !== s) seq.push(s);
@@ -53,9 +76,19 @@ const URL = process.argv[2] || 'http://127.0.0.1:8137/';
   // ③ 폰에서 **움직일 수 있는가** — 이게 핵심이다
   const st0 = await p.evaluate(() => (Game.player ? { x: Math.round(Game.player.x), y: Math.round(Game.player.y), s: Game.state } : null));
   // 화면 왼쪽 아래를 길게 끌어 본다 (가상 스틱이 있다면 여기 있을 자리)
-  await p.touchscreen.tap(110, 760);
-  for (const [x, y] of [[110, 760], [150, 760], [180, 760]]) { await p.touchscreen.tap(x, y); await p.waitForTimeout(120); }
-  await p.waitForTimeout(900);
+  // 가상 스틱은 **끌어야** 한다 — 탭만으로는 방향이 안 생긴다 (실제 손가락과 같다)
+  const [ox, oy] = toScreen(150, 400);
+  const [dx2, dy2] = toScreen(260, 400);
+  await p.touchscreen.tap(ox, oy);
+  const cdp = await p.context().newCDPSession(p);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: ox, y: oy }] });
+  for (let i = 1; i <= 6; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove',
+      touchPoints: [{ x: ox + (dx2 - ox) * (i / 6), y: oy + (dy2 - oy) * (i / 6) }] });
+    await p.waitForTimeout(90);
+  }
+  await p.waitForTimeout(700);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }).catch(() => {});
   const st1 = await p.evaluate(() => (Game.player ? { x: Math.round(Game.player.x), y: Math.round(Game.player.y), s: Game.state } : null));
   const moved = st0 && st1 && (Math.abs(st1.x - st0.x) + Math.abs(st1.y - st0.y)) > 6;
   console.log('  이동 시도: ' + JSON.stringify(st0) + ' → ' + JSON.stringify(st1) + '  ' + (moved ? '✓ 움직임' : '✗ 못 움직임'));
