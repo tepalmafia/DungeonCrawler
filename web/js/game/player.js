@@ -907,8 +907,15 @@ function createPlayer(x, y, classId = 'knight') {
     // 사장 F9 실측: 궁수 3층 공7 vs 기사 3층 공2. 궁수는 현상금8(검은 초)에 죽기 직전(관의 못)이라
     // **두 숫자가 애초에 같은 것을 재고 있지 않았다.** 그 위에 "기사 화력이 낮다"는 진단을 세울 뻔했다.
     // → 리포트와 기준선(normRef)은 **조건이 다 꺼진 화력**을 쓴다. 여섯 번째 계측 오염을 여기서 끊는다
+    // 「빌드 화력」 — 조건부 상태(열기·잔여HP·골드·중첩)를 전부 끈 값.
+    // ★ v208b — 레벨 성장을 여기에도 넣는다. 사장 F9 (v208): 「Lv6 · 특성 6장 · **공1**(임종 2.3)」.
+    //   리포트는 시키는 대로 찍었다. 내가 칸을 잘못 정한 것이다 —
+    //   레벨 성장은 열기·잔여 HP 같은 **조건부 상태가 아니라 확정 성장**인데 currentAtk 에만 넣어서,
+    //   확정 성장이 「상태 보너스로 버틴 판」 칸으로 들어갔다.
+    //   숫자가 틀린 게 아니라 **어느 칸에 넣느냐**를 틀렸고, 그러면 리포트로 빌드를 판정할 수 없다
     buildAtk() {
-      return 1 + this.bonusAtk + (this.flags.collector ? Math.floor(this.relics.length / 2) : 0);
+      const lv = (typeof Game !== 'undefined' && Game.level) ? Game.level : 1;
+      return 1 + (lv - 1) * 0.25 + this.bonusAtk + (this.flags.collector ? Math.floor(this.relics.length / 2) : 0);
     },
 
     currentAtk() {

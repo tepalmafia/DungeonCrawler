@@ -2279,6 +2279,11 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     };
     R.arrowFlight = arrowRun(false);   // 아무 반응도 안 하면 「반응없음」
     R.arrowReacted = arrowRun(true);   // 보고 움직였는데도 맞으면 「늦음」
+    // ⑨ 바닥 위험은 **이름이 아니라 깃발**로 「장판」이 된다.
+    //    종전엔 출처 이름 정규식이라 「독 웅덩이」·「독 안개」가 목록에 없어 2층 무예고 34% 로 찍혔다
+    reset();
+    Game.hurtPlayer(1, { x: 0, y: 0 }, 0, '이름을 처음 보는 바닥', { ground: true });
+    R.groundByFlag = Object.keys(Game._hurtWhy)[0];
     // ⑧ 보스 휘두르기는 **스윙마다** 예고를 등록하는가.
     //    v159가 스윙별 붉은 부채꼴을 이미 그리고 있었는데 noteTell 은 windup 에 한 번뿐이라
     //    3·4타가 창을 넘겼다 — 실측 보스전 피격의 58%가 이 경로의 「무예고」였다
@@ -2318,6 +2323,11 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `겹친 예고가 앞선 반응을 지우지 않는다 (${cause.overlap}) ` +
     '(★ v205의 예고 슬롯은 **하나**였다. 잡몹 한 기를 상대할 땐 맞았지만 보스전에서는 틀린다: ' +
     '초식·부하 강타·장판이 겹치면 마지막 예고만 남고 나머지가 지워져 「반응했는데 반응없음」이 찍혔다)');
+  ok('hurt.groundIsFlaggedNotNamed', cause.groundByFlag === '장판',
+    `바닥 위험은 이름이 아니라 깃발로 판정한다 (${cause.groundByFlag}) ` +
+    '(★ 종전엔 출처 **이름**을 정규식으로 훑었다. 2층 전수 계측에서 「독 웅덩이」·「독 안개」가 ' +
+    '그 목록에 없어 **무예고 34%** 로 찍혔다 — 이름이 늘거나 바뀌면 조용히 깨지는 판정이었다. ' +
+    '부르는 쪽이 「바닥이다」라고 말하게 한다)');
   ok('hurt.projectileIsItsOwnTell', cause.arrowFlight === '반응없음' && cause.arrowReacted === '늦음',
     `날아오는 탄은 보이는 내내가 예고다 (무반응→${cause.arrowFlight} · 반응함→${cause.arrowReacted}) ` +
     '(★ 종전엔 생성 순간만 예고였다. 방 건너에서 쏜 탄이 2초 날아와 맞으면 창(1.4초)을 넘겨 ' +

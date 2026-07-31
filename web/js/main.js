@@ -2,7 +2,7 @@
 // 상태: hub | altar | classes | play | levelup | relic | transition | over | victory
 // 빌드 버전 (v156~): 리포트·거점에 찍어 "지금 무슨 버전을 돌리고 있나"를 눈으로 확인 가능하게.
 // 캐시된 구버전에서 뛴 판을 밸런스 근거로 삼는 오판을 막는다. 릴리즈마다 index.html ?v=N과 함께 올린다
-const GAME_VERSION = 208;
+const GAME_VERSION = 209;
 
 // v192 — 사장: "기존처럼 동그라미를 날리는 공격만 가지지말고,
 //                동그라미는 불꽃이나 기타 보스가 쓰는 무기 공격으로 디자인해주고"
@@ -155,7 +155,11 @@ const Game = {
         const w = r.why || {};
         const wk = Object.keys(w);
         const whyTxt = wk.length ? ` (${wk.sort((a, b) => w[b] - w[a]).map((k) => k + ' ' + w[k]).join(' · ')})` : '';
-        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}${whyTxt}${build}` +
+        // v208b: 억울한 피격에는 **이름을 단다**. 「무예고 2」만으로는 고칠 자리를 못 찾는다
+        const uf = r.unfair || {};
+        const ufk = Object.keys(uf);
+        const ufTxt = ufk.length ? ` ⚠무예고출처: ${ufk.sort((a, b) => uf[b] - uf[a]).map((k) => k + '×' + uf[k]).join(', ')}` : '';
+        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}${whyTxt}${build}${ufTxt}` +
           (r.alt && /[1-9]/.test(r.alt) ? ` · 제단${r.alt}` : '') +
           (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '') + newest;
       }),
