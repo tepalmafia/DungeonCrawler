@@ -578,6 +578,7 @@ function createBoss(floor, x, y) {
       Particles.text(this.x, this.y - this.r - 34, '시전 — 끊어라!', { color: '#ffd866', size: 15 });
       Particles.ring(this.x, this.y, { r0: 10, r1: 70, life: 0.4, color: '#ffd866', width: 4 });
       AudioSys.tellBoss(this.x, this.y);
+            if (game && game.noteTell) game.noteTell(this.x, this.y);   // v205
     },
     // 시전 중 피해 누적 — combat.js 가 부른다
     castHit(dmg, game) {
@@ -947,6 +948,7 @@ function createBoss(floor, x, y) {
             // v177: 보스 초식 예고 — 예고 사다리의 4급. 접촉(0.34초)보다 낮고 길다.
             // 화면의 붉은 경고와 짝을 이룬다 (v159에서 예고를 판정과 일치시킨 그 초식이다)
             AudioSys.tellBoss(this.x, this.y);
+            if (game && game.noteTell) game.noteTell(this.x, this.y);   // v205
           }
           break;
         }

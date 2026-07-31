@@ -720,6 +720,7 @@ function createPlayer(x, y, classId = 'knight') {
       // 충전이 차오르는 순간 눌러둔 대시가 나간다 (선입력 버퍼의 핵심 규칙)
       if (this.dashCharges >= 1 && Input.take('Space', 'ShiftLeft', 'ShiftRight')) {
         this.dashCharges--;
+        if (game && game.noteReact) game.noteReact('dash');   // v205 — 예고에 반응했다(대시)
         this.dashTimer = 0.16;
         this.invuln = Math.max(this.invuln, 0.22);
         this.dashDir = len > 0 ? { x: mx, y: my } : { ...this.facing };
@@ -779,6 +780,7 @@ function createPlayer(x, y, classId = 'knight') {
         const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.freezeT > 0 ? 0.62 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1) * clearMul *
           (this.flags.reapstep && this._reaperT > 0 ? 1.3 : 1); // 사신의 걸음 (v151)
         World.moveEntity(this, mx * spd * dt, my * spd * dt);
+        if (game && game.noteReact) game.noteReact('move');   // v205 — 예고에 반응했다(이동)
       }
 
       if (Math.abs(this.kbx) > 1 || Math.abs(this.kby) > 1) {

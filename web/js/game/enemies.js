@@ -144,6 +144,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         // 우연히 터진 것은 "내가 했다"가 아니다.
         // 0.42초면 반응 0.25초를 쓰고도 0.17초가 남는다 — 그때부터 회피는 결정이 된다
         this._windT = ((this.elite || this.isMini) ? 0.50 : 0.42) * (this._shakenT > 0 ? 1.5 : 1);
+        if (game && game.noteTell) game.noteTell(this.x, this.y);   // v205 피격 원인 분류 — 예고가 있었음을 기록
         this._windMax = this._windT;
         this._windDmg = dmg;
         this._windA = Math.atan2(p.y - this.y, p.x - this.x);

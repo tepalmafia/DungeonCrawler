@@ -125,6 +125,15 @@ const Game = {
       `보스 처치 (층: 소요, c=치트런): ${Object.entries(bossLines).sort((a, b) => a[0] - b[0])
         .map(([f, ts]) => `${f}층 ${ts.join('/')}`).join(' · ') || '없음'}`,
       `런당 피격 평균: ${(hurts / log.length).toFixed(1)}`,
+      (() => {   // v205 — 전체 런의 피격 원인 합계. 「무예고」가 많으면 설계 결함, 「늦음」이 많으면 건강하다
+        const T = {};
+        for (const r of log) for (const k in (r.why || {})) T[k] = (T[k] || 0) + r.why[k];
+        const ks = Object.keys(T);
+        if (!ks.length) return '피격 원인: (기록 없음 — v205 이전 런)';
+        const n = ks.reduce((a, k) => a + T[k], 0);
+        return '피격 원인: ' + ks.sort((a, b) => T[b] - T[a])
+          .map((k) => `${k} ${T[k]}(${Math.round(T[k] / n * 100)}%)`).join(' · ');
+      })(),
       `── 최근 런 (최신이 맨 아래 · 현재 빌드 v${typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : '?'}) ──`,
       // v156: 시각·버전 표기 — 같은 문구의 런이 줄줄이라 '방금 것'을 못 찾던 문제 해소.
       // 버전이 현재와 다르면 그 판은 캐시된 구버전에서 뛴 것 → 밸런스 근거에서 빼야 한다
@@ -141,7 +150,12 @@ const Game = {
         // 그 차이가 곧 "상태 보너스로 버틴 판"이라는 뜻이다 (열기·잔여HP·골드·처치중첩)
         const nowTag = r.atkNow != null && r.atkNow > r.atk ? `(임종 ${r.atkNow})` : '';
         const build = r.mhp ? ` · HP${r.mhp}/공${r.atk}${nowTag}/특${r.tr}/유${r.rel}` : '';
-        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}${build}` +
+        // v205: 피격 **횟수**만으로는 난이도의 질을 알 수 없다.
+        // 억울하게 맞은 33대와 내 실수로 맞은 33대는 완전히 다른 게임이다
+        const w = r.why || {};
+        const wk = Object.keys(w);
+        const whyTxt = wk.length ? ` (${wk.sort((a, b) => w[b] - w[a]).map((k) => k + ' ' + w[k]).join(' · ')})` : '';
+        return `[${ago} · ${verTag}] ${r.cls} · ${r.floor}층 Lv${r.lv} · ${r.quit ? '포기' : r.win ? '승리' : '사망(' + (r.deathBy || '?') + ')'} · ${r.min}분 · 피격 ${r.hurts}${whyTxt}${build}` +
           (r.alt && /[1-9]/.test(r.alt) ? ` · 제단${r.alt}` : '') +
           (r.heat ? ` · 현상금${r.heat}` : '') + (r.cheat ? ' · 치트' : '') + newest;
       }),
@@ -287,7 +301,7 @@ const Game = {
     this.bossRush = false; // 보스 러시는 startBossRush()로만
     this.deathInfo = null;
     this._camp = null; // 모닥불 대화 — 다음 거점 방문 때 새 대화
-    this._runHurts = 0; this._runBossLog = []; // 플레이 리포트 (v144) 런 집계 리셋
+    this._runHurts = 0; this._hurtWhy = {}; this._tell = null; this._runBossLog = []; // 플레이 리포트 (v144) 런 집계 리셋
     this._graceRevived = false; // 망자의 가호 (v145) — 런당 1회
     // 온보딩 (v139): 생애 첫 런만 — 걷기→베기→대시 순서로 몸을 깨운다
     this._obHints = Meta.data.runs === 0 && Meta.data.wins === 0;

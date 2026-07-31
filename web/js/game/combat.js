@@ -822,6 +822,46 @@ const GameCombat = {
     return true;
   },
 
+  // ══ 피격 원인 분류 (v205) ══════════════════════════════════════════════
+  // 사장: "평균 타수가 올바른 재밌는 게임을 위한 방법인가?"
+  // 답: 아니다. 타수는 **휘두른 횟수**지 판단의 수가 아니고, 평균은 분산을 숨긴다.
+  //     그리고 사장이 이 세션에서 하신 지적 어디에도 「몇 대에 죽는지」는 없었다 —
+  //     사연·손맛·회피·패턴·속성이었다. 내가 재던 축이 사장이 느끼는 축과 달랐다.
+  //
+  // F9 리포트에는 「피격 33」처럼 **횟수**만 있다. 33대를 맞았다는 건 알지만
+  // **왜** 맞았는지는 모른다. 억울하게 맞은 33대와 내 실수로 맞은 33대는 다른 게임이다.
+  // 그래서 피격마다 원인을 태그한다 — 난이도의 **질**을 보는 지표다.
+  //
+  //   무예고    예고 없이 맞았다        → 억울하다. 많으면 설계 결함이다
+  //   반응없음  예고를 봤어야 하는데 아무 조작도 안 했다 → 못 봤거나 못 읽었다
+  //   늦음      반응은 했는데 못 피했다 → 배우는 중이다. 이게 많은 게 건강하다
+  //   장판      바닥 위험에 서 있었다   → 내 탓이 명확하다
+  TELL_WINDOW: 1.4,   // 예고가 유효한 시간
+
+  // 예고가 시작될 때 부른다 (잡몹 강타·보스 초식·인장기)
+  noteTell(x, y) {
+    const p = this.player;
+    if (!p) return;
+    if (Math.hypot(p.x - x, p.y - y) > 340) return;   // 화면 반대편 예고는 볼 이유가 없다
+    this._tell = { t: this.time || 0, moved: false, dashed: false };
+  },
+  // 플레이어가 예고에 반응했다 (이동/대시) — player.js 가 부른다
+  noteReact(kind) {
+    if (!this._tell) return;
+    if ((this.time || 0) - this._tell.t > this.TELL_WINDOW) return;
+    if (kind === 'dash') this._tell.dashed = true; else this._tell.moved = true;
+  },
+  _hurtCause(src) {
+    if (src === '화상' || src === '중독') return null;      // 도트는 피격이 아니다
+    const t = this._tell;
+    const fresh = t && ((this.time || 0) - t.t) <= this.TELL_WINDOW;
+    if (typeof src === 'string' && /장판|용암|가시|독무|빙판|전류|저주 지대/.test(src)) return '장판';
+    if (!fresh) return '무예고';
+    if (t.dashed) return '늦음';
+    if (t.moved) return '늦음';
+    return '반응없음';
+  },
+
   hurtPlayer(dmg, dir, kb = 260, src = null, opt = null) {
     const p = this.player;
     // 감전·저주는 **받는 피해**를 늘린다. 도트 자신은 증폭 대상이 아니다(무한 증폭 방지)
@@ -938,6 +978,15 @@ const GameCombat = {
     // 실력의 벽을 낮추되 1뎀 잡몹 구간은 그대로 — 긴장의 최저선은 지킨다
     if ((Meta.data.opts && Meta.data.opts.grace) >= 0.5 && dmg >= 2) dmg -= 1;
     this._runHurts = (this._runHurts || 0) + 1; // 플레이 리포트 (v144): 런당 피격 집계
+    {
+      const why = this._hurtCause(src);
+      if (why) {
+        this._hurtWhy = this._hurtWhy || {};
+        this._hurtWhy[why] = (this._hurtWhy[why] || 0) + 1;
+        // 억울한 피격은 그 자리에서 말해 준다 — 사장이 「왜 맞았는지 모르겠다」고 느끼는 순간이 이거다
+        if (why === '무예고') Particles.text(this.player.x, this.player.y - 52, '예고 없음', { color: '#e43b44', size: 11 });
+      }
+    }
     // 핏값 (v151 양날): 맞을 때마다 골드가 샌다
     if (p.flags.bloodprice && this.gold > 0) {
       const loss = Math.min(8, this.gold);
