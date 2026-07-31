@@ -338,10 +338,17 @@ function handleInput(dt) {
       p.target = null;
       p.moveTo(G.dungeon, G.pickupTarget.pos.x, G.pickupTarget.pos.z);
     } else if (!p.target || input.justDown) {
-      // 홀드 이동: 매 프레임 목적지를 갱신하되 경로 재계산은 조금씩만
-      if (input.justDown) { p.target = null; G.pickupTarget = null; }
-      if (p.repathCd <= 0) {
-        p.repathCd = 0.09;
+      if (input.justDown) {
+        // 새 클릭은 **무조건 즉시** 반영한다.
+        // 예전엔 재계산 쿨다운에 걸리면 명령이 통째로 버려져서,
+        // 적을 쫓다가 딴 곳을 클릭하면 그 자리에 멈춰 서 있었다.
+        p.target = null;
+        G.pickupTarget = null;
+        p.holdRepathCd = 0.09;
+        p.moveTo(G.dungeon, gp.x, gp.z);
+      } else if (p.holdRepathCd <= 0) {
+        // 홀드 이동: 커서를 계속 따라가되 경로 재계산은 조금씩만
+        p.holdRepathCd = 0.09;
         p.moveTo(G.dungeon, gp.x, gp.z);
       }
     }
@@ -384,8 +391,10 @@ function updateAutoAttack(dt) {
   const range = 2.0 + t.radius;
 
   if (dist > range) {
-    if (p.repathCd <= 0) {
-      p.repathCd = 0.16;
+    // 추격 재계산은 전용 타이머를 쓴다 — 클릭 처리와 타이머를 공유하면
+    // 추격 중에 누른 클릭이 씹힌다
+    if (p.chaseRepathCd <= 0) {
+      p.chaseRepathCd = 0.16;
       p.moveTo(G.dungeon, t.pos.x, t.pos.z);
       p.target = t;             // moveTo 가 target 을 지우므로 복구
     }

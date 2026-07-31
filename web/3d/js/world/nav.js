@@ -128,6 +128,24 @@ export function toWorldPath(dg, path) {
 }
 
 /**
+ * 지오메트리 안에 박힌 것을 빼낸다 — 밀어내기의 최후 수단.
+ *
+ * resolveCollision 은 인접 칸으로만 밀기 때문에, 두께 2칸 이상인 벽 **안쪽**에
+ * 들어가면 밀 곳이 전부 벽이라 영영 못 빠져나온다(실측: 벽 칸 25곳 중 3곳에서 갇힘).
+ * 그럴 때만 가장 가까운 바닥 칸 중앙으로 옮긴다. 정상 플레이에서는 발동하지 않는다.
+ *
+ * @returns {{x:number,z:number,moved:boolean}}
+ */
+export function unstick(dg, x, z) {
+  const [gx, gz] = worldToGrid(x, z, dg.w, dg.h);
+  if (walkable(dg, gx, gz)) return { x, z, moved: false };
+  const n = nearestWalkable(dg, gx, gz, 16);
+  if (!n) return { x, z, moved: false };
+  const [wx, wz] = gridToWorld(n[0], n[1], dg.w, dg.h);
+  return { x: wx, z: wz, moved: true };
+}
+
+/**
  * 원(반지름 r)이 벽에 파고들었으면 밀어낸다. 벽면을 따라 자연스럽게 미끄러진다.
  * @returns {{x:number,z:number,hit:boolean}}
  */

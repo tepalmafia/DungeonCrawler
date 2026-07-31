@@ -143,6 +143,61 @@ async function shot(page, name) {
     const after = { x: G.player.pos.x, z: G.player.pos.z };
     return { hadPath, insideWall, moved: Math.hypot(after.x - before.x, after.z - before.z) };
   });
+  // ── 회귀: 클릭이 씹히지 않는가 · 벽에 박혀도 빠져나오는가 ──────
+  // 예전엔 repathCd 하나를 홀드이동·추격·벽끼임이 공유해서, 추격 중에 누른
+  // 클릭이 통째로 버려졌다(= 클릭했는데 제자리에 서 있는 증상).
+  const clickFix = await page.evaluate(async () => {
+    const G = window.G3, P = G.player, dg = G.dungeon;
+    const CELL = 2;
+    const g2w = (gx, gz) => [(gx - dg.w / 2 + 0.5) * CELL, (gz - dg.h / 2 + 0.5) * CELL];
+    const w2g = (x, z) => [Math.floor(x / CELL + dg.w / 2), Math.floor(z / CELL + dg.h / 2)];
+
+    // 1) 타이머가 용도별로 분리돼 있는가
+    const split = ['repathCd', 'holdRepathCd', 'chaseRepathCd'].every((k) => typeof P[k] === 'number');
+
+    // 2) 추격 타이머가 돌고 있어도 새 목적지 명령이 즉시 반영되는가
+    const floors = [];
+    for (let gz = 1; gz < dg.h - 1; gz++)
+      for (let gx = 1; gx < dg.w - 1; gx++) if (dg.at(gx, gz) === 1) floors.push([gx, gz]);
+    const [sx, sz] = g2w(dg.spawn.gx, dg.spawn.gz);
+    P.setPosition(sx, sz);
+    P.chaseRepathCd = 0.16;
+    P.repathCd = 0.25;
+    let far = floors[0], best = -1;
+    for (const f of floors) {
+      const [fx, fz] = g2w(f[0], f[1]);
+      const d = Math.hypot(fx - sx, fz - sz);
+      if (d > best && d < 30) { best = d; far = f; }
+    }
+    const [tx, tz] = g2w(far[0], far[1]);
+    P.moveTo(dg, tx, tz);
+    const pathedWhileBusy = P.path.length > 0;
+
+    // 3) 벽 한가운데에 박혀도 바닥으로 빠져나오는가
+    const wallCells = [];
+    for (let gz = 2; gz < dg.h - 2; gz++)
+      for (let gx = 2; gx < dg.w - 2; gx++) if (dg.at(gx, gz) === 2) wallCells.push([gx, gz]);
+    let trapped = 0, tried = 0;
+    for (let i = 0; i < 20 && i < wallCells.length; i++) {
+      const c = wallCells[(i * 7919) % wallCells.length];
+      const [wx, wz] = g2w(c[0], c[1]);
+      P.setPosition(wx, wz);
+      tried++;
+      let escaped = false;
+      for (let f = 0; f < 30; f++) {
+        P.update(1 / 60, G);
+        const [gx, gz] = w2g(P.pos.x, P.pos.z);
+        if (dg.at(gx, gz) === 1) { escaped = true; break; }
+      }
+      if (!escaped) trapped++;
+    }
+    P.setPosition(sx, sz);
+    return { split, pathedWhileBusy, trapped, tried };
+  });
+  ok('move.timersSplit', clickFix.split, '홀드이동·추격·벽끼임 타이머 분리');
+  ok('move.clickNotDropped', clickFix.pathedWhileBusy, '추격 쿨다운 중에도 새 클릭이 즉시 반영');
+  ok('move.unstickFromWall', clickFix.trapped === 0, `벽 안 ${clickFix.tried}곳 중 갇힘 ${clickFix.trapped}`);
+
   ok('move.pathFound', move.hadPath);
   ok('move.actuallyMoved', move.moved > 3, `${move.moved.toFixed(1)} 유닛 이동`);
   ok('move.noWallClip', move.insideWall === 0, `벽 안에 있던 프레임 ${move.insideWall}`);

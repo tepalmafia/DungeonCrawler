@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
 import { aggregate, RARITIES } from './items.js';
-import { findPath, smoothPath, toWorldPath, resolveCollision } from '../world/nav.js';
+import { findPath, smoothPath, toWorldPath, resolveCollision, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 
 const RADIUS = 0.42;
@@ -128,7 +128,11 @@ export class Player {
     this.path = [];
     this.dest = null;
     this.target = null;          // 공격 대상 (Enemy)
-    this.repathCd = 0;
+    // 경로 재계산 타이머는 용도별로 나눈다. 하나로 공유하면 서로를 굶겨서
+    // 「클릭했는데 안 움직이는」 증상이 난다.
+    this.repathCd = 0;           // 벽에 끼었을 때 자체 재계산
+    this.holdRepathCd = 0;       // 좌클릭 홀드 이동
+    this.chaseRepathCd = 0;      // 평타 추격
 
     // 전투
     this.attackCd = 0;
@@ -256,6 +260,8 @@ export class Player {
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.repathCd = Math.max(0, this.repathCd - dt);
+    this.holdRepathCd = Math.max(0, this.holdRepathCd - dt);
+    this.chaseRepathCd = Math.max(0, this.chaseRepathCd - dt);
     for (const k of ['hp', 'mp']) this.potionCd[k] = Math.max(0, this.potionCd[k] - dt);
 
     // 마나 자연 회복 — 스킬을 계속 쓸 수 있게 넉넉히
@@ -295,6 +301,11 @@ export class Player {
         }
       }
     }
+
+    // 어떤 이유로든 벽 안에 박혔으면 가장 가까운 바닥으로 빼낸다.
+    // 밀어내기만으로는 두께 2칸 이상의 벽 안쪽에서 빠져나오지 못한다.
+    const esc = unstick(dg, this.pos.x, this.pos.z);
+    if (esc.moved) this.pos.set(esc.x, 0, esc.z);
 
     this.obj.position.copy(this.pos);
     this._animate(dt, moved);
