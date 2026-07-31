@@ -296,6 +296,7 @@ const GamePlay = {
     this.sigs.push(sig);
     this.sigWarnT = sig.tel;
     this.banner = { text: `⚠ ${boss.name} — 인장기!`, life: 1.4, maxLife: 1.4, color: '#e43b44' };
+    if (this.noteTell) this.noteTell(this.player.x, this.player.y);   // v208: 예고 사다리 최상단인데 계기엔 없었다
     AudioSys.tellSigil(boss && boss.x, boss && boss.y); // v177: 절대 위협 — 예고 사다리 최상단
     Renderer.shake(3, 0.3);
   },
@@ -319,6 +320,8 @@ const GamePlay = {
       if (this.sigs !== _sigs0 || !this.sigs[i]) break;
       const s = this.sigs[i];
       s.t += dt;
+      // 인장기 예고는 창(1.4초)보다 길 수 있다 — 예고가 떠 있는 내내 갱신한다
+      if (s.t < s.tel && this.noteTell) this.noteTell(p.x, p.y, s);
       if (s.type === 'brandZone' && s.t < s.tel) { // 낙인진은 발밑을 따라온다 (마지막 0.45s 고정)
         if (s.t < s.tel - s.lock) { s.x += (p.x - s.x) * Math.min(1, dt * 3.2); s.y += (p.y - s.y) * Math.min(1, dt * 3.2); }
         continue;
@@ -1307,6 +1310,9 @@ const GamePlay = {
       if (!ring) break;
       ring.r += ring.speed * dt;
       const pd = Math.hypot(p.x - ring.x, p.y - ring.y);
+      // v208: 퍼지는 링은 **보이는 내내가 예고**다. 생성 순간만 예고로 치면
+      // 크게 자란 뒤 닿는 링이 창(1.4초)을 넘겨 「무예고」로 찍힌다
+      if (this.noteTell) this.noteTell(ring.x, ring.y, ring);
       // 간극 링 (P2): 안전 부채꼴 안에 있으면 통과
       let inGap = false;
       if (ring.gapW) {
@@ -1350,6 +1356,7 @@ const GamePlay = {
       a.x += vx * a.speed * dt;
       a.y += vy * a.speed * dt;
       const pdist = Math.hypot(p.x - a.x, p.y - a.y);
+      if (a.dmg > 0 && this.noteTell) this.noteTell(a.x, a.y, a);   // v208: 날아오는 탄이 곧 예고다
       if (p.invuln > 0) {
         // 대시 무적 중 스치는 탄(+12px 그레이즈) = 완벽 회피 판정 — 탄은 그대로 지나간다
         if (a.dmg > 0 && pdist < p.r + a.r + 12) this.hurtPlayer(a.dmg, a.dir, 260, a.by);

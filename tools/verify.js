@@ -2214,7 +2214,10 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     Game.restart(1357); Game.state = 'play'; Game.player.god = false;
     Dungeon.floor = 1; Dungeon.roomIndex = 1; Dungeon.build('combat');
     const p = Game.player;
-    const reset = () => { Game._hurtWhy = {}; Game._tell = null; Game.time = 100; p.hp = 20; p.maxHp = 20; p.invuln = 0; };
+    const reset = () => {
+      Game._hurtWhy = {}; Game._tell = null; Game._tells = []; Game._dashAt = -9; Game._moveAt = -9;
+      Game.time = 100; p.hp = 20; p.maxHp = 20; p.invuln = 0;
+    };
     // ① 예고 없이 맞으면 「무예고」
     reset();
     Game.hurtPlayer(1, { x: 1, y: 0 }, 0, '시험');
@@ -2244,6 +2247,60 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     Game._tell = null;
     for (let i = 0; i < 30 && !Game._tell; i++) e.update(1 / 60, Game);
     R.stompTells = !!Game._tell && e._stompT > 0;
+    // ══ v208 ══════════════════════════════════════════════════════════════
+    // ⑥ 예고 슬롯이 **겹쳐도 지워지지 않는가**.
+    //    v205의 _tell 은 단일 슬롯이라 보스전처럼 위협이 겹치면 마지막 하나만 남았다 —
+    //    분명히 예고가 있었던 피격이 「무예고」로 찍혔다
+    reset();
+    Game.noteTell(p.x, p.y);          // 먼저 뜬 예고
+    Game.noteReact('dash');           // 여기에 반응했다
+    Game.time += 0.2;
+    Game.noteTell(p.x + 20, p.y);     // 다른 위협의 예고가 겹쳐 든다
+    Game.time += 0.2;
+    p.invuln = 0;
+    Game.hurtPlayer(1, { x: 1, y: 0 }, 0, '시험');
+    R.overlap = Object.keys(Game._hurtWhy)[0];   // 늦음이어야 한다 (단일 슬롯이면 반응없음)
+    // ⑦ 날아오는 탄은 **보이는 내내가 예고**다.
+    //    생성 순간만 예고로 치면 방 건너에서 쏜 탄이 창(1.4초)을 넘겨 「무예고」가 된다
+    // ★ 방을 **비우고** 잰다. 1차엔 방의 적을 그대로 두고 재서 화살이 아니라
+    //   옆의 잡몹이 때린 것을 화살의 결과로 읽었다 — 계측 대상이 아닌 것을 쟀다
+    const arrowRun = (react) => {
+      reset();
+      Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
+      Game.rings.length = 0; Game.firePatches.length = 0; Game.arrows.length = 0;
+      // 300px 를 속도 150 으로 → 약 1.9초 비행. **예고창(1.4초)보다 길다**: 이게 요점이다
+      Game.arrows.push({ x: p.x + 300, y: p.y, dir: { x: -1, y: 0 }, speed: 150, r: 6, dmg: 1,
+        life: 9, t: 0, kind: 'arrow', by: '시험 화살' });
+      for (let i = 0; i < 60 * 4 && !Object.keys(Game._hurtWhy).length; i++) {
+        Game.tick(1 / 60); p.invuln = 0;
+        if (react && i === 30) Game.noteReact('dash');
+      }
+      return Object.keys(Game._hurtWhy)[0] || '(안맞음)';
+    };
+    R.arrowFlight = arrowRun(false);   // 아무 반응도 안 하면 「반응없음」
+    R.arrowReacted = arrowRun(true);   // 보고 움직였는데도 맞으면 「늦음」
+    // ⑧ 보스 휘두르기는 **스윙마다** 예고를 등록하는가.
+    //    v159가 스윙별 붉은 부채꼴을 이미 그리고 있었는데 noteTell 은 windup 에 한 번뿐이라
+    //    3·4타가 창을 넘겼다 — 실측 보스전 피격의 58%가 이 경로의 「무예고」였다
+    Game.restart(1357); Game.state = 'play';
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    const bs = Game.enemies.find((x) => x.isBoss);
+    R.swingTells = 0; R.swingTel = 0;
+    if (bs) {
+      bs.spawnT = 0;
+      bs.attack = { kind: 'sweep', opt: [] };
+      bs._execute(Game, 60, 0, 60);
+      R.swingTel = bs.swingTel;
+      const pl = Game.player;
+      let last = -1;
+      for (let i = 0; i < 60 * 3; i++) {
+        Game._tells = []; Game._tell = null;
+        pl.x = bs.x + 40; pl.y = bs.y;
+        bs.update(1 / 60, Game);
+        if (Game._tell && bs.swingCount !== last) { R.swingTells++; last = bs.swingCount; }
+        if (bs.state !== 'sweep') break;
+      }
+    }
     return R;
   });
   console.log('  피격원인:', JSON.stringify(cause));
@@ -2257,6 +2314,21 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     '(★ 계측에서 무예고 피격의 83%가 「정예의 강타」였다. 예고는 있었는데(!·전용 소리·젖힌 자세) ' +
     '계기가 그걸 몰라서 전부 무예고로 찍혔다 — 계기가 예고를 모르면 없는 예고가 된다. ' +
     '동시에 진짜 결함도 있었다: **위험 반경이 화면에 없었다.** 「온다」는 알지만 「어디까지」를 모르면 못 피한다)');
+  ok('hurt.tellsDoNotOverwrite', cause.overlap === '늦음',
+    `겹친 예고가 앞선 반응을 지우지 않는다 (${cause.overlap}) ` +
+    '(★ v205의 예고 슬롯은 **하나**였다. 잡몹 한 기를 상대할 땐 맞았지만 보스전에서는 틀린다: ' +
+    '초식·부하 강타·장판이 겹치면 마지막 예고만 남고 나머지가 지워져 「반응했는데 반응없음」이 찍혔다)');
+  ok('hurt.projectileIsItsOwnTell', cause.arrowFlight === '반응없음' && cause.arrowReacted === '늦음',
+    `날아오는 탄은 보이는 내내가 예고다 (무반응→${cause.arrowFlight} · 반응함→${cause.arrowReacted}) ` +
+    '(★ 종전엔 생성 순간만 예고였다. 방 건너에서 쏜 탄이 2초 날아와 맞으면 창(1.4초)을 넘겨 ' +
+    '「무예고」로 찍혔는데 — 그 탄은 2초 내내 화면에 있었다. 억울한 게 아니라 못 피한 것이다)');
+  ok('boss.sweepTellsEverySwing', cause.swingTells >= 2 && cause.swingTel >= 0.42,
+    `보스 휘두르기가 스윙마다 예고를 등록한다 (${cause.swingTells}회 · 1층 예고 ${cause.swingTel}초) ` +
+    '(★ 실측 보스전 피격의 58%가 「무예고 / 보스 휘두르기」였다. v159가 스윙별 붉은 부채꼴을 ' +
+    '이미 화면에 그리고 있었는데 noteTell 은 windup 시작에 한 번뿐이라 3·4타가 창을 넘겼다 — ' +
+    '화면엔 예고가 있는데 계기가 모르면 없는 예고가 된다(v205 발구르기와 같은 실수). ' +
+    '동시에 진짜 결함도 고쳤다: 스윙 예고 0.32초는 인간 반응 시간(약 0.25초)과 거의 같아 ' +
+    '**보고 나서 누르면 물리적으로 늦었다** — 온보딩 층은 0.44초로 연다)');
 
   // ══ 터치 조작 (v204) ══════════════════════════════════════════════════
   // 사장: "플레이 안되는데?" — 사장은 갤럭시로 하신다.

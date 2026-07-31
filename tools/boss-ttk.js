@@ -26,8 +26,16 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137';
       const hp0 = bs.maxHp;
       let t = 0, hits = 0;
       const step = 1 / 60;
+      // ★ v208 — **게임을 돌린다**. 1차엔 Game.tick 없이 피해만 반복해서 넣었다.
+      //   그러면 보스가 시전도 그로기도 하지 않으므로 시전 인터럽트 ×1.5·그로기 ×1.35 가
+      //   한 번도 안 걸린다 — 「가만히 서 있는 보스」의 TTK 였다. 1층 49.6초는 그 허수였고,
+      //   실제로 돌려보면 22~26초다. (또 같은 실수: 소비자가 아니라 다른 경로를 쟀다)
+      const pl = Game.player;
+      pl.god = true;
       while (!bs.dead && t < 300) {
         t += step;
+        Game.tick(step);
+        pl.x = bs.x + 44; pl.y = bs.y;      // 붙어 있는다
         if (t - hits * 0.42 >= 0.42) { hits++; Game.damageEnemy(bs, atk, { x: 1, y: 0 }, { feel: false, kb: 0 }); }
       }
       out.ttk.push({ f, atk, hp: hp0, hits, sec: +t.toFixed(1), killed: bs.dead });
@@ -68,4 +76,47 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137';
   console.log('\n   원인별 출처 — **고칠 자리**');
   for (const k of Object.keys(R.src).sort((a, c) => R.src[c] - R.src[a]).slice(0, 12))
     console.log('   ' + String(R.src[k]).padStart(4) + '회  ' + k);
+
+  // ── ③ 실화력 — **가정하지 않고 잰다** ──────────────────────────────────
+  // 위 TTK 표의 공격력은 내가 손으로 넣은 숫자다. 그건 가정이지 계측이 아니다.
+  // 봇을 실제로 굴려서 **보스방에 들어서는 순간의 currentAtk()** 를 모은다.
+  // (v185·192·205·206에서 반복한 실수: 소비자가 아니라 다른 경로를 쟀다)
+  const b2 = await chromium.launch({ executablePath: CHROME });
+  const p2 = await b2.newPage({ viewport: { width: 960, height: 540 } });
+  await p2.goto(`${BASE}/?test=1&bot=1&botloop=1`);
+  await p2.waitForFunction(() => typeof Game !== 'undefined' && typeof Meta !== 'undefined');
+  await p2.evaluate(() => {
+    localStorage.clear(); Meta.load(); Meta.data.introSeen = true;
+    Meta.data.classes = { knight: true, archer: true, mage: true, alch: true }; Meta.save();
+  });
+  await p2.reload();
+  await p2.waitForFunction(() => typeof Game !== 'undefined' && Game.state);
+  await p2.evaluate(() => {
+    window.__fp = [];
+    const _b = Dungeon.build.bind(Dungeon);
+    Dungeon.build = function (t) {
+      const r = _b(t);
+      if (t === 'boss' && Game.player) {
+        window.__fp.push({ f: Dungeon.floor, lv: Game.level, atk: +Game.player.currentAtk().toFixed(2), hp: Game.player.maxHp });
+      }
+      return r;
+    };
+  });
+  const end = Date.now() + (parseFloat(process.env.FP_MIN || '6')) * 60000;
+  while (Date.now() < end) await p2.waitForTimeout(15000);
+  const FP = await p2.evaluate(() => window.__fp);
+  await b2.close();
+  console.log('\n════ 실화력 — 보스방 입장 순간 (봇 ' + (process.env.FP_MIN || 6) + '분, 표본 ' + FP.length + ') ════');
+  const byF = {};
+  for (const x of FP) (byF[x.f] || (byF[x.f] = [])).push(x);
+  // 여기서 hp/atk 로 TTK 를 만들지 않는다 — 그 나눗셈은 「가만히 서 있는 보스」의 숫자다.
+  // 처치 시간은 위 ① (Game.tick 을 실제로 돌린 표) 과 tools/floor-audit.js 가 낸다
+  console.log('층  표본  평균Lv  평균공격력');
+  for (const f of Object.keys(byF).sort((a, c) => a - c)) {
+    const g = byF[f];
+    const lv = g.reduce((a, c) => a + c.lv, 0) / g.length;
+    const at = g.reduce((a, c) => a + c.atk, 0) / g.length;
+    console.log(String(f).padStart(2) + String(g.length).padStart(6) + lv.toFixed(1).padStart(8)
+      + at.toFixed(2).padStart(12));
+  }
 })().catch((e) => { console.log('CRASH', e.message); process.exit(2); });

@@ -513,7 +513,11 @@ const Dungeon = {
   eliteComp(depth) {
     const data = floorData(this.floor);
     const comp = [];
-    const nElites = depth >= 6 || this.floor >= 4 ? 2 : 1;
+    // ★ v208 — 1~3층 정예방이 정예 **1기**뿐이었다. 1층 전체 계측에서 정예방 평균 4.9초 ·
+    // 일반 전투방 9.7초 — 「강적 — 특성 보상」이라고 써 붙인 방이 그 층에서 가장 쉬웠다.
+    // 게다가 편성 끝의 우두머리는 그 층에서 이미 우두머리를 봤으면 걸러진다(miniSeen).
+    // 방 이름이 약속한 것을 방이 지켜야 한다 — 온보딩 층도 정예방은 정예 2기다
+    const nElites = 2;
     for (let i = 0; i < nElites; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: true });
     }

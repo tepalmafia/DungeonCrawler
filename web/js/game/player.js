@@ -912,7 +912,15 @@ function createPlayer(x, y, classId = 'knight') {
     },
 
     currentAtk() {
-      let atk = 1 + this.bonusAtk + (this.floorAtk || 0); // floorAtk: 모닥불 담금질 (이번 층 한정)
+      // ── 레벨 성장 (v208) ──────────────────────────────────────────────
+      // 사장 F9 (v206): 1층 Lv5 · **특성 4장인데 공격력 1** · 사망(무덤지기 오스문드).
+      // 원인: 공격력이 `1 + bonusAtk` 뿐이라 **레벨업이 힘을 한 톨도 안 줬다.**
+      // 특성 뽑기가 어긋나면 Lv5 여도 공격력 1이고, 그 화력으로 1층 보스(118HP)를 잡으려면
+      // 쉬지 않고 때려도 **49.6초**가 걸린다 (실측). 체력 6으로 버틸 시간이 아니다.
+      // 사장이 말한 세 출처("레벨업과 보스를 잡거나 보물") 중 레벨업이 **스탯**을 줘야 한다 —
+      // 특성은 뽑기지만 레벨은 확정이다. 확정 성장이 있어야 뽑기가 사치가 된다.
+      const lv = (typeof Game !== 'undefined' && Game.level) ? Game.level : 1;
+      let atk = 1 + (lv - 1) * 0.25 + this.bonusAtk + (this.floorAtk || 0); // floorAtk: 모닥불 담금질 (이번 층 한정)
       if (this.form === 'venge') atk += Math.min(8, this._vs || 0) * 0.4; // 복수귀: 원한 중첩
       if (this._chaliceT > 0) atk += 1; // 성배를 삼킨 자: 하트의 힘
       if (this.flags.bloodpact && this.hp >= this.maxHp) atk += 1; // DPS 리그: +2는 +59%로 과함

@@ -489,6 +489,10 @@ function createBoss(floor, x, y) {
     fightT: 0,        // 전투 경과 시간 — 소프트 인레이지
     enrage: 0,        // 30초마다 +1 (최대 3): 패턴 가속
     swingCount: 0,
+    // 스윙별 예고 길이 (v208). 종전 고정 0.32초는 인간 반응 시간(약 0.25초)과 거의 같아서
+    // **보고 나서 누르면 물리적으로 늦었다** — v188에서 잡몹 접촉 예고를 0.25→0.42로 올린 것과
+    // 같은 문제가 보스 연타에 남아 있었다. 온보딩 층은 넉넉히, 깊은 층은 예리하게
+    swingTel: 0.32,
     aimDir: { x: -1, y: 0 },
     curses: [],
     _comboQueue: [],   // 초식 연계 큐 (P1)
@@ -1010,8 +1014,16 @@ function createBoss(floor, x, y) {
           // v159: 스윙마다 방향을 **미리 확정**한다. 종전엔 타격 순간에 재조준해서
           // 2·3타는 예고가 없을 뿐 아니라 내가 벌린 거리를 방향까지 따라와 지웠다 —
           // 위치로는 원리적으로 회피 불가능한 구조였다. 이제 확정된 방향을 0.32초간 예고한다
-          if (!this._swingAim) this._swingAim = { x: dx / d, y: dy / d };
-          if (this.stateT > 0.32) {
+          // ★ v208 — **스윙마다** 예고를 등록한다.
+          //   v159가 이미 스윙별 방향 확정 + 붉은 부채꼴 예고를 만들어 놨는데(화면엔 나온다),
+          //   noteTell 은 windup 시작에서 한 번만 걸렸다. 초식 하나가 최대 4연타 = 1.83초라
+          //   3·4타가 예고창(1.4초)을 넘겨 **「무예고」로 찍혔다** — 보스전 피격의 58%.
+          //   화면엔 예고가 있는데 계기가 모르면 없는 예고가 된다 (v205 발구르기와 똑같은 실수).
+          if (!this._swingAim) {
+            this._swingAim = { x: dx / d, y: dy / d };
+            if (game.noteTell) game.noteTell(this.x, this.y);
+          }
+          if (this.stateT > this.swingTel) {
             this.stateT = 0;
             this.swingCount++;
             this.aimDir = this._swingAim;
@@ -1031,7 +1043,7 @@ function createBoss(floor, x, y) {
               while (diff > Math.PI) diff -= Math.PI * 2;
               while (diff < -Math.PI) diff += Math.PI * 2;
               if (Math.abs(diff) < 1.35) {
-                game.hurtPlayer(bossDmg(), { x: pdx / (pd || 1), y: pdy / (pd || 1) });
+                game.hurtPlayer(bossDmg(), { x: pdx / (pd || 1), y: pdy / (pd || 1) }, 260, '보스 휘두르기');
               }
             }
             // v155: 1~3층은 1페이즈 2연타 — 온보딩 층의 최대 피해원(휘두르기 58%)을 배울 수 있는 크기로
@@ -1049,7 +1061,7 @@ function createBoss(floor, x, y) {
             game.firePatches.push({ x: this.x, y: this.y, r: 26, life: 1.6, kind: 'fire' });
           }
           if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
-            game.hurtPlayer(bossDmg(), this.aimDir, 420);
+            game.hurtPlayer(bossDmg(), this.aimDir, 420, '보스 돌진');
             this.strike(game, game.player.x, game.player.y, { zone: false });   // 근접타는 상태만 (장판까지 깔면 붙을 자리가 없다)
           }
           if (hit.x || hit.y || this.stateT > 1.4) {
@@ -1127,6 +1139,11 @@ function createBoss(floor, x, y) {
       // 저주 장판 폭발 처리 (v117: c.r 가변 반경 / c.noHit 무해 마커)
       for (let i = this.curses.length - 1; i >= 0; i--) {
         const c = this.curses[i];
+        // ★ v208 — 저주 장판이 **곧 위험 표시 그 자체**다 (보스 공격 표현의 절반).
+        //   종전엔 windup 시작(tellBoss)에만 예고를 등록해서, 연계기의 두 번째·세 번째 타격이
+        //   예고창(1.4초)을 넘겨 「무예고」로 찍혔다 — 계측에서 보스전 피격의 31%였다.
+        //   원이 바닥에 깔린 순간이 예고다. 그때 등록한다
+        if (!c._told) { c._told = 1; if (game.noteTell) game.noteTell(c.x, c.y); }
         c.t -= dt;
         if (c.t <= 0) {
           if (c.noHit) { // 고유기 예고 마커 — 소리 없이 스러진다
@@ -1146,7 +1163,7 @@ function createBoss(floor, x, y) {
           if (Math.hypot(p.x - c.x, p.y - c.y) < (c.r || 48) + p.r) {
             const ddx = p.x - c.x, ddy = p.y - c.y;
             const dd = Math.hypot(ddx, ddy) || 1;
-            game.hurtPlayer(bossDmg(), { x: ddx / dd, y: ddy / dd });
+            game.hurtPlayer(bossDmg(), { x: ddx / dd, y: ddy / dd }, 260, '저주 장판');
             this.strike(game, c.x, c.y, { zone: false });
           }
           if (c.fire) {
@@ -1210,7 +1227,12 @@ function createBoss(floor, x, y) {
     _uniqMove(game, dx, dy, d) {
       const p = game.player;
       const U = (t, fn) => { (this._uq = this._uq || []).push({ t, fn }); };
-      const say = (txt) => { game.banner = { text: txt, life: 1.4, maxLife: 1.4, color: '#e8a13b' }; };
+      // ★ v208 — 고유기 배너는 **화면 전체를 덮는 예고**인데 계기에 등록돼 있지 않았다.
+      //   보스 23종의 고유기가 전부 여기를 지나간다. 배너를 띄우는 곳이 곧 예고 시작점이다
+      const say = (txt) => {
+        game.banner = { text: txt, life: 1.4, maxLife: 1.4, color: '#e8a13b' };
+        if (game.noteTell) game.noteTell(game.player.x, game.player.y);   // 배너는 위치와 무관하게 보인다
+      };
       const clampY = (y) => Math.min(Math.max(y, World.offsetY + TS * 1.5), World.offsetY + TS * (World.rows - 1.5));
       const id = this.defId;
       // v176: 이름이 기술과 함께 운다 — 이 보스의 시그니처 모티프를 얇게(lite) 한 번.
@@ -1539,6 +1561,10 @@ function createBoss(floor, x, y) {
       if (kind === 'sweep') {
         this.state = 'sweep';
         this.swingCount = 0;
+        // v208: 온보딩 층(1~3)은 0.44초 — 반응 0.25초를 쓰고도 0.19초가 남아 회피가 **결정**이 된다.
+        // 4층부터 0.36초, 8층부터 종전의 0.32초로 조여든다 (실력이 붙은 뒤에 예리해진다)
+        const f = Dungeon.floor;
+        this.swingTel = f <= 3 ? 0.44 : f <= 7 ? 0.36 : 0.32;
       } else if (kind === 'fan') {
         const projKind = opt[0] || 'soul';
         const variant = opt[1] || null; // P2 변주: cross(교차 2연) / gap(간극 탄막) / snipe(속사 저격 — 응징)

@@ -839,27 +839,53 @@ const GameCombat = {
   //   장판      바닥 위험에 서 있었다   → 내 탓이 명확하다
   TELL_WINDOW: 1.4,   // 예고가 유효한 시간
 
-  // 예고가 시작될 때 부른다 (잡몹 강타·보스 초식·인장기)
-  noteTell(x, y) {
+  // ★ v208 — 예고 슬롯을 **하나에서 여럿으로**.
+  // v205의 _tell 은 단일 슬롯이었다. 잡몹 하나를 상대할 땐 맞았지만 보스전에서는 틀린다:
+  // 보스 초식·소환된 부하 강타·장판이 겹치면 **마지막 예고 하나만 남고** 나머지는 지워진다.
+  // 그래서 예고가 분명히 있었던 피격이 「무예고」로 찍혔다 — 보스전 무예고 31~42%의 절반은
+  // 게임 결함이 아니라 **계기 결함**이었다. (v185·186·192·205·206에 이어 같은 실수다)
+  // 이제 창 안의 예고를 전부 들고 있는다.
+  _tells: null,
+  // key 를 주면 같은 위협의 예고를 **갱신**한다 (매 프레임 불러도 안전하다).
+  // 날아오는 탄·퍼지는 링은 「생성 순간」이 아니라 **보이는 내내**가 예고다 —
+  // 방 건너에서 쏜 화살이 2초 뒤에 맞으면 창(1.4초)을 넘겨 「무예고」로 찍혔는데,
+  // 그 화살은 2초 내내 화면에 있었다. 억울한 게 아니라 못 피한 것이다
+  noteTell(x, y, key) {
     const p = this.player;
     if (!p) return;
     if (Math.hypot(p.x - x, p.y - y) > 340) return;   // 화면 반대편 예고는 볼 이유가 없다
-    this._tell = { t: this.time || 0, moved: false, dashed: false };
+    const now = this.time || 0;
+    const L = (this._tells || (this._tells = []));
+    // 만료는 **마지막으로 보인 시각**(t)으로, 반응 판정은 **처음 보인 시각**(t0)으로 한다.
+    // 이 둘을 하나로 합치면 둘 중 하나가 반드시 틀린다:
+    //   t 만 쓰면 계속 보이는 위협이 매 프레임 새 예고가 되어 전부 「반응없음」
+    //   t0 만 쓰면 오래 날아온 탄이 창을 넘겨 전부 「무예고」
+    for (let i = L.length - 1; i >= 0; i--) if (now - L[i].t > this.TELL_WINDOW) L.splice(i, 1);
+    if (key != null) {
+      const cur = L.find((e) => e.key === key);
+      if (cur) { cur.x = x; cur.y = y; cur.t = now; this._tell = cur; return; }
+    }
+    if (L.length >= 16) L.shift();
+    L.push({ t: now, t0: now, x, y, key });
+    this._tell = L[L.length - 1];   // 하위 호환 (기존 계측 도구가 읽는다)
   },
-  // 플레이어가 예고에 반응했다 (이동/대시) — player.js 가 부른다
+  // 플레이어가 예고에 반응했다 (이동/대시) — player.js 가 부른다.
+  // 반응은 **예고별**이 아니라 시각으로 남긴다. 어느 예고에 반응했는지는 알 수 없고,
+  // 알 필요도 없다 — 「예고가 뜬 뒤에 몸을 움직였는가」만 판정하면 된다
   noteReact(kind) {
-    if (!this._tell) return;
-    if ((this.time || 0) - this._tell.t > this.TELL_WINDOW) return;
-    if (kind === 'dash') this._tell.dashed = true; else this._tell.moved = true;
+    const now = this.time || 0;
+    if (kind === 'dash') this._dashAt = now; else this._moveAt = now;
   },
   _hurtCause(src) {
     if (src === '화상' || src === '중독') return null;      // 도트는 피격이 아니다
-    const t = this._tell;
-    const fresh = t && ((this.time || 0) - t.t) <= this.TELL_WINDOW;
     if (typeof src === 'string' && /장판|용암|가시|독무|빙판|전류|저주 지대/.test(src)) return '장판';
-    if (!fresh) return '무예고';
-    if (t.dashed) return '늦음';
-    if (t.moved) return '늦음';
+    const now = this.time || 0;
+    const L = this._tells || [];
+    let oldest = null;
+    for (const t of L) if (now - t.t <= this.TELL_WINDOW && (!oldest || t.t0 < oldest.t0)) oldest = t;
+    if (!oldest) return '무예고';
+    // 예고가 뜬 뒤에 움직였거나 대시했으면 「늦음」 — 읽고 반응은 했다는 뜻이다
+    if ((this._dashAt || -9) >= oldest.t0 || (this._moveAt || -9) >= oldest.t0) return '늦음';
     return '반응없음';
   },
 
@@ -987,7 +1013,7 @@ const GameCombat = {
         // 원인별 **출처**까지 남긴다 — 「무예고 88%」를 잡으려면 어느 경로가 예고 없이
         // 들어오는지 알아야 한다. 분포만으로는 고칠 자리를 못 찾는다
         this._hurtSrc = this._hurtSrc || {};
-        const sk = why + ' / ' + (src || '접촉');
+        const sk = why + ' / ' + (src || '이름표 없음');
         this._hurtSrc[sk] = (this._hurtSrc[sk] || 0) + 1;
         // 억울한 피격은 그 자리에서 말해 준다 — 사장이 「왜 맞았는지 모르겠다」고 느끼는 순간이 이거다
         if (why === '무예고') Particles.text(this.player.x, this.player.y - 52, '예고 없음', { color: '#e43b44', size: 11 });
