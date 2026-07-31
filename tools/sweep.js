@@ -13,6 +13,12 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137';
 const LAST = parseInt(process.argv[2] || '10', 10);
 const SECS = parseFloat(process.argv[3] || '75');
 const SEEDS = [2024, 777, 31337];
+// ★ v210b — 화력을 **하나의 값으로 가정하지 않는다.**
+// 기준 빌드(_cheatScaleToFloor)는 2층에 공5.25 를 준다. 그런데 사장 실측 F9 는
+// 같은 2층·같은 Lv6·특성 6장에 **공2.3** 이었다 — 치트가 공격 특성만 골라 뽑기 때문이다.
+// 레벨1로 재면 너무 약하고 기준 빌드로 재면 너무 강하다. 진실은 사이에 있다.
+// 그래서 **양 끝을 다 잰다**: 사장 화력(×0.45)과 봇 화력(×1.0). 둘 다 괜찮아야 통과다.
+const ATK_MUL = parseFloat(process.env.ATK_MUL || '1');
 
 (async () => {
   const b = await chromium.launch({ executablePath: CHROME });
@@ -21,7 +27,7 @@ const SEEDS = [2024, 777, 31337];
   p.on('pageerror', (e) => errs.push(e.message.slice(0, 160)));
   await p.goto(`${BASE}/?test=1&bot=1`);
   await p.waitForFunction(() => typeof Game !== 'undefined' && Game.state === 'play');
-  const R = await p.evaluate(([LAST, SECS, SEEDS]) => {
+  const R = await p.evaluate(([LAST, SECS, SEEDS, ATK_MUL]) => {
     const out = [];
     for (let FLOOR = 1; FLOOR <= LAST; FLOOR++) {
       const row = { f: FLOOR, why: {}, src: {}, kind: {} };
@@ -29,6 +35,18 @@ const SEEDS = [2024, 777, 31337];
       for (const seed of SEEDS) {
         Game.restart(seed); Game.state = 'play';
         Dungeon.floor = FLOOR;
+        // ★ v210b — **그 층에 맞는 몸**으로 잰다.
+        //   1차엔 restart 직후 레벨 1·특성 0인 채로 8층을 쟀다. 8층 방 하나에 적 40기·
+        //   우두머리 285HP인데 공격력 1이면 당연히 「못 끝냄」이 나온다 — 그건 방이 긴 게 아니라
+        //   **8층에 1층 몸을 세워 놓은 것**이다. 저장소엔 이미 층별 기준 빌드(_cheatScaleToFloor)가
+        //   있고 진짜 런으로 자가 보정된다. 안 쓰고 있었을 뿐이다
+        if (Game._cheatScaleToFloor) Game._cheatScaleToFloor();
+        if (ATK_MUL !== 1) {
+          // buildAtk = 1 + (lv-1)*0.25 + bonusAtk … 목표 화력에 맞춰 bonusAtk 만 눌린다
+          const pl0 = Game.player;
+          const fixed = 1 + (Game.level - 1) * 0.25;
+          pl0.bonusAtk = Math.max(0, (pl0.buildAtk() * ATK_MUL) - fixed);
+        }
         Dungeon.miniSeen = false;
         for (let ri = 1; ri <= nRooms; ri++) {
           Dungeon.roomIndex = ri;
@@ -88,10 +106,11 @@ const SEEDS = [2024, 777, 31337];
       out.push(row);
     }
     return out;
-  }, [LAST, SECS, SEEDS]);
+  }, [LAST, SECS, SEEDS, ATK_MUL]);
   await b.close();
 
-  console.log(`\n════ 전 층 쓸기 1~${LAST}층 (씨앗 ${SEEDS.length}개 · 방 전수 · 방당 최대 ${SECS}초) ════`);
+  console.log(`\n════ 전 층 쓸기 1~${LAST}층 (씨앗 ${SEEDS.length}개 · 방 전수 · 방당 최대 ${SECS}초`
+    + ` · 화력 ${ATK_MUL === 1 ? '기준(봇 실측)' : '×' + ATK_MUL + ' (사장 실측 F9 수준)'}) ════`);
   console.log('\n층   전투    정예    보스   │ 무예고  반응없음   늦음   장판');
   let bad = 0;
   for (const r of R) {
