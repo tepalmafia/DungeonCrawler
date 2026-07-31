@@ -2098,6 +2098,78 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 보상 출처 제한 (v203) ═════════════════════════════════════════════
+  // 사장: "특성이나 스킬, 스탯은 레벨업과 보스를 잡거나 보물을 먹을때만 주도록 하자."
+  // 코드 호출 지점이 아니라 **실제로 열리는 횟수**를 센다 — 생성기가 아니라 소비자다
+  const rwsrc = await page.evaluate(() => {
+    const R = { seen: {}, rooms: {}, bossCard: 0, budget: {} };
+    Game.restart(90210); Game.state = 'play'; Game.player.god = true;
+    const _t = Game.openTraitChoice.bind(Game);
+    Game.openTraitChoice = function (r) { R.seen[r || '?'] = (R.seen[r || '?'] || 0) + 1; Game.pendingChoices = 0; };
+    // ① 보스 처치가 특성을 주는가 (계측 결과 **아예 없었다**)
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    const pc0 = Game.pendingChoices;
+    Game.onBossDead();
+    R.bossCard = Game.pendingChoices - pc0;
+    Game.pendingChoices = 0;
+    // ② 정예방 입장이 특성을 주지 않는가
+    Dungeon.floor = 1; Dungeon.roomIndex = 2; Dungeon.tookEliteCard = false;
+    Dungeon.roomType = 'elite'; Game.roomCleared = false;
+    const pc1 = Game.pendingChoices;
+    Game.onRoomCleared && Game.onRoomCleared();
+    R.eliteCard = Game.pendingChoices - pc1;
+    // ③ 층별 방 수
+    for (const f of [1, 2, 3, 4, 5, 6, 9]) R.rooms[f] = Dungeon.roomsFor(f);
+    // ④ 특수방 예산이 층의 척추를 지키는가 — 문 후보를 끝까지 굴려 본다
+    for (const f of [1, 3]) {
+      // ★ totalRooms 는 build() 가 갱신한다 — 테스트가 build 를 안 부르면 옛 값이 남아
+      //   roomsLeft 계산이 어긋난다 (1차에 실제로 어긋났다). 명시적으로 맞춰 준다
+      Dungeon.floor = f; Dungeon.totalRooms = Dungeon.roomsFor(f);
+      Dungeon.specialsTaken = 0; Dungeon.tookTreasure = false;
+      Dungeon.tookCamp = false; Dungeon.tookEvent = false; Dungeon.tookSiege = false;
+      Dungeon.tookMerchant = false; Dungeon.vaultFound = false;
+      let sp = 0, cb = 0;
+      for (let r = 1; r < Dungeon.roomsFor(f); r++) {
+        Dungeon.roomIndex = r;
+        const opts = Dungeon.doorOptions().map((o) => o.type);
+        // 특수방을 고를 수 있으면 고른다 (최악의 경우 — 사람은 특수방으로 간다)
+        const pick = opts.find((t) => !['combat', 'elite', 'boss'].includes(t)) || opts[0];
+        // ★ 보스방은 특수방이 아니다. 1차에 boss 를 특수로 세어 예산이 새는 것처럼 보였다 —
+        //   내 계기 오류였다 (예산은 정상 작동 중이었다)
+        if (pick === 'boss') continue;
+        if (['combat', 'elite'].includes(pick)) cb++; else sp++;
+        if (!['combat', 'elite', 'boss'].includes(pick)) Dungeon.specialsTaken++;
+        if (pick === 'treasure') Dungeon.tookTreasure = true;
+        if (pick === 'camp') Dungeon.tookCamp = true;
+        if (pick === 'event') Dungeon.tookEvent = true;
+        if (pick === 'siege') Dungeon.tookSiege = true;
+        if (pick === 'merchant') Dungeon.tookMerchant = true;
+      }
+      R.budget[f] = { special: sp, combat: cb };
+    }
+    return R;
+  });
+  console.log('  보상출처:', JSON.stringify(rwsrc));
+  ok('reward.bossGrantsCard', rwsrc.bossCard >= 1,
+    `보스 처치가 특성 ${rwsrc.bossCard}장을 준다 ` +
+    '(★ v202까지 **보스 처치 보상이 아예 없었다** — 정예방·습격·기연에서는 나오는데 ' +
+    '정작 보스에서는 안 나왔다. 사장이 말한 세 출처 중 하나가 비어 있었다)');
+  ok('reward.onlyThreeSources', !rwsrc.eliteCard,
+    `정예방 입장이 특성을 주지 않는다 (${rwsrc.eliteCard || 0}장) ` +
+    '(출처는 레벨업 / 보스 / 보물 셋뿐. 정예·습격·기연·제단·층스킵은 영혼 파편으로 갚는다 — ' +
+    '보상이 사라지는 게 아니라 **종류가 바뀐다**)');
+  ok('room.shallowFloorsAreShort',
+    rwsrc.rooms[1] === 6 && rwsrc.rooms[1] < rwsrc.rooms[3] && rwsrc.rooms[3] < rwsrc.rooms[9],
+    `층별 방 수 1층 ${rwsrc.rooms[1]} · 3층 ${rwsrc.rooms[3]} · 5층 ${rwsrc.rooms[5]} · 9층 ${rwsrc.rooms[9]}칸 ` +
+    '(얕은 층은 배우는 구간이라 짧게, 깊을수록 버티는 구간이라 길게)');
+  ok('room.combatSpineSurvives',
+    rwsrc.budget[1].combat >= 2 && rwsrc.budget[1].special <= 2 && rwsrc.budget[3].combat >= 2,
+    `특수방만 골라도 1층 전투 ${rwsrc.budget[1].combat}칸/특수 ${rwsrc.budget[1].special}칸 · ` +
+    `3층 전투 ${rwsrc.budget[3].combat}칸/특수 ${rwsrc.budget[3].special}칸 ` +
+    '(★ 방을 줄였더니 1층 6칸에 일반 전투가 **0개**가 됐다 — 생성기가 아니라 선택 탓이다. ' +
+    '문마다 특수방이 붙어 있으면 사람은 다 특수방으로 간다. ' +
+    '그러면 v192~198의 「잡몹+보스」 설계가 놓일 자리가 사라진다)');
+
   // ══ 시전 인터럽트 (v201) ══════════════════════════════════════════════
   // 사장: "보스가 스킬쓸때 무적이 된다던가. 그런거 없어?" → 승인: "무적은 시전 인터럽트로"
   // 무적으로 딜을 막으면 플레이어가 할 일이 없어진다. 반대로 간다 —
