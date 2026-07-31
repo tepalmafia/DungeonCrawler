@@ -1698,9 +1698,13 @@ const GamePlay = {
           Renderer.shake(5, 0.3);
           AudioSys.hurt();
           Particles.burst(it.x, it.y, { count: 22, colors: ['#e43b44', '#8a1a2a', '#241832'], speed: 170, life: 0.6, size: 3 });
-          this.banner = { text: '피의 대가 — 힘을 골라라 (최대 HP -1)', life: 2.0, maxLife: 2.0, color: '#e43b44' };
-          this.pendingChoices++;
-          this.openTraitChoice('elite');
+          // ★ v203 출처 제한 (사장: "레벨업과 보스를 잡거나 보물을 먹을때만")
+          //   피의 대가는 셋 중 어디에도 없다 — 특성 대신 **영혼 파편**으로 바꾼다.
+          //   제단의 성격(대가를 치르고 얻는다)은 유지하되 런 파워는 안 준다
+          const bp = 12 + Dungeon.floor * 3;
+          Meta.data.shards += bp;
+          this.banner = { text: `피의 대가 — 영혼 파편 ◆${bp} (최대 HP -1)`, life: 2.0, maxLife: 2.0, color: '#e43b44' };
+          Particles.text(it.x, it.y - 30, `◆ +${bp}`, { color: '#2ec4b6', size: 16 });
           continue;
         }
         it.used = true;
@@ -1878,10 +1882,11 @@ const GamePlay = {
               this.hurtFlash = 0.2;
               AudioSys.hurt();
             } },
-            { w: 8, run: () => { // 금단의 서: 특성 +1, HP -1
+            { w: 8, run: () => { // 금단의 서 — v203: 특성 대신 파편 (출처 제한)
               p.hp = Math.max(1, p.hp - 1);
-              this.pendingChoices++;
-              this.banner = { text: '기연 — 금단의 서를 읽었다. 머리가 아프다 (특성 +1, HP -1)', life: 2.2, maxLife: 2.2, color: '#b13ae0' };
+              const fb = 16 + Dungeon.floor * 3;
+              Meta.data.shards += fb;
+              this.banner = { text: `기연 — 금단의 서를 읽었다 (영혼 파편 ◆${fb}, HP -1)`, life: 2.2, maxLife: 2.2, color: '#b13ae0' };
               AudioSys.hurt();
               if (this.state === 'play') this.openTraitChoice('levelup');
             } },
@@ -1968,9 +1973,8 @@ const GamePlay = {
         const bonus = 14 + Dungeon.floor * 2;
         Meta.data.shards += bonus;
         Particles.text(p.x, p.y - 34, `◆ +${bonus}`, { color: '#2ec4b6', size: 16 });
-        this.banner = { text: '습격을 버텨냈다!', life: 1.8, maxLife: 1.8, color: '#ffd866' };
-        this.pendingChoices++;
-        this.openTraitChoice('elite');
+        // ★ v203 출처 제한 — 습격 보상은 파편으로. 특성은 레벨업/보스/보물만
+        this.banner = { text: `습격을 버텨냈다! ◆${bonus}`, life: 1.8, maxLife: 1.8, color: '#ffd866' };
         AudioSys.buy();
       }
       // 시련 완주 보상 (G5): 확정 에픽+ 유물 + 골드 뭉치
@@ -2005,11 +2009,14 @@ const GamePlay = {
       if (Dungeon.roomType !== 'boss') {
         World.openDoors(this._maybeCollapseDoor(Dungeon.doorOptions()));
         if (Dungeon.roomType === 'elite' && !Dungeon.tookEliteCard) {
-          // v166: 정예방 특성 카드도 **층당 1장**. 실측 9층까지 정예 카드만 19장으로,
-          // 레벨업분(18장)과 맞먹었다 — 층마다 정예방이 1~2개씩 나오니 카드가 흔해졌다
+          // ★ v203 출처 제한 — 정예방은 특성을 주지 않는다.
+          //   계측: 1층 9칸 중 정예방이 4개였다. 여기서 카드가 나오면 「레벨업과 보스」라는
+          //   출처 규칙이 성립하지 않는다. 대신 파편 + 하트로 갚는다
           Dungeon.tookEliteCard = true;
-          this.pendingChoices++;
-          this.openTraitChoice('elite');
+          const eb = 10 + Dungeon.floor * 2;
+          Meta.data.shards += eb;
+          this.pickups.push({ x: p.x + 40, y: p.y, t: 0, r: 12 });
+          this.banner = { text: `정예 처치 — 영혼 파편 ◆${eb}`, life: 1.6, maxLife: 1.6, color: '#b13ae0' };
         }
       }
       // 보스방 클리어 시 문은 유물 선택 후 열림 (_afterBossReward)

@@ -172,8 +172,17 @@ const Dungeon = {
     this.build('combat');
   },
 
+  // ── 층별 방 수 (v203) ──────────────────────────────────────────────────
+  // 사장: "1층 단계를 줄이고"
+  // 계측: 1층이 9칸이고 그중 정예방이 4개였다 — 배우는 층에서 9칸은 길다.
+  // 얕은 층은 짧게(배우는 구간), 깊어질수록 길게(버티는 구간).
+  roomsFor(f) {
+    return f <= 1 ? 6 : f <= 3 ? 7 : f <= 5 ? 8 : 9;
+  },
+
   nextFloor() {
     this.floor++;
+    this.totalRooms = this.roomsFor(this.floor);
     this.roomIndex = 1;
     this.tookTreasure = false;
     this.tookRelicChest = false; // v166: 층당 유물 상자 1개
@@ -239,6 +248,10 @@ const Dungeon = {
   },
 
   build(type) {
+    // ★ v203: totalRooms 는 **파생 데이터**다. 층에서 매번 계산한다.
+    //   필드로 들고 nextFloor 에서만 갱신하면, 런 시작·치트 진입·이어하기처럼
+    //   nextFloor 를 거치지 않는 경로에서 옛 값이 남는다 (실제로 남았다)
+    this.totalRooms = this.roomsFor(this.floor);
     this.roomType = type;
     // v189: 좌표를 먼저 옮긴다 — 방을 짓기 전에 그 방이 '어디'인지 정해져 있어야 한다
     this._stepMap(type, !this._noStep);
@@ -301,7 +314,10 @@ const Dungeon = {
     }
     const options = ['combat'];
     const pool = [];
-    if (next >= 3) pool.push('elite', 'elite');
+    // ★ v203: 얕은 층에서 정예를 2장씩 넣던 것이 1층 9칸 중 정예 4개를 만들었다.
+    //   1~2층은 배우는 구간이라 정예가 절반이면 배울 자리가 없다 — 1장으로 줄인다
+    if (next >= 3) { pool.push('elite'); if (this.floor >= 3) pool.push('elite'); }
+    if (this.floor <= 2) pool.push('combat');   // 얕은 층은 일반 전투가 기본이어야 한다
     // 보물·모닥불은 층당 1회만 — 한 번 들어가면 그 층에서는 다시 나오지 않는다
     if (!this.tookTreasure) pool.push('treasure');
     if (!this.tookCamp && next >= 4) pool.push('camp');

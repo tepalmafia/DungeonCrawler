@@ -2066,7 +2066,13 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     for (let r = 0; r < 6; r++) {
       Game.restart(3000 + r * 29); Game.state = 'play'; Game.player.god = true;
       Dungeon.floor = 1; Dungeon.miniSeen = false;
-      for (let room = 1; room <= 7; room++) {
+      // ★ v203: 층별 방 수가 달라졌다(1층 6칸). 순회를 7칸 고정으로 두면
+      //   **존재하지 않는 방**을 검사하게 되고, 그 방들은 보스 직전으로 취급돼 우두머리가 빠진다.
+      //   실제 전투방 범위(1 … totalRooms-1)만 돈다 — 마지막 칸은 보스방이다
+      //   그리고 **보스 직전 방은 v194에서 의도적으로 우두머리를 뺀 「숨 고르는 방」**이다.
+      //   그 방까지 세면 의도된 설계가 실패로 찍힌다 — 검사 대상은 우두머리가 나와야 하는 방이다
+      const lastCombat = Dungeon.roomsFor(1) - 2;
+      for (let room = 1; room <= lastCombat; room++) {
         Dungeon.roomIndex = room;
         Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
         World.buildRoom('combat'); Game.onRoomBuilt('combat');
@@ -2087,7 +2093,7 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   });
   console.log('  단계별보스:', JSON.stringify(stage));
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
-    `전투방 ${stage.rooms}개 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
+    `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
   // ══ 시전 인터럽트 (v201) ══════════════════════════════════════════════
   // 사장: "보스가 스킬쓸때 무적이 된다던가. 그런거 없어?" → 승인: "무적은 시전 인터럽트로"
