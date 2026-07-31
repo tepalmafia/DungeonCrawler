@@ -563,6 +563,42 @@ function createBoss(floor, x, y) {
     },
 
     // 초식의 다음 연계로 — 남은 연계가 없으면 idle
+    // 시전 시작 — 게이지·임계·연출
+    castStart(game) {
+      const f = Dungeon.floor;
+      this.castMax = f <= 5 ? 2.2 : 1.6;
+      this.castT = 0;
+      // 임계 = 최대 HP의 12%. 층이 올라도 「몇 대」의 감각이 유지되도록 비율로 잡는다.
+      // 화력이 약한 빌드는 못 끊는다 — 그게 성장의 보상이 된다
+      this.castNeed = Math.max(3, Math.round(this.maxHp * 0.12));
+      this.castDmg = 0;
+      this.state = 'cast';
+      this.stateT = 0;
+      this.noFlinch = true;                 // 무경직 — 때려도 안 밀린다
+      Particles.text(this.x, this.y - this.r - 34, '시전 — 끊어라!', { color: '#ffd866', size: 15 });
+      Particles.ring(this.x, this.y, { r0: 10, r1: 70, life: 0.4, color: '#ffd866', width: 4 });
+      AudioSys.tellBoss(this.x, this.y);
+    },
+    // 시전 중 피해 누적 — combat.js 가 부른다
+    castHit(dmg, game) {
+      if (this.state !== 'cast') return false;
+      this.castDmg += dmg;
+      if (this.castDmg < this.castNeed) return false;
+      // ── 끊었다 ──
+      this.state = 'groggy';
+      this.stateT = 0;
+      this.groggyT = 2.0;
+      this.noFlinch = false;
+      this.castT = 0;
+      this._comboQueue = [];
+      Particles.text(this.x, this.y - this.r - 34, '시전 차단!', { color: '#5ce0e6', size: 19 });
+      Particles.ring(this.x, this.y, { r0: 8, r1: 110, life: 0.5, color: '#5ce0e6', width: 6 });
+      Particles.burst(this.x, this.y, { count: 20, colors: ['#5ce0e6', '#a9fff7', '#ffffff'], speed: 190, life: 0.6, size: 3 });
+      if (game) { game.slowmoT = 0.35; Renderer.shake(5, 0.2); }
+      AudioSys.pdodge();
+      return true;
+    },
+
     _endMove() {
       if (this._comboQueue && this._comboQueue.length > 0) {
         this.attack = this._parseStep(this._comboQueue.shift());
@@ -886,9 +922,24 @@ function createBoss(floor, x, y) {
               if (uniqAllowed && (this._patN === 1 || this._patN % cadence === 0) && this.spawnT <= 0) {
                 this.attack = { kind: 'uniq', opt: [] };
                 this._comboQueue = [];
+                this._wantCast = true;   // ★ v201 고유기는 '시전'으로 들어간다 (아래 castStart)
               } else {
                 this.attack = this._nextPattern(d);
               }
+            }
+            // ══ 시전 인터럽트 (v201) ══════════════════════════════════════
+            // 사장 승인: "무적은 시전 인터럽트로"
+            // 무적으로 딜을 막으면 플레이어가 할 일이 없어진다. 반대로 간다 —
+            // **시전 중에는 더 아프게 맞고, 대신 경직되지 않는다.**
+            //   · 시전 게이지 2.2초(1~5층) / 1.6초(6층+)
+            //   · 시전 중 보스는 **무경직**(경직·넉백 면역) + **받는 피해 ×1.5**
+            //   · 누적 피해가 임계를 넘으면 시전 취소 + 2.0초 **그로기**
+            //   · 못 끊으면 큰 기술이 그대로 나간다
+            // → 「무적이라 못 때린다」가 아니라 「지금 때려야 한다」가 된다.
+            if (this._wantCast) {
+              this._wantCast = false;
+              this.castStart(game);
+              break;
             }
             this.state = 'windup';
             this.stateT = 0;
@@ -900,6 +951,41 @@ function createBoss(floor, x, y) {
           break;
         }
 
+        // ══ 시전 (v201) ══ 게이지가 차는 동안 보스는 무경직·피해 증폭 상태로 서 있다
+        case 'cast': {
+          this.castT += dt;
+          // 시전 중에도 아주 천천히 플레이어 쪽으로 몸을 돌린다 (안 돌면 인형처럼 보인다)
+          this.aimDir = { x: dx / d, y: dy / d };
+          this.flip = dx < 0;
+          if (Math.random() < 0.5) {
+            const a = Math.random() * Math.PI * 2, rr = this.r * (2.2 + Math.random() * 0.6);
+            Particles.burst(this.x + Math.cos(a) * rr, this.y + Math.sin(a) * rr, {
+              count: 1, colors: ['#ffd866', '#fff4c8'], speed: -90, life: 0.45, size: 3,
+            });
+          }
+          if (this.castT >= this.castMax) {
+            // ── 못 끊었다 — 큰 기술이 그대로 나간다 ──
+            this.noFlinch = false;
+            Particles.text(this.x, this.y - this.r - 34, '시전 완료!', { color: '#e43b44', size: 17 });
+            Renderer.shake(4, 0.18);
+            this.attack = { kind: 'uniq', opt: [] };
+            this.state = 'windup';
+            this.stateT = 0;
+            this._castPunish = true;   // 계측용 — 못 끊고 맞은 횟수
+          }
+          break;
+        }
+        // ══ 그로기 ══ 끊긴 보스는 2초간 무방비다. 이게 인터럽트의 보상이다
+        case 'groggy': {
+          this.groggyT -= dt;
+          if (Math.random() < 0.25) {
+            Particles.burst(this.x + (Math.random() - 0.5) * this.r, this.y - this.r, {
+              count: 1, colors: ['#5ce0e6', '#c8ccd8'], speed: 40, life: 0.5, size: 2, gravity: -60,
+            });
+          }
+          if (this.groggyT <= 0) { this._endMove(); this.stateT = 0; }
+          break;
+        }
         case 'windup': {
           const k = this.attack.kind;
           // 조준 갱신 (마지막 순간 고정)
@@ -1785,6 +1871,46 @@ function createBoss(floor, x, y) {
         }
       }
       const img = this.flash > 0 ? Sprites.white(Sprites[this.def.sprite]) : Sprites[this.def.sprite];
+
+      // ── 시전 게이지 (v201) ──────────────────────────────────────────────
+      // 「보이지 않는 것은 없는 것과 같다」 — 끊으라고 만든 창인데 안 보이면 존재하지 않는다.
+      // 보스 머리 위에 게이지를 띄우고, 누적 피해가 임계에 얼마나 닿았는지도 함께 보인다
+      if (this.state === 'cast') {
+        const W = 92, H = 9, gx = this.x - W / 2, gy = this.y - this.r - 46;
+        ctx.save();
+        ctx.fillStyle = 'rgba(10,8,16,0.88)';
+        ctx.fillRect(gx - 2, gy - 2, W + 4, H + 4);
+        // 시전 진행 — 빨갛게 차오른다 (다 차면 큰 게 나온다)
+        const t = Math.min(1, this.castT / this.castMax);
+        ctx.fillStyle = '#e43b44';
+        ctx.fillRect(gx, gy, W * t, H);
+        // 끊기까지 남은 양 — 노란 막대가 오른쪽에서 줄어든다
+        const need = Math.max(0, 1 - this.castDmg / this.castNeed);
+        ctx.fillStyle = '#ffd866';
+        ctx.fillRect(gx, gy + H - 3, W * (1 - need), 3);
+        ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 1;
+        ctx.strokeRect(gx - 0.5, gy - 0.5, W + 1, H + 1);
+        ctx.fillStyle = '#ffd866';
+        ctx.font = 'bold 11px Galmuri11, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('시전 — 끊어라!', this.x, gy - 6);
+        ctx.restore();
+      } else if (this.state === 'groggy') {
+        ctx.save();
+        ctx.globalAlpha = 0.6 + Math.sin(this.animT * 12) * 0.25;
+        ctx.fillStyle = '#5ce0e6';
+        ctx.font = 'bold 13px Galmuri11, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('그로기!', this.x, this.y - this.r - 42);
+        // 머리 위를 도는 별 — 무방비 상태를 한눈에
+        for (let i = 0; i < 3; i++) {
+          const a = this.animT * 3.4 + i * 2.1;
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = '#ffd866';
+          ctx.fillRect(this.x + Math.cos(a) * 16 - 2, this.y - this.r - 26 + Math.sin(a) * 5 - 2, 4, 4);
+        }
+        ctx.restore();
+      }
 
       // ── 위압감 연출: 고동치는 오라 (2페이즈·맹공에서 격화) ──
       {

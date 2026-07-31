@@ -270,11 +270,27 @@ const GameCombat = {
         this.teachReaction('execute', '처형 — 상태 2종 + 크리티컬 = 피해 증폭');
       }
     }
+    // ══ 시전 인터럽트 (v201) ═════════════════════════════════════════════
+    // 사장 승인: "무적은 시전 인터럽트로"
+    // 무적으로 딜을 막으면 플레이어가 할 일이 없어진다. 반대로 간다:
+    //   시전 중 보스는 **더 아프게 맞고**(×1.5) 대신 **경직되지 않는다**(무경직).
+    //   → 「무적이라 못 때린다」가 아니라 「지금 때려야 한다」가 된다.
+    if (e.isBoss && e.state === 'cast') {
+      dmg = Math.max(1, Math.round(dmg * 1.5));
+      Particles.text(e.x + (Math.random() - 0.5) * 20, e.y - 46, '시전 중 — 약점!', { color: '#ffd866', size: 11 });
+    } else if (e.isBoss && e.state === 'groggy') {
+      // 그로기는 인터럽트의 보상 — 여기서 확실히 갚아준다
+      dmg = Math.max(1, Math.round(dmg * 1.35));
+    }
     e.hp -= dmg;
     e.flash = 0.1;
+    if (e.isBoss && e.castHit) e.castHit(dmg, this);
     // 드라마 AI: 얻어맞으면 그 순간 침입자를 안다 — 방 전체에 경보
     if (e._aware === false) { e._aware = true; this._roomAlert = true; }
-    if (kb && !e.isBoss) {
+    if (e.noFlinch) {
+      // 무경직 — 시전 중에는 밀리지 않는다. 「끊으려면 화력이 필요하다」가 성립하려면
+      // 넉백으로 시전을 흐트러뜨리는 우회로가 없어야 한다
+    } else if (kb && !e.isBoss) {
       e.kbx += dir.x * kb;
       e.kby += dir.y * kb;
     } else if (kb) {

@@ -2089,6 +2089,78 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 시전 인터럽트 (v201) ══════════════════════════════════════════════
+  // 사장: "보스가 스킬쓸때 무적이 된다던가. 그런거 없어?" → 승인: "무적은 시전 인터럽트로"
+  // 무적으로 딜을 막으면 플레이어가 할 일이 없어진다. 반대로 간다 —
+  // 시전 중에는 **더 아프게 맞고**(×1.5) 대신 **경직되지 않는다**.
+  const cast = await page.evaluate(() => {
+    const R = {};
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    let bs = Game.enemies.find((e) => e.isBoss);
+    bs.spawnT = 0;
+    bs.castStart(Game);
+    R.window = bs.castMax;
+    R.need = bs.castNeed;
+    R.needPct = +(bs.castNeed / bs.maxHp).toFixed(3);
+    // ① 무경직 — 큰 넉백을 줘도 안 밀린다 (넉백으로 시전을 흐트러뜨리는 우회로가 없어야 한다)
+    const x0 = bs.x;
+    Game.damageEnemy(bs, 1, { x: 1, y: 0 }, { feel: true, kb: 900 });
+    R.noFlinch = Math.abs(bs.x - x0) < 1 && Math.abs(bs.kbx) < 1;
+    // ② 시전 중 피해 증폭 — **절대값이 아니라 비율**로 잰다.
+    //   보스 버스트 상한(최대HP의 %)이 먼저 걸리므로 raw 10이 그대로 오지 않는다.
+    //   상한을 모르는 채 절대값을 기대하면 거짓 실패가 난다 (1차에서 실제로 났다)
+    const hpA = bs.hp;
+    Game.damageEnemy(bs, 10, { x: 0, y: 0 }, { feel: false, kb: 0 });
+    const dCast = hpA - bs.hp;
+    const stSave = bs.state; bs.state = 'idle';          // 같은 타격을 평상시로 한 번 더
+    const hpB = bs.hp;
+    Game.damageEnemy(bs, 10, { x: 0, y: 0 }, { feel: false, kb: 0 });
+    const dIdle = hpB - bs.hp;
+    bs.state = stSave;
+    R.ampDealt = dCast; R.idleDealt = dIdle;
+    R.ampRatio = dIdle > 0 ? +(dCast / dIdle).toFixed(2) : 0;
+    // ③ 임계까지 때리면 끊기고 그로기에 든다
+    let guard = 0;
+    while (bs.state === 'cast' && guard++ < 500) Game.damageEnemy(bs, 3, { x: 0, y: 0 }, { feel: false, kb: 0 });
+    R.broke = bs.state === 'groggy';
+    R.groggy = bs.groggyT || 0;
+    R.thaws = false;
+    for (let i = 0; i < 200 && bs.state === 'groggy'; i++) bs.update(1 / 60, Game);
+    R.thaws = bs.state !== 'groggy';
+    // ④ 못 끊으면 큰 기술이 그대로 나간다
+    Dungeon.build('boss');
+    bs = Game.enemies.find((e) => e.isBoss);
+    bs.spawnT = 0;
+    bs.castStart(Game);
+    for (let i = 0; i < 400 && bs.state === 'cast'; i++) bs.update(1 / 60, Game);
+    R.punish = bs.state === 'windup' && bs.attack && bs.attack.kind === 'uniq';
+    // ⑤ 화면에 게이지가 그려지는가 — 「보이지 않는 창은 없는 것과 같다」
+    Dungeon.build('boss');
+    bs = Game.enemies.find((e) => e.isBoss);
+    bs.spawnT = 0; bs.castStart(Game);
+    let texts = 0;
+    const g = Renderer.ctx, _f = g.fillText.bind(g);
+    g.fillText = function (t, x, y) { if (typeof t === 'string' && t.indexOf('끊어라') >= 0) texts++; return _f(t, x, y); };
+    bs.draw(g);
+    g.fillText = _f;
+    R.drawn = texts;
+    return R;
+  });
+  console.log('  시전:', JSON.stringify(cast));
+  ok('boss.castInterruptible',
+    cast.broke && cast.noFlinch && cast.ampRatio >= 1.4 && cast.needPct > 0.05 && cast.needPct < 0.25,
+    `시전 창 ${cast.window}초 · 차단 임계 ${cast.need}(최대HP의 ${(cast.needPct * 100).toFixed(0)}%) · ` +
+    `무경직 ${cast.noFlinch} · 같은 타격이 평상시 ${cast.idleDealt} → 시전 중 ${cast.ampDealt} (×${cast.ampRatio}) · 차단 ${cast.broke} ` +
+    '(무적으로 딜을 막으면 플레이어가 할 일이 없어진다 — 반대로 「지금 때려야 한다」로 만든다. ' +
+    '넉백 면역이 없으면 화력 없이 밀어내기로 시전을 흐트러뜨리는 우회로가 생긴다)');
+  ok('boss.castResolves',
+    cast.punish && cast.groggy >= 1.5 && cast.thaws,
+    `못 끊으면 고유기가 그대로 나간다 ${cast.punish} · 끊으면 그로기 ${cast.groggy.toFixed(1)}초 후 복귀 ${cast.thaws} ` +
+    '(끊어도 안 끊어도 결과가 있어야 선택이 된다 — 그로기는 인터럽트의 보상이고, 시전 완료는 벌이다)');
+  ok('boss.castIsVisible', cast.drawn >= 1,
+    `시전 게이지·문구가 실제로 그려진다 (${cast.drawn}회) ` +
+    '(★ 끊으라고 만든 창인데 화면에 안 보이면 존재하지 않는 것과 같다 — v185·186·192의 교훈)');
+
   // ══ 속성·상태이상 (v200) ══════════════════════════════════════════════
   // 사장: "상대를 얼리거나 화상을 입히거나 속성도 없고 뭐하는거야?"
   // ★ 「걸린다」와 「보인다」를 **따로** 검사한다.
