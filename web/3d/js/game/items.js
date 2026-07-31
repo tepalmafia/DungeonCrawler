@@ -159,6 +159,7 @@ const ITEM_GEO = {
   weapon: new THREE.BoxGeometry(0.13, 0.9, 0.13),
   armor: new THREE.BoxGeometry(0.5, 0.55, 0.22),
   ring: new THREE.TorusGeometry(0.22, 0.07, 6, 14),
+  lantern: new THREE.CylinderGeometry(0.16, 0.2, 0.42, 6),
 };
 
 function labelTexture(text, css) {

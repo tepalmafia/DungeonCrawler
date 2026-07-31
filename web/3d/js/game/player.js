@@ -119,6 +119,9 @@ export class Player {
     this.xpNext = 24;
     this.potions = { hp: 5, mp: 5 };
     this.potionCd = { hp: 0, mp: 0 };
+    // 랜턴 — 들고 있는 동안만 초당 1 씩 탄다. 다 타면 기본 등불로 돌아간다.
+    this.lantern = null;
+    this.torchRefuelT = 0;      // 벽 횃불 옆에 머문 시간
 
     // 장비
     this.equipped = { weapon: null, armor: null, ring: null };
@@ -289,6 +292,16 @@ export class Player {
 
     // 마나 자연 회복 — 스킬을 계속 쓸 수 있게 넉넉히
     this.mp = Math.min(this.maxMp, this.mp + (3.2 + this.level * 0.35) * dt);
+
+    // 랜턴 연료 — 시간이 자원이다
+    if (this.lantern && this.lantern.fuel > 0) {
+      this.lantern.fuel -= dt;
+      if (this.lantern.fuel <= 0) {
+        this.lantern.fuel = 0;
+        G.onLanternOut(this.lantern);
+        this.lantern = null;
+      }
+    }
 
     let moved = 0;
     const dg = G.dungeon;

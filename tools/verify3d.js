@@ -44,6 +44,15 @@ async function shot(page, name) {
   // (2D 쪽 tools/verify.js 가 Game.player.god 을 켜는 것과 같은 취지)
   await page.evaluate(() => { window.G3.player.invuln = 1e9; });
 
+  // 시작 지급품 — 다른 검사가 시간을 굴리면 연료가 타 버리므로 **여기서** 본다
+  const startLantern = await page.evaluate(() => {
+    const l = window.G3.player.lantern;
+    return l ? { tier: l.tier, fuel: l.fuel, name: l.name } : null;
+  });
+  ok('light.startsWithLantern',
+    !!startLantern && startLantern.tier === 0 && Math.round(startLantern.fuel) >= 235,
+    startLantern ? `${startLantern.name} · 연료 ${Math.round(startLantern.fuel)}초` : '없음');
+
   ok('boot.noPageError', errs.length === 0, errs[0] || '오류 0건');
   ok('boot.version', await page.evaluate(() => window.G3.VERSION === 1));
 
@@ -298,6 +307,88 @@ async function shot(page, name) {
       return /Audio\.Sfx\.itemDrop\(/.test(src);
     }), 'dropItem() 이 itemDrop 을 부른다');
 
+  // ── 조명 자원화: 랜턴·연료 (docs/DUNGEON-INTERACTIONS.md §1) ─────
+  const light = await page.evaluate(async () => {
+    const G = window.G3, P = G.player, L = G.lighting;
+    const mod = await import('./js/game/lantern.js');
+    const em = await import('./js/game/enemies.js');
+
+    // 앞선 검사들이 시간을 굴려 연료를 태웠을 수 있다 — 검사용으로 새로 준다
+    P.lantern = mod.makeLantern(0);
+    G.applyLantern();
+    const lampWith = L.playerLamp.distance;
+
+    // 광원 「개수」는 절대 변하면 안 된다 — 바뀌면 셰이더가 재컴파일돼 화면이 멈춘다
+    const countLights = () => { let n = 0; G.scene.traverse((o) => { if (o.isLight) n++; }); return n; };
+    const lights0 = countLights();
+
+    // 연료가 실제로 준다
+    const f0 = P.lantern.fuel;
+    for (let i = 0; i < 12; i++) await new Promise((r) => requestAnimationFrame(r));
+    const drained = f0 - P.lantern.fuel;
+
+    // 다 타면 기본 등불로 복귀
+    P.lantern.fuel = 0.02;
+    for (let i = 0; i < 6; i++) await new Promise((r) => requestAnimationFrame(r));
+    const burnedOut = P.lantern === null;
+    const lampBase = L.playerLamp.distance;
+
+    // 다시 주우면 켜진다 — 더 좋은 것이면 교체, 같거나 못하면 기름
+    mod.acquire(P, mod.makeLantern(0));
+    G.applyLantern();
+    const reEquip = P.lantern?.tier === 0 && L.playerLamp.distance > lampBase;
+    P.lantern.fuel = 50;                             // 가득이면 더 채울 수가 없다
+    const before = P.lantern.fuel;
+    const r2 = mod.acquire(P, mod.makeLantern(0));   // 같은 등급 → 기름
+    const asFuel = r2.action === 'fuel' && P.lantern.fuel > before;
+    const r3 = mod.acquire(P, mod.makeLantern(2));   // 상위 → 교체
+    const swapped = r3.action === 'swap' && P.lantern.tier === 2;
+    G.applyLantern();
+
+    const lights1 = countLights();
+
+    return {
+      lampWith, lampBase, drained, burnedOut, reEquip, asFuel, swapped,
+      lights0, lights1,
+      base: mod.BASE_LIGHT.radius,
+      archerAggro: em.ARCHETYPES.archer.aggro,
+      skelAggro: em.ARCHETYPES.skeleton.aggro,
+    };
+  });
+  ok('light.baseNarrowerThanArcher', light.base < light.archerAggro,
+    `기본 시야 ${light.base} < 망령 궁수 어그로 ${light.archerAggro} — 궁수가 나를 먼저 본다`);
+  ok('light.lanternExtends', light.lampWith > light.base,
+    `랜턴 ${light.lampWith} vs 기본 ${light.base}`);
+  ok('light.fuelDrains', light.drained > 0, `${light.drained.toFixed(2)}초 소모됨`);
+  ok('light.burnsOut', light.burnedOut && light.lampBase === light.base,
+    `소진 시 기본 등불(${light.lampBase})로 복귀`);
+  ok('light.reEquipAndFuel', light.reEquip && light.asFuel && light.swapped,
+    '재장착 · 같은 등급은 기름 · 상위는 교체');
+  ok('light.poolStillFixed', light.lights0 === light.lights1,
+    `광원 개수 ${light.lights0} → ${light.lights1} (바뀌면 셰이더 재컴파일로 화면이 멈춘다)`);
+
+  const refuel = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const mod = await import('./js/game/lantern.js');
+    P.lantern = mod.makeLantern(0);
+    P.lantern.fuel = 30;
+    G.applyLantern();
+    const t = G.level.torches.find((x) => !x.spent);
+    if (!t) return { skipped: true };
+    // 횃불 pos 는 이미 벽면에서 바닥 쪽으로 나와 있다. 여기서 더 밀면
+    // 벽 안으로 들어가 unstick 이 멀리 빼내 버린다.
+    P.setPosition(t.pos.x, t.pos.z);
+    P.stop();
+    const before = P.lantern.fuel;
+    for (let i = 0; i < 45; i++) {          // dt 상한 0.1초 → 3초를 넘기려면 넉넉히
+      await new Promise((r) => requestAnimationFrame(r));
+      if (t.spent) break;
+    }
+    return { gained: P.lantern.fuel - before, spent: t.spent };
+  });
+  ok('light.torchRefuel', refuel.skipped || (refuel.spent && refuel.gained > 50),
+    `벽 횃불에서 연료 +${Math.round(refuel.gained || 0)}초 · 그 횃불은 사그라듦`);
+
   // ── 벽 투명화: 카메라와 캐릭터 사이를 막는 벽이 흐려지는가 ─────
   const occ = await page.evaluate(async () => {
     const G = window.G3, dg = G.dungeon, P = G.player, CELL = 2;
@@ -494,9 +585,15 @@ async function shot(page, name) {
     const drops0 = G.drops.length;
     cm.killEnemy(G, G.boss);
     for (let i = 0; i < 60; i++) await new Promise((r) => requestAnimationFrame(r));
-    return { exitOpen: G.level.exitOpen, newDrops: G.drops.length - drops0, bossKills: G.stats.bossKills };
+    const added = G.drops.slice(drops0);
+    return {
+      exitOpen: G.level.exitOpen, bossKills: G.stats.bossKills,
+      gear: added.filter((d) => d.item.kind !== 'lantern').length,
+      lanterns: added.filter((d) => d.item.kind === 'lantern').length,
+    };
   });
-  ok('boss.kill.dropsRare', kill.newDrops === 3, `전리품 ${kill.newDrops}개`);
+  ok('boss.kill.dropsRare', kill.gear === 3 && kill.lanterns === 1,
+    `장비 ${kill.gear}개 + 영혼 등불 ${kill.lanterns}개`);
   ok('boss.kill.opensExit', kill.exitOpen && kill.bossKills === 1);
 
   await shot(page, '04-boss-loot.png');
