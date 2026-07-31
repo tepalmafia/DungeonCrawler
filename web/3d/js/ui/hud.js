@@ -15,6 +15,9 @@ export class UI {
       hpFill: $('#orbHp .fill'), hpNum: $('#orbHp .num'),
       mpFill: $('#orbMp .fill'), mpNum: $('#orbMp .num'),
       xpFill: $('#xpbar .fill'), lv: $('#lvLabel'),
+      lanternBar: $('#lanternBar'), lanternIcon: $('#lanternBar .lic'),
+      lanternFill: $('#lanternBar .lfill'), lanternRefuel: $('#lanternBar .lrefuel'),
+      lanternNum: $('#lanternBar .lnum'),
       skillbar: $('#skillbar'),
       toasts: $('#toasts'),
       center: $('#center'),
@@ -119,9 +122,23 @@ export class UI {
   }
   setBossPhase(t) { this.el.bossPhase.textContent = t; }
 
+  /** 벽 횃불 보충 진행도 (0~1) */
+  setRefuel(k) { this.el.lanternRefuel.style.width = (k * 100).toFixed(0) + '%'; }
+
   update(dt) {
     const G = this.G, p = G.player;
     if (!p) return;
+
+    // 랜턴 — 연료가 자원이므로 남은 시간을 초 단위로 보여준다
+    const lan = p.lantern;
+    this.el.lanternBar.hidden = !lan;
+    if (lan) {
+      const k = Math.max(0, lan.fuel / lan.def.fuelMax);
+      this.el.lanternIcon.textContent = lan.icon;
+      this.el.lanternFill.style.width = (k * 100).toFixed(1) + '%';
+      this.el.lanternNum.textContent = `${Math.ceil(lan.fuel)}초`;
+      this.el.lanternBar.classList.toggle('low', lan.fuel < 45);
+    }
 
     // 구슬
     const hk = Math.max(0, p.hp / p.maxHp), mk = Math.max(0, p.mp / p.maxMp);

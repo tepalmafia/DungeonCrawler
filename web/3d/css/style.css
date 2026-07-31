@@ -90,6 +90,28 @@ html, body {
 }
 #center-hud { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 
+/* 랜턴 — 연료가 자원이므로 항상 보여야 한다 */
+#lanternBar { display: flex; align-items: center; gap: 7px; width: 100%; font-size: 12px; }
+#lanternBar[hidden] { display: none; }
+#lanternBar .lic { font-size: 15px; filter: drop-shadow(0 0 4px rgba(255,180,90,.7)); }
+#lanternBar .ltrack {
+  position: relative; flex: 1; height: 9px; overflow: hidden;
+  background: #14101c; border: 1px solid #3a2f22; border-radius: 3px;
+}
+#lanternBar .lfill {
+  position: absolute; inset: 0 auto 0 0; width: 0%;
+  background: linear-gradient(90deg, #7a4a12, #ffb257);
+  transition: width .25s linear;
+}
+/* 보충 진행도 — 연료 위에 겹쳐 흐른다 */
+#lanternBar .lrefuel {
+  position: absolute; inset: 0 auto 0 0; width: 0%;
+  background: rgba(255,240,200,.55);
+}
+#lanternBar .lnum { color: #d8b98a; min-width: 46px; text-align: right; }
+#lanternBar.low .lfill { background: linear-gradient(90deg, #6a1a10, #e0553a); }
+#lanternBar.low .lnum { color: #ff9a8a; }
+
 #xpbar {
   position: relative; width: 100%; height: 15px;
   background: #14101c; border: 1px solid #2d2536; border-radius: 3px; overflow: hidden;

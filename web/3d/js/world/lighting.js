@@ -18,12 +18,15 @@ export class Lighting {
     this.scene = scene;
     this.theme = theme;
 
-    // 완전 검정 방지용 최소 앰비언트 — 지형 실루엣만 겨우 읽히는 수준
-    this.hemi = new THREE.HemisphereLight(0x272038, 0x08060d, 0.42);
+    // 앰비언트는 「완전 검정 방지」 수준이어야 한다.
+    // 이게 높으면 랜턴이 없어도 방이 다 보여서 빛이 자원이 되지 못한다
+    // (docs/DUNGEON-INTERACTIONS.md §1-1). B안의 요철은 횃불·랜턴이 만드는
+    // 밝은 웅덩이 안에서 드러나면 된다 — 오히려 그쪽이 더 극적이다.
+    this.hemi = new THREE.HemisphereLight(0x272038, 0x08060d, 0.26);
     scene.add(this.hemi);
 
     // 유일한 그림자 캐스터. 차가운 달빛이라 따뜻한 횃불과 대비된다.
-    this.moon = new THREE.DirectionalLight(0x8296c8, 0.5);
+    this.moon = new THREE.DirectionalLight(0x8296c8, 0.34);
     this.moon.castShadow = true;
     this.moon.shadow.mapSize.set(1024, 1024);
     const c = this.moon.shadow.camera;
@@ -34,8 +37,10 @@ export class Lighting {
     scene.add(this.moon);
     scene.add(this.moon.target);
 
-    // 플레이어가 들고 있는 광원 — 항상 켜져 있고 시야를 만든다
-    this.playerLamp = new THREE.PointLight(theme.torch, 52, 20, 2);
+    // 플레이어 등불 — 세기·반경·색을 랜턴이 정한다 (game/lantern.js).
+    // 기본값은 어그로 반경보다 좁다: 어둠이 위협이어야 랜턴이 보상이 된다.
+    this.lamp = { radius: 9, intensity: 34, color: null };
+    this.playerLamp = new THREE.PointLight(theme.torch, this.lamp.intensity, this.lamp.radius, 2);
     scene.add(this.playerLamp);
 
     // 횃불 풀 — 개수 불변
@@ -58,6 +63,15 @@ export class Lighting {
 
   setTorches(torches) { this.torches = torches || []; }
 
+  /** 랜턴이 바뀌면 호출. 반경·세기·색을 갈아끼운다. */
+  setLamp({ radius, intensity, color }) {
+    this.lamp.radius = radius;
+    this.lamp.intensity = intensity;
+    this.lamp.color = color;
+    this.playerLamp.distance = radius;
+    this.playerLamp.color.set(color ?? this.theme.torch);
+  }
+
   /** 한 번 번쩍이는 광원 (폭발·시전) */
   flash(pos, color, intensity = 90, dur = 0.35) {
     const slot = this.fxLights.reduce((a, b) => (a.life < b.life ? a : b));
@@ -77,7 +91,7 @@ export class Lighting {
     // 플레이어 광원: 살짝 흔들려야 횃불처럼 보인다
     const flick = 1 + Math.sin(t * 11.3) * 0.05 + Math.sin(t * 27.7) * 0.03;
     this.playerLamp.position.set(playerPos.x, 1.9, playerPos.z);
-    this.playerLamp.intensity = 52 * flick;
+    this.playerLamp.intensity = this.lamp.intensity * flick;
 
     // ── 가까운 횃불 8개를 풀에 배정 ────────────────────────
     if (this.torches && this.torches.length) {
@@ -105,7 +119,8 @@ export class Lighting {
           const d = s.torch.pos.distanceTo(playerPos);
           const fade = 1 - Math.min(1, Math.max(0, (d - TORCH_RANGE * 0.7) / (TORCH_RANGE * 0.3)));
           const fl = 1 + Math.sin(t * 9 + s.torch.phase) * 0.13 + Math.sin(t * 19 + s.torch.phase * 2) * 0.07;
-          target = 40 * fade * fl;
+          // 연료를 뽑아 쓴 횃불은 사그라든다 — 지나온 길이 어두워진다
+          target = 78 * fade * fl * (s.torch.spent ? 0.3 : 1);
           s.light.position.copy(s.torch.pos);
         }
         s.level += (target - s.level) * Math.min(1, dt * 7);

@@ -24,6 +24,7 @@ import { spawnBoss } from './game/boss.js';
 import { playerRoll, hitEnemy } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, power } from './game/items.js';
+import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, BASE_LIGHT } from './game/lantern.js';
 
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
@@ -58,7 +59,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;   // r185에서 PCFSoft 는 폐기 예정
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
@@ -93,7 +94,7 @@ const G = {
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
   perf: { logicMs: 0, frameMs: 0 },
   exitTouchT: 0,
-  onEnemyKilled, onPlayerDeath,
+  onEnemyKilled, onPlayerDeath, onLanternOut,
 };
 window.G3 = G;
 
@@ -131,7 +132,7 @@ function loadFloor(floorNo) {
 
   const dg = generate(floorNo, `${G.seed}-t${G.tier}`);
   G.dungeon = dg;
-  scene.fog = new THREE.FogExp2(dg.theme.fog, 0.038);
+  scene.fog = new THREE.FogExp2(dg.theme.fog, 0.03);
   scene.background = new THREE.Color(dg.theme.fog);
 
   G.level = new Level(scene, dg);
@@ -146,6 +147,9 @@ function loadFloor(floorNo) {
     G.player.recompute();
     G.player.hp = G.player.maxHp;
     G.player.mp = G.player.maxMp;
+    // 시작 지급품 — 240초는 1층을 도는 데 충분하고 2층부터는 모자란다.
+    // 보충하러 다녀야 하는 압력이 여기서 생긴다.
+    G.player.lantern = makeLantern(0);
   }
 
   let start = dg.spawn;
@@ -171,6 +175,8 @@ function loadFloor(floorNo) {
 
   ui.center(`${floorNo}층 — ${dg.theme.name}`, dg.isBossFloor ? '심연의 군주가 기다린다' : '출구를 찾아라');
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
+
+  applyLantern();
 
   // 카메라를 즉시 플레이어 위로 (줌 배율은 층을 넘어가도 유지한다)
   camDistNow = camDist;
@@ -203,6 +209,12 @@ function onEnemyKilled(e) {
     if (rnd.chance(0.5)) dropItem(rollItem(rnd, G.floorNo, G.tier), e.pos, 1);
   } else if (rnd.chance(0.17 + G.tier * 0.02) && !e.summoned) {
     dropItem(rollItem(rnd, G.floorNo, G.tier), e.pos, 0);
+  }
+
+  // 랜턴 — 빛이 곧 정보다. 잡몹도 낮은 확률로 떨군다.
+  if (rnd.chance(lanternDropChance(e.def.key, e.isBoss, e.elite))) {
+    const lan = e.isBoss ? makeLantern(2) : rollLantern(rnd, G.floorNo, G.tier);
+    dropItem(lan, e.pos, 2);
   }
 
   // 물약은 가끔 회복 대신 바로 보충
@@ -455,6 +467,19 @@ function updatePickups(dt) {
     d.update(G.time, dt, showLabels || d === G.pickupTarget);
     if (p.dead) continue;
     if (Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) < 1.15) {
+      if (d.item.kind === 'lantern') {
+        // 랜턴은 가방에 쌓지 않는다. 더 좋으면 바꿔 들고, 아니면 기름으로 쓴다.
+        const r = acquire(p, d.item);
+        applyLantern();
+        ui.toast(r.action === 'fuel'
+          ? `${d.item.name} → 연료 +${r.gained}초`
+          : `${d.item.name} (연료 ${Math.round(r.gained)}초)`, RARITIES[d.item.rarity].css);
+        Audio.Sfx.pickup(d.item.rarity);
+        fx.burst(d.pos.clone().setY(0.6), { count: 16, color: d.item.def.color, speed: 3, size: 0.4, life: 0.6, grav: -2 });
+        d.dispose();
+        G.drops.splice(i, 1);
+        continue;
+      }
       if (!p.pickUp(d.item)) { ui.toast('가방이 가득 찼다', '#e07272'); continue; }
       Audio.Sfx.pickup(d.item.rarity);
       const gain = power(d.item) - power(p.equipped[d.item.slot]);
@@ -500,6 +525,49 @@ function updateBossBar() {
     ui.center('심연의 군주', '왕관은 무덤 위에 있다');
     Audio.Sfx.bossRoar();
     fx.addShake(0.22, 3);
+  }
+}
+
+/** 지금 들고 있는 랜턴을 광원에 반영한다 */
+function applyLantern() {
+  if (G.lighting) G.lighting.setLamp(lightOf(G.player.lantern));
+}
+
+function onLanternOut(lan) {
+  applyLantern();
+  ui.toast(`${lan.name}이 꺼졌다`, '#e07272');
+  ui.center('불이 꺼졌다', '벽 횃불에서 연료를 채울 수 있다');
+  fx.burst(G.player.center(), { count: 14, color: 0x6a5a4a, speed: 2, size: 0.4, life: 0.7, grav: -1 });
+}
+
+/**
+ * 벽 횃불에서 연료 보충 — 2유닛 안에서 3초 정지.
+ * 쓴 횃불은 사그라든다(lighting.js). 지나온 길이 어두워지는 게 대가다.
+ */
+function updateTorchRefuel(dt) {
+  const p = G.player;
+  if (p.dead || !G.level) { p.torchRefuelT = 0; return; }
+  if (!p.lantern || p.lantern.fuel >= p.lantern.def.fuelMax) { p.torchRefuelT = 0; return; }
+
+  let near = null;
+  for (const t of G.level.torches) {
+    if (t.spent) continue;
+    if (Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z) < 2) { near = t; break; }
+  }
+  // 움직이면 처음부터 — 「머무는」 행동이어야 한다
+  if (!near || p.path.length) { p.torchRefuelT = 0; G.ui.setRefuel(0); return; }
+
+  p.torchRefuelT += dt;
+  G.ui.setRefuel(Math.min(1, p.torchRefuelT / 3));
+  if (p.torchRefuelT >= 3) {
+    p.torchRefuelT = 0;
+    near.spent = true;
+    p.lantern.fuel = Math.min(p.lantern.def.fuelMax, p.lantern.fuel + 100);
+    G.ui.setRefuel(0);
+    ui.toast('연료 +100초', '#ffcf9a');
+    Audio.Sfx.potion();
+    fx.burst(near.pos.clone(), { count: 18, color: 0xffb257, speed: 2.5, size: 0.4, life: 0.7, grav: -1 });
+    near.flame.scale.multiplyScalar(0.55);
   }
 }
 
@@ -572,10 +640,13 @@ function frame(now) {
     }
 
     updatePickups(dt);
+    updateTorchRefuel(dt);
     updateFloorClear();
     updateBossBar();
     updateExit(dt);
     G.level.update(G.time, dt);
+    // 벽에 가려 캐릭터가 안 보이면 조작이 불가능해진다 — 사이에 낀 벽을 흐린다
+    G.level.updateOcclusion(camera, G.player.pos, dt);
     G.lighting.update(G.time, dt, G.player.pos);
   } else if (G.dungeon) {
     G.level.update(G.time, dt);
@@ -610,5 +681,7 @@ window.G3.loadFloor = loadFloor;
 window.G3.nextFloor = nextFloor;
 window.G3.VERSION = VERSION;
 window.G3.params = params;
+window.G3.applyLantern = applyLantern;
+window.G3.BASE_LIGHT = BASE_LIGHT;
 window.G3.getZoom = () => ({ target: camDist, now: camDistNow, min: CAM_DIST_MIN, max: CAM_DIST_MAX });
 window.G3.setZoom = (d) => { camDist = THREE.MathUtils.clamp(d, CAM_DIST_MIN, CAM_DIST_MAX); return camDist; };
