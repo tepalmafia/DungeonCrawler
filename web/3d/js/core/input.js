@@ -14,6 +14,7 @@ export class Input {
     this.pressed = new Set();   // 이번 프레임에 처음 눌린 키
     this.alt = false;
     this.overUI = false;        // HUD 위에 커서가 있으면 지면 클릭을 무시한다
+    this.wheel = 0;             // 이번 프레임에 굴린 양 (위로 = 음수 = 확대)
 
     this._ray = new THREE.Raycaster();
     this._plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -40,6 +41,13 @@ export class Input {
     window.addEventListener('mouseup', (e) => { if (e.button === 0) this.down = false; });
     window.addEventListener('blur', () => { this.down = false; this.keys.clear(); });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // 휠 = 줌. deltaMode 는 브라우저마다 다르다(픽셀/줄/페이지) — 한 칸 단위로 정규화한다.
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      this.wheel += Math.max(-4, Math.min(4, (e.deltaY * unit) / 100));
+    }, { passive: false });
 
     window.addEventListener('keydown', (e) => {
       this.alt = e.altKey;
@@ -74,6 +82,7 @@ export class Input {
   endFrame() {
     this.justDown = false;
     this.rightJustDown = false;
+    this.wheel = 0;
     this.pressed.clear();
   }
 }

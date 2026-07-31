@@ -34,13 +34,14 @@
     <!-- 미니맵 -->
     <canvas id="minimap" width="180" height="180"></canvas>
 
-    <!-- 하단 -->
-    <div id="orbHp" class="orb"><div class="fill"></div><span class="num"></span></div>
-    <div id="orbMp" class="orb"><div class="fill"></div><span class="num"></span></div>
-
+    <!-- 하단 — 구슬을 단축키 양옆에 붙여 시선이 한곳에 모이게 한다 -->
     <div id="bottom">
-      <div id="xpbar"><div class="fill"></div><span id="lvLabel">Lv 1</span></div>
-      <div id="skillbar"></div>
+      <div id="orbHp" class="orb"><div class="fill"></div><span class="num"></span></div>
+      <div id="center-hud">
+        <div id="xpbar"><div class="fill"></div><span id="lvLabel">Lv 1</span></div>
+        <div id="skillbar"></div>
+      </div>
+      <div id="orbMp" class="orb"><div class="fill"></div><span class="num"></span></div>
     </div>
 
     <div id="toasts"></div>
