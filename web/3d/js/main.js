@@ -58,7 +58,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;   // r185에서 PCFSoft 는 폐기 예정
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
@@ -131,7 +131,7 @@ function loadFloor(floorNo) {
 
   const dg = generate(floorNo, `${G.seed}-t${G.tier}`);
   G.dungeon = dg;
-  scene.fog = new THREE.FogExp2(dg.theme.fog, 0.038);
+  scene.fog = new THREE.FogExp2(dg.theme.fog, 0.03);
   scene.background = new THREE.Color(dg.theme.fog);
 
   G.level = new Level(scene, dg);

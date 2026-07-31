@@ -13,7 +13,7 @@ import { makeRng } from '../core/rng.js';
 import { buildKnight } from '../game/player.js';
 import { ARCHETYPES } from '../game/enemies.js';
 import { themeFor } from '../world/dungeon.js';
-import { normalTexture, dataTexture, grayCanvas } from './normalmap.js';
+import { normalTexture, dataTexture, grayCanvas } from '../core/normalmap.js';
 
 const CELL = 2, WALL_H = 3.4;
 

@@ -262,6 +262,124 @@ export function ringTexture(thickness = 0.12) {
   return t;
 }
 
+// ─────────────────── 표면 요철 (B안) ───────────────────
+// 「마인크래프트 같다」의 절반은 표면이 평평해서다. 색만 있고 요철이 없으면
+// 아무리 텍스처를 그려도 스티커를 붙인 상자로 보인다.
+// 높이맵을 그려 노멀맵으로 변환하고, 거칠기맵으로 젖은 곳을 만든다.
+// (변환은 core/normalmap.js — 노멀맵은 색이 아니라 방향 데이터다)
+
+/** 회색조 캔버스 (128 = 기준면, 밝을수록 튀어나옴) */
+function grayCanvas(size, draw) {
+  const c = canvas(size);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, size, size);
+  draw(ctx, size);
+  return c;
+}
+
+/** 바닥 높이맵 — 석판이 솟고 줄눈이 파이고 균열이 깊다 */
+export function floorHeight(theme) {
+  const key = `fh:${theme.key}`;
+  if (cache.has(key)) return cache.get(key);
+  const S = 512, N = 4, cell = S / N;
+  const rnd = makeRng(`${theme.key}-fh`);
+  const c = grayCanvas(S, (ctx) => {
+    ctx.fillStyle = '#3a3a3a';                       // 줄눈 = 깊게 파인 바닥
+    ctx.fillRect(0, 0, S, S);
+    for (let gy = 0; gy < N; gy++) {
+      const off = (gy % 2) * cell * 0.5;
+      for (let gx = -1; gx <= N; gx++) {
+        const v = (150 + rnd.range(-20, 26)) | 0;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(gx * cell + off + 3, gy * cell + 3, cell - 7, cell - 7);
+      }
+    }
+    ctx.strokeStyle = 'rgba(45,45,45,1)';            // 균열
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 9; i++) {
+      let x = rnd() * S, y = rnd() * S, a = rnd() * Math.PI * 2;
+      ctx.lineWidth = rnd.range(1.5, 3.5);
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let k = 0; k < 5; k++) {
+        a += rnd.range(-0.7, 0.7);
+        x += Math.cos(a) * rnd.range(8, 44); y += Math.sin(a) * rnd.range(8, 44);
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    for (let i = 0; i < 800; i++) {                  // 잔 요철
+      const v = (128 + rnd.range(-34, 34)) | 0;
+      ctx.fillStyle = `rgba(${v},${v},${v},.5)`;
+      ctx.beginPath();
+      ctx.arc(rnd() * S, rnd() * S, rnd.range(1, 4.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  cache.set(key, c);
+  return c;
+}
+
+/** 벽 높이맵 — 벽돌 하나하나가 솟고 줄눈이 파인다 */
+export function wallHeight(theme) {
+  const key = `wh:${theme.key}`;
+  if (cache.has(key)) return cache.get(key);
+  const S = 256, ROWS = 8, bh = S / ROWS, bw = S / 5;
+  const rnd = makeRng(`${theme.key}-wh`);
+  const c = grayCanvas(S, (ctx) => {
+    ctx.fillStyle = '#3c3c3c';
+    ctx.fillRect(0, 0, S, S);
+    for (let r = 0; r < ROWS; r++) {
+      const off = (r % 2) * bw * 0.5;
+      for (let i = -1; i <= 5; i++) {
+        const x = i * bw + off, y = r * bh;
+        const v = (155 + rnd.range(-26, 24)) | 0;
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(x + 2.5, y + 2.5, bw - 5, bh - 5);
+        if (rnd.chance(0.16)) {                      // 깨진 자리는 파인다
+          ctx.fillStyle = 'rgba(70,70,70,1)';
+          ctx.fillRect(x + rnd() * bw * 0.5, y + rnd() * bh * 0.5, rnd.range(4, 11), rnd.range(3, 7));
+        }
+      }
+    }
+    for (let i = 0; i < 500; i++) {
+      const v = (128 + rnd.range(-30, 30)) | 0;
+      ctx.fillStyle = `rgba(${v},${v},${v},.45)`;
+      ctx.beginPath();
+      ctx.arc(rnd() * S, rnd() * S, rnd.range(0.8, 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  cache.set(key, c);
+  return c;
+}
+
+/**
+ * 거칠기맵 — 검정=매끈(젖음), 흰색=거침.
+ * 젖은 자국이 있어야 횃불이 바닥에 반사되어 「축축한 지하」가 된다.
+ */
+export function floorRough(theme) {
+  const key = `fr:${theme.key}`;
+  if (cache.has(key)) return cache.get(key);
+  const rnd = makeRng(`${theme.key}-fr`);
+  const wet = theme.key === 'flood' ? 14 : 7;        // 침수 회랑은 더 젖어 있다
+  const c = grayCanvas(512, (ctx, S) => {
+    ctx.fillStyle = '#dcdcdc';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < wet; i++) {
+      const x = rnd() * S, y = rnd() * S, r = rnd.range(28, 96);
+      const g = ctx.createRadialGradient(x, y, 2, x, y, r);
+      g.addColorStop(0, 'rgba(28,28,28,.92)');
+      g.addColorStop(0.6, 'rgba(120,120,120,.4)');
+      g.addColorStop(1, 'rgba(220,220,220,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+    }
+  });
+  cache.set(key, c);
+  return c;
+}
+
 export function disposeTextureCache() {
   for (const t of cache.values()) if (t.dispose) t.dispose();
   cache.clear();

@@ -17,8 +17,8 @@ function mat(color, opt = {}) {
  *  (아트 시제품 비교에서 「현재」 패널이 실제 게임 메시를 그대로 쓰도록 내보낸다) */
 export function buildKnight() {
   const g = new THREE.Group();
-  const steel = mat(0xb2b8cc, { metalness: 0.5, roughness: 0.42 });
-  const dark = mat(0x4d485c);
+  const steel = mat(0x9aa2b8, { metalness: 0.82, roughness: 0.3 });
+  const dark = mat(0x3f3b4d, { metalness: 0.35, roughness: 0.7 });
   const cloth = mat(0xb8434b, { roughness: 0.9, metalness: 0.05 });
   const skin = mat(0xc7a288, { roughness: 0.85, metalness: 0 });
 

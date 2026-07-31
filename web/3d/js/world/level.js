@@ -3,7 +3,12 @@
 
 import * as THREE from 'three';
 import { CELL, FLOOR, gridToWorld } from './dungeon.js';
-import { floorTexture, wallTexture, wallTopTexture, flameTexture, beamTexture, softDot } from '../core/textures.js';
+import {
+  floorTexture, wallTexture, wallTopTexture, flameTexture, beamTexture, softDot,
+  floorHeight, wallHeight, floorRough,
+} from '../core/textures.js';
+import { normalTexture, dataTexture } from '../core/normalmap.js';
+import { makeRng } from '../core/rng.js';
 
 export const WALL_H = 3.4;
 
@@ -47,7 +52,17 @@ export class Level {
     geo.setIndex(idx);
     geo.computeVertexNormals();
 
-    const mat = new THREE.MeshLambertMaterial({ map: floorTexture(dg.theme, dg.floorNo) });
+    // 표면이 평평하면 아무리 그려도 스티커가 된다 — 노멀맵으로 요철을,
+    // 거칠기맵으로 젖은 자국을 준다. 젖은 곳이 횃불을 반사해 「축축한 지하」가 된다.
+    const nrm = normalTexture(floorHeight(dg.theme), { repeat: 1, strength: 2.6 });
+    const rgh = dataTexture(floorRough(dg.theme), { repeat: 1 });
+    const mat = new THREE.MeshStandardMaterial({
+      map: floorTexture(dg.theme, dg.floorNo),
+      normalMap: nrm, roughnessMap: rgh,
+      roughness: 1, metalness: 0.06,
+    });
+    mat.normalScale.set(1.15, 1.15);
+    this.disposables.push(nrm, rgh);
     this.floorMesh = new THREE.Mesh(geo, mat);
     this.floorMesh.receiveShadow = true;
     this.group.add(this.floorMesh);
@@ -63,34 +78,115 @@ export class Level {
         if (dg.at(gx, gz) === 2) list.push([gx, gz]);
 
     const geo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
-    const side = new THREE.MeshLambertMaterial({ map: wallTexture(dg.theme) });
-    const top = new THREE.MeshLambertMaterial({ map: wallTopTexture(dg.theme) });
+    const wn = normalTexture(wallHeight(dg.theme), { repeat: 1, strength: 3.0 });
+    const side = new THREE.MeshStandardMaterial({
+      map: wallTexture(dg.theme), normalMap: wn, roughness: 0.95, metalness: 0.04,
+    });
+    side.normalScale.set(1.45, 1.45);
+    const top = new THREE.MeshStandardMaterial({ map: wallTopTexture(dg.theme), roughness: 1 });
     // BoxGeometry 그룹 순서: +x, -x, +y, -y, +z, -z
     const mats = [side, side, top, side, side, side];
 
     const mesh = new THREE.InstancedMesh(geo, mats, list.length);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    const m = new THREE.Matrix4();
+
+    // 높이를 조금씩 달리한다. 전부 같은 높이의 정육면체가 줄지어 선 것이
+    // 「마인크래프트 같다」의 절반이다. 충돌 격자는 그대로라 게임성엔 영향이 없다.
+    const rnd = makeRng(`${dg.seed}-wallvar-${dg.floorNo}`);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+    const heights = [];
     list.forEach(([gx, gz], i) => {
       const [x, z] = gridToWorld(gx, gz, dg.w, dg.h);
-      m.makeTranslation(x, WALL_H / 2, z);
+      const k = rnd.range(0.9, 1.1);
+      heights.push(k * WALL_H);
+      sc.set(1, k, 1);
+      m.compose(new THREE.Vector3(x, (k * WALL_H) / 2, z), q, sc);
       mesh.setMatrixAt(i, m);
     });
     mesh.instanceMatrix.needsUpdate = true;
     this.wallMesh = mesh;
     this.group.add(mesh);
-    this.disposables.push(geo, side, top);
+    this.disposables.push(geo, side, top, wn);
+
+    this._buildWallDetail(list, heights, side, rnd);
+  }
+
+  /**
+   * 벽 윗단 파편과 밑동 잔해.
+   * 윗단이 깨져 있으면 실루엣이 일정한 톱니가 아니게 되고,
+   * 밑동에 돌이 깔리면 바닥과 벽이 만나는 직선이 흐려진다 — 둘 다 격자감을 죽인다.
+   */
+  _buildWallDetail(list, heights, mat, rnd) {
+    const { dg } = this;
+    const caps = [], rubble = [];
+    list.forEach(([gx, gz], i) => {
+      const [x, z] = gridToWorld(gx, gz, dg.w, dg.h);
+      if (rnd.chance(0.42)) {
+        caps.push({ x, z, y: heights[i] + 0.1, w: rnd.range(0.3, 0.75), h: rnd.range(0.18, 0.5),
+          ox: rnd.range(-0.5, 0.5), oz: rnd.range(-0.5, 0.5), rot: rnd.range(-0.4, 0.4) });
+      }
+      // 바닥과 맞닿은 면 쪽으로만 잔해를 깐다
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (dg.at(gx + dx, gz + dz) !== FLOOR) continue;
+        if (!rnd.chance(0.3)) continue;
+        rubble.push({
+          x: x + dx * (CELL / 2 + rnd.range(0.05, 0.3)),
+          z: z + dz * (CELL / 2 + rnd.range(0.05, 0.3)),
+          s: rnd.range(0.11, 0.26), rot: [rnd() * 3, rnd() * 3, rnd() * 3],
+        });
+      }
+    });
+
+    if (caps.length) {
+      const g = new THREE.BoxGeometry(1, 1, 1);
+      const im = new THREE.InstancedMesh(g, mat, caps.length);
+      im.castShadow = im.receiveShadow = true;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+      caps.forEach((c, i) => {
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), c.rot);
+        s.set(CELL * c.w, c.h, CELL * 0.88);
+        m.compose(new THREE.Vector3(c.x + c.ox, c.y, c.z + c.oz), q, s);
+        im.setMatrixAt(i, m);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      this.group.add(im);
+      this.disposables.push(g);
+    }
+
+    if (rubble.length) {
+      const g = new THREE.DodecahedronGeometry(1, 0);
+      const im = new THREE.InstancedMesh(g, mat, rubble.length);
+      im.castShadow = im.receiveShadow = true;
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3();
+      rubble.forEach((r, i) => {
+        e.set(r.rot[0], r.rot[1], r.rot[2]);
+        q.setFromEuler(e);
+        s.setScalar(r.s);
+        m.compose(new THREE.Vector3(r.x, r.s * 0.7, r.z), q, s);
+        im.setMatrixAt(i, m);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      this.group.add(im);
+      this.disposables.push(g);
+    }
   }
 
   _buildProps() {
     const { dg } = this;
     const kinds = {
       pillar: new THREE.CylinderGeometry(0.42, 0.5, WALL_H, 8),
-      coffin: new THREE.BoxGeometry(0.85, 0.55, 1.9),
+      coffin: new THREE.BoxGeometry(0.9, 0.78, 1.95),   // 납작하면 바닥의 검은 구멍으로 읽힌다
       rubble: new THREE.DodecahedronGeometry(0.42, 0),
     };
-    const mat = new THREE.MeshLambertMaterial({ map: wallTopTexture(dg.theme), color: 0xa89f92 });
+    // 소품이 어두우면 바닥에 뚫린 구멍처럼 보인다. 벽면과 같은 요철을 주고
+    // 색을 올려 「빛을 받는 입체」로 읽히게 한다.
+    const pn = normalTexture(wallHeight(dg.theme), { repeat: 1, strength: 2.2 });
+    const mat = new THREE.MeshStandardMaterial({
+      map: wallTexture(dg.theme), normalMap: pn,
+      color: 0xc9bfae, roughness: 0.88, metalness: 0.05,
+    });
+    this.disposables.push(pn);
     this.disposables.push(mat);
 
     for (const [kind, geo] of Object.entries(kinds)) {
@@ -102,7 +198,7 @@ export class Level {
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);
       items.forEach((p, i) => {
         const [x, z] = gridToWorld(p.gx, p.gz, dg.w, dg.h);
-        const y = kind === 'pillar' ? WALL_H / 2 : kind === 'coffin' ? 0.28 : 0.3;
+        const y = kind === 'pillar' ? WALL_H / 2 : kind === 'coffin' ? 0.4 : 0.3;
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot);
         if (kind === 'rubble') s.set(1, 0.7, 1);
         m.compose(new THREE.Vector3(x, y, z), q, s);

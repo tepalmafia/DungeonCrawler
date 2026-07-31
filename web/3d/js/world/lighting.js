@@ -19,11 +19,11 @@ export class Lighting {
     this.theme = theme;
 
     // 완전 검정 방지용 최소 앰비언트 — 지형 실루엣만 겨우 읽히는 수준
-    this.hemi = new THREE.HemisphereLight(0x272038, 0x08060d, 0.42);
+    this.hemi = new THREE.HemisphereLight(0x272038, 0x08060d, 0.5);
     scene.add(this.hemi);
 
     // 유일한 그림자 캐스터. 차가운 달빛이라 따뜻한 횃불과 대비된다.
-    this.moon = new THREE.DirectionalLight(0x8296c8, 0.5);
+    this.moon = new THREE.DirectionalLight(0x8296c8, 0.62);
     this.moon.castShadow = true;
     this.moon.shadow.mapSize.set(1024, 1024);
     const c = this.moon.shadow.camera;
@@ -35,7 +35,7 @@ export class Lighting {
     scene.add(this.moon.target);
 
     // 플레이어가 들고 있는 광원 — 항상 켜져 있고 시야를 만든다
-    this.playerLamp = new THREE.PointLight(theme.torch, 52, 20, 2);
+    this.playerLamp = new THREE.PointLight(theme.torch, 68, 21, 2);
     scene.add(this.playerLamp);
 
     // 횃불 풀 — 개수 불변
@@ -77,7 +77,7 @@ export class Lighting {
     // 플레이어 광원: 살짝 흔들려야 횃불처럼 보인다
     const flick = 1 + Math.sin(t * 11.3) * 0.05 + Math.sin(t * 27.7) * 0.03;
     this.playerLamp.position.set(playerPos.x, 1.9, playerPos.z);
-    this.playerLamp.intensity = 52 * flick;
+    this.playerLamp.intensity = 68 * flick;
 
     // ── 가까운 횃불 8개를 풀에 배정 ────────────────────────
     if (this.torches && this.torches.length) {
@@ -105,7 +105,7 @@ export class Lighting {
           const d = s.torch.pos.distanceTo(playerPos);
           const fade = 1 - Math.min(1, Math.max(0, (d - TORCH_RANGE * 0.7) / (TORCH_RANGE * 0.3)));
           const fl = 1 + Math.sin(t * 9 + s.torch.phase) * 0.13 + Math.sin(t * 19 + s.torch.phase * 2) * 0.07;
-          target = 40 * fade * fl;
+          target = 78 * fade * fl;
           s.light.position.copy(s.torch.pos);
         }
         s.level += (target - s.level) * Math.min(1, dt * 7);
