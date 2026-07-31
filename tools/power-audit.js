@@ -33,7 +33,10 @@ const MIN = parseFloat(process.argv[2] || '6');
       if (!window.__pw.floors[f] && Game.player) {
         const pl = Game.player;
         window.__pw.floors[f] = {
-          atk: pl.atk, lvl: pl.level, cards: window.__pw.cards,
+          // ★ 필드명을 추측하지 않는다 — 실제 계산 함수를 부른다.
+          //   1차에 pl.atk / pl.level 로 읽었더니 전부 undefined 였다 (레벨은 Game 소유다)
+          atk: typeof pl.currentAtk === 'function' ? pl.currentAtk() : 0,
+          lvl: Game.level, cards: window.__pw.cards,
           traits: (pl.traits || []).length, relics: (pl.relics || []).length, hp: pl.maxHp,
         };
       }
