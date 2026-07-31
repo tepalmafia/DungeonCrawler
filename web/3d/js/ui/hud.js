@@ -1,0 +1,219 @@
+// HUD — 전부 DOM. 텍스트 선명도·툴팁·CSS 애니메이션을 공짜로 얻는다.
+// 미니맵만 별도 2D 캔버스에 직접 그린다.
+
+import { SKILLS } from '../game/skills.js';
+import { FLOOR, worldToGrid } from '../world/dungeon.js';
+import { RARITIES } from '../game/items.js';
+
+const $ = (s) => document.querySelector(s);
+
+export class UI {
+  constructor(G) {
+    this.G = G;
+    this.el = {
+      hud: $('#hud'),
+      hpFill: $('#orbHp .fill'), hpNum: $('#orbHp .num'),
+      mpFill: $('#orbMp .fill'), mpNum: $('#orbMp .num'),
+      xpFill: $('#xpbar .fill'), lv: $('#lvLabel'),
+      skillbar: $('#skillbar'),
+      toasts: $('#toasts'),
+      center: $('#center'),
+      hurt: $('#hurt'),
+      floor: $('#floorLabel'),
+      tier: $('#tierLabel'),
+      enemyLeft: $('#enemyLeft'),
+      bossbar: $('#bossbar'),
+      bossFill: $('#bossbar .bfill'),
+      bossPhase: $('#bossbar .bphase'),
+      bossName: $('#bossbar .bname'),
+      minimap: $('#minimap'),
+      overlay: $('#overlay'),
+      titleCard: $('#titleCard'),
+    };
+    this.mm = this.el.minimap.getContext('2d');
+    this._buildSkillbar();
+    this._centerT = 0;
+    this._hurtT = 0;
+    this.toastList = [];
+  }
+
+  show() { this.el.hud.hidden = false; }
+
+  _buildSkillbar() {
+    this.skillEls = {};
+    this.el.skillbar.innerHTML = '';
+    const potions = [
+      { key: 'potHp', label: '1', icon: '🧪', title: '체력 물약' },
+      { key: 'potMp', label: '2', icon: '🔵', title: '마나 물약' },
+    ];
+    for (const s of SKILLS) {
+      const d = document.createElement('div');
+      d.className = 'skill';
+      d.title = `${s.name} — ${s.desc} (마나 ${s.cost})`;
+      d.innerHTML = `<span class="key">${s.label}</span><span>${s.icon}</span>`
+        + `<span class="cost">${s.cost}</span><div class="cd"></div><div class="cdnum"></div>`;
+      this.el.skillbar.appendChild(d);
+      this.skillEls[s.key] = d;
+    }
+    for (const p of potions) {
+      const d = document.createElement('div');
+      d.className = 'skill';
+      d.title = p.title;
+      d.innerHTML = `<span class="key">${p.label}</span><span>${p.icon}</span>`
+        + `<span class="cost" id="${p.key}Count"></span><div class="cd"></div><div class="cdnum"></div>`;
+      this.el.skillbar.appendChild(d);
+      this.skillEls[p.key] = d;
+    }
+  }
+
+  fireSkill(key) {
+    const el = this.skillEls[key];
+    if (!el) return;
+    el.classList.remove('fire');
+    void el.offsetWidth;      // 리플로우로 애니메이션 재시작
+    el.classList.add('fire');
+  }
+
+  toast(text, color = '#e8e2d6') {
+    const d = document.createElement('div');
+    d.className = 'toast';
+    d.style.color = color;
+    d.textContent = text;
+    this.el.toasts.appendChild(d);
+    this.toastList.push({ el: d, t: 3.2 });
+    while (this.toastList.length > 7) {
+      const old = this.toastList.shift();
+      old.el.remove();
+    }
+  }
+
+  center(text, sub = '') {
+    this.el.center.innerHTML = text + (sub ? `<span class="sub">${sub}</span>` : '');
+    this.el.center.classList.remove('show');
+    void this.el.center.offsetWidth;
+    this.el.center.classList.add('show');
+    this._centerT = 2.4;
+  }
+
+  hurtFlash(k) { this._hurtT = Math.max(this._hurtT, 0.25 * Math.min(1, k) + 0.1); this.el.hurt.style.opacity = Math.min(0.9, k); }
+
+  setBoss(boss) {
+    this.boss = boss;
+    this.el.bossbar.hidden = !boss;
+    if (boss) {
+      this.el.bossName.textContent = boss.def.name;
+      this.setBossPhase('1페이즈');
+    }
+  }
+  setBossPhase(t) { this.el.bossPhase.textContent = t; }
+
+  update(dt) {
+    const G = this.G, p = G.player;
+    if (!p) return;
+
+    // 구슬
+    const hk = Math.max(0, p.hp / p.maxHp), mk = Math.max(0, p.mp / p.maxMp);
+    this.el.hpFill.style.height = (hk * 100).toFixed(1) + '%';
+    this.el.mpFill.style.height = (mk * 100).toFixed(1) + '%';
+    this.el.hpNum.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+    this.el.mpNum.textContent = `${Math.ceil(p.mp)} / ${p.maxMp}`;
+
+    this.el.xpFill.style.width = ((p.xp / p.xpNext) * 100).toFixed(1) + '%';
+    this.el.lv.textContent = `Lv ${p.level}  ·  ${Math.floor(p.xp)} / ${p.xpNext}`;
+
+    // 스킬 쿨다운
+    for (const s of SKILLS) {
+      const el = this.skillEls[s.key];
+      const left = G.cooldowns[s.key] || 0;
+      const full = s.cd * (1 - p.cdr);
+      const k = left > 0 ? left / full : 0;
+      el.querySelector('.cd').style.setProperty('--p', (k * 360).toFixed(1) + 'deg');
+      el.querySelector('.cdnum').textContent = left > 0.05 ? left.toFixed(1) : '';
+      el.classList.toggle('off', p.mp < s.cost && left <= 0);
+    }
+    for (const [key, kind] of [['potHp', 'hp'], ['potMp', 'mp']]) {
+      const el = this.skillEls[key];
+      const left = p.potionCd[kind];
+      el.querySelector('.cd').style.setProperty('--p', (Math.max(0, left / 8) * 360).toFixed(1) + 'deg');
+      el.querySelector('.cdnum').textContent = left > 0.05 ? left.toFixed(1) : '';
+      el.querySelector('.cost').textContent = `×${p.potions[kind]}`;
+      el.classList.toggle('off', p.potions[kind] <= 0);
+    }
+
+    // 층 / 남은 적
+    this.el.floor.textContent = `${G.floorNo}층 — ${G.dungeon.theme.name}`;
+    this.el.tier.textContent = G.tier > 0 ? `파밍 ${G.tier + 1}회차` : '';
+    const alive = G.enemies.filter((e) => !e.dead).length;
+    this.el.enemyLeft.textContent = G.boss && !G.boss.dead ? '보스전' : `남은 적 ${alive}`;
+
+    // 보스 바
+    if (this.boss) {
+      if (this.boss.dead) { this.el.bossbar.hidden = true; this.boss = null; }
+      else this.el.bossFill.style.width = Math.max(0, (this.boss.hp / this.boss.maxHp) * 100).toFixed(1) + '%';
+    }
+
+    // 페이드
+    if (this._centerT > 0) {
+      this._centerT -= dt;
+      this.el.center.style.opacity = Math.min(1, this._centerT / 0.6);
+      if (this._centerT <= 0) this.el.center.innerHTML = '';
+    }
+    if (this._hurtT > 0) {
+      this._hurtT -= dt;
+      if (this._hurtT <= 0) this.el.hurt.style.opacity = 0;
+    }
+    for (let i = this.toastList.length - 1; i >= 0; i--) {
+      const t = this.toastList[i];
+      t.t -= dt;
+      if (t.t <= 0) { t.el.remove(); this.toastList.splice(i, 1); }
+      else if (t.t < 0.6) t.el.style.opacity = (t.t / 0.6).toFixed(2);
+    }
+
+    this._drawMinimap();
+  }
+
+  _drawMinimap() {
+    const G = this.G, dg = G.dungeon, ctx = this.mm;
+    const S = 180, SPAN = 34;                     // 주변 34칸을 보여준다
+    const scale = S / SPAN;
+    const [pgx, pgz] = worldToGrid(G.player.pos.x, G.player.pos.z, dg.w, dg.h);
+
+    ctx.clearRect(0, 0, S, S);
+    ctx.fillStyle = 'rgba(6,5,10,.75)';
+    ctx.fillRect(0, 0, S, S);
+
+    const ox = S / 2 - pgx * scale, oz = S / 2 - pgz * scale;
+    const x0 = Math.max(0, pgx - SPAN / 2 - 1), x1 = Math.min(dg.w, pgx + SPAN / 2 + 1);
+    const z0 = Math.max(0, pgz - SPAN / 2 - 1), z1 = Math.min(dg.h, pgz + SPAN / 2 + 1);
+
+    ctx.fillStyle = '#3b3448';
+    for (let z = z0; z < z1; z++)
+      for (let x = x0; x < x1; x++)
+        if (dg.at(x, z) === FLOOR) ctx.fillRect(ox + x * scale, oz + z * scale, scale + 0.6, scale + 0.6);
+
+    // 출구
+    if (G.level && G.level.exitOpen) {
+      ctx.fillStyle = '#8fd6ff';
+      ctx.fillRect(ox + dg.exit.gx * scale - 2, oz + dg.exit.gz * scale - 2, scale + 4, scale + 4);
+    }
+    // 드랍
+    for (const d of G.drops) {
+      const [gx, gz] = worldToGrid(d.pos.x, d.pos.z, dg.w, dg.h);
+      ctx.fillStyle = RARITIES[d.item.rarity].css;
+      ctx.fillRect(ox + gx * scale - 1, oz + gz * scale - 1, scale + 2, scale + 2);
+    }
+    // 적
+    for (const e of G.enemies) {
+      if (e.dead) continue;
+      const [gx, gz] = worldToGrid(e.pos.x, e.pos.z, dg.w, dg.h);
+      ctx.fillStyle = e.isBoss ? '#ff4a8a' : e.elite ? '#e0a03a' : '#d0402f';
+      const s = e.isBoss ? scale + 4 : e.elite ? scale + 2 : scale;
+      ctx.fillRect(ox + gx * scale, oz + gz * scale, s, s);
+    }
+    // 플레이어
+    ctx.fillStyle = '#ffe9c0';
+    ctx.beginPath();
+    ctx.arc(S / 2 + scale / 2, S / 2 + scale / 2, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}

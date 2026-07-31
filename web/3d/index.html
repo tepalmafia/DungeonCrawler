@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>심연의 왕관 — 3D 액션 RPG 샘플</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2307060c'/><path d='M3 11h10l-1-5-2 2-2-3-2 3-2-2z' fill='%23ffb257'/></svg>">
+<link rel="stylesheet" href="css/style.css?v=1">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="view"></canvas>
+  <div id="vignette"></div>
+  <div id="hurt"></div>
+
+  <div id="hud" hidden>
+    <!-- 보스 -->
+    <div id="bossbar" hidden>
+      <div class="bname">심연의 군주</div>
+      <div class="btrack"><div class="bfill"></div></div>
+      <div class="bphase">1페이즈</div>
+    </div>
+
+    <!-- 좌상단 정보 -->
+    <div id="topleft">
+      <div class="row"><b id="floorLabel">1층</b><span id="tierLabel"></span></div>
+      <div class="row dim" id="enemyLeft">남은 적 0</div>
+    </div>
+
+    <!-- 미니맵 -->
+    <canvas id="minimap" width="180" height="180"></canvas>
+
+    <!-- 하단 -->
+    <div id="orbHp" class="orb"><div class="fill"></div><span class="num"></span></div>
+    <div id="orbMp" class="orb"><div class="fill"></div><span class="num"></span></div>
+
+    <div id="bottom">
+      <div id="xpbar"><div class="fill"></div><span id="lvLabel">Lv 1</span></div>
+      <div id="skillbar"></div>
+    </div>
+
+    <div id="toasts"></div>
+    <div id="center"></div>
+  </div>
+
+  <div id="inv" hidden>
+    <div class="panel">
+      <h2>장비 <span class="dim">— I 로 닫기</span></h2>
+      <div class="equip">
+        <div class="slot" data-slot="weapon"><label>무기</label><div class="cell"></div></div>
+        <div class="slot" data-slot="armor"><label>방어구</label><div class="cell"></div></div>
+        <div class="slot" data-slot="ring"><label>반지</label><div class="cell"></div></div>
+      </div>
+      <div class="stats" id="statList"></div>
+      <h2>가방 <span class="dim" id="bagCount"></span></h2>
+      <div class="bag" id="bagGrid"></div>
+    </div>
+  </div>
+
+  <div id="tooltip" hidden></div>
+
+  <div id="overlay">
+    <div class="card" id="titleCard">
+      <h1>심연의 왕관</h1>
+      <p class="sub">Deep Crown — 3D 액션 RPG 샘플</p>
+      <ul class="keys">
+        <li><b>좌클릭</b> 이동 · 적 클릭 시 공격 (누르고 있으면 계속 이동)</li>
+        <li><b>Q W E R</b> 스킬 · <b>1 2</b> 물약 · <b>I</b> 인벤토리 · <b>Alt</b> 바닥 아이템 표시</li>
+        <li><b>Space</b> 포탈 진입 / 재시작</li>
+      </ul>
+      <button id="startBtn">시작</button>
+      <p class="tip">3층에서 심연의 군주를 잡고 전리품을 파밍하세요.</p>
+    </div>
+  </div>
+</div>
+
+<div id="nowebgl" hidden>WebGL을 사용할 수 없는 브라우저입니다.</div>
+
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
