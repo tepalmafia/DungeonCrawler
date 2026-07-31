@@ -1968,7 +1968,10 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       Game.roomCleared = true;
       World.openDoors(Dungeon.doorOptions());
       const doors = World.doors.filter((d) => d.opt.type !== 'boss');
-      if (!doors.length) break;
+      // ★ v203: 층별 방 수가 달라져 1층은 6칸이다. 한 층 안에서만 걸으면
+      //   표본이 4개에서 끊긴다 — 「문 높이가 이어지는가」는 층과 무관한 성질이므로
+      //   보스방에 닿으면 다음 층으로 넘어가 계속 표본을 모은다
+      if (!doors.length) { Dungeon.nextFloor(); Game.roomCleared = true; continue; }
       const door = doors[room % doors.length];
       Game.player.x = door.x; Game.player.y = door.y;
       Game._tickPlay(1 / 60);
