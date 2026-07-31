@@ -86,6 +86,7 @@ const GameRewards = {
         min: +(this.time / 60).toFixed(1),
         deathBy: victory ? null : (this.deathInfo ? this.deathInfo.src : this._lastHurtBy) || null,
         hurts: this._runHurts || 0,
+        why: this._hurtWhy || {},   // v205 피격 원인 분포 — 「몇 대 맞았나」보다 「왜 맞았나」
         // v148: 사본 저장 — 무한 모드 진입 시 같은 런이 두 번 정산되는데(1막 완주 + 최종 도달),
         // 참조 공유면 첫 기록의 보스 목록이 소급 성장해 리포트가 전부 이중 집계된다 (사장 F9 실측)
         bosses: (this._runBossLog || []).slice(),

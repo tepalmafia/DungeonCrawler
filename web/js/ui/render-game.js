@@ -440,6 +440,30 @@ const GameRender = {
       ctx.restore();
     }
 
+    // ── 강타 예고 고리 (v205) ──────────────────────────────────────────
+    // 계측: 「정예의 강타」가 무예고 피격의 83%였다. 예고는 있었지만(!·소리·자세)
+    // **위험 반경이 화면에 없었다** — 「온다」는 알지만 「어디까지」를 모르면 못 피한다.
+    // 기획안 §2-1 의 ◎ 고리 문법: 도형이 곧 대처 동작이다("이 원 밖으로 나가라")
+    for (const e of this.enemies) {
+      if (e.dead || !(e._stompT > 0)) continue;
+      const k = 1 - e._stompT / (e._stompMax || 0.6);      // 0 → 1 로 차오른다
+      const R = 125;
+      ctx.save();
+      ctx.globalAlpha = 0.10 + k * 0.16;
+      ctx.fillStyle = '#e43b44';
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 4, R, R * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.55 + k * 0.4;
+      ctx.strokeStyle = k > 0.72 ? '#ffffff' : '#e43b44';   // 임박하면 하얗게 — 마지막 순간이 읽힌다
+      ctx.lineWidth = 2 + k * 2;
+      ctx.setLineDash([9, 7]);
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 4, R, R * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 안쪽에서 바깥으로 좁혀 오는 고리 — 시간이 얼마 남았는지가 보인다
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 4, R * k, R * 0.62 * k, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
     // 스폰 마커
     for (const m of this.markers) {
       const r = 10 + m.t * 30;
