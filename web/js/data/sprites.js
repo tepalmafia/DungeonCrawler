@@ -3121,19 +3121,33 @@ const Sprites = (() => {
     bigs.set(key, c);
     return c;
   };
-  // 몸 반경 r 인 적을 화면에서 얼마나 크게 그릴 것인가.
-  // 중앙값 r=13 이 종전 백골과 비슷한 크기로 나오도록 잡았다 (r13 → 약 46px)
-  // 보스 전용 — 보스는 def.scale 을 squash 로 곱해 쓴다. 그 곱까지 상쇄해야 r 비율이 맞는다
-  sprites.bossScaleFor = (img, r, defScale) => {
+  // ── 크기 복원 (v207) ────────────────────────────────────────────────────
+  // 사장: "플레이어 적들 크기를 전의 비율로 크기를 만들어줘"
+  // v200 에서 화면 크기를 r×3.5 로 「통일」했다. 그게 덩치를 키웠고, 방 크기는 그대로라
+  // "맵을 충분히 활용못하고 지나가기도 힘드네"가 됐다.
+  //
+  // 그런데 v199 의 크기에는 **규칙이 없었다** — 종별로 손으로 정한 값이다
+  // (백골 42 · 방패병 38 · 궁수 48 · 구울 34 · 골렘 38 · 거미 16 · 위습 16).
+  // r 로는 그 비율을 만들 수 없다. 그래서 **추측하지 않고** v199 를 실제로 띄워
+  // 화면 높이를 전수 계측해 표로 굽었다 (tools/old-size.js).
+  // 원본 해상도는 v200 의 재조립본(디테일 2배)을 그대로 쓰고, **크기만** 옛 값으로 되돌린다.
+  const V199_H = {"player":56,"playerArcher":56,"playerMage":56,"playerAlch":56,"slime":28,"toxicSlime":28,"archer":42,"boar":36,"lavaHound":26,"mushroom":20,"bat":26,"spider":16,"golem":38,"wraith":34,"fireSpirit":34,"necro":40,"bomber":48,"thornPlant":26,"executioner":48,"magmaSlime":16,"voidEye":26,"skeleton":42,"shieldSkeleton":38,"sniper":48,"swarm":16,"frog":18,"leech":12,"iceSlime":16,"frostArcher":48,"berserker":48,"wisp":16,"shaman":48,"crystal":30,"ghoul":34,"charger":20,"turret":24,"mimic":22,"stalker":48,"brute":48,"imp":28,"glutton":24,"sporePuff":12,"acidSnail":16,"jailer":48,"frostMage":48,"cinder":16,"ashWalker":38,"emberMoth":14,"acolyte":48,"shade":30,"gazer":18,"bloodBat":26,"boneHeap":42,"venomLasher":34,"sporeMother":20,"acidSlug":12,"sporeling":28,"fungalTick":24,"myceliumBrute":38,"rotWalker":38,"glowShrieker":48,"warden":48,"chainWraith":34,"frostGolem":38,"obsidianBeast":36,"flameJuggler":48,"lavaBurster":30,"voidSpawn":16,"riftCaster":40,"mirrorKnight":48,"boss":58,"bossSpore":50,"bossGolem":48,"bossIgnis":48,"bossAbyss":56,"bossWraith":58,"bossPlague":50,"bossDespair":48,"bossInferno":48,"bossBram":48,"bossJorn":48,"bossQuill":48,"bossGarok":48,"bossCorvus":48,"bossUrsh":48,"bossObel":48,"bossLancer":48,"bossVoid":48,"bossQueen":48,"bossValdia":48,"bossBishop":48,"bossWolf":48,"bossKing":48};
+  sprites.V199_H = V199_H;
+  const targetH = (key) => V199_H[key] || 40;
+  // 스프라이트 키를 역참조하기 위한 표 (make() 가 끝난 뒤 한 번 만든다)
+  sprites.scaleForKey = (key, img) => {
     const h = bodyH(img);
-    return h > 0 ? Math.max(0.8, Math.min(3.2, (r * 3.2) / (h * (defScale || 1)))) : 2;   // 보스는 방 하나를 지배해야 하므로 덜 줄인다
+    // 하한 0.6 에 걸려 포자모체 한 종만 26≠20 으로 어긋났다 — 표대로 맞추는 게 우선이다
+    return h > 0 ? Math.max(0.4, Math.min(3.4, targetH(key) / h)) : 2;
+  };
+  // 보스는 def.scale 을 squash 로 곱해 쓰므로 그 곱을 상쇄한다
+  sprites.bossScaleFor = (img, r, defScale, key) => {
+    const h = bodyH(img);
+    return h > 0 ? Math.max(0.4, Math.min(3.4, targetH(key) / h)) : 2;
   };
   sprites.scaleFor = (img, r) => {
     const h = bodyH(img);
-    // ★ v206: 3.5 → 3.05. 사장 실플레이 제보 "캐릭터 적들이 커져서 맵을 충분히 활용못하고".
-    //   계측이 확인해줬다 — 적 사이 최소 틈이 −1·1·13·17px 인데 플레이어 통과에 26px 이 필요해
-    //   7개 방 중 4개가 **통과 불가**였다. 방 크기는 그대로인데 덩치만 키운 결과다
-    return h > 0 ? Math.max(1.0, Math.min(3.0, (r * 3.05) / h)) : SCALE_DEFAULT;
+    return h > 0 ? Math.max(0.6, Math.min(3.4, 40 / h)) : 2;   // 표에 없는 키의 안전값
   };
   const SCALE_DEFAULT = 2;
 
@@ -4358,6 +4372,28 @@ const Sprites = (() => {
     };
     if (!(cur && cur.walk)) derivedN++;
   }
+  // ── v207: 표대로 크기를 물린다 ──────────────────────────────────────────
+  // ★ 한 곳에서 끝낸다. v200 은 createEnemy(소환 시점)에서 물렸는데,
+  //   그러면 소환되지 않은 스프라이트·미리 구워진 자세 프레임·틴트 사본이 새어나간다
+  //   (실제로 우두머리가 잡몹과 같은 크기로 그려졌다). 여기가 유일한 관문이다.
+  for (const key of Object.keys(sprites)) {
+    const img = sprites[key];
+    if (!img || !img.width || typeof img.getContext !== 'function') continue;
+    const ds = sprites.scaleForKey(key, img);
+    img.__ds = ds; img.__dsSet = 1;
+    const fr = sprites.enemyFrames[key];
+    if (fr) for (const v of Object.values(fr)) {
+      if (Array.isArray(v)) v.forEach((f) => { if (f && f.width) { f.__ds = ds; f.__dsSet = 1; } });
+      else if (v && v.width) { v.__ds = ds; v.__dsSet = 1; }
+    }
+  }
+  for (const pk of Object.keys(sprites.playerFrames || {})) {
+    const arr = sprites.playerFrames[pk];
+    const ds = sprites.scaleForKey(pk, arr[0]);
+    for (const f of arr) { f.__ds = ds; f.__dsSet = 1; }
+    if (sprites[pk]) { sprites[pk].__ds = ds; sprites[pk].__dsSet = 1; }
+  }
+
   sprites.frameStats = { total: Object.keys(sprites.enemyFrames).length, derived: derivedN };
 
   return { ...sprites, white: whiteOf, tint: tintOf };
