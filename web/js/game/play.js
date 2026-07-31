@@ -268,6 +268,76 @@ const GamePlay = {
   // ── 왕의 인장기: 피할 수는 있지만 막을 수는 없다 (예고 1.2s+ → 관통 피해 + 낙인) ──
   sigActive() { return (this.sigs || []).length > 0; },
 
+  // ══ 바닥 위험 조회 (v209b) ═══════════════════════════════════════════════
+  // 사장: "봇으로 테스트할때 바닥 함정을 잘피하도록해"
+  //
+  // 「이 자리가 위험한가」에 답하는 자리가 **한 곳도 없었다.** 봇은 위험 종류마다
+  // 제 나름의 검사를 따로 갖고 있었고(용암·안개·불길·함정·글롭…), 그래서 새 위험이
+  // 늘 때마다 조용히 구멍이 생겼다 — 원소 장판(zones)·보스 저주 예고는 아예 빠져 있었다.
+  // 계측 도구도 이 질문을 못 해서, 플레이어를 적 옆으로 순간이동시키다 장판 한복판에
+  // 세워 놓고 「장판 79%」를 찍었다. 봇이 못 피한 게 아니라 **물어볼 데가 없었다.**
+  //
+  // 여기 하나로 모은다. 새 위험이 생기면 여기에만 더하면 전부가 함께 안다.
+  // 반환: 0 = 안전 / 위험도(클수록 급함)
+  hazardAt(x, y, opt) {
+    const pr = (this.player && this.player.r) || 13;
+    const margin = (opt && opt.margin) || 0;
+    let worst = 0;
+    const hit = (v) => { if (v > worst) worst = v; };
+    if (World.isLavaAt(x, y + 10)) hit(3);
+    if (!this.roomCleared && World.inFog(x, y)) hit(1);
+    for (const fp of this.firePatches) {
+      if (fp.kind === 'ice') continue;                       // 빙판은 감속뿐 — 피하느라 동선 낭비 금지
+      if (Math.hypot(x - fp.x, y - fp.y) < fp.r + margin) hit(2);
+    }
+    // ★ zones 는 대부분 **플레이어가 깐 장판**이다 (독구름·감전). byBoss 만 플레이어를 친다 —
+    //   1차 계측에서 봇이 자기 스킬 장판을 피해 도망치고 있었다(체류 1.38%로 2위)
+    for (const z of (this.zones || [])) {
+      if (!z.byBoss || z.kind === 'ice') continue;
+      if (Math.hypot(x - z.x, y - z.y) < (z.r || 40) + margin) hit(2);
+    }
+    for (const tr of (this.traps || [])) {
+      if (tr.state === 'idle') continue;
+      if (Math.hypot(x - tr.x, y - tr.y) < 22 + pr + 12 + margin) hit(tr.state === 'up' ? 3 : 2);
+    }
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      // 보스 저주 예고 원 + 적의 착탄 예고(글롭·간헐천·올가미·균열) + 심지
+      // c.noHit 은 고유기 **예고 마커**다 — 소리 없이 스러진다. 피할 이유가 없다
+      if (e.curses) for (const c of e.curses) {
+        if (c.noHit) continue;
+        if (Math.hypot(x - c.x, y - c.y) < (c.r || 48) + pr + margin) hit(c.t < 0.35 ? 3 : 2);
+      }
+      for (const arr of [e.globs, e.geysers, e.snares, e.rifts]) {
+        if (!arr) continue;
+        for (const g of arr) if (Math.hypot(x - g.x, y - g.y) < 55 + margin) hit(g.t < 0.35 ? 3 : 2);
+      }
+      if (e.type === 'boomFuse' && Math.hypot(x - e.x, y - e.y) < 83 + margin) hit(e.fuseT < 0.3 ? 3 : 2);
+    }
+    for (const ring of this.rings) {
+      if (Math.abs(Math.hypot(x - ring.x, y - ring.y) - ring.r) < ring.width + 16 + margin) hit(3);
+    }
+    return worst;
+  },
+
+  // 위험을 피한 가장 가까운 자리. 없으면 null (그때는 지금 자리가 최선이다)
+  safeNear(x, y, opt) {
+    if (!this.hazardAt(x, y, opt)) return { x, y };
+    for (const dist of [34, 62, 96, 140]) {
+      let best = null, bestH = 99;
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const nx = x + Math.cos(a) * dist, ny = y + Math.sin(a) * dist;
+        if (World.isSolidAt(nx, ny)) continue;
+        const h = this.hazardAt(nx, ny, opt);
+        if (h < bestH) { bestH = h; best = { x: nx, y: ny }; }
+        if (!h) return { x: nx, y: ny };
+      }
+      if (best && bestH === 0) return best;
+    }
+    return null;
+  },
+
   startSignature(boss, type) {
     if (!this.sigs) this.sigs = [];
     const p = this.player;

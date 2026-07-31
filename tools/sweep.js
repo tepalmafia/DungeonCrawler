@@ -53,11 +53,27 @@ const SEEDS = [2024, 777, 31337];
               if (cleared < 0) cleared = t;
               break;
             }
+  // 가장 가까운 적에게 붙어서 쉬지 않고 때린다 (최선의 경우 = 하한 시간).
+            // ★ v209b — 사장: "봇으로 테스트할때 바닥 함정을 잘피하도록해"
+            //   종전엔 적 옆 **한 자리**로 순간이동시켰다. 그 자리가 용암·불길·저주 원 한복판이면
+            //   플레이어를 불 속에 세워 놓고 「장판 79%」를 찍었다 — 봇이 못 피한 게 아니라
+            //   내가 못 피하게 세워 놨다. 이제 적 주위를 한 바퀴 훑어 **안전한 사거리**를 고른다
             let near = live[0], nd = 1e9;
             for (const e of live) { const d = Math.hypot(e.x - pl.x, e.y - pl.y); if (d < nd) { nd = d; near = e; } }
-            const ang = Math.atan2(near.y - pl.y, near.x - pl.x);
-            pl.x = near.x - Math.cos(ang) * (near.r + 26);
-            pl.y = near.y - Math.sin(ang) * (near.r + 26);
+            const reach = near.r + 26;
+            let ang = Math.atan2(near.y - pl.y, near.x - pl.x);
+            let bestH = 99, bestA = ang;
+            for (let k = 0; k < 12; k++) {
+              const a2 = ang + (k / 12) * Math.PI * 2;
+              const sx = near.x - Math.cos(a2) * reach, sy = near.y - Math.sin(a2) * reach;
+              if (World.isSolidAt(sx, sy)) continue;
+              const h = Game.hazardAt ? Game.hazardAt(sx, sy, { margin: 6 }) : 0;
+              if (h < bestH) { bestH = h; bestA = a2; }
+              if (!h) break;
+            }
+            ang = bestA;
+            pl.x = near.x - Math.cos(ang) * reach;
+            pl.y = near.y - Math.sin(ang) * reach;
             if (t - hits * 0.42 >= 0.42) {
               hits++;
               Game.damageEnemy(near, pl.currentAtk(), { x: Math.cos(ang), y: Math.sin(ang) }, { feel: false, kb: 0 });

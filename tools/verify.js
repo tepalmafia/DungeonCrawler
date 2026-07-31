@@ -2284,6 +2284,22 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     reset();
     Game.hurtPlayer(1, { x: 0, y: 0 }, 0, '이름을 처음 보는 바닥', { ground: true });
     R.groundByFlag = Object.keys(Game._hurtWhy)[0];
+    // ⑩ 「이 자리가 위험한가」를 한 곳에서 답한다 (v209b).
+    //    종전엔 봇이 위험 종류마다 제 검사를 따로 갖고 있어 새 위험이 늘 때마다 구멍이 났고,
+    //    계측 하네스는 아예 물어볼 데가 없어 플레이어를 불 속에 세워 놓고 「장판 79%」를 찍었다
+    Game.firePatches.length = 0; Game.zones.length = 0;
+    R.hazClean = Game.hazardAt(p.x, p.y) === 0;
+    Game.firePatches.push({ x: p.x, y: p.y, r: 40, life: 3, kind: 'poison' });
+    R.hazPoison = Game.hazardAt(p.x, p.y) > 0;
+    R.hazSafeNear = (() => { const sp = Game.safeNear(p.x, p.y); return !!sp && Game.hazardAt(sp.x, sp.y) === 0; })();
+    Game.firePatches.length = 0;
+    // 플레이어 자기 장판(byBoss 아님)은 위험이 아니다 — 봇이 자기 스킬을 피해 도망쳤다
+    Game.zones.push({ x: p.x, y: p.y, r: 60, life: 3, kind: 'poison', tickT: 0 });
+    R.hazIgnoresOwnZone = Game.hazardAt(p.x, p.y) === 0;
+    Game.zones.length = 0;
+    Game.zones.push({ x: p.x, y: p.y, r: 60, life: 3, kind: 'burn', tickT: 0, byBoss: true, elem: 'burn' });
+    R.hazSeesBossZone = Game.hazardAt(p.x, p.y) > 0;
+    Game.zones.length = 0;
     // ⑧ 보스 휘두르기는 **스윙마다** 예고를 등록하는가.
     //    v159가 스윙별 붉은 부채꼴을 이미 그리고 있었는데 noteTell 은 windup 에 한 번뿐이라
     //    3·4타가 창을 넘겼다 — 실측 보스전 피격의 58%가 이 경로의 「무예고」였다
@@ -2323,6 +2339,14 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     `겹친 예고가 앞선 반응을 지우지 않는다 (${cause.overlap}) ` +
     '(★ v205의 예고 슬롯은 **하나**였다. 잡몹 한 기를 상대할 땐 맞았지만 보스전에서는 틀린다: ' +
     '초식·부하 강타·장판이 겹치면 마지막 예고만 남고 나머지가 지워져 「반응했는데 반응없음」이 찍혔다)');
+  ok('bot.hazardIsAskedInOnePlace',
+    cause.hazClean && cause.hazPoison && cause.hazSafeNear && cause.hazIgnoresOwnZone && cause.hazSeesBossZone,
+    `바닥 위험을 한 곳에서 답한다 — 빈자리 ${cause.hazClean} · 독웅덩이 ${cause.hazPoison} · ` +
+    `안전자리찾기 ${cause.hazSafeNear} · 내장판무시 ${cause.hazIgnoresOwnZone} · 보스장판인식 ${cause.hazSeesBossZone} ` +
+    '(★ 사장: "봇으로 테스트할때 바닥 함정을 잘피하도록해". 「이 자리가 위험한가」에 답하는 자리가 ' +
+    '**한 곳도 없었다** — 봇은 위험 종류마다 제 검사를 따로 갖고 있어 새 위험이 늘 때마다 구멍이 났고 ' +
+    '(원소 장판은 아예 빠져 있었다), 계측 하네스는 물어볼 데가 없어 플레이어를 불 속에 세워 놓고 ' +
+    '「장판 79%」를 찍었다. 봇이 못 피한 게 아니라 물어볼 데가 없었다)');
   ok('hurt.groundIsFlaggedNotNamed', cause.groundByFlag === '장판',
     `바닥 위험은 이름이 아니라 깃발로 판정한다 (${cause.groundByFlag}) ` +
     '(★ 종전엔 출처 **이름**을 정규식으로 훑었다. 2층 전수 계측에서 「독 웅덩이」·「독 안개」가 ' +
