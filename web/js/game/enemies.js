@@ -3070,27 +3070,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   const e = Object.assign(base, def());
   e._baseR = e.r;   // v206 — 정예·우두머리 배율의 기준
 
-  // ── 크기 비율 (v200) ─────────────────────────────────────────────────
-  // 사장: "몬스터에 맞게 크기 비율 맞춰야지"
-  // 게임은 이미 몸 크기를 r 로 선언한다 (잔불 10 · 백골 13 · 골렘 18).
-  // 그런데 렌더는 모든 스프라이트를 같은 배율로 뿌려서 그 비율이 화면에서 죽어 있었다.
-  // 여기서 스프라이트에 고유 배율을 한 번만 물린다 — 그리는 코드는 손대지 않아도
-  // drawSprite 의 __ds 훅이 **모든 draw() 구현**에 자동으로 적용한다.
-  // (정예의 r×1.15 이후가 아니라 기본 r 로 잰다. 정예는 별도 연출로 커져야 한다)
-  if (typeof Sprites !== 'undefined' && Sprites.scaleFor) {
-    const si = Sprites[e.sprite];
-    if (si && si.width && !si.__dsSet) {
-      const ds = Sprites.scaleFor(si, e.r);
-      si.__ds = ds; si.__dsSet = 1;
-      // 자세 프레임(걷기·예고·타격·피격·죽음)은 모듈 적재 시점에 미리 구워진 **다른 캔버스**다.
-      // 여기에 안 물리면 서 있을 때만 크고 걷는 순간 작아진다 (실제로 그렇게 보였다)
-      const fr = Sprites.enemyFrames && Sprites.enemyFrames[e.sprite];
-      if (fr) for (const v of Object.values(fr)) {
-        if (Array.isArray(v)) v.forEach((f) => { if (f && f.width) { f.__ds = ds; f.__dsSet = 1; } });
-        else if (v && v.width) { v.__ds = ds; v.__dsSet = 1; }
-      }
-    }
-  }
+  // 크기는 sprites.js 가 v199 표대로 이미 물려두었다 (v207) — 여기선 정하지 않는다.
+  // 정예·우두머리 배율만 skin() 이 반영한다
   e.hp = Math.ceil(e.hp * floorScale);
   // 깊은 층일수록 XP도 증가 (레벨 커브 유지) — ×0.68은 개체수 +30% 보정 (BALANCE.md 커브 목표)
   e.xpVal = Math.max(1, Math.round(e.xpVal * (0.7 + 0.3 * floorScale) * 0.68));
@@ -3101,7 +3082,8 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     e.hp = Math.ceil(e.hp * 3.2);
     e.speed *= 1.15;
     e.r *= 1.15;
-    e._sizeMul = e.r / (e._baseR || e.r);   // v206 — 정예는 눈에 보이게 크다
+    // v207: 배율을 제곱근으로 완만하게 — 기준 크기는 v199 그대로 두고 **위계만** 읽히게 한다
+    e._sizeMul = Math.sqrt(e.r / (e._baseR || e.r));
     e.xpVal *= 3;
     // 왕장(王章) 정예 (v130): 현상금 5단부터 — 왕실 각인을 받은 정예. 수치가 아니라 죽음의 방식이 다르다:
     // 쓰러지는 순간 왕의 저주가 4방 원혼탄으로 발화한다 (질적 변주 — 처치 순간까지 긴장 유지)
@@ -3233,7 +3215,7 @@ function createMiniboss(type, x, y, floorScale) {
   const MINI_FLOOR_HP = 26 + Dungeon.floor * 6;
   e.hp = e.maxHp = Math.max(Math.ceil(e.hp * 3), Math.round(MINI_FLOOR_HP * (floorScale || 1)));
   e.r *= 1.4;
-  e._sizeMul = e.r / (e._baseR || e.r);   // ★ v206 — 우두머리는 눈에 보이게 크다.
+  e._sizeMul = Math.sqrt(e.r / (e._baseR || e.r));   // ★ v206~207 — 우두머리는 눈에 보이게 크되, 방을 막을 만큼은 아니게.
   // 계측: 종전엔 r 이 13→18 로 커져도 화면 높이가 46px 그대로였다.
   // 3배 HP를 가진 놈이 잡몹과 같은 그림이면 「오래 걸린다」가 아니라 「왜 오래 걸리는지 모른다」가 된다
   e.xpVal *= 8;

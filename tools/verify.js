@@ -2098,6 +2098,31 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 크기 복원 (v207) ══════════════════════════════════════════════════
+  // 사장: "플레이어 적들 크기를 전의 비율로 크기를 만들어줘"
+  // v199 를 실제로 띄워 전수 계측한 표(V199_H)대로 되돌렸다 — 추측하지 않았다.
+  const sz = await page.evaluate(() => {
+    const R = { diffs: [], worst: 0 };
+    const T = Sprites.V199_H || {};
+    const bh = Sprites.bodyH;
+    for (const k of Object.keys(T)) {
+      const img = (Sprites.playerFrames && Sprites.playerFrames[k]) ? Sprites.playerFrames[k][0] : Sprites[k];
+      if (!img || !img.width) continue;
+      const now = Math.round(bh(img) * (img.__ds || 2));
+      const d = Math.abs(now - T[k]);
+      if (d > R.worst) { R.worst = d; R.worstKey = k + ' ' + now + '≠' + T[k]; }
+      if (d > 2) R.diffs.push(k + ' ' + now + '≠' + T[k]);
+    }
+    R.n = Object.keys(T).length;
+    return R;
+  });
+  console.log('  크기복원:', JSON.stringify({ n: sz.n, off: sz.diffs.length, worst: sz.worstKey }));
+  ok('size.matchesV199', sz.diffs.length === 0,
+    `v199 표 ${sz.n}종 중 크기가 어긋난 것 ${sz.diffs.length}종 (최대 오차 ${sz.worst}px${sz.worstKey ? ' — ' + sz.worstKey : ''}) ` +
+    '(★ v199 의 크기에는 규칙이 없었다 — 종별로 손으로 정한 값이다(백골 42·방패병 38·궁수 48·구울 34·거미 16). ' +
+    'r 로는 그 비율을 만들 수 없어서, 추측하는 대신 **v199 를 실제로 띄워 전수 계측해** 표로 굽었다. ' +
+    '원본 해상도는 v200 재조립본(디테일 2배)을 그대로 쓰고 크기만 되돌린다)');
+
   // ══ 공간·우두머리 (v206) ══════════════════════════════════════════════
   // 사장 실플레이: "재생 우두머리를 잡는데 시간이 너무 걸리고, 전체적으로 캐릭터 적들이
   // 커져서 맵을 충분히 활용못하고 지나가기도 힘드네"
