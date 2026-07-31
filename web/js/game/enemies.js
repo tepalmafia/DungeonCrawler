@@ -71,6 +71,36 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
 
     tickTimers(dt) {
       this.animT += dt;
+      // ── 몸 분리 (v206) ─────────────────────────────────────────────────
+      // 사장: "지나가기도 힘드네"
+      // 계측: 적 사이 최소 틈이 **−27px** 이었다 (플레이어 통과에 26px 필요).
+      // 원인: 적끼리 밀어내는 힘이 **아예 없었다** — 같은 표적을 향해 걸으니
+      // 전부 한 점으로 수렴해 몸으로 벽을 만든다.
+      // 게임플레이 위험(예고를 보고 피하기)은 남기되, **통로가 사라지는 것**만 막는다.
+      // 리더 옆에 붙는 무리 대형(v185)을 깨지 않도록 힘은 약하게, 대신 상시로 건다.
+      if (!this.dead && !this.isBoss && !this.phased && this.spawnT <= 0 && typeof Game !== 'undefined') {
+        const list = Game.enemies;
+        let px = 0, py = 0, n = 0;
+        for (let i = 0; i < list.length; i++) {
+          const o = list[i];
+          if (o === this || o.dead || o.phased || o.spawnT > 0) continue;
+          const dx = this.x - o.x, dy = this.y - o.y;
+          const d2 = dx * dx + dy * dy;
+          const want = (this.r + o.r) * 1.06;      // 몸이 겹치지 않을 만큼 (약간의 여유 포함)
+          if (d2 >= want * want || d2 < 0.01) continue;
+          const d = Math.sqrt(d2);
+          const push = (want - d) / want;
+          px += (dx / d) * push; py += (dy / d) * push;
+          if (++n >= 6) break;                      // 난전에서 비용 상한
+        }
+        if (n) {
+          // 큰 놈이 작은 놈을 민다 — 우두머리가 잡몹에 밀려나면 위계가 무너진다
+          const mass = 1 / (0.6 + (this.r / 16));
+          // 겹침이 깊을수록 세게 민다 — 약하게만 걸면 서로 파고든 채 평형에 갇힌다
+          const sp = 150 + Math.min(1, px * px + py * py) * 260;
+          World.moveEntity(this, px * sp * mass * dt, py * sp * mass * dt);
+        }
+      }
       if (this.flash > 0) this.flash -= dt;
       if (this._strikeT > 0) this._strikeT -= dt;
       if (this._whiffT > 0) this._whiffT -= dt;
@@ -195,10 +225,16 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
       }
     },
 
+    // ★ v206 — 모든 몹의 그림이 여기를 지난다. 몸 크기(r)를 그림에 반영하는 유일한 관문.
+    //   종전엔 우두머리(r×1.4)·정예(r×1.15)가 일반 몹과 **똑같은 크기**로 그려졌다.
+    //   덩치가 안 보이면 「강한 놈」이 아니라 「안 죽는 놈」이 된다 — 사장이 느낀 그대로다
     skin(baseImg) {
-      if (this.flash > 0) return Sprites.white(baseImg);
-      if (this.elite) return Sprites.tint(baseImg);
-      return baseImg;
+      let img = baseImg;
+      const mul = this._sizeMul || 1;
+      if (mul > 1.04) img = Sprites.sized(img, mul);
+      if (this.flash > 0) return Sprites.white(img);
+      if (this.elite) return Sprites.tint(img);
+      return img;
     },
 
     // 자세 프레임 선택 (v179) — 걷기뿐 아니라 **상태가 자세로 보인다**.
@@ -3032,6 +3068,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   const def = defs[type];
   if (!def) throw new Error('알 수 없는 적 타입: ' + type);
   const e = Object.assign(base, def());
+  e._baseR = e.r;   // v206 — 정예·우두머리 배율의 기준
 
   // ── 크기 비율 (v200) ─────────────────────────────────────────────────
   // 사장: "몬스터에 맞게 크기 비율 맞춰야지"
@@ -3064,6 +3101,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
     e.hp = Math.ceil(e.hp * 3.2);
     e.speed *= 1.15;
     e.r *= 1.15;
+    e._sizeMul = e.r / (e._baseR || e.r);   // v206 — 정예는 눈에 보이게 크다
     e.xpVal *= 3;
     // 왕장(王章) 정예 (v130): 현상금 5단부터 — 왕실 각인을 받은 정예. 수치가 아니라 죽음의 방식이 다르다:
     // 쓰러지는 순간 왕의 저주가 4방 원혼탄으로 발화한다 (질적 변주 — 처치 순간까지 긴장 유지)
@@ -3082,8 +3120,27 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
 const MINI_AFFIXES = {
   swift:    { name: '신속', color: '#5ce0e6', apply(e) { e.speed *= 1.4; } },
   steel:    { name: '강철', color: '#9aa0b4', apply(e) { e.armorCap = 2; } }, // 직접 타격 경감 (지속 피해로 뚫는다)
-  regen:    { name: '재생', color: '#38b764',
-    tick(e, dt) { e._rgT = (e._rgT || 0) + dt; if (e._rgT >= 1) { e._rgT = 0; if (e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + 2); } } },
+  // ★ v206 — 사장: "재생 우두머리를 잡는데 시간이 너무 걸리고"
+  // 종전 재생은 **조건 없이** 초당 +2 였다. 1층 화력(공격력 1, 초당 약 2.5딜)이면
+  // 회복이 딜의 80%를 상쇄해 순 딜이 0.5/초 — 68HP 우두머리에 **2분**이 걸린다.
+  // 그건 어려운 게 아니라 **지루한** 것이다. 게다가 「강철」(경감)과 겹치면 못 잡는다.
+  //
+  // 재생은 **대처법이 있는 기믹**이어야 한다: 「때리는 동안엔 안 낫는다」.
+  // 압박을 유지하면 재생은 없는 것과 같고, 손을 놓으면 되돌아온다 —
+  // 「빨리 때려라」가 아니라 「끊지 마라」가 되고, 그건 플레이어가 할 수 있는 일이다.
+  regen: { name: '재생', color: '#38b764',
+    tick(e, dt, game) {
+      e._rgT = (e._rgT || 0) + dt;
+      const calm = (e._rgCalm = Math.max(0, (e._rgCalm || 0) - dt));
+      if (calm > 0) return;                       // 최근에 맞았으면 안 낫는다
+      if (e._rgT < 0.8) return;
+      e._rgT = 0;
+      if (e.hp >= e.maxHp) return;
+      e.hp = Math.min(e.maxHp, e.hp + 2);
+      // 「보이지 않는 회복은 없는 것과 같다」 — 낫는 게 보여야 끊을 이유가 생긴다
+      Particles.text(e.x, e.y - e.r - 16, '+2', { color: '#38b764', size: 11 });
+      Particles.burst(e.x, e.y, { count: 2, colors: ['#38b764', '#a9ffc0'], speed: 40, life: 0.4, size: 2, gravity: -70 });
+    } },
   ghostly:  { name: '유령', color: '#a9c1d8',
     tick(e, dt) {
       e._ghT = (e._ghT || 0) + dt;
@@ -3167,9 +3224,18 @@ function createMiniboss(type, x, y, floorScale) {
   // 사장 화력(공4)이면 1.5초에 죽고 강타를 딱 한 번 본다.
   // 「보스급」은 배율이 아니라 **바닥값**으로 정한다. 층당 목표 생존 4~6초 =
   // 강타 2~3회를 반드시 보여줄 수 있는 길이. 잡몹 원본이 더 세면 그쪽을 쓴다
-  const MINI_FLOOR_HP = 46 + Dungeon.floor * 11;
+  // ★ v206 — 사장 실플레이: "재생 우두머리를 잡는데 시간이 너무 걸리고"
+  // v195에서 「패턴을 두세 번 보여줄 만큼 살아야 한다」며 46+11f 로 올렸다. 목표는 옳았지만 값이 과했다:
+  // 계측 결과 실제 화력으로 붙어서 계속 때려도 1층 24초 · 2층 38초 · 3층 56초가 걸렸다.
+  // 강타 쿨다운이 2.0~3.2초이니 패턴 3번을 보는 데는 **10~12초면 충분하다** — 그 4~5배였다.
+  // 그리고 v194부터 우두머리는 **방마다** 나온다. 방당 20초면 층당 100초가 우두머리에만 간다.
+  // 어려운 게 아니라 지루한 것이다. 목표 TTK 10~14초로 다시 잡는다
+  const MINI_FLOOR_HP = 26 + Dungeon.floor * 6;
   e.hp = e.maxHp = Math.max(Math.ceil(e.hp * 3), Math.round(MINI_FLOOR_HP * (floorScale || 1)));
   e.r *= 1.4;
+  e._sizeMul = e.r / (e._baseR || e.r);   // ★ v206 — 우두머리는 눈에 보이게 크다.
+  // 계측: 종전엔 r 이 13→18 로 커져도 화면 높이가 46px 그대로였다.
+  // 3배 HP를 가진 놈이 잡몹과 같은 그림이면 「오래 걸린다」가 아니라 「왜 오래 걸리는지 모른다」가 된다
   e.xpVal *= 8;
   e.speed *= 0.92;
   e.miniName = picked.map((k) => MINI_AFFIXES[k].name).join('·') + ' 우두머리';
