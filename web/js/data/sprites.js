@@ -3101,16 +3101,39 @@ const Sprites = (() => {
     return h;
   }
   sprites.bodyH = bodyH;
+  // ── 몸 크기에 맞춘 사본 (v206) ──────────────────────────────────────────
+  // 사장: "재생 우두머리를 잡는데 시간이 너무 걸리고" / "캐릭터 적들이 커져서"
+  // 계측: 우두머리는 r 이 13→18 로 커지는데 **화면 높이는 46px 그대로**였다.
+  //   __ds 를 스프라이트에 한 번만 물리는 구조라 우두머리·정예가 일반 몹과 똑같이 보였다.
+  //   3배 HP를 가진 놈이 잡몹과 같은 그림이면, 오래 걸리는 게 아니라 **왜 오래 걸리는지 모른다.**
+  // 배율이 다른 사본을 캐시해서 돌려준다 (원본은 그대로 — 팔레트 스왑과 같은 방식)
+  const bigs = new Map();
+  sprites.sized = (img, mul) => {
+    if (!img || !img.width || Math.abs(mul - 1) < 0.04) return img;
+    const key = (img.__sid || (img.__sid = Math.random())) + ':' + mul.toFixed(2);
+    if (bigs.has(key)) return bigs.get(key);
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * mul); c.height = Math.round(img.height * mul);
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(img, 0, 0, c.width, c.height);
+    c.__ds = img.__ds; c.__dsSet = img.__dsSet;   // 화면 배율은 그대로 — 원본 대비 mul 배가 된다
+    bigs.set(key, c);
+    return c;
+  };
   // 몸 반경 r 인 적을 화면에서 얼마나 크게 그릴 것인가.
   // 중앙값 r=13 이 종전 백골과 비슷한 크기로 나오도록 잡았다 (r13 → 약 46px)
   // 보스 전용 — 보스는 def.scale 을 squash 로 곱해 쓴다. 그 곱까지 상쇄해야 r 비율이 맞는다
   sprites.bossScaleFor = (img, r, defScale) => {
     const h = bodyH(img);
-    return h > 0 ? Math.max(0.8, Math.min(3.4, (r * 3.5) / (h * (defScale || 1)))) : 2;
+    return h > 0 ? Math.max(0.8, Math.min(3.2, (r * 3.2) / (h * (defScale || 1)))) : 2;   // 보스는 방 하나를 지배해야 하므로 덜 줄인다
   };
   sprites.scaleFor = (img, r) => {
     const h = bodyH(img);
-    return h > 0 ? Math.max(1.1, Math.min(3.4, (r * 3.5) / h)) : SCALE_DEFAULT;
+    // ★ v206: 3.5 → 3.05. 사장 실플레이 제보 "캐릭터 적들이 커져서 맵을 충분히 활용못하고".
+    //   계측이 확인해줬다 — 적 사이 최소 틈이 −1·1·13·17px 인데 플레이어 통과에 26px 이 필요해
+    //   7개 방 중 4개가 **통과 불가**였다. 방 크기는 그대로인데 덩치만 키운 결과다
+    return h > 0 ? Math.max(1.0, Math.min(3.0, (r * 3.05) / h)) : SCALE_DEFAULT;
   };
   const SCALE_DEFAULT = 2;
 

@@ -284,6 +284,7 @@ const GameCombat = {
     }
     e.hp -= dmg;
     e.flash = 0.1;
+    e._rgCalm = 2.0;   // v206 — 재생 우두머리: 맞으면 2초간 안 낫는다 (압박을 유지하면 재생은 없는 것과 같다)
     if (e.isBoss && e.castHit) e.castHit(dmg, this);
     // 드라마 AI: 얻어맞으면 그 순간 침입자를 안다 — 방 전체에 경보
     if (e._aware === false) { e._aware = true; this._roomAlert = true; }

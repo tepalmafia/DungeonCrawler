@@ -54,17 +54,38 @@ const MIN = parseFloat(process.argv[2] || '4');
     const _dash = Game.player ? null : null;
     Game._funHook = true;
   });
-  // 대시·스킬은 입력 소비 지점을 후킹한다
+  // ★ 실제 **함수**를 후킹한다. 1차에 Input.take('KeyK') 를 셌더니 스킬 0회가 나왔는데,
+  //   봇은 입력 계층을 거치지 않고 p.useSkill() 을 직접 부른다 — 계기가 엉뚱한 길을 보고 있었다.
+  //   (v185·186·192·205에 이어 같은 실수를 또 했다: 소비자가 아니라 다른 경로를 쟀다)
   await p.evaluate(() => {
-    const _take = Input.take.bind(Input);
-    Input.take = function (...c) {
-      const r = _take(...c);
-      if (r && Game.state === 'play') {
-        if (c.includes('Space')) window.__fun.dashes++;
-        if (c.includes('KeyK')) window.__fun.skills++;
-      }
-      return r;
+    const pl = Game.player;
+    const proto = Object.getPrototypeOf(pl) === Object.prototype ? pl : Object.getPrototypeOf(pl);
+    const wrap = (obj, name, key) => {
+      if (!obj || typeof obj[name] !== 'function') return false;
+      const _o = obj[name];
+      obj[name] = function (...a) { window.__fun[key]++; return _o.apply(this, a); };
+      return true;
     };
+    window.__fun.hooked = {
+      skill: wrap(pl, 'useSkill', 'skills'),
+      // ★ 대시는 함수가 아니라 update() 안에 인라인으로 있다. 이름을 추측해 후킹하면
+      //   조용히 실패한다(1차에 dash:false 로 0회가 나왔다). 대시가 **실제로 나가는 순간**
+      //   호출되는 noteReact('dash') 를 잡는다 — 봇도 사람도 이 길을 지난다
+      dash: (() => {
+        const _n = Game.noteReact.bind(Game);
+        Game.noteReact = function (kind) { if (kind === 'dash') window.__fun.dashes++; return _n(kind); };
+        return true;
+      })(),
+      ult: wrap(pl, 'useUltimate', 'ults'),
+    };
+    window.__fun.ults = 0;
+    // 스킬이 **왜** 안 나가는지도 본다 — 쿨다운 때문인가, 쓸 상황이 없는가
+    window.__fun.cdSamples = [];
+    const t2 = () => {
+      if (Game.state === 'play' && Game.player) window.__fun.cdSamples.push(+Game.player.skillCd.toFixed(2));
+      requestAnimationFrame(t2);
+    };
+    requestAnimationFrame(t2);
   });
   const end = Date.now() + MIN * 60000;
   while (Date.now() < end) await p.waitForTimeout(15000);
@@ -98,8 +119,14 @@ const MIN = parseFloat(process.argv[2] || '4');
     + (sd < 0.8 ? '  ← 전부 같은 타수. 단조롭다' : sd > 1.6 ? '  ← 리듬이 있다' : ''));
   console.log('   ' + Object.keys(hist).sort((a, c) => a - c)
     .map((h) => (h >= 8 ? '8+' : h) + '타 ' + '█'.repeat(Math.ceil(hist[h] / Math.max(1, k.length) * 30))).join('\n   '));
+  const cd = R.cdSamples || [];
+  const readyPct = cd.length ? Math.round(cd.filter((v) => v <= 0).length / cd.length * 100) : 0;
   console.log('\n■ ③ 판단 밀도 — 방당 대시 ' + (R.dashes / Math.max(1, R.rooms)).toFixed(1)
-    + '회 · 스킬 ' + (R.skills / Math.max(1, R.rooms)).toFixed(1) + '회');
+    + '회 · 스킬 ' + (R.skills / Math.max(1, R.rooms)).toFixed(1)
+    + '회 · 궁 ' + ((R.ults || 0) / Math.max(1, R.rooms)).toFixed(1) + '회');
+  console.log('   스킬 준비 완료 시간 비율 ' + readyPct + '%'
+    + (readyPct > 60 && R.skills / Math.max(1, R.rooms) < 1 ? '  ← 쓸 수 있는데 안 쓴다. 쿨다운이 아니라 **쓸 이유**가 없다' : '')
+    + '   (후킹: ' + JSON.stringify(R.hooked) + ')');
   console.log('■ ④ 위험 노출 — 적 사거리 안에서 보낸 시간 '
     + Math.round(R.nearT / Math.max(1, R.totalT) * 100) + '%');
   if (errs.length) console.log('\n⚠ 에러 ' + errs.length + ': ' + errs[0]);

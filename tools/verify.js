@@ -2098,6 +2098,89 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 공간·우두머리 (v206) ══════════════════════════════════════════════
+  // 사장 실플레이: "재생 우두머리를 잡는데 시간이 너무 걸리고, 전체적으로 캐릭터 적들이
+  // 커져서 맵을 충분히 활용못하고 지나가기도 힘드네"
+  const sp = await page.evaluate(() => {
+    const R = {};
+    Game.restart(777); Game.state = 'play'; Game.player.god = true;
+    Dungeon.floor = 1; Dungeon.roomIndex = 1; Dungeon.build('combat');
+    const size = (ent) => {
+      const img = ent.skin ? ent.skin(Sprites[ent.sprite]) : Sprites[ent.sprite];
+      return Math.round(Sprites.bodyH(img) * (img.__ds || 2));
+    };
+    // ① 위계 — 잡몹 < 정예 < 우두머리 가 **눈에 보여야** 한다
+    R.normal = size(createEnemy('skeleton', 300, 200, false, 1));
+    R.elite = size(createEnemy('skeleton', 300, 200, true, 1));
+    R.mini = size(createMiniboss('skeleton', 300, 200, 1));
+    // ② 지나갈 수 있는가 — **실제 경로가 있는가**로 잰다.
+    //   1차엔 「적 사이 최소 틈」을 쟀는데 그건 틀린 자다: 구석에 붙은 두 마리는
+    //   통행을 막지 않는다. 사장이 말한 건 "지나가기도 힘드네" — 방을 가로지를 수 있는가다.
+    //   격자 BFS 로 왼쪽 끝에서 오른쪽 끝까지 길이 있는지 본다 (적 몸이 장애물)
+    const pr = Game.player.r;
+    let blocked = 0, trials = 0;
+    for (let t = 0; t < 8; t++) {
+      Dungeon.floor = 1 + (t % 3); Dungeon.roomIndex = 1 + (t % 4);
+      Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
+      World.buildRoom('combat'); Game.onRoomBuilt('combat');
+      for (let i = 0; i < 200; i++) Game.tick(1 / 60);
+      const live = Game.enemies.filter((e) => !e.dead);
+      if (live.length < 2) continue;
+      trials++;
+      const C = World.cols, Rw = World.rows;
+      const open = [];
+      for (let y = 0; y < Rw; y++) { open.push([]); for (let x = 0; x < C; x++) {
+        if (World.map[y][x] !== 0) { open[y].push(false); continue; }
+        const cx = x * 48 + 24, cy = y * 48 + 24 + World.offsetY;
+        open[y].push(!live.some((e) => Math.hypot(cx - e.x, cy - e.y) < e.r + pr));
+      } }
+      // 왼쪽 열에서 시작해 오른쪽 열에 닿는가
+      const q = [], seen = new Set();
+      for (let y = 0; y < Rw; y++) if (open[y][1]) { q.push([1, y]); seen.add('1,' + y); }
+      let reached = false;
+      while (q.length) {
+        const [x, y] = q.shift();
+        if (x >= C - 2) { reached = true; break; }
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, k = nx + ',' + ny;
+          if (nx < 0 || ny < 0 || nx >= C || ny >= Rw || seen.has(k) || !open[ny][nx]) continue;
+          seen.add(k); q.push([nx, ny]);
+        }
+      }
+      if (!reached && q.length === 0) blocked++;
+    }
+    R.blocked = blocked; R.trials = trials; R.need = pr * 2;
+    // ③ 재생 우두머리 — 맞는 동안엔 안 낫는가
+    Dungeon.floor = 2;
+    const e = createMiniboss('skeleton', 400, 300, 1);
+    e.affixes = ['regen']; e.spawnT = 0; e.hp = Math.round(e.maxHp * 0.5);
+    Game.enemies.length = 0; Game.enemies.push(e);
+    const h0 = e.hp;
+    Game.damageEnemy(e, 1, { x: 1, y: 0 }, { feel: false, kb: 0 });
+    const afterHit = e.hp;
+    for (let i = 0; i < 90; i++) e.update(1 / 60, Game);   // 1.5초 — 정지 시간(2초) 안
+    R.regenWhilePressed = e.hp <= afterHit;
+    for (let i = 0; i < 240; i++) e.update(1 / 60, Game);  // 손을 놓으면 되돌아온다
+    R.regenWhenFree = e.hp > afterHit;
+    return R;
+  });
+  console.log('  공간:', JSON.stringify(sp));
+  ok('size.hierarchyIsVisible', sp.elite > sp.normal + 2 && sp.mini > sp.elite + 3,
+    `잡몹 ${sp.normal}px < 정예 ${sp.elite}px < 우두머리 ${sp.mini}px ` +
+    '(★ v200~205 에선 셋 다 같은 크기로 그려졌다 — __ds 를 스프라이트에 한 번만 물려서 ' +
+    'r 이 13→18 로 커져도 화면은 그대로였다. 3배 HP를 가진 놈이 잡몹과 같은 그림이면 ' +
+    '「강한 놈」이 아니라 **「안 죽는 놈」**이 된다. 사장이 느낀 그대로다)');
+  ok('size.playerCanPass', sp.blocked === 0,
+    `방을 가로지르는 길이 막힌 방 ${sp.blocked}/${sp.trials} ` +
+    '(★ 1차엔 「적 사이 최소 틈」을 쟀는데 그건 틀린 자였다 — 구석에 붙은 두 마리는 ' +
+    '통행을 막지 않는다. 사장이 말한 건 "지나가기도 힘드네", 즉 **길이 있는가**다. ' +
+    '방 크기는 20×11칸 그대로인데 덩치만 키우면 통로가 사라진다)');
+  ok('mini.regenNeedsPressure', sp.regenWhilePressed && sp.regenWhenFree,
+    `때리는 동안 회복 정지 ${sp.regenWhilePressed} · 손 놓으면 회복 ${sp.regenWhenFree} ` +
+    '(★ 종전 재생은 조건 없이 초당 +2 였다. 1층 화력이면 회복이 딜의 80%를 상쇄해 ' +
+    '68HP 우두머리에 2분이 걸렸다 — 어려운 게 아니라 **지루한** 것이다. ' +
+    '재생은 대처법이 있는 기믹이어야 한다: 「빨리 때려라」가 아니라 「끊지 마라」)');
+
   // ══ 피격 원인 (v205) ══════════════════════════════════════════════════
   // 사장: "평균 타수가 올바른 재밌는 게임을 위한 방법인가?" → 아니다.
   // 억울하게 맞은 33대와 내 실수로 맞은 33대는 완전히 다른 게임이다.
