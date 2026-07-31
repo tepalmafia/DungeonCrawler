@@ -13,8 +13,9 @@ function mat(color, opt = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.22, ...opt });
 }
 
-/** 기사 메시 — 상체/하체/팔/무기를 분리해 애니메이션이 가능하게 만든다 */
-function buildKnight() {
+/** 기사 메시 — 상체/하체/팔/무기를 분리해 애니메이션이 가능하게 만든다.
+ *  (아트 시제품 비교에서 「현재」 패널이 실제 게임 메시를 그대로 쓰도록 내보낸다) */
+export function buildKnight() {
   const g = new THREE.Group();
   const steel = mat(0xb2b8cc, { metalness: 0.5, roughness: 0.42 });
   const dark = mat(0x4d485c);
