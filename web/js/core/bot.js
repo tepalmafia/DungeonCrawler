@@ -77,8 +77,13 @@ const Bot = {
     const key = sx + ',' + sy + ':' + gx + ',' + gy;
     const now = performance.now();
     if (this._pc && this._pc.key === key && now - this._pc.at < 250) return this._pc.step;
-    // 1차: 용암(2)까지 피해서 탐색, 실패 시 2차: 용암 허용 (지나가며 1 피해 감수)
-    const bfs = (avoidLava) => {
+    // 1차: 용암(2)+바닥 위험까지 피해서 탐색, 2차: 위험 허용, 3차: 용암까지 허용
+    // ★ v209b — 사장: "봇으로 테스트할때 바닥 함정을 잘피하도록해"
+    //   국소 회피(반경 140px)만으로는 **안개·불길 지대 전체를 빠져나갈 수 없다** —
+    //   계측에서 독 안개 체류 2.05%로 1위였다. 한 칸 옆도 안개면 회피가 제자리를 맴돈다.
+    //   길찾기 자체가 위험을 알아야 **돌아서 간다.** (위험만 피하다 길이 막히면 단계적으로 완화 —
+    //   완벽 회피는 v144에서 진동 스톨 2000회를 만든 전례가 있다. 안전하게 못 가면 가긴 간다)
+    const bfs = (avoidLava, avoidHaz) => {
       const prev = new Map();
       prev.set(sx + ',' + sy, null);
       const q = [[sx, sy]];
@@ -92,13 +97,15 @@ const Bot = {
           const tile = World.map[ny] ? World.map[ny][nx] : 1;
           // 허공(3)도 벽 — 비정형 맵에서 경로가 강물/절벽을 가로지르면 가장자리에 대고 걷게 된다
           if (prev.has(k) || tile === 1 || tile === 3 || (avoidLava && tile === 2)) continue;
+          if (avoidHaz && Game.hazardAt
+              && Game.hazardAt(nx * TS + TS / 2, ny * TS + TS / 2 + oy) && !(nx === gx && ny === gy)) continue;
           prev.set(k, cx + ',' + cy);
           q.push([nx, ny]);
         }
       }
       return null;
     };
-    const prev = bfs(true) || bfs(false);
+    const prev = bfs(true, true) || bfs(true, false) || bfs(false, false);
     const found = !!prev;
     let step = null;
     if (found) {
@@ -705,11 +712,20 @@ const Bot = {
       const cx = (World.cols * TS) / 2, cy = (World.rows * TS) / 2;
       return { x: Math.sign(cx - p.x) || 1, y: Math.sign(cy - p.y) || 1 };
     }
-    for (const fp of game.firePatches) {
-      if (fp.kind === 'ice') continue; // 빙판은 감속뿐 — 피하느라 동선 낭비 금지
-      const d = Math.hypot(p.x - fp.x, p.y - fp.y);
-      if (d < fp.r + 8) {
-        return { x: (p.x - fp.x) / (d || 1), y: (p.y - fp.y) / (d || 1) };
+    // ★ v209b — 사장: "봇으로 테스트할때 바닥 함정을 잘피하도록해"
+    // 종전엔 위험 종류마다 여기서 따로 검사했다(불길만, 함정만, 글롭만…). 그래서 새 위험이
+    // 늘 때마다 조용히 구멍이 생겼고 — **원소 장판(zones)은 아예 빠져 있었다.**
+    // 이제 Game.hazardAt 한 곳에 묻는다. 위험이 늘면 거기만 고치면 봇이 함께 안다.
+    // 그리고 「지금 위험한가」가 아니라 **「어디로 가면 안전한가」**를 묻는다 —
+    // 종전 응답은 위험원의 반대 방향이라, 반대쪽에 또 장판이 있으면 그리로 걸어 들어갔다
+    {
+      const h = game.hazardAt ? game.hazardAt(p.x, p.y, { margin: 10 }) : 0;
+      if (h) {
+        const spot = game.safeNear(p.x, p.y, { margin: 10 });
+        if (spot) {
+          const dx2 = spot.x - p.x, dy2 = spot.y - p.y, dd2 = Math.hypot(dx2, dy2) || 1;
+          return { x: dx2 / dd2, y: dy2 / dd2, dash: h >= 3 && p.dashCharges >= 1 };
+        }
       }
     }
     // 가시 함정 (맵 M2): 예열(붉은 링)~가시 솟음 중엔 반경 밖으로 — 봇이 함정 위에서
