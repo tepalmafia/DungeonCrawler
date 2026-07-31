@@ -68,7 +68,7 @@ const MIN = parseFloat(process.argv[2] || '4');
   });
   const end = Date.now() + MIN * 60000;
   while (Date.now() < end) await p.waitForTimeout(15000);
-  const R = await p.evaluate(() => ({ ...window.__fun, why: Game._hurtWhy || {}, hurts: Game._runHurts || 0 }));
+  const R = await p.evaluate(() => ({ ...window.__fun, why: Game._hurtWhy || {}, src: Game._hurtSrc || {}, hurts: Game._runHurts || 0 }));
   await b.close();
 
   const k = R.kills;
@@ -87,6 +87,11 @@ const MIN = parseFloat(process.argv[2] || '4');
     const note = { '무예고': '← 억울하다. 많으면 설계 결함', '반응없음': '← 못 봤거나 못 읽었다',
       '늦음': '← 배우는 중. 이게 많은 게 건강하다', '장판': '← 내 탓이 명확하다' }[key] || '';
     console.log('   ' + key.padEnd(7) + String(R.why[key]).padStart(4) + '회 ' + String(pct).padStart(3) + '%  ' + note);
+  }
+  const sk = Object.keys(R.src || {}).sort((a, c) => R.src[c] - R.src[a]);
+  if (sk.length) {
+    console.log('\n■ ①-B 원인별 출처 — **고칠 자리**를 짚는다');
+    for (const key of sk.slice(0, 14)) console.log('   ' + String(R.src[key]).padStart(4) + '회  ' + key);
   }
   console.log('\n■ ② 잡몹 처치 타수 — 평균이 아니라 **분포** (' + k.length + '기)');
   console.log('   평균 ' + avg.toFixed(1) + '타 · 표준편차 ' + sd.toFixed(1)

@@ -2098,6 +2098,58 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 피격 원인 (v205) ══════════════════════════════════════════════════
+  // 사장: "평균 타수가 올바른 재밌는 게임을 위한 방법인가?" → 아니다.
+  // 억울하게 맞은 33대와 내 실수로 맞은 33대는 완전히 다른 게임이다.
+  const cause = await page.evaluate(() => {
+    const R = {};
+    Game.restart(1357); Game.state = 'play'; Game.player.god = false;
+    Dungeon.floor = 1; Dungeon.roomIndex = 1; Dungeon.build('combat');
+    const p = Game.player;
+    const reset = () => { Game._hurtWhy = {}; Game._tell = null; Game.time = 100; p.hp = 20; p.maxHp = 20; p.invuln = 0; };
+    // ① 예고 없이 맞으면 「무예고」
+    reset();
+    Game.hurtPlayer(1, { x: 1, y: 0 }, 0, '시험');
+    R.noTell = Object.keys(Game._hurtWhy)[0];
+    // ② 예고가 있었고 아무 조작도 안 했으면 「반응없음」
+    reset();
+    Game.noteTell(p.x, p.y);
+    p.invuln = 0;
+    Game.hurtPlayer(1, { x: 1, y: 0 }, 0, '시험');
+    R.noReact = Object.keys(Game._hurtWhy)[0];
+    // ③ 예고에 반응(대시)했는데 맞으면 「늦음」
+    reset();
+    Game.noteTell(p.x, p.y);
+    Game.noteReact('dash');
+    p.invuln = 0;
+    Game.hurtPlayer(1, { x: 1, y: 0 }, 0, '시험');
+    R.late = Object.keys(Game._hurtWhy)[0];
+    // ④ 도트는 피격으로 세지 않는다 (화상으로 죽어도 「맞았다」가 아니다)
+    reset();
+    Game.hurtPlayer(1, { x: 0, y: 0 }, 0, '화상', { noStatus: true });
+    R.dotIgnored = Object.keys(Game._hurtWhy).length === 0;
+    // ⑤ 정예 강타가 예고를 등록하는가 — 계측에서 무예고의 83%였던 그 경로
+    reset();
+    const e = createEnemy('skeleton', p.x + 90, p.y, true, 1);
+    e.spawnT = 0; e._stompCd = 0; e._stompT = 0;
+    Game.enemies.push(e);
+    Game._tell = null;
+    for (let i = 0; i < 30 && !Game._tell; i++) e.update(1 / 60, Game);
+    R.stompTells = !!Game._tell && e._stompT > 0;
+    return R;
+  });
+  console.log('  피격원인:', JSON.stringify(cause));
+  ok('hurt.causeIsClassified',
+    cause.noTell === '무예고' && cause.noReact === '반응없음' && cause.late === '늦음' && cause.dotIgnored,
+    `예고없음→${cause.noTell} · 반응없음→${cause.noReact} · 반응했으나피격→${cause.late} · 도트제외 ${cause.dotIgnored} ` +
+    '(★ F9 리포트에는 「피격 33」처럼 횟수만 있었다. 33대를 맞았다는 건 알지만 **왜** 맞았는지는 몰랐다. ' +
+    '평균 타수는 휘두른 횟수지 판단의 수가 아니다 — 사장의 지적 어디에도 「몇 대에 죽는지」는 없었다)');
+  ok('hurt.eliteStompTelegraphs', cause.stompTells,
+    `정예 강타가 예고를 등록한다 (${cause.stompTells}) ` +
+    '(★ 계측에서 무예고 피격의 83%가 「정예의 강타」였다. 예고는 있었는데(!·전용 소리·젖힌 자세) ' +
+    '계기가 그걸 몰라서 전부 무예고로 찍혔다 — 계기가 예고를 모르면 없는 예고가 된다. ' +
+    '동시에 진짜 결함도 있었다: **위험 반경이 화면에 없었다.** 「온다」는 알지만 「어디까지」를 모르면 못 피한다)');
+
   // ══ 터치 조작 (v204) ══════════════════════════════════════════════════
   // 사장: "플레이 안되는데?" — 사장은 갤럭시로 하신다.
   // ★ PC에서 「검증 통과」가 나와도 폰에서 안 되면 **사장에게는 안 되는 게임**이다.

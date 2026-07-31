@@ -983,6 +983,11 @@ const GameCombat = {
       if (why) {
         this._hurtWhy = this._hurtWhy || {};
         this._hurtWhy[why] = (this._hurtWhy[why] || 0) + 1;
+        // 원인별 **출처**까지 남긴다 — 「무예고 88%」를 잡으려면 어느 경로가 예고 없이
+        // 들어오는지 알아야 한다. 분포만으로는 고칠 자리를 못 찾는다
+        this._hurtSrc = this._hurtSrc || {};
+        const sk = why + ' / ' + (src || '접촉');
+        this._hurtSrc[sk] = (this._hurtSrc[sk] || 0) + 1;
         // 억울한 피격은 그 자리에서 말해 준다 — 사장이 「왜 맞았는지 모르겠다」고 느끼는 순간이 이거다
         if (why === '무예고') Particles.text(this.player.x, this.player.y - 52, '예고 없음', { color: '#e43b44', size: 11 });
       }

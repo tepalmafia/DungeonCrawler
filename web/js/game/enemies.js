@@ -115,8 +115,13 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           if (Math.hypot(p.x - this.x, p.y - this.y) < (this.isMini ? 240 : 170)) {
             // 우두머리는 예고 0.75초 — 인간 반응(0.25초)에 여유를 크게 준다. 피하라고 만든 패턴이다
             this._stompT = this.isMini ? 0.75 : 0.55;
+            this._stompMax = this._stompT;
             this._stompCd = this.isMini ? 2.0 + Math.random() * 1.2 : 4 + Math.random() * 2.5;
             Particles.text(this.x, this.y - this.r - 14, '!', { color: '#ff4757', size: 16 });
+            // ★ v205 계기 누락 수정 — 강타에는 예고가 있는데(!·전용 소리·젖힌 자세)
+            //   noteTell 을 안 걸어서 피격 원인이 전부 「무예고」로 찍혔다.
+            //   계기가 예고를 모르면 없는 예고가 된다 — v185·186·192와 같은 실수다
+            if (Game && Game.noteTell) Game.noteTell(this.x, this.y);
             AudioSys.tellStomp(this.x, this.y); // v177: 접촉 예고보다 한 급 위 — 바닥이 온다
           }
         }
