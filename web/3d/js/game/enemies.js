@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
 import { hitPlayer, Projectile } from './combat.js';
-import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight } from '../world/nav.js';
+import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 
 const V = new THREE.Vector3();
@@ -327,6 +327,9 @@ export class Enemy {
     }
 
     this._separate(dt, G);
+    // 밀치기·넉백이 겹쳐 벽 안으로 밀려 들어갔으면 빼낸다
+    const esc = unstick(G.dungeon, this.pos.x, this.pos.z);
+    if (esc.moved) this.pos.set(esc.x, 0, esc.z);
     this.obj.position.copy(this.pos);
     this._animate(dt, moving);
 

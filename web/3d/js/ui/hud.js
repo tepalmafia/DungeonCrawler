@@ -39,31 +39,43 @@ export class UI {
 
   show() { this.el.hud.hidden = false; }
 
+  /** 위 줄 = 스킬 4종, 아래 줄 = 물약 + 예비 칸. 두 줄 다 4칸으로 폭을 맞춘다. */
   _buildSkillbar() {
     this.skillEls = {};
     this.el.skillbar.innerHTML = '';
-    const potions = [
-      { key: 'potHp', label: '1', icon: '🧪', title: '체력 물약' },
-      { key: 'potMp', label: '2', icon: '🔵', title: '마나 물약' },
-    ];
-    for (const s of SKILLS) {
+
+    const rowTop = document.createElement('div');
+    rowTop.className = 'skillrow';
+    const rowBottom = document.createElement('div');
+    rowBottom.className = 'skillrow';
+    this.el.skillbar.append(rowTop, rowBottom);
+
+    const cell = (label, icon, cost, title, cls = 'skill') => {
       const d = document.createElement('div');
-      d.className = 'skill';
-      d.title = `${s.name} — ${s.desc} (마나 ${s.cost})`;
-      d.innerHTML = `<span class="key">${s.label}</span><span>${s.icon}</span>`
-        + `<span class="cost">${s.cost}</span><div class="cd"></div><div class="cdnum"></div>`;
-      this.el.skillbar.appendChild(d);
+      d.className = cls;
+      if (title) d.title = title;
+      d.innerHTML = `<span class="key">${label}</span><span>${icon}</span>`
+        + `<span class="cost">${cost}</span><div class="cd"></div><div class="cdnum"></div>`;
+      return d;
+    };
+
+    for (const s of SKILLS) {
+      const d = cell(s.label, s.icon, s.cost, `${s.name} — ${s.desc} (마나 ${s.cost})`);
+      rowTop.appendChild(d);
       this.skillEls[s.key] = d;
     }
-    for (const p of potions) {
-      const d = document.createElement('div');
-      d.className = 'skill';
-      d.title = p.title;
-      d.innerHTML = `<span class="key">${p.label}</span><span>${p.icon}</span>`
-        + `<span class="cost" id="${p.key}Count"></span><div class="cd"></div><div class="cdnum"></div>`;
-      this.el.skillbar.appendChild(d);
+
+    for (const p of [
+      { key: 'potHp', label: '1', icon: '🧪', title: '체력 물약' },
+      { key: 'potMp', label: '2', icon: '🔵', title: '마나 물약' },
+    ]) {
+      const d = cell(p.label, p.icon, '', p.title);
+      rowBottom.appendChild(d);
       this.skillEls[p.key] = d;
     }
+    // 예비 칸 — 두 줄의 폭을 맞추고, 늘어날 자리가 있다는 걸 보여준다
+    for (const label of ['3', '4'])
+      rowBottom.appendChild(cell(label, '', '', '', 'skill slot-empty'));
   }
 
   fireSkill(key) {

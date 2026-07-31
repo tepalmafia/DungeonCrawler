@@ -143,6 +143,203 @@ async function shot(page, name) {
     const after = { x: G.player.pos.x, z: G.player.pos.z };
     return { hadPath, insideWall, moved: Math.hypot(after.x - before.x, after.z - before.z) };
   });
+  // ── 회귀: 클릭이 씹히지 않는가 · 벽에 박혀도 빠져나오는가 ──────
+  // 예전엔 repathCd 하나를 홀드이동·추격·벽끼임이 공유해서, 추격 중에 누른
+  // 클릭이 통째로 버려졌다(= 클릭했는데 제자리에 서 있는 증상).
+  const clickFix = await page.evaluate(async () => {
+    const G = window.G3, P = G.player, dg = G.dungeon;
+    const CELL = 2;
+    const g2w = (gx, gz) => [(gx - dg.w / 2 + 0.5) * CELL, (gz - dg.h / 2 + 0.5) * CELL];
+    const w2g = (x, z) => [Math.floor(x / CELL + dg.w / 2), Math.floor(z / CELL + dg.h / 2)];
+
+    // 1) 타이머가 용도별로 분리돼 있는가
+    const split = ['repathCd', 'holdRepathCd', 'chaseRepathCd'].every((k) => typeof P[k] === 'number');
+
+    // 2) 추격 타이머가 돌고 있어도 새 목적지 명령이 즉시 반영되는가
+    const floors = [];
+    for (let gz = 1; gz < dg.h - 1; gz++)
+      for (let gx = 1; gx < dg.w - 1; gx++) if (dg.at(gx, gz) === 1) floors.push([gx, gz]);
+    const [sx, sz] = g2w(dg.spawn.gx, dg.spawn.gz);
+    P.setPosition(sx, sz);
+    P.chaseRepathCd = 0.16;
+    P.repathCd = 0.25;
+    let far = floors[0], best = -1;
+    for (const f of floors) {
+      const [fx, fz] = g2w(f[0], f[1]);
+      const d = Math.hypot(fx - sx, fz - sz);
+      if (d > best && d < 30) { best = d; far = f; }
+    }
+    const [tx, tz] = g2w(far[0], far[1]);
+    P.moveTo(dg, tx, tz);
+    const pathedWhileBusy = P.path.length > 0;
+
+    // 3) 벽 한가운데에 박혀도 바닥으로 빠져나오는가
+    const wallCells = [];
+    for (let gz = 2; gz < dg.h - 2; gz++)
+      for (let gx = 2; gx < dg.w - 2; gx++) if (dg.at(gx, gz) === 2) wallCells.push([gx, gz]);
+    let trapped = 0, tried = 0;
+    for (let i = 0; i < 20 && i < wallCells.length; i++) {
+      const c = wallCells[(i * 7919) % wallCells.length];
+      const [wx, wz] = g2w(c[0], c[1]);
+      P.setPosition(wx, wz);
+      tried++;
+      let escaped = false;
+      for (let f = 0; f < 30; f++) {
+        P.update(1 / 60, G);
+        const [gx, gz] = w2g(P.pos.x, P.pos.z);
+        if (dg.at(gx, gz) === 1) { escaped = true; break; }
+      }
+      if (!escaped) trapped++;
+    }
+    P.setPosition(sx, sz);
+    return { split, pathedWhileBusy, trapped, tried };
+  });
+  ok('move.timersSplit', clickFix.split, '홀드이동·추격·벽끼임 타이머 분리');
+  ok('move.clickNotDropped', clickFix.pathedWhileBusy, '추격 쿨다운 중에도 새 클릭이 즉시 반영');
+  ok('move.unstickFromWall', clickFix.trapped === 0, `벽 안 ${clickFix.tried}곳 중 갇힘 ${clickFix.trapped}`);
+
+  // ── 회귀: 아무 데나 연속으로 클릭해도 절대 멈춰 있지 않는가 ──────
+  // 「경로를 든 채 1초 이상 진척 0」이 한 번이라도 있으면 실패.
+  // 벽 클릭·모서리 걸림을 일부러 섞는다.
+  const stress = await page.evaluate(async () => {
+    const G = window.G3, dg = G.dungeon, P = G.player, CELL = 2;
+    const g2w = (gx, gz) => [(gx - dg.w / 2 + 0.5) * CELL, (gz - dg.h / 2 + 0.5) * CELL];
+    let sd = 987654321;
+    const rnd = () => { sd = (sd * 1103515245 + 12345) & 0x7fffffff; return sd / 0x7fffffff; };
+    const cells = [];
+    for (let gz = 1; gz < dg.h - 1; gz++)
+      for (let gx = 1; gx < dg.w - 1; gx++) if (dg.at(gx, gz) !== 0) cells.push([gx, gz]);
+
+    const [sx, sz] = g2w(dg.spawn.gx, dg.spawn.gz);
+    P.setPosition(sx, sz);
+    P.stuckEvents = { skipWaypoint: 0, unsmooth: 0, giveUp: 0 };
+    let stalls = 0, cmds = 0;
+    for (let i = 0; i < 150; i++) {
+      const c = cells[Math.floor(rnd() * cells.length)];
+      let [tx, tz] = g2w(c[0], c[1]);
+      tx += (rnd() - 0.5) * 1.8; tz += (rnd() - 0.5) * 1.8;
+      P.moveTo(dg, tx, tz);
+      cmds++;
+      let noProgress = 0, last = { x: P.pos.x, z: P.pos.z };
+      for (let f = 0; f < 240; f++) {
+        P.update(1 / 60, G);
+        const moved = Math.hypot(P.pos.x - last.x, P.pos.z - last.z);
+        last = { x: P.pos.x, z: P.pos.z };
+        if (P.path.length > 0 && moved < 0.003) noProgress++; else noProgress = 0;
+        if (noProgress >= 60) { stalls++; break; }
+        if (!P.path.length) break;
+      }
+    }
+    P.setPosition(sx, sz);
+    return { stalls, cmds, ev: P.stuckEvents, armed: !!P.stuckEvents };
+  });
+  ok('move.noStall', stress.stalls === 0, `클릭 ${stress.cmds}회 중 멈춤 ${stress.stalls}회`);
+  ok('move.stuckBreakerWorks',
+    stress.ev.skipWaypoint + stress.ev.unsmooth + stress.ev.giveUp > 0,
+    `탈출 발동 ${JSON.stringify(stress.ev)} — 0이면 시험이 그 상황을 못 만든 것이다`);
+
+  // ── HUD 배치: 구슬이 단축키 양옆인가 · 단축키가 두 줄인가 ─────
+  const hud = await page.evaluate(async () => {
+    const P = window.G3.player;
+    P.hp = P.maxHp * 0.4; P.mp = P.maxMp * 0.25;
+    await new Promise((r) => requestAnimationFrame(r));
+    const box = (sel) => { const b = document.querySelector(sel).getBoundingClientRect();
+      return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+    const hp = box('#orbHp'), mp = box('#orbMp'), bar = box('#skillbar');
+    const rows = [...document.querySelectorAll('.skillrow')];
+    // 게이지는 「내가 넣은 값」이 아니라 **읽는 시점의 실제 스탯**과 맞아야 한다.
+    // 마나는 매 프레임 자연 회복하므로 고정값과 비교하면 안 된다.
+    const hpFill = parseFloat(document.querySelector('#orbHp .fill').style.height);
+    const mpFill = parseFloat(document.querySelector('#orbMp .fill').style.height);
+    const hpWant = (P.hp / P.maxHp) * 100, mpWant = (P.mp / P.maxMp) * 100;
+    return {
+      hpLeft: hp.x + hp.w <= bar.x + 2,
+      mpRight: mp.x >= bar.x + bar.w - 2,
+      sameRow: Math.abs((hp.y + hp.h / 2) - (bar.y + bar.h / 2)) < 40,
+      rows: rows.length,
+      perRow: rows.map((r) => r.children.length),
+      hpFill, mpFill, hpWant, mpWant,
+      hpOk: Math.abs(hpFill - hpWant) < 1.5,
+      mpOk: Math.abs(mpFill - mpWant) < 1.5,
+    };
+  });
+  ok('hud.orbsFlankHotkeys', hud.hpLeft && hud.mpRight && hud.sameRow,
+    '체력·마나 구슬이 단축키 양옆 같은 높이에');
+  ok('hud.twoRows', hud.rows === 2 && hud.perRow.every((n) => n === 4),
+    `단축키 ${hud.rows}줄 × ${hud.perRow.join('/')}칸`);
+  ok('hud.orbsReflectStats', hud.hpOk && hud.mpOk,
+    `체력 게이지 ${hud.hpFill.toFixed(1)}% (실제 ${hud.hpWant.toFixed(1)}%) · `
+    + `마나 ${hud.mpFill.toFixed(1)}% (실제 ${hud.mpWant.toFixed(1)}%)`);
+
+  // ── 아이템 드랍 사운드 ────────────────────────────────────
+  const dropSfx = await page.evaluate(async () => {
+    const mod = await import('./js/core/audio.js');
+    const exists = typeof mod.Sfx.itemDrop === 'function';
+    let calls = 0;
+    const orig = mod.Sfx.itemDrop;
+    mod.Sfx.itemDrop = (...a) => { calls++; return orig.apply(mod.Sfx, a); };
+    const im = await import('./js/game/items.js');
+    const rm = await import('./js/core/rng.js');
+    const G = window.G3;
+    const before = G.drops.length;
+    // main.js 의 dropItem 을 태우려면 적을 죽여야 한다 — 대신 같은 경로를 직접 부른다
+    const it = im.rollItem(rm.makeRng('SFX'), 1, 0, { slot: 'ring' });
+    const d = new im.Drop(G.scene, it, G.player.pos.clone());
+    G.drops.push(d);
+    mod.Sfx.itemDrop(it.rarity);
+    mod.Sfx.itemDrop = orig;
+    return { exists, calls, added: G.drops.length - before };
+  });
+  ok('audio.itemDropExists', dropSfx.exists && dropSfx.calls === 1, '떨어질 때 「털썩」 재생 경로 존재');
+  ok('audio.itemDropWiredIn',
+    await page.evaluate(async () => {
+      const src = await (await fetch('./js/main.js')).text();
+      // 드랍 시점에 호출되고, 줍는 소리와 혼동되지 않아야 한다
+      return /Audio\.Sfx\.itemDrop\(/.test(src);
+    }), 'dropItem() 이 itemDrop 을 부른다');
+
+  // ── 줌 인/아웃 ───────────────────────────────────────────
+  const zoom = await page.evaluate(async () => {
+    const cv = document.getElementById('view');
+    const base = window.G3.setZoom(19);
+    const wheel = (dy) => cv.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, bubbles: true, cancelable: true }));
+
+    wheel(-300);                                        // 위로 = 확대
+    await new Promise((r) => requestAnimationFrame(r));
+    const inZ = window.G3.getZoom().target;
+
+    window.G3.setZoom(19);
+    wheel(300);                                         // 아래로 = 축소
+    await new Promise((r) => requestAnimationFrame(r));
+    const outZ = window.G3.getZoom().target;
+
+    // 한계 밖으로 밀어도 범위를 벗어나지 않는가
+    for (let i = 0; i < 40; i++) wheel(-300);
+    await new Promise((r) => requestAnimationFrame(r));
+    const minZ = window.G3.getZoom().target;
+    for (let i = 0; i < 80; i++) wheel(300);
+    await new Promise((r) => requestAnimationFrame(r));
+    const maxZ = window.G3.getZoom().target;
+
+    const lim = window.G3.getZoom();
+    window.G3.setZoom(19);
+    // 실제 카메라가 따라오는가
+    for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
+    const camY0 = window.G3.camera.position.y;
+    window.G3.setZoom(lim.min);
+    for (let i = 0; i < 40; i++) await new Promise((r) => requestAnimationFrame(r));
+    const camY1 = window.G3.camera.position.y;
+    window.G3.setZoom(19);
+    return { base, inZ, outZ, minZ, maxZ, lim, camY0, camY1 };
+  });
+  ok('camera.zoomIn', zoom.inZ < zoom.base, `휠 위로 → 거리 ${zoom.base} → ${zoom.inZ.toFixed(1)}`);
+  ok('camera.zoomOut', zoom.outZ > zoom.base, `휠 아래로 → 거리 ${zoom.base} → ${zoom.outZ.toFixed(1)}`);
+  ok('camera.zoomClamped',
+    zoom.minZ >= zoom.lim.min - 1e-6 && zoom.maxZ <= zoom.lim.max + 1e-6,
+    `범위 ${zoom.lim.min}~${zoom.lim.max} 안에서만 (${zoom.minZ.toFixed(1)} / ${zoom.maxZ.toFixed(1)})`);
+  ok('camera.zoomAppliesToCamera', zoom.camY1 < zoom.camY0 - 1,
+    `카메라 높이 ${zoom.camY0.toFixed(1)} → ${zoom.camY1.toFixed(1)}`);
+
   ok('move.pathFound', move.hadPath);
   ok('move.actuallyMoved', move.moved > 3, `${move.moved.toFixed(1)} 유닛 이동`);
   ok('move.noWallClip', move.insideWall === 0, `벽 안에 있던 프레임 ${move.insideWall}`);

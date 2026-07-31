@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
 import { aggregate, RARITIES } from './items.js';
-import { findPath, smoothPath, toWorldPath, resolveCollision } from '../world/nav.js';
+import { findPath, smoothPath, toWorldPath, resolveCollision, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 
 const RADIUS = 0.42;
@@ -128,7 +128,17 @@ export class Player {
     this.path = [];
     this.dest = null;
     this.target = null;          // 공격 대상 (Enemy)
-    this.repathCd = 0;
+    // 경로 재계산 타이머는 용도별로 나눈다. 하나로 공유하면 서로를 굶겨서
+    // 「클릭했는데 안 움직이는」 증상이 난다.
+    this.repathCd = 0;           // 벽에 끼었을 때 자체 재계산
+    this.holdRepathCd = 0;       // 좌클릭 홀드 이동
+    this.chaseRepathCd = 0;      // 평타 추격
+    // 끼임 감지 — 원인이 무엇이든 「앞으로 못 가는 상태」를 못 버티게 한다
+    this.stuckT = 0;
+    this.lastWpDist = Infinity;
+    this.noSmooth = false;
+    // 탈출이 몇 번 발동했는지 — 검증과 현장 진단용 (window.G3.player.stuckEvents)
+    this.stuckEvents = { skipWaypoint: 0, unsmooth: 0, giveUp: 0 };
 
     // 전투
     this.attackCd = 0;
@@ -223,23 +233,39 @@ export class Player {
 
   moveTo(dg, wx, wz) {
     this.target = null;
-    this._path(dg, wx, wz);
+    return this._path(dg, wx, wz);
   }
 
-  _path(dg, wx, wz) {
+  /**
+   * @param smooth false 면 스무딩을 끈다 — 칸 단위 경로는 인접 칸만 잇기 때문에
+   *   반드시 통과 가능하다. 스무딩된 대각선이 벽 모서리에 걸릴 때의 탈출구다.
+   */
+  _path(dg, wx, wz, smooth = true) {
     const [sgx, sgz] = worldToGrid(this.pos.x, this.pos.z, dg.w, dg.h);
     const [tgx, tgz] = worldToGrid(wx, wz, dg.w, dg.h);
     const raw = findPath(dg, sgx, sgz, tgx, tgz);
-    if (!raw) { this.path = []; return false; }
-    const sm = smoothPath(dg, raw);
-    this.path = toWorldPath(dg, sm);
-    if (this.path.length) this.path[this.path.length - 1] = { x: wx, z: wz };
+    if (!raw) { this.path = []; this.dest = null; return false; }
+    this.path = toWorldPath(dg, smooth ? smoothPath(dg, raw) : raw);
+
+    // 마지막 웨이포인트를 클릭한 지점 그대로 쓰되, **그 지점이 걸을 수 있을 때만**.
+    // 벽 안을 클릭했는데 그대로 목표로 삼으면 영영 도달할 수 없다.
+    if (this.path.length && walkable(dg, tgx, tgz))
+      this.path[this.path.length - 1] = { x: wx, z: wz };
+
     if (this.path.length > 1) this.path.shift();     // 현재 칸은 버린다
-    this.dest = { x: wx, z: wz };
+    this.dest = this.path.length ? this.path[this.path.length - 1] : null;
+    this.noSmooth = !smooth;
+    this._resetProgress();
     return true;
   }
 
-  stop() { this.path = []; this.dest = null; }
+  /** 웨이포인트 진척도 추적 초기화 */
+  _resetProgress() {
+    this.stuckT = 0;
+    this.lastWpDist = Infinity;
+  }
+
+  stop() { this.path = []; this.dest = null; this._resetProgress(); }
 
   dash(dir, dur = 0.22) {
     this.dashT = dur;
@@ -256,6 +282,8 @@ export class Player {
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.repathCd = Math.max(0, this.repathCd - dt);
+    this.holdRepathCd = Math.max(0, this.holdRepathCd - dt);
+    this.chaseRepathCd = Math.max(0, this.chaseRepathCd - dt);
     for (const k of ['hp', 'mp']) this.potionCd[k] = Math.max(0, this.potionCd[k] - dt);
 
     // 마나 자연 회복 — 스킬을 계속 쓸 수 있게 넉넉히
@@ -280,6 +308,7 @@ export class Player {
       const d = Math.hypot(dx, dz);
       if (d < 0.22) {
         this.path.shift();
+        this._resetProgress();
       } else {
         const step = Math.min(d, this.speed * dt);
         const nx = this.pos.x + (dx / d) * step;
@@ -288,13 +317,40 @@ export class Player {
         this.pos.set(r.x, 0, r.z);
         this.facing = Math.atan2(dx, dz);
         moved = Math.min(1, step / (this.speed * dt || 1));
-        // 벽에 끼면 경로를 다시 뽑는다
-        if (r.hit && this.dest && this.repathCd <= 0) {
-          this.repathCd = 0.25;
-          this._path(dg, this.dest.x, this.dest.z);
+
+        // ── 끼임 감지: 웨이포인트에 가까워지고 있는가 ──────────────
+        // 「벽에 닿았나(r.hit)」로 판단하면 벽을 따라 정상적으로 미끄러지는
+        // 경우까지 끼임으로 오해한다. 실제로 거리가 줄고 있는지만 본다.
+        const nd = Math.hypot(wp.x - this.pos.x, wp.z - this.pos.z);
+        if (nd > this.lastWpDist - 0.008) this.stuckT += dt;
+        else this.stuckT = 0;
+        this.lastWpDist = nd;
+
+        if (this.stuckT > 0.35) {
+          this.stuckT = 0;
+          this.lastWpDist = Infinity;
+          if (this.path.length > 1) {
+            // 1단계 — 걸린 웨이포인트를 버리고 다음 것으로 간다
+            this.stuckEvents.skipWaypoint++;
+            this.path.shift();
+          } else if (this.dest && !this.noSmooth) {
+            this.stuckEvents.unsmooth++;
+            // 2단계 — 스무딩을 끄고 칸 단위 경로로 다시 뽑는다.
+            //   스무딩된 대각선이 벽 모서리에 걸린 경우가 여기서 풀린다.
+            this._path(dg, this.dest.x, this.dest.z, false);
+          } else {
+            // 3단계 — 그래도 못 가면 포기한다. 계속 벽을 밀고 있는 것보다 낫다.
+            this.stuckEvents.giveUp++;
+            this.stop();
+          }
         }
       }
     }
+
+    // 어떤 이유로든 벽 안에 박혔으면 가장 가까운 바닥으로 빼낸다.
+    // 밀어내기만으로는 두께 2칸 이상의 벽 안쪽에서 빠져나오지 못한다.
+    const esc = unstick(dg, this.pos.x, this.pos.z);
+    if (esc.moved) this.pos.set(esc.x, 0, esc.z);
 
     this.obj.position.copy(this.pos);
     this._animate(dt, moved);

@@ -119,6 +119,28 @@ export const Sfx = {
     noise({ dur: 0.7, gain: 0.42, lp: 3600, lpTo: 120, at: 0.8 });
   },
 
+  /**
+   * 아이템이 바닥에 떨어지는 소리 — 「털썩」.
+   * 저역 임팩트(무게) + 흙먼지 노이즈 + 한 박자 늦은 작은 튐(구르는 느낌).
+   * 등급이 높으면 뒤에 맑은 배음을 얹어 「좋은 게 떨어졌다」를 귀로도 알린다.
+   */
+  itemDrop(rarity = 0) {
+    // 몸통 — 낮게 툭 떨어지는 무게감
+    tone(96, { type: 'sine', dur: 0.26, gain: 0.3, to: 38 });
+    tone(150, { type: 'triangle', dur: 0.16, gain: 0.12, to: 60 });
+    // 먼지 — 짧고 탁하게
+    noise({ dur: 0.16, gain: 0.22, lp: 1100, lpTo: 130 });
+    // 두 번째 튐 — 이게 있어야 「털썩」이지 「퍽」이 아니다
+    tone(78, { type: 'sine', dur: 0.13, gain: 0.13, at: 0.11, to: 42 });
+    noise({ dur: 0.1, gain: 0.1, lp: 700, lpTo: 120, at: 0.11 });
+    // 등급 배음
+    if (rarity >= 2) {
+      const f = rarity >= 3 ? 1046.5 : 784;
+      tone(f, { type: 'triangle', dur: 0.5, gain: 0.075, at: 0.05 });
+      tone(f * 1.5, { type: 'sine', dur: 0.4, gain: 0.04, at: 0.09 });
+    }
+  },
+
   pickup(rarity = 0) {
     const base = [523.25, 659.25, 783.99, 1046.5][Math.min(3, rarity)];
     for (let i = 0; i <= rarity; i++)

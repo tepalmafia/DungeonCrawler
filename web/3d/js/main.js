@@ -30,7 +30,9 @@ import { Inventory } from './ui/inventory.js';
 
 export const VERSION = 1;
 const MAX_FLOOR = 3;
-const CAM_DIST = 19, CAM_PITCH = 52 * Math.PI / 180;
+// 카메라 거리는 줌으로 바뀐다. 피치는 고정 — 각도까지 흔들면 쿼터뷰 실루엣이 무너진다.
+const CAM_DIST_MIN = 10, CAM_DIST_MAX = 34, CAM_DIST_DEFAULT = 19;
+const CAM_PITCH = 52 * Math.PI / 180;
 
 const qs = new URLSearchParams(location.search);
 const params = {
@@ -62,6 +64,8 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
+let camDist = CAM_DIST_DEFAULT;      // 목표 거리 (휠로 조절)
+let camDistNow = CAM_DIST_DEFAULT;   // 실제 거리 — 목표로 부드럽게 따라간다
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -168,7 +172,8 @@ function loadFloor(floorNo) {
   ui.center(`${floorNo}층 — ${dg.theme.name}`, dg.isBossFloor ? '심연의 군주가 기다린다' : '출구를 찾아라');
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
 
-  // 카메라를 즉시 플레이어 위로
+  // 카메라를 즉시 플레이어 위로 (줌 배율은 층을 넘어가도 유지한다)
+  camDistNow = camDist;
   updateCamera(1);
 }
 
@@ -216,8 +221,14 @@ function dropItem(item, pos, i = 0) {
   const d = new Drop(scene, item, new THREE.Vector3(res.x, 0, res.z));
   G.drops.push(d);
   G.stats.itemsFound++;
+  // 떨어질 때 「털썩」 — 등급이 높으면 뒤에 맑은 배음이 붙는다
+  Audio.Sfx.itemDrop(item.rarity);
+  // 착지 먼지 — 소리와 그림이 같이 나야 무게가 실린다
+  fx.burst(d.pos.clone().setY(0.12), {
+    count: 8 + item.rarity * 3, color: 0x8a7b66, speed: 2.2, size: 0.3, life: 0.4, grav: 8, spread: 0.35,
+  });
+  fx.ground(d.pos, { r0: 0.5, r1: 1.1, color: RARITIES[item.rarity].hex, life: 0.4, opacity: 0.5 });
   if (item.rarity >= 2) {
-    Audio.Sfx.pickup(item.rarity);
     fx.burst(d.pos.clone().setY(0.7), { count: 20, color: RARITIES[item.rarity].hex, speed: 4, size: 0.4, life: 0.7, grav: 2 });
   }
 }
@@ -295,6 +306,18 @@ const groundV = new THREE.Vector3();
 function handleInput(dt) {
   const p = G.player;
 
+  // 줌 — 휠. 사망·타이틀 화면에서도 동작한다(구경할 수 있어야 한다)
+  if (input.wheel) {
+    camDist = THREE.MathUtils.clamp(camDist * (1 + input.wheel * 0.12), CAM_DIST_MIN, CAM_DIST_MAX);
+  }
+  // 키보드 줌 — 휠 없는 환경(노트북 트랙패드·검증 스크립트)용
+  if (input.wasPressed('Equal') || input.wasPressed('NumpadAdd'))
+    camDist = THREE.MathUtils.clamp(camDist * 0.85, CAM_DIST_MIN, CAM_DIST_MAX);
+  if (input.wasPressed('Minus') || input.wasPressed('NumpadSubtract'))
+    camDist = THREE.MathUtils.clamp(camDist * 1.18, CAM_DIST_MIN, CAM_DIST_MAX);
+  if (input.wasPressed('Digit0') || input.wasPressed('Numpad0'))
+    camDist = CAM_DIST_DEFAULT;
+
   if (input.wasPressed('KeyI')) inv.toggle();
   if (input.wasPressed('Escape') && inv.open) inv.toggle(false);
 
@@ -338,10 +361,17 @@ function handleInput(dt) {
       p.target = null;
       p.moveTo(G.dungeon, G.pickupTarget.pos.x, G.pickupTarget.pos.z);
     } else if (!p.target || input.justDown) {
-      // 홀드 이동: 매 프레임 목적지를 갱신하되 경로 재계산은 조금씩만
-      if (input.justDown) { p.target = null; G.pickupTarget = null; }
-      if (p.repathCd <= 0) {
-        p.repathCd = 0.09;
+      if (input.justDown) {
+        // 새 클릭은 **무조건 즉시** 반영한다.
+        // 예전엔 재계산 쿨다운에 걸리면 명령이 통째로 버려져서,
+        // 적을 쫓다가 딴 곳을 클릭하면 그 자리에 멈춰 서 있었다.
+        p.target = null;
+        G.pickupTarget = null;
+        p.holdRepathCd = 0.09;
+        p.moveTo(G.dungeon, gp.x, gp.z);
+      } else if (p.holdRepathCd <= 0) {
+        // 홀드 이동: 커서를 계속 따라가되 경로 재계산은 조금씩만
+        p.holdRepathCd = 0.09;
         p.moveTo(G.dungeon, gp.x, gp.z);
       }
     }
@@ -384,8 +414,10 @@ function updateAutoAttack(dt) {
   const range = 2.0 + t.radius;
 
   if (dist > range) {
-    if (p.repathCd <= 0) {
-      p.repathCd = 0.16;
+    // 추격 재계산은 전용 타이머를 쓴다 — 클릭 처리와 타이머를 공유하면
+    // 추격 중에 누른 클릭이 씹힌다
+    if (p.chaseRepathCd <= 0) {
+      p.chaseRepathCd = 0.16;
       p.moveTo(G.dungeon, t.pos.x, t.pos.z);
       p.target = t;             // moveTo 가 target 을 지우므로 복구
     }
@@ -482,10 +514,12 @@ function updateCamera(k) {
     oz = THREE.MathUtils.clamp((groundV.z - p.pos.z) * 0.18, -1.6, 1.6);
   }
   camLook.lerp(new THREE.Vector3(p.pos.x + ox, 0.9, p.pos.z + oz), k);
+  // 줌은 한 박자 늦게 따라와야 휠을 굴릴 때 화면이 튀지 않는다
+  camDistNow += (camDist - camDistNow) * Math.min(1, k * 1.6);
   camPos.set(
     camLook.x,
-    camLook.y + Math.sin(CAM_PITCH) * CAM_DIST,
-    camLook.z + Math.cos(CAM_PITCH) * CAM_DIST,
+    camLook.y + Math.sin(CAM_PITCH) * camDistNow,
+    camLook.z + Math.cos(CAM_PITCH) * camDistNow,
   );
   const s = fx.shakeOffset(G.dt);
   camera.position.set(camPos.x + s.x, camPos.y + s.y, camPos.z);
@@ -576,3 +610,5 @@ window.G3.loadFloor = loadFloor;
 window.G3.nextFloor = nextFloor;
 window.G3.VERSION = VERSION;
 window.G3.params = params;
+window.G3.getZoom = () => ({ target: camDist, now: camDistNow, min: CAM_DIST_MIN, max: CAM_DIST_MAX });
+window.G3.setZoom = (d) => { camDist = THREE.MathUtils.clamp(d, CAM_DIST_MIN, CAM_DIST_MAX); return camDist; };
