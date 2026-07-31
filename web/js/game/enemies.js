@@ -3026,6 +3026,28 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
   const def = defs[type];
   if (!def) throw new Error('알 수 없는 적 타입: ' + type);
   const e = Object.assign(base, def());
+
+  // ── 크기 비율 (v200) ─────────────────────────────────────────────────
+  // 사장: "몬스터에 맞게 크기 비율 맞춰야지"
+  // 게임은 이미 몸 크기를 r 로 선언한다 (잔불 10 · 백골 13 · 골렘 18).
+  // 그런데 렌더는 모든 스프라이트를 같은 배율로 뿌려서 그 비율이 화면에서 죽어 있었다.
+  // 여기서 스프라이트에 고유 배율을 한 번만 물린다 — 그리는 코드는 손대지 않아도
+  // drawSprite 의 __ds 훅이 **모든 draw() 구현**에 자동으로 적용한다.
+  // (정예의 r×1.15 이후가 아니라 기본 r 로 잰다. 정예는 별도 연출로 커져야 한다)
+  if (typeof Sprites !== 'undefined' && Sprites.scaleFor) {
+    const si = Sprites[e.sprite];
+    if (si && si.width && !si.__dsSet) {
+      const ds = Sprites.scaleFor(si, e.r);
+      si.__ds = ds; si.__dsSet = 1;
+      // 자세 프레임(걷기·예고·타격·피격·죽음)은 모듈 적재 시점에 미리 구워진 **다른 캔버스**다.
+      // 여기에 안 물리면 서 있을 때만 크고 걷는 순간 작아진다 (실제로 그렇게 보였다)
+      const fr = Sprites.enemyFrames && Sprites.enemyFrames[e.sprite];
+      if (fr) for (const v of Object.values(fr)) {
+        if (Array.isArray(v)) v.forEach((f) => { if (f && f.width) { f.__ds = ds; f.__dsSet = 1; } });
+        else if (v && v.width) { v.__ds = ds; v.__dsSet = 1; }
+      }
+    }
+  }
   e.hp = Math.ceil(e.hp * floorScale);
   // 깊은 층일수록 XP도 증가 (레벨 커브 유지) — ×0.68은 개체수 +30% 보정 (BALANCE.md 커브 목표)
   e.xpVal = Math.max(1, Math.round(e.xpVal * (0.7 + 0.3 * floorScale) * 0.68));

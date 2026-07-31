@@ -155,6 +155,7 @@ const Dungeon = {
   newRun() {
     this.floor = 1;
     this.roomIndex = 1;
+    this.specialsTaken = 0;
     this.tookTreasure = false;
     this.tookRelicChest = false; // v166: 층당 유물 상자 1개
     this.tookEliteCard = false;  // v166: 층당 정예 특성 카드 1장
@@ -172,8 +173,17 @@ const Dungeon = {
     this.build('combat');
   },
 
+  // ── 층별 방 수 (v203) ──────────────────────────────────────────────────
+  // 사장: "1층 단계를 줄이고"
+  // 계측: 1층이 9칸이고 그중 정예방이 4개였다 — 배우는 층에서 9칸은 길다.
+  // 얕은 층은 짧게(배우는 구간), 깊어질수록 길게(버티는 구간).
+  roomsFor(f) {
+    return f <= 1 ? 6 : f <= 3 ? 7 : f <= 5 ? 8 : 9;
+  },
+
   nextFloor() {
     this.floor++;
+    this.totalRooms = this.roomsFor(this.floor);
     this.roomIndex = 1;
     this.tookTreasure = false;
     this.tookRelicChest = false; // v166: 층당 유물 상자 1개
@@ -217,7 +227,9 @@ const Dungeon = {
       this.build('combat');
       // 보상 감사: 층 스킵은 그 층의 XP·유물 기회를 통째로 버리는 것 — 위험(정예 들끓음)만 있고
       // 런 파워 보상이 없었다. 도착 즉시 특성 1장으로 손실을 일부 보전 (그래도 정상 진행보다 약간 손해 = 의도)
-      Game.pendingChoices++;
+      // ★ v203 출처 제한 — 층 스킵 보전도 특성이 아니라 파편으로.
+      //   「레벨업과 보스를 잡거나 보물을 먹을때만」에 층 스킵은 없다
+      Meta.data.shards += 20 + this.floor * 3;
       // 버그 수정: 여기서 카드를 바로 열면 화면 전환(페이드) 도중 상태가 바뀌어
       // 검은 오버레이가 걸린 채 멈춘다 — 전환 완료 시점(main.js transition 'in' 종료)이 알아서 연다
       return;
@@ -228,6 +240,8 @@ const Dungeon = {
       this.build('vault');
       return;
     }
+    // 특수방 예산 소비 (v203) — 전투·정예는 층의 척추이므로 예산에서 빼지 않는다
+    if (!['combat', 'elite', 'boss'].includes(type)) this.specialsTaken = (this.specialsTaken || 0) + 1;
     if (type === 'treasure') this.tookTreasure = true;
     if (type === 'camp') this.tookCamp = true;
     if (type === 'event') this.tookEvent = true;
@@ -239,6 +253,10 @@ const Dungeon = {
   },
 
   build(type) {
+    // ★ v203: totalRooms 는 **파생 데이터**다. 층에서 매번 계산한다.
+    //   필드로 들고 nextFloor 에서만 갱신하면, 런 시작·치트 진입·이어하기처럼
+    //   nextFloor 를 거치지 않는 경로에서 옛 값이 남는다 (실제로 남았다)
+    this.totalRooms = this.roomsFor(this.floor);
     this.roomType = type;
     // v189: 좌표를 먼저 옮긴다 — 방을 짓기 전에 그 방이 '어디'인지 정해져 있어야 한다
     this._stepMap(type, !this._noStep);
@@ -301,21 +319,39 @@ const Dungeon = {
     }
     const options = ['combat'];
     const pool = [];
-    if (next >= 3) pool.push('elite', 'elite');
+    // ── 특수방 예산 (v203) ─────────────────────────────────────────────
+    // 방을 줄이고 나서 계측했더니 **1층 6칸에 일반 전투방이 0개**였다
+    // (금고·보물·정예2·기연·보스). 생성기 탓이 아니라 **선택** 탓이다 —
+    // 문마다 특수방이 붙어 있으면 사람은 다 특수방으로 간다.
+    // 그러면 v192~198에서 만든 「잡몹+보스」 설계가 놓일 자리가 사라진다.
+    // 층마다 특수방 예산을 두고, 다 쓰면 전투/정예만 남긴다 — 층의 척추를 지킨다.
+    const budget = this.floor <= 1 ? 2 : this.floor <= 3 ? 3 : 4;
+    const spent = this.specialsTaken || 0;
+    const roomsLeft = this.totalRooms - next;           // 보스방 전까지 남은 칸
+    const budgetLeft = Math.max(0, budget - spent);
+    // ★ 조기 반환하지 않는다. 1차에 여기서 바로 return 했더니 아래의 셔플·문 수식어·금고 처리를
+    //   통째로 건너뛰어 문 방향이 2종으로 줄었다 (map.doorDecidesEntry 실패).
+    //   예산이 떨어지면 **후보만** 전투/정예로 좁히고, 나머지 경로는 그대로 흐르게 한다
+    const budgetOut = budgetLeft <= 0 || roomsLeft <= 1;
+    // ★ v203: 얕은 층에서 정예를 2장씩 넣던 것이 1층 9칸 중 정예 4개를 만들었다.
+    //   1~2층은 배우는 구간이라 정예가 절반이면 배울 자리가 없다 — 1장으로 줄인다
+    if (next >= (this.floor <= 1 ? 4 : 3)) { pool.push('elite'); if (this.floor >= 3) pool.push('elite'); }
+    if (this.floor <= 2) pool.push('combat');   // 얕은 층은 일반 전투가 기본이어야 한다
     // 보물·모닥불은 층당 1회만 — 한 번 들어가면 그 층에서는 다시 나오지 않는다
-    if (!this.tookTreasure) pool.push('treasure');
-    if (!this.tookCamp && next >= 4) pool.push('camp');
-    if (!this.tookEvent && next >= 3) {
+    if (!budgetOut && !this.tookTreasure) pool.push('treasure');
+    if (!budgetOut && !this.tookCamp && next >= 4) pool.push('camp');
+    if (!budgetOut && !this.tookEvent && next >= 3) {
       pool.push('event'); // 기연: 리스크-리워드 이벤트
       if (typeof Game !== 'undefined' && Game.route === 'old') pool.push('event'); // 기억의 옛길: 기이한 일이 잦다
     }
-    if (this.floor >= 3 && !this.tookSiege) pool.push('siege'); // 습격 (맵 M4): 3층+ 웨이브 생존 도전
-    if (this.floor >= 2 && !this.tookMerchant && next >= 3) {
+    if (!budgetOut && this.floor >= 3 && !this.tookSiege) pool.push('siege'); // 습격 (맵 M4): 3층+ 웨이브 생존 도전
+    if (!budgetOut && this.floor >= 2 && !this.tookMerchant && next >= 3) {
       pool.push('merchant'); // 상인 (G1): 층당 1회
       if (typeof Game !== 'undefined' && Game.route === 'mist') pool.push('merchant'); // 안개의 샛길: 까마귀와 자주 마주친다
     }
-    if (this.floor >= 4 && !this.trialSeen && RNG.chance(0.3)) pool.push('trial'); // 시련 (G5): 런당 1회, 희귀
+    if (!budgetOut && this.floor >= 4 && !this.trialSeen && RNG.chance(0.3)) pool.push('trial'); // 시련 (G5): 런당 1회, 희귀
     pool.push('combat');
+    if (budgetOut) pool.push('combat');   // 예산 소진 — 전투가 층의 척추다
 
     // 금고 발견 시: 문 3개 상한을 지키려 일반 문을 2개로 줄이고 금고 문을 끼운다
     const n = this.vaultFound ? 2 : RNG.int(2, 3);

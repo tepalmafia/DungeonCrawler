@@ -125,6 +125,18 @@ function createPlayer(x, y, classId = 'knight') {
 
     invuln: 0,
     slowT: 0,
+    // ── 상태이상 5종 (v200) ────────────────────────────────────────────────
+    // 사장: "상대를 얼리거나 화상을 입히거나 속성도 없고 뭐하는거야?"
+    // 계측: 보스가 거는 상태이상은 감속 1종뿐이었고, 플레이어가 받을 수 있는 필드도
+    //       slowT/brandT 두 개뿐이었다. status:{burn,shock,poison} 은 **적 쪽에만** 있었다 —
+    //       시스템이 한 방향이었다.
+    // 각 상태는 (탄 색) + (바닥 잔여물) + (플레이어 상태) 3종 세트로만 의미가 있다.
+    burnT: 0, burnTick: 0,     // 🔥 화상 — 도트. 움직이면 빨리 꺼진다
+    freezeT: 0,                // ❄ 빙결 — 대시 충전 정지 + 감속. 회피 자원을 빼앗는다
+    poisonT: 0, poisonTick: 0, // ☠ 중독 — 회복량 감소 + 약한 도트
+    shockT: 0,                 // ⚡ 감전 — 받는 피해 증가 + 이동 흔들림
+    curseT: 0,                 // 🕯 저주 — 받는 피해 증가. 보스 부하를 처치해야 풀린다
+    _statFx: 0,                // 표시용 애니 타이머
     kbx: 0, kby: 0,
     animT: 0,
     moving: false,
@@ -625,6 +637,42 @@ function createPlayer(x, y, classId = 'knight') {
       if (this._dashWin > 0) this._dashWin -= dt;
       if (this.finisherHealCd > 0) this.finisherHealCd -= dt;
       if (this.slowT > 0) this.slowT -= dt;
+      // ── 상태이상 진행 (v200) ──
+      {
+        const g = game || (typeof Game !== 'undefined' ? Game : null);
+        this._statFx += dt;
+        if (this.burnT > 0) {
+          // 움직이면 빨리 꺼진다 — 「불이 붙었으면 뛰어라」가 플레이어의 대응이 된다
+          this.burnT -= dt * (this.moving ? 2.2 : 1);
+          this.burnTick -= dt;
+          if (this.burnTick <= 0) {
+            this.burnTick = 0.65;
+            if (g && this.hp > 0) g.hurtPlayer(1, { x: 0, y: -0.4 }, 0, '화상', { noStatus: true });
+            Particles.burst(this.x, this.y - 6, { count: 3, colors: ['#ff7043', '#ffd866'], speed: 46, life: 0.4, size: 2, gravity: -140 });
+          }
+        }
+        if (this.freezeT > 0) {
+          this.freezeT -= dt;
+          if (Math.random() < 0.25) Particles.burst(this.x + (Math.random() - 0.5) * 16, this.y, { count: 1, colors: ['#b6e8ff', '#ffffff'], speed: 20, life: 0.5, size: 2, gravity: 40 });
+        }
+        if (this.poisonT > 0) {
+          this.poisonT -= dt;
+          this.poisonTick -= dt;
+          if (this.poisonTick <= 0) {
+            this.poisonTick = 1.1;
+            if (g && this.hp > 1) g.hurtPlayer(1, { x: 0, y: 0 }, 0, '중독', { noStatus: true });   // 중독만으론 죽지 않는다
+            Particles.burst(this.x, this.y - 4, { count: 2, colors: ['#6ab04c', '#b6f06a'], speed: 30, life: 0.6, size: 2, gravity: -80 });
+          }
+        }
+        if (this.shockT > 0) this.shockT -= dt;
+        if (this.curseT > 0) {
+          // 저주는 시간이 아니라 **보스의 부하를 처치해야** 풀린다.
+          // 지금까지 소환된 부하는 무시해도 그만이었다 — 처리할 이유를 만든다
+          const minions = g ? g.enemies.filter((e) => !e.dead && e.summoned).length : 0;
+          if (minions === 0) this.curseT -= dt * 3.5;
+          else this.curseT -= dt * 0.12;
+        }
+      }
       if (this._chaliceT > 0) this._chaliceT -= dt;
       if (this._hornT > 0) this._hornT -= dt;
       if (this._panicT > 0) this._panicT -= dt;
@@ -632,7 +680,9 @@ function createPlayer(x, y, classId = 'knight') {
       if (this._reaperT > 0) this._reaperT -= dt; // 사신의 걸음 (v151)
       if (this._vengeT > 0) this._vengeT -= dt;   // 원한 폭주 (v151)
 
-      if (this.dashCharges < this.dashMax) {
+      // ★ 빙결의 핵심 — 대시가 **안 찬다.** v188에서 세운 회피 자원을 정면으로 빼앗는다.
+      //   숫자가 아니라 손에서 바로 느껴지는 상태이상이어야 「걸렸다」가 성립한다
+      if (this.dashCharges < this.dashMax && this.freezeT <= 0) {
         this.dashRegenT += dt;
         if (this.dashRegenT >= this.dashRegenTime()) {
           this.dashRegenT = 0;
@@ -726,7 +776,7 @@ function createPlayer(x, y, classId = 'knight') {
         // 클리어 가속 (v140, 몰입 계측 처방): 방을 비운 순간부터 다음 방까지 +20% —
         // 로밍 타임(마도사 28.8% 실측)이 몰입을 끊는 유일한 구간이었다
         const clearMul = (typeof Game !== 'undefined' && Game.roomCleared) ? 1.2 : 1;
-        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1) * clearMul *
+        const spd = this.speed * (this.slowT > 0 ? 0.55 : 1) * (this.freezeT > 0 ? 0.62 : 1) * (this.tonicT > 0 ? 1.35 : 1) * (this._panicT > 0 ? 1.4 : 1) * clearMul *
           (this.flags.reapstep && this._reaperT > 0 ? 1.3 : 1); // 사신의 걸음 (v151)
         World.moveEntity(this, mx * spd * dt, my * spd * dt);
       }
@@ -1211,6 +1261,45 @@ function createPlayer(x, y, classId = 'knight') {
           flip: this.flip, rot, shadow: true, light: Renderer.lightAt(this.x, this.y),
           alpha: this.invuln > 0 ? 0.8 : 1,
         });
+
+      // ── 상태이상 몸 표시 (v200) ───────────────────────────────────────
+      // HUD 칩만으로는 시선이 화면 좌상단으로 끌린다. **캐릭터 몸 위에서** 보여야
+      // 전투 중에 읽힌다 (v185 「보이지 않는 경감은 없는 것과 같다」의 적용)
+      {
+        const on = [];
+        if (this.burnT > 0) on.push(['#ff7043', 'burn']);
+        if (this.freezeT > 0) on.push(['#b6e8ff', 'freeze']);
+        if (this.poisonT > 0) on.push(['#6ab04c', 'poison']);
+        if (this.shockT > 0) on.push(['#ffd866', 'shock']);
+        if (this.curseT > 0) on.push(['#b13ae0', 'curse']);
+        if (on.length) {
+          const [col, kind] = on[Math.floor(this._statFx * 2.2) % on.length];  // 여러 개면 번갈아 보인다
+          ctx.save();
+          ctx.globalAlpha = 0.30 + Math.sin(this._statFx * 9) * 0.10;
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.drawImage(Sprites.tint(img, col, 1), this.x - img.width, this.y - bob - img.height, img.width * 2, img.height * 2);
+          ctx.restore();
+          ctx.save();
+          if (kind === 'freeze') {                                   // 발밑 서리
+            ctx.globalAlpha = 0.5; ctx.strokeStyle = '#b6e8ff'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(this.x, this.y + this.r * 0.8, this.r + 6, 5, 0, 0, Math.PI * 2); ctx.stroke();
+          } else if (kind === 'shock') {                              // 튀는 전류
+            ctx.globalAlpha = 0.7 + Math.sin(this._statFx * 30) * 0.3;
+            ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 1.5;
+            for (let i = 0; i < 3; i++) {
+              const a0 = this._statFx * 7 + i * 2.1;
+              ctx.beginPath();
+              ctx.moveTo(this.x + Math.cos(a0) * 6, this.y - 6 + Math.sin(a0) * 6);
+              ctx.lineTo(this.x + Math.cos(a0 + 0.6) * 16, this.y - 6 + Math.sin(a0 + 0.6) * 14);
+              ctx.stroke();
+            }
+          } else if (kind === 'curse') {                              // 머리 위 도는 고리
+            ctx.globalAlpha = 0.6; ctx.strokeStyle = '#b13ae0'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(this.x, this.y - this.r - 16, 11, 4, Math.sin(this._statFx * 2) * 0.4, 0, Math.PI * 2); ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
 
       if (this.shield) {
         ctx.save();

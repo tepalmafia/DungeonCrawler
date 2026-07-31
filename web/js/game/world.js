@@ -2,6 +2,228 @@
 // 타일: 0=바닥, 1=벽, 2=용암(비고체, 플레이어 피해)
 const TS = 48;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CRAFT — 타일 공방 (v200)
+//
+// 사장: "이게 최선이야?" → "비용말고 퀄러티말이야."
+// 종전 바닥은 48px 단색 사각형 + 줄눈 1px이었다. 그래서 화면이 **격자로** 읽혔다.
+// 원인 진단 3가지와 그 처방이 이 파일의 규칙이다:
+//   ① 도형(fillRect)으로 찍어서 완벽한 직선만 나왔다  → 값 노이즈로 불규칙성을 만든다
+//   ② 광원 방향이 없어 입체가 안 섰다                 → **빛은 항상 좌상단**. 모든 면이 이 규칙 하나를 따른다
+//   ③ 색이 제각각이라 따로 놀았다                     → 테마색에서 유도한 **고정 램프**만 쓴다
+//
+// 성능: 타일마다 픽셀을 놓으면 방 하나에 50만 회 fillRect가 된다(베이크 끊김).
+//       24×24 ImageData로 **변종 12장을 한 번만** 구워 캐시하고 그 뒤엔 drawImage만 한다.
+//       24px 소스를 ×2로 확대해 스프라이트(24px·SCALE 2)와 픽셀 크기를 맞춘다.
+// ★ RNG 주의: 이 모듈은 RNG를 **한 번도** 쓰지 않는다. 자체 해시 노이즈만 쓴다.
+//   생성 루프의 RNG 호출 수가 바뀌면 방 생성 전체가 어긋난다 (v197에서 실제로 겪음).
+// ─────────────────────────────────────────────────────────────────────────────
+const CRAFT = {
+  SRC: 24,                       // 소스 해상도 (화면에서는 ×2 = 48px)
+  VARIANTS: 12,
+  _cache: {},
+
+  hash(x, y, s) {
+    let h = (x | 0) * 374761393 + (y | 0) * 668265263 + (s | 0) * 1442695041;
+    h = (h ^ (h >> 13)) * 1274126177;
+    return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+  },
+
+  _rgb(hex) {
+    return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+  },
+  _mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; },
+
+  // 색 램프 — 그림자는 차가운 청보라로, 하이라이트는 따뜻한 살구로 민다.
+  // 명암을 단순히 밝기로만 주면 회색으로 죽는다. 색온도가 갈려야 입체로 읽힌다.
+  ramp(hex, n) {
+    const base = this._rgb(hex);
+    const COOL = [46, 36, 74], WARM = [255, 214, 150];
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);                       // 0=가장 어두움 … 1=가장 밝음
+      out.push(t < 0.5 ? this._mix(COOL, base, 0.45 + t * 1.1) : this._mix(base, WARM, (t - 0.5) * 0.34));
+    }
+    return out;
+  },
+
+  // ImageData 위에 픽셀 하나 — 캔버스 fillRect보다 100배 빠르다
+  _px(d, W, x, y, c, a) {
+    if (x < 0 || y < 0 || x >= W || y >= W) return;
+    const i = (y * W + x) * 4;
+    if (a === undefined || a >= 1) { d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255; return; }
+    d[i] += (c[0] - d[i]) * a; d[i + 1] += (c[1] - d[i + 1]) * a; d[i + 2] += (c[2] - d[i + 2]) * a; d[i + 3] = 255;
+  },
+
+  _canvas(img) {
+    const S = this.SRC;
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    c.getContext('2d').putImageData(img, 0, 0);
+    return c;
+  },
+
+  // ── 바닥 ── 다진 흙 바탕 + 박힌 돌판 + 균열 + 이끼 + 잔뼈
+  _floorTile(th, seed) {
+    const S = this.SRC, W = S;
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(S, S), d = img.data;
+    const E = this.ramp(th.floor[seed % th.floor.length], 5);      // 흙 5단
+    const ST = this.ramp(th.floor[(seed + 1) % th.floor.length], 6); // 돌 6단. 바닥색 유도 —
+    // wallFace(벽 색)를 쓰면 바닥보다 너무 밝아 '떠 있는 조각'으로 읽힌다 (4배 확대에서 확인)
+    const MO = this.ramp(th.moss || '#3f5c33', 4);                 // 이끼 전용색. accent(횃불 빛)를 쓰면 바닥이 주황 얼룩이 된다
+
+    // 바탕 — 픽셀 단위 노이즈. 균일한 면을 아예 만들지 않는다
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const n = this.hash(x, y, seed);
+      this._px(d, W, x, y, E[n > 0.94 ? 3 : n > 0.70 ? 2 : n > 0.30 ? 1 : 0]);
+    }
+    // 박힌 돌판 0~2장 — 모서리를 확률적으로 깎아 직사각형이 안 보이게 한다
+    const nSlab = this.hash(0, 0, seed) > 0.62 ? 2 : this.hash(0, 0, seed) > 0.20 ? 1 : 0;
+    for (let k = 0; k < nSlab; k++) {
+      const sx = Math.floor(this.hash(k, 1, seed) * (S - 13));
+      const sy = Math.floor(this.hash(k, 2, seed) * (S - 11));
+      const sw = 6 + Math.floor(this.hash(k, 3, seed) * 6);
+      const sh = 5 + Math.floor(this.hash(k, 4, seed) * 5);
+      for (let y = sy; y < sy + sh && y < S; y++) for (let x = sx; x < sx + sw && x < S; x++) {
+        const ex = Math.min(x - sx, sx + sw - 1 - x), ey = Math.min(y - sy, sy + sh - 1 - y);
+        if (ex + ey <= 1 && this.hash(x, y, seed + 9) > 0.30) continue;        // 모서리 크게 깨짐
+        if (ex + ey <= 2 && this.hash(x, y, seed + 11) > 0.72) continue;
+        const n = this.hash(x, y, seed + 5);
+        const lit = (x === sx || y === sy);                                    // ← 광원 좌상단
+        const dark = (x === sx + sw - 1 || y === sy + sh - 1);
+        this._px(d, W, x, y, ST[lit ? 3 : dark ? 0 : n > 0.72 ? 2 : n > 0.3 ? 1 : 1]);
+      }
+    }
+    // 균열 — 갈라진 방향이 매번 다르고, 갈라진 면에 반사광이 1px 붙는다
+    if (this.hash(3, 3, seed) > 0.48) {
+      let cx = Math.floor(this.hash(4, 4, seed) * S), cy = Math.floor(this.hash(5, 5, seed) * 6);
+      const dir = this.hash(6, 6, seed) > 0.5 ? 1 : -1;
+      const len = 10 + this.hash(7, 7, seed) * 12;
+      for (let i = 0; i < len; i++) {
+        this._px(d, W, cx, cy, ST[0]); this._px(d, W, cx + 1, cy, ST[3], 0.6);
+        cy++; const t = this.hash(cx, cy, seed + 3);
+        cx += t > 0.72 ? dir : t > 0.5 ? -dir : 0;
+      }
+    }
+    // 흩어진 자갈 — 타일 경계가 만드는 가로 줄무늬를 깨는 역할. 1px 그림자가 우하단
+    for (let k = 0; k < 5; k++) {
+      if (this.hash(k, 30, seed) < 0.48) continue;
+      const gx = Math.floor(this.hash(k, 31, seed) * (S - 3));
+      const gy = Math.floor(this.hash(k, 32, seed) * (S - 3));
+      const gs = this.hash(k, 33, seed) > 0.7 ? 2 : 1;
+      for (let y = 0; y < gs; y++) for (let x = 0; x < gs; x++)
+        this._px(d, W, gx + x, gy + y, ST[this.hash(k, 34, seed) > 0.5 ? 3 : 2]);
+      this._px(d, W, gx + gs, gy + gs, ST[0], 0.7);
+    }
+    // 이끼 — 돌 틈에서만 자라야 한다. 아무 데나 찍으면 얼룩으로 보인다
+    if (this.hash(8, 8, seed) > 0.80) {
+      const mx = Math.floor(this.hash(9, 9, seed) * (S - 8)), my = Math.floor(this.hash(10, 10, seed) * (S - 8));
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 8; x++) {
+        const n = this.hash(mx + x, my + y, seed + 17);
+        const fall = 1 - (x / 8) * 0.6 - (y / 7) * 0.5;                        // 가장자리로 갈수록 성기게
+        if (n < fall * 0.42) this._px(d, W, mx + x, my + y, MO[n < fall * 0.15 ? 2 : n < fall * 0.3 ? 1 : 0], 0.55);
+      }
+    }
+    // 잔뼈 — 「지하 묘지」라는 서사가 바닥에 있어야 한다
+    if (this.hash(12, 12, seed) > 0.88) {
+      const bx = 3 + Math.floor(this.hash(13, 13, seed) * (S - 10));
+      const by = 3 + Math.floor(this.hash(14, 14, seed) * (S - 7));
+      const BN = this.ramp('#6b6472', 6);
+      for (let i = 0; i < 5; i++) this._px(d, W, bx + i, by, BN[3], 0.8);
+      this._px(d, W, bx, by - 1, BN[4], 0.8); this._px(d, W, bx + 4, by - 1, BN[4], 0.8);
+      this._px(d, W, bx, by + 1, BN[1], 0.8); this._px(d, W, bx + 4, by + 1, BN[1], 0.8);
+    }
+    g.putImageData(img, 0, 0);
+    return cv;
+  },
+
+  // ── 벽 정면 ── 그늘진 면. 벽돌이 어긋나게 쌓이고 좌상단 모서리에 빛이 걸린다
+  _wallFaceTile(th, seed) {
+    const S = this.SRC, W = S;
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(S, S), d = img.data;
+    const B = this.ramp(th.wallFace, 6), K = this.ramp(th.wallDark, 4);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const n = this.hash(x, y, seed + 1);
+      this._px(d, W, x, y, K[n > 0.8 ? 2 : n > 0.4 ? 1 : 0]);          // 줄눈(어두운 바탕)
+    }
+    for (const [y0, hh, off] of [[0, 8, 0], [8, 8, 5], [16, 8, 2]]) {   // 3단, 단마다 어긋남
+      let x = -off - Math.floor(this.hash(y0, 40, seed) * 4);
+      while (x < S) {
+        const w = 8 + Math.floor(this.hash(x, y0, seed) * 5);
+        for (let yy = y0 + 1; yy < y0 + hh - 1 && yy < S; yy++)
+          for (let xx = x + 1; xx < x + w - 1; xx++) {
+            if (xx < 0 || xx >= S) continue;
+            const n = this.hash(xx, yy, seed + 2);
+            const lit = (yy === y0 + 1 || xx === x + 1);                 // ← 광원 좌상단
+            const dark = (yy === y0 + hh - 2 || xx === x + w - 2);
+            this._px(d, W, xx, yy, B[lit ? 4 : dark ? 0 : n > 0.7 ? 3 : n > 0.35 ? 2 : 1]);
+          }
+        x += w;
+      }
+    }
+    for (let x = 0; x < S; x++) { this._px(d, W, x, S - 2, K[1]); this._px(d, W, x, S - 1, K[0]); }  // 발밑 립
+    g.putImageData(img, 0, 0);
+    return cv;
+  },
+
+  // ── 벽 윗면 ── 빛을 정면으로 받는 면. 가장 밝고, 세로 이음매가 지난다
+  _wallTopTile(th, seed) {
+    const S = this.SRC, W = S;
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(S, S), d = img.data;
+    const R = this.ramp(th.roof, 6);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const n = this.hash(x, y, seed);
+      this._px(d, W, x, y, R[y < 3 ? (n > 0.5 ? 5 : 4) : n > 0.78 ? 4 : n > 0.4 ? 3 : 2]);
+    }
+    for (let k = 0; k < 3; k++) {                                        // 돌 이음매
+      const jx = Math.floor(this.hash(k, 20, seed) * S);
+      for (let y = 0; y < S; y++) if (this.hash(jx, y, seed) > 0.25) this._px(d, W, jx, y, R[1]);
+    }
+    for (let x = 0; x < S; x++) { this._px(d, W, x, S - 2, R[1]); this._px(d, W, x, S - 1, R[0]); }  // 앞면으로 꺾이는 모서리
+    g.putImageData(img, 0, 0);
+    return cv;
+  },
+
+  // ── 결(grain) ── 구조를 건드리지 않고 질감만 얹는 반투명 노이즈.
+  // 벽은 이미 v191 「벽 솟음」과 벽돌 단위 명암이라는 좋은 구조를 갖고 있다.
+  // 그걸 갈아엎지 않고 **결만** 덧입힌다 — 통짜 면이 사라지는 게 목적이다.
+  _grainTile(seed) {
+    const S = this.SRC, W = S;
+    const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+    const img = g.createImageData(S, S), d = img.data;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const n = this.hash(x, y, seed);
+      const i = (y * W + x) * 4;
+      // 밝은 알갱이는 따뜻하게, 어두운 알갱이는 차갑게 — 여기서도 색온도를 가른다
+      if (n > 0.90)      { d[i] = 255; d[i+1] = 226; d[i+2] = 176; d[i+3] = 26; }
+      else if (n > 0.80) { d[i] = 255; d[i+1] = 236; d[i+2] = 206; d[i+3] = 12; }
+      else if (n < 0.10) { d[i] = 22;  d[i+1] = 16;  d[i+2] = 40;  d[i+3] = 46; }
+      else if (n < 0.22) { d[i] = 30;  d[i+1] = 24;  d[i+2] = 52;  d[i+3] = 22; }
+      else d[i+3] = 0;
+    }
+    g.putImageData(img, 0, 0);
+    return cv;
+  },
+
+  // 테마별 세트 — 한 번만 굽고 캐시한다
+  set(th, key) {
+    if (this._cache[key]) return this._cache[key];
+    const s = { floor: [], face: [], top: [], grain: [] };
+    for (let i = 0; i < this.VARIANTS; i++) s.floor.push(this._floorTile(th, i * 97 + 11));
+    for (let i = 0; i < 6; i++) { s.face.push(this._wallFaceTile(th, i * 53 + 7)); s.top.push(this._wallTopTile(th, i * 31 + 3)); }
+    for (let i = 0; i < 8; i++) s.grain.push(this._grainTile(i * 41 + 19));
+    this._cache[key] = s;
+    return s;
+  },
+};
+
 // 층 테마 팔레트 (기획안 §8.2) — 같은 렌더 코드에 색만 갈아끼운다
 // roof: 벽 윗면, grade: 층 컬러 그레이딩, accent: 횃불 빛, decals: 바닥 장식 종류
 const FLOOR_THEMES = {
@@ -9,30 +231,35 @@ const FLOOR_THEMES = {
     floor: ['#1b1b26', '#1e1e2a', '#191922', '#1d1d29'],
     wallBase: '#2a2a3a', wallFace: '#3d3d52', wallDark: '#1c1c28', roof: '#14141d',
     grade: 'rgba(60,60,110,0.05)', accent: '#ff9a3c',
+    moss: '#3f5c33',
     decals: ['skull', 'bones', 'crack', 'pebbles'],
   },
   2: { // 곰팡이 동굴 (독 안개)
     floor: ['#16211b', '#182419', '#141f17', '#17231c'],
     wallBase: '#22382a', wallFace: '#2f4d3a', wallDark: '#101a14', roof: '#0d1710',
     grade: 'rgba(50,140,70,0.06)', accent: '#8adf76',
+    moss: '#5f8a3e',
     decals: ['moss', 'spore', 'puddle', 'pebbles'],
   },
   3: { // 잊힌 감옥 (좁은 감방 구조)
     floor: ['#20202a', '#232330', '#1d1d26', '#212130'],
     wallBase: '#33334a', wallFace: '#474766', wallDark: '#191924', roof: '#16161f',
     grade: 'rgba(90,90,140,0.05)', accent: '#a9c1d8',
+    moss: '#3a5450',
     decals: ['chain', 'crack', 'bones', 'pebbles'],
   },
   4: { // 용암 심층 (바닥 용암)
     floor: ['#241416', '#281618', '#1f1213', '#261517'],
     wallBase: '#3a1f1f', wallFace: '#57302a', wallDark: '#1a0d0e', roof: '#170b0c',
     grade: 'rgba(220,90,30,0.06)', accent: '#ff7043',
+    moss: '#6b4a22',
     decals: ['ember', 'crack', 'pebbles'],
   },
   5: { // 심연의 옥좌 (어둠)
     floor: ['#171022', '#191226', '#140e1e', '#181126'],
     wallBase: '#2a1f3d', wallFace: '#3d2c5c', wallDark: '#120b1c', roof: '#0e0817',
     grade: 'rgba(120,40,140,0.06)', accent: '#b13ae0',
+    moss: '#4a3a6b',
     decals: ['skull', 'crack', 'voidspeck'],
   },
   // ── 6~10층 심층: 더 어둡고 핏빛으로 물든 변주 ──
@@ -1480,7 +1707,9 @@ const World = {
     c.width = this.cols * TS;
     c.height = this.rows * TS;
     const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;      // 24px 소스를 ×2 확대 — 픽셀이 뭉개지면 픽셀아트가 아니다
     const th = this.theme;
+    const craft = CRAFT.set(th, (Dungeon.floor || 1) + ':' + (this.act || 1));
     this.torches = [];
 
     // 1) 바닥 + 용암
@@ -1538,21 +1767,26 @@ const World = {
           const hsh = (a, b) => { let h = (a * 73856093) ^ (b * 19349663) ^ (this._slabSeed || 0); h = (h ^ (h >> 13)) * 1274126177; return ((h ^ (h >> 16)) >>> 0) % 1000 / 1000; };
           const slabX = Math.floor((tx + (ty % 2)) / 2); // 벽돌식 엇갈림
           const v = hsh(slabX, ty);
-          ctx.fillStyle = th.floor[Math.floor(v * th.floor.length) % th.floor.length];
-          ctx.fillRect(x, y, TS, TS);
-          // 판석 명암 4단 — 판 단위로만 달라진다
-          const tone = v < 0.25 ? 'rgba(0,0,0,0.10)' : v < 0.5 ? 'rgba(0,0,0,0.045)' : v < 0.75 ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.042)';
+          // ── v200 공방 타일 ──
+          // 종전엔 여기서 단색 채우기 + 4단 톤 + 1px 줄눈을 그렸다. 코드상으로는 판석이었지만
+          // 화면에서는 **격자**로 읽혔다 (사장: "바닥에 빨간 영역만 나오고…", 맵 실사 확인).
+          // 원인 3가지와 처방은 CRAFT 모듈 주석에 있다 — 여기선 바탕만 갈아끼운다.
+          // 판석 엇갈림·깨진 판석·막별 재질은 **그대로 살린다** (그건 잘 작동하던 설계다).
+          ctx.drawImage(craft.floor[Math.floor(v * CRAFT.VARIANTS) % CRAFT.VARIANTS], x, y, TS, TS);
+          // 판 단위 명암 — 큰 판석의 존재감은 유지하되 폭을 절반으로 줄인다(노이즈를 덮지 않게)
+          const tone = v < 0.25 ? 'rgba(0,0,0,0.05)' : v < 0.5 ? 'rgba(0,0,0,0.022)' : v < 0.75 ? 'rgba(255,255,255,0.010)' : 'rgba(255,255,255,0.022)';
           ctx.fillStyle = tone;
           ctx.fillRect(x, y, TS, TS);
-          // 줄눈: 가로는 매 행, 세로는 판 경계에만
-          ctx.fillStyle = 'rgba(0,0,0,0.30)';
-          ctx.fillRect(x, y, TS, 1);
+          // 줄눈: **판 경계에만.** 매 행 가로줄이 격자의 주범이었다.
+          // 남긴 경계선도 어두운 선 1px + 아래에 반사광 1px — 파인 홈으로 읽히게 한다
           const leftSlab = Math.floor(((tx - 1) + (ty % 2)) / 2);
-          if (leftSlab !== slabX || tx === 0) ctx.fillRect(x, y, 1, TS);
-          // 판석 상단 미세 하이라이트 (판 왼쪽 칸에서만 한 번)
-          if ((tx + (ty % 2)) % 2 === 0) {
-            ctx.fillStyle = 'rgba(255,255,255,0.028)';
-            ctx.fillRect(x + 1, y + 1, TS * 2 - 2, 1);
+          if (leftSlab !== slabX || tx === 0) {
+            ctx.fillStyle = 'rgba(0,0,0,0.34)'; ctx.fillRect(x, y, 1, TS);
+            ctx.fillStyle = 'rgba(255,222,170,0.05)'; ctx.fillRect(x + 1, y, 1, TS);   // ← 광원 좌상단
+          }
+          if ((ty + tx) % 2 === 0 || hsh(slabX, ty * 7) < 0.5) {
+            ctx.fillStyle = 'rgba(0,0,0,0.20)'; ctx.fillRect(x, y, TS, 1);
+            ctx.fillStyle = 'rgba(255,222,170,0.04)'; ctx.fillRect(x, y + 1, TS, 1);
           }
           // 깨진 판석: 사선 균열 + 떨어져나간 모서리
           if (hsh(slabX * 31 + 7, ty) < 0.11) {
@@ -1748,6 +1982,18 @@ const World = {
           // 아래 립
           ctx.fillStyle = th.wallDark;
           ctx.fillRect(x, y + TS - 6, TS, 6);
+          // ── v200 결 + 광원 규칙 ──
+          // 벽돌 구조(v124)와 벽 솟음(v191)은 좋은 설계라 건드리지 않는다.
+          // 통짜 면만 없앤다: 반투명 노이즈를 얹고, 빛을 좌상단으로 통일한다
+          {
+            const gi = Math.floor(CRAFT.hash(tx, ty, 3) * 8) % 8;
+            const gt = craft.grain[gi];
+            for (let gy = y - rise; gy < y + TS; gy += TS) ctx.drawImage(gt, x, gy, TS, TS);
+            ctx.fillStyle = 'rgba(255,222,170,0.055)';        // 좌측 모서리에 걸린 빛
+            ctx.fillRect(x, y - rise + 8, 1, TS + rise - 8);
+            ctx.fillStyle = 'rgba(18,12,34,0.34)';            // 우측은 그늘 (광원 반대쪽)
+            ctx.fillRect(x + TS - 2, y - rise + 8, 2, TS + rise - 8);
+          }
           // 벽돌 하이라이트 — 꼭대기 모서리에 얹는다
           ctx.fillStyle = 'rgba(255,255,255,0.05)';
           ctx.fillRect(x + 2, y - rise + 9, TS / 2 - 3, 2);
@@ -1801,6 +2047,8 @@ const World = {
           for (let i = 0; i < 3; i++) {
             ctx.fillRect(x + RNG.int(2, TS - 8), y + RNG.int(2, TS - 4), RNG.int(3, 6), 1);
           }
+          // v200 결 — 윗면도 통짜 면이면 배경 어둠과 같아진다
+          ctx.drawImage(craft.grain[Math.floor(CRAFT.hash(tx, ty, 7) * 8) % 8], x, y, TS, TS);
           // 바닥과 접한 전 방향 모서리 — 벽 실루엣이 어둠 속에서도 읽힌다
           ctx.fillStyle = 'rgba(255,255,255,0.075)';
           if (!this._wallAt(tx - 1, ty)) ctx.fillRect(x, y, 2, TS);

@@ -332,6 +332,42 @@ const HUD = {
       ctx.fillStyle = 'rgba(154,160,180,0.75)';
       lines.forEach((l, i) => ctx.fillText(l, Renderer.W - 16, Renderer.H - 46 + i * 14));
     }
+    // ── 상태이상 표시 (v200) ──────────────────────────────────────────────
+    // 「보이지 않는 경감은 없는 것과 같다」 — v185에서 얻은 교훈을 상태이상에 적용한다.
+    // 걸린 것을 화면 세 곳에서 알린다: ① HUD 칩 ② 캐릭터 색 오버레이(render-game) ③ 화면 가장자리
+    {
+      const ST = [
+        ['burnT', '화상', '#ff7043', 2.2], ['freezeT', '빙결', '#b6e8ff', 2.0],
+        ['poisonT', '중독', '#6ab04c', 3.5], ['shockT', '감전', '#ffd866', 2.0],
+        ['curseT', '저주', '#b13ae0', 5.0],
+      ];
+      // ★ 자리: 좌하단 고정. 1차에 barY 기준으로 뒀더니 경험치 바와 겹쳤다.
+      //   상태는 전투 내내 보여야 하므로 다른 UI가 자라도 안 밀리는 곳에 둔다
+      let sx = 14;
+      const sy = Renderer.H - 96;
+      let any = false;
+      for (const [f, label, col, max] of ST) {
+        const v = p[f] || 0;
+        if (v <= 0) continue;
+        any = true;
+        const w = 46;
+        ctx.fillStyle = 'rgba(12,10,18,0.85)';
+        ctx.fillRect(sx, sy, w, 14);
+        ctx.fillStyle = col;
+        ctx.globalAlpha = 0.30;
+        ctx.fillRect(sx, sy, w * Math.min(1, v / max), 14);      // 남은 시간이 줄어드는 게 보인다
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = col; ctx.lineWidth = 1;
+        ctx.strokeRect(sx + 0.5, sy + 0.5, w - 1, 13);
+        ctx.fillStyle = col;
+        ctx.font = '10px Galmuri11, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, sx + w / 2, sy + 11);
+        sx += w + 4;
+      }
+      ctx.textAlign = 'left';
+    }
+
   },
 
   cardRects(n, h = 165) {
@@ -2459,5 +2495,6 @@ const HUD = {
     ctx.font = 'bold 14px Galmuri11, monospace';
     ctx.fillStyle = '#5ce0e6';
     ctx.fillText(page === 1 ? 'H / — 다음 페이지   ·   ESC — 닫기' : 'H / — 닫기   ·   ESC — 닫기', Renderer.W / 2, Renderer.H - 24);
+
   },
 };

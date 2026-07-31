@@ -1968,7 +1968,10 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
       Game.roomCleared = true;
       World.openDoors(Dungeon.doorOptions());
       const doors = World.doors.filter((d) => d.opt.type !== 'boss');
-      if (!doors.length) break;
+      // ★ v203: 층별 방 수가 달라져 1층은 6칸이다. 한 층 안에서만 걸으면
+      //   표본이 4개에서 끊긴다 — 「문 높이가 이어지는가」는 층과 무관한 성질이므로
+      //   보스방에 닿으면 다음 층으로 넘어가 계속 표본을 모은다
+      if (!doors.length) { Dungeon.nextFloor(); Game.roomCleared = true; continue; }
       const door = doors[room % doors.length];
       Game.player.x = door.x; Game.player.y = door.y;
       Game._tickPlay(1 / 60);
@@ -2066,7 +2069,13 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
     for (let r = 0; r < 6; r++) {
       Game.restart(3000 + r * 29); Game.state = 'play'; Game.player.god = true;
       Dungeon.floor = 1; Dungeon.miniSeen = false;
-      for (let room = 1; room <= 7; room++) {
+      // ★ v203: 층별 방 수가 달라졌다(1층 6칸). 순회를 7칸 고정으로 두면
+      //   **존재하지 않는 방**을 검사하게 되고, 그 방들은 보스 직전으로 취급돼 우두머리가 빠진다.
+      //   실제 전투방 범위(1 … totalRooms-1)만 돈다 — 마지막 칸은 보스방이다
+      //   그리고 **보스 직전 방은 v194에서 의도적으로 우두머리를 뺀 「숨 고르는 방」**이다.
+      //   그 방까지 세면 의도된 설계가 실패로 찍힌다 — 검사 대상은 우두머리가 나와야 하는 방이다
+      const lastCombat = Dungeon.roomsFor(1) - 2;
+      for (let room = 1; room <= lastCombat; room++) {
         Dungeon.roomIndex = room;
         Game.enemies.length = 0; Game.pendingSpawns.length = 0; Game.markers.length = 0;
         World.buildRoom('combat'); Game.onRoomBuilt('combat');
@@ -2087,8 +2096,227 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   });
   console.log('  단계별보스:', JSON.stringify(stage));
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
-    `전투방 ${stage.rooms}개 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
+    `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 보상 출처 제한 (v203) ═════════════════════════════════════════════
+  // 사장: "특성이나 스킬, 스탯은 레벨업과 보스를 잡거나 보물을 먹을때만 주도록 하자."
+  // 코드 호출 지점이 아니라 **실제로 열리는 횟수**를 센다 — 생성기가 아니라 소비자다
+  const rwsrc = await page.evaluate(() => {
+    const R = { seen: {}, rooms: {}, bossCard: 0, budget: {} };
+    Game.restart(90210); Game.state = 'play'; Game.player.god = true;
+    const _t = Game.openTraitChoice.bind(Game);
+    Game.openTraitChoice = function (r) { R.seen[r || '?'] = (R.seen[r || '?'] || 0) + 1; Game.pendingChoices = 0; };
+    // ① 보스 처치가 특성을 주는가 (계측 결과 **아예 없었다**)
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    const pc0 = Game.pendingChoices;
+    Game.onBossDead();
+    R.bossCard = Game.pendingChoices - pc0;
+    Game.pendingChoices = 0;
+    // ② 정예방 입장이 특성을 주지 않는가
+    Dungeon.floor = 1; Dungeon.roomIndex = 2; Dungeon.tookEliteCard = false;
+    Dungeon.roomType = 'elite'; Game.roomCleared = false;
+    const pc1 = Game.pendingChoices;
+    Game.onRoomCleared && Game.onRoomCleared();
+    R.eliteCard = Game.pendingChoices - pc1;
+    // ③ 층별 방 수
+    for (const f of [1, 2, 3, 4, 5, 6, 9]) R.rooms[f] = Dungeon.roomsFor(f);
+    // ④ 특수방 예산이 층의 척추를 지키는가 — 문 후보를 끝까지 굴려 본다
+    for (const f of [1, 3]) {
+      // ★ totalRooms 는 build() 가 갱신한다 — 테스트가 build 를 안 부르면 옛 값이 남아
+      //   roomsLeft 계산이 어긋난다 (1차에 실제로 어긋났다). 명시적으로 맞춰 준다
+      Dungeon.floor = f; Dungeon.totalRooms = Dungeon.roomsFor(f);
+      Dungeon.specialsTaken = 0; Dungeon.tookTreasure = false;
+      Dungeon.tookCamp = false; Dungeon.tookEvent = false; Dungeon.tookSiege = false;
+      Dungeon.tookMerchant = false; Dungeon.vaultFound = false;
+      let sp = 0, cb = 0;
+      for (let r = 1; r < Dungeon.roomsFor(f); r++) {
+        Dungeon.roomIndex = r;
+        const opts = Dungeon.doorOptions().map((o) => o.type);
+        // 특수방을 고를 수 있으면 고른다 (최악의 경우 — 사람은 특수방으로 간다)
+        const pick = opts.find((t) => !['combat', 'elite', 'boss'].includes(t)) || opts[0];
+        // ★ 보스방은 특수방이 아니다. 1차에 boss 를 특수로 세어 예산이 새는 것처럼 보였다 —
+        //   내 계기 오류였다 (예산은 정상 작동 중이었다)
+        if (pick === 'boss') continue;
+        if (['combat', 'elite'].includes(pick)) cb++; else sp++;
+        if (!['combat', 'elite', 'boss'].includes(pick)) Dungeon.specialsTaken++;
+        if (pick === 'treasure') Dungeon.tookTreasure = true;
+        if (pick === 'camp') Dungeon.tookCamp = true;
+        if (pick === 'event') Dungeon.tookEvent = true;
+        if (pick === 'siege') Dungeon.tookSiege = true;
+        if (pick === 'merchant') Dungeon.tookMerchant = true;
+      }
+      R.budget[f] = { special: sp, combat: cb };
+    }
+    return R;
+  });
+  console.log('  보상출처:', JSON.stringify(rwsrc));
+  ok('reward.bossGrantsCard', rwsrc.bossCard >= 1,
+    `보스 처치가 특성 ${rwsrc.bossCard}장을 준다 ` +
+    '(★ v202까지 **보스 처치 보상이 아예 없었다** — 정예방·습격·기연에서는 나오는데 ' +
+    '정작 보스에서는 안 나왔다. 사장이 말한 세 출처 중 하나가 비어 있었다)');
+  ok('reward.onlyThreeSources', !rwsrc.eliteCard,
+    `정예방 입장이 특성을 주지 않는다 (${rwsrc.eliteCard || 0}장) ` +
+    '(출처는 레벨업 / 보스 / 보물 셋뿐. 정예·습격·기연·제단·층스킵은 영혼 파편으로 갚는다 — ' +
+    '보상이 사라지는 게 아니라 **종류가 바뀐다**)');
+  ok('room.shallowFloorsAreShort',
+    rwsrc.rooms[1] === 6 && rwsrc.rooms[1] < rwsrc.rooms[3] && rwsrc.rooms[3] < rwsrc.rooms[9],
+    `층별 방 수 1층 ${rwsrc.rooms[1]} · 3층 ${rwsrc.rooms[3]} · 5층 ${rwsrc.rooms[5]} · 9층 ${rwsrc.rooms[9]}칸 ` +
+    '(얕은 층은 배우는 구간이라 짧게, 깊을수록 버티는 구간이라 길게)');
+  ok('room.combatSpineSurvives',
+    rwsrc.budget[1].combat >= 2 && rwsrc.budget[1].special <= 2 && rwsrc.budget[3].combat >= 2,
+    `특수방만 골라도 1층 전투 ${rwsrc.budget[1].combat}칸/특수 ${rwsrc.budget[1].special}칸 · ` +
+    `3층 전투 ${rwsrc.budget[3].combat}칸/특수 ${rwsrc.budget[3].special}칸 ` +
+    '(★ 방을 줄였더니 1층 6칸에 일반 전투가 **0개**가 됐다 — 생성기가 아니라 선택 탓이다. ' +
+    '문마다 특수방이 붙어 있으면 사람은 다 특수방으로 간다. ' +
+    '그러면 v192~198의 「잡몹+보스」 설계가 놓일 자리가 사라진다)');
+
+  // ══ 시전 인터럽트 (v201) ══════════════════════════════════════════════
+  // 사장: "보스가 스킬쓸때 무적이 된다던가. 그런거 없어?" → 승인: "무적은 시전 인터럽트로"
+  // 무적으로 딜을 막으면 플레이어가 할 일이 없어진다. 반대로 간다 —
+  // 시전 중에는 **더 아프게 맞고**(×1.5) 대신 **경직되지 않는다**.
+  const cast = await page.evaluate(() => {
+    const R = {};
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    let bs = Game.enemies.find((e) => e.isBoss);
+    bs.spawnT = 0;
+    bs.castStart(Game);
+    R.window = bs.castMax;
+    R.need = bs.castNeed;
+    R.needPct = +(bs.castNeed / bs.maxHp).toFixed(3);
+    // ① 무경직 — 큰 넉백을 줘도 안 밀린다 (넉백으로 시전을 흐트러뜨리는 우회로가 없어야 한다)
+    const x0 = bs.x;
+    Game.damageEnemy(bs, 1, { x: 1, y: 0 }, { feel: true, kb: 900 });
+    R.noFlinch = Math.abs(bs.x - x0) < 1 && Math.abs(bs.kbx) < 1;
+    // ② 시전 중 피해 증폭 — **절대값이 아니라 비율**로 잰다.
+    //   보스 버스트 상한(최대HP의 %)이 먼저 걸리므로 raw 10이 그대로 오지 않는다.
+    //   상한을 모르는 채 절대값을 기대하면 거짓 실패가 난다 (1차에서 실제로 났다)
+    const hpA = bs.hp;
+    Game.damageEnemy(bs, 10, { x: 0, y: 0 }, { feel: false, kb: 0 });
+    const dCast = hpA - bs.hp;
+    const stSave = bs.state; bs.state = 'idle';          // 같은 타격을 평상시로 한 번 더
+    const hpB = bs.hp;
+    Game.damageEnemy(bs, 10, { x: 0, y: 0 }, { feel: false, kb: 0 });
+    const dIdle = hpB - bs.hp;
+    bs.state = stSave;
+    R.ampDealt = dCast; R.idleDealt = dIdle;
+    R.ampRatio = dIdle > 0 ? +(dCast / dIdle).toFixed(2) : 0;
+    // ③ 임계까지 때리면 끊기고 그로기에 든다
+    let guard = 0;
+    while (bs.state === 'cast' && guard++ < 500) Game.damageEnemy(bs, 3, { x: 0, y: 0 }, { feel: false, kb: 0 });
+    R.broke = bs.state === 'groggy';
+    R.groggy = bs.groggyT || 0;
+    R.thaws = false;
+    for (let i = 0; i < 200 && bs.state === 'groggy'; i++) bs.update(1 / 60, Game);
+    R.thaws = bs.state !== 'groggy';
+    // ④ 못 끊으면 큰 기술이 그대로 나간다
+    Dungeon.build('boss');
+    bs = Game.enemies.find((e) => e.isBoss);
+    bs.spawnT = 0;
+    bs.castStart(Game);
+    for (let i = 0; i < 400 && bs.state === 'cast'; i++) bs.update(1 / 60, Game);
+    R.punish = bs.state === 'windup' && bs.attack && bs.attack.kind === 'uniq';
+    // ⑤ 화면에 게이지가 그려지는가 — 「보이지 않는 창은 없는 것과 같다」
+    Dungeon.build('boss');
+    bs = Game.enemies.find((e) => e.isBoss);
+    bs.spawnT = 0; bs.castStart(Game);
+    let texts = 0;
+    const g = Renderer.ctx, _f = g.fillText.bind(g);
+    g.fillText = function (t, x, y) { if (typeof t === 'string' && t.indexOf('끊어라') >= 0) texts++; return _f(t, x, y); };
+    bs.draw(g);
+    g.fillText = _f;
+    R.drawn = texts;
+    return R;
+  });
+  console.log('  시전:', JSON.stringify(cast));
+  ok('boss.castInterruptible',
+    cast.broke && cast.noFlinch && cast.ampRatio >= 1.4 && cast.needPct > 0.05 && cast.needPct < 0.25,
+    `시전 창 ${cast.window}초 · 차단 임계 ${cast.need}(최대HP의 ${(cast.needPct * 100).toFixed(0)}%) · ` +
+    `무경직 ${cast.noFlinch} · 같은 타격이 평상시 ${cast.idleDealt} → 시전 중 ${cast.ampDealt} (×${cast.ampRatio}) · 차단 ${cast.broke} ` +
+    '(무적으로 딜을 막으면 플레이어가 할 일이 없어진다 — 반대로 「지금 때려야 한다」로 만든다. ' +
+    '넉백 면역이 없으면 화력 없이 밀어내기로 시전을 흐트러뜨리는 우회로가 생긴다)');
+  ok('boss.castResolves',
+    cast.punish && cast.groggy >= 1.5 && cast.thaws,
+    `못 끊으면 고유기가 그대로 나간다 ${cast.punish} · 끊으면 그로기 ${cast.groggy.toFixed(1)}초 후 복귀 ${cast.thaws} ` +
+    '(끊어도 안 끊어도 결과가 있어야 선택이 된다 — 그로기는 인터럽트의 보상이고, 시전 완료는 벌이다)');
+  ok('boss.castIsVisible', cast.drawn >= 1,
+    `시전 게이지·문구가 실제로 그려진다 (${cast.drawn}회) ` +
+    '(★ 끊으라고 만든 창인데 화면에 안 보이면 존재하지 않는 것과 같다 — v185·186·192의 교훈)');
+
+  // ══ 속성·상태이상 (v200) ══════════════════════════════════════════════
+  // 사장: "상대를 얼리거나 화상을 입히거나 속성도 없고 뭐하는거야?"
+  // ★ 「걸린다」와 「보인다」를 **따로** 검사한다.
+  //   v185~192에서 세 번 겪었다 — 기능은 작동하는데 화면에 안 나와서 없는 것과 같았다.
+  const stat = await page.evaluate(async () => {
+    const R = { elems: {}, applied: [], zoneKinds: [], hud: 0, dashFrozen: false, healCut: false, curseNeedsMinion: false };
+    // ① 23종 전부 속성이 배정돼 있는가
+    for (const f of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 45, 50, 60, 61, 62, 63, 64, 65, 66, 67]) {
+      const b = createBoss(f, 300, 200);
+      R.elems[f] = (b.elems || []).slice();
+    }
+    // ② 플레이어가 5종 전부 받을 수 있는가 + 화면에 나오는가
+    Dungeon.floor = 1; Dungeon.roomIndex = Dungeon.totalRooms; Dungeon.build('boss');
+    const p = Game.player; p.god = false;
+    for (const k of ['burn', 'freeze', 'poison', 'shock', 'curse']) {
+      Game.applyStatus(k, 4);
+      const F = { burn: 'burnT', freeze: 'freezeT', poison: 'poisonT', shock: 'shockT', curse: 'curseT' }[k];
+      if ((p[F] || 0) > 0) R.applied.push(k);
+    }
+    // ③ HUD 칩이 실제로 그려지는가 — 그리기 호출을 세서 확인 (상태 없을 때와 비교)
+    const cnt = () => { let n = 0; const g = Renderer.ctx; const _f = g.fillText.bind(g);
+      g.fillText = function (t, x, y) { if (['화상', '빙결', '중독', '감전', '저주'].includes(t)) n++; return _f(t, x, y); };
+      HUD.draw(g, Game); g.fillText = _f; return n; };
+    R.hud = cnt();
+    // ④ ❄빙결이 대시 충전을 정지시키는가 (회피 자원 박탈이 이 설계의 심장이다)
+    p.burnT = p.poisonT = p.shockT = p.curseT = 0;
+    p.freezeT = 3; p.dashCharges = 0; p.dashRegenT = 0;
+    for (let i = 0; i < 90; i++) p.update(1 / 60, Game);
+    R.dashFrozen = p.dashCharges === 0;
+    p.freezeT = 0; p.dashRegenT = 0;
+    // 재충전 시간은 특성·유물로 변한다 — 고정 프레임을 쓰면 검사 창이 모자라 거짓 실패가 난다
+    const need = Math.ceil(p.dashRegenTime() * 60) + 20;
+    for (let i = 0; i < need; i++) p.update(1 / 60, Game);
+    R.dashThaws = p.dashCharges > 0;
+    R.regenSec = +p.dashRegenTime().toFixed(2);
+    // ⑤ 🕯저주는 부하가 살아 있으면 안 풀린다
+    p.curseT = 5;
+    Game.enemies.push(Object.assign(createEnemy('skeleton', 400, 300, false, 1), { summoned: true }));
+    for (let i = 0; i < 120; i++) p.update(1 / 60, Game);
+    const withMinion = p.curseT;
+    Game.enemies.forEach((e) => { if (e.summoned) e.dead = true; });
+    for (let i = 0; i < 120; i++) p.update(1 / 60, Game);
+    R.curseNeedsMinion = withMinion > 4.0 && p.curseT < withMinion - 1;
+    // ⑥ 보스가 바닥에 흔적을 남기는가 (계측에서 boss.js zones.push 는 0회였다)
+    Game.zones.length = 0;
+    const bs = Game.enemies.find((e) => e.isBoss);
+    if (bs) { bs.strike(Game, 400, 300, { status: false }); }
+    R.zoneKinds = Game.zones.filter((z) => z.byBoss).map((z) => z.elem);
+    return R;
+  });
+  console.log('  속성:', JSON.stringify({ applied: stat.applied, hud: stat.hud, zones: stat.zoneKinds,
+    dashFrozen: stat.dashFrozen, dashThaws: stat.dashThaws, regenSec: stat.regenSec, curse: stat.curseNeedsMinion }));
+  const elemN = Object.values(stat.elems).filter((a) => a && a.length).length;
+  const elemKinds = new Set(Object.values(stat.elems).flat());
+  ok('elem.everyBossHasOne', elemN === 23 && elemKinds.size === 5,
+    `보스 ${elemN}/23 종에 속성 배정 · 쓰인 속성 ${elemKinds.size}종 (${[...elemKinds].join(',')}) ` +
+    '(v199까지 boss.js 가 거는 상태이상은 감속 한 곳(1.6초)뿐이었다 — 속성이 없다는 사장 지적이 정확했다)');
+  ok('elem.playerReceivesAll', stat.applied.length === 5,
+    `플레이어가 받을 수 있는 상태 ${stat.applied.length}/5종 (${stat.applied.join(',')}) ` +
+    '(종전 플레이어 필드는 slowT/brandT 둘뿐 — status:{burn,shock,poison} 은 **적 쪽에만** 있어 시스템이 한 방향이었다)');
+  ok('elem.visibleOnScreen', stat.hud >= 5,
+    `HUD 상태 칩 ${stat.hud}개가 실제로 그려진다 ` +
+    '(★ 「걸린다」와 「보인다」는 다르다 — v185 무리 경감, v186 리더, v192 우두머리에서 세 번 겪었다. ' +
+    '보이지 않는 상태이상은 없는 것과 같다)');
+  ok('elem.freezeStopsDash', stat.dashFrozen && stat.dashThaws,
+    `빙결 중 대시 충전 정지 ${stat.dashFrozen} · 해제 후 재충전 ${stat.dashThaws} (재충전 ${stat.regenSec}초) ` +
+    '(이 설계의 심장 — v188에서 세운 **회피 자원**을 정면으로 빼앗는다. 숫자가 아니라 손에서 느껴진다)');
+  ok('elem.curseNeedsMinionKill', stat.curseNeedsMinion,
+    `저주는 부하가 살아 있는 동안 안 풀리고, 처치하면 풀린다 (${stat.curseNeedsMinion}) ` +
+    '(종전 소환 부하는 무시해도 그만이었다 — 처리할 이유를 만든다)');
+  ok('elem.bossLeavesResidue', stat.zoneKinds.length > 0,
+    `보스가 남긴 바닥 잔여물 ${stat.zoneKinds.length}개 (${stat.zoneKinds.join(',')}) ` +
+    '(계측: boss.js 의 zones.push 는 **0회**였다 — 보스전 3분 동안 방이 처음 모습 그대로였다. ' +
+    '이제 방이 시간에 따라 변하고, HP 인플레 없이 후반 압박이 생긴다)');
+
   ok('stage.miniHasPattern', stage.withMini === 0 || stage.stomps >= stage.withMini * 0.9,
     `보스급 ${stage.withMini}기 중 ${stage.stomps}기가 예고 패턴(강타 0.75초)을 실제로 시전 ` +
     '(v193까지 enemies.js 가 `!this.isMini` 로 우두머리를 패턴에서 제외했다 — ' +

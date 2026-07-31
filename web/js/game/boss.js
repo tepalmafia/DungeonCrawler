@@ -12,6 +12,45 @@
 // ══ 1막 「나를 죽인 손들」 (v118 시나리오 정합) — 죄 없는 자 하나를 죽음까지 운반한
 // 변두리의 손들: 묻은 손(1)·나른 손(2)·가둔 손(3)·태운 손(4)·매단 자들의 원한(5),
 // 그리고 저주에 되삼켜진 그들(6~9) → 마지막에 벤 손, 처형인(10)이 기다린다.
+// ── 보스 속성 (v200) ─────────────────────────────────────────────────────
+// 사장: "상대를 얼리거나 화상을 입히거나 속성도 없고 뭐하는거야?"
+// 계측: boss.js 가 거는 상태이상은 slowT 한 곳(1.6초)뿐이었고 zones.push 는 **0회**였다.
+//       속성 하나 = (탄 색) + (바닥 잔여물) + (플레이어 상태) 3종 세트여야 화면에서 속성으로 읽힌다.
+// 배정 원칙: **죄목이 속성을 정한다.** 서사와 무관한 배정은 하지 않는다.
+//   주속성은 1페이즈부터, 부속성은 2페이즈부터 나온다.
+const BOSS_ELEM = {
+  1:  ['curse'],            // 무덤지기 — 무덤 흙이 발을 잡는다
+  2:  ['poison'],           // 시체 짐꾼 — 늪에 버린 시체가 썩는다
+  3:  ['freeze', 'curse'],  // 간수장 — 돌바닥 감방의 냉기, 얼어 죽은 죄수
+  4:  ['burn'],             // 방화대장 — 불을 놓고 다닌다
+  5:  ['curse', 'freeze'],  // 교수대의 그림자 — 목맨 원한
+  6:  ['curse', 'freeze'],  // 되살아난 오스문드 — 죽어서 더 차가워졌다
+  7:  ['poison', 'shock'],  // 물에 불은 몰레 — 물은 전기를 통한다
+  8:  ['freeze', 'shock'],  // 사슬에 얽힌 바르곤 — 쇠사슬은 전도체
+  9:  ['burn', 'curse'],    // 재가 된 브란트 — 백열한 잿불
+  10: ['curse', 'burn'],    // 왕실 처형인
+  20: ['poison', 'freeze'], // 관문 사령관 — 성문을 닫아 굶겼다
+  30: ['curse', 'poison'],  // 대재판관 — 오심과 고문
+  40: ['burn', 'curse'],    // 대주교 — 화형
+  45: ['freeze'],           // 근위대장 '흰 늑대' — 설한
+  50: ['curse', 'burn', 'freeze', 'poison', 'shock'],  // 왕 — 최종보스는 전부 쓴다
+  60: ['freeze', 'poison'], // 수문장 — 물
+  61: ['curse', 'freeze'],  // 뱃사공 — 강을 건넌 원혼
+  62: ['curse', 'shock'],   // 위증 서기장
+  63: ['shock', 'freeze'],  // 철퇴 가로크 — 금속
+  64: ['poison', 'burn'],   // 역병 의사
+  65: ['burn', 'curse'],    // 소각로장
+  66: ['shock', 'curse'],   // 별지기 오벨
+  67: ['freeze', 'shock'],  // 검은 창기병
+};
+const ELEM_INFO = {
+  burn:   { zone: 'fire',   sec: 2.2, color: '#ff7043', life: 3.0 },
+  freeze: { zone: 'ice',    sec: 2.0, color: '#b6e8ff', life: 4.0 },
+  poison: { zone: 'poison', sec: 3.5, color: '#6ab04c', life: 4.0 },
+  shock:  { zone: 'shock',  sec: 2.0, color: '#ffd866', life: 2.0 },
+  curse:  { zone: 'curse',  sec: 5.0, color: '#b13ae0', life: 5.0 },
+};
+
 const BOSS_DEFS = {
   1: {
     // ★ v192 — 사장: "잡몹만 잡는거 너무 지루하니깐 … 보스는 부하를 소환하거나 유성우를 소환하거나"
@@ -385,6 +424,31 @@ function createBoss(floor, x, y) {
     type: 'boss', isBoss: true,
     name: affixName,
     defId: def._key, // 도감 귀속 — 층 산식 대신 실제 킷으로
+    // 속성 (v200) — 죄목이 정한다. 주속성은 1페이즈부터, 부속성은 2페이즈부터
+    elems: BOSS_ELEM[def._key] || ['curse'],
+    elem() {
+      const list = this.elems;
+      if (this.phase >= 2 && list.length > 1) return list[Math.floor(Math.random() * list.length)];
+      return list[0];
+    },
+    // 공격에 속성을 실어 보낸다 — 상태 부여 + 바닥 잔여물을 한 곳에서 낸다.
+    // 「한 곳에서만」이 중요하다: 여기저기서 걸면 걸렸는지 셀 수가 없다
+    strike(game, x, y, { status = true, zone = true, kind = null } = {}) {
+      const k = kind || this.elem();
+      const info = ELEM_INFO[k];
+      if (!info) return k;
+      if (status && game.applyStatus) {
+        const p = game.player;
+        if (Math.hypot(p.x - x, p.y - y) < 46 + p.r) game.applyStatus(k, info.sec);
+      }
+      if (zone) {
+        // ★ 계측에서 boss.js 의 zones.push 는 **0회**였다 — 보스가 싸운 자리에 흔적이 없었다.
+        //   이제 방이 시간에 따라 변한다: 안전지대가 줄며 HP 인플레 없이 압박이 생긴다
+        game.zones.push({ x, y, r: 52, life: info.life, kind: info.zone, tickT: 0, hit: null, byBoss: true, elem: k });
+        if (game.zones.length > 26) game.zones.splice(0, game.zones.length - 26);
+      }
+      return k;
+    },
     def,
     affixes: affixes.map((a) => a.id),
     affixLabel: affixes.map((a) => a.label.split(' — ')[0]).join(' · ') || '',
@@ -499,6 +563,42 @@ function createBoss(floor, x, y) {
     },
 
     // 초식의 다음 연계로 — 남은 연계가 없으면 idle
+    // 시전 시작 — 게이지·임계·연출
+    castStart(game) {
+      const f = Dungeon.floor;
+      this.castMax = f <= 5 ? 2.2 : 1.6;
+      this.castT = 0;
+      // 임계 = 최대 HP의 12%. 층이 올라도 「몇 대」의 감각이 유지되도록 비율로 잡는다.
+      // 화력이 약한 빌드는 못 끊는다 — 그게 성장의 보상이 된다
+      this.castNeed = Math.max(3, Math.round(this.maxHp * 0.12));
+      this.castDmg = 0;
+      this.state = 'cast';
+      this.stateT = 0;
+      this.noFlinch = true;                 // 무경직 — 때려도 안 밀린다
+      Particles.text(this.x, this.y - this.r - 34, '시전 — 끊어라!', { color: '#ffd866', size: 15 });
+      Particles.ring(this.x, this.y, { r0: 10, r1: 70, life: 0.4, color: '#ffd866', width: 4 });
+      AudioSys.tellBoss(this.x, this.y);
+    },
+    // 시전 중 피해 누적 — combat.js 가 부른다
+    castHit(dmg, game) {
+      if (this.state !== 'cast') return false;
+      this.castDmg += dmg;
+      if (this.castDmg < this.castNeed) return false;
+      // ── 끊었다 ──
+      this.state = 'groggy';
+      this.stateT = 0;
+      this.groggyT = 2.0;
+      this.noFlinch = false;
+      this.castT = 0;
+      this._comboQueue = [];
+      Particles.text(this.x, this.y - this.r - 34, '시전 차단!', { color: '#5ce0e6', size: 19 });
+      Particles.ring(this.x, this.y, { r0: 8, r1: 110, life: 0.5, color: '#5ce0e6', width: 6 });
+      Particles.burst(this.x, this.y, { count: 20, colors: ['#5ce0e6', '#a9fff7', '#ffffff'], speed: 190, life: 0.6, size: 3 });
+      if (game) { game.slowmoT = 0.35; Renderer.shake(5, 0.2); }
+      AudioSys.pdodge();
+      return true;
+    },
+
     _endMove() {
       if (this._comboQueue && this._comboQueue.length > 0) {
         this.attack = this._parseStep(this._comboQueue.shift());
@@ -822,9 +922,24 @@ function createBoss(floor, x, y) {
               if (uniqAllowed && (this._patN === 1 || this._patN % cadence === 0) && this.spawnT <= 0) {
                 this.attack = { kind: 'uniq', opt: [] };
                 this._comboQueue = [];
+                this._wantCast = true;   // ★ v201 고유기는 '시전'으로 들어간다 (아래 castStart)
               } else {
                 this.attack = this._nextPattern(d);
               }
+            }
+            // ══ 시전 인터럽트 (v201) ══════════════════════════════════════
+            // 사장 승인: "무적은 시전 인터럽트로"
+            // 무적으로 딜을 막으면 플레이어가 할 일이 없어진다. 반대로 간다 —
+            // **시전 중에는 더 아프게 맞고, 대신 경직되지 않는다.**
+            //   · 시전 게이지 2.2초(1~5층) / 1.6초(6층+)
+            //   · 시전 중 보스는 **무경직**(경직·넉백 면역) + **받는 피해 ×1.5**
+            //   · 누적 피해가 임계를 넘으면 시전 취소 + 2.0초 **그로기**
+            //   · 못 끊으면 큰 기술이 그대로 나간다
+            // → 「무적이라 못 때린다」가 아니라 「지금 때려야 한다」가 된다.
+            if (this._wantCast) {
+              this._wantCast = false;
+              this.castStart(game);
+              break;
             }
             this.state = 'windup';
             this.stateT = 0;
@@ -836,6 +951,41 @@ function createBoss(floor, x, y) {
           break;
         }
 
+        // ══ 시전 (v201) ══ 게이지가 차는 동안 보스는 무경직·피해 증폭 상태로 서 있다
+        case 'cast': {
+          this.castT += dt;
+          // 시전 중에도 아주 천천히 플레이어 쪽으로 몸을 돌린다 (안 돌면 인형처럼 보인다)
+          this.aimDir = { x: dx / d, y: dy / d };
+          this.flip = dx < 0;
+          if (Math.random() < 0.5) {
+            const a = Math.random() * Math.PI * 2, rr = this.r * (2.2 + Math.random() * 0.6);
+            Particles.burst(this.x + Math.cos(a) * rr, this.y + Math.sin(a) * rr, {
+              count: 1, colors: ['#ffd866', '#fff4c8'], speed: -90, life: 0.45, size: 3,
+            });
+          }
+          if (this.castT >= this.castMax) {
+            // ── 못 끊었다 — 큰 기술이 그대로 나간다 ──
+            this.noFlinch = false;
+            Particles.text(this.x, this.y - this.r - 34, '시전 완료!', { color: '#e43b44', size: 17 });
+            Renderer.shake(4, 0.18);
+            this.attack = { kind: 'uniq', opt: [] };
+            this.state = 'windup';
+            this.stateT = 0;
+            this._castPunish = true;   // 계측용 — 못 끊고 맞은 횟수
+          }
+          break;
+        }
+        // ══ 그로기 ══ 끊긴 보스는 2초간 무방비다. 이게 인터럽트의 보상이다
+        case 'groggy': {
+          this.groggyT -= dt;
+          if (Math.random() < 0.25) {
+            Particles.burst(this.x + (Math.random() - 0.5) * this.r, this.y - this.r, {
+              count: 1, colors: ['#5ce0e6', '#c8ccd8'], speed: 40, life: 0.5, size: 2, gravity: -60,
+            });
+          }
+          if (this.groggyT <= 0) { this._endMove(); this.stateT = 0; }
+          break;
+        }
         case 'windup': {
           const k = this.attack.kind;
           // 조준 갱신 (마지막 순간 고정)
@@ -898,6 +1048,7 @@ function createBoss(floor, x, y) {
           }
           if (Math.hypot(p.x - this.x, p.y - this.y) < p.r + this.r) {
             game.hurtPlayer(bossDmg(), this.aimDir, 420);
+            this.strike(game, game.player.x, game.player.y, { zone: false });   // 근접타는 상태만 (장판까지 깔면 붙을 자리가 없다)
           }
           if (hit.x || hit.y || this.stateT > 1.4) {
             Renderer.shake(6, 0.3);
@@ -925,7 +1076,10 @@ function createBoss(floor, x, y) {
           const px = p.x - this.x, py = p.y - this.y;
           const tp = Math.max(0, Math.min(460, px * bx + py * by));
           const perp = Math.hypot(px - bx * tp, py - by * tp);
-          if (perp < 20 + p.r && p.invuln <= 0) game.hurtPlayer(bossDmg(), { x: bx, y: by }, 260, this.name);
+          if (perp < 20 + p.r && p.invuln <= 0) {
+            game.hurtPlayer(bossDmg(), { x: bx, y: by }, 260, this.name);
+            this.strike(game, p.x, p.y, { zone: false });
+          }
           if (Math.random() < 0.6) {
             const dd = 60 + Math.random() * 380;
             Particles.burst(this.x + bx * dd, this.y + by * dd, { count: 1, colors: this.def.deathPalette, speed: 60, life: 0.25, size: 3 });
@@ -982,21 +1136,30 @@ function createBoss(floor, x, y) {
             count: 16, colors: this.def.deathPalette, speed: 160, life: 0.45, size: 4,
           });
           AudioSys.thud();
+          // ★ v200 — 잔여물은 **맞았는지와 무관하게** 남는다.
+          //   1차 계측에서 1·2·4층이 전부 0이었다: 「맞았을 때만」 남기게 배선한 게 잘못이었다.
+          //   빗나가도 바닥은 그을린다 — 그게 방이 시간에 따라 변한다는 뜻이고,
+          //   HP 인플레 없이 후반 압박을 만드는 장치다.
+          this.strike(game, c.x, c.y, { status: false });
           if (Math.hypot(p.x - c.x, p.y - c.y) < (c.r || 48) + p.r) {
             const ddx = p.x - c.x, ddy = p.y - c.y;
             const dd = Math.hypot(ddx, ddy) || 1;
             game.hurtPlayer(bossDmg(), { x: ddx / dd, y: ddy / dd });
+            this.strike(game, c.x, c.y, { zone: false });
           }
           if (c.fire) {
             game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.4, kind: 'fire', by: this.name });
+            this.strike(game, c.x, c.y, { status: false, kind: 'burn' });
           }
           if (c.poison) {
             // 계측 (관통 v3): 20층 사망 18회 중 13회가 독 웅덩이 — 재생 기믹 장기전에서 융단이 됐다.
             // 지속 3.0→2.2s: 화염(2.4s) 밴드에 정렬, 웅덩이가 '피할 것'에서 '기다릴 것'으로 격하되지 않는 선
             game.firePatches.push({ x: c.x, y: c.y, r: 44, life: 2.2, kind: 'poison', by: this.name });
+            this.strike(game, c.x, c.y, { status: false, kind: 'poison' });
           }
           if (c.snare && Math.hypot(p.x - c.x, p.y - c.y) < 55 + p.r) {
             p.slowT = Math.max(p.slowT, 1.6);
+            this.strike(game, p.x, p.y);   // 종전엔 여기 감속 한 줄이 전부였다 (계측: boss.js 상태 부여 1곳)
             Particles.text(p.x, p.y - 30, '속박!', { color: '#c05060', size: 13 });
           }
           this.curses.splice(i, 1);
@@ -1330,6 +1493,7 @@ function createBoss(floor, x, y) {
             if (!hitOnce && distSeg < 20 + pp.r && pp.invuln <= 0) {
               hitOnce = true;
               g.hurtPlayer(bossDmg(), { x: 0, y: -0.5 }, 220, b.name);
+            b.strike(g, g.player.x, g.player.y);
             }
           }
         });
@@ -1346,7 +1510,10 @@ function createBoss(floor, x, y) {
           const px = pp.x - sx, py = pp.y - sy;
           const tp = Math.max(0, Math.min(len, px * nx + py * ny));
           const perp = Math.hypot(px - nx * tp, py - ny * tp);
-          if (perp < 40 + pp.r && pp.invuln <= 0) g.hurtPlayer(bossDmg(), { x: nx, y: ny }, 320, b.name);
+          if (perp < 40 + pp.r && pp.invuln <= 0) {
+            g.hurtPlayer(bossDmg(), { x: nx, y: ny }, 320, b.name);
+            b.strike(g, pp.x, pp.y, { zone: false });
+          }
           for (let s2 = 0; s2 < 6; s2++) Particles.burst(sx + vx * (s2 / 6), sy + vy * (s2 / 6), { count: 2, colors: ['#c8ccd8', '#16141e'], speed: 90, life: 0.3, size: 3 });
           const spot = World.safeSpot(ex, ey);
           b.x = spot.x; b.y = spot.y;
@@ -1444,8 +1611,12 @@ function createBoss(floor, x, y) {
         for (let i = 0; i < cnt; i++) {
           const a = (i / Math.max(1, cnt)) * Math.PI * 2 + this.patternIdx * 0.7;
           const pos = World.safeSpot(this.x + Math.cos(a) * 96, this.y + Math.sin(a) * 78);
-          game.markers.push({ x: pos.x, y: pos.y, type: mType, elite: isElite, t: 0.7, pack: this.pack });
+          game.markers.push({ x: pos.x, y: pos.y, type: mType, elite: isElite, t: 0.7, pack: this.pack, summoned: true });
         }
+        // ★ 소환은 크게 예고되는 순간이다 — 여기서 속성을 건다.
+        //   서사와도 맞물린다: 무덤지기가 부른 것들과 함께 저주가 온다.
+        //   그리고 🕯저주는 **부하를 처치해야** 풀리므로, 소환과 저주가 한 쌍이 된다
+        if (cnt > 0) this.strike(game, game.player.x, game.player.y, { zone: false });
         Particles.text(this.x, this.y - this.r - 26, '일어나라!', { color: '#c9a24a', size: 13 });
         AudioSys.roar();
         this._endMove();
@@ -1689,7 +1860,57 @@ function createBoss(floor, x, y) {
       }
 
       const bob = Math.sin(this.animT * 2.2) * 4;
+      // ── 크기 비율 (v200) ────────────────────────────────────────────
+      // 보스도 몸 크기 r 을 선언한다(26~33). 원본을 48~64px로 다시 그렸으니
+      // 화면 크기는 잡몹과 **같은 자**(화면높이 = r×3.5)로 맞춘다.
+      // 보스는 def.scale 을 squash 로 곱해 쓰므로 그 곱까지 상쇄해서 물린다
+      {
+        const bi = Sprites[this.def.sprite];
+        if (bi && bi.width && !bi.__dsSet && Sprites.bossScaleFor) {
+          bi.__ds = Sprites.bossScaleFor(bi, this.r, this.def.scale); bi.__dsSet = 1;
+        }
+      }
       const img = this.flash > 0 ? Sprites.white(Sprites[this.def.sprite]) : Sprites[this.def.sprite];
+
+      // ── 시전 게이지 (v201) ──────────────────────────────────────────────
+      // 「보이지 않는 것은 없는 것과 같다」 — 끊으라고 만든 창인데 안 보이면 존재하지 않는다.
+      // 보스 머리 위에 게이지를 띄우고, 누적 피해가 임계에 얼마나 닿았는지도 함께 보인다
+      if (this.state === 'cast') {
+        const W = 92, H = 9, gx = this.x - W / 2, gy = this.y - this.r - 46;
+        ctx.save();
+        ctx.fillStyle = 'rgba(10,8,16,0.88)';
+        ctx.fillRect(gx - 2, gy - 2, W + 4, H + 4);
+        // 시전 진행 — 빨갛게 차오른다 (다 차면 큰 게 나온다)
+        const t = Math.min(1, this.castT / this.castMax);
+        ctx.fillStyle = '#e43b44';
+        ctx.fillRect(gx, gy, W * t, H);
+        // 끊기까지 남은 양 — 노란 막대가 오른쪽에서 줄어든다
+        const need = Math.max(0, 1 - this.castDmg / this.castNeed);
+        ctx.fillStyle = '#ffd866';
+        ctx.fillRect(gx, gy + H - 3, W * (1 - need), 3);
+        ctx.strokeStyle = '#ffd866'; ctx.lineWidth = 1;
+        ctx.strokeRect(gx - 0.5, gy - 0.5, W + 1, H + 1);
+        ctx.fillStyle = '#ffd866';
+        ctx.font = 'bold 11px Galmuri11, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('시전 — 끊어라!', this.x, gy - 6);
+        ctx.restore();
+      } else if (this.state === 'groggy') {
+        ctx.save();
+        ctx.globalAlpha = 0.6 + Math.sin(this.animT * 12) * 0.25;
+        ctx.fillStyle = '#5ce0e6';
+        ctx.font = 'bold 13px Galmuri11, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('그로기!', this.x, this.y - this.r - 42);
+        // 머리 위를 도는 별 — 무방비 상태를 한눈에
+        for (let i = 0; i < 3; i++) {
+          const a = this.animT * 3.4 + i * 2.1;
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = '#ffd866';
+          ctx.fillRect(this.x + Math.cos(a) * 16 - 2, this.y - this.r - 26 + Math.sin(a) * 5 - 2, 4, 4);
+        }
+        ctx.restore();
+      }
 
       // ── 위압감 연출: 고동치는 오라 (2페이즈·맹공에서 격화) ──
       {
