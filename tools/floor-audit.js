@@ -32,6 +32,12 @@ const SECS = parseFloat(process.argv[3] || '45');
     for (const seed of [2024, 777, 31337, 5150]) {
       Game.restart(seed); Game.state = 'play';
       Dungeon.floor = FLOOR;
+      // ★ v210b — **그 층에 맞는 몸**으로 잰다.
+      //   1차엔 restart 직후 레벨 1·특성 0인 채로 8층을 쟀다. 8층 방 하나에 적 40기·
+      //   우두머리 285HP인데 공격력 1이면 당연히 「못 끝냄」이 나온다 — 그건 방이 긴 게 아니라
+      //   **8층에 1층 몸을 세워 놓은 것**이다. 저장소엔 이미 층별 기준 빌드(_cheatScaleToFloor)가
+      //   있고 진짜 런으로 자가 보정된다. 안 쓰고 있었을 뿐이다
+      if (Game._cheatScaleToFloor) Game._cheatScaleToFloor();
       // ★ 우두머리 등장은 게임이 정한다. 1차엔 내가 miniSeen 을 손으로 세워서
       //   정예방에서 우두머리를 **지워 버렸다** — 방이 빈약한 게 아니라 계기가 지운 것이다
       Dungeon.miniSeen = false;

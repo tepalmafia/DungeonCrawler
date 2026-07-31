@@ -517,13 +517,19 @@ const Dungeon = {
     // 일반 전투방 9.7초 — 「강적 — 특성 보상」이라고 써 붙인 방이 그 층에서 가장 쉬웠다.
     // 게다가 편성 끝의 우두머리는 그 층에서 이미 우두머리를 봤으면 걸러진다(miniSeen).
     // 방 이름이 약속한 것을 방이 지켜야 한다 — 온보딩 층도 정예방은 정예 2기다
-    const nElites = 2;
+    // ★ v210b — v208 은 **1층만** 고쳤다. 전 층을 쓸어 보니 정예방은 1~10층 **전부**
+    // 3.7~6.0초였다 (같은 층 전투방 6~13초). 원인은 개체 강함이 아니라 **수**다:
+    // 전투방은 층이 깊어지면 15~17기까지 불어나는데 정예방은 층과 무관하게 6기 고정이었다.
+    // 「강적 — 특성 보상」이라고 써 붙인 방이 어느 층에서든 그 층의 가장 쉬운 방이었다.
+    // 방도 층을 따라 자란다: 정예는 4층마다 +1, 잡몹은 2층마다 +1
+    const nElites = 2 + Math.floor(this.floor / 4);
+    const nTrash = 3 + Math.floor(this.floor / 2);
     for (let i = 0; i < nElites; i++) {
       comp.push({ type: RNG.pick(data.enemies), elite: true });
     }
-    comp.push({ type: RNG.pick(data.enemies), elite: false });
-    comp.push({ type: RNG.pick(data.enemies), elite: false });
-    comp.push({ type: RNG.pick(data.enemies), elite: false });
+    for (let i = 0; i < nTrash; i++) {
+      comp.push({ type: RNG.pick(data.enemies), elite: false });
+    }
     // ★ v196 — 사장: "왜 자꾸 안나오는거야? 전체 방에서 나오라고"
     // v194·v195 는 combatComp 에만 넣었다. 실제 경로 실측으로 전투방은 92.5%였는데
     // **전체 방 대비 51%**였다 — 정예방이 전체의 24%인데 eliteComp 를 타서 우두머리가 없었다.

@@ -308,6 +308,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           // 텔레그래프: 납작하게 웅크림 (0.45초)
           if (this.stateT > 0.45) {
             this.state = 'leap';
+            this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
             this.stateT = 0;
             this.leapDir = { x: dx / d, y: dy / d };
             AudioSys.shoot();
@@ -567,6 +568,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           // 텔레그래프: 공중 정지 + 파르르 (0.4초) 후 급강하
           if (this.stateT > 0.4) {
             this.state = 'dive';
+            this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
             this.stateT = 0;
             this.diveDir = { x: dx / d, y: dy / d };
             AudioSys.shoot();
@@ -617,6 +619,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
             World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           }
           if (this.stateT > 1.4 && d < 260) { this.state = 'spin'; this.stateT = 0; }
+          this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
         } else if (this.state === 'spin') {
           // 텔레그래프: 웅크림 (0.5초) 후 거미줄 발사
           if (this.stateT > 0.5) {
@@ -791,6 +794,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const hit = World.moveEntity(this, vx * spd * dt, vy * spd * dt);
           if (hit.x || hit.y) this.strafe *= -1;
           if (this.stateT > 1.6) { this.state = 'cast'; this.stateT = 0; }
+          this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
         } else if (this.state === 'cast') {
           // 텔레그래프: 붉게 달아오름 (0.6초)
           if (this.stateT > 0.6) {
@@ -988,6 +992,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           this.flip = dx < 0;
           if (d < 135) { this.state = 'raise'; this.stateT = 0; this.slamDir = { x: dx / d, y: dy / d }; }
+          this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
         } else if (this.state === 'raise') {
           // 텔레그래프: 도끼를 들어올리고 바닥에 처형 구역 표시 (0.85초)
           this.flip = this.slamDir.x < 0;
@@ -1133,6 +1138,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
           const spd = this.effSpeed();
           World.moveEntity(this, (dx / d) * spd * dt, (dy / d) * spd * dt);
           if (d < 110) { this.state = 'ready'; this.stateT = 0; this.stabDir = { x: dx / d, y: dy / d }; }
+          this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
         } else if (this.state === 'ready') {
           if (this.stateT > 0.5) { this.state = 'stab'; this.stateT = 0; }
         } else if (this.state === 'stab') {
@@ -2166,6 +2172,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         } else if (this.state === 'tele') {
           if (this.stateT > 0.5) {
             this.state = 'dive'; this.stateT = 0;
+            this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
             this.diveDir = { x: dx / d, y: dy / d };
             AudioSys.shoot();
           }
@@ -2250,6 +2257,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         } else if (this.state === 'crouch') {
           if (this.stateT > 0.4) {
             this.state = 'leap'; this.stateT = 0;
+            this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
             this.leapDir = { x: dx / d, y: dy / d };
             AudioSys.shoot();
           }
@@ -2567,6 +2575,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'walk') {
           World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
           if (d < 160 && this.lungeCd <= 0) { this.state = 'raise'; this.stateT = 0; }
+          this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
         } else if (this.state === 'raise') {
           if (this.stateT > 0.7) {
             this.state = 'lunge'; this.stateT = 0;
@@ -2655,6 +2664,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         if (this.state === 'walk') {
           World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
           if (d < 130 && this.slamCd <= 0) { this.state = 'raise'; this.stateT = 0; }
+          this.tell(game);  // v210b: 예고 시작 — 전수 확인으로 찾았다 (상태 이름을 추측해 등록하다 처형인을 놓쳤다)
         } else if (this.state === 'raise') {
           if (this.stateT > 0.6) {
             this.state = 'walk'; this.slamCd = 3.2;
@@ -2899,7 +2909,7 @@ function createEnemy(type, x, y, elite = false, floorScale = 1) {
         this.faceDir = { x: Math.cos(na), y: Math.sin(na) };
         if (this.state === 'walk') {
           World.moveEntity(this, (dx / d) * this.effSpeed() * dt, (dy / d) * this.effSpeed() * dt);
-          if (d < 150 && this.stanceCd <= 0) { this.state = 'stance'; this.stateT = 0; }
+          if (d < 150 && this.stanceCd <= 0) { this.state = 'stance'; this.stateT = 0; this.tell(game); }
         } else if (this.state === 'stance') {
           // 반격 자세 0.8초 — 끝나는 순간 사거리 안이면 찌르기
           if (this.stateT > 0.8) {
