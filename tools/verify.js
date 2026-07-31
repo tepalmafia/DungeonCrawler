@@ -2098,6 +2098,43 @@ async function boot(page, { cls = 'knight', heat = 0, test = true, ff = 1 } = {}
   ok('stage.bossEveryRoom', stage.withMini >= stage.rooms * 0.85,
     `전투방 ${stage.rooms}개(보스 직전 숨 고르는 방 제외) 중 ${stage.withMini}개에 보스급 (방당 적 ${stage.bodies}기) ` +
     '(v193은 층당 1.35기였고 그마저 특정 방에 몰렸다 — 사장이 앞쪽 방을 돌면 잡몹만 봤다)');
+  // ══ 터치 조작 (v204) ══════════════════════════════════════════════════
+  // 사장: "플레이 안되는데?" — 사장은 갤럭시로 하신다.
+  // ★ PC에서 「검증 통과」가 나와도 폰에서 안 되면 **사장에게는 안 되는 게임**이다.
+  //   input.js 에 touchstart/touchmove/pointerdown 이 하나도 없었고,
+  //   폰에서는 프롤로그조차 못 넘어가고 이동 0px 였다.
+  const tch = await page.evaluate(() => {
+    const R = {};
+    R.hasHandlers = typeof Input.pollTouch === 'function' && typeof Input.drawTouchUI === 'function';
+    R.btns = (Input.TOUCH_BTNS || []).map((b) => b.code);
+    // 스틱 기울기가 실제로 이동 키로 번역되는가 (게임패드와 같은 방식이어야 한다)
+    Input.touch.on = true;
+    Input.keys = {};
+    Input.touch.dx = 0.9; Input.touch.dy = -0.9;
+    Input.pollTouch();
+    R.toKeys = ['KeyD', 'KeyW'].filter((k) => Input.keys[k]);
+    Input.touch.dx = 0; Input.touch.dy = 0;
+    Input.pollTouch();
+    R.releases = !Input.keys.KeyD && !Input.keys.KeyW;
+    // 버튼이 화면에 그려지는가 — 보이지 않는 조작은 없는 것과 같다
+    let drawn = 0;
+    const g = Renderer.ctx, _f = g.fillText.bind(g);
+    g.fillText = function (t, x, y) { if (['공격', '대시', '스킬', '궁'].includes(t)) drawn++; return _f(t, x, y); };
+    Input.drawTouchUI(g, true);
+    g.fillText = _f;
+    R.drawn = drawn;
+    Input.touch.on = false;
+    return R;
+  });
+  console.log('  터치:', JSON.stringify(tch));
+  ok('touch.stickMovesPlayer',
+    tch.hasHandlers && tch.toKeys.length === 2 && tch.releases,
+    `가상 스틱이 이동 키로 번역된다 (${tch.toKeys.join(',')}) · 떼면 풀린다 ${tch.releases} ` +
+    '(게임패드가 이미 하는 방식 그대로 — 터치를 키코드로 번역하면 게임 로직·UI·봇을 한 줄도 안 건드린다)');
+  ok('touch.buttonsVisible', tch.drawn >= 4 && tch.btns.length >= 4,
+    `터치 버튼 ${tch.btns.length}개(${tch.btns.join(',')})가 화면에 ${tch.drawn}개 그려진다 ` +
+    '(★ 폰에는 키보드가 없다. 조작 안내가 "WASD 이동 · Space 대시"뿐이면 폰에서는 게임이 시작조차 안 된다)');
+
   // ══ 보상 출처 제한 (v203) ═════════════════════════════════════════════
   // 사장: "특성이나 스킬, 스탯은 레벨업과 보스를 잡거나 보물을 먹을때만 주도록 하자."
   // 코드 호출 지점이 아니라 **실제로 열리는 횟수**를 센다 — 생성기가 아니라 소비자다

@@ -1548,5 +1548,10 @@ const GameRender = {
       ctx.fillRect(0, 0, Renderer.W, Renderer.H);
       ctx.globalAlpha = 1;
     }
+
+    // ── 터치 조작 UI (v204) — 맨 마지막. 무엇에도 가리면 안 된다 ──
+    // 사장은 폰으로 하신다. 조작이 화면에 없으면 폰에서는 게임이 시작조차 안 된다
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    Input.drawTouchUI(ctx, this.state === 'play' && !this.paused);
   },
 };
