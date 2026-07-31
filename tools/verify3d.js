@@ -298,6 +298,53 @@ async function shot(page, name) {
       return /Audio\.Sfx\.itemDrop\(/.test(src);
     }), 'dropItem() 이 itemDrop 을 부른다');
 
+  // ── 벽 투명화: 카메라와 캐릭터 사이를 막는 벽이 흐려지는가 ─────
+  const occ = await page.evaluate(async () => {
+    const G = window.G3, dg = G.dungeon, P = G.player, CELL = 2;
+    const g2w = (gx, gz) => [(gx - dg.w / 2 + 0.5) * CELL, (gz - dg.h / 2 + 0.5) * CELL];
+
+    // 같은 재질을 쓰는 메시에 aFade 가 없으면 셰이더가 0 을 읽어 전부 사라진다.
+    // 이 검사가 그 발등찍기를 막는다.
+    // 검사 대상은 「페이드 재질을 쓰는」 메시뿐이다. 다른 재질을 쓰는 메시
+    // (횃불 받침 등)는 속성이 없어도 정상이다.
+    let missing = 0, meshes = 0;
+    G.level.group.traverse((o) => {
+      if (!o.isInstancedMesh) return;
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (!m?.userData?.fadeable) return;
+      meshes++;
+      if (!o.geometry.attributes.aFade) missing++;
+    });
+
+    // 카메라 쪽(+Z)에 벽이 두 칸 있는 바닥 칸 = 반드시 가려지는 자리
+    let spot = null;
+    for (let gz = 2; gz < dg.h - 3 && !spot; gz++)
+      for (let gx = 2; gx < dg.w - 2; gx++)
+        if (dg.at(gx, gz) === 1 && dg.at(gx, gz + 1) === 2 && dg.at(gx, gz + 2) === 2) { spot = [gx, gz]; break; }
+    if (!spot) return { skipped: true, missing, meshes };
+
+    const [bx, bz] = g2w(spot[0], spot[1]);
+    P.setPosition(bx, bz);
+    for (let i = 0; i < 45; i++) await new Promise((r) => requestAnimationFrame(r));
+    let faded = 0;
+    for (const g of G.level.fadeGroups) for (const v of g.mesh.userData.fade) if (v < 0.9) faded++;
+
+    // 탁 트인 곳으로 옮기면 전부 되돌아와야 한다
+    const [sx, sz] = g2w(dg.spawn.gx, dg.spawn.gz);
+    P.setPosition(sx, sz);
+    for (let i = 0; i < 60; i++) await new Promise((r) => requestAnimationFrame(r));
+    let stillFaded = 0;
+    for (const g of G.level.fadeGroups) for (const v of g.mesh.userData.fade) if (v < 0.99) stillFaded++;
+
+    return { missing, meshes, faded, stillFaded };
+  });
+  ok('occlusion.attrOnFadeableMesh', occ.missing === 0 && occ.meshes > 0,
+    `페이드 재질 메시 ${occ.meshes}개 중 aFade 누락 ${occ.missing} (누락되면 그 메시가 통째로 사라진다)`);
+  ok('occlusion.fadesBlockingWall', occ.skipped || occ.faded > 0,
+    `가리는 벽 ${occ.faded}개가 흐려짐`);
+  ok('occlusion.restoresWhenClear', occ.skipped || occ.stillFaded === 0,
+    `트인 곳에서 남은 흐림 ${occ.stillFaded}개`);
+
   // ── 줌 인/아웃 ───────────────────────────────────────────
   const zoom = await page.evaluate(async () => {
     const cv = document.getElementById('view');

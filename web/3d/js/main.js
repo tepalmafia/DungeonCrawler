@@ -576,6 +576,8 @@ function frame(now) {
     updateBossBar();
     updateExit(dt);
     G.level.update(G.time, dt);
+    // 벽에 가려 캐릭터가 안 보이면 조작이 불가능해진다 — 사이에 낀 벽을 흐린다
+    G.level.updateOcclusion(camera, G.player.pos, dt);
     G.lighting.update(G.time, dt, G.player.pos);
   } else if (G.dungeon) {
     G.level.update(G.time, dt);

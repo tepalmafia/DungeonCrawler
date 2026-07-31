@@ -9,6 +9,7 @@ import {
 } from '../core/textures.js';
 import { normalTexture, dataTexture } from '../core/normalmap.js';
 import { makeRng } from '../core/rng.js';
+import { makeFadeable, attachFade, updateOcclusion } from './occlusion.js';
 
 export const WALL_H = 3.4;
 
@@ -109,6 +110,18 @@ export class Level {
     this.group.add(mesh);
     this.disposables.push(geo, side, top, wn);
 
+    // 카메라와 플레이어 사이를 막으면 흐려진다 (occlusion.js)
+    makeFadeable(side);
+    makeFadeable(top);
+    attachFade(mesh);
+    this.fadeGroups = [{
+      mesh, hw: CELL / 2,
+      cells: list.map(([gx, gz], i) => {
+        const [x, z] = gridToWorld(gx, gz, dg.w, dg.h);
+        return { x, z, y0: 0, y1: heights[i] };
+      }),
+    }];
+
     this._buildWallDetail(list, heights, side, rnd);
   }
 
@@ -150,6 +163,11 @@ export class Level {
         im.setMatrixAt(i, m);
       });
       im.instanceMatrix.needsUpdate = true;
+      attachFade(im);
+      this.fadeGroups.push({
+        mesh: im, hw: CELL * 0.44,
+        cells: caps.map((c) => ({ x: c.x + c.ox, z: c.z + c.oz, y0: c.y - c.h / 2, y1: c.y + c.h / 2 })),
+      });
       this.group.add(im);
       this.disposables.push(g);
     }
@@ -167,6 +185,8 @@ export class Level {
         im.setMatrixAt(i, m);
       });
       im.instanceMatrix.needsUpdate = true;
+      // 잔해는 낮아서 가리지 않지만, 같은 재질을 쓰므로 속성은 반드시 붙인다
+      attachFade(im);
       this.group.add(im);
       this.disposables.push(g);
     }
@@ -182,10 +202,10 @@ export class Level {
     // 소품이 어두우면 바닥에 뚫린 구멍처럼 보인다. 벽면과 같은 요철을 주고
     // 색을 올려 「빛을 받는 입체」로 읽히게 한다.
     const pn = normalTexture(wallHeight(dg.theme), { repeat: 1, strength: 2.2 });
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = makeFadeable(new THREE.MeshStandardMaterial({
       map: wallTexture(dg.theme), normalMap: pn,
       color: 0xc9bfae, roughness: 0.88, metalness: 0.05,
-    });
+    }));
     this.disposables.push(pn);
     this.disposables.push(mat);
 
@@ -205,6 +225,17 @@ export class Level {
         mesh.setMatrixAt(i, m);
       });
       mesh.instanceMatrix.needsUpdate = true;
+      attachFade(mesh);
+      if (kind === 'pillar' || kind === 'coffin') {
+        const half = kind === 'pillar' ? WALL_H / 2 : 0.4;
+        this.fadeGroups.push({
+          mesh, hw: kind === 'pillar' ? 0.5 : 0.98,
+          cells: items.map((p) => {
+            const [x, z] = gridToWorld(p.gx, p.gz, dg.w, dg.h);
+            return { x, z, y0: 0, y1: half * 2 };
+          }),
+        });
+      }
       this.group.add(mesh);
       this.disposables.push(geo);
     }
@@ -287,6 +318,11 @@ export class Level {
 
   openExit() { this.exitMesh.visible = true; }
   get exitOpen() { return this.exitMesh.visible; }
+
+  /** 카메라와 플레이어 사이를 막는 벽·기둥을 흐린다 */
+  updateOcclusion(camera, playerPos, dt) {
+    if (this.fadeGroups) updateOcclusion(this.fadeGroups, camera, playerPos, dt);
+  }
 
   update(t, dt) {
     // 불꽃 흔들림 — 크기와 밝기를 서로 다른 주파수로 흔들면 규칙성이 사라진다
