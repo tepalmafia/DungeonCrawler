@@ -244,7 +244,9 @@ body[data-post="low"] #vignette {
   font-size: 28px; cursor: pointer; height: 58px;
   transition: border-color .12s, box-shadow .12s;
 }
-.slot.tall .cell { height: 128px; font-size: 40px; }
+/* 갑옷 칸은 투구가 위에 얹힌 만큼 줄인다 — 세 열의 아래끝을 맞춰야
+   종이인형이 「사람 모양」으로 읽힌다 */
+.slot.tall .cell { height: 96px; font-size: 40px; }
 .cell:hover { border-color: #7a6690; box-shadow: inset 0 0 18px rgba(140,110,180,.25); }
 .cell.filled { border-color: var(--rc, #4a3f58); }
 .cell.filled:hover { box-shadow: inset 0 0 20px color-mix(in srgb, var(--rc, #8a7aa0) 30%, transparent); }
@@ -273,6 +275,8 @@ body[data-post="low"] #vignette {
 }
 .baghead h3 { margin: 0; font-size: 13px; font-weight: normal; letter-spacing: 3px; color: #cbbd9f; }
 .baghead #bagCount { margin-left: auto; }
+/* 영혼 조각 — 상점까지 얼마나 남았는지가 늘 보여야 모을 이유가 생긴다 */
+.baghead .coin { color: #d8b45e; font-size: 12.5px; letter-spacing: .5px; }
 #bagSort {
   font: inherit; font-size: 11.5px; cursor: pointer; margin-left: 12px;
   padding: 2px 12px; color: #cbbd9f;
@@ -306,6 +310,8 @@ body[data-post="low"] #vignette {
 #tooltip .tname { font-size: 14px; margin-bottom: 3px; }
 #tooltip .tkind { color: var(--dim); font-size: 11px; margin-bottom: 6px; }
 #tooltip .taff { color: #9fd0ff; }
+/* 계열 고유 보너스 — 접사와 색을 달리해 「운이 아니라 이 무기의 성질」임을 보여준다 */
+#tooltip .tbase { color: #c0a86a; }
 #tooltip .tcmp { margin-top: 7px; padding-top: 6px; border-top: 1px solid #2a2333; font-size: 11.5px; color: var(--dim); }
 #tooltip .up { color: #7fdd7f; }
 #tooltip .dn { color: #e07272; }
@@ -331,3 +337,45 @@ body[data-post="low"] #vignette {
 
 #nowebgl { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
 #nowebgl[hidden] { display: none; }
+
+/* ── 상호작용 안내 ── */
+/* 화면 아래쪽 가운데. 구슬·단축키 위에 떠서 손이 가는 쪽에 가깝게 둔다 */
+#interact {
+  position: absolute; left: 50%; bottom: 190px; transform: translateX(-50%);
+  padding: 6px 14px; border: 1px solid #6a5a3a; border-radius: 3px;
+  background: rgba(8,6,12,.82); color: #ffd98a;
+  font-size: 13px; letter-spacing: 1px; pointer-events: none;
+  animation: ipulse 2.2s ease-in-out infinite;
+}
+@keyframes ipulse { 0%,100% { opacity: .78; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #interact { animation: none; } }
+
+/* ── 상점 ── */
+#shop {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(3,2,6,.55); z-index: 30;
+}
+#shop .panel { width: min(460px, 92vw); }
+.shoptop { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
+.shoptop h2 { margin: 0; font-size: 15px; font-weight: normal; letter-spacing: 4px; color: #d8c9a4; }
+.shoptop #shopCoin { margin-left: auto; color: #d8b45e; font-size: 13px; }
+.shoptop button {
+  background: none; border: 1px solid #3a3047; color: #9a8fa8;
+  width: 26px; height: 26px; border-radius: 3px; cursor: pointer;
+}
+.shopline { margin: 0 16px 10px; color: #8d8398; font-size: 12px; font-style: italic; }
+#shopList { padding: 0 16px; display: flex; flex-direction: column; gap: 5px; }
+.srow {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid #2f2740; border-radius: 3px; background: rgba(0,0,0,.3);
+  cursor: pointer; transition: border-color .12s, background .12s;
+}
+.srow:hover { border-color: #7a6690; background: rgba(60,44,88,.28); }
+.srow .si { font-size: 20px; }
+.srow .sn { flex: 1; font-size: 12.5px; color: #cbc3d4; }
+.srow .sp { color: #d8b45e; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+/* 못 사는 것은 눌러 보기 전에 알아야 한다 */
+.srow.poor { opacity: .55; }
+.srow.poor .sp { color: #e07272; }
+.srow.sold { opacity: .3; cursor: default; }
+.srow.sold:hover { border-color: #2f2740; background: rgba(0,0,0,.3); }

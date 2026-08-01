@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
-import { aggregate, RARITIES } from './items.js';
+import { aggregate, RARITIES, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
@@ -124,10 +124,14 @@ export class Player {
     this.lantern = null;
     this.torchRefuelT = 0;      // 벽 횃불 옆에 머문 시간
 
-    // 장비
-    this.equipped = { weapon: null, armor: null, ring: null };
+    // 장비 — 슬롯 5칸 (docs/ITEM-ECONOMY.md §3-1).
+    // 칸이 늘면 드랍 하나가 덜 중요해지고, 그래야 「장비가 안 바뀌는 판」이
+    // 정상이 된다. 그게 이 게임 경제의 출발점이다.
+    this.equipped = { weapon: null, helm: null, armor: null, gloves: null, ring: null };
     this.bag = [];
     this.bagMax = 24;
+    // 영혼 조각 — 잡몹이 확정으로 떨군다. 장비가 안 나와도 판이 헛되지 않게 하는 장치.
+    this.coin = 0;
 
     // 이동
     this.path = [];
@@ -179,6 +183,15 @@ export class Player {
     this.leech = a.leech;
     this.dmgMin = a.dmgMin + a.dmg + lv * 1.6;
     this.dmgMax = a.dmgMax + a.dmg + lv * 2.4;
+    // 이 게임에만 있는 축들 (docs/ITEM-ECONOMY.md §3-3).
+    // 접사를 스탯으로만 두고 아무 데서도 안 읽으면 그건 그냥 툴팁 장식이다 —
+    // 여섯 개 전부 실제로 쓰이는 곳을 정해 뒀다.
+    this.thorns = a.thorns;               // combat.hitPlayer 가 반사한다
+    this.fuelBonus = a.fuel;              // game/lantern.js 의 연료 상한에 더해진다
+    this.find = a.find;                   // rollItem 의 등급 밀기
+    this.stunChance = a.stun;             // combat.hitEnemy 가 굴린다
+    this.reach = a.range;                 // 평타 사거리에 더해진다
+    this.regen = a.regen;                 // 초당 회복
     this.hp = Math.min(this.hp ?? this.maxHp, this.maxHp);
     this.mp = Math.min(this.mp ?? this.maxMp, this.maxMp);
     this._syncBlade();
@@ -200,6 +213,9 @@ export class Player {
 
   equip(item) {
     const prev = this.equipped[item.slot];
+    // 「실제로 갈아입었는가」가 드랍 설계의 진짜 지표다 (ITEM-ECONOMY §7-1).
+    // 주운 개수가 아니라 이 숫자가 0 이면 드랍은 보상이 아니라 소음이다.
+    if (power(item) > power(prev)) this._onUpgrade?.();
     this.equipped[item.slot] = item;
     const i = this.bag.indexOf(item);
     if (i >= 0) this.bag.splice(i, 1);
@@ -296,6 +312,8 @@ export class Player {
 
     // 마나 자연 회복 — 스킬을 계속 쓸 수 있게 넉넉히
     this.mp = Math.min(this.maxMp, this.mp + (3.2 + this.level * 0.35) * dt);
+    // 체력은 기본으로는 안 찬다. regen 접사가 붙었을 때만 — 물약이 자원이어야 하므로.
+    if (this.regen) this.hp = Math.min(this.maxHp, this.hp + this.regen * dt);
 
     // 랜턴 연료 — 시간이 자원이다
     if (this.lantern && this.lantern.fuel > 0) {

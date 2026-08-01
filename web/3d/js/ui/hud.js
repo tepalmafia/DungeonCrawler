@@ -4,6 +4,7 @@
 import { SKILLS } from '../game/skills.js';
 import { FLOOR, worldToGrid } from '../world/dungeon.js';
 import { RARITIES } from '../game/items.js';
+import { fuelCap } from '../game/lantern.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -32,7 +33,13 @@ export class UI {
       minimap: $('#minimap'),
       overlay: $('#overlay'),
       titleCard: $('#titleCard'),
+      interact: $('#interact'),
+      shop: $('#shop'),
+      shopList: $('#shopList'),
+      shopCoin: $('#shopCoin'),
     };
+    const sc = $('#shopClose');
+    if (sc) sc.addEventListener('click', () => this.setShop(null));
     this.mm = this.el.minimap.getContext('2d');
     this._buildSkillbar();
     this._centerT = 0;
@@ -125,6 +132,60 @@ export class UI {
   /** 벽 횃불 보충 진행도 (0~1) */
   setRefuel(k) { this.el.lanternRefuel.style.width = (k * 100).toFixed(0) + '%'; }
 
+  /** 손 닿는 곳의 안내 — 스위치·행상. null 이면 감춘다 */
+  setInteract(it) {
+    const el = this.el.interact;
+    if (!el) return;
+    if (!it) { el.hidden = true; return; }
+    if (el.textContent !== it.label) el.textContent = it.label;
+    el.hidden = false;
+  }
+
+  /**
+   * 상점 창. shop 이 null 이면 닫는다.
+   *
+   * 인벤토리와 같은 창에 넣지 않았다 — 던전 안에서 여는 창이라
+   * 「잠깐 멈춰서 고른다」는 감각이 인벤토리와 달라야 한다.
+   */
+  setShop(shop) {
+    const el = this.el.shop;
+    if (!el) return;
+    this.shop = shop || null;
+    if (!shop) { el.hidden = true; return; }
+    el.hidden = false;
+    this.renderShop();
+  }
+
+  renderShop() {
+    const shop = this.shop;
+    if (!shop) return;
+    const p = this.G.player;
+    const body = this.el.shopList;
+    this.el.shopCoin.textContent = `◈ ${p.coin}`;
+    body.innerHTML = '';
+    shop.stock.forEach((s, i) => {
+      const row = document.createElement('div');
+      row.className = 'srow' + (s.sold ? ' sold' : '') + (p.coin < s.price ? ' poor' : '');
+      const rar = s.item && s.item.rarity != null ? RARITIES[s.item.rarity] : null;
+      row.innerHTML = `<span class="si">${s.icon}</span>`
+        + `<span class="sn" ${rar ? `style="color:${rar.css}"` : ''}>${s.sold ? '— 팔림 —' : s.name}</span>`
+        + `<span class="sp">◈ ${s.price}</span>`;
+      if (!s.sold) {
+        row.onmouseenter = () => { if (s.item && s.item.slot) this._shopTip(s.item, p.equipped[s.item.slot]); };
+        row.onmouseleave = () => { this.G.inv._hideTooltip(); };
+        row.onclick = () => {
+          const r = shop.buy(this.G, i);
+          if (!r.ok) { this.toast(r.why, '#e07272'); return; }
+          this.toast(`${s.name} 구입`, '#d8b45e');
+          this.renderShop();
+        };
+      }
+      body.appendChild(row);
+    });
+  }
+
+  _shopTip(item, same) { this.G.inv._showTooltip(item, same); }
+
   update(dt) {
     const G = this.G, p = G.player;
     if (!p) return;
@@ -133,7 +194,7 @@ export class UI {
     const lan = p.lantern;
     this.el.lanternBar.hidden = !lan;
     if (lan) {
-      const k = Math.max(0, lan.fuel / lan.def.fuelMax);
+      const k = Math.max(0, lan.fuel / fuelCap(lan, p));
       this.el.lanternIcon.textContent = lan.icon;
       this.el.lanternFill.style.width = (k * 100).toFixed(1) + '%';
       this.el.lanternNum.textContent = `${Math.ceil(lan.fuel)}초`;

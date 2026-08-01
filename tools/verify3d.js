@@ -803,7 +803,9 @@ async function shot(page, name) {
       lanterns: added.filter((k) => k === 'lantern').length,
     };
   });
-  ok('boss.kill.dropsRare', kill.gear === 3 && kill.lanterns === 1,
+  // 3 → 2. 보스가 한 번에 세 개를 뱉으면 그 뒤 층의 드랍이 전부 무의미해진다
+  // (docs/ITEM-ECONOMY.md §5).
+  ok('boss.kill.dropsRare', kill.gear === 2 && kill.lanterns === 1,
     `장비 ${kill.gear}개 + 영혼 등불 ${kill.lanterns}개`);
   ok('boss.kill.opensExit', kill.exitOpen && kill.bossKills === 1);
 

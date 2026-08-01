@@ -69,6 +69,19 @@ export class Metrics {
     this.concurrent = [];
     this.backstabs = 0;               // busy 상태의 적을 뒤에서 먼저 친 교전 수
 
+    // 경제 (docs/ITEM-ECONOMY.md §7-1)
+    this.coinTotal = 0;
+    this.itemsTotal = 0;
+    this.upgradesTotal = 0;
+    this.spent = 0;
+    this.buys = 0;
+    this.coinPerFloor = [];
+    this.itemsPerFloor = [];
+    this.upgradesPerFloor = [];
+    this._floorCoin = 0;
+    this._floorItems = 0;
+    this._floorUpgrades = 0;
+
     // 자원
     this.fuel = [];                   // 랜턴 연료 시계열 (5초 간격)
     this.hpPct = [];                  // 체력 비율 시계열
@@ -146,12 +159,23 @@ export class Metrics {
   death() { this.deaths++; }
   pickup(rarity) { this.pickups[Math.min(3, Math.max(0, rarity | 0))]++; }
 
+  // ── 경제 (docs/ITEM-ECONOMY.md §7-1) ───────────────────
+  // upgrades 가 핵심이다. 아이템을 20개 주워도 하나도 안 갈아입으면
+  // 드랍은 보상이 아니라 **소음**이다. 목표는 층당 0.7~1.2.
+  coin(n) { this.coinTotal += n; this._floorCoin += n; }
+  itemGot() { this._floorItems++; this.itemsTotal++; }
+  upgrade() { this._floorUpgrades++; this.upgradesTotal++; }
+  spend(n) { this.spent += n; this.buys++; }
+
   // ── 층 ────────────────────────────────────────────────
   floorStart(no) {
     if (this._floorNo != null) this.floorEnd();
     this._floorNo = no;
     this._floorT = 0;
     this._floorKills = 0;
+    this._floorCoin = 0;
+    this._floorItems = 0;
+    this._floorUpgrades = 0;
   }
 
   floorEnd() {
@@ -160,7 +184,13 @@ export class Metrics {
       floor: this._floorNo,
       sec: +this._floorT.toFixed(1),
       kills: this._floorKills,
+      coin: this._floorCoin,
+      items: this._floorItems,
+      upgrades: this._floorUpgrades,
     });
+    push(this.coinPerFloor, this._floorCoin);
+    push(this.itemsPerFloor, this._floorItems);
+    push(this.upgradesPerFloor, this._floorUpgrades);
     this._floorNo = null;
   }
 
@@ -207,6 +237,16 @@ export class Metrics {
         fuel: stats(this.fuel),
         hpPct: stats(this.hpPct),
         pickups: this.pickups.slice(),
+      },
+      // 목표치는 docs/ITEM-ECONOMY.md §5 · §7-1 에 적혀 있다:
+      //   층당 장비 2~3개 · 그중 갈아입는 것 0.7~1.2 · 영혼 조각 80~140
+      economy: {
+        coinTotal: this.coinTotal,
+        coinPerFloor: stats(this.coinPerFloor),
+        itemsPerFloor: stats(this.itemsPerFloor),
+        upgradesPerFloor: stats(this.upgradesPerFloor),
+        spent: this.spent,
+        buys: this.buys,
       },
       perf: { logicMs: stats(this.logicMs), frameMs: stats(this.frameMs) },
       errors: this.errors,

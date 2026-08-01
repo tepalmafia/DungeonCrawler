@@ -2,15 +2,29 @@
 //   A* 로 칸 경로를 뽑고 → 시야(LOS) 검사로 웨이포인트를 솎아내 매끄럽게 만든 뒤
 //   이동 중에는 원-사각형 밀어내기로 벽을 따라 미끄러진다.
 
-import { CELL, FLOOR, gridToWorld, worldToGrid } from './dungeon.js';
+import { CELL, FLOOR, DOOR, gridToWorld, worldToGrid } from './dungeon.js';
 
 const DIRS = [
   [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
   [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
 ];
 
+/**
+ * 걸을 수 있는 칸인가.
+ *
+ * **문 상태를 해석하는 곳은 여기 하나뿐이다.** A*·시야(lineOfSight)·충돌
+ * (resolveCollision) 이 전부 이 함수를 지나가므로, 닫힌 문은 자동으로
+ * 「길도 막고 시선도 막고 몸도 막는」다. 세 곳에 따로 적었다면 반드시
+ * 한 곳이 어긋났을 것이다 — 그리고 어긋난 쪽이 어그로 차단이었을 것이다.
+ */
 export function walkable(dg, gx, gz) {
-  return dg.at(gx, gz) === FLOOR;
+  const v = dg.at(gx, gz);
+  if (v === FLOOR) return true;
+  if (v === DOOR) {
+    const d = dg.doorAt && dg.doorAt.get(gz * dg.w + gx);
+    return d ? d.open : true;
+  }
+  return false;
 }
 
 /** 두 칸 사이가 뚫려 있는가 (Bresenham) */

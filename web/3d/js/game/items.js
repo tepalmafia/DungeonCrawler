@@ -1,5 +1,9 @@
 // 아이템 — 등급 · 접사 롤 · 바닥 드랍 · 장착 스탯 합산.
 // 데이터 주도: 새 접사를 AFFIXES 에 한 줄 추가하면 그대로 굴러간다.
+//
+// 설계는 docs/ITEM-ECONOMY.md 를 따른다. 한 문장으로 줄이면
+// **가짓수는 늘리고 드랍 빈도는 줄인다.** 둘은 반대가 아니라 짝이다 —
+// 종류가 많아질수록 하나가 덜 중요해지고, 그래야 「안 바뀌는 판」이 정상이 된다.
 
 import * as THREE from 'three';
 import { softDot, beamTexture } from '../core/textures.js';
@@ -11,23 +15,63 @@ export const RARITIES = [
   { key: 'legend', name: '전설',  css: '#ff8a2b', hex: 0xff8a2b, affixes: 4, mult: 1.75 },
 ];
 
+/** 등급 기본 분포 (%). 층·티어·find 접사가 위쪽으로 민다. */
+const RARITY_W = [55, 30, 12, 3];
+
+/** 장비 슬롯 — 표시 순서이자 종이인형 배치 순서 */
+export const SLOTS = ['weapon', 'helm', 'armor', 'gloves', 'ring'];
+export const SLOT_NAME = { weapon: '무기', helm: '투구', armor: '갑옷', gloves: '장갑', ring: '장신구' };
+
+// ─────────────────────── 기반 아이템 ───────────────────────
+//
+// 무기는 계열마다 **속도·피해 곡선이 다르고, 계열 고유 보너스가 붙는다.**
+// 숫자만 큰 상위 호환을 만들면 12종이 아니라 1종을 12단계로 나눈 것에 불과하다.
+// 그래서 계열별 초당 피해(dmg 평균 × spd)를 8~11.5 안으로 좁혀 두고,
+// 차이를 **고유 보너스** 쪽으로 옮겼다:
+//
+//   검   균형 (고유 보너스 없음 — 대신 원시 피해가 제일 높다)
+//   도끼 느리고 세다
+//   둔기 제일 느리다 + 기절
+//   대검 느리다 + 사거리 (여러 마리에 닿는다)
+//   단검 빠르다 + 치명타
+//   지팡이 피해는 낮다 + 쿨감·마나 (스킬로 싸우는 사람용)
+//
+// lvl 은 **등장 하한**이다. floorNo + tier 가 그 이상이어야 나온다 —
+// 1층에서 처형자가 나오면 계열 설계가 무의미해진다.
 const BASES = {
   weapon: [
-    { name: '녹슨 검',     icon: '🗡', dmg: [6, 11],  spd: 1.00 },
-    { name: '강철 도끼',   icon: '🪓', dmg: [9, 16],  spd: 0.86 },
-    { name: '사슬 철퇴',   icon: '🔨', dmg: [11, 19], spd: 0.76 },
-    { name: '흑요석 대검', icon: '⚔', dmg: [14, 24], spd: 0.68 },
-    { name: '단검',        icon: '🔪', dmg: [4, 8],   spd: 1.42 },
+    { name: '녹슨 검',     icon: '🗡', fam: '검',   lvl: 1, dmg: [6, 11],  spd: 1.00 },
+    { name: '장검',        icon: '🗡', fam: '검',   lvl: 2, dmg: [8, 13],  spd: 0.98 },
+    { name: '룬검',        icon: '🗡', fam: '검',   lvl: 3, dmg: [10, 14], spd: 0.96 },
+    { name: '강철 도끼',   icon: '🪓', fam: '도끼', lvl: 1, dmg: [9, 14],  spd: 0.86 },
+    { name: '쌍날 도끼',   icon: '🪓', fam: '도끼', lvl: 3, dmg: [11, 17], spd: 0.82 },
+    { name: '사슬 철퇴',   icon: '🔨', fam: '둔기', lvl: 1, dmg: [10, 14], spd: 0.78, base: { stun: 4 } },
+    { name: '성전 망치',   icon: '🔨', fam: '둔기', lvl: 3, dmg: [12, 18], spd: 0.70, base: { stun: 8 } },
+    { name: '흑요석 대검', icon: '⚔',  fam: '대검', lvl: 1, dmg: [12, 16], spd: 0.70, base: { range: 0.5 } },
+    { name: '처형자',      icon: '⚔',  fam: '대검', lvl: 3, dmg: [14, 20], spd: 0.64, base: { range: 0.75 } },
+    { name: '단검',        icon: '🔪', fam: '단검', lvl: 1, dmg: [4, 7],   spd: 1.45, base: { crit: 5 } },
+    { name: '독니',        icon: '🔪', fam: '단검', lvl: 2, dmg: [5, 9],   spd: 1.58, base: { crit: 8 } },
+    { name: '재의 지팡이', icon: '🪄', fam: '지팡이', lvl: 1, dmg: [7, 10], spd: 0.95, base: { cdr: 7, mp: 20 } },
+  ],
+  helm: [
+    { name: '가죽 두건', icon: '🧢', lvl: 1, armor: [2, 4] },
+    { name: '사슬 투구', icon: '⛑', lvl: 2, armor: [4, 7] },
+    { name: '판금 투구', icon: '🪖', lvl: 3, armor: [7, 11] },
   ],
   armor: [
-    { name: '가죽 갑옷', icon: '🎽', armor: [3, 6] },
-    { name: '사슬 갑옷', icon: '🥋', armor: [6, 11] },
-    { name: '판금 갑옷', icon: '🛡', armor: [10, 17] },
+    { name: '가죽 갑옷', icon: '🎽', lvl: 1, armor: [3, 6] },
+    { name: '사슬 갑옷', icon: '🥋', lvl: 2, armor: [6, 11] },
+    { name: '판금 갑옷', icon: '🛡', lvl: 3, armor: [10, 17] },
+  ],
+  gloves: [
+    { name: '천 장갑',     icon: '🧤', lvl: 1, armor: [1, 3] },
+    { name: '가죽 장갑',   icon: '🧤', lvl: 2, armor: [2, 5] },
+    { name: '판금 건틀릿', icon: '🥊', lvl: 3, armor: [4, 8] },
   ],
   ring: [
-    { name: '구리 반지',   icon: '💍', armor: [0, 1] },
-    { name: '흑철 반지',   icon: '💍', armor: [1, 3] },
-    { name: '영혼 인장',   icon: '🔮', armor: [1, 2] },
+    { name: '구리 반지', icon: '💍', lvl: 1, armor: [0, 1] },
+    { name: '흑철 반지', icon: '💍', lvl: 2, armor: [1, 3] },
+    { name: '영혼 인장', icon: '🔮', lvl: 3, armor: [1, 2] },
   ],
 };
 
@@ -46,26 +90,72 @@ const AFFIXES = [
   { key: 'leech', label: '타격 시 회복',    fmt: (v) => `타격 시 ${v} 회복`,     roll: (r, s) => Math.round(r.range(1, 3) * s) },
   { key: 'mp',    label: '최대 마나',       fmt: (v) => `+${v} 최대 마나`,       roll: (r, s) => Math.round(r.range(6, 14) * s) },
   { key: 'cdr',   label: '재사용 대기시간', fmt: (v) => `-${v}% 재사용 대기시간`, roll: (r, s) => +(r.range(3, 7) * Math.min(1.5, s)).toFixed(1) },
+
+  // ── 아래 여섯은 이 게임에만 있는 축이다 ────────────────────
+  // fuel 과 find 는 랜턴 시스템과 드랍 억제라는 두 축에 직접 붙는다.
+  // 다른 게임에서 베껴 온 접사가 아니라, 이 게임이 어떤 게임인지 말하는 접사다.
+  { key: 'thorns', label: '가시',        fmt: (v) => `피격 시 ${v} 반사`,      roll: (r, s) => Math.round(r.range(2, 5) * s) },
+  { key: 'fuel',   label: '연료 최대치', fmt: (v) => `+${v}초 랜턴 연료`,      roll: (r, s) => Math.round(r.range(14, 34) * s) },
+  { key: 'find',   label: '보물 감각',   fmt: (v) => `+${v}% 상위 등급 확률`,  roll: (r, s) => Math.round(r.range(6, 15) * Math.min(2, s)) },
+  { key: 'stun',   label: '기절',        fmt: (v) => `+${v}% 기절 확률`,       roll: (r, s) => +(r.range(2, 5) * Math.min(1.8, s)).toFixed(1) },
+  { key: 'range',  label: '공격 사거리', fmt: (v) => `+${v} 공격 사거리`,      roll: (r, s) => +(r.range(0.12, 0.3) * Math.min(1.5, s)).toFixed(2) },
+  { key: 'regen',  label: '체력 재생',   fmt: (v) => `초당 ${v} 회복`,         roll: (r, s) => +(r.range(0.4, 1.1) * s).toFixed(1) },
 ];
 const AFFIX_BY_KEY = Object.fromEntries(AFFIXES.map((a) => [a.key, a]));
 
+/** 접사 키 전체 — aggregate 의 빈 그릇을 여기서 만든다 (추가할 때 빠뜨리지 않도록) */
+const STAT_KEYS = AFFIXES.map((a) => a.key);
+
+/**
+ * 슬롯마다 잘 붙는 접사가 다르다. 안 그러면 슬롯을 5개로 늘려도
+ * 「아무 데나 아무거나 붙는 칸 5개」일 뿐이라 늘린 의미가 없다.
+ * 여기 적힌 것은 가중치 ×4, 나머지는 ×1 로 굴린다.
+ */
+const SLOT_AFFIX = {
+  weapon: ['dmg', 'aspd', 'crit', 'cdmg', 'leech', 'stun', 'range'],
+  helm:   ['hp', 'armor', 'mp', 'fuel', 'find'],
+  armor:  ['armor', 'hp', 'thorns', 'regen'],
+  gloves: ['aspd', 'crit', 'cdmg', 'dmg'],
+  ring:   ['cdr', 'speed', 'leech', 'mp', 'find', 'fuel'],
+};
+
 let uid = 1;
+
+/** 층·티어·find 를 반영해 등급을 굴린다 */
+function rollRarity(rnd, floorNo, tier, find = 0) {
+  // 상위 등급 쪽으로 미는 힘. 등급이 한 칸 올라갈 때마다 제곱으로 걸리므로
+  // 전설은 층이 깊어질 때 눈에 띄게 늘고, 일반은 자연히 줄어든다.
+  const push = 1 + (floorNo - 1) * 0.10 + tier * 0.22 + find / 100;
+  const w = RARITY_W.map((base, i) => base * Math.pow(push, i));
+  const total = w.reduce((a, b) => a + b, 0);
+  let u = rnd() * total;
+  for (let i = 0; i < w.length; i++) { u -= w[i]; if (u <= 0) return i; }
+  return 0;
+}
 
 /**
  * 아이템 하나를 굴린다.
  * @param rnd     시드 RNG
  * @param floorNo 층 (값 스케일)
  * @param tier    파밍 티어 (반복 회차 — 높을수록 등급이 잘 뜬다)
- * @param opt     { slot, minRarity }
+ * @param opt     { slot, minRarity, find, prefer }
+ *                prefer: 착용 중인 슬롯 목록. 60% 확률로 이 중에서 고른다 —
+ *                가짓수를 늘리면 무작위 드랍은 쓸모없는 것으로 채워지므로
+ *                「내가 쓰는 부위」쪽으로 치우치게 한다 (ITEM-ECONOMY §2-2).
  */
 export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
-  const slot = opt.slot || rnd.pick(['weapon', 'weapon', 'armor', 'ring']);
-  const base = rnd.pick(BASES[slot]);
+  let slot = opt.slot;
+  if (!slot) {
+    const prefer = opt.prefer && opt.prefer.length ? opt.prefer : null;
+    slot = (prefer && rnd() < 0.6) ? rnd.pick(prefer) : rnd.pick(SLOTS);
+  }
 
-  // 등급 — 층·티어가 오를수록 위로 밀린다
-  let ri = 0;
-  const luck = rnd() + tier * 0.09 + floorNo * 0.035;
-  if (luck > 1.42) ri = 3; else if (luck > 1.12) ri = 2; else if (luck > 0.72) ri = 1;
+  // 등장 하한을 넘긴 기반만. 전부 걸러지면(이론상 없음) 제일 낮은 것으로 떨어진다.
+  const depth = floorNo + tier;
+  const pool = BASES[slot].filter((b) => (b.lvl ?? 1) <= depth);
+  const base = rnd.pick(pool.length ? pool : [BASES[slot][0]]);
+
+  let ri = rollRarity(rnd, floorNo, tier, opt.find || 0);
   if (opt.minRarity != null) ri = Math.max(ri, opt.minRarity);
   const rarity = RARITIES[ri];
 
@@ -76,7 +166,9 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
     slot, icon: base.icon,
     rarity: ri,
     ilvl: floorNo + tier,
+    fam: base.fam || null,
     stats: {},
+    baseStats: {},      // 계열 고유 보너스 — 접사와 구분해서 보여준다
     affixes: [],
   };
 
@@ -84,24 +176,40 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
     item.dmgMin = Math.max(1, Math.round(base.dmg[0] * scale));
     item.dmgMax = Math.max(item.dmgMin + 1, Math.round(base.dmg[1] * scale));
     item.aspd = base.spd;
-    item.baseName = base.name;
   } else {
     item.stats.armor = Math.round(rnd.int(base.armor[0], base.armor[1]) * scale);
-    item.baseName = base.name;
+  }
+  item.baseName = base.name;
+
+  // 계열 고유 보너스는 배율을 안 받는다. 「단검이라서 치명타」는 등급이 아니라
+  // 계열의 성질이고, 배율을 먹이면 전설 단검이 치명타 20% 를 달고 나온다.
+  if (base.base) {
+    for (const [k, v] of Object.entries(base.base)) {
+      item.baseStats[k] = v;
+      item.stats[k] = (item.stats[k] || 0) + v;
+    }
   }
 
-  // 접사
-  const pool = AFFIXES.filter((a) => !(slot === 'weapon' && a.key === 'armor'));
-  rnd.shuffle(pool);
-  for (let i = 0; i < rarity.affixes && i < pool.length; i++) {
-    const a = pool[i];
+  // 접사 — 슬롯에 맞는 것에 가중치를 준다
+  const bias = SLOT_AFFIX[slot] || [];
+  const cand = AFFIXES.filter((a) => !(slot === 'weapon' && a.key === 'armor'));
+  const bag = [];
+  for (const a of cand) {
+    const n = bias.includes(a.key) ? 4 : 1;
+    for (let i = 0; i < n; i++) bag.push(a);
+  }
+  rnd.shuffle(bag);
+  const used = new Set();
+  for (const a of bag) {
+    if (item.affixes.length >= rarity.affixes) break;
+    if (used.has(a.key)) continue;
     const v = a.roll(rnd, scale);
     if (!v) continue;
+    used.add(a.key);
     item.affixes.push({ key: a.key, value: v });
     item.stats[a.key] = (item.stats[a.key] || 0) + v;
   }
 
-  // 이름
   item.name = ri === 0 ? base.name
     : ri === 1 ? `${rnd.pick(PREFIX)} ${base.name}`
       : `${rnd.pick(PREFIX)} ${base.name}의 ${rnd.pick(SUFFIX)}`;
@@ -109,9 +217,9 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
   return item;
 }
 
-/** 장비 3칸을 합산해 최종 보너스를 만든다 */
+/** 장비 5칸을 합산해 최종 보너스를 만든다 */
 export function aggregate(equipped) {
-  const s = { dmg: 0, hp: 0, armor: 0, crit: 0, cdmg: 0, speed: 0, aspd: 0, leech: 0, mp: 0, cdr: 0 };
+  const s = Object.fromEntries(STAT_KEYS.map((k) => [k, 0]));
   let dmgMin = 2, dmgMax = 4, wSpd = 1;
   for (const it of Object.values(equipped)) {
     if (!it) continue;
@@ -126,7 +234,10 @@ export function power(item) {
   if (!item) return 0;
   let p = 0;
   if (item.slot === 'weapon') p += (item.dmgMin + item.dmgMax) * 0.5 * (item.aspd || 1) * 3;
-  const w = { dmg: 3, hp: 0.5, armor: 1.6, crit: 3.2, cdmg: 0.7, speed: 2.4, aspd: 2.6, leech: 3.4, mp: 0.35, cdr: 2.8 };
+  const w = {
+    dmg: 3, hp: 0.5, armor: 1.6, crit: 3.2, cdmg: 0.7, speed: 2.4, aspd: 2.6, leech: 3.4, mp: 0.35, cdr: 2.8,
+    thorns: 1.1, fuel: 0.4, find: 1.0, stun: 2.2, range: 14, regen: 6,
+  };
   for (const [k, v] of Object.entries(item.stats)) p += (w[k] || 1) * v;
   return Math.round(p);
 }
@@ -136,13 +247,17 @@ export function affixLine(a) { return AFFIX_BY_KEY[a.key].fmt(a.value); }
 /** 툴팁 HTML (비교 포함) */
 export function tooltipHtml(item, equippedSame) {
   const r = RARITIES[item.rarity];
-  const kind = { weapon: '무기', armor: '방어구', ring: '반지' }[item.slot];
+  const kind = SLOT_NAME[item.slot] || item.slot;
   let h = `<div class="tname" style="color:${r.css}">${item.name}</div>`;
-  h += `<div class="tkind">${r.name} ${kind} · 아이템 레벨 ${item.ilvl}</div>`;
+  h += `<div class="tkind">${r.name} ${item.fam ? `${item.fam} ` : ''}${kind} · 아이템 레벨 ${item.ilvl}</div>`;
   if (item.slot === 'weapon')
     h += `<div>피해 <b>${item.dmgMin}–${item.dmgMax}</b> · 속도 ${item.aspd.toFixed(2)}</div>`;
   if (item.stats.armor && item.slot !== 'weapon')
     h += `<div>방어도 <b>${item.stats.armor}</b></div>`;
+  // 계열 고유 보너스는 접사와 색을 달리한다 — 「이건 이 무기의 성질이지
+  // 운 좋게 붙은 게 아니다」가 읽혀야 계열을 고르는 재미가 생긴다
+  for (const [k, v] of Object.entries(item.baseStats || {}))
+    h += `<div class="tbase">${AFFIX_BY_KEY[k].fmt(v)}</div>`;
   for (const a of item.affixes) h += `<div class="taff">${affixLine(a)}</div>`;
 
   if (equippedSame && equippedSame.id !== item.id) {
@@ -154,12 +269,26 @@ export function tooltipHtml(item, equippedSame) {
   return h;
 }
 
+/**
+ * 가격 — 파는 값. 사는 값은 이것의 3.5배다 (ITEM-ECONOMY §4-2).
+ * power() 를 그대로 쓰면 무기가 방어구보다 10배 비싸지므로 제곱근으로 눌러
+ * 슬롯 사이 격차를 좁힌다.
+ */
+export function priceOf(item) {
+  if (!item) return 0;
+  const p = Math.max(1, power(item));
+  return Math.max(4, Math.round(Math.sqrt(p) * 7 * (1 + item.rarity * 0.45)));
+}
+
 // ─────────────────────── 바닥 드랍 ───────────────────────
 const ITEM_GEO = {
   weapon: new THREE.BoxGeometry(0.13, 0.9, 0.13),
+  helm: new THREE.SphereGeometry(0.26, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
   armor: new THREE.BoxGeometry(0.5, 0.55, 0.22),
+  gloves: new THREE.BoxGeometry(0.26, 0.3, 0.18),
   ring: new THREE.TorusGeometry(0.22, 0.07, 6, 14),
   lantern: new THREE.CylinderGeometry(0.16, 0.2, 0.42, 6),
+  coin: new THREE.CylinderGeometry(0.17, 0.17, 0.05, 10),
 };
 
 function labelTexture(text, css) {
@@ -196,7 +325,7 @@ export class Drop {
       color: r.hex, emissive: r.hex, emissiveIntensity: 0.55,
       roughness: 0.4, metalness: 0.6,
     });
-    this.mesh = new THREE.Mesh(ITEM_GEO[item.slot], mat);
+    this.mesh = new THREE.Mesh(ITEM_GEO[item.slot] || ITEM_GEO.ring, mat);
     this.mesh.position.y = 0.55;
     this.mesh.rotation.z = 0.4;
     this.group.add(this.mesh);

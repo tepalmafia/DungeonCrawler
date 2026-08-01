@@ -2,7 +2,7 @@
 //   바닥 = 병합 지오메트리 1개, 벽 = InstancedMesh 1개, 소품 = 종류별 InstancedMesh.
 
 import * as THREE from 'three';
-import { CELL, FLOOR, gridToWorld } from './dungeon.js';
+import { CELL, FLOOR, DOOR, gridToWorld } from './dungeon.js';
 import {
   floorTexture, wallTexture, wallTopTexture, flameTexture, beamTexture, softDot,
   floorHeight, wallHeight, floorRough,
@@ -37,7 +37,9 @@ export class Level {
 
     for (let gz = 0; gz < dg.h; gz++)
       for (let gx = 0; gx < dg.w; gx++) {
-        if (dg.at(gx, gz) !== FLOOR) continue;
+        const cv = dg.at(gx, gz);
+        // 문 칸에도 바닥을 깐다 — 열리면 지나다니는 곳이라 구멍이면 안 된다
+        if (cv !== FLOOR && cv !== DOOR) continue;
         const [cx, cz] = gridToWorld(gx, gz, dg.w, dg.h);
         const x0 = cx - CELL / 2, x1 = cx + CELL / 2;
         const z0 = cz - CELL / 2, z1 = cz + CELL / 2;
