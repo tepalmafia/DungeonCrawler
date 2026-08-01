@@ -860,6 +860,34 @@ async function shot(page, name) {
     `정면에서 맞으면 가슴이 ${hitPose.frontX?.toFixed(3)} 젖혀진다`);
   ok('actor.hitHeadLag', hitPose.skipped || hitPose.headLags,
     `머리 ${hitPose.headLag?.toFixed(3)} (가슴보다 0.06초 늦게 젖혀진다)`);
+  // 무기를 **바로 쥐고 있는가.**
+  //
+  // 칼날이 손에서 팔뚝 쪽(몸 쪽)으로 뻗어 있었다 — 얼음송곳 쥐듯 거꾸로다.
+  // 서 있을 때는 검이 위로 서 있어 그럴듯해 보이지만, 들어올리면 손잡이가
+  // 위로 가고 칼끝이 아래-뒤를 향한다. 팔이 아무리 큰 호를 그려도 칼끝은
+  // 몸 앞에서 오르내리기만 한다 — 「몸 앞에서 내려가잖아」가 이것이었다.
+  //
+  // 판정: **칼끝이 손보다 어깨에서 멀어야 한다.** 거꾸로 쥐면 가까워진다.
+  const grip = await page.evaluate(async () => {
+    const THREE = await import('three');
+    const em = await import('./js/game/enemies.js');
+    const G = window.G3;
+    const out = {};
+    const check = (rig) => {
+      rig.group.updateMatrixWorld(true);
+      const sh = new THREE.Vector3(), hand = new THREE.Vector3(), tip = new THREE.Vector3();
+      rig.armR.getWorldPosition(sh);
+      rig.handR.getWorldPosition(hand);
+      rig.blade.getWorldPosition(tip);
+      return +(tip.distanceTo(sh) - hand.distanceTo(sh)).toFixed(3);
+    };
+    out.knight = check(G.player.rig);
+    out.skeleton = check(em.ARCHETYPES.skeleton.build());
+    return out;
+  });
+  ok('actor.weaponHeldForward', grip.knight > 0.15 && grip.skeleton > 0.1,
+    `칼끝이 손보다 어깨에서 먼 정도 — 기사 ${grip.knight} · 해골 ${grip.skeleton} (음수면 거꾸로 쥔 것)`);
+
   // 시간이 지나도 **제자리에 있는가.**
   //
   // 사고를 겪고 넣었다. poseHit 이 root.x / root.z 를 `+=` 로 더하는데 되돌리는

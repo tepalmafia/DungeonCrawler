@@ -134,9 +134,18 @@ export function buildKnight() {
   // ── 검 (오른손) ── 능선이 있는 날 + 십자 가드 + 원형 폼멜
   const weapon = new THREE.Group();
   weapon.position.set(0, -0.06, 0.04);
-  // 방패와 같은 이유의 보정. 겨눔 자세에서 팔이 −1.35 접히므로, 그대로 두면
-  // 칼끝이 바닥과 나란해진다. 0.55 를 되돌려 **비스듬히 위**를 향하게 한다.
-  weapon.rotation.x = 0.55;
+  // ── 검을 쥐는 방향 ──
+  //
+  // **칼날은 손에서 팔 바깥쪽(먼 쪽)으로 뻗어야 한다.** 처음엔 그 반대로,
+  // 칼날이 손에서 팔뚝 쪽으로 뻗어 있었다 — 얼음송곳 쥐듯 거꾸로 쥔 것이다.
+  // 서 있을 때는 검이 위로 서 있어서 그럴듯해 보였지만, 들어올리면
+  // **손잡이가 위, 칼끝이 아래-뒤**를 향했다. 그래서 팔이 아무리 큰 호를
+  // 그려도 칼끝은 몸 앞에서 오르내리기만 했다 —
+  // 「몸 앞에서 내려가잖아」가 이것이었다.
+  //
+  // π 만큼 뒤집으면 칼날이 손 바깥(−Y)으로, 폼멜이 손목 쪽으로 온다.
+  // 0.28 을 덜어 칼끝을 살짝 앞으로 눕힌다.
+  weapon.rotation.x = Math.PI - 0.28;
   const wp = new Part(weapon);
   wp.add(prism(0.045, 0.045, 0.20, 0.05, 0.05), leather, { y: 0.06 });       // 손잡이
   wp.add(prism(0.09, 0.09, 0.05, 0.06, 0.06, { hang: false }), gold, { y: -0.16 });  // 폼멜
@@ -228,7 +237,7 @@ export function buildSkeleton() {
   // 녹슨 검
   const weapon = new THREE.Group();
   weapon.position.set(0, -0.05, 0.03);
-  weapon.rotation.x = -0.18;
+  weapon.rotation.x = Math.PI - 0.22;   // 기사와 같은 이유 (칼날은 손 바깥으로)
   new Part(weapon)
     .add(prism(0.04, 0.04, 0.15, 0.045, 0.045), rag, { y: 0.05 })
     .add(prism(0.20, 0.06, 0.045, 0.17, 0.05, { hang: false }), rust, { y: 0.07 })
