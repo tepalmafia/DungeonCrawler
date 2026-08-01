@@ -32,12 +32,25 @@ export class Input {
       setNdc(e);
       this.overUI = !!(e.target.closest && e.target.closest('#inv, #overlay, #skillbar, .orb, #minimap'));
     });
+    // 창(인벤토리·상점)이 열려 있으면 게임 입력을 막는다.
+    //
+    // 이 리스너들은 캔버스가 아니라 **window** 에 붙어 있다 — 커서가 HUD 위로
+    // 나가도 이동이 이어지게 하려는 것이었는데, 그 대가로 전면 창을 클릭해도
+    // 캐릭터가 같이 움직였다. 창을 닫으려고 ✕ 를 누르면 그 자리로 걸어갔다.
+    //
+    // 캔버스 리스너로 되돌리지 않는 이유: 그러면 커서가 구슬·단축바 위로
+    // 지나갈 때마다 이동이 끊긴다. 게이트를 하나 두는 편이 낫다.
+    this.blocked = () => false;
+
     window.addEventListener('mousedown', (e) => {
+      if (this.blocked()) return;
       setNdc(e);
       if (this.overUI) return;
       if (e.button === 0) { this.down = true; this.justDown = true; }
       if (e.button === 2) this.rightJustDown = true;
     });
+    // 놓는 것은 **막지 않는다.** 누른 채로 창을 열면 down 이 영원히 true 로
+    // 남아, 창을 닫는 순간 캐릭터가 걷기 시작한다.
     window.addEventListener('mouseup', (e) => { if (e.button === 0) this.down = false; });
     window.addEventListener('blur', () => { this.down = false; this.keys.clear(); });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());

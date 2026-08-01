@@ -435,6 +435,48 @@ export class UI {
         ctx.fillRect(ox + x * scale, oz + z * scale, scale + 0.6, scale + 0.6);
       }
 
+    // ── 스위치와 문 ──────────────────────────────────────
+    //
+    // **이건 안개보다 우선한다.** 금고 방이 시작점에서 중앙값 39칸이고
+    // 스위치가 30칸인데, 안개까지 덮으면 「어디 있는지 알 방법이 없다」가 된다.
+    // 그건 탐험이 아니라 술래잡기다.
+    //
+    // 위치를 알려 주는 것과 가는 길을 알려 주는 것은 다르다 — 길은 여전히
+    // 안개 속에서 찾아야 한다. 목적지만 찍어 준다.
+    const dr = G.doors;
+    if (dr?.lever && !dr.lever.pulled) {
+      const [lx, lz] = worldToGrid(dr.lever.x, dr.lever.z, dg.w, dg.h);
+      let mx = ox + lx * scale + scale / 2, mz = oz + lz * scale + scale / 2;
+      // 창 밖이면 **가장자리에 붙여** 방향만이라도 보여준다.
+      // 실측에서 스위치가 시작점에서 31칸이었는데 미니맵 창은 34칸이라,
+      // 안 붙이면 「있는 줄도 모르는」 상태가 층의 대부분 동안 이어진다.
+      const pad = 9;
+      const off = mx < pad || mx > S - pad || mz < pad || mz > S - pad;
+      if (off) {
+        const cxm = S / 2, czm = S / 2;
+        let vx = mx - cxm, vz = mz - czm;
+        const m = Math.max(Math.abs(vx), Math.abs(vz)) || 1;
+        const k = (S / 2 - pad) / m;
+        mx = cxm + vx * k; mz = czm + vz * k;
+      }
+      ctx.fillStyle = '#ffd070';
+      ctx.globalAlpha = off ? 0.85 : 1;
+      const rr = off ? 5 : 4;
+      ctx.beginPath();
+      ctx.moveTo(mx, mz - rr); ctx.lineTo(mx + rr, mz);
+      ctx.lineTo(mx, mz + rr); ctx.lineTo(mx - rr, mz);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    for (const door of dg.doors || []) {
+      if (door.open) continue;
+      ctx.fillStyle = '#c8a24a';
+      for (const idx of door.cells) {
+        const gx = idx % dg.w, gz = (idx / dg.w) | 0;
+        ctx.fillRect(ox + gx * scale, oz + gz * scale, scale + 0.6, scale + 0.6);
+      }
+    }
+
     // 출구 — **밟아 본 곳일 때만.** 안 가 본 출구를 찍어 주면 안개가 무의미해진다
     if (G.level && G.level.exitOpen && seen[dg.exit.gz * dg.w + dg.exit.gx]) {
       ctx.fillStyle = '#8fd6ff';

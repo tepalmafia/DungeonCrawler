@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
+import { makeActor } from '../core/actor.js';
 import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
@@ -103,11 +104,76 @@ export function buildKnight() {
   return { group: g, torso, legL, legR, armR, armL, weapon, blade, bladeMat, materials: [steel, dark, cloth, skin, bladeMat] };
 }
 
+/**
+ * 상자 기사의 자세 — **관절을 아는 유일한 곳.**
+ *
+ * 게임 로직은 이제 `actor.play('walk')` 만 부른다. 여기 있는 코드는 그 동사를
+ * 상자 리그로 수행하는 방법이고, 산 모델을 넣으면 GltfActor 가 같은 동사를
+ * AnimationMixer 로 수행한다 (core/actor.js).
+ *
+ * 한 가지 다른 점: 상자 리그는 **걷기와 휘두르기를 동시에** 한다 (다리와 팔이
+ * 따로 놀 수 있으므로). 그래서 idle/walk/attack 이 전부 같은 몸통 함수를 부르고
+ * ctx 의 raw 값(moved·swing)으로 갈린다. 산 모델은 클립 하나만 재생하므로
+ * 그때는 이름이 실제로 갈라진다 — 그래도 **호출부는 안 바뀐다.**
+ */
+function knightBody(rig, c) {
+  const { dt, moved, swing, walkT } = c;
+  let d = c.facing - rig.group.rotation.y;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  rig.group.rotation.y += d * Math.min(1, dt * 16);
+
+  if (moved > 0.05) {
+    const sn = Math.sin(walkT);
+    rig.legL.rotation.x = sn * 0.75;
+    rig.legR.rotation.x = -sn * 0.75;
+    rig.torso.position.y = 0.62 + Math.abs(Math.sin(walkT * 2)) * 0.045;
+    rig.armL.rotation.x = -sn * 0.34;
+  } else {
+    rig.legL.rotation.x *= 1 - Math.min(1, dt * 9);
+    rig.legR.rotation.x *= 1 - Math.min(1, dt * 9);
+    rig.armL.rotation.x *= 1 - Math.min(1, dt * 9);
+    rig.torso.position.y += (0.62 - rig.torso.position.y) * Math.min(1, dt * 9);
+  }
+
+  if (swing > 0) {
+    const k = 1 - swing;                       // 0 → 1
+    const a = k < 0.32 ? -1.15 * (k / 0.32) : -1.15 + 2.5 * ((k - 0.32) / 0.68);
+    rig.armR.rotation.x = a;
+    rig.armR.rotation.z = 0.25 * Math.sin(k * Math.PI);
+    rig.torso.rotation.y = 0.3 * Math.sin(k * Math.PI);
+  } else {
+    rig.armR.rotation.x += (0.05 - rig.armR.rotation.x) * Math.min(1, dt * 9);
+    rig.armR.rotation.z *= 1 - Math.min(1, dt * 9);
+    rig.torso.rotation.y *= 1 - Math.min(1, dt * 9);
+  }
+}
+
+const KNIGHT_POSER = {
+  idle: knightBody,
+  walk: knightBody,
+  attack: knightBody,
+  hit: knightBody,
+  // 앉기 — 무릎을 접고 상체를 낮춘다. 별도 리그 없이 기존 관절만 굽힌다.
+  // 저폴리라 「웅크린 실루엣」만 나와도 쉬는 것으로 읽힌다.
+  rest: (rig, t, k, c) => {
+    const r = c.resting;
+    rig.group.position.y = -0.34 * r;
+    rig.torso.rotation.x = 0.30 * r;
+    if (rig.legL) { rig.legL.rotation.x = -1.15 * r; rig.legR.rotation.x = -0.55 * r; }
+    rig.armR.rotation.x = -0.5 * r;
+    rig.armL.rotation.x = -0.45 * r;
+  },
+  die: (rig) => { rig.group.rotation.z = Math.PI * 0.42; },
+};
+
 export class Player {
   constructor(scene) {
     this.scene = scene;
     const k = buildKnight();
     this.rig = k;
+    // 게임 로직과 메시 사이의 벽 (core/actor.js). 에셋 교체의 전제다.
+    this.actor = makeActor(k, KNIGHT_POSER);
     this.obj = new THREE.Group();
     this.obj.add(k.group);
     this.shadow = makeBlobShadow(1.5);
@@ -409,62 +475,30 @@ export class Player {
   }
 
   _animate(dt, moved) {
-    // 앉은 자세 — 무릎을 접고 상체를 낮춘다.
-    // 별도 리그를 만들지 않고 기존 관절을 굽히는 것으로 끝낸다. 저폴리 기사라
-    // 「웅크린 실루엣」만 나와도 쉬는 것으로 읽힌다.
-    const rest = this.resting || 0;
-    if (rest > 0) {
-      const k = rest;
-      this.rig.group.position.y = -0.34 * k;
-      this.rig.torso.rotation.x = 0.30 * k;
-      if (this.rig.legL) { this.rig.legL.rotation.x = -1.15 * k; this.rig.legR.rotation.x = -0.55 * k; }
-      this.rig.armR.rotation.x = -0.5 * k;
-      this.rig.armL.rotation.x = -0.45 * k;
-      return;                      // 걷기·스윙 애니메이션은 건너뛴다
-    }
-    if (this.rig.group.position.y !== 0) {
+    // 여기서 하는 일은 **동사를 고르는 것**뿐이다. 관절은 KNIGHT_POSER 가 안다.
+    // 모델을 사서 갈아 끼우면 이 함수는 한 줄도 안 바뀐다 (core/actor.js).
+    if (moved > 0.05) this.walkT += dt * 11 * MOVE_SCALE;
+    if (this.swing > 0) this.swing = Math.max(0, this.swing - dt * 4.4 * ATTACK_SCALE);
+
+    const clip = this.dead ? 'die'
+      : this.resting > 0 ? 'rest'
+        : this.swing > 0 ? 'attack'
+          : moved > 0.05 ? 'walk' : 'idle';
+
+    // 앉았다 일어설 때 몸이 바닥에 박힌 채로 남지 않게
+    if (clip !== 'rest' && this.rig.group.position.y !== 0) {
       this.rig.group.position.y = 0;
       this.rig.torso.rotation.x = 0;
     }
 
-    const r = this.rig;
-    // 몸통은 진행 방향을 부드럽게 따라간다
-    let d = this.facing - r.group.rotation.y;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    r.group.rotation.y += d * Math.min(1, dt * 16);
+    this.actor.play(clip, {
+      dt, moved, swing: this.swing, resting: this.resting,
+      facing: this.facing, walkT: this.walkT,
+    });
+    this.actor.update(dt);
 
-    // 걷기: 다리 교차 + 상체 상하
-    if (moved > 0.05) {
-      // 보폭은 실제 이동 속도를 따라간다 — 안 맞으면 발이 미끄러져 보인다
-      this.walkT += dt * 11 * MOVE_SCALE;
-      const s = Math.sin(this.walkT);
-      r.legL.rotation.x = s * 0.75;
-      r.legR.rotation.x = -s * 0.75;
-      r.torso.position.y = 0.62 + Math.abs(Math.sin(this.walkT * 2)) * 0.045;
-      r.armL.rotation.x = -s * 0.34;
-    } else {
-      r.legL.rotation.x *= 1 - Math.min(1, dt * 9);
-      r.legR.rotation.x *= 1 - Math.min(1, dt * 9);
-      r.armL.rotation.x *= 1 - Math.min(1, dt * 9);
-      r.torso.position.y += (0.62 - r.torso.position.y) * Math.min(1, dt * 9);
-    }
-
-    // 공격 스윙: 예비(뒤로) → 타격(앞으로) → 복귀
-    if (this.swing > 0) {
-      this.swing = Math.max(0, this.swing - dt * 4.4 * ATTACK_SCALE);
-      const k = 1 - this.swing;                  // 0 → 1
-      const a = k < 0.32 ? -1.15 * (k / 0.32) : -1.15 + 2.5 * ((k - 0.32) / 0.68);
-      r.armR.rotation.x = a;
-      r.armR.rotation.z = 0.25 * Math.sin(k * Math.PI);   // 손이 바뀌었으니 휘두르는 쪽도 뒤집는다
-      r.torso.rotation.y = 0.3 * Math.sin(k * Math.PI);
-    } else {
-      r.armR.rotation.x += (0.05 - r.armR.rotation.x) * Math.min(1, dt * 9);
-      r.armR.rotation.z *= 1 - Math.min(1, dt * 9);
-      r.torso.rotation.y *= 1 - Math.min(1, dt * 9);
-    }
-
-    // 피격 플래시
+    // 피격 플래시는 자세가 아니라 **재질**이라 Actor 밖에 둔다.
+    // 산 모델로 갈아 끼워도 이 코드는 그대로 쓸 수 있어야 한다.
     const f = this.hurtT > 0 ? this.hurtT / 0.18 : 0;
     for (const m of this.rig.materials) {
       if (m === this.rig.bladeMat) continue;

@@ -136,6 +136,9 @@ const ui = new UI(G);
 G.ui = ui;
 const inv = new Inventory(G);
 G.inv = inv;
+// 창이 열려 있는 동안은 클릭이 게임으로 안 간다 (core/input.js).
+// 판단을 한 곳에 모아 둔다 — 창이 늘 때마다 여기만 고치면 된다.
+input.blocked = () => inv.open || !!ui.shop;
 
 // ───────────────────────── 층 로딩 ─────────────────────────
 function clearFloor() {
@@ -490,7 +493,7 @@ function handleInput(dt) {
   if (input.wasPressed('Digit0') || input.wasPressed('Numpad0'))
     camDist = CAM_DIST_DEFAULT;
 
-  if (input.wasPressed('KeyI')) inv.toggle();
+  if (input.wasPressed('KeyI')) { inv.toggle(); if (inv.open) { input.down = false; G.player.stop(); } }
   // C — 휴식. 모닥불을 피우고 앉는다 (game/rest.js).
   if (input.wasPressed('KeyC')) {
     if (G.rest?.active) G.rest.stop(G, '일어섰다');
@@ -912,6 +915,8 @@ function doInteract() {
     }
   } else if (it.kind === 'shop') {
     ui.setShop(G.shop);
+    input.down = false;
+    G.player.stop();
   } else if (it.kind === 'chest') {
     const r = G.shop.openChest(G);
     if (r) {

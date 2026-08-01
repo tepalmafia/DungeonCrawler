@@ -10,6 +10,7 @@ import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank, SHOUT, NOISE, SEARCH, FLEE } from './ai.js';
 import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
+import { makeActor } from '../core/actor.js';
 import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
 
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
@@ -40,6 +41,44 @@ function alertTexture() {
   ALERT_TEX.colorSpace = THREE.SRGBColorSpace;
   return ALERT_TEX;
 }
+
+/**
+ * 적의 자세 — **관절을 아는 유일한 곳** (core/actor.js 참조).
+ *
+ * 종족마다 리그가 다르지만(궁수는 다리가 없고 부유한다) 동작 이름은 같다.
+ * 그래서 포저 하나로 전부 처리하고, 리그에 없는 부위는 건너뛴다.
+ * 산 모델을 넣으면 GltfActor 가 같은 이름의 클립을 재생한다.
+ */
+function enemyBody(rig, t, k, c) {
+  const { dt, moving, walkT, armX } = c;
+  let d = c.facing - rig.group.rotation.y;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  rig.group.rotation.y += d * Math.min(1, dt * 12);
+
+  if (rig.float) {
+    rig.group.position.y = 0.28 + Math.sin(walkT * 1.6 + c.bobPhase) * 0.12;
+  } else if (moving > 0.05) {
+    const sn = Math.sin(walkT);
+    if (rig.legL) rig.legL.rotation.x = sn * 0.8;
+    if (rig.legR) rig.legR.rotation.x = -sn * 0.8;
+    rig.group.position.y = Math.abs(Math.sin(walkT * 2)) * 0.05;
+  } else {
+    if (rig.legL) rig.legL.rotation.x *= 1 - Math.min(1, dt * 8);
+    if (rig.legR) rig.legR.rotation.x *= 1 - Math.min(1, dt * 8);
+    rig.group.position.y *= 1 - Math.min(1, dt * 8);
+  }
+
+  // 팔: 예비 동작에서 크게 젖혔다가 타격에서 내려친다
+  if (rig.arm) rig.arm.rotation.x += (armX - rig.arm.rotation.x) * Math.min(1, dt * 18);
+}
+
+const ENEMY_POSER = {
+  idle: enemyBody, walk: enemyBody, attack: enemyBody, hit: enemyBody,
+  // 죽음은 update() 의 dieT 분기가 직접 만든다 — 스케일이 줄며 가라앉는 연출이라
+  // 자세가 아니라 전체 변환이다. 여기서는 아무것도 안 한다.
+  die: () => {},
+};
 
 function m(color, opt = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1, ...opt });
@@ -293,6 +332,7 @@ export class Enemy {
     this.xpMul = 1;
 
     // 피격 시 원래 색으로 되돌리기 위해 보관
+    this.actor = makeActor(rig, ENEMY_POSER);   // core/actor.js — 에셋 교체의 전제
     this.baseColors = rig.mats.map((mm) => mm.color.clone());
     this.mats = rig.mats;
 
@@ -953,6 +993,7 @@ export class Enemy {
 
     // 리코일 — 맞은 방향으로 움찔하고 납작해진다.
     // 위치(this.pos)는 건드리지 않는다 — 이건 순전히 연출이라 충돌·경로와 무관하다.
+    // 자세가 아니라 **전체 변환**이라 Actor 밖에 둔다.
     if (this.recoilT > 0) {
       this.recoilT = Math.max(0, this.recoilT - dt * 6.5);
       const k = this.recoilT * this.recoilPow;
@@ -966,32 +1007,23 @@ export class Enemy {
         rig.group.scale.setScalar(sq);
       }
     }
-    let d = this.facing - rig.group.rotation.y;
-    while (d > Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    rig.group.rotation.y += d * Math.min(1, dt * 12);
 
-    if (rig.float) {
-      rig.group.position.y = 0.28 + Math.sin(this.walkT * 1.6 + this.bobPhase) * 0.12;
-      this.walkT += dt * 2.2;
-    } else if (moving > 0.05) {
-      this.walkT += dt * (7 + this.speed);
-      const s = Math.sin(this.walkT);
-      if (rig.legL) rig.legL.rotation.x = s * 0.8;
-      if (rig.legR) rig.legR.rotation.x = -s * 0.8;
-      rig.group.position.y = Math.abs(Math.sin(this.walkT * 2)) * 0.05;
-    } else {
-      if (rig.legL) rig.legL.rotation.x *= 1 - Math.min(1, dt * 8);
-      if (rig.legR) rig.legR.rotation.x *= 1 - Math.min(1, dt * 8);
-      rig.group.position.y *= 1 - Math.min(1, dt * 8);
-    }
+    // 보폭 시계는 여기서 굴린다 — 종족마다 속도가 달라 포저가 알 수 없다
+    if (rig.float) this.walkT += dt * 2.2;
+    else if (moving > 0.05) this.walkT += dt * (7 + this.speed);
 
-    // 팔: 예비 동작에서 크게 젖혔다가 타격에서 내려친다
     let armX = 0;
     if (this.state === 'windup') armX = -1.5 * Math.min(1, this.stateT / this.def.windup);
     else if (this.state === 'attack') armX = 1.15;
     else if (this.state === 'recover') armX = 1.15 * Math.max(0, 1 - this.stateT / this.def.recover);
-    if (rig.arm) rig.arm.rotation.x += (armX - rig.arm.rotation.x) * Math.min(1, dt * 18);
+
+    const clip = this.dead ? 'die'
+      : (this.state === 'windup' || this.state === 'attack' || this.state === 'recover') ? 'attack'
+        : moving > 0.05 ? 'walk' : 'idle';
+    this.actor.play(clip, {
+      dt, moving, walkT: this.walkT, armX, facing: this.facing, bobPhase: this.bobPhase,
+    });
+    this.actor.update(dt);
 
     // 피격 플래시
     const f = this.flash > 0 ? this.flash / 0.14 : 0;
