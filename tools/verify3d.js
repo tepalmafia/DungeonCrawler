@@ -1083,6 +1083,48 @@ async function shot(page, name) {
     const p95 = (a) => a[Math.floor(a.length * 0.95)];
     return { logicMed: med(logic), logicP95: p95(logic), frameMed: med(frame), frameP95: p95(frame) };
   });
+
+  // ── 로직 비용: **장면을 고정해 놓고** 잰다 ────────────────
+  //
+  // 원래는 위의 봇 소크 도중에 쟀다. 그런데 그때는 봇이 싸우는 중이라
+  // **살아 있는 적 수가 판마다 다르다.** 실측이 그대로 흔들렸다:
+  //   6.20 → 5.50 → 6.30 → 5.90 → 5.80 → 6.90 ms
+  // 마지막 판은 **무기를 매단 각도만** 바꾼 것이라 로직 비용에 영향을 줄 수
+  // 없는 변경이었다. 즉 ±1.4ms 는 코드가 아니라 장면 구성의 차이였고,
+  // 기준선(6ms)이 그 잡음 폭 한가운데 있었다.
+  //
+  // 무작위로 실패하는 검사는 쓸모없는 정도가 아니라 **해롭다** — 무시하는
+  // 습관이 든다. 그래서 잰 값을 못 믿게 만든 원인을 없앤다:
+  // 적 수를 못박고, 전부 깨우고, 렌더링 없이 고정 시간을 밟는다.
+  const budget = await page.evaluate(async () => {
+    const G = window.G3;
+    const em = await import('./js/game/enemies.js');
+    for (const e of G.enemies) e.dispose();
+    G.enemies.length = 0;
+    G.boss = null;
+    // 24 마리 — 실제 한 층의 상한(방마다 1~4 × 방 8개)에 가깝다.
+    // 플레이어 주위 4~26 유닛에 고르게 뿌려 자세 LOD 의 경계를 모두 지나게 한다.
+    const P = G.player;
+    const kinds = ['skeleton', 'ghoul', 'archer', 'golem'];
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      const r = 4 + (i % 6) * 4.4;
+      const e = new em.Enemy(G, kinds[i % 4], P.pos.x + Math.cos(a) * r, P.pos.z + Math.sin(a) * r);
+      e.aggro = true; e.state = 'chase';
+      G.enemies.push(e);
+    }
+    const samples = [];
+    for (let i = 0; i < 90; i++) {
+      G.headlessRun(1 / 60);
+      samples.push(G.perf.logicMs);
+    }
+    samples.sort((x, y) => x - y);
+    return {
+      n: G.enemies.length,
+      med: samples[Math.floor(samples.length / 2)],
+      p95: samples[Math.floor(samples.length * 0.95)],
+    };
+  });
   // 벽시계 9초를 기다리는 대신 시뮬레이션 12초를 밟는다.
   // 렌더링이 느린 환경에서 벽시계로 기다리면 게임 내 시간이 거의 안 흐른다 —
   // 「9초 기다렸는데 봇이 한 마리도 못 잡았다」가 되면 검사가 무의미하다.
@@ -1097,9 +1139,12 @@ async function shot(page, name) {
     alive: !window.G3.player.dead,
   }));
   ok('bot.fights', botState.kills > 0, `처치 ${botState.kills} · 획득 ${botState.items} · Lv ${botState.level}`);
-  // 로직 예산: 60fps 프레임(16.7ms) 중 시뮬레이션이 6ms를 넘지 않아야 한다
-  ok('perf.logicBudget', frames.logicMed < 6,
-    `시뮬레이션 중앙값 ${frames.logicMed.toFixed(2)}ms · p95 ${frames.logicP95.toFixed(2)}ms`);
+  // 로직 예산: 60fps 프레임(16.7ms) 중 시뮬레이션이 6ms를 넘지 않아야 한다.
+  // **적 24마리 고정** 장면에서 잰다 (위 참조) — 봇 전투 중에 재면 살아 있는
+  // 적 수가 판마다 달라 같은 코드도 ±1.4ms 로 흔들린다.
+  ok('perf.logicBudget', budget.med < 6,
+    `적 ${budget.n}마리 고정 · 중앙값 ${budget.med.toFixed(2)}ms · p95 ${budget.p95.toFixed(2)}ms`);
+  console.log(`  (참고) 봇 전투 중 실측 중앙값 ${frames.logicMed.toFixed(2)}ms — 장면이 매번 달라 비교용으로는 못 쓴다`);
   console.log(`  (참고) 전체 프레임 중앙값 ${frames.frameMed.toFixed(1)}ms — SwiftShader 소프트웨어 렌더링이라 GPU 성능을 대변하지 않는다`);
 
   await shot(page, '05-bot.png');
