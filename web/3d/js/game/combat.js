@@ -6,6 +6,7 @@ import { Sfx } from '../core/audio.js';
 import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
 import { worldToGrid } from '../world/dungeon.js';
 import { ELEMENTS, elementalMult } from './elements.js';
+import { DIE_TIME } from './pace.js';
 
 /**
  * 벽 너머로 때리거나 맞지 않게 막는다.
@@ -118,6 +119,13 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
   e.recoilT = 1;
   e.recoilDir = dir;
   e.recoilPow = opts.crit ? 1.5 : 1;
+  // 피격 **동작**. 지금까지는 위의 리코일(몸통 통째로 밀기)이 전부였다 —
+  // 그건 「밀렸다」지 「맞았다」가 아니다. 몸이 어디서 맞았는지 알아야
+  // 상체가 그 반대로 꺾이고, 머리가 뒤늦게 따라 젖혀진다 (core/anim.js).
+  e.hitT = opts.crit ? 0.55 : 0.42;
+  e.hitDur = e.hitT;
+  e.hitPow = opts.crit ? 1.5 : 1;
+  e.hitFrom = dir;                     // 월드 방향. 몸 기준으로는 그릴 때 돌린다
 
   const vol = volAt(G, e.pos);
   if (!opts.silent) Sfx.enemyHit(e.def.key, opts.crit, vol);
@@ -156,7 +164,7 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
 export function killEnemy(G, e) {
   if (e.dead) return;
   e.dead = true;
-  e.dieT = 0.55;
+  e.dieT = DIE_TIME;
   const c = e.center();
   G.fx.burst(c, { count: 30, color: e.def.gib ?? 0xb03a3a, speed: 6.5, size: 0.42, life: 0.75, grav: 13 });
   G.fx.burst(c, { count: 14, color: 0x6a4a7a, speed: 2.4, size: 0.7, life: 1.0, grav: -1, up: 1.4 });
@@ -192,6 +200,17 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   const dmg = Math.max(1, Math.round(mitigate(rawDmg, p.armor, p.level)));
   p.hp -= dmg;
   p.hurtT = 0.18;
+  // 플레이어도 맞으면 몸이 반응한다. 맞은 방향은 때린 쪽에서 나에게로.
+  p.hitT = 0.38;
+  p.hitDur = 0.38;
+  p.hitPow = Math.min(1.6, 0.8 + dmg / (p.maxHp * 0.25));
+  if (opts.from) {
+    const dx = p.pos.x - opts.from.x, dz = p.pos.z - opts.from.z;
+    const L = Math.hypot(dx, dz) || 1;
+    p.hitFrom = { x: dx / L, z: dz / L };
+  } else {
+    p.hitFrom = { x: Math.sin(p.facing), z: Math.cos(p.facing) };
+  }
   p.invuln = Math.max(p.invuln, 0.12);
 
   G.fx.number(p.center().setY(1.85), dmg, { color: '#ff8080' });
@@ -247,8 +266,9 @@ export class Projectile {
     this.mesh.position.copy(this.pos);
     G.scene.add(this.mesh);
 
-    const glow = new THREE.PointLight(color, 12, 6, 2);
-    this.mesh.add(glow);
+    // 화살빛은 **빌린다.** 예전에는 화살마다 new PointLight 였고, 그래서 궁수가
+    // 쏠 때마다 씬의 광원 개수가 바뀌어 셰이더가 재컴파일됐다 — 하필 전투 중에.
+    this.glow = G.lighting?.lendProjLight(this.mesh, color) || null;
     this.color = color;
   }
 
@@ -313,6 +333,9 @@ export class Projectile {
   kill() {
     if (this.dead) return;
     this.dead = true;
+    // 빛을 먼저 돌려준다 — 메시와 함께 씬에서 빠지면 광원 개수가 줄어든다
+    this.G.lighting?.returnProjLight(this.glow);
+    this.glow = null;
     this.G.scene.remove(this.mesh);
     this.mat.dispose();
   }

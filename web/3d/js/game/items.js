@@ -255,6 +255,10 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
   if (slot === 'weapon' && ri >= 1 && rnd.chance(WEAPON_ELEMENT_CHANCE)) {
     item.element = rnd.pick(ELEMENT_KEYS.filter((k) => k !== 'none'));
   }
+  // 호출한 쪽이 속성을 지정할 수 있다 — 상점의 「오늘의 물건」이 층별 대항 속성을
+  // 놓을 때 쓴다. 확률을 건드리지 않고 결과만 덮어쓴다(minRarity 와 rarity 의
+  // 관계와 같다 — 하한과 덮어쓰기를 섞으면 확률이 샌다).
+  if (opt.element && slot === 'weapon') item.element = opt.element;
 
   item.name = ri === 0 ? base.name
     : ri === 1 ? `${rnd.pick(PREFIX)} ${base.name}`

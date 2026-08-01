@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>캐릭터 시제품 — 개선 전 / 후</title>
+<style>
+  @font-face { font-family: 'Galmuri11'; src: url('../fonts/Galmuri11.woff2') format('woff2'); font-display: swap; }
+  html, body { margin: 0; height: 100%; background: #08070c; color: #e8e2d6;
+    font-family: 'Galmuri11', system-ui, sans-serif; overflow: hidden; }
+  #view { display: block; width: 100vw; height: 100vh; }
+  #ui { position: fixed; inset: 0; pointer-events: none; }
+  .col { position: absolute; top: 0; text-align: center; }
+  .col b { display: block; font-size: 15px; color: #ffd9a8; text-shadow: 0 2px 6px #000; margin-top: 10px; }
+  .col span { display: block; font-size: 11px; color: #8d8577; margin-top: 2px; text-shadow: 0 2px 4px #000; }
+  .row { position: absolute; left: 8px; font-size: 12px; letter-spacing: 3px; font-weight: bold;
+    color: #7f7768; writing-mode: vertical-rl; text-shadow: 0 2px 4px #000; }
+  .row.on { color: #9fd8ff; }
+  /* 통계는 각 칸의 **아래쪽**에 둔다. 위에 뒀더니 세로 라벨과 겹쳤다 */
+  .stat { position: absolute; font-size: 10px; color: #6a6357; text-shadow: 0 1px 3px #000; }
+  #clip { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: rgba(8,6,12,.82); border: 1px solid rgba(140,120,160,.34); border-radius: 4px;
+    padding: 8px 18px; text-align: center; pointer-events: auto; }
+  #clip b { font-size: 17px; color: #ffd9a8; letter-spacing: 3px; }
+  #clip span { display: block; font-size: 11px; color: #8d8577; margin-top: 3px; }
+  #bar { height: 2px; background: #ffb066; margin-top: 7px; transition: none; }
+  #keys { position: fixed; right: 12px; bottom: 14px; font-size: 11px; color: #6a6357; text-align: right; }
+  .sep { position: fixed; background: rgba(255,255,255,.09); }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.min.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="ui"></div>
+<div id="clip"><b></b><span></span><div id="bar"></div></div>
+<div id="keys">스페이스 정지 · ← → 동작 넘기기</div>
+<script type="module">
+import * as THREE from 'three';
+import { CAST, TIMELINE, CYCLE, phaseAt, ctxFor, timeFor, makePanels, stepPanel } from './js/proto/actors.js';
+
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
+renderer.setScissorTest(true);
+
+const panels = makePanels();          // [기사-old, 기사-new, 해골-old, ...]
+const COLS = CAST.length, ROWS = 2;
+
+// 라벨
+const ui = document.getElementById('ui');
+ui.innerHTML =
+  CAST.map((c, i) => `<div class="col" style="left:${i / COLS * 100}%;width:${100 / COLS}%">`
+    + `<b>${c.label}</b><span>${c.sub}</span></div>`).join('')
+  + `<div class="row" id="rowOld">개선 전</div><div class="row on" id="rowNew">개선 후</div>`
+  + panels.map((p, i) => {
+    const col = Math.floor(i / ROWS), row = i % ROWS;
+    return `<div class="stat" style="left:${(col / COLS) * 100 + 1.6}%;top:${(row + 1) / ROWS * 100 - 3.4}%">`
+      + `메시 ${p.meshes} · 삼각형 ${Math.round(p.tris)}</div>`;
+  }).join('');
+
+function layout() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  const w = innerWidth / COLS, h = innerHeight / ROWS;
+  for (const p of panels) { p.camera.aspect = w / h; p.camera.updateProjectionMatrix(); }
+  document.getElementById('rowOld').style.top = '6%';
+  document.getElementById('rowNew').style.top = '56%';
+  for (const s of [...document.querySelectorAll('.sep')]) s.remove();
+  for (let i = 1; i < COLS; i++) add(`left:${i / COLS * 100}%;top:0;bottom:0;width:1px`);
+  add('left:0;right:0;top:50%;height:1px');
+  function add(css) {
+    const d = document.createElement('div'); d.className = 'sep'; d.style.cssText = css;
+    document.body.appendChild(d);
+  }
+}
+addEventListener('resize', layout);
+layout();
+
+// ── 시계 ── URL 로 고정할 수 있다 (?clip=attack&u=0.35) — 캡처 도구가 쓴다.
+// u 는 **그 동작 한 번의 진행도**다. 구간 전체 비율이 아니다 — 공격은 구간
+// 안에서 여러 번 반복하므로 구간 비율로 잡으면 쉬는 틈에 떨어진다.
+const q = new URLSearchParams(location.search);
+let t = 0, paused = false, frozen = null;
+if (q.get('clip')) frozen = timeFor(q.get('clip'), parseFloat(q.get('u') || '0.5'));
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { paused = !paused; e.preventDefault(); }
+  if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
+    const ph = phaseAt(t);
+    const i = TIMELINE.indexOf(TIMELINE.find((s) => s.clip === ph.clip));
+    const n = (i + (e.code === 'ArrowRight' ? 1 : TIMELINE.length - 1)) % TIMELINE.length;
+    t = TIMELINE.slice(0, n).reduce((a, s) => a + s.dur, 0) + 0.001;
+  }
+});
+
+const clipEl = document.getElementById('clip');
+const nameEl = clipEl.querySelector('b'), noteEl = clipEl.querySelector('span');
+const barEl = document.getElementById('bar');
+
+let last = performance.now(), lastClip = '';
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (!paused && frozen == null) t += dt;
+  const tt = frozen != null ? frozen : t;
+
+  const ph = phaseAt(tt);
+  const c = ctxFor(ph, dt, 0);
+
+  const w = innerWidth / COLS, h = innerHeight / ROWS;
+  panels.forEach((p, i) => {
+    const col = Math.floor(i / ROWS), row = i % ROWS;
+    if (c.moving > 0.05) p.walkT += dt * 9;
+    const cc = { ...c, walkT: p.walkT };
+    stepPanel(p, ph, cc, dt, tt);
+    // 캔버스 좌표는 아래가 0 이라 행을 뒤집는다
+    const y = (ROWS - 1 - row) * h;
+    renderer.setViewport(col * w, y, w, h);
+    renderer.setScissor(col * w, y, w, h);
+    renderer.render(p.scene, p.camera);
+  });
+
+  if (ph.clip !== lastClip) {
+    lastClip = ph.clip;
+    nameEl.textContent = ph.name;
+    noteEl.textContent = ph.note;
+  }
+  barEl.style.width = `${(ph.t / ph.dur) * 100}%`;
+  window.ACTORS_READY = tt > 0.4;
+}
+requestAnimationFrame(frame);
+
+window.ACTORS = { panels, CAST, TIMELINE, CYCLE, setTime: (v) => { frozen = v; } };
+</script>
+</body>
+</html>

@@ -7,10 +7,13 @@ import { hitPlayer, Projectile, volAt } from './combat.js';
 import { Sfx } from '../core/audio.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
-import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
+import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME, DIE_TIME } from './pace.js';
 import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank, SHOUT, NOISE, SEARCH, FLEE } from './ai.js';
 import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
 import { makeActor } from '../core/actor.js';
+import { buildSkeleton, buildGhoul, buildArcher, buildGolem } from '../core/models.js';
+import { Pose } from '../core/rig.js';
+import { poseHumanoid, STANCE } from '../core/anim.js';
 import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
 
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
@@ -43,184 +46,17 @@ function alertTexture() {
 }
 
 /**
- * 적의 자세 — **관절을 아는 유일한 곳** (core/actor.js 참조).
+ * 적의 자세 — **관절을 아는 곳은 core/anim.js 하나**다 (core/actor.js 참조).
  *
  * 종족마다 리그가 다르지만(궁수는 다리가 없고 부유한다) 동작 이름은 같다.
- * 그래서 포저 하나로 전부 처리하고, 리그에 없는 부위는 건너뛴다.
+ * 다른 것은 STANCE 하나뿐이다 — 보폭·무릎 굽힘·예비 동작 길이·무게.
  * 산 모델을 넣으면 GltfActor 가 같은 이름의 클립을 재생한다.
  */
-function enemyBody(rig, t, k, c) {
-  const { dt, moving, walkT, armX } = c;
-  let d = c.facing - rig.group.rotation.y;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  rig.group.rotation.y += d * Math.min(1, dt * 12);
-
-  if (rig.float) {
-    rig.group.position.y = 0.28 + Math.sin(walkT * 1.6 + c.bobPhase) * 0.12;
-  } else if (moving > 0.05) {
-    const sn = Math.sin(walkT);
-    if (rig.legL) rig.legL.rotation.x = sn * 0.8;
-    if (rig.legR) rig.legR.rotation.x = -sn * 0.8;
-    rig.group.position.y = Math.abs(Math.sin(walkT * 2)) * 0.05;
-  } else {
-    if (rig.legL) rig.legL.rotation.x *= 1 - Math.min(1, dt * 8);
-    if (rig.legR) rig.legR.rotation.x *= 1 - Math.min(1, dt * 8);
-    rig.group.position.y *= 1 - Math.min(1, dt * 8);
-  }
-
-  // 팔: 예비 동작에서 크게 젖혔다가 타격에서 내려친다
-  if (rig.arm) rig.arm.rotation.x += (armX - rig.arm.rotation.x) * Math.min(1, dt * 18);
-}
-
-const ENEMY_POSER = {
-  idle: enemyBody, walk: enemyBody, attack: enemyBody, hit: enemyBody,
-  // 죽음은 update() 의 dieT 분기가 직접 만든다 — 스케일이 줄며 가라앉는 연출이라
-  // 자세가 아니라 전체 변환이다. 여기서는 아무것도 안 한다.
-  die: () => {},
-};
-
-function m(color, opt = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1, ...opt });
-}
-
-// ───────────────────────── 메시 ─────────────────────────
-function buildSkeleton() {                       // 두개골 · 장신 마름 · 검
-  const g = new THREE.Group();
-  const bone = m(0xcfc6ad, { roughness: 0.7 });
-  const rag = m(0x4a4453);
-  const legGeo = new THREE.BoxGeometry(0.12, 0.55, 0.13);
-  const legL = new THREE.Mesh(legGeo, bone); legL.position.set(-0.12, 0.28, 0);
-  const legR = new THREE.Mesh(legGeo, bone); legR.position.set(0.12, 0.28, 0);
-  const torso = new THREE.Group(); torso.position.y = 0.55;
-  const ribs = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.42, 0.2), bone);
-  ribs.position.y = 0.2;
-  for (let i = 0; i < 3; i++) {                  // 갈비뼈 — 해골의 정체성
-    const r = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.045, 0.24), bone);
-    r.position.y = 0.08 + i * 0.12;
-    torso.add(r);
-  }
-  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), bone);
-  skull.position.y = 0.55;
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.07, 0.2), bone);
-  jaw.position.y = 0.43;
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff4a2a });
-  const eyeGeo = new THREE.BoxGeometry(0.055, 0.05, 0.03);
-  const eL = new THREE.Mesh(eyeGeo, eyeMat); eL.position.set(-0.06, 0.57, 0.12);
-  const eR = new THREE.Mesh(eyeGeo, eyeMat); eR.position.set(0.06, 0.57, 0.12);
-  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.6), new THREE.MeshStandardMaterial({ color: 0x3b3546, side: THREE.DoubleSide, roughness: 1 }));
-  cape.position.set(0, 0.22, -0.13);
-  torso.add(ribs, skull, jaw, eL, eR, cape);
-
-  // 무기 손은 −X 다 (정면이 +Z 이므로) — player.js 의 armR 주석 참조
-  const arm = new THREE.Group(); arm.position.set(-0.25, 0.38, 0);
-  const upper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.36, 0.1), bone);
-  upper.position.set(0, -0.17, 0);
-  arm.add(upper);
-
-  const sword = new THREE.Group(); sword.position.set(0, -0.34, 0.04);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.06), rag);
-  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.07), m(0x8a7a5a));
-  guard.position.set(0, 0.1, 0);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.035), m(0xa9b0bd, { metalness: 0.7, roughness: 0.35 }));
-  blade.position.set(0, 0.42, 0);
-  sword.add(grip, guard, blade);
-  sword.rotation.x = -0.2;
-  arm.add(sword);
-  torso.add(arm);
-  g.add(legL, legR, torso);
-  return { group: g, torso, legL, legR, arm, mats: [bone, rag] };
-}
-
-function buildGhoul() {                          // 뿔 없음 · 왜소·굽은 몸 · 발톱
-  const g = new THREE.Group();
-  const skin = m(0x6d7a4e, { roughness: 0.95 });
-  const claw = m(0xd8cdb0);
-  const legGeo = new THREE.BoxGeometry(0.15, 0.36, 0.16);
-  const legL = new THREE.Mesh(legGeo, skin); legL.position.set(-0.14, 0.18, 0);
-  const legR = new THREE.Mesh(legGeo, skin); legR.position.set(0.14, 0.18, 0);
-  const torso = new THREE.Group(); torso.position.y = 0.36;
-  torso.rotation.x = 0.42;                       // 앞으로 굽은 자세
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), skin);
-  body.scale.set(1, 0.85, 1.25);
-  body.position.y = 0.2;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.2, 0.3), skin);
-  head.position.set(0, 0.3, 0.28);
-  const maw = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 4), claw);
-  maw.rotation.x = Math.PI / 2;
-  maw.position.set(0, 0.25, 0.45);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
-  const eL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.03), eyeMat); eL.position.set(-0.07, 0.36, 0.42);
-  const eR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.03), eyeMat); eR.position.set(0.07, 0.36, 0.42);
-  torso.add(body, head, maw, eL, eR);
-  const arm = new THREE.Group(); arm.position.set(-0.28, 0.24, 0.1);
-  const fore = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.34, 0.11), skin);
-  fore.position.y = -0.16;
-  for (let i = -1; i <= 1; i++) {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.19, 4), claw);
-    c.position.set(i * 0.06, -0.36, 0.03);
-    c.rotation.x = Math.PI;
-    arm.add(c);
-  }
-  arm.add(fore);
-  torso.add(arm);
-  g.add(legL, legR, torso);
-  return { group: g, torso, legL, legR, arm, mats: [skin, claw] };
-}
-
-function buildArcher() {                         // 두건 · 부유(다리 없음) · 활
-  const g = new THREE.Group();
-  const robe = m(0x3a4a63, { roughness: 1 });
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff });
-  const torso = new THREE.Group(); torso.position.y = 0.85;
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.0, 7), robe);
-  body.position.y = -0.15;
-  const hood = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.34, 6), robe);
-  hood.position.y = 0.4;
-  const face = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.13, 0.05), new THREE.MeshBasicMaterial({ color: 0x0a0d14 }));
-  face.position.set(0, 0.33, 0.15);
-  const eL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.02), glowMat); eL.position.set(-0.04, 0.34, 0.18);
-  const eR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.02), glowMat); eR.position.set(0.04, 0.34, 0.18);
-  torso.add(body, hood, face, eL, eR);
-  const arm = new THREE.Group(); arm.position.set(-0.26, 0.15, 0.05);
-  const bow = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.032, 5, 12, Math.PI * 1.25), m(0x5a4630));
-  bow.rotation.y = -Math.PI / 2;          // 손을 옮겼으니 활의 배도 같이 뒤집는다
-  bow.rotation.z = -Math.PI * 0.38;
-  arm.add(bow);
-  torso.add(arm);
-  g.add(torso);
-  return { group: g, torso, legL: null, legR: null, arm, mats: [robe], float: true };
-}
-
-function buildGolem() {                          // 투구 · 육중 · 맨손
-  const g = new THREE.Group();
-  const stone = m(0x6b6a72, { roughness: 0.95 });
-  const core = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
-  const legGeo = new THREE.BoxGeometry(0.3, 0.5, 0.32);
-  const legL = new THREE.Mesh(legGeo, stone); legL.position.set(-0.24, 0.25, 0);
-  const legR = new THREE.Mesh(legGeo, stone); legR.position.set(0.24, 0.25, 0);
-  const torso = new THREE.Group(); torso.position.y = 0.5;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.75, 0.6), stone);
-  body.position.y = 0.38;
-  const heart = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), core);
-  heart.position.set(0, 0.42, 0.31);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.3, 0.36), stone);
-  head.position.y = 0.92;
-  const shGeo = new THREE.BoxGeometry(0.34, 0.34, 0.44);
-  const shL = new THREE.Mesh(shGeo, stone); shL.position.set(-0.62, 0.6, 0);
-  const shR = new THREE.Mesh(shGeo, stone); shR.position.set(0.62, 0.6, 0);
-  torso.add(body, heart, head, shL, shR);
-  const arm = new THREE.Group(); arm.position.set(-0.62, 0.5, 0);
-  const fore = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), stone);
-  fore.position.y = -0.34;
-  const fist = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.42), stone);
-  fist.position.y = -0.7;
-  arm.add(fore, fist);
-  const armL2 = new THREE.Group(); armL2.position.set(-0.62, 0.5, 0);
-  armL2.add(fore.clone(), fist.clone());
-  torso.add(arm, armL2);
-  g.add(legL, legR, torso);
-  return { group: g, torso, legL, legR, arm, mats: [stone] };
+function enemyPoser(rig) {
+  const P = new Pose(rig);
+  const st = STANCE[rig.stance] || STANCE.skeleton;
+  const body = (r, t, k, c) => poseHumanoid(r, P, st, c);
+  return { idle: body, walk: body, attack: body, hit: body, die: body };
 }
 
 // ───────────────────────── 데이터 ─────────────────────────
@@ -301,6 +137,14 @@ export class Enemy {
     this.repathCd = Math.random() * 0.4;
     this.attackCd = 0;
     this.recoilT = 0;
+    this.poseTick = (Math.random() * 4) | 0;   // LOD 갱신 프레임을 흩뜨린다
+    this.poseDt = 0;
+    this.dist2Player = 0;
+    // 피격 자세 (core/anim.js). recoil 은 몸통 전체 이동, hit 은 관절 반응이다.
+    this.hitT = 0;
+    this.hitDur = 0.42;
+    this.hitPow = 1;
+    this.hitFrom = null;
     this.stunT = 0;              // 기절 남은 시간 (둔기·stun 접사)
     this.recoilDir = { x: 0, z: 1 };
     this.recoilPow = 1;
@@ -332,7 +176,7 @@ export class Enemy {
     this.xpMul = 1;
 
     // 피격 시 원래 색으로 되돌리기 위해 보관
-    this.actor = makeActor(rig, ENEMY_POSER);   // core/actor.js — 에셋 교체의 전제
+    this.actor = makeActor(rig, enemyPoser(rig));   // core/actor.js — 에셋 교체의 전제
     this.baseColors = rig.mats.map((mm) => mm.color.clone());
     this.mats = rig.mats;
 
@@ -419,14 +263,26 @@ export class Enemy {
 
   update(dt, G) {
     if (this.dead) {
+      // ── 죽음 ──
+      // 예전에는 **줄어들면서 팽이처럼 도는** 것이 전부였다. 그건 「사라졌다」지
+      // 「쓰러졌다」가 아니다. 이제 자세(무릎 → 골반 → 상체, core/anim.js)가
+      // 무너짐을 만들고, 여기서는 **남은 것을 지우는 일**만 한다.
+      //
+      // 그래서 시간이 두 배가 됐다. 0.55 초는 넘어지는 동작이 다 나오기 전에
+      // 몸이 사라지는 길이다 — 잡은 손맛의 절반은 상대가 무너지는 걸 **보는** 데서 온다.
       this.dieT -= dt;
-      const k = Math.max(0, this.dieT / 0.55);
-      this.rig.group.scale.setScalar(this.def.scale * k);
-      this.rig.group.rotation.z += dt * 6;
-      this.rig.group.position.y = (1 - k) * -0.6;
-      this.shadow.material.opacity = 0.5 * k;
+      const k = Math.max(0, this.dieT / DIE_TIME);
+      const fade = Math.min(1, k / 0.42);        // 마지막 42% 구간에서만 옅어진다
+      this.rig.group.scale.setScalar(this.def.scale * (0.82 + 0.18 * fade));
+      this.rig.group.position.y = (1 - fade) * -0.45;
+      for (const mm of this.mats) { mm.transparent = true; mm.opacity = fade; }
+      this.shadow.material.opacity = 0.5 * fade;
       this.hpBar.visible = false;
       this.obj.position.copy(this.pos);
+      this.actor.play('die', {
+        dt, dieK: Math.min(1, 1 - k), facing: this.facing, time: this.animT || 0,
+      });
+      this.actor.update(dt);
       return;
     }
 
@@ -467,6 +323,7 @@ export class Enemy {
     }
 
     const dist = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+    this.dist2Player = dist;          // 자세 LOD 가 읽는다 (_animate)
 
     // 기절 — 둔기 계열과 stun 접사가 건다 (game/combat.js).
     //
@@ -1012,20 +869,56 @@ export class Enemy {
     if (rig.float) this.walkT += dt * 2.2;
     else if (moving > 0.05) this.walkT += dt * (7 + this.speed);
 
-    let armX = 0;
-    if (this.state === 'windup') armX = -1.5 * Math.min(1, this.stateT / this.def.windup);
-    else if (this.state === 'attack') armX = 1.15;
-    else if (this.state === 'recover') armX = 1.15 * Math.max(0, 1 - this.stateT / this.def.recover);
+    // 상태 → 공격 진행도(0~1). 예비 0.00~0.42 · 타격 0.42~0.60 · 여운 0.60~1.00
+    // 은 core/anim.js 의 네 박자와 같은 구간이다. 둘이 어긋나면 예고가 거짓말이 된다.
+    let armX = 0, atkK = 0;
+    if (this.state === 'windup') {
+      const u = Math.min(1, this.stateT / this.def.windup);
+      armX = -1.5 * u;
+      atkK = 0.42 * u;
+    } else if (this.state === 'attack') {
+      armX = 1.15;
+      atkK = 0.42 + 0.18 * Math.min(1, this.stateT / 0.12);
+    } else if (this.state === 'recover') {
+      const u = Math.min(1, this.stateT / this.def.recover);
+      armX = 1.15 * (1 - u);
+      atkK = 0.60 + 0.399 * u;
+    }
 
     const clip = this.dead ? 'die'
       : (this.state === 'windup' || this.state === 'attack' || this.state === 'recover') ? 'attack'
         : moving > 0.05 ? 'walk' : 'idle';
-    this.actor.play(clip, {
-      dt, moving, walkT: this.walkT, armX, facing: this.facing, bobPhase: this.bobPhase,
-    });
-    this.actor.update(dt);
+    // 피격 동작 — 맞은 방향을 **몸 기준**으로 돌린다. 월드 방향 그대로 넘기면
+    // 적이 어느 쪽을 보든 늘 같은 쪽으로 꺾여, 등을 보인 적이 앞으로 넘어간다.
+    if (this.hitT > 0) this.hitT = Math.max(0, this.hitT - dt);
+    let hx = 0, hz = 1;
+    if (this.hitT > 0 && this.hitFrom) {
+      const co = Math.cos(-this.facing), si = Math.sin(-this.facing);
+      hx = this.hitFrom.x * co - this.hitFrom.z * si;
+      hz = this.hitFrom.x * si + this.hitFrom.z * co;
+    }
+    // ── 거리 LOD ──────────────────────────────────────────
+    //
+    // 관절이 6 개에서 18 개로 늘면서 자세 계산이 마리당 3 배가 됐다. 26 마리를
+    // 매 프레임 전부 굴리니 시뮬레이션 중앙값이 3.8 → 6.2ms 로 올라 예산(6ms)을
+    // 넘었다. 실측이 아니었으면 「좀 무거워졌나」로 넘어갔을 값이다.
+    //
+    // 안 보이는 것은 안 굴린다. 기본 등불 반경이 9, 미니맵·이름표가 22 이므로
+    // 그 밖은 화면에서 실루엣조차 안 나온다. 건너뛴 시간은 **모아 뒀다가**
+    // 한 번에 넘긴다 — 안 그러면 다시 보이는 순간 자세가 뚝 끊긴다.
+    //
+    // **건너뛰기는 자세만이다.** 예전에 여기서 return 해 버렸더니 아래 피격
+    // 플래시까지 같이 건너뛰어, 멀리서 맞은 적이 흰색으로 굳어 있었다.
+    this.poseDt = (this.poseDt || 0) + dt;
+    const near = this.dist2Player || 0;
+    const every = near < 16 ? 1 : near < 30 ? 2 : 4;
+    const pdt = this.poseDt;
+    if ((++this.poseTick % every) === 0) {
+      this.poseDt = 0;
+      this._pose(clip, pdt, moving, armX, atkK, hx, hz);
+    }
 
-    // 피격 플래시
+    // 피격 플래시 — **매 프레임** 돌아야 한다 (LOD 와 무관)
     const f = this.flash > 0 ? this.flash / 0.14 : 0;
     for (let i = 0; i < this.mats.length; i++) {
       const base = this.baseColors[i];
@@ -1035,6 +928,22 @@ export class Enemy {
         base.b + (1 - base.b) * f * 0.8,
       );
     }
+  }
+
+  /** 자세 한 프레임 — LOD 가 이걸 건너뛴다 */
+  _pose(clip, pdt, moving, armX, atkK, hx, hz) {
+    this.actor.play(clip, {
+      dt: pdt, moving, walkT: this.walkT, armX, facing: this.facing, bobPhase: this.bobPhase,
+      // 공격 진행도 0→1. 잡몹은 상태 시계로, 보스는 기술마다 따로 만든다
+      // (보스의 「연타」는 한 번에 여러 번 감는다 — 상태 시계로는 표현이 안 된다).
+      atk: this.bossAtk != null ? this.bossAtk : atkK,
+      time: this.animT = (this.animT || 0) + pdt,
+      // 죽음은 여기로 안 온다 — update() 의 dead 분기가 먼저 처리하고 돌아간다.
+      dieK: 0,
+      hitT: this.hitT || 0, hitDur: this.hitDur || 0.42, hitPow: this.hitPow || 1,
+      hitDirX: hx, hitDirZ: hz,
+    });
+    this.actor.update(pdt);
   }
 
   dispose() {

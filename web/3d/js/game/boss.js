@@ -2,10 +2,12 @@
 
 import * as THREE from 'three';
 import { Enemy, ARCHETYPES } from './enemies.js';
+import { BOSS_PHASE_ELEMENT, ELEMENTS } from './elements.js';
 import { hitPlayer } from './combat.js';
 import { Sfx } from '../core/audio.js';
 import { gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
+import { prism, slab, spike, Part, skeleton } from '../core/rig.js';
 
 const V = new THREE.Vector3();
 
@@ -13,74 +15,113 @@ function m(color, opt = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.25, ...opt });
 }
 
-function buildLord() {                            // 왕관 · 장신 부유 · 낫
-  const g = new THREE.Group();
-  const robe = m(0x241c2e, { roughness: 1 });
-  const bone = m(0xd8cfb6);
+// 「심연의 군주」 — 왕관 · 부유 · 낫.
+//
+// 잡몹과 같은 골격(core/rig.js)을 쓴다. 크기만 다르다. 그래야 **같은 동작 코드**가
+// 보스에게도 걸린다 — 예전에는 보스만 따로 팔 하나를 흔들었고, 그래서 보스전이
+// 잡몹전보다 오히려 뻣뻣했다. 층의 마지막에 만나는 것이 제일 안 움직이면 곤란하다.
+//
+// 실루엣 규칙: **어깨가 머리보다 높고 넓다.** 위로 뻗은 왕관과 낫이 그 위에 얹혀,
+// 방에 들어선 순간 화면에서 제일 큰 삼각형이 된다.
+function buildLord() {
+  const robe = m(0x241c2e, { roughness: 1, metalness: 0 });
+  const inner = m(0x140f1c, { roughness: 1, metalness: 0 });
+  const bone = m(0xd8cfb6, { roughness: 0.55, metalness: 0.08 });
   const gold = m(0xd8a94a, { metalness: 0.85, roughness: 0.3, emissive: 0x3a2200, emissiveIntensity: 0.4 });
   const emberMat = new THREE.MeshBasicMaterial({ color: 0xff5a2a });
 
-  const torso = new THREE.Group();
-  torso.position.y = 1.15;
+  const rig = skeleton({
+    hipY: 1.55, legX: 0, thigh: 0, shin: 0,
+    spineY: 0.10, chestY: 0.44, neckY: 0.30, headY: 0.12,
+    armX: 0.62, armY: 0.20, upper: 0.52, fore: 0.48,
+  });
+  rig.hips.remove(rig.thighL, rig.thighR);
+  rig.thighL = rig.thighR = rig.shinL = rig.shinR = rig.footL = rig.footR = null;
+  rig.legL = rig.legR = null;
+  rig.float = true;
 
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.5, 8), robe);
-  body.position.y = -0.35;
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.65), robe);
-  chest.position.y = 0.62;
+  // 아래로 갈수록 사라지는 옷자락 — 궁수와 같은 문법이되 세 배 크다
+  new Part(rig.hips)
+    .add(prism(0.62, 0.56, 0.62, 0.78, 0.70), robe, { y: 0.04 })
+    .add(prism(0.34, 0.31, 0.52, 0.60, 0.55), robe, { y: -0.56 })
+    .add(prism(0.06, 0.06, 0.40, 0.32, 0.30), inner, { y: -1.06 })
+    .finish();
+  new Part(rig.spine)
+    .add(prism(0.66, 0.52, 0.44, 0.86, 0.62, { hang: false }), robe, { y: 0.20 })
+    .finish();
 
-  // 어깨 — 실루엣을 지배한다
-  const shGeo = new THREE.ConeGeometry(0.44, 0.6, 6);
-  const shL = new THREE.Mesh(shGeo, bone); shL.position.set(-0.78, 0.9, 0); shL.rotation.z = 0.5;
-  const shR = new THREE.Mesh(shGeo, bone); shR.position.set(0.78, 0.9, 0); shR.rotation.z = -0.5;
+  new Part(rig.chest)
+    .add(prism(0.92, 0.64, 0.52, 0.80, 0.58, { hang: false }), robe, { y: 0.10 })
+    .add(slab(0.52, 0.36, 0.06, 0.03), inner, { y: 0.12, z: 0.32 })
+    // 망토 — 세 겹. 보스는 뒤에서 봐도 보스여야 한다
+    .add(slab(1.30, 1.70, 0.03, 0.04), inner, { y: -0.42, z: -0.38, rx: 0.14 })
+    .add(slab(0.96, 1.20, 0.03, 0.04), robe, { y: -0.58, z: -0.46, rx: 0.24 })
+    .finish();
 
-  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.46, 0.44), bone);
-  skull.position.y = 1.28;
-
-  // 왕관
-  const crown = new THREE.Group();
-  crown.position.y = 1.6;
-  crown.add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.16, 8), gold));
-  for (let i = 0; i < 6; i++) {
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 4), gold);
-    const a = (i / 6) * Math.PI * 2;
-    spike.position.set(Math.cos(a) * 0.26, 0.2, Math.sin(a) * 0.26);
-    crown.add(spike);
+  new Part(rig.neck).add(prism(0.18, 0.18, 0.22, 0.22, 0.22), bone).finish();
+  new Part(rig.head)
+    .add(prism(0.40, 0.42, 0.40, 0.34, 0.36, { hang: false }), bone, { y: 0.12 })
+    .add(prism(0.28, 0.14, 0.14, 0.24, 0.12, { hang: false }), bone, { y: -0.02, z: 0.12 })  // 턱
+    .finish();
+  const eg = prism(0.09, 0.07, 0.06, 0.09, 0.07, { hang: false, sides: 4 });
+  for (const x of [0.11, -0.11]) {
+    const e = new THREE.Mesh(eg, emberMat);
+    e.position.set(x, 0.16, 0.21);
+    rig.head.add(e);
   }
 
-  const eyeGeo = new THREE.BoxGeometry(0.1, 0.09, 0.04);
-  const eL = new THREE.Mesh(eyeGeo, emberMat); eL.position.set(-0.11, 1.31, 0.23);
-  const eR = new THREE.Mesh(eyeGeo, emberMat); eR.position.set(0.11, 1.31, 0.23);
+  // 왕관 — 천천히 돈다 (아래 _animate 가 돌린다)
+  const crown = new THREE.Group();
+  crown.position.y = 0.36;
+  const cp = new Part(crown).add(prism(0.32, 0.32, 0.16, 0.30, 0.30, { hang: false }), gold);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    cp.add(spike(0.055, 0.30, 4), gold, { x: Math.cos(a) * 0.27, y: 0.10, z: Math.sin(a) * 0.27 });
+  }
+  cp.finish();
+  rig.head.add(crown);
 
-  const cape = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.7, 2.2),
-    new THREE.MeshStandardMaterial({ color: 0x1a1322, side: THREE.DoubleSide, roughness: 1 }),
-  );
-  cape.position.set(0, 0.1, -0.5);
-  cape.rotation.x = 0.16;
+  // 어깨 — 실루엣을 지배한다. 뿔 세 개씩
+  for (const [g2, s2] of [[rig.armL, 1], [rig.armR, -1]]) {
+    const p = new Part(g2);
+    p.add(prism(0.44, 0.44, 0.24, 0.52, 0.52, { hang: false }), bone, { y: 0.08, rz: s2 * 0.2 });
+    p.add(spike(0.09, 0.34, 5), bone, { x: s2 * 0.20, y: 0.16, rz: s2 * 0.9 });
+    p.add(spike(0.07, 0.26, 5), bone, { x: s2 * 0.10, y: 0.20, z: -0.16, rz: s2 * 0.6 });
+    p.add(prism(0.17, 0.17, 0.52, 0.22, 0.22), bone, { y: -0.10 });
+    p.finish();
+  }
+  const foreG = prism(0.14, 0.14, 0.48, 0.18, 0.18);
+  new Part(rig.foreL).add(foreG, bone).finish();
+  new Part(rig.foreR).add(foreG, bone).finish();
+  new Part(rig.handL).add(prism(0.15, 0.16, 0.16, 0.14, 0.15), bone).finish();
+  new Part(rig.handR).add(prism(0.15, 0.16, 0.16, 0.14, 0.15), bone).finish();
 
-  torso.add(body, chest, shL, shR, skull, crown, eL, eR, cape);
-
-  // 낫 — 초승달 날이 보이도록 굽힌다
-  const arm = new THREE.Group();
-  arm.position.set(-0.82, 0.75, 0);   // 무기 손은 −X (정면이 +Z)
-  const fore = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), bone);
-  fore.position.y = -0.4;
+  // 낫 — 초승달 날. 겨눔 자세의 팔 접힘을 되돌려 자루를 세운다
   const scythe = new THREE.Group();
-  scythe.position.set(0, -0.8, 0.1);
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 2.6, 6), m(0x3a2c22));
-  shaft.position.y = 0.7;
+  scythe.position.set(0, -0.08, 0.06);
+  scythe.rotation.x = 0.9;
+  new Part(scythe)
+    .add(prism(0.055, 0.055, 2.5, 0.06, 0.06, { sides: 6, hang: false }), m(0x3a2c22), { y: 0.75 })
+    .finish();
   const bladeMat = m(0xc8cfdc, { metalness: 0.9, roughness: 0.2, emissive: 0x2a3a55, emissiveIntensity: 0.5 });
   const blade = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.055, 5, 16, Math.PI * 0.72), bladeMat);
-  blade.position.set(0.0, 1.95, 0);
+  blade.position.set(0, 1.9, 0);
   blade.rotation.set(Math.PI / 2, 0, -0.4);
   blade.scale.set(1, 1, 3.2);                     // 납작한 날
-  scythe.add(shaft, blade);
-  scythe.rotation.x = -0.15;
-  arm.add(fore, scythe);
-  torso.add(arm);
+  blade.castShadow = true;
+  scythe.add(blade);
+  rig.handR.add(scythe);
 
-  g.add(torso);
-  return { group: g, torso, legL: null, legR: null, arm, mats: [robe, bone, gold], float: true, crown, scytheBladeMat: bladeMat };
+  rig.weapon = scythe;
+  rig.blade = blade;
+  rig.bladeMat = bladeMat;
+  rig.scytheBladeMat = bladeMat;
+  rig.crown = crown;
+  rig.stance = 'lord';
+  rig.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  rig.mats = [robe, inner, bone, gold];
+  rig.materials = rig.mats;
+  return rig;
 }
 
 ARCHETYPES.lord = {
@@ -118,6 +159,13 @@ export class Boss extends Enemy {
     this.phase = want;
     this.enrage = 1 + this.phase * 0.22;
     this.speed = this.def.speed * MOVE_SCALE * this.enrage;
+    // 페이즈마다 속성이 바뀐다 (docs/ELEMENTS.md §5).
+    //
+    // 이유는 하나다: **무기를 두 개 이상 챙길 이유를 만드는 것.** 지금 보스전은
+    // 「피하고 때린다」뿐이라 판단할 것이 없다. 가방에 속성 무기를 몇 개 들고
+    // 다니다가 페이즈마다 바꿔 끼는 것이 보스전의 조작이 된다.
+    this.setElement(BOSS_PHASE_ELEMENT[Math.min(this.phase, BOSS_PHASE_ELEMENT.length - 1)]);
+    G.ui.toast(`군주가 ${ELEMENTS[this.element].name}으로 물든다`, ELEMENTS[this.element].css);
     G.ui.setBossPhase(PHASES[this.phase].name);
     G.ui.center(PHASES[this.phase].name, '심연이 요동친다');
     G.fx.shockwave(this.pos, { r0: 1, r1: 12, color: 0x9a5aff, life: 0.9, y: 0.5 });
@@ -336,17 +384,22 @@ export class Boss extends Enemy {
   }
 
   _animate(dt, moving) {
+    // 기술마다 「공격 진행도」를 만들어 준다. 예전에는 여기서 팔 각도를 직접
+    // 대입했고, 그래서 보스는 **몸통 없이 팔만** 움직였다 — 층의 마지막에
+    // 만나는 것이 제일 뻣뻣했다. 이제 진행도만 넘기고 자세는 공용 코드가 만든다.
+    if (this.move === 'cleave') {
+      this.bossAtk = this.state === 'attack' ? 0.5
+        : 0.3 * Math.min(1, this.moveT / this.windupDur);
+    } else if (this.move === 'combo') {
+      this.bossAtk = (this.moveT * 1.4) % 1;      // 연타 — 계속 감는다
+    } else if (this.move === 'sweep') {
+      this.bossAtk = 0.36;                        // 젖힌 채 버틴다
+    } else {
+      this.bossAtk = 0;
+    }
     super._animate(dt, moving);
     this.rig.crown.rotation.y += dt * 0.5;
-    // 부유 — 위아래로 천천히
-    this.rig.group.position.y = 0.35 + Math.sin(this.walkT * 1.2 + this.bobPhase) * 0.14;
     this.walkT += dt * 1.4;
-    // 낫 스윙
-    let armX = 0;
-    if (this.move === 'cleave') armX = this.state === 'attack' ? 1.3 : -1.5 * Math.min(1, this.moveT / this.windupDur);
-    else if (this.move === 'combo') armX = Math.sin(this.moveT * 9) * 1.2;
-    else if (this.move === 'sweep') armX = -0.5;
-    this.rig.arm.rotation.x += (armX - this.rig.arm.rotation.x) * Math.min(1, dt * 14);
   }
 }
 
