@@ -223,10 +223,27 @@ export function generate(floorNo, seed) {
       }
       if (!seal.length || seal.length > 14) continue;   // 목이 너무 넓으면 문이 아니라 벽이다
 
-      // **닫은 채로 출구까지 갈 수 있는지 먼저 확인한다.** 이걸 안 하면
-      // 언젠가 열쇠 없이 층이 잠기는 시드가 나오고, 그건 재현이 어려운 사고다.
+      // ── 봉했을 때 무엇이 갇히는가 ────────────────────────
+      //
+      // 처음엔 「출구까지 갈 수 있는가」만 봤다. 그것만으로는 부족했다:
+      //
+      //   · 스위치가 **문 안쪽**에 놓이면 영영 못 연다 (실측 160층 중 1층)
+      //   · 금고 방이 길목이면 **그 너머 방이 통째로 갇힌다** (실측 160층 중 38층)
+      //     갇힌 방의 적을 못 잡으니 「다 잡으면 포탈이 열린다」가 성립하지 않는다
+      //
+      // 그래서 기준을 바꾼다: **금고 방을 뺀 모든 방이 여전히 닿아야 한다.**
+      // 금고는 길목이 아니라 **막다른 곳**이어야 한다 — 그게 「봉인된 보물방」의
+      // 정의이기도 하다. 길목을 잠그는 건 문이 아니라 벽이다.
       for (const [x, y] of seal) set(x, y, DOOR);
-      const ok = reachable(spawn, exit);
+      const seen = reachableFrom(spawn);
+      const idx = (g) => g.gz * w + g.gx;
+      let ok = seen[idx(exit)];
+      if (ok) {
+        for (const o of rooms) {
+          if (o === r) continue;
+          if (!seen[o.cy * w + o.cx]) { ok = false; break; }
+        }
+      }
       if (!ok) { for (const [x, y] of seal) set(x, y, FLOOR); continue; }
 
       const door = { cells: seal.map(([x, y]) => y * w + x), open: false, room: r };
@@ -240,6 +257,8 @@ export function generate(floorNo, seed) {
       // 다만 「가장 먼 방」은 아니다. 그렇게 뒀더니 시작점에서 중앙값 30칸,
       // 금고는 39칸이 나왔다 — 미니맵 안개까지 겹치면 존재 자체를 모른다.
       // 금고에서 **중간쯤** 떨어진 방을 고른다: 찾을 거리는 남기되 순례는 아니게.
+      // 스위치는 **닿는 방**에서만 고른다. 위에서 모든 방이 닿는 것을 확인했지만,
+      // 그건 방 중심 기준이다. 벽면 후보 칸까지 닿는지는 아래에서 다시 본다.
       const swCands = rooms.filter((o) => o !== r && o !== startRoom);
       swCands.sort((a, b) => ((a.cx - r.cx) ** 2 + (a.cy - r.cy) ** 2)
         - ((b.cx - r.cx) ** 2 + (b.cy - r.cy) ** 2));
@@ -256,7 +275,12 @@ export function generate(floorNo, seed) {
           if (walls.length !== 1) continue;      // 모서리는 제외 — 어느 벽인지 애매하다
           wallCands.push({ gx: x, gz: y, wall: walls[0] });
         }
-      if (wallCands.length) swCell = rnd.pick(wallCands);
+      // 닫힌 문 기준으로 실제로 닿는 칸만 남긴다 — 스위치가 문 안쪽에 놓이면
+      // 영영 못 연다. 방 중심이 닿는다고 벽면 칸도 닿는 것은 아니다.
+      const reachNow = reachableFrom(spawn);
+      const openCands = wallCands.filter((c) => reachNow[c.gz * w + c.gx]);
+      if (openCands.length) swCell = rnd.pick(openCands);
+      else if (wallCands.length) swCell = null;   // 이 방은 못 쓴다
       switchAt = swCell
         ? { gx: swCell.gx, gz: swCell.gz, wall: swCell.wall, room: swRoom, door }
         : { gx: swRoom.cx, gz: swRoom.cy, wall: null, room: swRoom, door };
@@ -328,15 +352,19 @@ export function generate(floorNo, seed) {
     addTrap(rnd.int(2, w - 3), rnd.int(2, h - 3), rnd.pick(TRAP_POOL));
   }
 
-  /** 문을 닫은 상태로 a → b 가 이어지는가 (BFS) */
-  function reachable(a, b) {
+  /**
+   * 문을 닫은 상태로 a 에서 닿는 칸 전부 (BFS).
+   *
+   * 「목적지 하나에 닿는가」가 아니라 **닿는 집합**을 돌려준다.
+   * 봉인이 무엇을 가두는지 보려면 목적지 하나로는 모자라기 때문이다 —
+   * 출구는 닿는데 방 셋이 갇혀 있는 시드가 실제로 나왔다.
+   */
+  function reachableFrom(a) {
     const seen = new Uint8Array(w * h);
     const q = [a.gz * w + a.gx];
     seen[q[0]] = 1;
-    const goal = b.gz * w + b.gx;
     for (let qi = 0; qi < q.length; qi++) {
       const i = q[qi];
-      if (i === goal) return true;
       const x = i % w, y = (i / w) | 0;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy;
@@ -347,7 +375,7 @@ export function generate(floorNo, seed) {
         q.push(ni);
       }
     }
-    return false;
+    return seen;
   }
 
   return {
