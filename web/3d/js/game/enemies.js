@@ -8,7 +8,7 @@ import { Sfx } from '../core/audio.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
-import { AI, pickIdle, updateIdle, visionFactor, reactionDelay } from './ai.js';
+import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank } from './ai.js';
 
 const V = new THREE.Vector3();
 
@@ -262,6 +262,8 @@ export class Enemy {
     this.idleTarget = null;
     this.idleFace = null;
     this.spotT = 0;                   // 뒤에서 발견했을 때의 반응 지연
+    this.flankCd = 0;                 // 우회 지점 재탐색 쿨다운
+    this.flankTarget = null;
     this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
 
@@ -331,6 +333,7 @@ export class Enemy {
     this.stateT += dt * ATTACK_SCALE;
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.leapCd = Math.max(0, this.leapCd - dt);
+    this.flankCd = Math.max(0, this.flankCd - dt);
     this.flash = Math.max(0, this.flash - dt);
     this.repathCd -= dt;
 
@@ -414,14 +417,37 @@ export class Enemy {
       case 'idle':
       case 'chase': {
         const want = d.ranged ? Math.min(d.range * 0.8, 9) : d.range * 0.85;
-        if (dist <= want && this._canSee(G, p) && this.attackCd <= 0) {
+        const see = this._canSee(G, p);
+        if (dist <= want && see && this.attackCd <= 0) {
           this.state = 'windup';
           this.stateT = 0;
           this._telegraph(G);
           break;
         }
-        // 궁수는 너무 가까우면 물러난다 (카이팅)
-        if (d.ranged && dist < d.keepAway) {
+        // 사거리 안인데 벽·기둥이 사선을 막았다 → 옆으로 돌아 각을 연다.
+        // 이 분기가 없으면 궁수는 뒤로 물러나기만 하고 영영 못 쏘고,
+        // 근접은 이미 가까워 추격도 의미가 없어 그 자리에 굳는다.
+        // **후퇴(카이팅)보다 먼저 판단해야 한다** — 순서를 바꾸면 궁수가
+        // 막힌 채로 계속 물러나기만 한다.
+        if (dist <= want && !see) {
+          if (this.flankCd <= 0 || !this.flankTarget) {
+            this.flankCd = 0.5;
+            this.flankTarget = findFlank(this, G, p);
+          }
+          if (this.flankTarget) {
+            const fd = Math.hypot(this.flankTarget.x - this.pos.x, this.flankTarget.z - this.pos.z);
+            if (fd < 0.45) {
+              this.flankTarget = null;          // 도착 — 다음 프레임에 사선을 다시 본다
+            } else {
+              moving = this._step(dt, G, this.flankTarget.x, this.flankTarget.z, this.speed);
+              break;
+            }
+          }
+        } else {
+          this.flankTarget = null;
+        }
+        // 궁수는 너무 가까우면 물러난다 (카이팅) — 단, 사선이 열려 있을 때만.
+        if (d.ranged && dist < d.keepAway && see) {
           moving = this._step(dt, G, this.pos.x * 2 - p.pos.x, this.pos.z * 2 - p.pos.z, this.speed * 0.9, true);
           break;
         }

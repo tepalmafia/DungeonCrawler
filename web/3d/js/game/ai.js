@@ -1,6 +1,9 @@
 // 적 AI — 살아있게 만들되 풀링을 죽이지 않는다.
 // 설계 근거는 docs/ENEMY-AI.md. 여기는 그 구현이다.
 //
+import { lineOfSight, walkable } from '../world/nav.js';
+import { worldToGrid } from '../world/dungeon.js';
+
 // 이 파일의 규칙 하나: **모든 행동은 플래그로 끌 수 있어야 한다.**
 // 전부 켠 채로 「느낌이 나쁘다」만 남으면 원인을 못 찾는다. 실측(tools/bench3d.js)
 // 에서 어떤 행동이 지표를 망쳤는지 하나씩 끄면서 좁힐 수 있어야 한다.
@@ -8,6 +11,7 @@
 export const AI = {
   wander: true,     // 미발견 상태에서 각자 다른 일을 한다
   vision: true,     // 어그로가 전방위가 아니라 부채꼴이다
+  reposition: true, // 벽·기둥에 사선이 막히면 옆으로 돌아 각을 연다 (§6-3)
   squads: false,    // 조 편성 (docs/ENEMY-AI.md §4) — 미구현
   shout: false,     // 지원 요청 (§5) — 미구현
   noise: false,     // 전투 소음 → 수색 (§5-2) — 미구현
@@ -119,4 +123,43 @@ export function updateIdle(e, dt, G) {
     e.facing += d * Math.min(1, dt * 1.6);
   }
   return 0;
+}
+
+
+/**
+ * 사선이 막혔을 때 「돌아서 갈 곳」을 찾는다 (docs/ENEMY-AI.md §6-3).
+ *
+ * 왜 필요한가: 지금까지 기둥이 사이에 끼면 궁수는 뒤로 물러나기만 하고
+ * 영영 못 쐈다. 근접도 사거리 안에서 사선이 막히면 공격 조건이 성립하지
+ * 않는데 이미 가까워서 추격도 의미가 없어 그 자리에 굳었다.
+ *
+ * 방법: 플레이어 방향의 **수직**으로 좌우를 시험해, 걸을 수 있고 사선이
+ * 열리는 가장 가까운 지점을 고른다. A* 를 안 쓰는 이유는 이 판단이 매
+ * 0.5초마다 최대 26마리에게서 일어나기 때문이다 — 싸야 한다.
+ *
+ * @returns {{x:number,z:number}|null} 없으면 null (그때는 평소대로 추격한다)
+ */
+export function findFlank(e, G, p) {
+  if (!AI.reposition) return null;
+  const dg = G.dungeon;
+  const dx = p.pos.x - e.pos.x, dz = p.pos.z - e.pos.z;
+  const l = Math.hypot(dx, dz) || 1;
+  const nx = -dz / l, nz = dx / l;                 // 플레이어 방향의 수직
+  const [tx, tz] = worldToGrid(p.pos.x, p.pos.z, dg.w, dg.h);
+
+  let best = null, bestStep = Infinity;
+  for (const side of [1, -1]) {
+    for (const step of [2.0, 3.2, 4.6, 6.0]) {
+      const x = e.pos.x + nx * side * step;
+      const z = e.pos.z + nz * side * step;
+      const [gx, gz] = worldToGrid(x, z, dg.w, dg.h);
+      if (!walkable(dg, gx, gz)) continue;
+      if (!lineOfSight(dg, gx, gz, tx, tz)) continue;
+      // 좌우 중 **덜 돌아가는 쪽**을 고른다. 멀리 도는 쪽을 고르면
+      // 플레이어 눈에는 도망치는 것처럼 보인다.
+      if (step < bestStep) { bestStep = step; best = { x, z }; }
+      break;                                        // 이 방향의 최단 해를 찾았다
+    }
+  }
+  return best;
 }

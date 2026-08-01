@@ -97,7 +97,7 @@ async function shot(page, name) {
     G.player.obj.position.copy(G.player.pos);
     for (const b of before) b.d = b.e.pos.distanceTo(G.player.pos);
 
-    for (let i = 0; i < 30; i++) await new Promise((r) => requestAnimationFrame(r));
+    window.G3.headlessRun(0.5);
 
     // 새로 어그로가 붙은 적은 전부 「자기 어그로 반경 안」에 있던 놈이어야 한다.
     // 하나라도 반경 밖에서 붙었다면 무리 전파가 살아 있다는 뜻이다.
@@ -183,7 +183,7 @@ async function shot(page, name) {
     const hadPath = G.player.path.length > 0;
     let insideWall = 0;
     for (let i = 0; i < 260; i++) {
-      await new Promise((r) => requestAnimationFrame(r));
+      window.G3.headlessRun(1 / 60);
       const gx = Math.floor(G.player.pos.x / 2 + dg.w / 2);
       const gz = Math.floor(G.player.pos.z / 2 + dg.h / 2);
       if (!dg.isFloor(gx, gz)) insideWall++;
@@ -289,6 +289,75 @@ async function shot(page, name) {
   ok('move.stuckBreakerWorks',
     stress.ev.skipWaypoint + stress.ev.unsmooth + stress.ev.giveUp > 0,
     `탈출 발동 ${JSON.stringify(stress.ev)} — 0이면 시험이 그 상황을 못 만든 것이다`);
+
+  // ── 엄폐물 우회 (docs/ENEMY-AI.md §6-3) ─────────────────
+  // 벽을 사이에 두고 마주 세운 뒤, 사선을 여는 데 걸리는 시간을 잰다.
+  // 근접은 원래도 A* 로 돌아갔다 — 이 검사가 지키는 것은 **원거리**다.
+  // 궁수는 예전에 사선이 막히면 물러나기만 하며 영영 못 쐈다.
+  const flank = await page.evaluate(async () => {
+    const G = window.G3, P = G.player, dg = G.dungeon;
+    const nav = await import('./js/world/nav.js');
+    const dun = await import('./js/world/dungeon.js');
+    P.invuln = 1e9;
+
+    let setup = null;
+    for (let gz = 2; gz < dg.h - 2 && !setup; gz++) {
+      for (let gx = 2; gx < dg.w - 2; gx++) {
+        if (dg.at(gx, gz) !== 2) continue;
+        for (const [dx, dz] of [[1, 0], [0, 1]]) {
+          const a = [gx - dx, gz - dz], c = [gx + dx, gz + dz];
+          if (dg.at(a[0], a[1]) !== 1 || dg.at(c[0], c[1]) !== 1) continue;
+          if (nav.lineOfSight(dg, a[0], a[1], c[0], c[1])) continue;
+          setup = { a, c };
+          break;
+        }
+        if (setup) break;
+      }
+    }
+    if (!setup) return { skipped: true };
+
+    const [px, pz] = dun.gridToWorld(setup.a[0], setup.a[1], dg.w, dg.h);
+    const [ex, ez] = dun.gridToWorld(setup.c[0], setup.c[1], dg.w, dg.h);
+    P.setPosition(px, pz);
+
+    const out = {};
+    for (const kind of ['skeleton', 'archer']) {
+      const e = G.enemies.find((x) => !x.dead && !x.isBoss && x.def.key === kind);
+      if (!e) { out[kind] = null; continue; }
+      // **원상복구할 것을 먼저 적어 둔다.** 검사가 게임 상태를 바꾼 채로
+      // 끝나면 뒤의 검사가 엉뚱하게 깨진다 — 실제로 그렇게 당했다.
+      const save = {
+        hp: e.hp, maxHp: e.maxHp, aggro: e.aggro, state: e.state,
+        px: e.pos.x, pz: e.pos.z, hx: e.home.x, hz: e.home.z,
+      };
+      e.pos.set(ex, 0, ez);
+      e.home.set(ex, 0, ez);
+      e.hp = e.maxHp = 1e9;
+      e.aggro = true; e.state = 'chase'; e.path.length = 0;
+      e.flankTarget = null; e.flankCd = 0;
+      let opened = false, t = 0;
+      for (let i = 0; i < 60 * 8 && !opened; i++) {
+        e.update(1 / 60, G); t += 1 / 60;
+        const [agx, agz] = dun.worldToGrid(e.pos.x, e.pos.z, dg.w, dg.h);
+        const [bgx, bgz] = dun.worldToGrid(P.pos.x, P.pos.z, dg.w, dg.h);
+        if (nav.lineOfSight(dg, agx, agz, bgx, bgz)) opened = true;
+      }
+      out[kind] = { opened, sec: +t.toFixed(2) };
+      e.hp = save.hp; e.maxHp = save.maxHp;
+      e.aggro = save.aggro; e.state = save.state;
+      e.pos.set(save.px, 0, save.pz);
+      e.home.set(save.hx, 0, save.hz);
+      e.path.length = 0;
+      e.flankTarget = null;
+    }
+    return out;
+  });
+  ok('ai.flanksAroundCover',
+    flank.skipped || (!flank.archer || (flank.archer.opened && flank.archer.sec < 8)),
+    flank.skipped ? '엄폐 상황을 못 만듦'
+      : `궁수 ${flank.archer ? flank.archer.sec + '초' : '없음'}`
+        + ` · 해골 ${flank.skeleton ? flank.skeleton.sec + '초' : '없음'}`
+        + ' — 막히면 돌아가야 한다');
 
   // ── HUD 배치: 구슬이 단축키 양옆인가 · 단축키가 두 줄인가 ─────
   const hud = await page.evaluate(async () => {
@@ -459,14 +528,16 @@ async function shot(page, name) {
 
     const [bx, bz] = g2w(spot[0], spot[1]);
     P.setPosition(bx, bz);
-    for (let i = 0; i < 45; i++) await new Promise((r) => requestAnimationFrame(r));
+    // 오클루전은 frame() 의 렌더 경로에서만 갱신된다(카메라가 필요하다).
+    // headlessRun 은 시뮬레이션만 밟으므로 여기서는 실제 프레임을 돌려야 한다.
+    for (let i = 0; i < 12; i++) await new Promise((r) => requestAnimationFrame(r));
     let faded = 0;
     for (const g of G.level.fadeGroups) for (const v of g.mesh.userData.fade) if (v < 0.9) faded++;
 
     // 탁 트인 곳으로 옮기면 전부 되돌아와야 한다
     const [sx, sz] = g2w(dg.spawn.gx, dg.spawn.gz);
     P.setPosition(sx, sz);
-    for (let i = 0; i < 60; i++) await new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 14; i++) await new Promise((r) => requestAnimationFrame(r));
     let stillFaded = 0;
     for (const g of G.level.fadeGroups) for (const v of g.mesh.userData.fade) if (v < 0.99) stillFaded++;
 
@@ -562,7 +633,7 @@ async function shot(page, name) {
     const tookDamage = e.hp < hp0;
     // 확실히 죽인다
     for (let i = 0; i < 40 && !e.dead; i++) mod.hitEnemy(G, e, 999);
-    for (let i = 0; i < 40; i++) await new Promise((r) => requestAnimationFrame(r));
+    window.G3.headlessRun(0.7);
     return {
       tookDamage, died: e.dead,
       xpGained: G.player.xp !== xp0 || G.player.level > 1,
@@ -662,7 +733,12 @@ async function shot(page, name) {
     const p95 = (a) => a[Math.floor(a.length * 0.95)];
     return { logicMed: med(logic), logicP95: p95(logic), frameMed: med(frame), frameP95: p95(frame) };
   });
-  await page.waitForTimeout(9000);
+  // 벽시계 9초를 기다리는 대신 시뮬레이션 12초를 밟는다.
+  // 렌더링이 느린 환경에서 벽시계로 기다리면 게임 내 시간이 거의 안 흐른다 —
+  // 「9초 기다렸는데 봇이 한 마리도 못 잡았다」가 되면 검사가 무의미하다.
+  await page.evaluate(() => {
+    for (let i = 0; i < 12; i++) window.G3.headlessRun(1);
+  });
   const botState = await page.evaluate(() => ({
     kills: window.G3.stats.kills,
     floor: window.G3.floorNo,
