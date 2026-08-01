@@ -184,30 +184,108 @@ html, body {
 /* ─────────────── 인벤토리 ─────────────── */
 #inv {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(3,2,6,.55); backdrop-filter: blur(2px);
+  background: rgba(3,2,6,.6); backdrop-filter: blur(3px);
 }
 #inv[hidden] { display: none; }
+
+/* 돌판에 박아 넣은 창 — 안쪽으로 파인 느낌을 이중 테두리로 낸다 */
 #inv .panel {
-  width: 470px; max-height: 86vh; overflow-y: auto;
-  background: #100c17; border: 1px solid #342b40; border-radius: 6px;
-  padding: 16px 18px 20px; box-shadow: 0 18px 60px rgba(0,0,0,.8);
+  width: 520px; max-height: 88vh; overflow-y: auto;
+  background:
+    linear-gradient(180deg, rgba(255,220,170,.05), rgba(0,0,0,0) 120px),
+    #14101a;
+  border: 1px solid #4a3f58;
+  border-radius: 5px;
+  padding: 0 0 16px;
+  box-shadow: 0 22px 70px rgba(0,0,0,.85), inset 0 0 0 1px rgba(0,0,0,.6);
 }
-#inv h2 { font-size: 14px; margin: 14px 0 8px; color: #cbbd9f; font-weight: normal; letter-spacing: 1px; }
-#inv h2:first-child { margin-top: 0; }
-.equip { display: flex; gap: 10px; }
-.equip .slot { flex: 1; text-align: center; }
-.equip label { display: block; font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+
+.invtop {
+  display: flex; align-items: center; justify-content: center; position: relative;
+  padding: 13px 16px 12px; border-bottom: 1px solid #2e2639;
+  background: linear-gradient(180deg, #1d1727, #14101a);
+}
+.invtop h2 { margin: 0; font-size: 15px; letter-spacing: 7px; color: #d9c9a4; font-weight: normal; }
+#invClose {
+  position: absolute; right: 10px; top: 9px;
+  font: inherit; font-size: 13px; line-height: 1; cursor: pointer;
+  width: 24px; height: 24px; color: #8d8296;
+  background: #1b1524; border: 1px solid #382e46; border-radius: 3px;
+}
+#invClose:hover { color: #ffd9a8; border-color: #6b5a80; }
+#invClose:focus-visible { outline: 2px solid #c08c3c; outline-offset: 1px; }
+
+/* ── 종이인형 ── */
+.doll {
+  display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 10px;
+  padding: 16px 16px 4px;
+}
+.dollcol { display: flex; flex-direction: column; gap: 10px; }
+.dollcol.right { justify-content: space-between; }
+
+.slot { position: relative; }
+.slot .sl {
+  position: absolute; top: 5px; left: 7px; z-index: 1;
+  font-size: 10px; letter-spacing: 1px; color: #7c7189; pointer-events: none;
+}
 .cell {
-  height: 56px; border: 1px solid #342b40; border-radius: 4px; background: #17121f;
-  display: flex; align-items: center; justify-content: center; font-size: 24px;
-  cursor: pointer;
+  border: 1px solid #3a3047; border-radius: 3px;
+  background: radial-gradient(ellipse at 50% 35%, #1e1728, #120e19 70%);
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.7), inset 0 0 14px rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; cursor: pointer; height: 58px;
+  transition: border-color .12s, box-shadow .12s;
 }
-.cell:hover { border-color: #6b5a80; }
-.bag { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.bag .cell { height: 52px; }
-.bag .cell.empty { cursor: default; opacity: .38; }
-.stats { font-size: 12.5px; line-height: 1.75; color: #c3bbae; margin-top: 12px; }
-.stats span { color: #ffd9a8; }
+.slot.tall .cell { height: 128px; font-size: 40px; }
+.cell:hover { border-color: #7a6690; box-shadow: inset 0 0 18px rgba(140,110,180,.25); }
+.cell.filled { border-color: var(--rc, #4a3f58); }
+.cell.filled:hover { box-shadow: inset 0 0 20px color-mix(in srgb, var(--rc, #8a7aa0) 30%, transparent); }
+
+/* 랜턴은 장비가 아니다 — 들고 다니는 것이라 따로 보여준다 */
+.lantern {
+  border: 1px dashed #3a3047; border-radius: 3px; padding: 8px 9px;
+  font-size: 11.5px; line-height: 1.55; color: #a9a0b5; background: rgba(0,0,0,.25);
+}
+.lantern b { color: #ffcf8a; font-weight: normal; }
+.lantern .fuel { display: block; height: 4px; margin-top: 6px; background: #221b2c; border-radius: 2px; overflow: hidden; }
+.lantern .fuel i { display: block; height: 100%; background: linear-gradient(90deg, #a8641c, #ffc069); }
+
+.stats {
+  font-size: 12.5px; line-height: 1.8; color: #b9b1a5;
+  margin: 12px 16px 0; padding: 10px 12px;
+  background: rgba(0,0,0,.28); border: 1px solid #2a2335; border-radius: 4px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px;
+}
+.stats div { display: flex; justify-content: space-between; gap: 10px; }
+.stats span { color: #ffd9a8; font-variant-numeric: tabular-nums; }
+
+.baghead {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin: 16px 16px 8px; padding-bottom: 6px; border-bottom: 1px solid #2a2335;
+}
+.baghead h3 { margin: 0; font-size: 13px; font-weight: normal; letter-spacing: 3px; color: #cbbd9f; }
+.baghead #bagCount { margin-left: auto; }
+#bagSort {
+  font: inherit; font-size: 11.5px; cursor: pointer; margin-left: 12px;
+  padding: 2px 12px; color: #cbbd9f;
+  background: #1e1828; border: 1px solid #3a3047; border-radius: 3px;
+}
+#bagSort:hover { color: #ffd9a8; border-color: #6b5a80; }
+#bagSort:focus-visible { outline: 2px solid #c08c3c; outline-offset: 1px; }
+/* 가방이 꽉 차면 그 사실이 보여야 한다 — 토스트는 지나가면 사라진다 */
+.baghead.full #bagCount { color: #ff8a72; }
+.baghead.full #bagSort { border-color: #7a4238; }
+
+.bag {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px;
+  margin: 0 16px;
+}
+.bag .cell { height: 54px; font-size: 24px; }
+.bag .cell.empty { cursor: default; }
+.bag .cell.empty:hover { border-color: #3a3047; box-shadow: inset 0 1px 0 rgba(0,0,0,.7), inset 0 0 14px rgba(0,0,0,.55); }
+
+.invhint { margin: 12px 16px 0; font-size: 11.5px; color: var(--dim); text-align: center; }
+.invhint b { color: #cbbd9f; font-weight: normal; }
 
 #tooltip {
   position: absolute; z-index: 20; pointer-events: none;

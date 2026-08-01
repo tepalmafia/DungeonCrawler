@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
-import { resolveCollision } from '../world/nav.js';
+import { resolveCollision, sweep } from '../world/nav.js';
 
 /**
  * 소리 크기 = 거리. 26마리가 같은 크기로 울면 어디서 나는지 알 수 없다.
@@ -161,25 +161,45 @@ export class Projectile {
     this.life -= dt;
     if (this.life <= 0) return this.kill();
 
+    // 화살은 초당 15유닛이다. 예전엔 이동시킨 뒤 도착 지점만 검사해서
+    // 프레임이 끊기면 벽을 지나 반대편 적을 맞췄다.
+    //
+    // 벽 검사 반지름은 화살의 실제 굵기(0.12)를 쓴다. 판정용 radius(0.3)로
+    // 벽을 재면 벽면을 스치듯 나는 화살이 애먼 데서 터진다.
     const step = this.speed * dt;
-    this.pos.x += this.dir.x * step;
-    this.pos.z += this.dir.z * step;
+    const from = { x: this.pos.x, z: this.pos.z };
+    const sw = sweep(this.G.dungeon, this.pos.x, this.pos.z,
+      this.dir.x * step, this.dir.z * step, 0.12);
+    this.pos.x = sw.x;
+    this.pos.z = sw.z;
     this.mesh.position.copy(this.pos);
+    this.blocked = sw.hit;
 
     if (Math.random() < 0.6)
       this.G.fx.burst(this.pos, { count: 1, color: this.color, speed: 0.5, size: 0.24, life: 0.25, grav: 0 });
 
     // 벽
-    const r = resolveCollision(this.G.dungeon, this.pos.x, this.pos.z, this.radius);
+    const r = { hit: this.blocked };
     if (r.hit) {
       this.G.fx.burst(this.pos, { count: 10, color: this.color, speed: 3.5, size: 0.3, life: 0.35 });
       return this.kill();
     }
 
+    // 지나간 **구간**과의 최근접 거리로 판정한다. 끝점만 보면 한 프레임에
+    // 12유닛을 건너뛸 때 적을 통과하며 안 맞는다.
+    const segDist = (px, pz) => {
+      const vx = this.pos.x - from.x, vz = this.pos.z - from.z;
+      const L2 = vx * vx + vz * vz;
+      if (L2 < 1e-9) return Math.hypot(px - this.pos.x, pz - this.pos.z);
+      let t = ((px - from.x) * vx + (pz - from.z) * vz) / L2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (from.x + vx * t), pz - (from.z + vz * t));
+    };
+
     if (this.fromPlayer) {
       for (const e of this.G.enemies) {
         if (e.dead || this.hitSet.has(e)) continue;
-        if (this.pos.distanceTo(e.pos) < e.radius + this.radius + 0.2) {
+        if (segDist(e.pos.x, e.pos.z) < e.radius + this.radius + 0.2) {
           this.hitSet.add(e);
           hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 0.7 });
           if (this.pierce-- <= 0) return this.kill();
@@ -187,7 +207,7 @@ export class Projectile {
       }
     } else {
       const p = this.G.player;
-      if (!p.dead && this.pos.distanceTo(p.pos) < p.radius + this.radius + 0.25) {
+      if (!p.dead && segDist(p.pos.x, p.pos.z) < p.radius + this.radius + 0.25) {
         hitPlayer(this.G, this.dmg);
         return this.kill();
       }

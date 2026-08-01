@@ -18,7 +18,7 @@ import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
 import { Lighting } from './world/lighting.js';
 import { Remains } from './world/remains.js';
-import { resolveCollision, nearestWalkable } from './world/nav.js';
+import { resolveCollision, nearestWalkable, sweep } from './world/nav.js';
 
 import { Player } from './game/player.js';
 import { spawnFloor } from './game/enemies.js';
@@ -94,7 +94,7 @@ const G = {
   fields: [], timers: [], cooldowns: {},
   boss: null, hover: null, pickupTarget: null,
   fx: null, ui: null, inv: null, input: null, bot: null, remains: null,
-  nav: { resolveCollision, nearestWalkable },
+  nav: { resolveCollision, nearestWalkable, sweep },
   pace: { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME },   // 검증·튜닝에서 읽는다
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
   perf: { logicMs: 0, frameMs: 0 },
@@ -102,6 +102,7 @@ const G = {
   metrics: new Metrics(),                            // 실측 — window.G3.metrics.report()
   exitTouchT: 0,
   onEnemyKilled, onPlayerDeath, onLanternOut,
+  dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
 window.G3 = G;
 
@@ -615,8 +616,8 @@ function updateCamera(k) {
 
 // ───────────────────────── 루프 ─────────────────────────
 let last = performance.now();
-let acc = 0;
-const MAX_DT = 1 / 20;
+let simAcc = 0;
+const MAX_DT = 1 / 20;   // 시뮬레이션 한 스텝의 상한 (50ms)
 
 // ── 시뮬레이션 한 스텝 ──────────────────────────────────────
 // frame() 에서 떼어냈다. 이유는 계측이다:
@@ -708,44 +709,55 @@ function frame(now) {
   last = now;
   if (!Number.isFinite(dt)) dt = 0;
   dt = Math.min(dt, 0.1) * params.ff;
-  const rawDt = dt;            // 히트스톱 전 — 실제 흐른 시간
 
-  // ── 히트스톱 ──────────────────────────────────────────────
-  // 타격 순간 시뮬레이션을 몇십 밀리초 거의 멈춘다. 액션 게임에서 「손맛」의
-  // 가장 큰 지분이 여기 있다 — 밀어내지 않고도 맞았다는 감각을 준다.
-  // 렌더는 계속 돌아가므로 화면이 멈추는 게 아니라 「걸리는」 느낌이 된다.
-  if (G.hitStop > 0) {
-    G.hitStop = Math.max(0, G.hitStop - dt);
-    dt *= 0.12;
-  }
-  G.dt = dt;
-  G.time += dt;
-
-  handleInput(dt);
+  // ── 고정 스텝 ──────────────────────────────────────────────
+  // 예전엔 흐른 시간을 **한 번에** 시뮬레이션에 밀어 넣었다. ?ff=8 이나
+  // 프레임이 끊긴 순간에는 한 스텝이 0.8초가 되고, 그러면 한 걸음에 격자
+  // 30칸을 건너뛰어 벽을 통과한다(감사 실측 최악 60유닛).
+  //
+  // 스윕이 지오메트리는 구해 주지만, 큰 스텝이 망가뜨리는 것은 그것만이
+  // 아니다 — 공격 예고 타이밍, 경로 재계산 주기, 히트스톱 소비, 투사체
+  // 수명이 전부 어긋난다. 그래서 **스텝 크기를 늘리는 대신 횟수를 늘린다.**
+  //
+  // 상한 0.8초: 탭을 오래 비활성화했다가 돌아왔을 때 밀린 시간을 전부
+  // 따라잡으려 들면 한 프레임에 수백 스텝을 밟고 화면이 멈춘다. 버린다.
+  simAcc = Math.min(simAcc + dt, MAX_DT * 16);
   const tLogic = performance.now();
+  let steps = 0;
+  while (simAcc > 1e-5 && steps++ < 16) {
+    const s = Math.min(simAcc, MAX_DT);
+    simAcc -= s;
+    // 히트스톱 — 타격 순간 시뮬레이션을 거의 멈춘다. 렌더는 계속 돌아가므로
+    // 화면이 멈추는 게 아니라 「걸리는」 느낌이 된다.
+    let sd = s;
+    if (G.hitStop > 0) { G.hitStop = Math.max(0, G.hitStop - s); sd = s * 0.12; }
+    G.dt = sd;
+    G.time += sd;
+    simulate(sd);
+    record(sd, s);
+  }
+  const dtRender = dt;
 
-  simulate(dt);
+  handleInput(dtRender);
 
   if (G.state === 'play' && G.dungeon) {
-    G.level.update(G.time, dt);
+    G.level.update(G.time, dtRender);
     // 벽에 가려 캐릭터가 안 보이면 조작이 불가능해진다 — 사이에 낀 벽을 흐린다
-    G.level.updateOcclusion(camera, G.player.pos, dt);
-    G.lighting.update(G.time, dt, G.player.pos);
-    G.remains.update(dt);
+    G.level.updateOcclusion(camera, G.player.pos, dtRender);
+    G.lighting.update(G.time, dtRender, G.player.pos);
+    G.remains.update(dtRender);
   } else if (G.dungeon) {
-    G.level.update(G.time, dt);
-    G.lighting.update(G.time, dt, G.player ? G.player.pos : new THREE.Vector3());
+    G.level.update(G.time, dtRender);
+    G.lighting.update(G.time, dtRender, G.player ? G.player.pos : new THREE.Vector3());
   }
 
-  fx.update(dt);
-  updateCamera(Math.min(1, dt * 8));
-  if (G.state !== 'title') ui.update(dt);
+  fx.update(dtRender);
+  updateCamera(Math.min(1, dtRender * 8));
+  if (G.state !== 'title') ui.update(dtRender);
 
   // 시뮬레이션 비용만 따로 잰다 — GPU가 느린 환경(소프트웨어 렌더링)에서도
   // 게임 로직이 예산 안에 있는지 판단할 수 있어야 한다.
   G.perf.logicMs = performance.now() - tLogic;
-
-  record(dt, rawDt);
 
   G.perf.frameMs = dt * 1000 / params.ff;
 
@@ -769,6 +781,7 @@ window.G3.nextFloor = nextFloor;
 window.G3.VERSION = VERSION;
 window.G3.params = params;
 window.G3.applyLantern = applyLantern;
+window.G3.dropItem = dropItem;         // 인벤토리에서 버릴 때 쓴다
 window.G3.headlessRun = headlessRun;   // tools/bench3d.js
 window.G3.BASE_LIGHT = BASE_LIGHT;
 window.G3.getZoom = () => ({ target: camDist, now: camDistNow, min: CAM_DIST_MIN, max: CAM_DIST_MAX });
