@@ -214,7 +214,7 @@ export class Boss extends Enemy {
           let ad = Math.atan2(dx, dz) - this.facing;
           while (ad > Math.PI) ad -= Math.PI * 2;
           while (ad < -Math.PI) ad += Math.PI * 2;
-          if (d < 5.4 && Math.abs(ad) < Math.PI * 0.35) hitPlayer(G, this.dmg * 1.5);
+          if (d < 5.4 && Math.abs(ad) < Math.PI * 0.35) hitPlayer(G, this.dmg * 1.5, { from: this.pos });
           Sfx.swing();
         }
         if (this.moveT > this.windupDur + 0.45) done();
@@ -228,7 +228,7 @@ export class Boss extends Enemy {
           this.comboLeft--;
           this.state = 'attack';
           G.fx.arc(this.pos, this.facing, { radius: 4.0, spread: Math.PI * 0.5, color: 0xffaa7a, life: 0.18 });
-          if (dist < 4.4) hitPlayer(G, this.dmg * 0.85);
+          if (dist < 4.4) hitPlayer(G, this.dmg * 0.85, { from: this.pos });
           Sfx.swing();
           this._face(p.pos.x, p.pos.z);
         }
@@ -241,7 +241,7 @@ export class Boss extends Enemy {
         const step = 15 * MOVE_SCALE * this.enrage * dt;   // 돌진도 이동이다
         const r = this._stepRaw(G, this.chargeDir.x * step, this.chargeDir.z * step);
         G.fx.burst(this.center(), { count: 3, color: 0x9a5aff, speed: 1.5, size: 0.5, life: 0.35, grav: 0 });
-        if (dist < this.radius + p.radius + 1.1) { hitPlayer(G, this.dmg * 1.15); done(); }
+        if (dist < this.radius + p.radius + 1.1) { hitPlayer(G, this.dmg * 1.15, { from: this.pos }); done(); }
         else if (r.hit || this.moveT > this.windupDur + 0.85) {
           if (r.hit) { G.fx.addShake(0.2); G.fx.burst(this.center(), { count: 26, color: 0x8a7a6a, speed: 6, size: 0.5, life: 0.6 }); }
           done();
@@ -273,7 +273,8 @@ export class Boss extends Enemy {
                 G.fx.shockwave(pos, { r0: 0.4, r1: 2.4, color: 0xff8a3a, life: 0.4, y: 0.3 });
                 G.fx.burst(pos.clone().setY(0.4), { count: 24, color: 0xff9a3a, speed: 8, size: 0.5, life: 0.6 });
                 G.lighting.flash(pos.clone().setY(1), 0xff8a3a, 55, 0.3);
-                if (Math.hypot(G.player.pos.x - sx, G.player.pos.z - sz) < 2.3) hitPlayer(G, this.dmg * 0.9);
+                if (Math.hypot(G.player.pos.x - sx, G.player.pos.z - sz) < 2.3)
+                  hitPlayer(G, this.dmg * 0.9, { from: { x: sx, z: sz } });
               },
             });
           }
@@ -302,7 +303,7 @@ export class Boss extends Enemy {
         let ad = Math.atan2(dx, dz) - this.sweepAngle;
         while (ad > Math.PI) ad -= Math.PI * 2;
         while (ad < -Math.PI) ad += Math.PI * 2;
-        if (d < RANGE && Math.abs(ad) < 0.22) hitPlayer(G, this.dmg * 0.55);
+        if (d < RANGE && Math.abs(ad) < 0.22) hitPlayer(G, this.dmg * 0.55, { from: this.pos });
         if (this.sweepT > 3.2) done();
         return 0;
       }

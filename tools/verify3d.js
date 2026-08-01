@@ -374,6 +374,59 @@ async function shot(page, name) {
         + ` · 해골 ${flank.skeleton ? flank.skeleton.sec + '초' : '없음'}`
         + ' — 막히면 돌아가야 한다');
 
+  // ── 벽 너머로 때리지 않는가 ──────────────────────────────
+  // 지금까지 피해 판정이 거리와 각도만 봤다. 몸은 벽을 안 지나가는데
+  // **피해만 지나갔다.** 이동 관통과 다른 축이라 따로 잡는다.
+  const wallDmg = await page.evaluate(async () => {
+    const G = window.G3, P = G.player, dg = G.dungeon;
+    const cm = await import('./js/game/combat.js');
+    const nav = await import('./js/world/nav.js');
+    const dun = await import('./js/world/dungeon.js');
+
+    // 벽을 사이에 둔 바닥-벽-바닥 삼중항
+    let setup = null;
+    for (let gz = 2; gz < dg.h - 2 && !setup; gz++) {
+      for (let gx = 2; gx < dg.w - 2; gx++) {
+        if (dg.at(gx, gz) !== 2) continue;
+        for (const [dx, dz] of [[1, 0], [0, 1]]) {
+          const a = [gx - dx, gz - dz], c = [gx + dx, gz + dz];
+          if (dg.at(a[0], a[1]) !== 1 || dg.at(c[0], c[1]) !== 1) continue;
+          if (nav.lineOfSight(dg, a[0], a[1], c[0], c[1])) continue;
+          setup = { a, c };
+          break;
+        }
+        if (setup) break;
+      }
+    }
+    if (!setup) return { skipped: true };
+
+    const e = G.enemies.find((x) => !x.dead && !x.isBoss);
+    if (!e) return { skipped: true };
+    const save = { hp: e.hp, maxHp: e.maxHp, px: e.pos.x, pz: e.pos.z, aggro: e.aggro, st: e.state };
+    e.hp = e.maxHp = 1e9;
+
+    const [ax, az] = dun.gridToWorld(setup.a[0], setup.a[1], dg.w, dg.h);
+    const [cx, cz] = dun.gridToWorld(setup.c[0], setup.c[1], dg.w, dg.h);
+
+    // 벽을 사이에 두고 — 안 맞아야 한다
+    P.setPosition(ax, az);
+    e.pos.set(cx, 0, cz);
+    const blocked = cm.hitEnemy(G, e, 50);
+
+    // 같은 칸 옆에 나란히 — 맞아야 한다 (검사가 늘 0을 뱉는 게 아님을 보인다)
+    e.pos.set(ax + 1.0, 0, az);
+    const open = cm.hitEnemy(G, e, 50);
+
+    e.hp = save.hp; e.maxHp = save.maxHp;
+    e.pos.set(save.px, 0, save.pz);
+    e.aggro = save.aggro; e.state = save.st;
+    return { blocked, open };
+  });
+  ok('combat.noDamageThroughWalls',
+    wallDmg.skipped || (wallDmg.blocked === 0 && wallDmg.open > 0),
+    wallDmg.skipped ? '엄폐 상황을 못 만듦'
+      : `벽 너머 ${wallDmg.blocked} · 트인 곳 ${wallDmg.open}`);
+
   // ── 앰비언스: 사건이 전부 예외 없이 도는가 ────────────────
   // 물방울 4~13초, 비명 38~95초 간격이라 그냥 두면 버그가 한참 뒤에 드러난다.
   // 소리는 헤드리스에서 못 듣지만 「터지지 않는가」는 여기서 잡을 수 있다.
@@ -664,6 +717,9 @@ async function shot(page, name) {
     G.timers.length = 0;
     const e = G.enemies.find((x) => !x.dead && !x.isBoss);
     if (!e) return { skipped: true };
+    // 피해에 시야 검사가 걸리므로 **적 옆에 서야 한다.**
+    // 예전엔 아무 데서나 때려도 맞았다 — 그게 벽 너머 타격 버그였다.
+    G.player.setPosition(e.pos.x + 1.1, e.pos.z);
     const xp0 = G.player.xp, kills0 = G.stats.kills;
     const hp0 = e.hp;
     mod.hitEnemy(G, e, 20);

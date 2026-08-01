@@ -3,7 +3,28 @@
 
 import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
-import { resolveCollision, sweep } from '../world/nav.js';
+import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
+import { worldToGrid } from '../world/dungeon.js';
+
+/**
+ * 벽 너머로 때리거나 맞지 않게 막는다.
+ *
+ * 지금까지 모든 피해 판정이 **거리와 각도만** 봤다. 그래서 벽 하나를 사이에
+ * 두고 광역기가 넘어가고, 기둥 뒤에 서 있어도 근접 공격이 들어왔다.
+ * 이동 관통과는 다른 축의 버그다 — 몸은 안 지나가는데 피해만 지나갔다.
+ *
+ * 한계를 밝혀 둔다: 격자 기준이라 **소품(기둥·관)은 못 막는다.**
+ * 기둥은 칸의 일부만 차지하므로 칸 단위 시야로는 표현할 수 없다.
+ * 벽만 막는다 — 그것만으로도 「방 건너편에서 맞는」 문제는 사라진다.
+ */
+export function hasLine(G, ax, az, bx, bz) {
+  const dg = G.dungeon;
+  if (!dg) return true;
+  const [gx0, gz0] = worldToGrid(ax, az, dg.w, dg.h);
+  const [gx1, gz1] = worldToGrid(bx, bz, dg.w, dg.h);
+  if (gx0 === gx1 && gz0 === gz1) return true;
+  return lineOfSight(dg, gx0, gz0, gx1, gz1);
+}
 
 /**
  * 소리 크기 = 거리. 26마리가 같은 크기로 울면 어디서 나는지 알 수 없다.
@@ -32,6 +53,12 @@ export function playerRoll(p) {
  */
 export function hitEnemy(G, e, rawDmg, opts = {}) {
   if (!e || e.dead) return 0;
+  // 벽 너머로는 안 닿는다. 투사체는 이미 스윕으로 벽에서 죽으므로 예외다
+  // (los: false). 장판도 예외 — 바닥에 깔린 것은 자기 위치가 곧 근원이다.
+  if (opts.los !== false) {
+    const src = opts.from || G.player.pos;
+    if (!hasLine(G, src.x, src.z, e.pos.x, e.pos.z)) return 0;
+  }
   const dmg = Math.max(1, Math.round(mitigate(rawDmg, e.armor, G.player.level)));
   e.hp -= dmg;
   e.flash = 0.14;
@@ -112,6 +139,7 @@ export function killEnemy(G, e) {
 export function hitPlayer(G, rawDmg, opts = {}) {
   const p = G.player;
   if (p.dead || p.invuln > 0) return 0;
+  if (opts.from && !hasLine(G, opts.from.x, opts.from.z, p.pos.x, p.pos.z)) return 0;
   const dmg = Math.max(1, Math.round(mitigate(rawDmg, p.armor, p.level)));
   p.hp -= dmg;
   p.hurtT = 0.18;
@@ -201,7 +229,7 @@ export class Projectile {
         if (e.dead || this.hitSet.has(e)) continue;
         if (segDist(e.pos.x, e.pos.z) < e.radius + this.radius + 0.2) {
           this.hitSet.add(e);
-          hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 0.7 });
+          hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 0.7, los: false });
           if (this.pierce-- <= 0) return this.kill();
         }
       }
