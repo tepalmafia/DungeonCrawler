@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
-import { aggregate, RARITIES, power } from './items.js';
+import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
@@ -128,12 +128,15 @@ export class Player {
     this.lantern = null;
     this.torchRefuelT = 0;      // 벽 횃불 옆에 머문 시간
 
-    // 장비 — 슬롯 5칸 (docs/ITEM-ECONOMY.md §3-1).
-    // 칸이 늘면 드랍 하나가 덜 중요해지고, 그래야 「장비가 안 바뀌는 판」이
-    // 정상이 된다. 그게 이 게임 경제의 출발점이다.
-    this.equipped = { weapon: null, helm: null, armor: null, gloves: null, ring: null };
+    // 장비 — 슬롯 8칸. **SLOTS 에서 만든다.**
+    // 손으로 적어 뒀더니 슬롯을 5 → 8 로 늘릴 때 여기만 5칸으로 남아 있었다.
+    // 목록이 두 군데 있으면 반드시 한쪽이 뒤처진다.
+    this.equipped = Object.fromEntries(SLOTS.map((k) => [k, null]));
     this.bag = [];
-    this.bagMax = 24;
+    // 10×4 = 40. 디아블로2 의 가방과 같은 크기다.
+    // 「인벤이 꽉 차면 줍질 못한다」는 지적이 있었고, 슬롯이 8칸으로 늘어난 만큼
+    // 갈아입을 후보를 들고 다닐 자리도 있어야 한다.
+    this.bagMax = 40;
     // 영혼 조각 — 잡몹이 확정으로 떨군다. 장비가 안 나와도 판이 헛되지 않게 하는 장치.
     this.coin = 0;
 
@@ -163,6 +166,7 @@ export class Player {
     this.dashT = 0;
     this.dashDir = new THREE.Vector3();
     this.dead = false;
+    this.resting = 0;            // 0=서 있음, 1=완전히 앉음 (game/rest.js)
 
     this.recompute();
     this.hp = this.maxHp;
@@ -404,6 +408,24 @@ export class Player {
   }
 
   _animate(dt, moved) {
+    // 앉은 자세 — 무릎을 접고 상체를 낮춘다.
+    // 별도 리그를 만들지 않고 기존 관절을 굽히는 것으로 끝낸다. 저폴리 기사라
+    // 「웅크린 실루엣」만 나와도 쉬는 것으로 읽힌다.
+    const rest = this.resting || 0;
+    if (rest > 0) {
+      const k = rest;
+      this.rig.group.position.y = -0.34 * k;
+      this.rig.torso.rotation.x = 0.30 * k;
+      if (this.rig.legL) { this.rig.legL.rotation.x = -1.15 * k; this.rig.legR.rotation.x = -0.55 * k; }
+      this.rig.armR.rotation.x = -0.5 * k;
+      this.rig.armL.rotation.x = -0.45 * k;
+      return;                      // 걷기·스윙 애니메이션은 건너뛴다
+    }
+    if (this.rig.group.position.y !== 0) {
+      this.rig.group.position.y = 0;
+      this.rig.torso.rotation.x = 0;
+    }
+
     const r = this.rig;
     // 몸통은 진행 방향을 부드럽게 따라간다
     let d = this.facing - r.group.rotation.y;

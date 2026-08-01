@@ -136,6 +136,57 @@ export class Shop {
     scene.add(g);
     this.merchant = g;
     this.lamp = lamp;
+
+    // 상자 — 행상 옆이 아니라 방 반대편에 둔다. 둘이 붙어 있으면
+    // 「상점에 딸린 물건」으로 읽히고, 문을 연 보상이라는 느낌이 안 산다.
+    const cx = x + (room.w > 6 ? 3.6 : 2.4), cz = z - 2.2;
+    const cg = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: 0x5a4326, roughness: 0.8, metalness: 0.2 });
+    const iron = new THREE.MeshStandardMaterial({
+      color: 0xc8a24a, roughness: 0.35, metalness: 0.9,
+      emissive: 0xc8a24a, emissiveIntensity: 0.35,
+    });
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.62, 0.7), wood);
+    box.position.y = 0.31;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.76), wood);
+    lid.position.y = 0.72;
+    for (const bx of [-0.32, 0.32]) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.72, 0.78), iron);
+      band.position.set(bx, 0.4, 0);
+      cg.add(band);
+    }
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.12), iron);
+    lock.position.set(0, 0.6, 0.38);
+    cg.add(box, lid, lock);
+    cg.position.set(cx, 0, cz);
+    cg.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    scene.add(cg);
+    this.chest = { group: cg, lid, x: cx, z: cz, opened: false, iron };
+  }
+
+  /**
+   * 금고 상자 — **문을 연 대가.**
+   *
+   * 스위치를 찾아 층을 가로지르고, 함정을 뚫고 들어왔는데 안에 상점만 있으면
+   * 「돈을 내야 뭘 준다」라서 보상이 아니다. 수고에는 값을 치러야 한다.
+   * 희귀 이상 2개 + 조각. 한 번만 열린다.
+   */
+  openChest(G) {
+    if (!this.chest || this.chest.opened) return null;
+    this.chest.opened = true;
+    const out = [];
+    for (let i = 0; i < 2; i++) {
+      out.push(rollItem(this.rnd, this.floorNo, this.tier, {
+        minRarity: 2, find: G.player.find || 0,
+      }));
+    }
+    const coin = Math.round((60 + this.floorNo * 40 + this.tier * 30) * this.rnd.range(0.85, 1.2));
+    return { items: out, coin };
+  }
+
+  chestInRange(px, pz, r = 2.2) {
+    const c = this.chest;
+    return !!c && !c.opened && Math.hypot(c.x - px, c.z - pz) < r;
   }
 
   inRange(px, pz, r = 2.6) {
@@ -203,6 +254,14 @@ export class Shop {
     // 아주 느리게 흔들린다 — 완전히 멈춰 있으면 소품으로 보인다
     this.merchant.rotation.y = Math.sin(t * 0.4) * 0.22;
     if (this.lamp) this.lamp.position.y = 1.2 + Math.sin(t * 1.7) * 0.05;
+    if (this.chest) {
+      // 안 연 동안만 쇠띠가 맥동한다 — 열고 나서도 반짝이면 시선만 끈다
+      this.chest.iron.emissiveIntensity = this.chest.opened ? 0.05 : 0.25 + Math.sin(t * 2.4) * 0.2;
+      if (this.chest.opened && this.chest.lid.rotation.x > -1.1) {
+        this.chest.lid.rotation.x -= dt * 2.4;
+        this.chest.lid.position.z = -0.3 * Math.sin(this.chest.lid.rotation.x);
+      }
+    }
   }
 
   dispose() {
@@ -210,6 +269,11 @@ export class Shop {
     this.scene.remove(this.merchant);
     this.merchant.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
     this.merchant = null;
+    if (this.chest) {
+      this.scene.remove(this.chest.group);
+      this.chest.group.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+      this.chest = null;
+    }
   }
 }
 

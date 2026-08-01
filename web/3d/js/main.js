@@ -27,12 +27,13 @@ import { Doors } from './world/doors.js';
 import { Traps } from './world/traps.js';
 import { Shop } from './game/shop.js';
 import { Dialogue } from './game/dialogue.js';
+import { Rest } from './game/rest.js';
 import { spawnBoss } from './game/boss.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
 import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, fuelCap, BASE_LIGHT } from './game/lantern.js';
-import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './game/pace.js';
+import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME, POTION_CD } from './game/pace.js';
 import { AI } from './game/ai.js';
 
 import { UI } from './ui/hud.js';
@@ -114,7 +115,7 @@ const G = {
   metrics: new Metrics(),                            // 실측 — window.G3.metrics.report()
   exitTouchT: 0,
   onEnemyKilled, onPlayerDeath, onLanternOut,
-  doors: null, traps: null, shop: null, dialogue: null, interact: null,
+  doors: null, traps: null, shop: null, dialogue: null, rest: null, interact: null,
   acquireLantern: null,      // 아래에서 채운다 (game/shop.js 가 쓴다)
   // 정예 스킬이 쓰는 통로 (game/elites.js). 판정 규칙을 한 곳에 모아 둔다.
   hitPlayerFrom: null, spawnEnemyShot: null, makeNoise: null,
@@ -180,6 +181,8 @@ function loadFloor(floorNo) {
   G.doors = new Doors(scene, dg);
   G.traps = new Traps(scene, dg, makeRng(`${G.seed}-trap-${floorNo}-${G.tier}`));
   if (!G.dialogue) G.dialogue = new Dialogue(scene);
+  if (!G.rest) G.rest = new Rest(scene);
+  G.rest.stop(G);
 
   const rnd = makeRng(`${G.seed}-spawn-${floorNo}-${G.tier}`);
   if (!G.player) {
@@ -269,8 +272,12 @@ function onEnemyKilled(e) {
     Audio.Sfx.victory();
     fx.addShake(0.3, 3);
   } else if (e.elite) {
-    dropItem(roll({ minRarity: 1 }), e.pos, 0);       // 확정 1 · 추가 없음
-  } else if (rnd.chance(0.09 + G.tier * 0.015) && !e.summoned) {
+    // 정예도 확정에서 절반 확률로. 정예는 여전히 제일 나은 표적이지만
+    // 「정예만 잡으면 장비가 나온다」가 되면 잡몹을 지나치게 된다.
+    if (rnd.chance(0.5)) dropItem(roll({ minRarity: 1 }), e.pos, 0);
+  // 9% → 4.5%. 절반으로 내린다. 「필요한 것만 나온다」에서 한 걸음 더 —
+  // 장비가 바뀌는 순간이 드물수록 그 순간이 커진다.
+  } else if (rnd.chance(0.045 + G.tier * 0.0075) && !e.summoned) {
     dropItem(roll(), e.pos, 0);
   }
 
@@ -484,6 +491,15 @@ function handleInput(dt) {
     camDist = CAM_DIST_DEFAULT;
 
   if (input.wasPressed('KeyI')) inv.toggle();
+  // C — 휴식. 모닥불을 피우고 앉는다 (game/rest.js).
+  if (input.wasPressed('KeyC')) {
+    if (G.rest?.active) G.rest.stop(G, '일어섰다');
+    else {
+      const r = G.rest?.start(G);
+      if (r && !r.ok && r.why) ui.toast(r.why, '#e07272');
+      else if (r?.ok) ui.toast('불을 피우고 앉았다 — 연료가 3배로 탄다', '#ffcf9a');
+    }
+  }
   if (input.wasPressed('KeyE')) {
     // 열려 있으면 닫는다 — 같은 키로 열고 닫아야 손이 헤매지 않는다
     if (ui.shop) ui.setShop(null); else doInteract();
@@ -551,7 +567,9 @@ function usePotion(kind) {
   const p = G.player;
   if (p.potions[kind] <= 0 || p.potionCd[kind] > 0) return;
   p.potions[kind]--;
-  p.potionCd[kind] = 8;
+  // 8 → 24초. 물약을 연달아 들이켜면 「버티는 판단」이 사라진다 —
+  // 체력이 자원이 되려면 다음 한 모금까지가 멀어야 한다.
+  p.potionCd[kind] = POTION_CD;
   if (kind === 'hp') {
     const heal = p.maxHp * 0.42;
     p.hp = Math.min(p.maxHp, p.hp + heal);
@@ -827,6 +845,7 @@ function simulate(dt) {
     updateDisarm(dt);
     G.shop?.update(dt, G.time);
     G.dialogue?.update(dt, G);
+    G.rest?.update(dt, G);
     updateInteract();
   }
 }
@@ -841,6 +860,8 @@ function updateInteract() {
   const trap = G.traps?.nearestDisarmable(p.pos.x, p.pos.z);
   if (G.doors?.leverInRange(p.pos.x, p.pos.z)) {
     G.interact = { kind: 'lever', label: 'E — 스위치를 당긴다' };
+  } else if (G.shop?.chestInRange(p.pos.x, p.pos.z)) {
+    G.interact = { kind: 'chest', label: 'E — 금고 상자를 연다' };
   } else if (G.shop?.inRange(p.pos.x, p.pos.z)) {
     G.interact = { kind: 'shop', label: 'E — 재의 행상과 거래' };
   } else if (trap) {
@@ -891,6 +912,17 @@ function doInteract() {
     }
   } else if (it.kind === 'shop') {
     ui.setShop(G.shop);
+  } else if (it.kind === 'chest') {
+    const r = G.shop.openChest(G);
+    if (r) {
+      for (let i = 0; i < r.items.length; i++) dropItem(r.items[i], new THREE.Vector3(G.shop.chest.x, 0, G.shop.chest.z), i);
+      dropCoin(r.coin, new THREE.Vector3(G.shop.chest.x, 0, G.shop.chest.z), true);
+      ui.center('금고가 열렸다', `희귀 이상 ${r.items.length}개 · 조각 ${r.coin}`);
+      fx.burst(new THREE.Vector3(G.shop.chest.x, 1, G.shop.chest.z),
+        { count: 40, color: 0xffd84d, speed: 5, size: 0.5, life: 1, grav: 2 });
+      fx.addShake(0.14, 1.4);
+      Audio.Sfx.victory();
+    }
   } else if (it.kind === 'trap') {
     disarmTarget = it.trap;
     disarmT = 0;

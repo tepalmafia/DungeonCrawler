@@ -1,6 +1,7 @@
 // 스킬 4종 — 마나를 계속 쓰면서 싸우는 리듬을 만든다.
 // 데이터 + cast() 만 추가하면 새 스킬이 붙는다.
 
+import { SKILL_CD_SCALE } from './pace.js';
 import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { playerRoll, hitEnemy } from './combat.js';
@@ -147,7 +148,8 @@ export function trySkill(G, skill, aim) {
   }
   if (!skill.cast(G, aim || p.pos)) return false;
   p.mp -= skill.cost;
-  G.cooldowns[skill.key] = skill.cd * (1 - p.cdr);
+  // 배수는 pace.js 가 정한다. SKILLS 의 cd 를 하나씩 고치면 언젠가 하나를 빠뜨린다.
+  G.cooldowns[skill.key] = skill.cd * SKILL_CD_SCALE * (1 - p.cdr);
   G.ui.fireSkill(skill.key);
   return true;
 }

@@ -70,7 +70,9 @@ body[data-post="low"] #vignette {
 .orb {
   position: relative;
   flex: none;
-  width: 124px; height: 124px; border-radius: 50%;
+  width: 118px; height: 118px; border-radius: 50%;
+  z-index: 1;                     /* 돌판 위에 얹힌다 */
+  margin-bottom: -14px;           /* 살짝 걸쳐 내려온다 */
   overflow: hidden;
   border: 2px solid #2d2536;
   box-shadow: inset 0 0 26px rgba(0,0,0,.9), 0 0 18px rgba(0,0,0,.7);
@@ -93,35 +95,33 @@ body[data-post="low"] #vignette {
 #orbMp .fill { background: linear-gradient(#5fb8ff, #1a49b8 58%, #0b2166); }
 
 #bottom {
-  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
-  display: flex; flex-direction: row; align-items: center; gap: 18px;
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  display: flex; flex-direction: row; align-items: flex-end; gap: 0;
 }
-#center-hud { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 
-/* 랜턴 — 연료가 자원이므로 항상 보여야 한다 */
-#lanternBar { display: flex; align-items: center; gap: 7px; width: 100%; font-size: 12px; }
-#lanternBar[hidden] { display: none; }
-#lanternBar .lic { font-size: 15px; filter: drop-shadow(0 0 4px rgba(255,180,90,.7)); }
-#lanternBar .ltrack {
-  position: relative; flex: 1; height: 9px; overflow: hidden;
-  background: #14101c; border: 1px solid #3a2f22; border-radius: 3px;
+/* 돌판 — 구슬 둘 사이를 **잇는다.** 디아블로2 의 하단은 조각 셋이 아니라
+   하나의 조작대다. 위쪽 모서리만 둥글려 화면 바닥에 박힌 것처럼 보이게 한다. */
+#beltbar {
+  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+  padding: 8px 22px 12px;
+  margin: 0 -26px 0;                         /* 구슬 뒤로 파고들어 이어 붙는다 */
+  background:
+    linear-gradient(180deg, rgba(255,220,170,.05), rgba(0,0,0,0) 40px),
+    linear-gradient(180deg, #241d2c, #14101a 60%, #0d0a12);
+  border: 1px solid #4a3f58;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  box-shadow: 0 -6px 26px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.06);
 }
-#lanternBar .lfill {
-  position: absolute; inset: 0 auto 0 0; width: 0%;
-  background: linear-gradient(90deg, #7a4a12, #ffb257);
-  transition: width .25s linear;
-}
-/* 보충 진행도 — 연료 위에 겹쳐 흐른다 */
-#lanternBar .lrefuel {
-  position: absolute; inset: 0 auto 0 0; width: 0%;
-  background: rgba(255,240,200,.55);
-}
-#lanternBar .lnum { color: #d8b98a; min-width: 46px; text-align: right; }
-#lanternBar.low .lfill { background: linear-gradient(90deg, #6a1a10, #e0553a); }
-#lanternBar.low .lnum { color: #ff9a8a; }
+.beltrow { display: flex; align-items: center; gap: 10px; }
+/* 스킬과 물약 사이의 칸막이 — 둘의 역할이 다르다는 걸 선 하나로 말한다 */
+.bdiv { width: 1px; align-self: stretch; background: linear-gradient(180deg, transparent, #4a3f58 30%, #4a3f58 70%, transparent); }
+
+/* 물약 벨트 — 디아블로2 의 4칸 */
+#beltSlots { display: flex; gap: 5px; }
 
 #xpbar {
-  position: relative; width: 100%; height: 15px;
+  position: relative; width: 100%; height: 13px;
   background: #14101c; border: 1px solid #2d2536; border-radius: 3px; overflow: hidden;
 }
 #xpbar .fill { height: 100%; width: 0%; background: linear-gradient(#c9a24a, #7a5c19); transition: width .2s; }
@@ -135,6 +135,8 @@ body[data-post="low"] #vignette {
 .skillrow { display: flex; gap: 7px; justify-content: center; }
 /* 아직 안 쓰는 칸 — 있다는 건 보이되 눈에 띄지 않게 */
 .skill.slot-empty { opacity: .3; box-shadow: inset 0 0 10px rgba(0,0,0,.7); }
+/* 벨트 칸 — 물약은 스킬보다 작다. 크기 차이도 「다른 종류」라는 신호다 */
+.skill.belt { width: 46px; height: 46px; font-size: 20px; border-radius: 3px; }
 .skill {
   position: relative; width: 58px; height: 58px;
   border: 1px solid #3a3145; border-radius: 5px;
@@ -200,7 +202,7 @@ body[data-post="low"] #vignette {
 /* 인벤토리와 상점은 같은 판때기를 쓴다 — 창마다 다른 재질이면
    같은 게임의 UI 로 안 읽힌다 */
 #inv .panel, #shop .panel {
-  width: 520px; max-height: 88vh; overflow-y: auto;
+  width: 512px; max-height: 94vh; overflow-y: auto;
   background:
     linear-gradient(180deg, rgba(255,220,170,.05), rgba(0,0,0,0) 120px),
     #14101a;
@@ -226,16 +228,31 @@ body[data-post="low"] #vignette {
 #invClose:focus-visible { outline: 2px solid #c08c3c; outline-offset: 1px; }
 
 /* ── 종이인형 ── */
+/* 칸을 목록으로 늘어놓지 않고 **사람 모양**으로 놓는다.
+   위치만 봐도 어디에 걸치는 물건인지 알 수 있어야 여덟 칸이어도 안 헷갈린다.
+   (디아블로2 의 배치를 그대로 따랐다) */
 .doll {
-  display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 10px;
-  padding: 16px 16px 4px;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  grid-template-areas:
+    ".     helm   amul"
+    "weap  armor  glov"
+    "weap  armor  belt"
+    "ring  boots  lant";
+  gap: 6px;
+  padding: 10px 16px 2px;
 }
-.dollcol { display: flex; flex-direction: column; gap: 8px; }
-/* 세 열의 아래끝이 맞아야 종이인형이 「사람 모양」으로 읽힌다.
-   왼쪽 무기(큰 칸)+장갑, 가운데 투구+갑옷(큰 칸)+허리띠, 오른쪽 목걸이+반지+장화. */
-.dollcol.left, .dollcol.right { justify-content: flex-end; }
-/* 랜턴은 장비가 아니라 들고 다니는 것 — 종이인형 밖으로 뺐다 */
-#invLantern { margin: 0 16px; }
+.s-helm  { grid-area: helm; }
+.s-amul  { grid-area: amul; }
+.s-weap  { grid-area: weap; }
+.s-armor { grid-area: armor; }
+.s-glov  { grid-area: glov; }
+.s-belt  { grid-area: belt; }
+.s-ring  { grid-area: ring; }
+.s-boots { grid-area: boots; }
+.s-lant  { grid-area: lant; }
+/* 무기와 갑옷은 두 줄을 차지한다 — 몸에서 제일 큰 것들이다 */
+.s-weap .cell, .s-armor .cell { height: 100%; min-height: 82px; font-size: 32px; }
 
 .slot { position: relative; }
 .slot .sl {
@@ -247,7 +264,7 @@ body[data-post="low"] #vignette {
   background: radial-gradient(ellipse at 50% 35%, #1e1728, #120e19 70%);
   box-shadow: inset 0 1px 0 rgba(0,0,0,.7), inset 0 0 14px rgba(0,0,0,.55);
   display: flex; align-items: center; justify-content: center;
-  font-size: 28px; cursor: pointer; height: 58px;
+  font-size: 22px; cursor: pointer; height: 43px;
   transition: border-color .12s, box-shadow .12s;
 }
 /* 갑옷 칸은 투구가 위에 얹힌 만큼 줄인다 — 세 열의 아래끝을 맞춰야
@@ -268,8 +285,8 @@ body[data-post="low"] #vignette {
 .lantern .fuel i { display: block; height: 100%; background: linear-gradient(90deg, #a8641c, #ffc069); }
 
 .stats {
-  font-size: 12.5px; line-height: 1.8; color: #b9b1a5;
-  margin: 12px 16px 0; padding: 10px 12px;
+  font-size: 11.5px; line-height: 1.5; color: #b9b1a5;
+  margin: 6px 16px 0; padding: 7px 11px;
   background: rgba(0,0,0,.28); border: 1px solid #2a2335; border-radius: 4px;
   display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px;
 }
@@ -282,8 +299,17 @@ body[data-post="low"] #vignette {
 }
 .baghead h3 { margin: 0; font-size: 13px; font-weight: normal; letter-spacing: 3px; color: #cbbd9f; }
 .baghead #bagCount { margin-left: auto; }
-/* 영혼 조각 — 상점까지 얼마나 남았는지가 늘 보여야 모을 이유가 생긴다 */
-.baghead .coin { color: #d8b45e; font-size: 12.5px; letter-spacing: .5px; }
+/* 소지금 — 가방 아래 액자 안에. 디아블로2 도 여기에 둔다.
+   상점까지 얼마나 남았는지가 늘 보여야 모을 이유가 생긴다. */
+.goldbar {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 6px 16px 0; padding: 4px 12px;
+  background: linear-gradient(180deg, #100c16, #1a1422);
+  border: 1px solid #4a3f58; border-radius: 3px;
+  color: #d8b45e; font-size: 14px; font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.7);
+}
+.goldbar .gi { opacity: .8; }
 #bagSort {
   font: inherit; font-size: 11.5px; cursor: pointer; margin-left: 12px;
   padding: 2px 12px; color: #cbbd9f;
@@ -296,14 +322,14 @@ body[data-post="low"] #vignette {
 .baghead.full #bagSort { border-color: #7a4238; }
 
 .bag {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px;
-  margin: 0 16px;
+  display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px;
+  padding: 0 16px;
 }
-.bag .cell { height: 54px; font-size: 24px; }
+.bag .cell { height: 33px; font-size: 17px; border-radius: 2px; }
 .bag .cell.empty { cursor: default; }
 .bag .cell.empty:hover { border-color: #3a3047; box-shadow: inset 0 1px 0 rgba(0,0,0,.7), inset 0 0 14px rgba(0,0,0,.55); }
 
-.invhint { margin: 12px 16px 0; font-size: 11.5px; color: var(--dim); text-align: center; }
+.invhint { margin: 6px 16px 0; font-size: 10.5px; color: var(--dim); text-align: center; }
 .invhint b { color: #cbbd9f; font-weight: normal; }
 
 #tooltip {
@@ -382,6 +408,7 @@ body[data-post="low"] #vignette {
    #inv 에는 같은 규칙이 처음부터 있었는데 상점에만 없었다. */
 #shop[hidden] { display: none; }
 #shop .panel { width: min(470px, 92vw); }
+#inv .panel { width: min(512px, 96vw); }
 .shoptop { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
 .shoptop h2 { margin: 0; font-size: 15px; font-weight: normal; letter-spacing: 4px; color: #d8c9a4; }
 .shoptop #shopCoin { margin-left: auto; color: #d8b45e; font-size: 13px; }
