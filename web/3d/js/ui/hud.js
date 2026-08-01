@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { SKILLS } from '../game/skills.js';
 import { FLOOR, worldToGrid } from '../world/dungeon.js';
 import { RARITIES, priceOf } from '../game/items.js';
+import { ELEMENTS } from '../game/elements.js';
 import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
 
@@ -289,7 +290,13 @@ export class UI {
     // 레벨 숫자는 안 쓴다 — 이 게임에 적 레벨 개념이 없으므로 지어내면 거짓말이다.
     // 대신 「정예/보스」를 붙인다. 그건 실제로 규칙이 다른 구분이다.
     const tag = e.isBoss ? '보스' : e.elite ? '정예' : '';
-    const label = (e.displayName || e.def.name) + (tag ? `<span class="lv">${tag}</span>` : '');
+    // 속성 — 확인용이지 학습용이 아니다. 학습은 **몸 색**과 **피해 숫자**가 한다
+    // (docs/ELEMENTS.md §7). 이름표는 「내가 본 게 맞나」를 확인하는 자리다.
+    const eel = ELEMENTS[e.element];
+    const elTag = eel && e.element !== 'none'
+      ? `<span class="el" style="color:${eel.css}">${eel.icon} ${eel.name}</span>` : '';
+    const label = (e.displayName || e.def.name) + elTag
+      + (tag ? `<span class="lv">${tag}</span>` : '');
     if (el.innerHTML !== label) el.innerHTML = label;
     el.hidden = false;
     el.style.display = '';

@@ -794,6 +794,99 @@ async function shot(page, name) {
   ok('combat.kill', combat.skipped || (combat.died && combat.kills >= 1), `처치 집계 +${combat.kills}`);
   ok('combat.xp', combat.skipped || combat.xpGained);
 
+  // ── 피격 동작 ────────────────────────────────────────────
+  //
+  // 이 검사는 **CLIPS 에 'hit' 이 적혀 있는데 어디서도 재생하지 않고 있던**
+  // 사고를 겪고 넣었다. 맞으면 몸통이 통째로 밀리고 납작해질 뿐이었고,
+  // 그건 「밀렸다」지 「맞았다」가 아니다. 「타격감이 없다」의 절반이 여기였다.
+  //
+  // 그래서 「hitT 가 설정됐다」로는 부족하다. 그건 예전에도 통과했을 값이다.
+  // **관절이 실제로 움직였는가**를 본다 — 가슴 각도가 맞기 전후로 달라야 한다.
+  // 그리고 **방향이 다르면 결과도 달라야** 한다. 안 그러면 방향성이 없는 것이다.
+  const hitPose = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const cb = await import('./js/game/combat.js');
+    const e = G.enemies.find((x) => !x.dead && !x.isBoss);
+    if (!e) return { skipped: true };
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+
+    // 재는 조건을 **고정**한다. 처음엔 아무 적이나 잡아서 그 자리에서 쟀는데,
+    // 두 가지가 결과를 흔들었다:
+    //   · 자세 LOD 는 거리로 갈린다 — 멀면 2~4 프레임에 한 번만 갱신되므로
+    //     「때린 뒤 2 프레임」이 아직 안 그려진 순간일 수 있다
+    //   · 적이 두 측정 사이에 몸을 돌리면 「몸 기준 방향」이 달라진다
+    // 그래서 옆에 붙이고(LOD=매 프레임), 기절시켜(방향 고정) 잰다.
+    // 리쉬가 되돌려 놓지 않게 home 도 같이 옮긴다 — 안 그러면 제자리로 돌아간다.
+    e.pos.set(P.pos.x + 1.2, 0, P.pos.z);
+    e.home.copy(e.pos);
+    e.stunT = 999;
+    e.facing = 0;
+    for (let i = 0; i < 10; i++) await frame();
+
+    // 맞은 방향에 따른 **변화량**을 본다. 절대각을 보면 대기 자세의 무게중심
+    // 흔들림이 기준선에 섞여서, 방향 항보다 그게 더 클 때 거짓 실패한다.
+    const probe = async (fromX, fromZ) => {
+      e.hitT = 0; e.facing = 0;
+      for (let i = 0; i < 25; i++) await frame();
+      const bz = e.rig.chest.rotation.z, bx = e.rig.chest.rotation.x, bh = e.rig.head.rotation.x;
+      cb.hitEnemy(G, e, 1, { silent: true, los: false, from: { x: e.pos.x + fromX, z: e.pos.z + fromZ } });
+      await frame(); await frame();
+      return {
+        z: e.rig.chest.rotation.z - bz,
+        x: e.rig.chest.rotation.x - bx,
+        head: e.rig.head.rotation.x - bh,
+      };
+    };
+
+    const front = await probe(0, -2);      // 정면에서 맞음 → 뒤로 젖혀진다
+    const left = await probe(-2, 0);
+    const right = await probe(2, 0);
+
+    const joints = ['foreR', 'foreL', 'neck', 'head', 'root', 'hips', 'spine', 'chest']
+      .filter((k) => e.rig[k]).length;
+    const hasKnee = !!(e.rig.shinL || e.def.float);
+
+    return {
+      frontX: front.x, headLag: front.head, leftZ: left.z, rightZ: right.z, joints, hasKnee,
+      bent: Math.abs(front.x) > 0.03,
+      headLags: Math.abs(front.head) > 0.02,
+      // 왼쪽에서 맞았을 때와 오른쪽에서 맞았을 때가 **반대로** 꺾여야 한다
+      directional: left.z * right.z < 0 && Math.abs(left.z - right.z) > 0.05,
+    };
+  });
+  ok('actor.rigJoints', hitPose.skipped || (hitPose.joints === 8 && hitPose.hasKnee),
+    `관절 ${hitPose.joints}/8 · 무릎 ${hitPose.hasKnee ? '있음' : '없음'}`);
+  ok('actor.hitBends', hitPose.skipped || hitPose.bent,
+    `정면에서 맞으면 가슴이 ${hitPose.frontX?.toFixed(3)} 젖혀진다`);
+  ok('actor.hitHeadLag', hitPose.skipped || hitPose.headLags,
+    `머리 ${hitPose.headLag?.toFixed(3)} (가슴보다 0.06초 늦게 젖혀진다)`);
+  // 뜨는 것이 실제로 떠 있는가.
+  //
+  // 이것도 사고를 겪고 넣었다. 뜨는 높이를 root 관절에 얹었더니, 공격 자세가
+  // 같은 관절·같은 축을 더 센 감쇠로 잡아당겨서 **궁수가 공격할 때마다 바닥에
+  // 앉았다.** 눈으로는 「좀 낮나?」 정도로만 보이는 종류의 고장이다.
+  const floaty = await page.evaluate(async () => {
+    const G = window.G3;
+    const em = await import('./js/game/enemies.js');
+    const P = G.player;
+    const a = new em.Enemy(G, 'archer', P.pos.x + 2, P.pos.z);
+    const s = new em.Enemy(G, 'skeleton', P.pos.x - 2, P.pos.z);
+    a.state = 'windup'; a.stateT = 0.2;      // 공격 중에도 떠 있어야 한다
+    G.enemies.push(a, s);
+    for (let i = 0; i < 40; i++) await new Promise((r) => requestAnimationFrame(r));
+    const y = (e) => +(e.rig.root.position.y + e.rig.hips.position.y - e.rig.dim.hipY).toFixed(3);
+    const out = { archer: y(a), skeleton: y(s) };
+    a.dispose(); s.dispose();
+    G.enemies.splice(G.enemies.indexOf(a), 1);
+    G.enemies.splice(G.enemies.indexOf(s), 1);
+    return out;
+  });
+  ok('actor.floatsWhileAttacking', floaty.archer > 0.15 && Math.abs(floaty.skeleton) < 0.08,
+    `망령 궁수 ${floaty.archer} (떠 있어야) · 해골 ${floaty.skeleton} (땅에 붙어야)`);
+
+  ok('actor.hitDirectional', hitPose.skipped || hitPose.directional,
+    `왼쪽에서 맞음 z ${hitPose.leftZ?.toFixed(4)} · 오른쪽에서 맞음 z ${hitPose.rightZ?.toFixed(4)} (부호가 반대여야)`);
+
   // ── 아이템: 롤 → 장착 → 스탯 상승 ────────────────────────
   const items = await page.evaluate(async () => {
     const G = window.G3;

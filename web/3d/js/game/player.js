@@ -3,6 +3,9 @@
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
 import { makeActor } from '../core/actor.js';
+import { buildKnight } from '../core/models.js';
+import { Pose } from '../core/rig.js';
+import { poseHumanoid, poseRest, STANCE } from '../core/anim.js';
 import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
@@ -11,161 +14,26 @@ import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
 const RADIUS = 0.42;
 const BASE_SPEED = 6.2;
 
-function mat(color, opt = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.22, ...opt });
-}
-
-/** 기사 메시 — 상체/하체/팔/무기를 분리해 애니메이션이 가능하게 만든다.
- *  (아트 시제품 비교에서 「현재」 패널이 실제 게임 메시를 그대로 쓰도록 내보낸다) */
-export function buildKnight() {
-  const g = new THREE.Group();
-  const steel = mat(0x9aa2b8, { metalness: 0.82, roughness: 0.3 });
-  const dark = mat(0x3f3b4d, { metalness: 0.35, roughness: 0.7 });
-  const cloth = mat(0xb8434b, { roughness: 0.9, metalness: 0.05 });
-  const skin = mat(0xc7a288, { roughness: 0.85, metalness: 0 });
-
-  // 다리
-  const legGeo = new THREE.BoxGeometry(0.19, 0.62, 0.22);
-  const legL = new THREE.Mesh(legGeo, dark); legL.position.set(-0.15, 0.31, 0);
-  const legR = new THREE.Mesh(legGeo, dark); legR.position.set(0.15, 0.31, 0);
-  g.add(legL, legR);
-
-  // 상체 (허리에서 어깨로 넓어지게 두 덩이)
-  const torso = new THREE.Group();
-  torso.position.y = 0.62;
-  const hip = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.24, 0.28), steel);
-  hip.position.y = 0.12;
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.36, 0.32), steel);
-  chest.position.y = 0.42;
-  torso.add(hip, chest);
-
-  // 어깨 갑주 — 실루엣의 핵심. 이게 있으면 멀리서도 "기사"로 읽힌다
-  const paulGeo = new THREE.SphereGeometry(0.19, 8, 6);
-  const paulL = new THREE.Mesh(paulGeo, steel); paulL.position.set(-0.34, 0.52, 0);
-  const paulR = new THREE.Mesh(paulGeo, steel); paulR.position.set(0.34, 0.52, 0);
-  paulL.scale.set(1, 0.8, 1); paulR.scale.set(1, 0.8, 1);
-  torso.add(paulL, paulR);
-
-  // 머리 + 투구
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), skin);
-  head.position.y = 0.76;
-  const helm = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.19, 0.31), steel);
-  helm.position.y = 0.85;
-  const crest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.3), cloth);
-  crest.position.y = 1.0;
-  torso.add(head, helm, crest);
-
-  // 망토
-  const cloak = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.9), new THREE.MeshStandardMaterial({
-    color: 0x93343c, side: THREE.DoubleSide, roughness: 0.95, metalness: 0,
-  }));
-  cloak.position.set(0, 0.34, -0.2);
-  cloak.rotation.x = 0.12;
-  torso.add(cloak);
-
-  // 오른팔 + 무기 (스윙 축이 어깨에 오도록 그룹 원점을 어깨에 둔다)
-  //
-  // **x 는 음수다.** facing = atan2(dx, dz) 라 모델의 정면이 +Z 이고,
-  // 오른손 좌표계에서 정면 +Z · 위 +Y 이면 오른쪽은 −X 다.
-  // 그동안 +0.34 에 무기를 달아 두어서 플레이어도 몬스터도 전부 왼손잡이였다.
-  const armR = new THREE.Group();
-  armR.position.set(-0.34, 0.5, 0);
-  const upperR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.42, 0.15), dark);
-  upperR.position.y = -0.2;
-  armR.add(upperR);
-
-  const weapon = new THREE.Group();
-  weapon.position.set(0, -0.4, 0.05);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.22, 0.07), dark);
-  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 0.09), mat(0xb99a4e, { metalness: 0.8 }));
-  guard.position.y = 0.14;
-  const bladeMat = mat(0xd7dbe6, { metalness: 0.85, roughness: 0.25, emissive: 0x000000 });
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.86, 0.045), bladeMat);
-  blade.position.y = 0.6;
-  weapon.add(grip, guard, blade);
-  weapon.rotation.x = -0.25;
-  armR.add(weapon);
-
-  // 왼팔 + 방패
-  const armL = new THREE.Group();
-  armL.position.set(0.34, 0.5, 0);
-  const upperL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.42, 0.15), dark);
-  upperL.position.y = -0.2;
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.07), mat(0x8a6238, { roughness: 0.8 }));
-  shield.position.set(0.12, -0.28, 0.13);
-  shield.rotation.y = -0.35;
-  armL.add(upperL, shield);
-
-  torso.add(armR, armL);
-  g.add(torso);
-
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-
-  return { group: g, torso, legL, legR, armR, armL, weapon, blade, bladeMat, materials: [steel, dark, cloth, skin, bladeMat] };
-}
+export { buildKnight };
 
 /**
- * 상자 기사의 자세 — **관절을 아는 유일한 곳.**
+ * 기사의 자세 — 이제 **관절을 아는 곳은 core/anim.js 하나**다.
  *
- * 게임 로직은 이제 `actor.play('walk')` 만 부른다. 여기 있는 코드는 그 동사를
- * 상자 리그로 수행하는 방법이고, 산 모델을 넣으면 GltfActor 가 같은 동사를
- * AnimationMixer 로 수행한다 (core/actor.js).
+ * 예전에는 이 파일 안에 knightBody() 가 있었고, 어깨와 골반 두 관절만 굽혔다.
+ * 그래서 무엇을 하든 널빤지를 흔드는 것으로 보였다. 지금은 팔꿈치·무릎·목·발이
+ * 생겼고, 그 관절을 굽히는 방법은 종족과 무관하게 같다 — 다른 것은 STANCE 뿐이다.
  *
- * 한 가지 다른 점: 상자 리그는 **걷기와 휘두르기를 동시에** 한다 (다리와 팔이
- * 따로 놀 수 있으므로). 그래서 idle/walk/attack 이 전부 같은 몸통 함수를 부르고
- * ctx 의 raw 값(moved·swing)으로 갈린다. 산 모델은 클립 하나만 재생하므로
- * 그때는 이름이 실제로 갈라진다 — 그래도 **호출부는 안 바뀐다.**
+ * 게임 로직(아래 update)은 여전히 동사만 고른다. 산 모델을 넣으면 GltfActor 가
+ * 같은 동사를 AnimationMixer 로 수행한다 (core/actor.js).
  */
-function knightBody(rig, c) {
-  const { dt, moved, swing, walkT } = c;
-  let d = c.facing - rig.group.rotation.y;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  rig.group.rotation.y += d * Math.min(1, dt * 16);
-
-  if (moved > 0.05) {
-    const sn = Math.sin(walkT);
-    rig.legL.rotation.x = sn * 0.75;
-    rig.legR.rotation.x = -sn * 0.75;
-    rig.torso.position.y = 0.62 + Math.abs(Math.sin(walkT * 2)) * 0.045;
-    rig.armL.rotation.x = -sn * 0.34;
-  } else {
-    rig.legL.rotation.x *= 1 - Math.min(1, dt * 9);
-    rig.legR.rotation.x *= 1 - Math.min(1, dt * 9);
-    rig.armL.rotation.x *= 1 - Math.min(1, dt * 9);
-    rig.torso.position.y += (0.62 - rig.torso.position.y) * Math.min(1, dt * 9);
-  }
-
-  if (swing > 0) {
-    const k = 1 - swing;                       // 0 → 1
-    const a = k < 0.32 ? -1.15 * (k / 0.32) : -1.15 + 2.5 * ((k - 0.32) / 0.68);
-    rig.armR.rotation.x = a;
-    rig.armR.rotation.z = 0.25 * Math.sin(k * Math.PI);
-    rig.torso.rotation.y = 0.3 * Math.sin(k * Math.PI);
-  } else {
-    rig.armR.rotation.x += (0.05 - rig.armR.rotation.x) * Math.min(1, dt * 9);
-    rig.armR.rotation.z *= 1 - Math.min(1, dt * 9);
-    rig.torso.rotation.y *= 1 - Math.min(1, dt * 9);
-  }
+function knightPoser(rig, P) {
+  const body = (r, t, k, c) => poseHumanoid(r, P, STANCE.knight, c);
+  return {
+    idle: body, walk: body, attack: body, hit: body, die: body,
+    // 앉기(C) 만 따로다. 다른 동작 위에 겹치는 게 아니라 **대체**하므로.
+    rest: (r, t, k, c) => poseRest(r, P, STANCE.knight, c.resting, Math.min(c.dt, 0.05)),
+  };
 }
-
-const KNIGHT_POSER = {
-  idle: knightBody,
-  walk: knightBody,
-  attack: knightBody,
-  hit: knightBody,
-  // 앉기 — 무릎을 접고 상체를 낮춘다. 별도 리그 없이 기존 관절만 굽힌다.
-  // 저폴리라 「웅크린 실루엣」만 나와도 쉬는 것으로 읽힌다.
-  rest: (rig, t, k, c) => {
-    const r = c.resting;
-    rig.group.position.y = -0.34 * r;
-    rig.torso.rotation.x = 0.30 * r;
-    if (rig.legL) { rig.legL.rotation.x = -1.15 * r; rig.legR.rotation.x = -0.55 * r; }
-    rig.armR.rotation.x = -0.5 * r;
-    rig.armL.rotation.x = -0.45 * r;
-  },
-  die: (rig) => { rig.group.rotation.z = Math.PI * 0.42; },
-};
 
 export class Player {
   constructor(scene) {
@@ -173,7 +41,8 @@ export class Player {
     const k = buildKnight();
     this.rig = k;
     // 게임 로직과 메시 사이의 벽 (core/actor.js). 에셋 교체의 전제다.
-    this.actor = makeActor(k, KNIGHT_POSER);
+    this.pose = new Pose(k);
+    this.actor = makeActor(k, knightPoser(k, this.pose));
     this.obj = new THREE.Group();
     this.obj.add(k.group);
     this.shadow = makeBlobShadow(1.5);
@@ -228,6 +97,11 @@ export class Player {
     this.swing = 0;              // 0..1 스윙 진행도
     this.walkT = 0;
     this.hurtT = 0;
+    // 피격 동작 (core/anim.js). hurtT 는 재질 플래시, hitT 는 자세다 — 서로 다르다.
+    this.hitT = 0;
+    this.hitDur = 0.38;
+    this.hitPow = 1;
+    this.hitFrom = null;
     this.invuln = 0;
     this.dashT = 0;
     this.dashDir = new THREE.Vector3();
@@ -475,25 +349,41 @@ export class Player {
   }
 
   _animate(dt, moved) {
-    // 여기서 하는 일은 **동사를 고르는 것**뿐이다. 관절은 KNIGHT_POSER 가 안다.
+    // 여기서 하는 일은 **동사를 고르는 것**뿐이다. 관절은 core/anim.js 가 안다.
     // 모델을 사서 갈아 끼우면 이 함수는 한 줄도 안 바뀐다 (core/actor.js).
     if (moved > 0.05) this.walkT += dt * 11 * MOVE_SCALE;
     if (this.swing > 0) this.swing = Math.max(0, this.swing - dt * 4.4 * ATTACK_SCALE);
+    if (this.hitT > 0) this.hitT = Math.max(0, this.hitT - dt);
+    // 대기 동작(호흡·무게중심)의 시계. 게임 시각과 따로 두는 이유는
+    // 층을 넘어도 호흡이 이어져야 하기 때문 — G.time 은 층마다 초기화된다.
+    this.animT = (this.animT || 0) + dt;
 
     const clip = this.dead ? 'die'
       : this.resting > 0 ? 'rest'
         : this.swing > 0 ? 'attack'
           : moved > 0.05 ? 'walk' : 'idle';
 
-    // 앉았다 일어설 때 몸이 바닥에 박힌 채로 남지 않게
-    if (clip !== 'rest' && this.rig.group.position.y !== 0) {
-      this.rig.group.position.y = 0;
-      this.rig.torso.rotation.x = 0;
+    // 앉았다 일어설 때 몸이 바닥에 박힌 채로 남지 않게 — **이제는 필요 없다.**
+    // 옛 앉기는 group.position.y 를 직접 눌렀고, 그래서 일어설 때 손으로
+    // 되돌려야 했다. 지금은 관절(root·hips·무릎)로 앉으므로 자세가 스스로
+    // 풀린다. poseHumanoid 가 앉기 전용 축까지 매 프레임 0 으로 놓는다.
+
+    // 맞은 방향을 **몸 기준**으로 돌린다. 월드 방향 그대로 쓰면 내가 어느 쪽을
+    // 보고 있든 늘 같은 쪽으로 꺾여서, 등 뒤에서 맞아도 앞으로 넘어간다.
+    let hx = 0, hz = 1;
+    if (this.hitT > 0 && this.hitFrom) {
+      const c = Math.cos(-this.facing), s = Math.sin(-this.facing);
+      hx = this.hitFrom.x * c - this.hitFrom.z * s;
+      hz = this.hitFrom.x * s + this.hitFrom.z * c;
     }
 
     this.actor.play(clip, {
       dt, moved, swing: this.swing, resting: this.resting,
-      facing: this.facing, walkT: this.walkT,
+      facing: this.facing, walkT: this.walkT, time: this.animT,
+      // 피격은 다른 동작을 **대체하지 않고 위에 겹친다** — 맞았다고 걸음이
+      // 멈추면 조작이 끊긴다. 그래서 clip 이 아니라 ctx 로 넘어간다.
+      hitT: this.hitT || 0, hitDur: this.hitDur || 0.38, hitPow: this.hitPow || 1,
+      hitDirX: hx, hitDirZ: hz,
     });
     this.actor.update(dt);
 

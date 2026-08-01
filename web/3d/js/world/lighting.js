@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 
 const POOL = 8;              // 동시에 켜지는 횃불 수 (고정)
+const PROJ_LIGHTS = 4;       // 동시에 빛나는 화살 수 (고정) — 넘치면 오래된 것부터 회수
 const TORCH_RANGE = 30;      // 이 거리 밖 횃불은 강도 0 (개수는 그대로)
 
 // 플레이어 등불의 높이. 원래 1.9 였는데, 그건 **머리 꼭대기(y≈1.55) 바로 위
@@ -77,6 +78,44 @@ export class Lighting {
       scene.add(l);
       this.fxLights.push({ light: l, life: 0, max: 1, peak: 0 });
     }
+
+    // 화살빛 풀 — **개수 고정의 마지막 구멍이었다.**
+    // Projectile 생성자가 화살마다 new PointLight 를 달고 있었다. 궁수가 셋만
+    // 쏘면 광원이 셋 늘고, 그때마다 셰이더가 재컴파일돼 **전투 도중에** 화면이
+    // 멎는다. 검증(light.poolStillFixed)이 간헐적으로 떨어진 것도 이것이다.
+    //
+    // 풀에서 빌려주고 화살 메시에 매단다. 씬에서 빼지 않으므로 개수는 안 변한다.
+    this.projHolder = new THREE.Group();
+    scene.add(this.projHolder);
+    this.projLights = [];
+    for (let i = 0; i < PROJ_LIGHTS; i++) {
+      const l = new THREE.PointLight(0xffffff, 0, 6, 2);
+      this.projHolder.add(l);
+      this.projLights.push(l);
+    }
+    this.projNext = 0;
+  }
+
+  /**
+   * 화살에 빛을 빌려준다. 풀이 모자라면 **가장 오래된 것을 뺏는다** —
+   * 최신 화살이 빛나는 편이 낫다(지금 날아오는 것이 위험한 것이므로).
+   * 돌려주지 않아도 다음 대여 때 자동으로 회수된다.
+   */
+  lendProjLight(mesh, color) {
+    const l = this.projLights[this.projNext];
+    this.projNext = (this.projNext + 1) % this.projLights.length;
+    l.color.set(color);
+    l.intensity = 12;
+    l.position.set(0, 0, 0);
+    mesh.add(l);
+    return l;
+  }
+
+  /** 화살이 사라질 때. 씬에서 빼는 게 아니라 **보관함으로 되돌린다.** */
+  returnProjLight(l) {
+    if (!l) return;
+    l.intensity = 0;
+    this.projHolder.add(l);
   }
 
   setTorches(torches) { this.torches = torches || []; }
@@ -158,6 +197,9 @@ export class Lighting {
   dispose() {
     for (const s of this.pool) this.scene.remove(s.light);
     for (const s of this.fxLights) this.scene.remove(s.light);
+    // 화살빛은 화살 메시에 매달려 있을 수 있다 — 보관함으로 걷어온 뒤 버린다
+    for (const l of this.projLights) this.projHolder.add(l);
+    this.scene.remove(this.projHolder);
     this.scene.remove(this.hemi, this.moon, this.moon.target, this.playerLamp);
   }
 }

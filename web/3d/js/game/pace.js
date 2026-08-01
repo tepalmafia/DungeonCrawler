@@ -29,3 +29,10 @@ export const POTION_CD = 24;
 // SKILLS 의 cd 를 하나씩 고치지 않고 여기서 한 번에 곱한다 —
 // 개별로 고치면 언젠가 하나를 빠뜨린다.
 export const SKILL_CD_SCALE = 2;
+
+// 쓰러지는 데 걸리는 시간. 0.55 → 1.1.
+//
+// 무릎이 풀리고 골반이 내려앉고 상체가 넘어가는 동작(core/anim.js 의 poseDie)이
+// 다 나오려면 0.55 초로는 모자랐다 — 반쯤 무너진 채로 몸이 사라졌다.
+// **잡은 손맛의 절반은 상대가 무너지는 걸 보는 데서 온다.**
+export const DIE_TIME = 1.1;

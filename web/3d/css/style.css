@@ -392,6 +392,8 @@ body[data-post="low"] #vignette {
   background: rgba(6,4,10,.62); border: 1px solid rgba(120,104,140,.4); border-radius: 3px;
 }
 #enemyName .lv { color: #8d8577; font-size: 11px; margin-left: 6px; }
+/* 속성 표식 — 색은 인라인으로 들어온다(ELEMENTS[key].css). 여기선 크기·간격만 잡는다 */
+#enemyName .el { font-size: 11px; margin-left: 6px; }
 /* 정예와 보스는 색으로 먼저 읽혀야 한다 — 이름을 다 읽기 전에 판단이 끝나야 하므로 */
 #enemyName.elite { color: #ffd070; border-color: #8a6a2a; }
 #enemyName.boss  { color: #ff8a72; border-color: #8a3a30; }
