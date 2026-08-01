@@ -28,7 +28,7 @@ import { Traps } from './world/traps.js';
 import { Shop } from './game/shop.js';
 import { Dialogue } from './game/dialogue.js';
 import { spawnBoss } from './game/boss.js';
-import { playerRoll, hitEnemy } from './game/combat.js';
+import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
 import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, fuelCap, BASE_LIGHT } from './game/lantern.js';
@@ -42,6 +42,8 @@ const MAX_FLOOR = 3;
 // 카메라 거리는 줌으로 바뀐다. 피치는 고정 — 각도까지 흔들면 쿼터뷰 실루엣이 무너진다.
 const CAM_DIST_MIN = 10, CAM_DIST_MAX = 34, CAM_DIST_DEFAULT = 19;
 const CAM_PITCH = 52 * Math.PI / 180;
+// 맨몸 평타 사거리. 격자 한 칸이 2.0 이라, 적 반지름을 더해도 한 칸 안에 들어온다.
+const MELEE_REACH = 1.35;
 
 const qs = new URLSearchParams(location.search);
 const params = {
@@ -113,6 +115,8 @@ const G = {
   onEnemyKilled, onPlayerDeath, onLanternOut,
   doors: null, traps: null, shop: null, dialogue: null, interact: null,
   acquireLantern: null,      // 아래에서 채운다 (game/shop.js 가 쓴다)
+  // 정예 스킬이 쓰는 통로 (game/elites.js). 판정 규칙을 한 곳에 모아 둔다.
+  hitPlayerFrom: null, spawnEnemyShot: null,
   dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
 window.G3 = G;
@@ -229,7 +233,7 @@ function loadFloor(floorNo) {
 // ───────────────────────── 콜백 ─────────────────────────
 function onEnemyKilled(e) {
   G.stats.kills++;
-  const ups = G.player.gainXp(e.def.xp * (1 + G.tier * 0.25));
+  const ups = G.player.gainXp(e.def.xp * (e.xpMul || 1) * (1 + G.tier * 0.25));
   if (ups) {
     Audio.Sfx.levelUp();
     ui.center(`레벨 ${G.player.level}`, '체력과 마나가 가득 찼다');
@@ -539,9 +543,15 @@ function updateAutoAttack(dt) {
   if (!t || t.dead) { if (t && t.dead) p.target = null; return; }
 
   const dist = Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z);
-  // 대검 계열과 range 접사가 사거리를 늘린다. 눈에 보이는 차이라
-  // 「이 무기는 멀리 닿는다」가 툴팁을 안 읽어도 전달된다.
-  const range = 2.0 + t.radius + (p.reach || 0);
+  // 평타 사거리.
+  //
+  // 예전엔 기본이 2.0 이었다. 격자 한 칸이 2.0 이므로 그것만으로 한 칸이고,
+  // 여기에 적 반지름과 **타격 시점의 유예 +1.0** 이 얹혀 실제로는 거의 두 칸까지
+  // 닿았다. 짧은 검으로 두 칸 밖을 때리면 「근접」이 아니다.
+  //
+  // 이제 기본은 1.35 다. 적 반지름(0.38~0.6)을 더해도 1.7~2.0 — **한 칸 안**이다.
+  // 두 칸은 대검 계열만 닿는다 (items.js 의 base.range 가 1.4~2.0).
+  const range = MELEE_REACH + t.radius + (p.reach || 0);
 
   if (dist > range) {
     // 추격 재계산은 전용 타이머를 쓴다 — 클릭 처리와 타이머를 공유하면
@@ -574,7 +584,9 @@ function updateAutoAttack(dt) {
     fn: () => {
       if (p.dead || t.dead) return;
       const d2 = Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z);
-      if (d2 > range + 1.0) return;
+      // 유예는 0.35 다. 예고 동작 중에 적이 조금 움직이는 것까지는 봐주되,
+      // 1.0(=반 칸)을 봐주면 사거리 설계가 통째로 무의미해진다.
+      if (d2 > range + 0.35) return;
       const r = playerRoll(p);
       hitEnemy(G, t, r.dmg, { crit: r.crit });
     },
@@ -966,6 +978,12 @@ G.acquireLantern = (lan) => {
   ui.toast(r.action === 'fuel' ? `연료 +${r.gained}초` : `${lan.name} (연료 ${Math.round(r.gained)}초)`,
     RARITIES[lan.rarity].css);
   return r;
+};
+G.hitPlayerFrom = (e, dmg) => hitPlayer(G, dmg, { from: e.pos, attacker: e });
+G.spawnEnemyShot = (e, dir, dmg) => {
+  G.projectiles.push(new Projectile(G, {
+    from: e.center(), dir, speed: 15, dmg, color: e.auraColor ?? 0x9a6bff, radius: 0.3,
+  }));
 };
 window.G3.dropItem = dropItem;         // 인벤토리에서 버릴 때 쓴다
 window.G3.headlessRun = headlessRun;   // tools/bench3d.js

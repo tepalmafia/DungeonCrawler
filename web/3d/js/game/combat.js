@@ -140,6 +140,18 @@ export function killEnemy(G, e) {
   G.remains?.spawn(e.def.key, e.pos, e.def.scale || 1);
   // 마지막 말. 망령 궁수의 「고맙…다.」 가 이 게임 이야기의 전부다 (docs/STORY.md §6-3).
   G.dialogue?.say(G, e, 'die');
+  // 정예 「타오르는」 — 죽을 때 터진다. 마지막 순간까지 방심할 수 없게.
+  if (e.deathBlast) {
+    G.fx.burst(c, { count: 34, color: 0xff8a2b, speed: 9, size: 0.5, life: 0.7, grav: 6 });
+    G.fx.ground(e.pos, { r0: 0.4, r1: 3.4, color: 0xff8a2b, life: 0.45, opacity: 0.8 });
+    G.lighting?.flash(c, 0xff8a2b, 70, 0.3);
+    G.fx.addShake(0.16, 1.6);
+    const p2 = G.player;
+    if (!p2.dead && Math.hypot(p2.pos.x - e.pos.x, p2.pos.z - e.pos.z) < 3.4) {
+      hitPlayer(G, p2.maxHp * e.deathBlast, { from: e.pos, ranged: true });
+    }
+  }
+
   Sfx.enemyDie(e.def.key, volAt(G, e.pos));
   G.hitStop = Math.max(G.hitStop || 0, 0.11);      // 마무리 일격은 더 길게 붙잡는다
 
@@ -165,6 +177,13 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   Sfx.playerGrunt(Math.min(1, 0.5 + dmg / (p.maxHp * 0.3)));
 
   G.metrics?.taken(dmg);
+
+  // 정예 「가시 돋친」 — 근접으로 때린 놈이 되받는다. 플레이어의 thorns 와
+  // 반대 방향이고, 규칙(근접만)은 같다.
+  if (opts.attacker?.reflect && !opts.ranged) {
+    p.hp -= Math.max(1, Math.round(dmg * opts.attacker.reflect));
+    G.fx.burst(p.center(), { count: 8, color: 0xc9a44a, speed: 3, size: 0.28, life: 0.35 });
+  }
 
   // 가시 — 때린 놈에게 되돌려준다. 근접해서 때린 경우만이다:
   // 화살에 반사가 걸리면 화면 밖 궁수가 스스로 죽는 우스운 그림이 된다.

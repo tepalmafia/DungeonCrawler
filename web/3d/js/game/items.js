@@ -53,9 +53,9 @@ const BASES = {
     { name: '사슬 철퇴',   icon: '🔨', fam: '둔기', lvl: 1, dmg: [10, 14], spd: 0.78, base: { stun: 4 } },
     { name: '별철퇴',      icon: '🔨', fam: '둔기', lvl: 2, dmg: [11, 16], spd: 0.74, base: { stun: 6 } },
     { name: '성전 망치',   icon: '🔨', fam: '둔기', lvl: 3, dmg: [12, 18], spd: 0.70, base: { stun: 8 } },
-    { name: '흑요석 대검', icon: '⚔',  fam: '대검', lvl: 1, dmg: [12, 16], spd: 0.70, base: { range: 0.5 } },
-    { name: '무덤 파쇄기', icon: '⚔',  fam: '대검', lvl: 2, dmg: [13, 18], spd: 0.67, base: { range: 0.62 } },
-    { name: '처형자',      icon: '⚔',  fam: '대검', lvl: 3, dmg: [14, 20], spd: 0.64, base: { range: 0.75 } },
+    { name: '흑요석 대검', icon: '⚔',  fam: '대검', lvl: 1, dmg: [12, 16], spd: 0.70, base: { range: 1.40 } },
+    { name: '무덤 파쇄기', icon: '⚔',  fam: '대검', lvl: 2, dmg: [13, 18], spd: 0.67, base: { range: 1.70 } },
+    { name: '처형자',      icon: '⚔',  fam: '대검', lvl: 3, dmg: [14, 20], spd: 0.64, base: { range: 2.00 } },
     { name: '단검',        icon: '🔪', fam: '단검', lvl: 1, dmg: [4, 7],   spd: 1.45, base: { crit: 5 } },
     { name: '가시 단검',   icon: '🔪', fam: '단검', lvl: 2, dmg: [5, 8],   spd: 1.50, base: { crit: 6 } },
     { name: '독니',        icon: '🔪', fam: '단검', lvl: 2, dmg: [5, 9],   spd: 1.58, base: { crit: 8 } },
@@ -130,7 +130,7 @@ const AFFIXES = [
   { key: 'fuel',   label: '연료 최대치', fmt: (v) => `+${v}초 랜턴 연료`,      roll: (r, s) => Math.round(r.range(14, 34) * s) },
   { key: 'find',   label: '보물 감각',   fmt: (v) => `+${v}% 상위 등급 확률`,  roll: (r, s) => Math.round(r.range(6, 15) * Math.min(2, s)) },
   { key: 'stun',   label: '기절',        fmt: (v) => `+${v}% 기절 확률`,       roll: (r, s) => +(r.range(2, 5) * Math.min(1.8, s)).toFixed(1) },
-  { key: 'range',  label: '공격 사거리', fmt: (v) => `+${v} 공격 사거리`,      roll: (r, s) => +(r.range(0.12, 0.3) * Math.min(1.5, s)).toFixed(2) },
+  { key: 'range',  label: '공격 사거리', fmt: (v) => `+${v} 공격 사거리`,      roll: (r, s) => +(r.range(0.1, 0.26) * Math.min(1.5, s)).toFixed(2) },
   { key: 'regen',  label: '체력 재생',   fmt: (v) => `초당 ${v} 회복`,         roll: (r, s) => +(r.range(0.4, 1.1) * s).toFixed(1) },
 ];
 const AFFIX_BY_KEY = Object.fromEntries(AFFIXES.map((a) => [a.key, a]));
@@ -274,7 +274,7 @@ export function power(item) {
   if (item.slot === 'weapon') p += (item.dmgMin + item.dmgMax) * 0.5 * (item.aspd || 1) * 3;
   const w = {
     dmg: 3, hp: 0.5, armor: 1.6, crit: 3.2, cdmg: 0.7, speed: 2.4, aspd: 2.6, leech: 3.4, mp: 0.35, cdr: 2.8,
-    thorns: 1.1, fuel: 0.4, find: 1.0, stun: 2.2, range: 14, regen: 6,
+    thorns: 1.1, fuel: 0.4, find: 1.0, stun: 2.2, range: 9, regen: 6,
   };
   for (const [k, v] of Object.entries(item.stats)) p += (w[k] || 1) * v;
   return Math.round(p);

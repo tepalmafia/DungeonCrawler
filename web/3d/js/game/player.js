@@ -63,8 +63,12 @@ export function buildKnight() {
   torso.add(cloak);
 
   // 오른팔 + 무기 (스윙 축이 어깨에 오도록 그룹 원점을 어깨에 둔다)
+  //
+  // **x 는 음수다.** facing = atan2(dx, dz) 라 모델의 정면이 +Z 이고,
+  // 오른손 좌표계에서 정면 +Z · 위 +Y 이면 오른쪽은 −X 다.
+  // 그동안 +0.34 에 무기를 달아 두어서 플레이어도 몬스터도 전부 왼손잡이였다.
   const armR = new THREE.Group();
-  armR.position.set(0.34, 0.5, 0);
+  armR.position.set(-0.34, 0.5, 0);
   const upperR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.42, 0.15), dark);
   upperR.position.y = -0.2;
   armR.add(upperR);
@@ -83,12 +87,12 @@ export function buildKnight() {
 
   // 왼팔 + 방패
   const armL = new THREE.Group();
-  armL.position.set(-0.34, 0.5, 0);
+  armL.position.set(0.34, 0.5, 0);
   const upperL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.42, 0.15), dark);
   upperL.position.y = -0.2;
   const shield = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.07), mat(0x8a6238, { roughness: 0.8 }));
-  shield.position.set(-0.12, -0.28, 0.13);
-  shield.rotation.y = 0.35;
+  shield.position.set(0.12, -0.28, 0.13);
+  shield.rotation.y = -0.35;
   armL.add(upperL, shield);
 
   torso.add(armR, armL);
@@ -429,7 +433,7 @@ export class Player {
       const k = 1 - this.swing;                  // 0 → 1
       const a = k < 0.32 ? -1.15 * (k / 0.32) : -1.15 + 2.5 * ((k - 0.32) / 0.68);
       r.armR.rotation.x = a;
-      r.armR.rotation.z = -0.25 * Math.sin(k * Math.PI);
+      r.armR.rotation.z = 0.25 * Math.sin(k * Math.PI);   // 손이 바뀌었으니 휘두르는 쪽도 뒤집는다
       r.torso.rotation.y = 0.3 * Math.sin(k * Math.PI);
     } else {
       r.armR.rotation.x += (0.05 - r.armR.rotation.x) * Math.min(1, dt * 9);
