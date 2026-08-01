@@ -12,3 +12,4 @@
 # 검증 스크립트가 흘리는 로그 (저장소에 남기지 않는다)
 *.log
 node_modules/
+docs/audit3d/bench-last.json
