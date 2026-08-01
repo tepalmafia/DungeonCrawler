@@ -26,6 +26,15 @@ import { ease } from './rig.js';
 const { lerp, clamp01, damp, springOut } = ease;
 const TAU = Math.PI * 2;
 
+/** 몸을 목표 방향으로 돌린다. 자세와 분리해 둔다 — LOD 가 건너뛰면 안 되므로. */
+export function faceTowards(rig, facing, dt, rate = 14) {
+  if (facing == null) return;
+  let d = facing - rig.group.rotation.y;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  rig.group.rotation.y += d * Math.min(1, dt * rate);
+}
+
 /**
  * 종족마다 다른 것만 넘긴다. 나머지 타이밍은 전부 공유한다 —
  * **타이밍이 공유되어야 「같은 게임의 캐릭터」로 보인다.**
@@ -34,23 +43,29 @@ export const STANCE = {
   // 기사 — 곧게 서고, 무기가 무거우며, 회복이 느리다
   knight: {
     stride: 0.72, kneeBend: 0.9, armSwing: 0.38, lean: 0.06,
-    idleBreath: 0.035, idleSway: 0.05, windup: 1.25, follow: 1.5,
+    idleBreath: 0.035, idleSway: 0.05,
+    // 내려베기 — 오른쪽 위에서 왼쪽 아래로. windup 이 드는 높이다.
+    windup: 2.15, follow: 0.95, out: 0.55, across: 0.35,
     guard: 0.35, weight: 1.0,
-    // 검과 방패 — 검은 어깨 옆에 세우고, 방패는 몸 앞을 가린다
-    restR: -0.30, restForeR: -1.05, restRz: -0.14,
+    // 검과 방패 — 검은 **몸에서 떨어뜨려** 오른쪽 앞에 세운다.
+    // 예전 값(restForeR −1.05)은 팔꿈치를 너무 접어 검이 가슴에 붙었다.
+    restR: -0.55, restForeR: -0.62, restRz: -0.40,
     restL: -0.34, restForeL: -1.45, restLz: 0.16,
   },
   // 해골 — 가볍고 덜그럭거린다. 예비 동작이 짧고 회복이 길다(관절이 헐겁다)
   skeleton: {
     stride: 0.85, kneeBend: 1.05, armSwing: 0.5, lean: 0.05,
-    idleBreath: 0.012, idleSway: 0.09, windup: 1.35, follow: 1.6,
+    idleBreath: 0.012, idleSway: 0.09,
+    windup: 2.0, follow: 1.0, out: 0.5, across: 0.3,
     guard: 0.2, weight: 0.75, rattle: 0.05,
-    restR: -0.24, restForeR: -0.9, restL: -0.14, restForeL: -0.5,
+    restR: -0.45, restForeR: -0.55, restRz: -0.34, restL: -0.14, restForeL: -0.5,
   },
   // 구울 — 굽은 채로 종종거린다. 팔을 크게 휘두르지 않고 할퀸다
   ghoul: {
     stride: 1.05, kneeBend: 1.3, armSwing: 0.3, lean: 0.34,
-    idleBreath: 0.06, idleSway: 0.11, windup: 1.0, follow: 1.9,
+    idleBreath: 0.06, idleSway: 0.11,
+    // 구울은 내려치지 않고 **옆으로 할퀸다** — 드는 높이가 낮고 가로지름이 크다
+    windup: 1.45, follow: 0.85, out: 0.95, across: 0.65,
     guard: 0.5, weight: 0.6,
     // 구울은 두 팔을 다 앞으로 늘어뜨린다 — 네 발로 뛸 것 같은 자세
     restR: 0.28, restForeR: -0.75, restRz: -0.2,
@@ -59,7 +74,9 @@ export const STANCE = {
   // 골렘 — 느리고 무겁다. 예비 동작이 길고 멈출 때 관성이 남는다
   golem: {
     stride: 0.5, kneeBend: 0.45, armSwing: 0.22, lean: 0.03,
-    idleBreath: 0.02, idleSway: 0.02, windup: 1.5, follow: 1.2,
+    idleBreath: 0.02, idleSway: 0.02,
+    // 골렘은 **정직하게 위에서 아래로** 내려찍는다. 가로지름이 거의 없다
+    windup: 2.35, follow: 1.15, out: 0.28, across: 0.1,
     guard: 0.15, weight: 2.2,
     // 골렘은 팔을 거의 안 굽힌다. 길게 늘어뜨린 팔이 육중함이다
     restR: -0.06, restForeR: -0.22, restL: -0.06, restForeL: -0.22,
@@ -67,7 +84,9 @@ export const STANCE = {
   // 심연의 군주 — 크고 느리고 뜬다. 낫이 길어 예비 동작이 제일 길다
   lord: {
     stride: 0, kneeBend: 0, armSwing: 0.3, lean: 0.02,
-    idleBreath: 0.045, idleSway: 0.06, windup: 1.55, follow: 1.7,
+    idleBreath: 0.045, idleSway: 0.06,
+    // 낫은 길다 — 크게 돌려 베는 궤적
+    windup: 1.95, follow: 0.95, out: 0.7, across: 0.55,
     guard: 0.3, weight: 2.6, float: true, floatY: 0.35,
     restR: -0.55, restForeR: -0.45, restRz: -0.16,
     restL: -0.3, restForeL: -0.6, restLz: 0.16,
@@ -76,6 +95,8 @@ export const STANCE = {
   archer: {
     stride: 0, kneeBend: 0, armSwing: 0.2, lean: 0.02,
     idleBreath: 0.03, idleSway: 0.14, windup: 1.1, follow: 1.0,
+    // 활은 내려베기가 아니라 **당겼다 놓기**다 (poseDraw)
+    ranged: true,
     guard: 0.3, weight: 0.5, float: true, floatY: 0.28,
     // 궁수는 활을 든 팔을 앞으로 뻗는다 — 활이 실루엣 밖으로 나와야 원거리로 읽힌다
     restR: -0.95, restForeR: -0.25, restRz: -0.3,
@@ -96,17 +117,21 @@ export function poseHumanoid(rig, P, st, c) {
   const t = c.time || 0;
 
   // ── 0. 바라보는 방향 ────────────────────────────────────
-  if (c.facing != null) {
-    let d = c.facing - rig.group.rotation.y;
-    while (d > Math.PI) d -= TAU;
-    while (d < -Math.PI) d += TAU;
-    rig.group.rotation.y += d * Math.min(1, dt * (c.turnRate || 14));
-  }
+  // 자세 LOD 가 프레임을 건너뛰면 이것도 같이 건너뛰어 **몸이 뚝뚝 돌아간다.**
+  // 그래서 호출부(enemies.js)가 이걸 매 프레임 따로 부른다 — 여기서는
+  // 건너뛰지 않은 프레임을 위해 한 번 더 부를 뿐이고, 두 번 불러도 안전하다.
+  faceTowards(rig, c.facing, dt, c.turnRate);
 
   // ── 1. 죽음 — 다른 모든 것을 덮는다 ──────────────────────
   if (c.dieK > 0) { poseDie(rig, P, st, c, dt); return; }
 
-  const moving = c.moving || 0;
+  // **이름이 두 개다.** 플레이어는 `moved`, 적은 `moving` 을 넘긴다 — 원래
+  // 포저가 파일마다 따로 있어서 각자 이름을 쓰던 흔적이다. 하나로 합치면서
+  // `moving` 만 읽게 했더니 **플레이어가 한 번도 걷지 않았다.** 걷기 판정이
+  // 늘 거짓이라 대기 자세로 미끄러져 다녔다.
+  // 호출부를 고치는 대신 여기서 둘 다 받는다 — 산 모델로 갈아 끼울 때
+  // 호출부는 안 바뀐다는 게 이 층의 약속이므로.
+  const moving = c.moving ?? c.moved ?? 0;
   const walkT = c.walkT || 0;
   // 공격 진행도를 0(시작) → 1(끝) 로 통일한다.
   // swing 은 1→0, armX 는 각도라서 규약이 서로 달랐다. 여기서 한 번에 맞춘다.
@@ -119,11 +144,25 @@ export function poseHumanoid(rig, P, st, c) {
 
   // ── 2. 걷기 / 서 있기 ───────────────────────────────────
   //
-  // 앉기(poseRest)만 쓰는 관절은 여기서 되돌린다. 대기·걷기가 안 건드리는 축은
-  // Pose 에 값이 그대로 남으므로, **일어서도 골반과 고개가 계속 숙여져 있다.**
-  // 「어떤 자세가 무엇을 건드리는가」의 합집합을 매 프레임 0 으로 놓는 자리다.
+  // ── 기본값 ──
+  //
+  // **여기가 이 파일에서 제일 중요한 블록이다.** 아래 자세들은 각자 필요한
+  // 관절만 건드리고, 특히 poseHit 은 `+=` 로 **더한다**. 그래서 어떤 자세도
+  // 안 건드리는 축이 하나라도 있으면 그 축은 값이 **영원히 남는다.**
+  //
+  // 실제로 그렇게 사고가 났다: poseHit 이 root.x / root.z 를 더하는데
+  // 되돌리는 곳이 없어서, 맞을 때마다 몸이 조금씩 밀려나 **모든 캐릭터가
+  // 제자리에서 벗어났다.** 화면의 몸과 실제 좌표가 어긋나니 클릭도 안 맞았다.
+  //
+  // 규칙: **poseHit / poseRest 가 만지는 축은 전부 여기서 매 프레임 0 으로
+  // 놓는다.** 뒤에 오는 자세가 필요하면 같은 키로 덮어쓰면 된다(나중 호출이 이긴다).
   P.set('hips', 'x', 0, 7, dt);
   P.set('head', 'x', 0, 7, dt);
+  P.set('head', 'z', 0, 7, dt);
+  P.set('chest', 'x', 0, 7, dt);      // poseIdle 이 호흡으로 덮어쓴다
+  P.set('chest', 'z', 0, 8, dt);
+  P.pos('root', 'x', 0, 16, dt);
+  P.pos('root', 'z', 0, 16, dt);      // poseAttack 이 체중 싣기로 덮어쓴다
 
   if (st.float) {
     // 뜬다 — 다리 대신 몸 전체가 흔들린다.
@@ -248,37 +287,50 @@ function restArms(rig, P, st, dt, moving) {
 //   0.42–0.60  타격  — 가장 빠른 구간. 여기서만 실제로 맞는다.
 //   0.60–1.00  여운  — 지나간 뒤 몸이 따라 돌고 되돌아온다.
 function poseAttack(rig, P, st, k, dt) {
-  let armX, armZ, chestY, chestZ, rootY = 0, lunge = 0, fore;
+  if (st.ranged) return poseDraw(rig, P, st, k, dt);
 
-  if (k < 0.30) {                              // 예비
+  // 어깨 회전의 부호는 **넣어 보고** 정했다 (추측하면 반대로 나온다):
+  //   armR.x 음수 = 팔이 위로·뒤로  (= 든다)      양수 = 아래로·앞으로 (= 내려친다)
+  //   armR.z 음수 = 팔이 몸 밖으로  (= 벌린다)    양수 = 몸 쪽으로 (= 가로지른다)
+  //
+  // 그래서 이 동작은 **오른쪽 위 → 왼쪽 아래 대각선**이다. 위에서 아래로
+  // 내려오면서 몸을 가로지른다 — 검을 쥔 사람이 실제로 하는 궤적이고,
+  // 화면에서도 궤적이 제일 길게 보인다.
+  let armX, armZ, fore, chestY, chestZ, rootY = 0, lunge = 0;
+
+  if (k < 0.30) {                              // 예비 — 높이 든다
     const u = k / 0.30;
-    const e = u * u;                           // 천천히 시작해서 가속
-    armX = lerp(0, -st.windup, e);
-    fore = lerp(-st.guard, -1.35, e);          // 팔꿈치를 접어 무기를 어깨 뒤로
-    armZ = lerp(0, -0.42, e);
-    chestY = lerp(0, -0.34, e);                // 몸통을 **반대로** 비튼다
-    chestZ = lerp(0, 0.1, e);
-    rootY = -0.03 * e;                         // 살짝 가라앉는다 = 힘을 모은다
-  } else if (k < 0.42) {                       // 정지
-    armX = -st.windup; fore = -1.35; armZ = -0.42; chestY = -0.34; chestZ = 0.1;
-    rootY = -0.03;
-  } else if (k < 0.60) {                       // 타격
+    const e = u * u;
+    armX = lerp(st.restR ?? -0.3, -st.windup, e);
+    armZ = lerp(st.restRz ?? 0, -(st.out ?? 0.5), e);
+    // **팔꿈치를 펴면서** 든다. 접은 채로 들면 검이 가슴 옆에 박힌다 —
+    // 처음에 −1.35 로 접어 놨더니 「무기가 몸통에 붙어 있다」가 됐다.
+    fore = lerp(st.restForeR ?? -1.0, -0.62, e);
+    chestY = lerp(0, -0.36, e);                // 몸통을 반대로 비튼다
+    chestZ = lerp(0, 0.12, e);
+    rootY = -0.03 * e;
+  } else if (k < 0.42) {                       // 정지 — 힘이 모인다
+    armX = -st.windup; armZ = -(st.out ?? 0.5); fore = -0.62;
+    chestY = -0.36; chestZ = 0.12; rootY = -0.03;
+  } else if (k < 0.60) {                       // 타격 — 내려베기
     const u = (k - 0.42) / 0.18;
-    const e = 1 - (1 - u) * (1 - u) * (1 - u); // 급가속 후 감속
+    const e = 1 - (1 - u) * (1 - u) * (1 - u);
     armX = lerp(-st.windup, st.follow, e);
-    fore = lerp(-1.35, -0.1, Math.min(1, e * 1.6));  // 팔꿈치가 **먼저** 펴진다
-    armZ = lerp(-0.42, 0.3, e);
-    chestY = lerp(-0.34, 0.42, e);
-    chestZ = lerp(0.1, -0.12, e);
+    armZ = lerp(-(st.out ?? 0.5), st.across ?? 0.3, e);
+    fore = lerp(-0.62, -0.08, Math.min(1, e * 1.5));   // 팔꿈치가 **먼저** 펴진다
+    chestY = lerp(-0.36, 0.44, e);
+    chestZ = lerp(0.12, -0.14, e);
     rootY = lerp(-0.03, 0.01, e);
-    lunge = Math.sin(u * Math.PI) * 0.1 * st.weight;  // 앞으로 체중을 싣는다
+    // 앞으로 체중을 싣는다. **작게** 둔다 — 이건 눈에 보이는 위치 이동이라
+    // 벽을 등지고 때리면 그만큼 벽에 들어간다. 충돌은 이걸 모른다.
+    lunge = Math.sin(u * Math.PI) * 0.045 * st.weight;
   } else {                                     // 여운
     const u = (k - 0.60) / 0.40;
-    armX = lerp(st.follow, -st.guard * 0.4, u);
-    fore = lerp(-0.1, -st.guard, u);
-    armZ = lerp(0.3, 0, u);
-    chestY = lerp(0.42, 0, u);
-    chestZ = lerp(-0.12, 0, u);
+    armX = lerp(st.follow, st.restR ?? -0.3, u);
+    armZ = lerp(st.across ?? 0.3, st.restRz ?? 0, u);
+    fore = lerp(-0.08, st.restForeR ?? -1.0, u);
+    chestY = lerp(0.44, 0, u);
+    chestZ = lerp(-0.14, 0, u);
   }
 
   const r = 26;                                // 공격은 빠르게 붙어야 한다
@@ -289,9 +341,48 @@ function poseAttack(rig, P, st, k, dt) {
   P.set('chest', 'z', chestZ, r * 0.8, dt);
   P.set('hips', 'y', -chestY * 0.35, r * 0.6, dt);   // 골반은 가슴을 늦게 따라간다
   P.set('head', 'y', chestY * 0.4, r * 0.5, dt);     // 고개는 표적을 계속 본다
-  P.set('armL', 'x', -chestY * 0.5 - st.guard * 0.3, r * 0.7, dt);  // 반대 팔이 균형을 잡는다
+  // 반대 팔이 균형을 잡는다 — 벌린 만큼 반대로 벌린다
+  P.set('armL', 'x', -chestY * 0.5 + (st.restL ?? -0.3), r * 0.7, dt);
+  P.set('armL', 'z', -armZ * 0.45 + (st.restLz ?? 0), r * 0.7, dt);
   P.pos('root', 'y', rootY, 20, dt);
   P.pos('root', 'z', lunge, 22, dt);
+}
+
+/**
+ * 활 당기기 — 궁수 전용. 내려베기와는 아예 다른 동작이라 갈라 둔다.
+ *
+ * 활을 든 팔(오른손)은 **앞으로 뻗어 고정**하고, 반대 손이 시위를 당긴다.
+ * 「든 팔이 흔들리면」 활을 쏘는 것으로 안 보인다 — 고정된 쪽이 있어야 한다.
+ */
+function poseDraw(rig, P, st, k, dt) {
+  let bowX, drawX, drawFore, chestY;
+  if (k < 0.42) {                              // 당긴다
+    const u = k / 0.42;
+    bowX = lerp(st.restR ?? -0.95, -1.25, u);
+    drawX = lerp(st.restL ?? -0.4, -1.05, u);
+    drawFore = lerp(st.restForeL ?? -1.0, -1.9, u);   // 팔꿈치를 뒤로 접는다
+    chestY = lerp(0, 0.22, u);
+  } else if (k < 0.52) {                       // 놓는다 — 시위가 튄다
+    const u = (k - 0.42) / 0.10;
+    bowX = -1.25;
+    drawX = lerp(-1.05, -0.5, u);
+    drawFore = lerp(-1.9, -0.35, u);
+    chestY = lerp(0.22, -0.06, u);
+  } else {                                     // 되돌아온다
+    const u = (k - 0.52) / 0.48;
+    bowX = lerp(-1.25, st.restR ?? -0.95, u);
+    drawX = lerp(-0.5, st.restL ?? -0.4, u);
+    drawFore = lerp(-0.35, st.restForeL ?? -1.0, u);
+    chestY = lerp(-0.06, 0, u);
+  }
+  P.set('armR', 'x', bowX, 22, dt);
+  P.set('armR', 'z', st.restRz ?? -0.3, 14, dt);
+  P.set('foreR', 'x', st.restForeR ?? -0.25, 18, dt);
+  P.set('armL', 'x', drawX, 24, dt);
+  P.set('armL', 'z', st.restLz ?? 0.22, 14, dt);
+  P.set('foreL', 'x', drawFore, 26, dt);
+  P.set('chest', 'y', chestY, 16, dt);
+  P.set('head', 'y', -chestY * 0.6, 12, dt);
 }
 
 // ───────────────────────── 피격 ─────────────────────────

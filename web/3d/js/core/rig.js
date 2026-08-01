@@ -223,8 +223,24 @@ export function skeleton(dim) {
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+// 감쇠 계수 캐시.
+//
+// damp 는 관절마다 한 번씩 불린다 — 배우 하나당 25 번, 26 마리면 프레임당 650 번.
+// 그런데 `1 - exp(-rate*dt)` 는 **한 프레임 안에서 rate 가 같으면 값도 같다.**
+// dt 는 프레임 전체가 공유하고 rate 는 열 종류쯤뿐이라, 캐시 하나로 650 번이
+// 10 번이 된다. 거리 LOD 로 프레임을 건너뛰어 아끼려던 비용을 여기서 되찾는다 —
+// 건너뛰기는 눈에 보이고(몬스터가 순간이동하는 것처럼 보였다), 이건 안 보인다.
+let _dampDt = -1;
+const _dampF = new Map();
+function dampFactor(rate, dt) {
+  if (dt !== _dampDt) { _dampDt = dt; _dampF.clear(); }
+  let f = _dampF.get(rate);
+  if (f === undefined) { f = 1 - Math.exp(-rate * dt); _dampF.set(rate, f); }
+  return f;
+}
+
 /** 감쇠 — 프레임률과 무관하게 같은 속도로 목표에 붙는다 */
-const damp = (cur, to, rate, dt) => cur + (to - cur) * (1 - Math.exp(-rate * dt));
+const damp = (cur, to, rate, dt) => cur + (to - cur) * dampFactor(rate, dt);
 /**
  * 튕기며 잦아든다 — 피격 회복에 쓴다. 그냥 감쇠하면 「스르륵」이라 안 아파 보인다.
  *
