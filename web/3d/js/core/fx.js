@@ -86,15 +86,21 @@ export class FX {
   }
 
   /** 파티클 한 줌 */
+  /**
+   * @param dir 있으면 「방향성 분출」이 된다 — 사방으로 퍼지는 대신 타격 방향으로
+   *   원뿔을 이룬다. 어느 쪽에서 맞았는지가 눈에 보여야 때린 실감이 난다.
+   *   cone 은 원뿔의 반각(라디안). 작을수록 날카롭다.
+   */
   burst(pos, {
     count = 14, color = 0xffb060, speed = 4.5, size = 0.5,
-    life = 0.5, spread = 1, grav = 9, up = 1,
+    life = 0.5, spread = 1, grav = 9, up = 1, dir = null, cone = 0.6,
   } = {}) {
     const p = this.p;
     const c = new THREE.Color(color);
+    const baseA = dir ? Math.atan2(dir.z, dir.x) : 0;
     for (let i = 0; i < count; i++) {
       const k = p.head = (p.head + 1) % MAX_PARTICLES;
-      const a = Math.random() * Math.PI * 2;
+      const a = dir ? baseA + (Math.random() * 2 - 1) * cone : Math.random() * Math.PI * 2;
       const el = Math.random() * Math.PI * 0.5 * spread;
       const s = speed * (0.45 + Math.random() * 0.75);
       p.pos[k * 3] = pos.x; p.pos[k * 3 + 1] = pos.y; p.pos[k * 3 + 2] = pos.z;

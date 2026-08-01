@@ -5,6 +5,15 @@ import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { resolveCollision } from '../world/nav.js';
 
+/**
+ * 소리 크기 = 거리. 26마리가 같은 크기로 울면 어디서 나는지 알 수 없다.
+ * 6유닛 안은 최대, 28유닛 밖은 무음.
+ */
+export function volAt(G, pos) {
+  const d = Math.hypot(pos.x - G.player.pos.x, pos.z - G.player.pos.z);
+  return Math.max(0, Math.min(1, 1 - (d - 6) / 22));
+}
+
 /** 방어도 감산 — 수확 체감. 층이 깊어져도 방어도가 무의미해지지 않는다. */
 export function mitigate(raw, armor, level = 1) {
   const k = armor / (armor + 42 + level * 9);
@@ -33,24 +42,43 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     color: opts.crit ? '#ffe066' : '#ffffff',
     big: !!opts.crit,
   });
+  // 타격 방향 — 스파크가 이 방향으로 뿜어져야 「어디서 맞았는지」가 보인다
+  const src = opts.from || G.player.pos;
+  const hx = e.pos.x - src.x, hz = e.pos.z - src.z;
+  const hd = Math.hypot(hx, hz) || 1;
+  const dir = { x: hx / hd, z: hz / hd };
+
   G.fx.burst(c, {
-    count: opts.crit ? 20 : 10,
+    count: opts.crit ? 26 : 14,
     color: opts.color ?? (opts.crit ? 0xffd070 : 0xff6a4a),
-    speed: opts.crit ? 6.5 : 4.2,
+    speed: opts.crit ? 9 : 6,
     size: 0.34, life: 0.4, grav: 11,
+    dir, cone: opts.crit ? 0.75 : 0.55,
   });
 
-  // 넉백 — 근원에서 멀어지는 방향
-  const knock = opts.knock ?? (opts.crit ? 3.4 : 2.0);
+  // 넉백 — 근원에서 멀어지는 방향.
+  //
+  // 이 값이 곧 밀려나는 「거리」다. 감쇠가 지수라 이동량 ≈ 임펄스이고,
+  // 격자 한 칸이 2.0 이다. 예전 평타 2.0 은 한 대에 정확히 한 칸을 밀어내서
+  // 근접 사거리(1.6~2.2) 밖으로 보냈고, 매 스윙마다 다시 붙어야 했다.
+  // 넉백은 타격의 강조지 위치를 바꾸는 수단이 아니다 → 사거리를 넘지 않게 잡는다.
+  const knock = opts.knock ?? (opts.crit ? 0.9 : 0.5);
   if (knock && !e.heavy) {
-    const from = opts.from || G.player.pos;
-    const dx = e.pos.x - from.x, dz = e.pos.z - from.z;
-    const d = Math.hypot(dx, dz) || 1;
-    e.knock.set((dx / d) * knock, 0, (dz / d) * knock);
+    e.knock.set(dir.x * knock, 0, dir.z * knock);
   }
 
-  if (!opts.silent) Sfx.hit(opts.crit);
-  if (opts.crit) G.fx.addShake(0.045);
+  // 리코일 — 위치를 옮기지 않고 「움찔」하게 만든다.
+  // 밀어내기를 줄인 만큼의 손맛을 이쪽으로 옮겼다.
+  e.recoilT = 1;
+  e.recoilDir = dir;
+  e.recoilPow = opts.crit ? 1.5 : 1;
+
+  const vol = volAt(G, e.pos);
+  if (!opts.silent) Sfx.enemyHit(e.def.key, opts.crit, vol);
+
+  // 히트스톱 — 프레임을 잠깐 붙잡는다. 크리티컬은 두 배 이상 길게.
+  if (!opts.silent) G.hitStop = Math.max(G.hitStop || 0, opts.crit ? 0.09 : 0.04);
+  G.fx.addShake(opts.crit ? 0.075 : 0.022);
 
   // 흡혈
   if (G.player.leech && !e.dead) {
@@ -69,7 +97,8 @@ export function killEnemy(G, e) {
   G.fx.burst(c, { count: 30, color: e.def.gib ?? 0xb03a3a, speed: 6.5, size: 0.42, life: 0.75, grav: 13 });
   G.fx.burst(c, { count: 14, color: 0x6a4a7a, speed: 2.4, size: 0.7, life: 1.0, grav: -1, up: 1.4 });
   G.fx.ground(e.pos, { r0: 0.7, r1: 1.7, color: 0x8a2a2a, life: 0.5 });
-  Sfx.enemyDie();
+  Sfx.enemyDie(e.def.key, volAt(G, e.pos));
+  G.hitStop = Math.max(G.hitStop || 0, 0.11);      // 마무리 일격은 더 길게 붙잡는다
 
   G.onEnemyKilled(e);
 }
@@ -88,6 +117,7 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   G.fx.addShake(0.06 + Math.min(0.16, dmg / p.maxHp));
   G.ui.hurtFlash(Math.min(1, dmg / (p.maxHp * 0.28)));
   Sfx.playerHurt();
+  Sfx.playerGrunt(Math.min(1, 0.5 + dmg / (p.maxHp * 0.3)));
 
   if (p.hp <= 0) { p.hp = 0; G.onPlayerDeath(); }
   return dmg;
@@ -144,7 +174,7 @@ export class Projectile {
         if (e.dead || this.hitSet.has(e)) continue;
         if (this.pos.distanceTo(e.pos) < e.radius + this.radius + 0.2) {
           this.hitSet.add(e);
-          hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 2.2 });
+          hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 0.7 });
           if (this.pierce-- <= 0) return this.kill();
         }
       }
