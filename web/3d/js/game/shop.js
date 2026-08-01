@@ -9,7 +9,7 @@
 // 재고는 층에 들어올 때 한 번 굴린다. 떠나면 다시 안 산다.
 
 import * as THREE from 'three';
-import { rollItem, RARITIES, SLOTS, priceOf } from './items.js';
+import { rollItem, RARITIES, SLOTS, SLOT_NAME, priceOf } from './items.js';
 import { makeLantern } from './lantern.js';
 import { gridToWorld } from '../world/dungeon.js';
 
@@ -56,6 +56,40 @@ export function rollStock(rnd, floorNo, tier, player) {
   return stock;
 }
 
+// ─────────────────────── 갬블 ───────────────────────
+//
+// 디아블로2 의 도박과 같은 구조다: **부위만 알고 등급은 모른 채** 산다.
+//
+// 왜 이게 재미있나 — 이 게임에는 이미 「빈손으로 나가는 판」이 설계돼 있다
+// (드랍 9%). 그 판에서 남는 것이 영혼 조각이고, 조각은 상점에서 **정확히
+// 원하는 것**을 살 때 쓴다. 갬블은 그 반대편이다: 싸게, 대신 운에 건다.
+// 두 출구가 다 있어야 조각이 「모아 두면 뭐든 된다」가 된다.
+//
+// 등급 분포를 일반 드랍보다 위로 잡는다 (일반 55/30/12/3 → 18/54/24/4).
+// 그래야 「사는 값이 아까운데도 누른다」가 성립한다. 다만 전설은 4% 로 둔다 —
+// 여기서 전설이 잘 나오면 던전을 돌 이유가 없어진다.
+const GAMBLE_W = [18, 54, 24, 4];
+const GAMBLE_SLOTS = 3;
+
+function gambleRarity(rnd, find = 0) {
+  const w = GAMBLE_W.map((b, i) => b * Math.pow(1 + find / 140, i));
+  const total = w.reduce((a, b) => a + b, 0);
+  let u = rnd() * total;
+  for (let i = 0; i < w.length; i++) { u -= w[i]; if (u <= 0) return i; }
+  return 1;
+}
+
+/**
+ * 갬블 한 칸. 부위와 값만 정하고 **물건은 살 때 굴린다** —
+ * 미리 굴려 두면 「가게를 나갔다 들어와서 다시 본다」로 결과를 세탁할 수 있다.
+ */
+function rollGambleSlot(rnd, floorNo, tier) {
+  const slot = rnd.pick(SLOTS);
+  // 값은 결과와 무관하게 부위·층으로만 정한다. 그게 도박이다.
+  const price = Math.round((78 + floorNo * 52 + tier * 44) * (slot === 'weapon' ? 1.25 : 1));
+  return { slot, price, name: `미확인 ${SLOT_NAME[slot]}`, icon: '❔' };
+}
+
 export class Shop {
   constructor(scene, dg, rnd, player, floorNo, tier) {
     this.dg = dg;
@@ -67,7 +101,14 @@ export class Shop {
     const room = dg.vaultRoom;
     if (!room) return;
 
+    this.rnd = rnd;
+    this.floorNo = floorNo;
+    this.tier = tier;
     this.stock = rollStock(rnd, floorNo, tier, player);
+    // 갬블 칸은 재고와 따로 관리한다 — 사면 그 자리에서 다시 채워지므로
+    // 「팔림」으로 남는 재고와 수명이 다르다.
+    this.gamble = [];
+    for (let i = 0; i < GAMBLE_SLOTS; i++) this.gamble.push(rollGambleSlot(rnd, floorNo, tier));
     const [x, z] = gridToWorld(room.cx, room.cy, dg.w, dg.h);
     this.pos = new THREE.Vector3(x, 0, z);
 
@@ -121,6 +162,29 @@ export class Shop {
     s.sold = true;
     G.metrics?.spend(s.price);
     return { ok: true, item: s };
+  }
+
+  /**
+   * 갬블 한 칸을 산다. 결과는 **여기서** 굴린다.
+   * @returns {{ok:boolean, why?:string, item?:object, rarity?:number}}
+   */
+  gambleBuy(G, i) {
+    const g = this.gamble[i];
+    const p = G.player;
+    if (!g) return { ok: false, why: '없는 칸' };
+    if (p.coin < g.price) return { ok: false, why: '영혼 조각이 모자란다' };
+    if (p.bag.length >= p.bagMax) return { ok: false, why: '가방이 가득 찼다' };
+
+    const ri = gambleRarity(this.rnd, p.find || 0);
+    // minRarity 가 아니라 rarity 다 — 하한으로 주면 자체 롤과 최댓값을 취해
+    // 전설이 설계값보다 3배 나온다 (실측으로 잡았다).
+    const item = rollItem(this.rnd, this.floorNo, this.tier, { slot: g.slot, rarity: ri });
+    p.coin -= g.price;
+    p.bag.push(item);
+    G.metrics?.spend(g.price);
+    // 산 자리는 곧바로 새 부위로 채운다 — 계속 걸 수 있어야 도박이다
+    this.gamble[i] = rollGambleSlot(this.rnd, this.floorNo, this.tier);
+    return { ok: true, item, rarity: item.rarity };
   }
 
   /** 가방의 물건을 판다 */

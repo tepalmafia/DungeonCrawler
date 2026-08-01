@@ -155,7 +155,10 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
   const pool = BASES[slot].filter((b) => (b.lvl ?? 1) <= depth);
   const base = rnd.pick(pool.length ? pool : [BASES[slot][0]]);
 
-  let ri = rollRarity(rnd, floorNo, tier, opt.find || 0);
+  // rarity 는 **덮어쓰기**, minRarity 는 **하한**이다. 둘을 헷갈리면 조용히 샌다 —
+  // 갬블이 minRarity 로 등급을 지정했더니 자체 롤과 최댓값을 취해
+  // 전설이 설계값 4% 대신 12% 로 나왔다. 실측하지 않았으면 못 봤을 것이다.
+  let ri = opt.rarity != null ? opt.rarity : rollRarity(rnd, floorNo, tier, opt.find || 0);
   if (opt.minRarity != null) ri = Math.max(ri, opt.minRarity);
   const rarity = RARITIES[ri];
 
