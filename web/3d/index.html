@@ -55,15 +55,33 @@
 
   <div id="inv" hidden>
     <div class="panel">
-      <h2>장비 <span class="dim">— I 로 닫기</span></h2>
-      <div class="equip">
-        <div class="slot" data-slot="weapon"><label>무기</label><div class="cell"></div></div>
-        <div class="slot" data-slot="armor"><label>방어구</label><div class="cell"></div></div>
-        <div class="slot" data-slot="ring"><label>반지</label><div class="cell"></div></div>
+      <header class="invtop">
+        <h2>소지품</h2>
+        <button id="invClose" type="button" aria-label="닫기">✕</button>
+      </header>
+
+      <!-- 종이인형 배치 — 왼쪽 손에 든 것, 가운데 몸에 걸친 것, 오른쪽 곁들이는 것 -->
+      <div class="doll">
+        <div class="dollcol left">
+          <div class="slot tall" data-slot="weapon"><span class="sl">무기</span><div class="cell"></div></div>
+        </div>
+        <div class="dollcol mid">
+          <div class="slot tall" data-slot="armor"><span class="sl">방어구</span><div class="cell"></div></div>
+        </div>
+        <div class="dollcol right">
+          <div class="slot" data-slot="ring"><span class="sl">장신구</span><div class="cell"></div></div>
+          <div class="lantern" id="invLantern"></div>
+        </div>
       </div>
+
       <div class="stats" id="statList"></div>
-      <h2>가방 <span class="dim" id="bagCount"></span></h2>
+
+      <div class="baghead">
+        <h3>가방</h3>
+        <span class="dim" id="bagCount"></span>
+      </div>
       <div class="bag" id="bagGrid"></div>
+      <p class="invhint">칸을 누르면 착용·해제 · <b>I</b> 또는 <b>Esc</b> 로 닫기</p>
     </div>
   </div>
 
