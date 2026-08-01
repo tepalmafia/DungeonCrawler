@@ -33,6 +33,7 @@ import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './
 import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
 import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, fuelCap, BASE_LIGHT } from './game/lantern.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './game/pace.js';
+import { AI } from './game/ai.js';
 
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
@@ -116,7 +117,7 @@ const G = {
   doors: null, traps: null, shop: null, dialogue: null, interact: null,
   acquireLantern: null,      // 아래에서 채운다 (game/shop.js 가 쓴다)
   // 정예 스킬이 쓰는 통로 (game/elites.js). 판정 규칙을 한 곳에 모아 둔다.
-  hitPlayerFrom: null, spawnEnemyShot: null,
+  hitPlayerFrom: null, spawnEnemyShot: null, makeNoise: null,
   dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
 window.G3 = G;
@@ -220,6 +221,12 @@ function loadFloor(floorNo) {
 
   ui.center(`${floorNo}층 — ${dg.theme.name}`, dg.isBossFloor ? '심연의 군주가 기다린다' : '출구를 찾아라');
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
+  // 문·스위치 안내. 미니맵에 안개가 깔린 뒤로는 **있다는 사실조차** 알 방법이
+  // 없었다 (실측: 금고 방이 시작점에서 중앙값 39칸). 존재만 알리고 위치는 안 준다 —
+  // 찾는 것이 일이어야 한다.
+  if (dg.doors?.length) {
+    G.timers.push({ t: 3.2, fn: () => ui.toast('어딘가에 봉인된 문이 있다 — 스위치를 찾아라', '#c8a24a') });
+  }
 
   applyLantern();
   if (post) post.setTheme(dg.theme);
@@ -978,6 +985,20 @@ G.acquireLantern = (lan) => {
   ui.toast(r.action === 'fuel' ? `연료 +${r.gained}초` : `${lan.name} (연료 ${Math.round(r.gained)}초)`,
     RARITIES[lan.rarity].css);
   return r;
+};
+/**
+ * 소리를 낸다 — 반경 안의 적이 「수색」 상태가 된다. 어그로가 아니다.
+ * 이미 어그로가 붙었거나 이미 수색 중인 적은 반응하지 않는다(hear 가 거른다).
+ */
+G.makeNoise = (pos, radius) => {
+  if (!AI.noise) return 0;
+  let n = 0;
+  for (const e of G.enemies) {
+    if (e.dead || e.aggro) continue;
+    if (Math.hypot(e.pos.x - pos.x, e.pos.z - pos.z) > radius) continue;
+    if (e.hear(G, pos.x, pos.z)) n++;
+  }
+  return n;
 };
 G.hitPlayerFrom = (e, dmg) => hitPlayer(G, dmg, { from: e.pos, attacker: e });
 G.spawnEnemyShot = (e, dir, dmg) => {

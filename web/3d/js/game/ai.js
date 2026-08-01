@@ -12,11 +12,11 @@ export const AI = {
   wander: true,     // 미발견 상태에서 각자 다른 일을 한다
   vision: true,     // 어그로가 전방위가 아니라 부채꼴이다
   reposition: true, // 벽·기둥에 사선이 막히면 옆으로 돌아 각을 연다 (§6-3)
-  squads: false,    // 조 편성 (docs/ENEMY-AI.md §4) — 미구현
-  shout: false,     // 지원 요청 (§5) — 미구현
-  noise: false,     // 전투 소음 → 수색 (§5-2) — 미구현
-  archerFlee: false, // 궁수 도주 (§6) — 미구현
-  chatter: false,   // 잡담 (§7) — 스토리 기획 뒤
+  squads: true,     // 조 편성 (docs/ENEMY-AI.md §4)
+  shout: true,      // 지원 요청 (§5) — 어그로가 아니라 **수색**을 퍼뜨린다
+  noise: true,      // 전투 소음 → 수색 (§5-2)
+  archerFlee: true, // 궁수 도주 (§6)
+  chatter: true,    // 잡담 (§7) — game/dialogue.js
 };
 
 // ── 미발견 상태의 행동 ─────────────────────────────────────
@@ -163,3 +163,41 @@ export function findFlank(e, G, p) {
   }
   return best;
 }
+
+// ─────────────────────── 외침 · 소음 · 수색 ───────────────────────
+//
+// **이 게임에서 어그로가 번지는 경로는 여기 하나뿐이다.**
+// 그리고 번지는 것은 어그로가 아니라 **수색**이다 — 소리를 들은 적은
+// 「플레이어가 저기 있다」가 아니라 「저기서 무슨 소리가 났다」만 안다.
+//
+// 왜 이 구분이 중요한가: 소음이 곧 어그로면 한 번 싸울 때마다 방 전체가 오고,
+// 그러면 「한 마리씩 끌어낸다」는 이 게임의 전투 방식이 성립하지 않는다.
+// 수색은 **완충 장치**다 — 플레이어에게 도망칠 시간을 준다.
+//
+// 실측으로 지킬 선: concurrentAggro 중앙값 ≤ 1 (docs/ENEMY-AI.md §8-1).
+// 이 값이 1 을 넘으면 난전이 된 것이고, 그 변경은 되돌려야 한다.
+
+/** 종족별 외침 (§5-1). 골렘은 0 — 정예가 지원까지 부르면 「못 이긴다」가 된다. */
+export const SHOUT = {
+  skeleton: { chance: 0.25, radius: 9, cast: 0.9 },
+  ghoul: { chance: 0.15, radius: 7, cast: 0.7 },
+  // 궁수는 원래 「잘못 끌면 곤란해지는 존재」로 설계됐다 (어그로 반경 12.5).
+  // 외침도 그 정체성 위에 얹는다.
+  archer: { chance: 0.60, radius: 13, cast: 1.1 },
+  golem: null,
+  lord: null,
+};
+
+/** 전투 소음 반경 (§5-2). 스킬이 더 시끄럽다. */
+export const NOISE = { hit: 7, skill: 11 };
+
+/** 수색 (§5-3) */
+export const SEARCH = { look: 4.0, speed: 0.8 };
+
+/** 궁수 이탈 (§6-2) */
+export const FLEE = {
+  hpPct: 0.35,       // 이 아래로 떨어지면 도망
+  brace: 1.2,        // 돌아서는 경직 — 이때 붙으면 못 도망친다
+  speedMul: 1.05,    // 전투 속도의 105% 까지만. 못 잡으면 AI 가 아니라 벽이다
+  maxTimes: 1,       // 개체당 1회. 두 번째는 싸운다
+};

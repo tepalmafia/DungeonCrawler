@@ -53,9 +53,23 @@ export const TRAP_KINDS = {
 
 const KEYS = Object.keys(TRAP_KINDS);
 
-// 발견 판정 — 랜턴 반경의 이 비율 안에 들어와야 보인다.
-// 1.0 으로 두면 빛의 가장자리에서 발견되어 「보자마자 이미 밟은」 상황이 난다.
-const SEE_RATIO = 0.62;
+// ── 다시 짠 이유 ────────────────────────────────────────
+//
+// 처음엔 발견 반경을 랜턴 반경의 62%(약 4칸)로 뒀다. 그랬더니 함정이
+// **항상 보이고 항상 피할 수 있는 것**이 됐다. 그건 함정이 아니라 장식이다.
+// 「예고 없는 피해는 넣지 않는다」를 지키려다 반대편으로 넘어갔다.
+//
+// 두 가지를 분리해서 다시 짰다:
+//   · **공정함** — 밟은 뒤에는 반드시 피할 창이 있다. 붉은 고리는 그대로 둔다.
+//     이건 양보하지 않는다.
+//   · **공짜 회피** — 이건 없앤다. 발견은 1.4칸 안에서만 되고, 표식은 UI 고리가
+//     아니라 **금이 간 바닥**처럼 보인다. 주의를 기울인 사람만 본다.
+//
+// 그리고 배치를 바꿨다. 방 한가운데 있는 함정은 그냥 돌아가면 그만이다.
+// **길목**(복도·문턱)에 놓으면 「돌아갈까, 해제할까, 밟고 갈까」가 판단이 된다.
+// 그게 함정이 만들어야 하는 순간이다.
+const SEE_DIST = 2.8;          // 발견 거리 (월드 유닛) — 격자 한 칸이 2.0
+const REARM = 14;              // 터진 뒤 다시 장전되기까지. 돌아오는 길도 위험해야 한다
 
 export class Traps {
   constructor(scene, dg, rnd) {
@@ -72,7 +86,9 @@ export class Traps {
       const k = TRAP_KINDS[t.kind];
       const [x, z] = gridToWorld(t.gx, t.gz, dg.w, dg.h);
 
-      // 발견 표식 — 바닥에 낮게 깔린 고리. 발견 전에는 안 보인다.
+      // 발견 표식 — **UI 가 아니라 지형처럼** 보여야 한다.
+      // 밝은 고리를 그리면 「여기 밟지 마시오」 표지판이 된다. 어두운 금·눌린 자국은
+      // 보는 사람만 본다. 가산 합성을 쓰지 않는 이유도 그것이다.
       const mark = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
         color: k.mark, transparent: true, opacity: 0,
         depthWrite: false, side: THREE.DoubleSide,
@@ -130,26 +146,34 @@ export class Traps {
 
   update(dt, G) {
     const p = G.player;
-    // 「보이는 거리」는 지금 들고 있는 등불이 정한다 — 랜턴을 켤 이유가 하나 더 는다
-    const lampR = (G.lighting?.lamp?.radius ?? 9) * SEE_RATIO;
+    // 발견 거리는 짧게 고정한다. 랜턴이 밝다고 층 전체의 함정이 드러나면
+    // 「지도를 받는」 것과 같아진다 — 어두우면 아예 안 보인다는 규칙만 남긴다.
+    const lit = (G.lighting?.lamp?.radius ?? 9) > 6;
+    const lampR = lit ? SEE_DIST : SEE_DIST * 0.45;
 
     for (const t of this.list) {
       const k = t.def;
 
       // ── 발견 ─────────────────────────────────────────
+      // 토스트는 띄우지 않는다. 화면 구석의 글자로 알려 주면 그것도 결국
+      // 「표지판」이다. 바닥을 보고 알아채야 한다.
       if (!t.found && t.state === 'armed' && !p.dead) {
-        if (Math.hypot(t.x - p.pos.x, t.z - p.pos.z) < lampR) {
-          t.found = true;
-          G.ui?.toast(`${k.name} — ${k.tell}`, '#c9b98a');
-        }
+        if (Math.hypot(t.x - p.pos.x, t.z - p.pos.z) < lampR) t.found = true;
       }
-      // 표식은 발견 뒤에도 **거리에 따라 흐려진다.** 화면 가득 고리가 깔리면
-      // 표식이 경고가 아니라 배경이 된다.
+      // 표식은 가까울수록 진해지되 최대 0.34 다. 진한 고리는 표지판이 된다.
       if (t.state !== 'spent') {
         const d = Math.hypot(t.x - p.pos.x, t.z - p.pos.z);
-        const want = t.found ? Math.max(0, Math.min(0.62, (lampR * 1.4 - d) / (lampR * 0.9))) : 0;
+        const want = t.found ? Math.max(0, Math.min(0.34, (SEE_DIST * 1.6 - d) / (SEE_DIST * 2))) : 0;
         const mm = t.mark.material;
         mm.opacity += (want - mm.opacity) * Math.min(1, dt * 6);
+      }
+
+      // 재장전 — 터진 함정이 영영 죽어 있으면, 돌아오는 길은 안전한 복도가 된다.
+      // 다시 장전되면 「아까 그 자리」를 기억해야 하고, 적을 유인하는 도구로도
+      // 계속 쓸 수 있다.
+      if (t.state === 'spent') {
+        t.rearmT = (t.rearmT ?? REARM) - dt;
+        if (t.rearmT <= 0) { t.state = 'armed'; t.rearmT = REARM; t.found = false; }
       }
 
       // ── 독가스 구름 ──────────────────────────────────

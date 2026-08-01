@@ -122,6 +122,12 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     });
   }
 
+  // 전투 소음 — 타격은 소리를 낸다 (docs/ENEMY-AI.md §5-2).
+  // 어그로가 아니라 **수색**만 퍼진다. 그리고 닫힌 문을 넘지 않는다
+  // (hear() 가 lineOfSight 를 쓰고, 그게 walkable() 을 쓰므로 자동이다).
+  // 문을 닫고 싸우면 옆방이 안 온다 — 문 기획과 여기서 맞물린다.
+  if (!opts.silent) G.makeNoise?.(G.player.pos, opts.skill ? 11 : 7);
+
   G.metrics?.hit(e, dmg, !!opts.crit);
 
   if (e.hp <= 0) killEnemy(G, e);

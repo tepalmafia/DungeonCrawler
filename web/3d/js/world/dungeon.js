@@ -236,12 +236,30 @@ export function generate(floorNo, seed) {
       vaultRoom = r;
 
       // 스위치는 **다른 방**에 둔다. 문 옆에 두면 그냥 문이 두 번 열리는 것과 같다.
-      // 시작 방을 제외한 나머지 중 금고에서 가장 먼 방의 중앙 근처.
-      const swRoom = rooms
-        .filter((o) => o !== r && o !== startRoom)
-        .sort((a, b) => ((b.cx - r.cx) ** 2 + (b.cy - r.cy) ** 2) - ((a.cx - r.cx) ** 2 + (a.cy - r.cy) ** 2))[0]
-        || startRoom;
-      switchAt = { gx: swRoom.cx, gz: swRoom.cy, room: swRoom, door };
+      //
+      // 다만 「가장 먼 방」은 아니다. 그렇게 뒀더니 시작점에서 중앙값 30칸,
+      // 금고는 39칸이 나왔다 — 미니맵 안개까지 겹치면 존재 자체를 모른다.
+      // 금고에서 **중간쯤** 떨어진 방을 고른다: 찾을 거리는 남기되 순례는 아니게.
+      const swCands = rooms.filter((o) => o !== r && o !== startRoom);
+      swCands.sort((a, b) => ((a.cx - r.cx) ** 2 + (a.cy - r.cy) ** 2)
+        - ((b.cx - r.cx) ** 2 + (b.cy - r.cy) ** 2));
+      const swRoom = swCands[Math.floor(swCands.length * 0.45)] || swCands[0] || startRoom;
+
+      // **벽면에 붙인다.** 방 한가운데 서 있는 손잡이는 어디에 달린 건지 안 읽힌다.
+      // 방 안쪽 바닥 칸 중 벽과 맞닿은 곳을 찾아, 벽이 있는 방향을 같이 넘긴다.
+      let swCell = null;
+      const wallCands = [];
+      for (let y = swRoom.y; y < swRoom.y + swRoom.h; y++)
+        for (let x = swRoom.x; x < swRoom.x + swRoom.w; x++) {
+          if (at(x, y) !== FLOOR) continue;
+          const walls = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => at(x + dx, y + dy) === WALL);
+          if (walls.length !== 1) continue;      // 모서리는 제외 — 어느 벽인지 애매하다
+          wallCands.push({ gx: x, gz: y, wall: walls[0] });
+        }
+      if (wallCands.length) swCell = rnd.pick(wallCands);
+      switchAt = swCell
+        ? { gx: swCell.gx, gz: swCell.gz, wall: swCell.wall, room: swRoom, door }
+        : { gx: swRoom.cx, gz: swRoom.cy, wall: null, room: swRoom, door };
       break;
     }
   }
@@ -283,7 +301,28 @@ export function generate(floorNo, seed) {
       addTrap(rnd.int(v.x, v.x + v.w - 1), rnd.int(v.y, v.y + v.h - 1), rnd.pick(TRAP_POOL));
     }
   }
-  const wantLoose = isBossFloor ? 4 : 6 + Math.floor(floorNo * 1.5);
+  // ── 길목에 놓는다 ────────────────────────────────────
+  //
+  // 방 한가운데 함정은 그냥 돌아가면 그만이라 아무 결정도 만들지 않는다.
+  // **양옆이 벽인 칸**(복도·문턱)에 놓으면 돌아갈 길이 없다 —
+  // 「해제할까(2초 멈춤), 밟고 갈까」가 진짜 판단이 된다.
+  const chokes = [];
+  for (let y = 2; y < h - 2; y++)
+    for (let x = 2; x < w - 2; x++) {
+      if (at(x, y) !== FLOOR) continue;
+      const ns = at(x - 1, y) === WALL && at(x + 1, y) === WALL;
+      const ew = at(x, y - 1) === WALL && at(x, y + 1) === WALL;
+      if (ns || ew) chokes.push([x, y]);
+    }
+  rnd.shuffle(chokes);
+  const wantChoke = isBossFloor ? 3 : 4 + floorNo;
+  let placedChoke = 0;
+  for (const [cx, cy] of chokes) {
+    if (placedChoke >= wantChoke) break;
+    if (addTrap(cx, cy, rnd.pick(TRAP_POOL))) placedChoke++;
+  }
+
+  const wantLoose = isBossFloor ? 3 : 4 + Math.floor(floorNo);
   const before = traps.length;
   for (let tries = 0; tries < 400 && traps.length < before + wantLoose; tries++) {
     addTrap(rnd.int(2, w - 3), rnd.int(2, h - 3), rnd.pick(TRAP_POOL));
