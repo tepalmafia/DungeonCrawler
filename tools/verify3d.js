@@ -860,6 +860,68 @@ async function shot(page, name) {
     `정면에서 맞으면 가슴이 ${hitPose.frontX?.toFixed(3)} 젖혀진다`);
   ok('actor.hitHeadLag', hitPose.skipped || hitPose.headLags,
     `머리 ${hitPose.headLag?.toFixed(3)} (가슴보다 0.06초 늦게 젖혀진다)`);
+  // 시간이 지나도 **제자리에 있는가.**
+  //
+  // 사고를 겪고 넣었다. poseHit 이 root.x / root.z 를 `+=` 로 더하는데 되돌리는
+  // 곳이 없어서, 맞을 때마다 몸이 조금씩 밀려났다. 시제품을 몇 분 켜 두면
+  // 캐릭터가 화면 밖으로 나갔고, 게임에서는 **조준이 안 됐다** — 조준은
+  // 커서 지면 좌표와 e.pos 의 거리로 잡는데(main.js), 보이는 몸이 e.pos 에서
+  // 벗어나 있으면 몸을 눌러도 아무것도 안 잡힌다.
+  //
+  // 자세 코드가 「어떤 축을 아무도 0 으로 안 돌려놓는가」는 눈으로 못 찾는다.
+  // 오래 굴려 보고 재는 수밖에 없다.
+  const drift = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const cb = await import('./js/game/combat.js');
+    const e = G.enemies.find((x) => !x.dead && !x.isBoss);
+    if (!e) return { skipped: true };
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    e.pos.set(P.pos.x + 1.2, 0, P.pos.z);
+    e.home.copy(e.pos);
+    for (let n = 0; n < 12; n++) {
+      const a = (n / 12) * Math.PI * 2;
+      cb.hitEnemy(G, e, 1, {
+        silent: true, los: false,
+        from: { x: e.pos.x + Math.sin(a) * 2, z: e.pos.z + Math.cos(a) * 2 },
+      });
+      for (let i = 0; i < 6; i++) await frame();
+    }
+    for (let i = 0; i < 30; i++) await frame();
+    return {
+      enemy: Math.max(Math.abs(e.rig.root.position.x), Math.abs(e.rig.root.position.z)),
+      player: Math.max(Math.abs(P.rig.root.position.x), Math.abs(P.rig.root.position.z)),
+    };
+  });
+  ok('actor.staysInPlace', drift.skipped || (drift.enemy < 0.05 && drift.player < 0.05),
+    `12대 맞은 뒤 이탈 — 적 ${drift.enemy?.toFixed(4)} · 플레이어 ${drift.player?.toFixed(4)}`);
+
+  // 플레이어가 **실제로 걷는가.**
+  //
+  // 플레이어는 `moved`, 적은 `moving` 을 넘기는데 새 포저가 `moving` 만 읽어서
+  // **플레이어가 한 번도 걷지 않았다.** 대기 자세로 미끄러져 다녔다.
+  // 「걷기 클립을 골랐다」로는 못 잡는다 — 클립은 맞게 골랐고 그 안에서 안 걸었다.
+  const walk = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    const dg = G.dungeon;
+    let far = null, bd = -1;
+    for (const room of dg.rooms) {
+      const d = (room.cx - P.pos.x / 2 - dg.w / 2) ** 2 + (room.cy - P.pos.z / 2 - dg.h / 2) ** 2;
+      if (d > bd) { bd = d; far = room; }
+    }
+    P.moveTo(dg, (far.cx - dg.w / 2 + 0.5) * 2, (far.cy - dg.h / 2 + 0.5) * 2);
+    let minThigh = 9, maxThigh = -9, minShin = 9, maxShin = -9;
+    for (let i = 0; i < 60; i++) {
+      await frame();
+      const t = P.rig.thighL.rotation.x, sh = P.rig.shinL.rotation.x;
+      if (t < minThigh) minThigh = t; if (t > maxThigh) maxThigh = t;
+      if (sh < minShin) minShin = sh; if (sh > maxShin) maxShin = sh;
+    }
+    return { thigh: maxThigh - minThigh, shin: maxShin - minShin };
+  });
+  ok('actor.playerActuallyWalks', walk.thigh > 0.5 && walk.shin > 0.2,
+    `허벅지 진폭 ${walk.thigh.toFixed(2)} · 무릎 진폭 ${walk.shin.toFixed(2)}`);
+
   // 뜨는 것이 실제로 떠 있는가.
   //
   // 이것도 사고를 겪고 넣었다. 뜨는 높이를 root 관절에 얹었더니, 공격 자세가

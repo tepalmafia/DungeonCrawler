@@ -223,8 +223,24 @@ export function skeleton(dim) {
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+// 감쇠 계수 캐시.
+//
+// damp 는 관절마다 한 번씩 불린다 — 배우 하나당 25 번, 26 마리면 프레임당 650 번.
+// 그런데 `1 - exp(-rate*dt)` 는 **한 프레임 안에서 rate 가 같으면 값도 같다.**
+// dt 는 프레임 전체가 공유하고 rate 는 열 종류쯤뿐이라, 캐시 하나로 650 번이
+// 10 번이 된다. 거리 LOD 로 프레임을 건너뛰어 아끼려던 비용을 여기서 되찾는다 —
+// 건너뛰기는 눈에 보이고(몬스터가 순간이동하는 것처럼 보였다), 이건 안 보인다.
+let _dampDt = -1;
+const _dampF = new Map();
+function dampFactor(rate, dt) {
+  if (dt !== _dampDt) { _dampDt = dt; _dampF.clear(); }
+  let f = _dampF.get(rate);
+  if (f === undefined) { f = 1 - Math.exp(-rate * dt); _dampF.set(rate, f); }
+  return f;
+}
+
 /** 감쇠 — 프레임률과 무관하게 같은 속도로 목표에 붙는다 */
-const damp = (cur, to, rate, dt) => cur + (to - cur) * (1 - Math.exp(-rate * dt));
+const damp = (cur, to, rate, dt) => cur + (to - cur) * dampFactor(rate, dt);
 /**
  * 튕기며 잦아든다 — 피격 회복에 쓴다. 그냥 감쇠하면 「스르륵」이라 안 아파 보인다.
  *
@@ -244,46 +260,58 @@ export const ease = { lerp, clamp01, damp, springOut };
  * 동작을 바꿀 때 관절이 **뚝 끊기지 않게** 하는 유일한 방법이다. 예전 포저는
  * 동작마다 각도를 직접 대입해서, 걷다가 때리면 다리가 한 프레임에 튀었다.
  */
+const PAXIS = { x: 'px', y: 'py', z: 'pz' };   // 'p'+axis 문자열을 매번 만들지 않게
+
 export class Pose {
   constructor(rig) {
     this.rig = rig;
-    this.v = new Map();                 // 'armR.x' → 현재 각도
-    // 관절의 **원래 자리**를 붙잡아 둔다. pos() 는 여기서의 어긋남을 다루므로
-    // 「엉덩이를 3cm 내린다」가 골격 치수와 무관하게 항상 3cm 다.
-    this.base = new Map();
+    // 관절마다 **미리 칸을 파 둔다.**
+    //
+    // 처음엔 Map 에 `joint + axis` 문자열을 키로 넣었다. 배우 하나당 25 번,
+    // 26 마리면 프레임당 문자열 650 개를 만들고 Map 을 1300 번 두드린다.
+    // 실측에서 감쇠 계수를 캐시해도 비용이 안 줄길래 찾아보니, 병목이
+    // exp 가 아니라 **키를 만드는 쪽**이었다.
+    //
+    // 관절 객체 참조까지 여기서 붙잡아 둔다 — 매 프레임 rig[joint] 를
+    // 다시 찾을 이유가 없다.
+    this.j = Object.create(null);
     for (const k of Object.keys(rig)) {
       const b = rig[k];
-      if (b && b.isObject3D) this.base.set(k, b.position.clone());
+      if (!b || !b.isObject3D) continue;
+      this.j[k] = {
+        b, base: b.position.clone(),
+        x: 0, y: 0, z: 0,      // 회전 누적값
+        px: 0, py: 0, pz: 0,   // 위치 어긋남
+      };
     }
   }
 
   /** 목표 각도로 rate 속도로 다가간다 */
   set(joint, axis, to, rate, dt) {
-    const key = joint + axis;
-    const cur = this.v.get(key) ?? 0;
-    const next = damp(cur, to, rate, dt);
-    this.v.set(key, next);
-    const b = this.rig[joint];
-    if (b) b.rotation[axis] = next;
+    const s = this.j[joint];
+    if (!s) return 0;
+    const next = s[axis] + (to - s[axis]) * dampFactor(rate, dt);
+    s[axis] = next;
+    s.b.rotation[axis] = next;
     return next;
   }
 
   /** 감쇠 없이 바로 — 격한 동작(피격 초반)은 즉시 꺾여야 아파 보인다 */
   hard(joint, axis, to) {
-    this.v.set(joint + axis, to);
-    const b = this.rig[joint];
-    if (b) b.rotation[axis] = to;
+    const s = this.j[joint];
+    if (!s) return;
+    s[axis] = to;
+    s.b.rotation[axis] = to;
   }
 
   /** 원래 자리에서 얼마나 어긋날지 (절대 좌표가 아니다) */
   pos(joint, axis, to, rate, dt) {
-    const key = joint + '@' + axis;
-    const cur = this.v.get(key) ?? 0;
-    const next = damp(cur, to, rate, dt);
-    this.v.set(key, next);
-    const b = this.rig[joint];
-    const base = this.base.get(joint);
-    if (b && base) b.position[axis] = base[axis] + next;
+    const s = this.j[joint];
+    if (!s) return 0;
+    const k = PAXIS[axis];
+    const next = s[k] + (to - s[k]) * dampFactor(rate, dt);
+    s[k] = next;
+    s.b.position[axis] = s.base[axis] + next;
     return next;
   }
 }

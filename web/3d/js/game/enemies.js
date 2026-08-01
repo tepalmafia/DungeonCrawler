@@ -13,7 +13,7 @@ import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
 import { makeActor } from '../core/actor.js';
 import { buildSkeleton, buildGhoul, buildArcher, buildGolem } from '../core/models.js';
 import { Pose } from '../core/rig.js';
-import { poseHumanoid, STANCE } from '../core/anim.js';
+import { poseHumanoid, faceTowards, STANCE } from '../core/anim.js';
 import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
 
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
@@ -836,6 +836,9 @@ export class Enemy {
 
   _animate(dt, moving) {
     const rig = this.rig;
+    // 시선은 **자세 LOD 와 무관하게** 매 프레임 돈다. 같이 건너뛰면 몸이
+    // 뚝뚝 돌아가서, 걷는 것보다 그게 더 부산스럽게 보인다.
+    faceTowards(rig, this.facing, dt, 12);
 
     // 발견 표식 — 위로 튀었다가 천천히 내려오며 사라진다
     if (this.alert && this.alertT > 0) {
@@ -903,15 +906,21 @@ export class Enemy {
     // 매 프레임 전부 굴리니 시뮬레이션 중앙값이 3.8 → 6.2ms 로 올라 예산(6ms)을
     // 넘었다. 실측이 아니었으면 「좀 무거워졌나」로 넘어갔을 값이다.
     //
-    // 안 보이는 것은 안 굴린다. 기본 등불 반경이 9, 미니맵·이름표가 22 이므로
-    // 그 밖은 화면에서 실루엣조차 안 나온다. 건너뛴 시간은 **모아 뒀다가**
-    // 한 번에 넘긴다 — 안 그러면 다시 보이는 순간 자세가 뚝 끊긴다.
+    // 처음에 16 유닛 밖을 2 프레임, 30 밖을 4 프레임에 한 번으로 잡았다.
+    // **틀렸다.** 등불 반경(9)을 기준으로 삼았는데, 등불이 안 닿아도 달빛과
+    // 앰비언트로 화면에는 보인다 — 카메라 거리가 19~34 다. 그 구간의 적들은
+    // 위치는 매 프레임 움직이는데 다리만 띄엄띄엄 갱신돼서, 미끄러지며
+    // **순간이동하는 것처럼** 보였다. 실제로 그 보고를 받았다.
+    //
+    // 기준을 카메라 최대 거리(34)로 올린다. 아낀 비용은 감쇠 계수 캐시로
+    // 되찾는다(core/rig.js) — 건너뛰기는 눈에 보이고 그건 안 보인다.
     //
     // **건너뛰기는 자세만이다.** 예전에 여기서 return 해 버렸더니 아래 피격
     // 플래시까지 같이 건너뛰어, 멀리서 맞은 적이 흰색으로 굳어 있었다.
+    // 시선 회전도 마찬가지라 위에서 매 프레임 따로 돌린다.
     this.poseDt = (this.poseDt || 0) + dt;
     const near = this.dist2Player || 0;
-    const every = near < 16 ? 1 : near < 30 ? 2 : 4;
+    const every = near < 38 ? 1 : 3;
     const pdt = this.poseDt;
     if ((++this.poseTick % every) === 0) {
       this.poseDt = 0;
