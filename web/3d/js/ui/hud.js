@@ -231,14 +231,31 @@ export class UI {
       ctx.fillStyle = RARITIES[d.item.rarity].css;
       ctx.fillRect(ox + gx * scale - 1, oz + gz * scale - 1, scale + 2, scale + 2);
     }
-    // 적
+    // ── 적 ────────────────────────────────────────────────
+    // 전부 찍어 주면 미니맵이 정찰 도구가 되어 「어둠 속을 더듬는다」는 설계가
+    // 통째로 무너진다. 랜턴 반경 안에 들어온 놈만 보이고, 벗어나면 마지막 위치가
+    // 잠깐 남았다가 사라진다 — 기억은 하되 추적은 못 한다.
+    const sense = (G.lighting ? G.lighting.lamp.radius : 9) + 2;
+    const MEM = 4;                                 // 시야에서 벗어난 뒤 남는 초
     for (const e of G.enemies) {
       if (e.dead) continue;
-      const [gx, gz] = worldToGrid(e.pos.x, e.pos.z, dg.w, dg.h);
+      const d = Math.hypot(e.pos.x - G.player.pos.x, e.pos.z - G.player.pos.z);
+      // 어그로가 붙은 놈은 거리와 무관하게 보인다 — 이미 쫓아오는 걸 아는 상태다
+      const visible = d <= sense || e.aggro;
+      if (visible) {
+        e._mmSeen = G.time;
+        e._mmX = e.pos.x; e._mmZ = e.pos.z;
+      } else if (e._mmSeen == null || G.time - e._mmSeen > MEM) {
+        continue;
+      }
+      const age = visible ? 0 : (G.time - e._mmSeen) / MEM;
+      const [gx, gz] = worldToGrid(e._mmX, e._mmZ, dg.w, dg.h);
+      ctx.globalAlpha = visible ? 1 : Math.max(0, 1 - age);
       ctx.fillStyle = e.isBoss ? '#ff4a8a' : e.elite ? '#e0a03a' : '#d0402f';
       const s = e.isBoss ? scale + 4 : e.elite ? scale + 2 : scale;
       ctx.fillRect(ox + gx * scale, oz + gz * scale, s, s);
     }
+    ctx.globalAlpha = 1;
     // 플레이어
     ctx.fillStyle = '#ffe9c0';
     ctx.beginPath();

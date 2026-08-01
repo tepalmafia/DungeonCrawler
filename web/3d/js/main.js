@@ -17,6 +17,7 @@ import { Metrics } from './core/metrics.js';
 import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
 import { Lighting } from './world/lighting.js';
+import { Remains } from './world/remains.js';
 import { resolveCollision, nearestWalkable } from './world/nav.js';
 
 import { Player } from './game/player.js';
@@ -92,7 +93,7 @@ const G = {
   player: null, enemies: [], drops: [], projectiles: [],
   fields: [], timers: [], cooldowns: {},
   boss: null, hover: null, pickupTarget: null,
-  fx: null, ui: null, inv: null, input: null, bot: null,
+  fx: null, ui: null, inv: null, input: null, bot: null, remains: null,
   nav: { resolveCollision, nearestWalkable },
   pace: { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME },   // 검증·튜닝에서 읽는다
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
@@ -128,8 +129,10 @@ function clearFloor() {
   fx.clearTransients();
   if (G.level) G.level.dispose();
   if (G.lighting) G.lighting.dispose();
+  if (G.remains) G.remains.dispose();
   G.level = null;
   G.lighting = null;
+  G.remains = null;
 }
 
 function loadFloor(floorNo) {
@@ -143,6 +146,7 @@ function loadFloor(floorNo) {
 
   G.level = new Level(scene, dg);
   G.lighting = new Lighting(scene, dg.theme);
+  G.remains = new Remains(scene);
   G.lighting.setTorches(G.level.torches);
 
   const rnd = makeRng(`${G.seed}-spawn-${floorNo}-${G.tier}`);
@@ -726,6 +730,7 @@ function frame(now) {
     // 벽에 가려 캐릭터가 안 보이면 조작이 불가능해진다 — 사이에 낀 벽을 흐린다
     G.level.updateOcclusion(camera, G.player.pos, dt);
     G.lighting.update(G.time, dt, G.player.pos);
+    G.remains.update(dt);
   } else if (G.dungeon) {
     G.level.update(G.time, dt);
     G.lighting.update(G.time, dt, G.player ? G.player.pos : new THREE.Vector3());
