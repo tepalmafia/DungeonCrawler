@@ -33,7 +33,7 @@ export function isEnabled() { return enabled; }
 
 function now() { return ctx.currentTime; }
 
-function tone(freq, { type = 'sine', dur = 0.2, gain = 0.25, at = 0, decay = null, to = null, detune = 0, vol = 1 } = {}) {
+function tone(freq, { type = 'sine', dur = 0.2, gain = 0.25, at = 0, decay = null, to = null, detune = 0, vol = 1, out = null } = {}) {
   if (!ensure() || !enabled || vol <= 0.02) return;
   gain *= vol;
   const t = now() + at;
@@ -46,12 +46,12 @@ function tone(freq, { type = 'sine', dur = 0.2, gain = 0.25, at = 0, decay = nul
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t + (decay || dur));
-  o.connect(g).connect(master);
+  o.connect(g).connect(out || master);
   o.start(t);
   o.stop(t + (decay || dur) + 0.05);
 }
 
-function noise({ dur = 0.18, gain = 0.3, at = 0, lp = 1800, lpTo = null, hp = 0, q = 1, vol = 1 } = {}) {
+function noise({ dur = 0.18, gain = 0.3, at = 0, lp = 1800, lpTo = null, hp = 0, q = 1, vol = 1, out = null } = {}) {
   if (!ensure() || !enabled || vol <= 0.02) return;
   gain *= vol;
   const t = now() + at;
@@ -77,7 +77,7 @@ function noise({ dur = 0.18, gain = 0.3, at = 0, lp = 1800, lpTo = null, hp = 0,
   } else {
     f.connect(g);
   }
-  g.connect(master);
+  g.connect(out || master);
   s.start(t);
   s.stop(t + dur + 0.05);
 }
@@ -104,7 +104,7 @@ const VOWEL = {
  * @param bend   끝날 때 음높이 배수. 1보다 작으면 처지고(신음), 크면 치솟는다(비명)
  * @param rasp   0~1. 성대가 거칠게 떨리는 정도 — 괴물일수록 높다
  */
-function vox(f0, { dur = 0.3, gain = 0.22, at = 0, vowel = 'a', bend = 0.8, rasp = 0, vol = 1 } = {}) {
+function vox(f0, { dur = 0.3, gain = 0.22, at = 0, vowel = 'a', bend = 0.8, rasp = 0, vol = 1, out = null } = {}) {
   if (!ensure() || !enabled || vol <= 0.02) return;
   const t = now() + at;
   const g0 = gain * vol;
@@ -133,7 +133,7 @@ function vox(f0, { dur = 0.3, gain = 0.22, at = 0, vowel = 'a', bend = 0.8, rasp
     a.gain.value = amp;
     src.connect(bp).connect(a).connect(env);
   }
-  env.connect(master);
+  env.connect(out || master);
   src.start(t);
   src.stop(t + dur + 0.05);
 
@@ -150,7 +150,7 @@ function vox(f0, { dur = 0.3, gain = 0.22, at = 0, vowel = 'a', bend = 0.8, rasp
     ng.gain.setValueAtTime(0.0001, t);
     ng.gain.exponentialRampToValueAtTime(g0 * rasp, t + 0.03);
     ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    n.connect(bp).connect(ng).connect(master);
+    n.connect(bp).connect(ng).connect(out || master);
     n.start(t);
     n.stop(t + dur + 0.05);
   }
@@ -424,9 +424,96 @@ export const Sfx = {
 };
 
 // ─────────────── 앰비언트: 저역 패드 + 이따금 물방울 ───────────────
+// ─────────────────── 던전 앰비언스 ───────────────────
+// 「음침함」은 큰 소리가 아니라 **불규칙한 작은 소리**에서 온다.
+// 일정한 간격으로 반복되면 3분 만에 루프인 걸 알아채고 귀가 꺼 버린다.
+// 그래서 모든 사건은 자기 스스로 다음 시각을 다시 뽑는다.
+//
+// 「멀리서」를 내려면 잔향이 필요하다. 외부 임펄스 파일 없이,
+// 노이즈를 지수 감쇠시킨 버퍼를 만들어 ConvolverNode 에 물린다 —
+// 돌방의 울림을 코드로 만드는 것이다.
+
+let verb = null;
+function reverb() {
+  if (verb) return verb;
+  const sec = 2.6, n = (ctx.sampleRate * sec) | 0;
+  const buf = ctx.createBuffer(2, n, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      // 초반에 성긴 반사, 뒤로 갈수록 촘촘한 꼬리 — 돌벽의 울림
+      const sparse = i < n * 0.08 && Math.random() > 0.986 ? 6 : 1;
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.6) * sparse;
+    }
+  }
+  const c = ctx.createConvolver();
+  c.buffer = buf;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.9;
+  c.connect(wet).connect(master);
+  verb = c;
+  return c;
+}
+
+/**
+ * 먼 곳에서 나는 소리 — 잔향으로만 보낸다.
+ * 직접음이 없고 반사음만 들리는 것이 「멀다」의 정체다.
+ * fn 은 목적지 노드를 받아 tone/noise/vox 의 out 으로 넘긴다.
+ */
+function far(fn) {
+  if (!ensure() || !enabled) return;
+  fn(reverb());
+}
+
+// ── 사건들 ────────────────────────────────────────────
+// 각 항목: [최소 간격, 최대 간격, 소리]  (초)
+// export 하는 이유는 검증이다. 사건 간격이 16~95초라 그냥 두면
+// 비명 코드에 버그가 있어도 40초 뒤에야 드러난다 — 검사가 직접 불러 본다.
+export const AMBIENT_EVENTS = {
+  // 물방울 — 「똑」. 짧은 사인 + 급격한 하강 + 작은 공명이 물이다.
+  drip: [4, 13, (deep) => {
+    const f = 900 + Math.random() * 1100;
+    tone(f, { type: 'sine', dur: 0.09, gain: 0.06, to: f * 0.35 });
+    tone(f * 0.5, { type: 'sine', dur: 0.22, gain: 0.03, at: 0.02, to: f * 0.2 });
+    if (deep) noise({ dur: 0.14, gain: 0.02, lp: 2400, lpTo: 400, at: 0.03 });
+  }],
+  // 멀리서 나는 비명 — 잔향으로만 나가고, 저역만 남게 눌러 「거리」를 만든다
+  scream: [38, 95, () => far((out) => {
+    const f0 = 180 + Math.random() * 160;
+    vox(f0, { dur: 0.9 + Math.random() * 0.5, gain: 0.085, vowel: ['a', 'o'], bend: 0.55, rasp: 0.35, out });
+  })],
+  // 쇠사슬 — 마르고 짧게 여러 번
+  chain: [22, 60, () => far((out) => {
+    const n = 3 + ((Math.random() * 4) | 0);
+    for (let i = 0; i < n; i++)
+      noise({ dur: 0.05, gain: 0.05, lp: 7000, lpTo: 2200, hp: 2600, at: i * (0.05 + Math.random() * 0.07), out });
+  })],
+  // 돌이 어긋나는 소리 — 아주 낮게, 길게
+  shift: [30, 85, () => far((out) => {
+    tone(44, { type: 'sawtooth', dur: 1.4, gain: 0.09, to: 30, out });
+    noise({ dur: 1.2, gain: 0.05, lp: 420, lpTo: 140, q: 3, out });
+  })],
+  // 쥐 — 가까이서. 잔향 없이 나야 「바로 옆」이 된다
+  rat: [16, 48, () => {
+    for (let i = 0; i < 2; i++)
+      tone(2200 + Math.random() * 900, { type: 'square', dur: 0.035, gain: 0.022, at: i * 0.06, to: 1400 });
+    noise({ dur: 0.1, gain: 0.02, lp: 8000, hp: 3000, at: 0.02 });
+  }],
+};
+
+// 층 테마마다 무엇이 자주 나는지가 다르다
+const AMBIENT_MIX = {
+  crypt: { drip: 1, scream: 1, chain: 1.2, shift: 1, rat: 1.2 },
+  flood: { drip: 2.6, scream: 0.8, chain: 0.7, shift: 1, rat: 0.6 },
+  throne: { drip: 0.5, scream: 2.2, chain: 1.4, shift: 1.6, rat: 0.3 },
+};
+
 export function startAmbient(themeKey = 'crypt') {
   if (!ensure() || ambient) return;
   const base = { crypt: 55, flood: 49, throne: 43.65 }[themeKey] || 55;
+  const mix = AMBIENT_MIX[themeKey] || AMBIENT_MIX.crypt;
+
   const g = ctx.createGain();
   g.gain.value = 0;
   g.gain.linearRampToValueAtTime(0.075, now() + 3);
@@ -452,25 +539,61 @@ export function startAmbient(themeKey = 'crypt') {
   lfo.connect(lfoG).connect(g.gain);
   lfo.start();
 
-  const drip = setInterval(() => {
-    if (!enabled || !ctx || ctx.state !== 'running') return;
-    if (Math.random() < 0.45)
-      tone(700 + Math.random() * 900, { type: 'sine', dur: 0.35, gain: 0.045, to: 240 });
-  }, 3400);
+  // ── 바람 — 끊기지 않는 얇은 층. 필터가 아주 느리게 오간다.
+  const windSrc = ctx.createBufferSource();
+  windSrc.buffer = noiseBuf;
+  windSrc.loop = true;
+  const windF = ctx.createBiquadFilter();
+  windF.type = 'bandpass';
+  windF.frequency.value = 380;
+  windF.Q.value = 0.7;
+  const windG = ctx.createGain();
+  windG.gain.value = 0.026;
+  const windLfo = ctx.createOscillator();
+  const windLfoG = ctx.createGain();
+  windLfo.frequency.value = 0.041;
+  windLfoG.gain.value = 210;              // 380 ± 210 Hz 로 천천히 오간다
+  windLfo.connect(windLfoG).connect(windF.frequency);
+  windLfo.start();
+  windSrc.connect(windF).connect(windG).connect(master);
+  windSrc.start();
 
-  ambient = { g, oscs, lfo, drip };
+  // ── 불규칙 사건 — 각자 다음 시각을 스스로 뽑는다
+  const timers = [];
+  const deep = themeKey === 'flood';
+  for (const [key, [lo, hi, play]] of Object.entries(AMBIENT_EVENTS)) {
+    const w = mix[key] ?? 1;
+    if (w <= 0) continue;
+    const schedule = () => {
+      const gap = (lo + Math.random() * (hi - lo)) / w;
+      const id = setTimeout(() => {
+        if (enabled && ctx && ctx.state === 'running') {
+          try { play(deep); } catch { /* 컨텍스트가 닫히는 중 */ }
+        }
+        schedule();
+      }, gap * 1000);
+      timers[timers.length - 1] = id;
+    };
+    timers.push(0);
+    schedule();
+  }
+
+  ambient = { g, oscs, lfo, windLfo, windSrc, windG, timers };
 }
 
 export function stopAmbient() {
   if (!ambient) return;
-  const { g, oscs, lfo, drip } = ambient;
-  clearInterval(drip);
+  const { g, oscs, lfo, windLfo, windSrc, windG, timers } = ambient;
+  for (const id of timers) clearTimeout(id);
   try {
     g.gain.cancelScheduledValues(now());
     g.gain.setValueAtTime(g.gain.value, now());
     g.gain.linearRampToValueAtTime(0.0001, now() + 0.6);
     oscs.forEach((o) => o.stop(now() + 0.7));
     lfo.stop(now() + 0.7);
+    windG.gain.linearRampToValueAtTime(0.0001, now() + 0.6);
+    windSrc.stop(now() + 0.7);
+    windLfo.stop(now() + 0.7);
   } catch { /* 컨텍스트가 이미 닫힌 경우 */ }
   ambient = null;
 }

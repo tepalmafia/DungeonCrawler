@@ -359,6 +359,28 @@ async function shot(page, name) {
         + ` · 해골 ${flank.skeleton ? flank.skeleton.sec + '초' : '없음'}`
         + ' — 막히면 돌아가야 한다');
 
+  // ── 앰비언스: 사건이 전부 예외 없이 도는가 ────────────────
+  // 물방울 4~13초, 비명 38~95초 간격이라 그냥 두면 버그가 한참 뒤에 드러난다.
+  // 소리는 헤드리스에서 못 듣지만 「터지지 않는가」는 여기서 잡을 수 있다.
+  const amb = await page.evaluate(async () => {
+    const A = await import('./js/core/audio.js');
+    A.resume();
+    const fired = [], failed = [];
+    for (const [key, spec] of Object.entries(A.AMBIENT_EVENTS)) {
+      try { spec[2](true); spec[2](false); fired.push(key); }
+      catch (e) { failed.push(key + ': ' + e.message); }
+    }
+    // 테마별 기동·정지도 새는 곳 없이 도는가
+    const themes = [];
+    for (const t of ['crypt', 'flood', 'throne']) {
+      try { A.stopAmbient(); A.startAmbient(t); A.stopAmbient(); themes.push(t); }
+      catch (e) { failed.push(t + ': ' + e.message); }
+    }
+    return { fired, failed, themes };
+  });
+  ok('audio.ambientEventsRun', amb.failed.length === 0 && amb.fired.length >= 5,
+    `사건 ${amb.fired.join('·')} · 테마 ${amb.themes.length}종` + (amb.failed[0] ? ` · 실패 ${amb.failed[0]}` : ''));
+
   // ── HUD 배치: 구슬이 단축키 양옆인가 · 단축키가 두 줄인가 ─────
   const hud = await page.evaluate(async () => {
     const P = window.G3.player;
