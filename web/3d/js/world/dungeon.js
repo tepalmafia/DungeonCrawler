@@ -15,10 +15,15 @@ export function worldToGrid(x, z, w, h) {
   return [Math.floor(x / CELL + w / 2), Math.floor(z / CELL + h / 2)];
 }
 
+// postShadow/postHigh 는 후처리의 스플릿 톤(core/post.js)이 쓴다.
+// 그림자로 스미는 색과 하이라이트로 스미는 색을 층마다 달리해 온도를 가른다.
 const THEMES = [
-  { key: 'crypt',  name: '납골당', floor: 0x59506a, wall: 0x453c56, moss: '#4c6b3a', mossP: 0.30, fog: 0x07060c, torch: 0xffa04a },
-  { key: 'flood',  name: '침수 회랑', floor: 0x4a5a5e, wall: 0x37464d, moss: '#3f7a68', mossP: 0.46, fog: 0x05090c, torch: 0x9fd8ff },
-  { key: 'throne', name: '왕좌의 방', floor: 0x63505c, wall: 0x4e3b48, moss: '#7a3a3a', mossP: 0.18, fog: 0x0b0508, torch: 0xff7a3a },
+  { key: 'crypt',  name: '납골당', floor: 0x59506a, wall: 0x453c56, moss: '#4c6b3a', mossP: 0.30, fog: 0x07060c, torch: 0xffa04a,
+    postShadow: 0x8fa8d4, postHigh: 0xffd6a0 },
+  { key: 'flood',  name: '침수 회랑', floor: 0x4a5a5e, wall: 0x37464d, moss: '#3f7a68', mossP: 0.46, fog: 0x05090c, torch: 0x9fd8ff,
+    postShadow: 0x7fbcd6, postHigh: 0xd8f0ff },   // 물 — 위아래 다 차갑다
+  { key: 'throne', name: '왕좌의 방', floor: 0x63505c, wall: 0x4e3b48, moss: '#7a3a3a', mossP: 0.18, fog: 0x0b0508, torch: 0xff7a3a,
+    postShadow: 0xa88ac0, postHigh: 0xffb070 },   // 영혼빛 그림자 + 붉은 불
 ];
 export function themeFor(floorNo) {
   return THEMES[Math.min(floorNo - 1, THEMES.length - 1)];

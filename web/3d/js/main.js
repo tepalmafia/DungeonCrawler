@@ -13,6 +13,7 @@ import { FX } from './core/fx.js';
 import * as Audio from './core/audio.js';
 import { Bot } from './core/bot.js';
 import { Metrics } from './core/metrics.js';
+import { Post } from './core/post.js';
 
 import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
@@ -45,6 +46,8 @@ const params = {
   ff: Math.max(1, Math.min(8, parseFloat(qs.get('ff') || '1') || 1)),
   bot: qs.get('bot') === '1',
   jumpBoss: qs.get('jump') === 'boss',
+  // 후처리 — 기본 켜짐. ?post=0 으로 끄고, ?post=low 로 블룸만 뺀다
+  post: qs.get('post') === '0' ? 'off' : (qs.get('post') === 'low' ? 'low' : 'high'),
   autostart: qs.get('autostart') === '1' || qs.get('bot') === '1',
 };
 
@@ -66,6 +69,7 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
+let post = null;                     // 후처리 (core/post.js) — resize 보다 먼저 선언되어야 한다
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 const lastPos = { x: 0, z: 0 };       // 이동 거리 적산용 (실측)
@@ -77,6 +81,7 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  if (post) post.setSize(w, h);
 }
 addEventListener('resize', resize);
 resize();
@@ -93,7 +98,7 @@ const G = {
   player: null, enemies: [], drops: [], projectiles: [],
   fields: [], timers: [], cooldowns: {},
   boss: null, hover: null, pickupTarget: null,
-  fx: null, ui: null, inv: null, input: null, bot: null, remains: null,
+  fx: null, ui: null, inv: null, input: null, bot: null, remains: null, post: null,
   nav: { resolveCollision, nearestWalkable, sweep },
   pace: { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME },   // 검증·튜닝에서 읽는다
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
@@ -105,6 +110,11 @@ const G = {
   dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
 window.G3 = G;
+
+post = new Post(renderer, scene, camera, params.post);
+G.post = post;
+// CSS 비네트가 셰이더 비네트와 겹치지 않도록 알린다 (css/style.css 참조)
+document.body.dataset.post = params.post;
 
 const input = new Input(canvas);
 G.input = input;
@@ -188,6 +198,7 @@ function loadFloor(floorNo) {
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
 
   applyLantern();
+  if (post) post.setTheme(dg.theme);
   G.metrics.floorStart(floorNo);
 
   // 카메라를 즉시 플레이어 위로 (줌 배율은 층을 넘어가도 유지한다)
@@ -762,7 +773,7 @@ function frame(now) {
   G.perf.frameMs = dt * 1000 / params.ff;
 
   input.endFrame();
-  renderer.render(scene, camera);
+  if (post) post.render(); else renderer.render(scene, camera);
 }
 
 // ───────────────────────── 시작 ─────────────────────────
