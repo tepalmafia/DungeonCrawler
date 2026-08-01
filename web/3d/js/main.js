@@ -25,6 +25,7 @@ import { playerRoll, hitEnemy } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, power } from './game/items.js';
 import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, BASE_LIGHT } from './game/lantern.js';
+import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './game/pace.js';
 
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
@@ -91,6 +92,7 @@ const G = {
   boss: null, hover: null, pickupTarget: null,
   fx: null, ui: null, inv: null, input: null, bot: null,
   nav: { resolveCollision, nearestWalkable },
+  pace: { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME },   // 검증·튜닝에서 읽는다
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
   perf: { logicMs: 0, frameMs: 0 },
   exitTouchT: 0,
@@ -440,14 +442,17 @@ function updateAutoAttack(dt) {
   p.facing = Math.atan2(t.pos.x - p.pos.x, t.pos.z - p.pos.z);
   if (p.attackCd > 0) return;
 
-  p.attackCd = 1 / Math.max(0.35, p.attackSpeed);
+  // 하한도 전체 템포를 따라간다 — 안 그러면 안전망만 30% 좁아진다
+  p.attackCd = 1 / Math.max(0.35 * ATTACK_SCALE, p.attackSpeed);
   p.swing = 1;
   Audio.Sfx.swing();
   fx.arc(p.pos, p.facing, { radius: range + 0.6, spread: Math.PI * 0.45, color: 0xdfe6f2, life: 0.15 });
 
-  // 타격 판정은 스윙 중간에 — 예비 동작이 보이고 나서 맞아야 손맛이 산다
+  // 타격 판정은 스윙 중간에 — 예비 동작이 보이고 나서 맞아야 손맛이 산다.
+  // 스윙이 느려진 만큼 이 시점도 같이 늦춘다(ATTACK_TIME). 안 그러면
+  // 칼이 아직 뒤에 있는데 적이 먼저 맞는다.
   G.timers.push({
-    t: 0.11,
+    t: 0.11 * ATTACK_TIME,
     fn: () => {
       if (p.dead || t.dead) return;
       const d2 = Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z);
