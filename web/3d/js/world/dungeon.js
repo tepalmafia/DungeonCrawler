@@ -32,6 +32,10 @@ export function themeFor(floorNo) {
   return THEMES[Math.min(floorNo - 1, THEMES.length - 1)];
 }
 
+// 함정 종류 뽑기 주머니. 압력판이 제일 흔하고 낙석이 제일 드물다 —
+// 제일 아픈 것(18%)이 제일 자주 나오면 함정이 벌이 된다.
+const TRAP_POOL = ['spike', 'spike', 'spike', 'dart', 'dart', 'gas', 'rock'];
+
 function rectsOverlap(a, b, pad) {
   return !(a.x - pad > b.x + b.w || a.x + a.w + pad < b.x || a.y - pad > b.y + b.h || a.y + a.h + pad < b.y);
 }
@@ -242,6 +246,49 @@ export function generate(floorNo, seed) {
     }
   }
 
+  // ── 함정 ────────────────────────────────────────────────
+  //
+  // 두 종류의 밀도를 쓴다:
+  //   · 금고 방 — **빽빽하게.** 사장님 지시가 「상점은 함정이 도사리는 방에」였다.
+  //     스위치를 찾아 문을 열고도 대가가 남아야 「갈지 말지」가 판단이 된다.
+  //   · 그 밖 — **드물게.** 복도와 방에 흩어 둔다. 자주 밟으면 함정이 아니라 지형이다.
+  //
+  // 시작 방과 출구 주변에는 놓지 않는다. 시작하자마자 밟는 함정은 예고가 아니라 사고다.
+  const traps = [];
+  const trapTaken = new Set();
+  const farFrom = (gx, gz, p, r) => Math.abs(gx - p.gx) + Math.abs(gz - p.gz) > r;
+
+  const addTrap = (gx, gz, kind) => {
+    const key = gz * w + gx;
+    if (trapTaken.has(key)) return false;
+    if (at(gx, gz) !== FLOOR) return false;
+    if (!farFrom(gx, gz, spawn, 6) || !farFrom(gx, gz, exit, 4)) return false;
+    if (traps.some((t) => Math.abs(t.gx - gx) + Math.abs(t.gz - gz) < 3)) return false;
+    // 화살 발사기는 벽을 등져야 한다 — 허공에서 화살이 나오면 안 된다
+    let dir = null;
+    if (kind === 'dart') {
+      const walls = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => at(gx + dx, gz + dz) === WALL);
+      if (!walls.length) return false;
+      const back = rnd.pick(walls);
+      dir = [-back[0], -back[1]];        // 벽 반대쪽으로 쏜다
+    }
+    trapTaken.add(key);
+    traps.push({ gx, gz, kind, dir });
+    return true;
+  };
+
+  if (vaultRoom) {
+    const v = vaultRoom;
+    for (let tries = 0; tries < 90 && traps.length < 7; tries++) {
+      addTrap(rnd.int(v.x, v.x + v.w - 1), rnd.int(v.y, v.y + v.h - 1), rnd.pick(TRAP_POOL));
+    }
+  }
+  const wantLoose = isBossFloor ? 4 : 6 + Math.floor(floorNo * 1.5);
+  const before = traps.length;
+  for (let tries = 0; tries < 400 && traps.length < before + wantLoose; tries++) {
+    addTrap(rnd.int(2, w - 3), rnd.int(2, h - 3), rnd.pick(TRAP_POOL));
+  }
+
   /** 문을 닫은 상태로 a → b 가 이어지는가 (BFS) */
   function reachable(a, b) {
     const seen = new Uint8Array(w * h);
@@ -267,7 +314,7 @@ export function generate(floorNo, seed) {
   return {
     w, h, cells, rooms, spawn, exit, torches, props,
     solids, solidAt,
-    doors, doorAt, vaultRoom, switchAt,
+    doors, doorAt, vaultRoom, switchAt, traps,
     startRoom, bossRoom, isBossFloor,
     theme: themeFor(floorNo),
     floorNo, seed,
