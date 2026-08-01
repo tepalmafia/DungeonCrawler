@@ -1,6 +1,7 @@
 // HUD — 전부 DOM. 텍스트 선명도·툴팁·CSS 애니메이션을 공짜로 얻는다.
 // 미니맵만 별도 2D 캔버스에 직접 그린다.
 
+import * as THREE from 'three';
 import { SKILLS } from '../game/skills.js';
 import { FLOOR, worldToGrid } from '../world/dungeon.js';
 import { RARITIES, priceOf } from '../game/items.js';
@@ -8,6 +9,7 @@ import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
 
 const $ = (s) => document.querySelector(s);
+const V = new THREE.Vector3();      // 투영용 재사용 벡터
 
 export class UI {
   constructor(G) {
@@ -37,6 +39,7 @@ export class UI {
       interact: $('#interact'),
       shop: $('#shop'),
       shopList: $('#shopList'),
+      enemyName: $('#enemyName'),
       gambleList: $('#gambleList'),
       sellList: $('#sellList'),
       shopCoin: $('#shopCoin'),
@@ -252,6 +255,39 @@ export class UI {
     return row;
   }
 
+  /**
+   * 커서가 가리킨 적의 이름을 머리 위에 띄운다.
+   *
+   * 3D 스프라이트가 아니라 DOM 이다. 이름은 화면 픽셀에 딱 맞아야 읽히는데,
+   * 스프라이트는 원근에 따라 크기가 변하고 안개·블룸에도 먹힌다.
+   * 위치만 3D 에서 가져와 투영한다.
+   */
+  _hoverName(G) {
+    const el = this.el.enemyName;
+    if (!el) return;
+    const e = G.hover;
+    if (!e || e.dead || G.state !== 'play') {
+      if (!el.hidden) { el.hidden = true; el.style.display = 'none'; }
+      return;
+    }
+    const v = e.center();
+    V.set(v.x, (e.headY ?? 1.6) + 0.75, v.z).project(G.camera);
+    // 카메라 뒤로 넘어가면 투영이 뒤집혀 엉뚱한 데 붙는다
+    if (V.z > 1) { el.hidden = true; el.style.display = 'none'; return; }
+    const c = G.renderer.domElement;
+    el.style.left = ((V.x * 0.5 + 0.5) * c.clientWidth).toFixed(0) + 'px';
+    el.style.top = ((-V.y * 0.5 + 0.5) * c.clientHeight).toFixed(0) + 'px';
+    const cls = e.isBoss ? 'boss' : e.elite ? 'elite' : '';
+    if (el.className !== cls) el.className = cls;
+    // 레벨 숫자는 안 쓴다 — 이 게임에 적 레벨 개념이 없으므로 지어내면 거짓말이다.
+    // 대신 「정예/보스」를 붙인다. 그건 실제로 규칙이 다른 구분이다.
+    const tag = e.isBoss ? '보스' : e.elite ? '정예' : '';
+    const label = e.def.name + (tag ? `<span class="lv">${tag}</span>` : '');
+    if (el.innerHTML !== label) el.innerHTML = label;
+    el.hidden = false;
+    el.style.display = '';
+  }
+
   _hover(row, item) {
     const same = this.G.player.equipped[item.slot];
     row.onmouseenter = () => this.G.inv._showTooltip(item, same);
@@ -263,6 +299,8 @@ export class UI {
   update(dt) {
     const G = this.G, p = G.player;
     if (!p) return;
+
+    this._hoverName(G);
 
     // 랜턴 — 연료가 자원이므로 남은 시간을 초 단위로 보여준다
     const lan = p.lantern;

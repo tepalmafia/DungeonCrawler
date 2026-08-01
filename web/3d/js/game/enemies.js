@@ -483,14 +483,21 @@ export class Enemy {
           break;
         }
         // 구울은 이따금 도약
-        if (d.leap && dist < 7 && dist > 2.4 && this.leapCd <= 0 && this._canSee(G, p)) {
+        if (d.leap && dist < 5.5 && dist > 2.6 && this.leapCd <= 0 && this._canSee(G, p)) {
           this.leapCd = 4 + Math.random() * 2;
           this.state = 'leap';
           this.stateT = 0;
           const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
           const l = Math.hypot(dx, dz) || 1;
-          // 도약도 「이동」이다 — 같은 배수를 먹인다 (거리도 그만큼 짧아진다)
-          this.knock.set((dx / l) * 12 * MOVE_SCALE, 0, (dz / l) * 12 * MOVE_SCALE);
+          // 도약 거리는 **지금 벌어진 간격**에서 나온다.
+          //
+          // 예전엔 고정 임펄스 12(×0.7=8.4)를 썼다. 그런데 넉백 감쇠가 지수라
+          // **이동량 ≈ 임펄스**다 — 격자 한 칸이 2.0 이니 8.4 는 네 칸이다.
+          // 2.6 유닛 앞에서도 8.4 를 날아가 플레이어를 지나쳐 등 뒤에 떨어졌고,
+          // 그게 「엄청 멀리 날아온다」로 보였다. 도약은 간격을 좁히는 동작이지
+          // 순간이동이 아니다.
+          const gap = Math.max(1.4, Math.min(3.6, dist - d.range * 0.9));
+          this.knock.set((dx / l) * gap, 0, (dz / l) * gap);
           break;
         }
         moving = this._chase(dt, G, p);
