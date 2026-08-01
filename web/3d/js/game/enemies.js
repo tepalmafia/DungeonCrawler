@@ -6,6 +6,7 @@ import { makeBlobShadow } from '../core/fx.js';
 import { hitPlayer, Projectile } from './combat.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
+import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 
 const V = new THREE.Vector3();
 
@@ -208,7 +209,7 @@ export class Enemy {
     this.hp = this.maxHp;
     this.dmg = d.dmg * powerMult;
     this.armor = d.armor * powerMult;
-    this.speed = d.speed;
+    this.speed = d.speed * MOVE_SCALE;   // 전체 템포는 game/pace.js
     this.radius = d.radius;
     this.heavy = !!d.heavy;
     this.elite = !!d.elite;
@@ -286,7 +287,11 @@ export class Enemy {
     }
 
     const p = G.player;
-    this.stateT += dt;
+    // 공격 상태 시계 자체를 늦춘다 — windup/attack/recover/leap 임계값이 전부
+    // 이 시계로 재므로, 임계값을 한 줄씩 고치다 하나를 빠뜨려 예고와 타격이
+    // 어긋나는 사고가 원천적으로 안 생긴다. 애니메이션(stateT/def.windup)도
+    // 같은 시계를 쓰니 자동으로 맞는다.
+    this.stateT += dt * ATTACK_SCALE;
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.leapCd = Math.max(0, this.leapCd - dt);
     this.flash = Math.max(0, this.flash - dt);
@@ -371,7 +376,8 @@ export class Enemy {
           this.stateT = 0;
           const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
           const l = Math.hypot(dx, dz) || 1;
-          this.knock.set((dx / l) * 12, 0, (dz / l) * 12);
+          // 도약도 「이동」이다 — 같은 배수를 먹인다 (거리도 그만큼 짧아진다)
+          this.knock.set((dx / l) * 12 * MOVE_SCALE, 0, (dz / l) * 12 * MOVE_SCALE);
           break;
         }
         moving = this._chase(dt, G, p);
@@ -477,7 +483,9 @@ export class Enemy {
   _telegraph(G) {
     const d = this.def;
     if (d.slam) {
-      G.fx.ground(this.pos, { r0: d.slam, color: 0xff4a2a, life: d.windup, fade: 'in', opacity: 0.7 });
+      // 링은 실시간으로 자란다. 선딜은 느려진 시계로 재므로 실제 초로 환산해야
+      // 예고가 끝나는 순간과 타격이 정확히 겹친다.
+      G.fx.ground(this.pos, { r0: d.slam, color: 0xff4a2a, life: d.windup * ATTACK_TIME, fade: 'in', opacity: 0.7 });
     } else if (d.ranged) {
       G.fx.burst(this.center(), { count: 5, color: 0x9fd8ff, speed: 1.2, size: 0.3, life: 0.4, grav: -2 });
     }
@@ -485,7 +493,8 @@ export class Enemy {
 
   _strike(G, p, dist) {
     const d = this.def;
-    this.attackCd = d.recover * 0.8 + 0.25;
+    // 이 쿨다운만 실시간(dt)으로 줄어드니 여기서 환산해 둔다
+    this.attackCd = (d.recover * 0.8 + 0.25) * ATTACK_TIME;
 
     if (d.ranged) {
       const from = this.center();

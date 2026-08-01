@@ -5,6 +5,7 @@ import { Enemy, ARCHETYPES } from './enemies.js';
 import { hitPlayer } from './combat.js';
 import { Sfx } from '../core/audio.js';
 import { gridToWorld } from '../world/dungeon.js';
+import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 
 const V = new THREE.Vector3();
 
@@ -116,7 +117,7 @@ export class Boss extends Enemy {
     if (want <= this.phase) return;
     this.phase = want;
     this.enrage = 1 + this.phase * 0.22;
-    this.speed = this.def.speed * this.enrage;
+    this.speed = this.def.speed * MOVE_SCALE * this.enrage;
     G.ui.setBossPhase(PHASES[this.phase].name);
     G.ui.center(PHASES[this.phase].name, '심연이 요동친다');
     G.fx.shockwave(this.pos, { r0: 1, r1: 12, color: 0x9a5aff, life: 0.9, y: 0.5 });
@@ -137,7 +138,7 @@ export class Boss extends Enemy {
 
     if (this.move) return this._runMove(dt, G, p, dist);
 
-    this.nextMove -= dt * this.enrage;
+    this.nextMove -= dt * this.enrage * ATTACK_SCALE;
     if (this.nextMove <= 0) {
       const moves = PHASES[this.phase].moves;
       let pick = moves[Math.floor(Math.random() * moves.length)];
@@ -162,7 +163,7 @@ export class Boss extends Enemy {
     switch (move) {
       case 'cleave':
         this.windupDur = 0.8 / this.enrage;
-        G.fx.ground(this.pos, { r0: 5.4, color: 0xff3a5a, life: this.windupDur, fade: 'in', opacity: 0.55 });
+        G.fx.ground(this.pos, { r0: 5.4, color: 0xff3a5a, life: this.windupDur * ATTACK_TIME, fade: 'in', opacity: 0.55 });
         this._face(p.pos.x, p.pos.z);
         break;
       case 'combo':
@@ -177,7 +178,7 @@ export class Boss extends Enemy {
         break;
       case 'summon':
         this.windupDur = 0.9;
-        G.fx.ground(this.pos, { r0: 3.2, color: 0x9a5aff, life: 0.9, fade: 'in', opacity: 0.6 });
+        G.fx.ground(this.pos, { r0: 3.2, color: 0x9a5aff, life: 0.9 * ATTACK_TIME, fade: 'in', opacity: 0.6 });
         break;
       case 'firering':
         this.windupDur = 0.4;
@@ -187,14 +188,17 @@ export class Boss extends Enemy {
         this.windupDur = 0.7;
         this.sweepAngle = Math.atan2(p.pos.x - this.pos.x, p.pos.z - this.pos.z) - Math.PI;
         this.sweepT = 0;
-        G.fx.ground(this.pos, { r0: 9, color: 0xff6a2a, life: 0.7, fade: 'in', opacity: 0.4 });
+        G.fx.ground(this.pos, { r0: 9, color: 0xff6a2a, life: 0.7 * ATTACK_TIME, fade: 'in', opacity: 0.4 });
         break;
     }
     Sfx.cast();
   }
 
   _runMove(dt, G, p, dist) {
-    this.moveT += dt;
+    // 기술 진행도 시계를 늦춘다 — windupDur 과 그 뒤의 모든 분기(+0.45, beat,
+    // +0.85, +1.5)가 이 시계를 쓰므로 한 번에 30% 느려진다. 대신 이 시계는
+    // 「초」가 아니게 되니, 실시간으로 도는 것(지면 예고 링·이동)은 따로 환산한다.
+    this.moveT += dt * ATTACK_SCALE;
     const done = () => { this.move = null; this.state = 'recover'; this.stateT = 0; this.nextMove = (1.5 + Math.random() * 1.2) / this.enrage; };
 
     switch (this.move) {
@@ -234,7 +238,7 @@ export class Boss extends Enemy {
 
       case 'charge': {
         if (this.moveT < this.windupDur) return 0;
-        const step = 15 * this.enrage * dt;
+        const step = 15 * MOVE_SCALE * this.enrage * dt;   // 돌진도 이동이다
         const r = this._stepRaw(G, this.chargeDir.x * step, this.chargeDir.z * step);
         G.fx.burst(this.center(), { count: 3, color: 0x9a5aff, speed: 1.5, size: 0.5, life: 0.35, grav: 0 });
         if (dist < this.radius + p.radius + 1.1) { hitPlayer(G, this.dmg * 1.15); done(); }
@@ -282,9 +286,10 @@ export class Boss extends Enemy {
       case 'sweep': {
         if (this.moveT < this.windupDur) return 0;
         // 회전하는 광선 — 사거리 밖으로 도망치거나 뒤를 잡아야 한다
-        this.sweepT += dt;
+        // 회전이 느려진 만큼 지속도 늘려야 쓸고 지나가는 각도가 그대로다
+        this.sweepT += dt * ATTACK_SCALE;
         const speed = 2.1 * this.enrage;
-        this.sweepAngle += dt * speed;
+        this.sweepAngle += dt * speed * ATTACK_SCALE;
         this.facing = this.sweepAngle;
         const RANGE = 9.5;
         for (let i = 1; i <= 5; i++) {

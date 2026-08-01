@@ -125,6 +125,45 @@ async function shot(page, name) {
   ok('pull.leashReturns', pull.skipped || pull.returning, '집에서 멀어지면 귀환');
   ok('pull.leashReleases', pull.skipped || pull.released, '귀환 완료 시 어그로 해제');
 
+  // ── 전투 템포 (game/pace.js) ────────────────────────────
+  // 배수가 플레이어·잡몹·보스에 「전부」 먹었는지, 그리고 선딜이 느려진 만큼
+  // 지면 예고도 같이 늘어났는지 본다. 후자가 어긋나면 예고 없이 맞는다.
+  const pace = await page.evaluate(async () => {
+    const G = window.G3, P = G.player, pc = G.pace;
+    const e = G.enemies.find((x) => !x.dead && !x.isBoss);
+
+    // 이동: 정의값 × 배수인가
+    const enemyMove = Math.abs(e.speed - e.def.speed * pc.MOVE_SCALE) < 1e-6;
+    const playerBase = P.speed / (1 + P.bonus.speed / 100);
+    const playerMove = Math.abs(playerBase - 6.2 * pc.MOVE_SCALE) < 1e-6;
+
+    // 공격: 무기·장비·레벨 보정을 걷어내면 배수만 남아야 한다
+    const lv = P.level - 1;
+    const atkScale = P.attackSpeed / (P.bonus.weaponSpeed * (1 + P.bonus.aspd / 100) * (1 + lv * 0.012));
+    const playerAtk = Math.abs(atkScale - pc.ATTACK_SCALE) < 1e-6;
+
+    // 선딜을 실제로 재 본다 — windup 진입부터 타격까지 몇 초 걸리는가
+    const inv0 = P.invuln;
+    P.invuln = 1e9;
+    P.setPosition(e.pos.x + e.def.range * 0.5, e.pos.z);
+    e.aggro = true; e.state = 'windup'; e.stateT = 0; e.attackCd = 0;
+    let secs = 0;
+    for (let f = 0; f < 600 && e.state === 'windup'; f++) { e.update(1 / 60, G); secs += 1 / 60; }
+    P.invuln = inv0;
+    const wantWindup = e.def.windup * pc.ATTACK_TIME;
+    return {
+      enemyMove, playerMove, playerAtk,
+      scale: pc.MOVE_SCALE, atkScale,
+      secs, wantWindup, windupOk: Math.abs(secs - wantWindup) < 0.04,
+      enemyKey: e.def.key,
+    };
+  });
+  ok('pace.moveScaled', pace.enemyMove && pace.playerMove,
+    `이동 ×${pace.scale} — 플레이어·${pace.enemyKey} 모두 적용`);
+  ok('pace.attackScaled', pace.playerAtk, `공격 ×${pace.atkScale.toFixed(3)}`);
+  ok('pace.windupMatchesTelegraph', pace.windupOk,
+    `선딜 실측 ${pace.secs.toFixed(2)}초 (예고 링 ${pace.wantWindup.toFixed(2)}초) — 어긋나면 예고 없이 맞는다`);
+
   // 이후 이동 검사가 영향을 받지 않도록 어그로를 정리한다
   await page.evaluate(() => {
     const G = window.G3, dg = G.dungeon;
@@ -230,7 +269,11 @@ async function shot(page, name) {
       P.moveTo(dg, tx, tz);
       cmds++;
       let noProgress = 0, last = { x: P.pos.x, z: P.pos.z };
-      for (let f = 0; f < 240; f++) {
+      // 프레임 예산은 「거리」 기준이어야 한다 — 이동 속도를 낮추면(pace.js)
+      // 240프레임으로는 경로를 다 못 걸어서, 끼임을 만들어 보기도 전에 시험이
+      // 끝나 버린다. 속도 배수로 나눠 같은 거리를 보장한다.
+      const FRAMES = Math.ceil(240 / (window.G3.pace?.MOVE_SCALE ?? 1));
+      for (let f = 0; f < FRAMES; f++) {
         P.update(1 / 60, G);
         const moved = Math.hypot(P.pos.x - last.x, P.pos.z - last.z);
         last = { x: P.pos.x, z: P.pos.z };

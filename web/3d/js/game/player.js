@@ -5,6 +5,7 @@ import { makeBlobShadow } from '../core/fx.js';
 import { aggregate, RARITIES } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
+import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
 
 const RADIUS = 0.42;
 const BASE_SPEED = 6.2;
@@ -169,8 +170,10 @@ export class Player {
     this.armor = 2 + lv * 1.2 + a.armor;
     this.critChance = 5 + a.crit;
     this.critMult = 1.8 + a.cdmg / 100;
-    this.speed = BASE_SPEED * (1 + a.speed / 100);
-    this.attackSpeed = a.weaponSpeed * (1 + a.aspd / 100) * (1 + lv * 0.012);
+    // 전체 템포는 pace.js 가 정한다 (game/pace.js). 장비 보너스는 그 위에 얹힌다 —
+    // 순서를 바꾸면 「+5% 이동 속도」가 체감상 다른 값이 되어버린다.
+    this.speed = BASE_SPEED * MOVE_SCALE * (1 + a.speed / 100);
+    this.attackSpeed = a.weaponSpeed * ATTACK_SCALE * (1 + a.aspd / 100) * (1 + lv * 0.012);
     this.cdr = Math.min(0.45, a.cdr / 100);
     this.leech = a.leech;
     this.dmgMin = a.dmgMin + a.dmg + lv * 1.6;
@@ -380,7 +383,8 @@ export class Player {
 
     // 걷기: 다리 교차 + 상체 상하
     if (moved > 0.05) {
-      this.walkT += dt * 11;
+      // 보폭은 실제 이동 속도를 따라간다 — 안 맞으면 발이 미끄러져 보인다
+      this.walkT += dt * 11 * MOVE_SCALE;
       const s = Math.sin(this.walkT);
       r.legL.rotation.x = s * 0.75;
       r.legR.rotation.x = -s * 0.75;
@@ -395,7 +399,7 @@ export class Player {
 
     // 공격 스윙: 예비(뒤로) → 타격(앞으로) → 복귀
     if (this.swing > 0) {
-      this.swing = Math.max(0, this.swing - dt * 4.4);
+      this.swing = Math.max(0, this.swing - dt * 4.4 * ATTACK_SCALE);
       const k = 1 - this.swing;                  // 0 → 1
       const a = k < 0.32 ? -1.15 * (k / 0.32) : -1.15 + 2.5 * ((k - 0.32) / 0.68);
       r.armR.rotation.x = a;
