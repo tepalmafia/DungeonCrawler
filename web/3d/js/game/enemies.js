@@ -251,6 +251,7 @@ export class Enemy {
     this.repathCd = Math.random() * 0.4;
     this.attackCd = 0;
     this.recoilT = 0;
+    this.stunT = 0;              // 기절 남은 시간 (둔기·stun 접사)
     this.recoilDir = { x: 0, z: 1 };
     this.recoilPow = 1;
     this.knockMoved = 0;              // 넉백으로 실제 밀려난 거리 — 실측용(core/metrics.js)
@@ -339,6 +340,27 @@ export class Enemy {
     this.repathCd -= dt;
 
     const dist = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+
+    // 기절 — 둔기 계열과 stun 접사가 건다 (game/combat.js).
+    //
+    // 상태를 유지한 채 **행동만** 멈춘다. state 를 'idle' 같은 걸로 바꿔 버리면
+    // 선딜 중에 기절한 놈이 깨어나며 예고 없이 때린다 — 예고 링과 타격이
+    // 어긋나는 그 사고다. 그래서 stateT 를 되돌려 공격 시계까지 같이 세운다.
+    if (this.stunT > 0) {
+      this.stunT -= dt;
+      this.stateT -= dt * ATTACK_SCALE;
+      this.rig.group.rotation.z = Math.sin(G.time * 17) * 0.11;   // 비틀거린다
+      this.obj.position.copy(this.pos);
+      this._animate(dt, 0);
+      const showS = (this.hp < this.maxHp || G.hover === this) && dist < 22;
+      this.hpBar.visible = showS;
+      if (showS) {
+        this.hpBar.position.set(0, this.headY + 0.35, 0);
+        this._drawHpBar();
+      }
+      return;
+    }
+    if (this.rig.group.rotation.z) this.rig.group.rotation.z = 0;
 
     // 어그로는 「개체별」로만 붙는다. 옆의 동료에게 번지지 않는다 —
     // 그래야 가장자리 한 마리만 끌어내는 플레이가 성립한다.
@@ -523,6 +545,10 @@ export class Enemy {
     }
     this.alert.visible = true;
     this.alertT = 1.25;
+
+    // 「누구냐! 정지!」 — 발견의 순간에만 말한다. 대사 조건(거리·벽·간격)은
+    // game/dialogue.js 가 판단하므로 여기서는 부르기만 한다.
+    G.dialogue?.say(G, this, 'spot');
   }
 
   /** 귀환: 원래 자리로 돌아가며 회복하고 어그로를 푼다 */
@@ -625,12 +651,12 @@ export class Enemy {
       G.fx.addShake(0.14);
       G.lighting.flash(this.center(), 0xff7a2a, 70, 0.3);
       if (Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < d.slam)
-        hitPlayer(G, this.dmg, { from: this.pos });
+        hitPlayer(G, this.dmg, { from: this.pos, attacker: this });
       return;
     }
 
     // 근접: 예고 후에도 사거리 안에 있어야 맞는다 — 피할 수 있다
-    if (dist <= d.range + 0.5) hitPlayer(G, this.dmg, { from: this.pos });
+    if (dist <= d.range + 0.5) hitPlayer(G, this.dmg, { from: this.pos, attacker: this });
     G.fx.arc(this.pos, this.facing, { radius: d.range, spread: Math.PI * 0.55, color: 0xff9a7a, life: 0.16 });
   }
 
@@ -750,6 +776,10 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
 
   for (const room of dg.rooms) {
     if (room === dg.startRoom || room.boss) continue;
+    // 금고 방에는 적을 두지 않는다. 문이 닫혀 있으면 갇힌 적을 못 잡고,
+    // 그러면 「적을 다 잡으면 포탈이 열린다」가 영원히 성립하지 않는다.
+    // 이 방의 위험은 적이 아니라 함정과 값이다.
+    if (room.vault) continue;
 
     // 방 넓이에 비례하되 적게 — 한 판이 길어졌으니 마릿수로 밀지 않는다
     const area = room.w * room.h;

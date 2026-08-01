@@ -5,13 +5,13 @@
 // 지금 슬롯은 셋뿐이지만 배치가 그 규칙을 따르므로, 투구·장갑이 늘어도
 // 각 열에 한 칸씩 얹으면 된다 (docs/ITEM-ECONOMY.md §3-1).
 
-import { RARITIES, tooltipHtml, power } from '../game/items.js';
-
-const SLOTS = ['weapon', 'armor', 'ring'];
+import { RARITIES, SLOTS, tooltipHtml, power } from '../game/items.js';
+import { fuelCap } from '../game/lantern.js';
 
 // 정렬 순서 — 같은 부위끼리 모으고, 그 안에서 좋은 것이 앞에 온다.
 // 「좋은 것」은 등급이 아니라 power() 다. 고급 무기가 희귀 반지보다 나을 수 있다.
-const SLOT_ORDER = { weapon: 0, armor: 1, ring: 2 };
+// SLOTS 의 순서를 그대로 쓴다 — 두 곳에 따로 적으면 슬롯을 늘릴 때 한쪽만 고치게 된다.
+const SLOT_ORDER = Object.fromEntries(SLOTS.map((s, i) => [s, i]));
 
 const $ = (s) => document.querySelector(s);
 
@@ -22,6 +22,7 @@ export class Inventory {
     this.bag = $('#bagGrid');
     this.statList = $('#statList');
     this.bagCount = $('#bagCount');
+    this.coinEl = $('#invCoin');
     this.tooltip = $('#tooltip');
     this.lantern = $('#invLantern');
     this.open = false;
@@ -113,6 +114,7 @@ export class Inventory {
     // 가방
     this.bag.innerHTML = '';
     this.bagCount.textContent = `${p.bag.length} / ${p.bagMax}`;
+    if (this.coinEl) this.coinEl.textContent = `◈ ${p.coin}`;
     // 꽉 찬 것이 눈에 보여야 한다. 토스트는 지나가면 사라지고,
     // 그러면 「왜 안 주워지지」로 남는다.
     const head = this.bagCount.parentElement;
@@ -151,8 +153,9 @@ export class Inventory {
       this.lantern.innerHTML = '<b>맨손</b><br>기본 등불만';
       return;
     }
-    const pct = Math.max(0, Math.min(1, l.fuel / l.fuelMax));
-    this.lantern.innerHTML = `<b>${l.name}</b><br>연료 ${Math.round(l.fuel)}초`
+    const cap = fuelCap(l, this.G.player);
+    const pct = Math.max(0, Math.min(1, l.fuel / cap));
+    this.lantern.innerHTML = `<b>${l.name}</b><br>연료 ${Math.round(l.fuel)} / ${Math.round(cap)}초`
       + `<span class="fuel"><i style="width:${(pct * 100).toFixed(1)}%"></i></span>`;
   }
 

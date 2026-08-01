@@ -13,6 +13,24 @@ import * as THREE from 'three';
 const POOL = 8;              // 동시에 켜지는 횃불 수 (고정)
 const TORCH_RANGE = 30;      // 이 거리 밖 횃불은 강도 0 (개수는 그대로)
 
+// 플레이어 등불의 높이. 원래 1.9 였는데, 그건 **머리 꼭대기(y≈1.55) 바로 위
+// 0.35** 다. 감쇠가 제곱이라 정수리가 1 단위 거리 대비 8배로 얻어맞았고,
+// HDR 휘도가 36 까지 치솟아 캐릭터가 흰 덩어리로 뭉개졌다. 후처리를 켜니
+// 블룸이 그 36 을 재료로 삼아 문제가 눈에 보이게 됐을 뿐, 원인은 원래 여기 있었다.
+//
+// 등불을 올리면 정수리는 급격히, 바닥은 완만하게만 어두워진다. 세기로 바닥을
+// 되살리면 **바닥은 그대로, 정수리만 내려가는** 교환이 된다.
+// 실측(등불 높이 훑기, 후처리 켠 상태):
+//   y=1.9  몸통 136.8 · 발밑 90.1 · 빛웅덩이 22.6   ← 캐릭터가 배경보다 밝다
+//   y=2.9  몸통  96.7 · 발밑 88.0 · 빛웅덩이 39.6
+//   y=3.4  몸통  78.9 · 발밑 83.3 · 빛웅덩이 43.6   ← 후처리 끔의 몸통(77.5)과 같음
+// 3.0 을 골랐다. 캐릭터가 다시 읽히면서 빛웅덩이는 오히려 넓어진다 —
+// 머리에 붙은 헤드램프가 아니라 손에 든 등불처럼 보인다.
+const LAMP_Y = 3.0;
+// 발밑 조도를 예전과 맞추는 보정. 랜턴 등급별 세기(game/lantern.js)는
+// 그대로 두고 여기서 한 번에 곱한다.
+const LAMP_GAIN = (LAMP_Y / 1.9) ** 2;   // ≈ 2.49
+
 export class Lighting {
   constructor(scene, theme) {
     this.scene = scene;
@@ -90,8 +108,8 @@ export class Lighting {
 
     // 플레이어 광원: 살짝 흔들려야 횃불처럼 보인다
     const flick = 1 + Math.sin(t * 11.3) * 0.05 + Math.sin(t * 27.7) * 0.03;
-    this.playerLamp.position.set(playerPos.x, 1.9, playerPos.z);
-    this.playerLamp.intensity = this.lamp.intensity * flick;
+    this.playerLamp.position.set(playerPos.x, LAMP_Y, playerPos.z);
+    this.playerLamp.intensity = this.lamp.intensity * LAMP_GAIN * flick;
 
     // ── 가까운 횃불 8개를 풀에 배정 ────────────────────────
     if (this.torches && this.torches.length) {

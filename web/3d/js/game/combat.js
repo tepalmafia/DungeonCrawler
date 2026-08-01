@@ -112,6 +112,16 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     G.player.hp = Math.min(G.player.maxHp, G.player.hp + G.player.leech);
   }
 
+  // 기절 — 둔기 계열과 stun 접사가 굴린다.
+  // 정예·보스는 안 걸린다. 보스가 기절로 잠기면 페이즈 설계가 통째로 무너진다.
+  const stun = (opts.stun !== false) ? (G.player.stunChance || 0) : 0;
+  if (stun > 0 && !e.dead && !e.elite && !e.isBoss && Math.random() * 100 < stun) {
+    e.stunT = Math.max(e.stunT || 0, 0.9);
+    G.fx.burst(c.clone().setY(c.y + 0.55), {
+      count: 8, color: 0xffe9a0, speed: 2.4, size: 0.3, life: 0.5, grav: -1, up: 1.2,
+    });
+  }
+
   G.metrics?.hit(e, dmg, !!opts.crit);
 
   if (e.hp <= 0) killEnemy(G, e);
@@ -128,6 +138,8 @@ export function killEnemy(G, e) {
   G.fx.ground(e.pos, { r0: 0.7, r1: 1.7, color: 0x8a2a2a, life: 0.5 });
   // 죽은 자리에 종족에 맞는 잔해를 남긴다 (world/remains.js)
   G.remains?.spawn(e.def.key, e.pos, e.def.scale || 1);
+  // 마지막 말. 망령 궁수의 「고맙…다.」 가 이 게임 이야기의 전부다 (docs/STORY.md §6-3).
+  G.dialogue?.say(G, e, 'die');
   Sfx.enemyDie(e.def.key, volAt(G, e.pos));
   G.hitStop = Math.max(G.hitStop || 0, 0.11);      // 마무리 일격은 더 길게 붙잡는다
 
@@ -153,6 +165,14 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   Sfx.playerGrunt(Math.min(1, 0.5 + dmg / (p.maxHp * 0.3)));
 
   G.metrics?.taken(dmg);
+
+  // 가시 — 때린 놈에게 되돌려준다. 근접해서 때린 경우만이다:
+  // 화살에 반사가 걸리면 화면 밖 궁수가 스스로 죽는 우스운 그림이 된다.
+  if (p.thorns > 0 && opts.attacker && !opts.attacker.dead && !opts.ranged) {
+    hitEnemy(G, opts.attacker, p.thorns, {
+      color: 0xc0d8ff, knock: 0, silent: true, los: false, stun: false, crit: false,
+    });
+  }
 
   if (p.hp <= 0) { p.hp = 0; G.onPlayerDeath(); }
   return dmg;
@@ -236,7 +256,7 @@ export class Projectile {
     } else {
       const p = this.G.player;
       if (!p.dead && segDist(p.pos.x, p.pos.z) < p.radius + this.radius + 0.25) {
-        hitPlayer(this.G, this.dmg);
+        hitPlayer(this.G, this.dmg, { ranged: true });
         return this.kill();
       }
     }

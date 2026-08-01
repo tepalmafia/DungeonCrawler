@@ -4,7 +4,10 @@
 import { makeRng } from '../core/rng.js';
 
 export const CELL = 2;            // 한 칸 = 2 월드 유닛
-export const VOID = 0, FLOOR = 1, WALL = 2;
+// DOOR 는 「열려 있으면 바닥, 닫혀 있으면 벽」인 칸이다. 상태는 격자가 아니라
+// dg.doorAt 이 들고 있고, nav.walkable() 한 곳에서만 해석한다 —
+// 길찾기·시야·충돌이 전부 walkable() 을 지나가므로 거기만 맞으면 셋 다 맞는다.
+export const VOID = 0, FLOOR = 1, WALL = 2, DOOR = 3;
 
 /** 격자 좌표 → 월드 좌표(칸 중심) */
 export function gridToWorld(gx, gz, w, h) {
@@ -15,10 +18,15 @@ export function worldToGrid(x, z, w, h) {
   return [Math.floor(x / CELL + w / 2), Math.floor(z / CELL + h / 2)];
 }
 
+// postShadow/postHigh 는 후처리의 스플릿 톤(core/post.js)이 쓴다.
+// 그림자로 스미는 색과 하이라이트로 스미는 색을 층마다 달리해 온도를 가른다.
 const THEMES = [
-  { key: 'crypt',  name: '납골당', floor: 0x59506a, wall: 0x453c56, moss: '#4c6b3a', mossP: 0.30, fog: 0x07060c, torch: 0xffa04a },
-  { key: 'flood',  name: '침수 회랑', floor: 0x4a5a5e, wall: 0x37464d, moss: '#3f7a68', mossP: 0.46, fog: 0x05090c, torch: 0x9fd8ff },
-  { key: 'throne', name: '왕좌의 방', floor: 0x63505c, wall: 0x4e3b48, moss: '#7a3a3a', mossP: 0.18, fog: 0x0b0508, torch: 0xff7a3a },
+  { key: 'crypt',  name: '납골당', floor: 0x59506a, wall: 0x453c56, moss: '#4c6b3a', mossP: 0.30, fog: 0x07060c, torch: 0xffa04a,
+    postShadow: 0x8fa8d4, postHigh: 0xffd6a0 },
+  { key: 'flood',  name: '침수 회랑', floor: 0x4a5a5e, wall: 0x37464d, moss: '#3f7a68', mossP: 0.46, fog: 0x05090c, torch: 0x9fd8ff,
+    postShadow: 0x7fbcd6, postHigh: 0xd8f0ff },   // 물 — 위아래 다 차갑다
+  { key: 'throne', name: '왕좌의 방', floor: 0x63505c, wall: 0x4e3b48, moss: '#7a3a3a', mossP: 0.18, fog: 0x0b0508, torch: 0xff7a3a,
+    postShadow: 0xa88ac0, postHigh: 0xffb070 },   // 영혼빛 그림자 + 붉은 불
 ];
 export function themeFor(floorNo) {
   return THEMES[Math.min(floorNo - 1, THEMES.length - 1)];
@@ -181,9 +189,85 @@ export function generate(floorNo, seed) {
   }, rooms[1] || rooms[0]);
   const exit = { gx: exitRoom.cx, gz: exitRoom.cy };
 
+  // ── 금고 방: 문으로 봉하고, 스위치를 찾아야 열린다 ─────────
+  //
+  // 사장님 지시는 「문에 스위치를 찾아서 문을 열어주고」였다.
+  // 문의 진짜 기능은 **어그로를 끊는 것**이다(docs/DUNGEON-INTERACTIONS.md §2-2):
+  // 닫힌 문은 walkable() 이 막으므로 lineOfSight 도 같이 막히고,
+  // 그러면 문 너머의 적은 플레이어를 감지하지 못한다. 도망칠 곳이 생긴다.
+  //
+  // 안에는 상점(재의 행상)이 들어간다. 「함정이 도사리는 특정한 방」이라는
+  // 지시와 맞물려, 여기가 이 층에서 유일하게 판단이 필요한 장소가 된다.
+  const doors = [];
+  const doorAt = new Map();
+  let vaultRoom = null, switchAt = null;
+  if (!isBossFloor) {
+    // 후보: 시작도 출구도 아닌 방 중 시작에서 먼 순서
+    const cands = rooms
+      .filter((r) => r !== startRoom && r !== exitRoom && !r.boss)
+      .sort((a, b) => ((b.cx - startRoom.cx) ** 2 + (b.cy - startRoom.cy) ** 2)
+        - ((a.cx - startRoom.cx) ** 2 + (a.cy - startRoom.cy) ** 2));
+
+    for (const r of cands) {
+      // 방을 둘러싼 고리에서 바닥인 칸 = 드나드는 목
+      const seal = [];
+      for (let x = r.x - 1; x <= r.x + r.w; x++) {
+        for (const y of [r.y - 1, r.y + r.h]) if (at(x, y) === FLOOR) seal.push([x, y]);
+      }
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (const x of [r.x - 1, r.x + r.w]) if (at(x, y) === FLOOR) seal.push([x, y]);
+      }
+      if (!seal.length || seal.length > 14) continue;   // 목이 너무 넓으면 문이 아니라 벽이다
+
+      // **닫은 채로 출구까지 갈 수 있는지 먼저 확인한다.** 이걸 안 하면
+      // 언젠가 열쇠 없이 층이 잠기는 시드가 나오고, 그건 재현이 어려운 사고다.
+      for (const [x, y] of seal) set(x, y, DOOR);
+      const ok = reachable(spawn, exit);
+      if (!ok) { for (const [x, y] of seal) set(x, y, FLOOR); continue; }
+
+      const door = { cells: seal.map(([x, y]) => y * w + x), open: false, room: r };
+      doors.push(door);
+      for (const i of door.cells) doorAt.set(i, door);
+      r.vault = true;
+      vaultRoom = r;
+
+      // 스위치는 **다른 방**에 둔다. 문 옆에 두면 그냥 문이 두 번 열리는 것과 같다.
+      // 시작 방을 제외한 나머지 중 금고에서 가장 먼 방의 중앙 근처.
+      const swRoom = rooms
+        .filter((o) => o !== r && o !== startRoom)
+        .sort((a, b) => ((b.cx - r.cx) ** 2 + (b.cy - r.cy) ** 2) - ((a.cx - r.cx) ** 2 + (a.cy - r.cy) ** 2))[0]
+        || startRoom;
+      switchAt = { gx: swRoom.cx, gz: swRoom.cy, room: swRoom, door };
+      break;
+    }
+  }
+
+  /** 문을 닫은 상태로 a → b 가 이어지는가 (BFS) */
+  function reachable(a, b) {
+    const seen = new Uint8Array(w * h);
+    const q = [a.gz * w + a.gx];
+    seen[q[0]] = 1;
+    const goal = b.gz * w + b.gx;
+    for (let qi = 0; qi < q.length; qi++) {
+      const i = q[qi];
+      if (i === goal) return true;
+      const x = i % w, y = (i / w) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const ni = ny * w + nx;
+        if (seen[ni] || at(nx, ny) !== FLOOR) continue;
+        seen[ni] = 1;
+        q.push(ni);
+      }
+    }
+    return false;
+  }
+
   return {
     w, h, cells, rooms, spawn, exit, torches, props,
     solids, solidAt,
+    doors, doorAt, vaultRoom, switchAt,
     startRoom, bossRoom, isBossFloor,
     theme: themeFor(floorNo),
     floorNo, seed,

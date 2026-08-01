@@ -57,6 +57,18 @@ export function lanternDropChance(enemyKey, isBoss, isElite) {
 }
 
 /**
+ * 연료 상한 — 랜턴 자체 상한 + `fuel` 접사.
+ *
+ * 상한을 def.fuelMax 로 직접 읽는 곳이 세 군데(줍기·횃불 보충·인벤 표시) 있었는데,
+ * 접사를 더하려면 셋이 반드시 같은 값을 봐야 한다. 한 곳이라도 빠뜨리면
+ * 「채워지지 않는 게이지」나 「상한을 넘겨 채워지는 게이지」가 된다.
+ */
+export function fuelCap(lantern, player) {
+  if (!lantern) return 0;
+  return lantern.def.fuelMax + (player?.fuelBonus || 0);
+}
+
+/**
  * 지금 들고 있는 랜턴이 만드는 빛. 없으면 기본 등불.
  * @returns {{radius:number,intensity:number,color:number|null}}
  */
@@ -82,6 +94,6 @@ export function acquire(player, lantern) {
   }
   const add = Math.round(lantern.def.fuelMax * 0.6);
   const before = cur.fuel;
-  cur.fuel = Math.min(cur.def.fuelMax, cur.fuel + add);
+  cur.fuel = Math.min(fuelCap(cur, player), cur.fuel + add);
   return { action: 'fuel', gained: Math.round(cur.fuel - before) };
 }

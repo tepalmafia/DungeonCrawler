@@ -13,6 +13,7 @@ import { FX } from './core/fx.js';
 import * as Audio from './core/audio.js';
 import { Bot } from './core/bot.js';
 import { Metrics } from './core/metrics.js';
+import { Post } from './core/post.js';
 
 import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
@@ -22,11 +23,14 @@ import { resolveCollision, nearestWalkable, sweep } from './world/nav.js';
 
 import { Player } from './game/player.js';
 import { spawnFloor } from './game/enemies.js';
+import { Doors } from './world/doors.js';
+import { Shop } from './game/shop.js';
+import { Dialogue } from './game/dialogue.js';
 import { spawnBoss } from './game/boss.js';
 import { playerRoll, hitEnemy } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
-import { rollItem, Drop, RARITIES, power } from './game/items.js';
-import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, BASE_LIGHT } from './game/lantern.js';
+import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
+import { makeLantern, rollLantern, lanternDropChance, lightOf, acquire, fuelCap, BASE_LIGHT } from './game/lantern.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './game/pace.js';
 
 import { UI } from './ui/hud.js';
@@ -45,6 +49,8 @@ const params = {
   ff: Math.max(1, Math.min(8, parseFloat(qs.get('ff') || '1') || 1)),
   bot: qs.get('bot') === '1',
   jumpBoss: qs.get('jump') === 'boss',
+  // 후처리 — 기본 켜짐. ?post=0 으로 끄고, ?post=low 로 블룸만 뺀다
+  post: qs.get('post') === '0' ? 'off' : (qs.get('post') === 'low' ? 'low' : 'high'),
   autostart: qs.get('autostart') === '1' || qs.get('bot') === '1',
 };
 
@@ -66,6 +72,7 @@ renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
+let post = null;                     // 후처리 (core/post.js) — resize 보다 먼저 선언되어야 한다
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 const lastPos = { x: 0, z: 0 };       // 이동 거리 적산용 (실측)
@@ -77,6 +84,7 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  if (post) post.setSize(w, h);
 }
 addEventListener('resize', resize);
 resize();
@@ -93,7 +101,7 @@ const G = {
   player: null, enemies: [], drops: [], projectiles: [],
   fields: [], timers: [], cooldowns: {},
   boss: null, hover: null, pickupTarget: null,
-  fx: null, ui: null, inv: null, input: null, bot: null, remains: null,
+  fx: null, ui: null, inv: null, input: null, bot: null, remains: null, post: null,
   nav: { resolveCollision, nearestWalkable, sweep },
   pace: { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME },   // 검증·튜닝에서 읽는다
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
@@ -102,9 +110,16 @@ const G = {
   metrics: new Metrics(),                            // 실측 — window.G3.metrics.report()
   exitTouchT: 0,
   onEnemyKilled, onPlayerDeath, onLanternOut,
+  doors: null, shop: null, dialogue: null, interact: null,
+  acquireLantern: null,      // 아래에서 채운다 (game/shop.js 가 쓴다)
   dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
 window.G3 = G;
+
+post = new Post(renderer, scene, camera, params.post);
+G.post = post;
+// CSS 비네트가 셰이더 비네트와 겹치지 않도록 알린다 (css/style.css 참조)
+document.body.dataset.post = params.post;
 
 const input = new Input(canvas);
 G.input = input;
@@ -131,9 +146,14 @@ function clearFloor() {
   if (G.level) G.level.dispose();
   if (G.lighting) G.lighting.dispose();
   if (G.remains) G.remains.dispose();
+  if (G.doors) G.doors.dispose();
+  if (G.shop) G.shop.dispose();
   G.level = null;
   G.lighting = null;
   G.remains = null;
+  G.doors = null;
+  G.shop = null;
+  ui.setShop(null);
 }
 
 function loadFloor(floorNo) {
@@ -149,10 +169,13 @@ function loadFloor(floorNo) {
   G.lighting = new Lighting(scene, dg.theme);
   G.remains = new Remains(scene);
   G.lighting.setTorches(G.level.torches);
+  G.doors = new Doors(scene, dg);
+  if (!G.dialogue) G.dialogue = new Dialogue(scene);
 
   const rnd = makeRng(`${G.seed}-spawn-${floorNo}-${G.tier}`);
   if (!G.player) {
     G.player = new Player(scene);
+    G.player._onUpgrade = () => G.metrics.upgrade();
     // 시작 장비 — 빈손으로 시작하면 첫 전투가 너무 답답하다
     G.player.equip(rollItem(rnd, 1, 0, { slot: 'weapon', minRarity: 0 }));
     G.player.recompute();
@@ -172,6 +195,9 @@ function loadFloor(floorNo) {
   G.player.setPosition(sx, sz);
   G.player.target = null;
 
+  // 상점은 플레이어가 만들어진 뒤에 굴린다 — 재고가 착용 부위를 참고한다
+  G.shop = new Shop(scene, dg, makeRng(`${G.seed}-shop-${floorNo}-${G.tier}`), G.player, floorNo, G.tier);
+
   G.enemies = spawnFloor(G, dg, rnd, floorNo, G.tier);
   if (dg.isBossFloor) {
     G.boss = spawnBoss(G, dg, floorNo, G.tier);
@@ -188,6 +214,7 @@ function loadFloor(floorNo) {
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
 
   applyLantern();
+  if (post) post.setTheme(dg.theme);
   G.metrics.floorStart(floorNo);
 
   // 카메라를 즉시 플레이어 위로 (줌 배율은 층을 넘어가도 유지한다)
@@ -208,19 +235,42 @@ function onEnemyKilled(e) {
   }
 
   const rnd = makeRng(`${G.seed}-drop-${G.stats.kills}-${e.pos.x.toFixed(2)}`);
+
+  // 드랍 롤에 넘길 공통 조건 — 「내가 쓰는 부위」쪽으로 치우치게 하고(§2-2),
+  // find 접사를 등급 밀기에 반영한다.
+  const roll = (extra = {}) => rollItem(rnd, G.floorNo, G.tier, {
+    prefer: SLOTS.filter((s) => G.player.equipped[s]),
+    find: G.player.find || 0,
+    ...extra,
+  });
+
   if (e.isBoss) {
     G.stats.bossKills++;
-    for (let i = 0; i < 3; i++) dropItem(rollItem(rnd, G.floorNo, G.tier, { minRarity: 2 }), e.pos, i);
+    // 3 → 2. 보스가 한 번에 세 개를 뱉으면 그 뒤 층의 드랍이 전부 무의미해진다.
+    for (let i = 0; i < 2; i++) dropItem(roll({ minRarity: 2 }), e.pos, i);
     G.level.openExit();
     ui.setBoss(null);
     ui.center('심연의 군주 처치', '포탈이 열렸다');
     Audio.Sfx.victory();
     fx.addShake(0.3, 3);
   } else if (e.elite) {
-    dropItem(rollItem(rnd, G.floorNo, G.tier, { minRarity: 1 }), e.pos, 0);
-    if (rnd.chance(0.5)) dropItem(rollItem(rnd, G.floorNo, G.tier), e.pos, 1);
-  } else if (rnd.chance(0.17 + G.tier * 0.02) && !e.summoned) {
-    dropItem(rollItem(rnd, G.floorNo, G.tier), e.pos, 0);
+    dropItem(roll({ minRarity: 1 }), e.pos, 0);       // 확정 1 · 추가 없음
+  } else if (rnd.chance(0.09 + G.tier * 0.015) && !e.summoned) {
+    dropItem(roll(), e.pos, 0);
+  }
+
+  // 영혼 조각 — 잡몹도 **확정**으로 떨군다 (자동 획득, 줍는 동작 없음).
+  //
+  // 장비 드랍을 17% → 9% 로 절반 아래로 내렸으니, 그대로 두면 「아무것도 없는 판」이
+  // 대부분이 된다. 그건 절제가 아니라 그냥 빈 게임이다. 확정 화폐가 그 바닥을 받친다:
+  // 장비가 안 나와도 상점 쪽으로 조금씩 다가간다 (docs/ITEM-ECONOMY.md §4-1).
+  if (!e.summoned) {
+    const base = 3 + G.floorNo * 2 + G.tier * 3;
+    const mult = e.isBoss ? 25 : e.elite ? 6 : 1;
+    const coin = Math.max(1, Math.round(base * mult * rnd.range(0.7, 1.3)));
+    G.player.coin += coin;
+    G.metrics?.coin(coin);
+    fx.number(e.center().setY(1.5), `+${coin}`, { color: '#c9a44a' });
   }
 
   // 랜턴 — 빛이 곧 정보다. 잡몹도 낮은 확률로 떨군다.
@@ -257,22 +307,67 @@ function dropItem(item, pos, i = 0) {
   }
 }
 
+/**
+ * 사망 페널티 — 착용 중인 칸 하나를 골라, 등급에 따라 잃는다.
+ * (docs/ITEM-ECONOMY.md §6)
+ *
+ * 두 가지를 의도적으로 이렇게 뒀다:
+ *
+ * · **빈 칸이 뽑히면 아무 일도 없다.** 5칸 중 하나를 고르므로 장비가 하나뿐인
+ *   초반에는 80% 확률로 무사하다. 「초반 보호」를 따로 만들지 않아도 저절로 된다.
+ * · **등급이 높을수록 덜 잃는다** (일반 60% → 전설 15%). 반대로 두면 좋은 물건을
+ *   아껴 두고 낡은 걸 입게 된다. 그건 설계 실패다.
+ *
+ * 잃은 물건은 사라지지 않고 **죽은 자리에 떨어진다.** 어두운 길을 연료를 써 가며
+ * 되돌아가는 것이 벌이지, 소멸이 벌이 아니다.
+ */
+const LOSE_CHANCE = [0.60, 0.45, 0.30, 0.15];
+
+function applyDeathPenalty() {
+  const p = G.player;
+  const rnd = makeRng(`${G.seed}-death-${G.stats.deaths}`);
+  const slot = rnd.pick(SLOTS);
+  const item = p.equipped[slot];
+  const lost = [];
+
+  if (item && rnd.chance(LOSE_CHANCE[item.rarity] ?? 0.4)) {
+    p.equipped[slot] = null;
+    p.recompute();
+    dropItem(item, p.pos, 0);
+    lost.push(item);
+  }
+
+  // 영혼 조각은 30%. 장비를 안 잃어도 죽음에는 값이 있어야 한다.
+  const coinLost = Math.floor(p.coin * 0.3);
+  if (coinLost > 0) p.coin -= coinLost;
+
+  return { lost, coinLost, slot };
+}
+
 function onPlayerDeath() {
   G.metrics.death();
   if (G.state !== 'play') return;
   G.player.dead = true;
   G.state = 'dead';
   G.stats.deaths++;
+  const pen = applyDeathPenalty();
   Audio.Sfx.death();
   Audio.stopAmbient();
   fx.addShake(0.3, 2);
   ui.setBoss(null);
+  const lossLine = pen.lost.length
+    ? `<li style="color:#e07272">쓰러지며 <b>${pen.lost[0].name}</b> 을(를) 놓쳤다 — 그 자리에 떨어져 있다</li>`
+    : '<li>장비는 지켰다</li>';
+  const coinLine = pen.coinLost > 0
+    ? `<li>영혼 조각 <b>${pen.coinLost}</b> 을(를) 잃었다</li>` : '';
   showOverlay(`
     <h1 style="color:#c8484a">패 배</h1>
     <p class="sub">${G.floorNo}층에서 쓰러졌다</p>
     <ul class="keys">
       <li>처치 <b>${G.stats.kills}</b> · 획득 아이템 <b>${G.stats.itemsFound}</b> · 레벨 <b>${G.player.level}</b></li>
-      <li>장비는 그대로 유지된다. 다시 1층부터.</li>
+      ${lossLine}
+      ${coinLine}
+      <li>다시 1층부터. 떨어뜨린 것은 이 층과 함께 사라진다.</li>
     </ul>
     <button id="startBtn">다시 도전</button>`, () => restartRun(false));
 }
@@ -344,7 +439,11 @@ function handleInput(dt) {
     camDist = CAM_DIST_DEFAULT;
 
   if (input.wasPressed('KeyI')) inv.toggle();
-  if (input.wasPressed('Escape') && inv.open) inv.toggle(false);
+  if (input.wasPressed('KeyE')) {
+    // 열려 있으면 닫는다 — 같은 키로 열고 닫아야 손이 헤매지 않는다
+    if (ui.shop) ui.setShop(null); else doInteract();
+  }
+  if (input.wasPressed('Escape')) { if (ui.shop) ui.setShop(null); else if (inv.open) inv.toggle(false); }
 
   if (G.state !== 'play' || p.dead) {
     if (input.wasPressed('Space') && G.overlayAction) G.overlayAction();
@@ -436,7 +535,9 @@ function updateAutoAttack(dt) {
   if (!t || t.dead) { if (t && t.dead) p.target = null; return; }
 
   const dist = Math.hypot(t.pos.x - p.pos.x, t.pos.z - p.pos.z);
-  const range = 2.0 + t.radius;
+  // 대검 계열과 range 접사가 사거리를 늘린다. 눈에 보이는 차이라
+  // 「이 무기는 멀리 닿는다」가 툴팁을 안 읽어도 전달된다.
+  const range = 2.0 + t.radius + (p.reach || 0);
 
   if (dist > range) {
     // 추격 재계산은 전용 타이머를 쓴다 — 클릭 처리와 타이머를 공유하면
@@ -502,6 +603,7 @@ function updatePickups(dt) {
       if (!p.pickUp(d.item)) { ui.toast('가방이 가득 찼다', '#e07272'); continue; }
       Audio.Sfx.pickup(d.item.rarity);
       G.metrics.pickup(d.item.rarity);
+      G.metrics.itemGot();
       const gain = power(d.item) - power(p.equipped[d.item.slot]);
       ui.toast(`${d.item.name}${gain > 0 ? '  ▲ +' + gain : ''}`, RARITIES[d.item.rarity].css);
       fx.burst(d.pos.clone().setY(0.6), { count: 14, color: RARITIES[d.item.rarity].hex, speed: 3, size: 0.35, life: 0.5, grav: -2 });
@@ -567,7 +669,7 @@ function onLanternOut(lan) {
 function updateTorchRefuel(dt) {
   const p = G.player;
   if (p.dead || !G.level) { p.torchRefuelT = 0; return; }
-  if (!p.lantern || p.lantern.fuel >= p.lantern.def.fuelMax) { p.torchRefuelT = 0; return; }
+  if (!p.lantern || p.lantern.fuel >= fuelCap(p.lantern, p)) { p.torchRefuelT = 0; return; }
 
   let near = null;
   for (const t of G.level.torches) {
@@ -582,7 +684,7 @@ function updateTorchRefuel(dt) {
   if (p.torchRefuelT >= 3) {
     p.torchRefuelT = 0;
     near.spent = true;
-    p.lantern.fuel = Math.min(p.lantern.def.fuelMax, p.lantern.fuel + 100);
+    p.lantern.fuel = Math.min(fuelCap(p.lantern, p), p.lantern.fuel + 100);
     G.ui.setRefuel(0);
     ui.toast('연료 +100초', '#ffcf9a');
     Audio.Sfx.potion();
@@ -657,6 +759,46 @@ function simulate(dt) {
     updateFloorClear();
     updateBossBar();
     updateExit(dt);
+    G.doors?.update(dt);
+    G.shop?.update(dt, G.time);
+    G.dialogue?.update(dt, G);
+    updateInteract();
+  }
+}
+
+/**
+ * 손 닿는 곳에 무엇이 있는지 — 스위치 / 행상.
+ * 거리 판정을 한 곳에 모아 두면 안내 문구와 실제 동작이 어긋나지 않는다.
+ */
+function updateInteract() {
+  const p = G.player;
+  if (p.dead) { G.interact = null; return; }
+  if (G.doors?.leverInRange(p.pos.x, p.pos.z)) {
+    G.interact = { kind: 'lever', label: 'E — 스위치를 당긴다' };
+  } else if (G.shop?.inRange(p.pos.x, p.pos.z)) {
+    G.interact = { kind: 'shop', label: 'E — 재의 행상과 거래' };
+  } else {
+    G.interact = null;
+  }
+  ui.setInteract(G.interact);
+}
+
+/** E 키 — 손 닿는 것을 쓴다 */
+function doInteract() {
+  const it = G.interact;
+  if (!it) return;
+  if (it.kind === 'lever') {
+    if (G.doors.pull(G)) {
+      Audio.Sfx.portal?.() ?? Audio.Sfx.pickup(2);
+      ui.center('무언가가 열렸다', '멀리서 돌이 갈리는 소리');
+      ui.toast('봉인된 문이 열렸다', '#ffd84d');
+      fx.burst(new THREE.Vector3(G.doors.lever.x, 1.4, G.doors.lever.z), {
+        count: 22, color: 0xc8a24a, speed: 3.4, size: 0.4, life: 0.8, grav: -1,
+      });
+      fx.addShake(0.12, 1.2);
+    }
+  } else if (it.kind === 'shop') {
+    ui.setShop(G.shop);
   }
 }
 
@@ -762,7 +904,7 @@ function frame(now) {
   G.perf.frameMs = dt * 1000 / params.ff;
 
   input.endFrame();
-  renderer.render(scene, camera);
+  if (post) post.render(); else renderer.render(scene, camera);
 }
 
 // ───────────────────────── 시작 ─────────────────────────
@@ -781,6 +923,13 @@ window.G3.nextFloor = nextFloor;
 window.G3.VERSION = VERSION;
 window.G3.params = params;
 window.G3.applyLantern = applyLantern;
+G.acquireLantern = (lan) => {
+  const r = acquire(G.player, lan);
+  applyLantern();
+  ui.toast(r.action === 'fuel' ? `연료 +${r.gained}초` : `${lan.name} (연료 ${Math.round(r.gained)}초)`,
+    RARITIES[lan.rarity].css);
+  return r;
+};
 window.G3.dropItem = dropItem;         // 인벤토리에서 버릴 때 쓴다
 window.G3.headlessRun = headlessRun;   // tools/bench3d.js
 window.G3.BASE_LIGHT = BASE_LIGHT;
