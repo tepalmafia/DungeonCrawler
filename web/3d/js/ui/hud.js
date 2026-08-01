@@ -282,7 +282,7 @@ export class UI {
     // 레벨 숫자는 안 쓴다 — 이 게임에 적 레벨 개념이 없으므로 지어내면 거짓말이다.
     // 대신 「정예/보스」를 붙인다. 그건 실제로 규칙이 다른 구분이다.
     const tag = e.isBoss ? '보스' : e.elite ? '정예' : '';
-    const label = e.def.name + (tag ? `<span class="lv">${tag}</span>` : '');
+    const label = (e.displayName || e.def.name) + (tag ? `<span class="lv">${tag}</span>` : '');
     if (el.innerHTML !== label) el.innerHTML = label;
     el.hidden = false;
     el.style.display = '';
@@ -374,6 +374,18 @@ export class UI {
     this._drawMinimap();
   }
 
+  /**
+   * 층별 「밟아 본 칸」 기록. 층이 바뀌면(=다른 던전 객체) 새로 만든다 —
+   * 층을 넘어가며 지도가 남으면 안개가 한 판만 유효한 장치가 된다.
+   */
+  _seenFor(dg) {
+    if (this._seenDg !== dg) {
+      this._seenDg = dg;
+      this._seen = new Uint8Array(dg.w * dg.h);
+    }
+    return this._seen;
+  }
+
   _drawMinimap() {
     const G = this.G, dg = G.dungeon, ctx = this.mm;
     const S = 180, SPAN = 34;                     // 주변 34칸을 보여준다
@@ -388,13 +400,36 @@ export class UI {
     const x0 = Math.max(0, pgx - SPAN / 2 - 1), x1 = Math.min(dg.w, pgx + SPAN / 2 + 1);
     const z0 = Math.max(0, pgz - SPAN / 2 - 1), z1 = Math.min(dg.h, pgz + SPAN / 2 + 1);
 
-    ctx.fillStyle = '#3b3448';
-    for (let z = z0; z < z1; z++)
-      for (let x = x0; x < x1; x++)
-        if (dg.at(x, z) === FLOOR) ctx.fillRect(ox + x * scale, oz + z * scale, scale + 0.6, scale + 0.6);
+    // ── 안개 — 지나온 길만 남는다 ──────────────────────────
+    //
+    // 층 전체 지도를 처음부터 보여 주면 미니맵이 「가 볼 곳」을 알려주는 정찰
+    // 도구가 된다. 그러면 어둠 속을 더듬는다는 설계가 통째로 무너진다.
+    // 걸어서 밝힌 칸만 남기고, 그 기록은 층마다 새로 시작한다.
+    //
+    // 밝히는 반경은 **랜턴 반경**이다. 여기서도 빛이 곧 정보다 —
+    // 좋은 랜턴을 들면 지도가 더 빨리 채워진다.
+    const seen = this._seenFor(dg);
+    const lampR = (G.lighting ? G.lighting.lamp.radius : 9) / 2;   // 칸 단위
+    const R = Math.ceil(lampR);
+    for (let dz = -R; dz <= R; dz++)
+      for (let dx = -R; dx <= R; dx++) {
+        if (dx * dx + dz * dz > lampR * lampR) continue;
+        const gx = pgx + dx, gz = pgz + dz;
+        if (gx < 0 || gz < 0 || gx >= dg.w || gz >= dg.h) continue;
+        seen[gz * dg.w + gx] = 1;
+      }
 
-    // 출구
-    if (G.level && G.level.exitOpen) {
+    for (let z = z0; z < z1; z++)
+      for (let x = x0; x < x1; x++) {
+        if (!seen[z * dg.w + x]) continue;
+        const v = dg.at(x, z);
+        if (v !== FLOOR && v !== 3) continue;      // 3 = DOOR (열리면 지나다닌다)
+        ctx.fillStyle = v === 3 ? '#6a5236' : '#3b3448';
+        ctx.fillRect(ox + x * scale, oz + z * scale, scale + 0.6, scale + 0.6);
+      }
+
+    // 출구 — **밟아 본 곳일 때만.** 안 가 본 출구를 찍어 주면 안개가 무의미해진다
+    if (G.level && G.level.exitOpen && seen[dg.exit.gz * dg.w + dg.exit.gx]) {
       ctx.fillStyle = '#8fd6ff';
       ctx.fillRect(ox + dg.exit.gx * scale - 2, oz + dg.exit.gz * scale - 2, scale + 4, scale + 4);
     }

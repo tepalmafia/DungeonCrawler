@@ -9,6 +9,12 @@ import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, lineOfSight
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank } from './ai.js';
+import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
+
+// 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
+// 아이템·스킬이 늘면서 플레이어 쪽만 세졌다. 한 곳에서 올린다 —
+// 종족마다 hp 를 손보면 종족 간 균형이 같이 흔들린다.
+export const HP_SCALE = 1.3;
 
 const V = new THREE.Vector3();
 
@@ -66,7 +72,8 @@ function buildSkeleton() {                       // 두개골 · 장신 마름 �
   cape.position.set(0, 0.22, -0.13);
   torso.add(ribs, skull, jaw, eL, eR, cape);
 
-  const arm = new THREE.Group(); arm.position.set(0.25, 0.38, 0);
+  // 무기 손은 −X 다 (정면이 +Z 이므로) — player.js 의 armR 주석 참조
+  const arm = new THREE.Group(); arm.position.set(-0.25, 0.38, 0);
   const upper = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.36, 0.1), bone);
   upper.position.set(0, -0.17, 0);
   arm.add(upper);
@@ -106,7 +113,7 @@ function buildGhoul() {                          // 뿔 없음 · 왜소·굽은
   const eL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.03), eyeMat); eL.position.set(-0.07, 0.36, 0.42);
   const eR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.03), eyeMat); eR.position.set(0.07, 0.36, 0.42);
   torso.add(body, head, maw, eL, eR);
-  const arm = new THREE.Group(); arm.position.set(0.28, 0.24, 0.1);
+  const arm = new THREE.Group(); arm.position.set(-0.28, 0.24, 0.1);
   const fore = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.34, 0.11), skin);
   fore.position.y = -0.16;
   for (let i = -1; i <= 1; i++) {
@@ -135,10 +142,10 @@ function buildArcher() {                         // 두건 · 부유(다리 없�
   const eL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.02), glowMat); eL.position.set(-0.04, 0.34, 0.18);
   const eR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.02), glowMat); eR.position.set(0.04, 0.34, 0.18);
   torso.add(body, hood, face, eL, eR);
-  const arm = new THREE.Group(); arm.position.set(0.26, 0.15, 0.05);
+  const arm = new THREE.Group(); arm.position.set(-0.26, 0.15, 0.05);
   const bow = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.032, 5, 12, Math.PI * 1.25), m(0x5a4630));
-  bow.rotation.y = Math.PI / 2;
-  bow.rotation.z = Math.PI * 0.38;
+  bow.rotation.y = -Math.PI / 2;          // 손을 옮겼으니 활의 배도 같이 뒤집는다
+  bow.rotation.z = -Math.PI * 0.38;
   arm.add(bow);
   torso.add(arm);
   g.add(torso);
@@ -163,7 +170,7 @@ function buildGolem() {                          // 투구 · 육중 · 맨손
   const shL = new THREE.Mesh(shGeo, stone); shL.position.set(-0.62, 0.6, 0);
   const shR = new THREE.Mesh(shGeo, stone); shR.position.set(0.62, 0.6, 0);
   torso.add(body, heart, head, shL, shR);
-  const arm = new THREE.Group(); arm.position.set(0.62, 0.5, 0);
+  const arm = new THREE.Group(); arm.position.set(-0.62, 0.5, 0);
   const fore = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), stone);
   fore.position.y = -0.34;
   const fist = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.42), stone);
@@ -229,10 +236,11 @@ export class Enemy {
     this.knock = new THREE.Vector3();
     this.facing = Math.random() * Math.PI * 2;
 
-    this.maxHp = Math.round(d.hp * powerMult);
+    this.maxHp = Math.round(d.hp * powerMult * HP_SCALE);
     this.hp = this.maxHp;
     this.dmg = d.dmg * powerMult;
     this.armor = d.armor * powerMult;
+    this.atkSpeedMul = 1;      // 정예 특성이 올린다
     this.speed = d.speed * MOVE_SCALE;   // 전체 템포는 game/pace.js
     this.radius = d.radius;
     this.heavy = !!d.heavy;
@@ -268,6 +276,12 @@ export class Enemy {
     this.flankTarget = null;
     this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
+
+    this.skill = null;
+    this.skillCd = 0;
+    this.traits = null;
+    this.chargeT = 0;
+    this.xpMul = 1;
 
     // 피격 시 원래 색으로 되돌리기 위해 보관
     this.baseColors = rig.mats.map((mm) => mm.color.clone());
@@ -314,6 +328,23 @@ export class Enemy {
   get headY() { return (this.def.float ? 1.9 : this.radius * 3.2 + 0.5) * this.def.scale; }
 
   // ─────────────────── 프레임 ───────────────────
+  /** 화면에 보이는 이름. 정예는 특성이 앞에 붙는다 */
+  get displayName() { return this.eliteName || this.def.name; }
+
+  /** 정예로 승격 — spawnFloor 가 부른다 (game/elites.js) */
+  promote(rnd, floorNo) {
+    makeElite(this, rnd, floorNo);
+    const a = makeAura(this);
+    this.aura = a.mesh;
+    this.auraColor = a.color;
+    this.obj.add(this.aura);
+    // 몸에도 색을 스민다 — 발밑 고리는 각도에 따라 가려진다
+    for (const mm of this.mats) mm.emissive?.setHex?.(a.color), (mm.emissiveIntensity = 0.16);
+    this.rig.group.scale.multiplyScalar(1.12);
+    this.baseScale *= 1.12;
+    return this;
+  }
+
   update(dt, G) {
     if (this.dead) {
       this.dieT -= dt;
@@ -332,12 +363,23 @@ export class Enemy {
     // 이 시계로 재므로, 임계값을 한 줄씩 고치다 하나를 빠뜨려 예고와 타격이
     // 어긋나는 사고가 원천적으로 안 생긴다. 애니메이션(stateT/def.windup)도
     // 같은 시계를 쓰니 자동으로 맞는다.
-    this.stateT += dt * ATTACK_SCALE;
+    this.stateT += dt * ATTACK_SCALE * (this.atkSpeedMul || 1);
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.leapCd = Math.max(0, this.leapCd - dt);
     this.flankCd = Math.max(0, this.flankCd - dt);
     this.flash = Math.max(0, this.flash - dt);
     this.repathCd -= dt;
+
+    // 정예 — 특성 지속 효과와 스킬 쿨다운
+    if (this.traits) {
+      for (const t of this.traits) TRAITS[t].tick?.(this, dt);
+      this.skillCd = Math.max(0, this.skillCd - dt);
+      this.chargeT = Math.max(0, this.chargeT - dt);
+      if (this.aura) {
+        this.aura.rotation.z += dt * 1.1;
+        this.aura.material.opacity = 0.42 + Math.sin(G.time * 2.6 + this.bobPhase) * 0.18;
+      }
+    }
 
     const dist = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
 
@@ -482,6 +524,21 @@ export class Enemy {
           moving = this._step(dt, G, this.pos.x * 2 - p.pos.x, this.pos.z * 2 - p.pos.z, this.speed * 0.9, true);
           break;
         }
+        // 정예 스킬 — 예고가 먼저다. 예고 없는 큰 피해는 이 게임에 없다.
+        if (this.skill && this.skillCd <= 0 && this._canSee(G, p)) {
+          const sk = ELITE_SKILLS[this.skill];
+          if (dist >= sk.minRange && dist <= sk.maxRange) {
+            this.state = 'cast';
+            this.stateT = 0;
+            this.skillCd = sk.cd[0] + Math.random() * (sk.cd[1] - sk.cd[0]);
+            G.fx.ground(this.pos, {
+              r0: 0.3, r1: this.radius * 3.4, color: this.auraColor ?? 0xffd070, life: sk.tell,
+            });
+            G.ui?.toast(`${this.eliteName} — ${sk.name}`, '#ffd070');
+            break;
+          }
+        }
+
         // 구울은 이따금 도약
         if (d.leap && dist < 5.5 && dist > 2.6 && this.leapCd <= 0 && this._canSee(G, p)) {
           this.leapCd = 4 + Math.random() * 2;
@@ -502,6 +559,17 @@ export class Enemy {
         }
         moving = this._chase(dt, G, p);
         this.state = 'chase';
+        break;
+      }
+
+      case 'cast': {
+        this._face(p.pos.x, p.pos.z);
+        const sk = ELITE_SKILLS[this.skill];
+        if (this.stateT >= sk.tell) {
+          sk.fire(G, this);
+          this.state = 'recover';
+          this.stateT = 0;
+        }
         break;
       }
 
@@ -793,6 +861,7 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
     let n = Math.max(1, Math.min(4, Math.round(area / 26)));
     if (floorNo >= 2 && rnd.chance(0.45)) n++;
 
+    let roomElite = false;
     const kinds = [];
     for (let i = 0; i < n; i++) kinds.push(rnd.pick(roster));
     if (rnd.chance(0.2 + floorNo * 0.1 + tier * 0.05)) kinds.push('golem');
@@ -810,7 +879,14 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
       }
       if (x == null) continue;   // 자리를 못 찾으면 그냥 덜 놓는다 — 뭉치게 두지 않는다
       placed.push({ x, z });
-      out.push(new Enemy(G, key, x, z, powerMult));
+      const e = new Enemy(G, key, x, z, powerMult);
+      // 정예 승격 — 층이 깊을수록 잦다. 골렘은 이미 정예 취급이라 제외한다.
+      // 방마다 하나까지만: 정예 둘이 같은 방에 있으면 「한 마리씩」이 성립하지 않는다.
+      if (key !== 'golem' && !roomElite && rnd.chance(0.10 + floorNo * 0.05 + tier * 0.03)) {
+        e.promote(rnd, floorNo);
+        roomElite = true;
+      }
+      out.push(e);
     }
   }
   return out;

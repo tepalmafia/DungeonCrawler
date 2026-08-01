@@ -62,7 +62,7 @@ function buildLord() {                            // 왕관 · 장신 부유 · 
 
   // 낫 — 초승달 날이 보이도록 굽힌다
   const arm = new THREE.Group();
-  arm.position.set(0.82, 0.75, 0);
+  arm.position.set(-0.82, 0.75, 0);   // 무기 손은 −X (정면이 +Z)
   const fore = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), bone);
   fore.position.y = -0.4;
   const scythe = new THREE.Group();
