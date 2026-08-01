@@ -142,6 +142,36 @@ export function generate(floorNo, seed) {
     }
   }
 
+  // ── 소품 충돌 ───────────────────────────────────────────
+  // 지금까지 소품은 **격자를 전혀 건드리지 않는 순수 장식**이었다.
+  // walkable() 이 바닥인지만 보므로 기둥도 관도 그냥 통과했다.
+  //
+  // 칸 전체를 막지는 않는다. 기둥은 지름 1.0 인데 칸은 2.0 이라,
+  // 칸을 통째로 막으면 「기둥 근처에 못 간다」가 되어 답답해진다.
+  // 실제 크기의 원으로 막고 그 옆으로 미끄러지게 한다.
+  // 잔해(rubble)는 높이 0.3 짜리라 밟고 지나가는 게 맞다.
+  const SOLID_R = { pillar: 0.5, coffin: 0.75 };
+  const solids = [];
+  for (const p of props) {
+    const r = SOLID_R[p.kind];
+    if (!r) continue;
+    const [px, pz] = gridToWorld(p.gx, p.gz, w, h);
+    solids.push({ x: px, z: pz, r });
+  }
+  // 칸별로 미리 묶어 둔다 — 충돌 판정이 매 프레임 26마리에게서 돌기 때문에
+  // 전체 목록을 훑으면 안 된다. 반지름이 칸 경계를 넘으므로 이웃 칸에도 등록한다.
+  const solidAt = new Map();
+  for (const sd of solids) {
+    const [sgx, sgz] = worldToGrid(sd.x, sd.z, w, h);
+    for (let dz = -1; dz <= 1; dz++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const k = (sgz + dz) * w + (sgx + dx);
+        let list = solidAt.get(k);
+        if (!list) solidAt.set(k, (list = []));
+        list.push(sd);
+      }
+  }
+
   // ── 시작 / 출구 ─────────────────────────────────────────
   const spawn = { gx: startRoom.cx, gz: startRoom.cy };
   const exitRoom = isBossFloor ? bossRoom : rooms.reduce((far, r) => {
@@ -153,6 +183,7 @@ export function generate(floorNo, seed) {
 
   return {
     w, h, cells, rooms, spawn, exit, torches, props,
+    solids, solidAt,
     startRoom, bossRoom, isBossFloor,
     theme: themeFor(floorNo),
     floorNo, seed,

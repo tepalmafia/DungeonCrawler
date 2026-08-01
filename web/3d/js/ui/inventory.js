@@ -9,6 +9,10 @@ import { RARITIES, tooltipHtml, power } from '../game/items.js';
 
 const SLOTS = ['weapon', 'armor', 'ring'];
 
+// 정렬 순서 — 같은 부위끼리 모으고, 그 안에서 좋은 것이 앞에 온다.
+// 「좋은 것」은 등급이 아니라 power() 다. 고급 무기가 희귀 반지보다 나을 수 있다.
+const SLOT_ORDER = { weapon: 0, armor: 1, ring: 2 };
+
 const $ = (s) => document.querySelector(s);
 
 export class Inventory {
@@ -25,11 +29,43 @@ export class Inventory {
     const close = $('#invClose');
     if (close) close.addEventListener('click', () => this.toggle(false));
 
+    const sort = $('#bagSort');
+    if (sort) sort.addEventListener('click', () => this.sort());
+
+    // 가방 안에서는 브라우저 기본 메뉴가 뜨면 안 된다 — 우클릭이 「버리기」다
+    this.bag.addEventListener('contextmenu', (e) => e.preventDefault());
+
     this.root.addEventListener('mousemove', (e) => this._moveTooltip(e));
     this.root.addEventListener('mouseleave', () => this._hideTooltip());
     document.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.open) this.toggle(false);
     });
+  }
+
+  /** 부위별로 모으고 그 안에서 좋은 것부터 */
+  sort() {
+    const p = this.G.player;
+    p.bag.sort((a, b) => {
+      const s = (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9);
+      if (s) return s;
+      const r = b.rarity - a.rarity;
+      if (r) return r;
+      return power(b) - power(a);
+    });
+    this.render();
+    this.G.ui.toast('가방 정렬', '#cbbd9f');
+  }
+
+  /** 바닥에 버린다 — 발밑에 떨어뜨리므로 마음이 바뀌면 다시 주우면 된다 */
+  drop(item) {
+    const p = this.G.player;
+    const i = p.bag.indexOf(item);
+    if (i < 0) return;
+    p.bag.splice(i, 1);
+    if (this.G.dropItem) this.G.dropItem(item, p.pos, 0);
+    this.G.ui.toast(`${item.name} 버림`, '#9b9078');
+    this.render();
+    this._hideTooltip();
   }
 
   toggle(force) {
@@ -77,6 +113,10 @@ export class Inventory {
     // 가방
     this.bag.innerHTML = '';
     this.bagCount.textContent = `${p.bag.length} / ${p.bagMax}`;
+    // 꽉 찬 것이 눈에 보여야 한다. 토스트는 지나가면 사라지고,
+    // 그러면 「왜 안 주워지지」로 남는다.
+    const head = this.bagCount.parentElement;
+    if (head) head.classList.toggle('full', p.bag.length >= p.bagMax);
     const cells = Math.max(p.bagMax, p.bag.length);
     for (let i = 0; i < cells; i++) {
       const item = p.bag[i];
@@ -84,9 +124,10 @@ export class Inventory {
       d.className = 'cell' + (item ? '' : ' empty');
       this._fill(d, item);
       if (item) {
-        d.title = '클릭해서 장착';
+        d.title = '좌클릭 장착 · 우클릭 버리기';
         d.onmouseenter = () => this._showTooltip(item, p.equipped[item.slot]);
         d.onmouseleave = () => this._hideTooltip();
+        d.oncontextmenu = (e) => { e.preventDefault(); this.drop(item); };
         d.onclick = () => {
           const gain = power(item) - power(p.equipped[item.slot]);
           p.equip(item);

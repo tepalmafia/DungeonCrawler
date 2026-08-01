@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
 import { aggregate, RARITIES } from './items.js';
-import { findPath, smoothPath, toWorldPath, resolveCollision, unstick, walkable } from '../world/nav.js';
+import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
 
@@ -144,6 +144,7 @@ export class Player {
     this.noSmooth = false;
     // 탈출이 몇 번 발동했는지 — 검증과 현장 진단용 (window.G3.player.stuckEvents)
     this.stuckEvents = { skipWaypoint: 0, unsmooth: 0, giveUp: 0 };
+    this.lastGood = null;        // 마지막으로 걸을 수 있는 칸에 있었던 위치
 
     // 전투
     this.attackCd = 0;
@@ -312,9 +313,8 @@ export class Player {
     if (this.dashT > 0) {
       this.dashT -= dt;
       const step = 21 * dt;
-      const nx = this.pos.x + this.dashDir.x * step;
-      const nz = this.pos.z + this.dashDir.z * step;
-      const r = resolveCollision(dg, nx, nz, this.radius);
+      // 대시는 초당 21유닛이다. 한 번에 밀면 벽을 뚫는다(감사 최악 16.8유닛).
+      const r = sweep(dg, this.pos.x, this.pos.z, this.dashDir.x * step, this.dashDir.z * step, this.radius);
       this.pos.set(r.x, 0, r.z);
       this.facing = Math.atan2(this.dashDir.x, this.dashDir.z);
       moved = 1;
@@ -328,9 +328,7 @@ export class Player {
         this._resetProgress();
       } else {
         const step = Math.min(d, this.speed * dt);
-        const nx = this.pos.x + (dx / d) * step;
-        const nz = this.pos.z + (dz / d) * step;
-        const r = resolveCollision(dg, nx, nz, this.radius);
+        const r = sweep(dg, this.pos.x, this.pos.z, (dx / d) * step, (dz / d) * step, this.radius);
         this.pos.set(r.x, 0, r.z);
         this.facing = Math.atan2(dx, dz);
         moved = Math.min(1, step / (this.speed * dt || 1));
@@ -366,8 +364,18 @@ export class Player {
 
     // 어떤 이유로든 벽 안에 박혔으면 가장 가까운 바닥으로 빼낸다.
     // 밀어내기만으로는 두께 2칸 이상의 벽 안쪽에서 빠져나오지 못한다.
-    const esc = unstick(dg, this.pos.x, this.pos.z);
+    // 벽 안에 박혔으면 빼낸다. 못 빼내면 **직전에 검증된 위치**로 되돌린다 —
+    // 예전엔 실패 시 그냥 두어서, 비보행 칸에 남은 채 경로가 비면 영구 정지했다.
+    const esc = unstick(dg, this.pos.x, this.pos.z, this.lastGood);
     if (esc.moved) this.pos.set(esc.x, 0, esc.z);
+    // 이번 프레임 위치가 합법이면 다음 사고 때 쓸 안전지대로 기억한다
+    {
+      const [lgx, lgz] = worldToGrid(this.pos.x, this.pos.z, dg.w, dg.h);
+      if (walkable(dg, lgx, lgz)) {
+        if (!this.lastGood) this.lastGood = { x: this.pos.x, z: this.pos.z };
+        else { this.lastGood.x = this.pos.x; this.lastGood.z = this.pos.z; }
+      }
+    }
 
     this.obj.position.copy(this.pos);
     this._animate(dt, moved);

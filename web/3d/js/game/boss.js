@@ -312,8 +312,8 @@ export class Boss extends Enemy {
   }
 
   _stepRaw(G, dx, dz) {
-    const { resolveCollision } = G.nav;
-    const r = resolveCollision(G.dungeon, this.pos.x + dx, this.pos.z + dz, this.radius);
+    // 돌진은 초당 15유닛이라 한 번에 밀면 벽을 뚫는다 (감사 최악 12.1유닛)
+    const r = G.nav.sweep(G.dungeon, this.pos.x, this.pos.z, dx, dz, this.radius);
     this.pos.set(r.x, 0, r.z);
     return r;
   }

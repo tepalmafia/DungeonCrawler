@@ -106,15 +106,30 @@ async function shot(page, name) {
 
     // 리쉬: 집에서 멀어지면 귀환 상태로, 집에 닿으면 어그로가 풀린다.
     // 플레이어를 먼저 멀리 치워야 한다 — 옆에 서 있으면 해제되자마자 다시 붙는다.
-    G.player.pos.set(target.pos.x + 120, 0, target.pos.z + 120);
-    G.player.obj.position.copy(G.player.pos);
+    //
+    // **던전 밖 좌표로 밀면 안 된다.** 게임이 불법 위치를 직전의 합법 위치로
+    // 되돌리므로(nav.unstick 의 fallback), 결국 적 옆으로 다시 튕겨 온다.
+    // 실제로 걸을 수 있는 가장 먼 방으로 옮긴다.
+    {
+      const dg2 = G.dungeon;
+      let best = null, bd = -1;
+      for (const room of dg2.rooms) {
+        const d = (room.cx - target.pos.x / 2 - dg2.w / 2) ** 2 + (room.cy - target.pos.z / 2 - dg2.h / 2) ** 2;
+        if (d > bd) { bd = d; best = room; }
+      }
+      const fx2 = (best.cx - dg2.w / 2 + 0.5) * 2, fz2 = (best.cy - dg2.h / 2 + 0.5) * 2;
+      G.player.setPosition(fx2, fz2);
+      G.player.lastGood = { x: fx2, z: fz2 };
+    }
     const t = pulled[0] ? pulled[0].e : target;
     t.aggro = true;
     t.pos.set(t.home.x + t.def.leash + 6, 0, t.home.z);
-    await new Promise((r) => requestAnimationFrame(r));
+    // 프레임 수가 아니라 **시뮬레이션 시간**으로 센다. rAF 로 세면 렌더 속도에
+    // 따라 결과가 달라진다 — 고정 스텝을 넣자 실제로 이 검사가 깨졌다.
+    window.G3.headlessRun(0.1);
     const returning = t.state === 'returning';
     t.pos.copy(t.home);
-    for (let i = 0; i < 4; i++) await new Promise((r) => requestAnimationFrame(r));
+    window.G3.headlessRun(0.25);
     const released = !t.aggro;
 
     return { minGap, pulledCount: pulled.length, spreadCount: spread.length, returning, released };

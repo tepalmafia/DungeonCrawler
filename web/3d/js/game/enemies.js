@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
 import { hitPlayer, Projectile, volAt } from './combat.js';
 import { Sfx } from '../core/audio.js';
-import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
+import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank } from './ai.js';
@@ -254,6 +254,7 @@ export class Enemy {
     this.recoilDir = { x: 0, z: 1 };
     this.recoilPow = 1;
     this.knockMoved = 0;              // 넉백으로 실제 밀려난 거리 — 실측용(core/metrics.js)
+    this.lastGood = null;             // 마지막으로 걸을 수 있는 칸에 있었던 위치
 
     // 미발견 상태의 「하는 일」 (game/ai.js). 종족마다 어울리는 것이 다르다.
     this.idleKind = pickIdle(defKey);
@@ -379,7 +380,8 @@ export class Enemy {
     if (this.knock.lengthSq() > 0.0001) {
       const kx = this.knock.x * dt * 9, kz = this.knock.z * dt * 9;
       const before = { x: this.pos.x, z: this.pos.z };
-      const r = resolveCollision(G.dungeon, this.pos.x + kx, this.pos.z + kz, this.radius);
+      // 감사 최악값이 여기였다 — 60유닛(=격자 30칸). 반드시 쪼개서 민다.
+      const r = sweep(G.dungeon, this.pos.x, this.pos.z, kx, kz, this.radius);
       this.pos.set(r.x, 0, r.z);
       // 벽에 막히면 임펄스만큼 못 밀린다 — 그래서 「의도한 값」이 아니라
       // 실제 이동 합계를 잰다. 이게 사장님이 화면에서 보는 거리다.
@@ -392,8 +394,15 @@ export class Enemy {
 
     this._separate(dt, G);
     // 밀치기·넉백이 겹쳐 벽 안으로 밀려 들어갔으면 빼낸다
-    const esc = unstick(G.dungeon, this.pos.x, this.pos.z);
+    const esc = unstick(G.dungeon, this.pos.x, this.pos.z, this.lastGood);
     if (esc.moved) this.pos.set(esc.x, 0, esc.z);
+    {
+      const [lgx, lgz] = worldToGrid(this.pos.x, this.pos.z, G.dungeon.w, G.dungeon.h);
+      if (G.dungeon.at(lgx, lgz) === 1) {
+        if (!this.lastGood) this.lastGood = { x: this.pos.x, z: this.pos.z };
+        else { this.lastGood.x = this.pos.x; this.lastGood.z = this.pos.z; }
+      }
+    }
     this.obj.position.copy(this.pos);
     this._animate(dt, moving);
 
@@ -573,8 +582,9 @@ export class Enemy {
     const dx = tx - this.pos.x, dz = tz - this.pos.z;
     const l = Math.hypot(dx, dz);
     if (l < 0.001) return 0;
-    const step = speed * dt;
-    const r = resolveCollision(G.dungeon, this.pos.x + (dx / l) * step, this.pos.z + (dz / l) * step, this.radius);
+    // 목표를 지나치지 않도록 먼저 자르고, 그 다음 쪼개 민다
+    const step = Math.min(l, speed * dt);
+    const r = sweep(G.dungeon, this.pos.x, this.pos.z, (dx / l) * step, (dz / l) * step, this.radius);
     this.pos.set(r.x, 0, r.z);
     if (!away) this._face(tx, tz); else this.facing = Math.atan2(dx, dz);
     return 1;
@@ -639,7 +649,7 @@ export class Enemy {
       n++;
     }
     if (!n) return;
-    const r = resolveCollision(G.dungeon, this.pos.x + px * dt * 7, this.pos.z + pz * dt * 7, this.radius);
+    const r = sweep(G.dungeon, this.pos.x, this.pos.z, px * dt * 7, pz * dt * 7, this.radius);
     this.pos.set(r.x, 0, r.z);
   }
 

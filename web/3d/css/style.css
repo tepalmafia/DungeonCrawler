@@ -264,6 +264,17 @@ html, body {
   margin: 16px 16px 8px; padding-bottom: 6px; border-bottom: 1px solid #2a2335;
 }
 .baghead h3 { margin: 0; font-size: 13px; font-weight: normal; letter-spacing: 3px; color: #cbbd9f; }
+.baghead #bagCount { margin-left: auto; }
+#bagSort {
+  font: inherit; font-size: 11.5px; cursor: pointer; margin-left: 12px;
+  padding: 2px 12px; color: #cbbd9f;
+  background: #1e1828; border: 1px solid #3a3047; border-radius: 3px;
+}
+#bagSort:hover { color: #ffd9a8; border-color: #6b5a80; }
+#bagSort:focus-visible { outline: 2px solid #c08c3c; outline-offset: 1px; }
+/* 가방이 꽉 차면 그 사실이 보여야 한다 — 토스트는 지나가면 사라진다 */
+.baghead.full #bagCount { color: #ff8a72; }
+.baghead.full #bagSort { border-color: #7a4238; }
 
 .bag {
   display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px;

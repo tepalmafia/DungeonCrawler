@@ -136,13 +136,71 @@ export function toWorldPath(dg, path) {
  *
  * @returns {{x:number,z:number,moved:boolean}}
  */
-export function unstick(dg, x, z) {
+export function unstick(dg, x, z, fallback = null) {
   const [gx, gz] = worldToGrid(x, z, dg.w, dg.h);
   if (walkable(dg, gx, gz)) return { x, z, moved: false };
-  const n = nearestWalkable(dg, gx, gz, 16);
-  if (!n) return { x, z, moved: false };
+  // 탐색 반경 2칸. 예전엔 16칸이었는데, 그러면 벽에 낀 것을 빼내는 게 아니라
+  // **26유닛 떨어진 다른 방으로 순간이동**시킬 수 있다. 이건 수습이 아니라 사고다.
+  //
+  // fallback 은 호출부가 넘겨준 「직전에 검증된 위치」다. 예전 주석은
+  // 「호출부가 되돌린다」고 적어 놓고 정작 그런 코드가 없었다 — 여기서 받는다.
+  const n = nearestWalkable(dg, gx, gz, 2);
+  if (!n) {
+    if (fallback && walkable(dg, ...worldToGrid(fallback.x, fallback.z, dg.w, dg.h)))
+      return { x: fallback.x, z: fallback.z, moved: true };
+    return { x, z, moved: false };
+  }
   const [wx, wz] = gridToWorld(n[0], n[1], dg.w, dg.h);
   return { x: wx, z: wz, moved: true };
+}
+
+/**
+ * 스윕 이동 — 한 걸음을 조각내며 매 조각마다 벽을 푼다.
+ *
+ * 왜 필요한가: resolveCollision 은 **도착 지점 주변 3×3 칸만** 본다.
+ * 한 스텝이 한 칸(CELL=2.0)을 넘으면 지나온 벽을 아예 못 보고 통과한다.
+ * 감사 결과 최악은 넉백의 60유닛(=30칸)이었다.
+ *
+ * 조각 크기의 근거는 한 칸(2.0)의 절반이 아니라 **대각 핀치 폭**이다.
+ * 대각으로 맞물린 두 벽이 만나는 점을 45°로 지날 때 통과가 시작되는 임계는
+ * r√2 이고(구울 r=0.38 → 0.537, 실측 0.540), 그 절반 아래여야 안 스친다.
+ * 반지름이 작을수록 임계도 작으므로 **반지름에 연동**해야 한다 —
+ * 고정 0.25 는 화살(r=0.3, 안전 상한 0.212)에서 위반이었다.
+ *
+ * 비용: 정상 플레이의 한 걸음은 0.06 유닛이라 조각이 1개뿐 — 사실상 무료다.
+ * 비싸지는 것은 어차피 정상이 아닌 프레임(배속·큰 히치)뿐이다.
+ *
+ * 변위 상한: 한 스텝에 16유닛(=8칸)을 넘게 이동하는 것은 어떤 경우에도
+ * 의도된 연출이 아니다. 조각을 무한정 늘리는 대신 **거리를 자른다** —
+ * 늘리면 벽에 처박힌 넉백이 조각 수백 개를 헛돌며 CPU만 태운다.
+ *
+ * @returns {{x:number,z:number,hit:boolean,clamped:boolean}}
+ */
+const SWEEP_MAX_DIST = 16;
+
+export function sweep(dg, x, z, dx, dz, r, maxStep = null) {
+  let d = Math.hypot(dx, dz);
+  if (d < 1e-6) return { ...resolveCollision(dg, x, z, r), clamped: false };
+
+  let clamped = false;
+  if (d > SWEEP_MAX_DIST) {
+    const k = SWEEP_MAX_DIST / d;
+    dx *= k; dz *= k; d = SWEEP_MAX_DIST;
+    clamped = true;
+  }
+
+  const step = maxStep ?? Math.min(0.25, 0.7 * r);
+  const n = Math.max(1, Math.ceil(d / step));
+  const sx = dx / n, sz = dz / n;
+  let cx = x, cz = z, hit = false;
+  for (let i = 0; i < n; i++) {
+    const res = resolveCollision(dg, cx + sx, cz + sz, r);
+    if (res.hit) hit = true;
+    // 전진이 사실상 멈췄으면 남은 조각은 헛돈다 — 일찍 끊는다
+    if (Math.abs(res.x - cx) + Math.abs(res.z - cz) < 1e-5) { cx = res.x; cz = res.z; break; }
+    cx = res.x; cz = res.z;
+  }
+  return { x: cx, z: cz, hit, clamped };
 }
 
 /**
@@ -154,6 +212,27 @@ export function resolveCollision(dg, x, z, r) {
   for (let pass = 0; pass < 2; pass++) {
     const [gx, gz] = worldToGrid(x, z, dg.w, dg.h);
     let moved = false;
+
+    // 소품(기둥·관) — 격자가 아니라 원으로 막는다. 벽보다 먼저 푼다:
+    // 벽에 밀린 뒤 기둥에 박히는 것보다, 기둥에서 밀린 뒤 벽으로 정리되는 편이
+    // 결과가 안정적이다.
+    const near = dg.solidAt && dg.solidAt.get(gz * dg.w + gx);
+    if (near) {
+      for (const s of near) {
+        const ox = x - s.x, oz = z - s.z;
+        const rr = r + s.r;
+        const d2 = ox * ox + oz * oz;
+        if (d2 >= rr * rr) continue;
+        if (d2 > 1e-8) {
+          const d = Math.sqrt(d2);
+          x = s.x + (ox / d) * rr;
+          z = s.z + (oz / d) * rr;
+        } else {
+          x = s.x + rr;                 // 정확히 중심 — 아무 방향으로나 뺀다
+        }
+        hit = moved = true;
+      }
+    }
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const cx = gx + dx, cz = gz + dy;
