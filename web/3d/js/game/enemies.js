@@ -3,12 +3,35 @@
 
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';
-import { hitPlayer, Projectile } from './combat.js';
+import { hitPlayer, Projectile, volAt } from './combat.js';
+import { Sfx } from '../core/audio.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 
 const V = new THREE.Vector3();
+
+// 「!」 — 적이 나를 발견한 순간을 눈으로 알린다.
+// 붉은 바닥 원은 발밑이라 카메라 각도에 따라 가려진다. 머리 위 표식은 안 가려진다.
+let ALERT_TEX = null;
+function alertTexture() {
+  if (ALERT_TEX) return ALERT_TEX;
+  const S = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d');
+  x.font = 'bold 104px system-ui, sans-serif';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.lineWidth = 12;
+  x.strokeStyle = '#1a0806';          // 검은 테두리 — 어두운 배경에서도 뜬다
+  x.strokeText('!', S / 2, S / 2 + 4);
+  x.fillStyle = '#ff4a3a';
+  x.fillText('!', S / 2, S / 2 + 4);
+  ALERT_TEX = new THREE.CanvasTexture(c);
+  ALERT_TEX.colorSpace = THREE.SRGBColorSpace;
+  return ALERT_TEX;
+}
 
 function m(color, opt = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1, ...opt });
@@ -226,6 +249,10 @@ export class Enemy {
     this.path = [];
     this.repathCd = Math.random() * 0.4;
     this.attackCd = 0;
+    this.recoilT = 0;
+    this.recoilDir = { x: 0, z: 1 };
+    this.recoilPow = 1;
+    this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
 
     // 피격 시 원래 색으로 되돌리기 위해 보관
@@ -417,6 +444,19 @@ export class Enemy {
     this.stateT = 0;
     G.fx.ground(this.pos, { r0: this.radius * 2.6, color: 0xff3a3a, life: 0.7 });
     G.fx.burst(this.center(), { count: 6, color: 0xff5a4a, speed: 1.6, size: 0.32, life: 0.5, grav: -1 });
+    Sfx.enemyAggro(this.def.key, volAt(G, this.pos));
+
+    // 머리 위 느낌표 — 튀어올랐다가 사그라든다
+    if (!this.alert) {
+      this.alert = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: alertTexture(), transparent: true, depthTest: false,
+      }));
+      this.alert.renderOrder = 990;      // 벽·안개에 묻히지 않게
+      this.alert.scale.setScalar(0.6);
+      this.obj.add(this.alert);
+    }
+    this.alert.visible = true;
+    this.alertT = 1.25;
   }
 
   /** 귀환: 원래 자리로 돌아가며 회복하고 어그로를 푼다 */
@@ -493,6 +533,7 @@ export class Enemy {
 
   _strike(G, p, dist) {
     const d = this.def;
+    Sfx.enemyAttack(d.key, volAt(G, this.pos));
     // 이 쿨다운만 실시간(dt)으로 줄어드니 여기서 환산해 둔다
     this.attackCd = (d.recover * 0.8 + 0.25) * ATTACK_TIME;
 
@@ -541,6 +582,33 @@ export class Enemy {
 
   _animate(dt, moving) {
     const rig = this.rig;
+
+    // 발견 표식 — 위로 튀었다가 천천히 내려오며 사라진다
+    if (this.alert && this.alertT > 0) {
+      this.alertT = Math.max(0, this.alertT - dt);
+      const k = this.alertT / 1.25;                 // 1 → 0
+      const pop = Math.min(1, (1 - k) * 7);         // 처음 0.18초에 솟아오른다
+      this.alert.position.set(0, this.headY + 0.55 + pop * 0.35, 0);
+      this.alert.scale.setScalar(0.28 + pop * 0.36);
+      this.alert.material.opacity = k > 0.65 ? 1 : k / 0.65;
+      if (this.alertT === 0) this.alert.visible = false;
+    }
+
+    // 리코일 — 맞은 방향으로 움찔하고 납작해진다.
+    // 위치(this.pos)는 건드리지 않는다 — 이건 순전히 연출이라 충돌·경로와 무관하다.
+    if (this.recoilT > 0) {
+      this.recoilT = Math.max(0, this.recoilT - dt * 6.5);
+      const k = this.recoilT * this.recoilPow;
+      const back = 0.13 * k;
+      rig.group.position.x = this.recoilDir.x * back;
+      rig.group.position.z = this.recoilDir.z * back;
+      const sq = this.baseScale;
+      rig.group.scale.set(sq * (1 + 0.1 * k), sq * (1 - 0.14 * k), sq * (1 + 0.1 * k));
+      if (this.recoilT === 0) {
+        rig.group.position.x = rig.group.position.z = 0;
+        rig.group.scale.setScalar(sq);
+      }
+    }
     let d = this.facing - rig.group.rotation.y;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;

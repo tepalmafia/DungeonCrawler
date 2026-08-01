@@ -95,6 +95,7 @@ const G = {
   pace: { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME },   // 검증·튜닝에서 읽는다
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
   perf: { logicMs: 0, frameMs: 0 },
+  hitStop: 0,                                        // core/main frame() 에서 소모된다
   exitTouchT: 0,
   onEnemyKilled, onPlayerDeath, onLanternOut,
 };
@@ -446,6 +447,8 @@ function updateAutoAttack(dt) {
   p.attackCd = 1 / Math.max(0.35 * ATTACK_SCALE, p.attackSpeed);
   p.swing = 1;
   Audio.Sfx.swing();
+  // 기합은 가끔이어야 기합이다. 매번 지르면 30초 만에 소리를 끄게 된다.
+  if (Math.random() < 0.28) Audio.Sfx.playerShout(false);
   fx.arc(p.pos, p.facing, { radius: range + 0.6, spread: Math.PI * 0.45, color: 0xdfe6f2, life: 0.15 });
 
   // 타격 판정은 스윙 중간에 — 예비 동작이 보이고 나서 맞아야 손맛이 산다.
@@ -610,6 +613,15 @@ function frame(now) {
   last = now;
   if (!Number.isFinite(dt)) dt = 0;
   dt = Math.min(dt, 0.1) * params.ff;
+
+  // ── 히트스톱 ──────────────────────────────────────────────
+  // 타격 순간 시뮬레이션을 몇십 밀리초 거의 멈춘다. 액션 게임에서 「손맛」의
+  // 가장 큰 지분이 여기 있다 — 밀어내지 않고도 맞았다는 감각을 준다.
+  // 렌더는 계속 돌아가므로 화면이 멈추는 게 아니라 「걸리는」 느낌이 된다.
+  if (G.hitStop > 0) {
+    G.hitStop = Math.max(0, G.hitStop - dt);
+    dt *= 0.12;
+  }
   G.dt = dt;
   G.time += dt;
 
