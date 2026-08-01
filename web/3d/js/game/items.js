@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { softDot, beamTexture } from '../core/textures.js';
+import { ELEMENTS, ELEMENT_KEYS, WEAPON_ELEMENT_CHANCE } from './elements.js';
 
 export const RARITIES = [
   { key: 'common', name: '일반',  css: '#b8b8b8', hex: 0xb8b8b8, affixes: 1, mult: 1.00 },
@@ -248,9 +249,18 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
     item.stats[a.key] = (item.stats[a.key] || 0) + v;
   }
 
+  // 속성 — **무기에만**, 마법 등급 이상에만 붙는다.
+  // 일반 무기가 「안전한 기본값」으로 남아야 속성이 선택이 된다 (docs/ELEMENTS.md §6-1).
+  item.element = 'none';
+  if (slot === 'weapon' && ri >= 1 && rnd.chance(WEAPON_ELEMENT_CHANCE)) {
+    item.element = rnd.pick(ELEMENT_KEYS.filter((k) => k !== 'none'));
+  }
+
   item.name = ri === 0 ? base.name
     : ri === 1 ? `${rnd.pick(PREFIX)} ${base.name}`
       : `${rnd.pick(PREFIX)} ${base.name}의 ${rnd.pick(SUFFIX)}`;
+  // 속성이 붙으면 이름 앞에 표식 — 가방에서 아이콘만 봐도 구분된다
+  if (item.element !== 'none') item.name = `${ELEMENTS[item.element].icon} ${item.name}`;
 
   return item;
 }
@@ -258,13 +268,16 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
 /** 장비 5칸을 합산해 최종 보너스를 만든다 */
 export function aggregate(equipped) {
   const s = Object.fromEntries(STAT_KEYS.map((k) => [k, 0]));
-  let dmgMin = 2, dmgMax = 4, wSpd = 1;
+  let dmgMin = 2, dmgMax = 4, wSpd = 1, element = 'none';
   for (const it of Object.values(equipped)) {
     if (!it) continue;
     for (const [k, v] of Object.entries(it.stats)) s[k] = (s[k] || 0) + v;
-    if (it.slot === 'weapon') { dmgMin = it.dmgMin; dmgMax = it.dmgMax; wSpd = it.aspd; }
+    if (it.slot === 'weapon') {
+      dmgMin = it.dmgMin; dmgMax = it.dmgMax; wSpd = it.aspd;
+      element = it.element || 'none';
+    }
   }
-  return { ...s, dmgMin, dmgMax, weaponSpeed: wSpd };
+  return { ...s, dmgMin, dmgMax, weaponSpeed: wSpd, element };
 }
 
 /** 대략적인 강함 — 비교 화살표용 */
@@ -288,8 +301,14 @@ export function tooltipHtml(item, equippedSame) {
   const kind = SLOT_NAME[item.slot] || item.slot;
   let h = `<div class="tname" style="color:${r.css}">${item.name}</div>`;
   h += `<div class="tkind">${r.name} ${item.fam ? `${item.fam} ` : ''}${kind} · 아이템 레벨 ${item.ilvl}</div>`;
-  if (item.slot === 'weapon')
+  if (item.slot === 'weapon') {
     h += `<div>피해 <b>${item.dmgMin}–${item.dmgMax}</b> · 속도 ${item.aspd.toFixed(2)}</div>`;
+    if (item.element && item.element !== 'none') {
+      const el = ELEMENTS[item.element];
+      h += `<div class="telem" style="color:${el.css}">${el.icon} ${el.name} 속성 — `
+        + `${ELEMENTS[el.beats].name}에 강하다</div>`;
+    }
+  }
   if (item.stats.armor && item.slot !== 'weapon')
     h += `<div>방어도 <b>${item.stats.armor}</b></div>`;
   // 계열 고유 보너스는 접사와 색을 달리한다 — 「이건 이 무기의 성질이지
@@ -362,11 +381,14 @@ export class Drop {
     this.group = new THREE.Group();
     this.group.position.copy(pos);
 
+    const coin = item.kind === 'coin';
+    const tint = coin ? 0xd8b45e : r.hex;
     const mat = new THREE.MeshStandardMaterial({
-      color: r.hex, emissive: r.hex, emissiveIntensity: 0.55,
-      roughness: 0.4, metalness: 0.6,
+      color: tint, emissive: tint, emissiveIntensity: coin ? 0.7 : 0.55,
+      roughness: 0.4, metalness: coin ? 0.9 : 0.6,
     });
     this.mesh = new THREE.Mesh(ITEM_GEO[item.slot] || ITEM_GEO.ring, mat);
+    if (coin) this.mesh.rotation.x = Math.PI / 2.6;   // 비스듬히 눕혀 원반으로 읽히게
     this.mesh.position.y = 0.55;
     this.mesh.rotation.z = 0.4;
     this.group.add(this.mesh);
@@ -377,7 +399,7 @@ export class Drop {
     // 등급 사이 차이를 선형으로 두면 전설이 희귀와 구분이 안 간다 — 벌린다.
     const R = item.rarity;
     const beam = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: beamTexture(), color: r.hex, blending: THREE.AdditiveBlending,
+      map: beamTexture(), color: tint, blending: THREE.AdditiveBlending,
       depthWrite: false, transparent: true, opacity: [0.34, 0.5, 0.72, 0.95][R],
     }));
     beam.scale.set([0.9, 1.15, 1.5, 1.95][R], [2.2, 2.9, 4.0, 5.4][R], 1);
@@ -386,7 +408,7 @@ export class Drop {
     this.beam = beam;
 
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: softDot(), color: r.hex, blending: THREE.AdditiveBlending,
+      map: softDot(), color: tint, blending: THREE.AdditiveBlending,
       depthWrite: false, transparent: true, opacity: 0.5,
     }));
     glow.scale.setScalar([1.2, 1.6, 2.2, 3.0][R]);
@@ -425,7 +447,7 @@ export class Drop {
       }
     }
 
-    this.labelTex = labelTexture(item.name, r.css);
+    this.labelTex = labelTexture(item.name, coin ? '#d8b45e' : r.css);
     this.label = new THREE.Sprite(new THREE.SpriteMaterial({
       map: this.labelTex, depthTest: false, transparent: true,
     }));

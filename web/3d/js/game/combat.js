@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
 import { worldToGrid } from '../world/dungeon.js';
+import { ELEMENTS, elementalMult } from './elements.js';
 
 /**
  * 벽 너머로 때리거나 맞지 않게 막는다.
@@ -22,7 +23,17 @@ export function hasLine(G, ax, az, bx, bz) {
   if (!dg) return true;
   const [gx0, gz0] = worldToGrid(ax, az, dg.w, dg.h);
   const [gx1, gz1] = worldToGrid(bx, bz, dg.w, dg.h);
-  if (gx0 === gx1 && gz0 === gz1) return true;
+  // **맞닿은 칸끼리는 언제나 통한다.**
+  //
+  // lineOfSight 는 양 끝 칸의 walkable 도 본다. 그래서 적이 벽에 살짝 낀 채로
+  // 서 있으면(밀치기·넉백·도약이 겹치면 실제로 생긴다 — unstick 이 그걸 빼내려고
+  // 있는 것이다) 코앞에 있는데도 시야가 막혔다고 나오고, **그 적은 무적이 된다.**
+  // 실측에서 거리 1.1 에 los=false, 피해 0 이 나왔다.
+  //
+  // 맞닿은 두 칸 사이에는 「사이에 낀 것」이 있을 수 없다. 벽이 있다면 그 벽이
+  // 곧 두 칸 중 하나다. 이 검사의 목적은 **사이를 막는 것**을 잡는 것이지
+  // 서 있는 자리를 심판하는 게 아니다.
+  if (Math.abs(gx0 - gx1) <= 1 && Math.abs(gz0 - gz1) <= 1) return true;
   return lineOfSight(dg, gx0, gz0, gx1, gz1);
 }
 
@@ -59,15 +70,23 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     const src = opts.from || G.player.pos;
     if (!hasLine(G, src.x, src.z, e.pos.x, e.pos.z)) return 0;
   }
-  const dmg = Math.max(1, Math.round(mitigate(rawDmg, e.armor, G.player.level)));
+  // 속성 상성 — 공격 속성은 opts.element, 없으면 무기 속성을 따른다.
+  // 「무기 속성을 따른다」가 기본인 이유: 평타와 소용돌이 베기는 무기를
+  // 휘두르는 동작이므로 무기가 곧 속성이다. 스킬은 자기 속성을 넘긴다.
+  const atkEl = opts.element ?? G.player.element ?? 'none';
+  const mult = elementalMult(atkEl, e.element);
+  const dmg = Math.max(1, Math.round(mitigate(rawDmg * mult, e.armor, G.player.level)));
   e.hp -= dmg;
   e.flash = 0.14;
   e.aggro = true;
 
   const c = e.center();
-  G.fx.number(c.clone().setY(c.y + 0.5), dmg, {
-    color: opts.crit ? '#ffe066' : '#ffffff',
-    big: !!opts.crit,
+  // 숫자로 상성을 알린다. **한 대만 때려 봐도 맞는지 틀리는지 안다** —
+  // 이게 실질적인 학습 경로다. 표를 외우게 만들면 아무도 안 외운다.
+  const strong = mult > 1.05, weak = mult < 0.95;
+  G.fx.number(c.clone().setY(c.y + 0.5), (strong ? '▲' : weak ? '▼' : '') + dmg, {
+    color: strong ? ELEMENTS[atkEl].css : weak ? '#8d8577' : (opts.crit ? '#ffe066' : '#ffffff'),
+    big: !!opts.crit || strong,
   });
   // 타격 방향 — 스파크가 이 방향으로 뿜어져야 「어디서 맞았는지」가 보인다
   const src = opts.from || G.player.pos;
@@ -121,6 +140,12 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
       count: 8, color: 0xffe9a0, speed: 2.4, size: 0.3, life: 0.5, grav: -1, up: 1.2,
     });
   }
+
+  // 전투 소음 — 타격은 소리를 낸다 (docs/ENEMY-AI.md §5-2).
+  // 어그로가 아니라 **수색**만 퍼진다. 그리고 닫힌 문을 넘지 않는다
+  // (hear() 가 lineOfSight 를 쓰고, 그게 walkable() 을 쓰므로 자동이다).
+  // 문을 닫고 싸우면 옆방이 안 온다 — 문 기획과 여기서 맞물린다.
+  if (!opts.silent) G.makeNoise?.(G.player.pos, opts.skill ? 11 : 7);
 
   G.metrics?.hit(e, dmg, !!opts.crit);
 

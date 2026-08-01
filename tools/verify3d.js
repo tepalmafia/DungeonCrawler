@@ -103,11 +103,23 @@ async function shot(page, name) {
   const pull = await page.evaluate(async () => {
     const G = window.G3;
 
-    // 배치 간격 — 뭉쳐 있으면 한 마리만 끌어낼 수가 없다
-    let minGap = Infinity;
+    // 배치 간격.
+    //
+    // 예전엔 「최소 간격 > 4.5」였다. 조 편성(docs/ENEMY-AI.md §4)을 넣으면서
+    // 그 기준이 무의미해졌다 — 조원은 **일부러** 2.6~5 안에 모여 있다.
+    // 「세 마리가 모여 있다」는 그림을 만드는 것이 조 편성의 목적이다.
+    //
+    // 그래서 보는 것을 바꾼다: 최소값이 아니라 **중앙값**이 넓은가.
+    // 몇 쌍이 붙어 있는 건 의도이고, 전체가 붙어 있으면 사고다.
+    // 「한 마리만 끌어낼 수 있는가」의 진짜 보증은 아래 pull.noPackAggro 다 —
+    // 뭉쳐 있어도 어그로가 안 번지면 설계는 살아 있다.
+    const gaps = [];
     for (let i = 0; i < G.enemies.length; i++)
       for (let j = i + 1; j < G.enemies.length; j++)
-        minGap = Math.min(minGap, G.enemies[i].pos.distanceTo(G.enemies[j].pos));
+        gaps.push(G.enemies[i].pos.distanceTo(G.enemies[j].pos));
+    gaps.sort((a, b) => a - b);
+    const minGap = gaps[0] ?? Infinity;
+    const medGap = gaps[gaps.length >> 1] ?? Infinity;
 
     // 이웃이 있는 적을 하나 골라 그 옆에 선다
     const target = G.enemies.find((e) => !e.dead && !e.isBoss
@@ -154,9 +166,10 @@ async function shot(page, name) {
     window.G3.headlessRun(0.25);
     const released = !t.aggro;
 
-    return { minGap, pulledCount: pulled.length, spreadCount: spread.length, returning, released };
+    return { minGap, medGap, pulledCount: pulled.length, spreadCount: spread.length, returning, released };
   });
-  ok('pull.spacing', pull.minGap > 4.5, `적 간 최소 간격 ${pull.minGap.toFixed(1)} 유닛`);
+  ok('pull.spacing', pull.medGap > 20 && pull.minGap > 2.4,
+    `최소 ${pull.minGap.toFixed(1)} (조원끼리) · 중앙값 ${pull.medGap.toFixed(1)} 유닛`);
   ok('pull.noPackAggro', pull.skipped || pull.spreadCount === 0,
     `끌린 ${pull.pulledCount}마리 전부 자기 어그로 반경 안 (무리 전파 ${pull.spreadCount}건)`);
   ok('pull.leashReturns', pull.skipped || pull.returning, '집에서 멀어지면 귀환');
@@ -480,26 +493,36 @@ async function shot(page, name) {
       return { x: b.x, y: b.y, w: b.width, h: b.height }; };
     const hp = box('#orbHp'), mp = box('#orbMp'), bar = box('#skillbar');
     const rows = [...document.querySelectorAll('.skillrow')];
+    const belt = [...document.querySelectorAll('#beltSlots .skill')];
     // 게이지는 「내가 넣은 값」이 아니라 **읽는 시점의 실제 스탯**과 맞아야 한다.
     // 마나는 매 프레임 자연 회복하므로 고정값과 비교하면 안 된다.
     const hpFill = parseFloat(document.querySelector('#orbHp .fill').style.height);
     const mpFill = parseFloat(document.querySelector('#orbMp .fill').style.height);
     const hpWant = (P.hp / P.maxHp) * 100, mpWant = (P.mp / P.maxMp) * 100;
     return {
-      hpLeft: hp.x + hp.w <= bar.x + 2,
-      mpRight: mp.x >= bar.x + bar.w - 2,
-      sameRow: Math.abs((hp.y + hp.h / 2) - (bar.y + bar.h / 2)) < 40,
+      // 「양옆에 있는가」는 **중심**으로 본다. 디아블로2 배치에서는 돌판이
+      // 구슬 뒤로 파고들어 몇 픽셀 겹치는데, 그건 의도한 것이지 어긋난 게 아니다.
+      // 가장자리로 재면 그 겹침이 실패로 잡힌다 (실측 407 vs 404).
+      hpLeft: hp.x + hp.w / 2 < bar.x,
+      mpRight: mp.x + mp.w / 2 > bar.x + bar.w,
+      // 구슬은 디아블로2 처럼 돌판에 **걸쳐 내려온다.** 정확히 같은 높이가 아니라
+      // 「같은 띠 안에 있는가」를 본다 — 세로 중심이 60px 안이면 한 덩어리로 읽힌다.
+      sameRow: Math.abs((hp.y + hp.h / 2) - (bar.y + bar.h / 2)) < 60,
       rows: rows.length,
       perRow: rows.map((r) => r.children.length),
+      beltCount: belt.length,
       hpFill, mpFill, hpWant, mpWant,
       hpOk: Math.abs(hpFill - hpWant) < 1.5,
       mpOk: Math.abs(mpFill - mpWant) < 1.5,
     };
   });
   ok('hud.orbsFlankHotkeys', hud.hpLeft && hud.mpRight && hud.sameRow,
-    '체력·마나 구슬이 단축키 양옆 같은 높이에');
-  ok('hud.twoRows', hud.rows === 2 && hud.perRow.every((n) => n === 4),
-    `단축키 ${hud.rows}줄 × ${hud.perRow.join('/')}칸`);
+    '체력·마나 구슬이 단축바 양옆 같은 띠에');
+  // 예전엔 「두 줄 × 4칸」이었다. 디아블로2 배치로 바꾸면서 스킬은 한 줄,
+  // 물약은 **벨트**로 따로 뺐다 — 스킬과 소모품은 성격이 다르다
+  // (스킬은 마나·쿨다운, 물약은 개수). 그래서 보는 것도 바꾼다.
+  ok('hud.skillsAndBelt', hud.rows === 1 && hud.perRow[0] === 4 && hud.beltCount === 4,
+    `스킬 ${hud.perRow.join('/')}칸 · 벨트 ${hud.beltCount}칸`);
   ok('hud.orbsReflectStats', hud.hpOk && hud.mpOk,
     `체력 게이지 ${hud.hpFill.toFixed(1)}% (실제 ${hud.hpWant.toFixed(1)}%) · `
     + `마나 ${hud.mpFill.toFixed(1)}% (실제 ${hud.mpWant.toFixed(1)}%)`);
@@ -744,18 +767,30 @@ async function shot(page, name) {
     G.player.setPosition(e.pos.x + 1.1, e.pos.z);
     const xp0 = G.player.xp, kills0 = G.stats.kills;
     const hp0 = e.hp;
-    mod.hitEnemy(G, e, 20);
+    const dealt = mod.hitEnemy(G, e, 20);
     const tookDamage = e.hp < hp0;
+    // 실패했을 때 **왜**를 알 수 있게 상태를 같이 돌려준다.
+    // 단독으로는 통과하는데 스위트 안에서만 깨지는 종류의 사고가 있었고,
+    // 그때 메시지가 「combat.damage」 한 줄이라 원인을 좁힐 수가 없었다.
+    const why = {
+      kind: e.def.key, elite: !!e.traits, dealt,
+      dist: +Math.hypot(G.player.pos.x - e.pos.x, G.player.pos.z - e.pos.z).toFixed(2),
+      los: mod.hasLine(G, G.player.pos.x, G.player.pos.z, e.pos.x, e.pos.z),
+      armor: +e.armor.toFixed(1), stunT: +(e.stunT || 0).toFixed(2),
+      invuln: +(G.player.invuln || 0).toFixed(1),
+      pDead: G.player.dead, eDead: e.dead, alive: G.enemies.filter((x) => !x.dead).length,
+    };
     // 확실히 죽인다
     for (let i = 0; i < 40 && !e.dead; i++) mod.hitEnemy(G, e, 999);
     window.G3.headlessRun(0.7);
     return {
-      tookDamage, died: e.dead,
+      tookDamage, died: e.dead, why,
       xpGained: G.player.xp !== xp0 || G.player.level > 1,
       kills: G.stats.kills - kills0,
     };
   });
-  ok('combat.damage', combat.skipped || combat.tookDamage);
+  ok('combat.damage', combat.skipped || combat.tookDamage,
+    combat.why ? JSON.stringify(combat.why) : '');
   ok('combat.kill', combat.skipped || (combat.died && combat.kills >= 1), `처치 집계 +${combat.kills}`);
   ok('combat.xp', combat.skipped || combat.xpGained);
 
@@ -821,7 +856,8 @@ async function shot(page, name) {
     for (let i = 0; i < 10; i++) await new Promise((r) => requestAnimationFrame(r));
     return {
       exitOpen: G.level.exitOpen, bossKills: G.stats.bossKills,
-      gear: added.filter((k) => k !== 'lantern').length,
+      // 영혼 조각은 장비가 아니다 — 안 거르면 보스 드랍 수가 잘못 세진다
+      gear: added.filter((k) => k !== 'lantern' && k !== 'coin').length,
       lanterns: added.filter((k) => k === 'lantern').length,
     };
   });

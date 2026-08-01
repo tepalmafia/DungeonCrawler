@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { SKILLS, trySkill } from '../game/skills.js';
 import { power } from '../game/items.js';
+import { POTION_CD } from '../game/pace.js';
 
 const V = new THREE.Vector3();
 
@@ -24,7 +25,7 @@ export class Bot {
 
     // 물약
     if (p.hp / p.maxHp < 0.42 && p.potions.hp > 0 && p.potionCd.hp <= 0) {
-      p.potions.hp--; p.potionCd.hp = 8;
+      p.potions.hp--; p.potionCd.hp = POTION_CD;
       p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.42);
     }
     if (p.mp / p.maxMp < 0.2 && p.potions.mp > 0 && p.potionCd.mp <= 0) {

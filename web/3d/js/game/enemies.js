@@ -8,8 +8,9 @@ import { Sfx } from '../core/audio.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
-import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank } from './ai.js';
+import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank, SHOUT, NOISE, SEARCH, FLEE } from './ai.js';
 import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
+import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
 
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
 // 아이템·스킬이 늘면서 플레이어 쪽만 세졌다. 한 곳에서 올린다 —
@@ -241,6 +242,8 @@ export class Enemy {
     this.dmg = d.dmg * powerMult;
     this.armor = d.armor * powerMult;
     this.atkSpeedMul = 1;      // 정예 특성이 올린다
+    // 속성 — 기본은 종족값. spawnFloor 가 층 분포로 덮어쓴다 (game/elements.js).
+    this.element = ENEMY_ELEMENT[defKey] || 'none';
     this.speed = d.speed * MOVE_SCALE;   // 전체 템포는 game/pace.js
     this.radius = d.radius;
     this.heavy = !!d.heavy;
@@ -277,6 +280,12 @@ export class Enemy {
     this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
 
+    this.shouted = false;         // 층당 1회 (docs/ENEMY-AI.md §5-1)
+    this.shoutT = 0;              // 외침 시전 남은 시간
+    this.searchAt = null;         // 수색 목표 지점
+    this.searchT = 0;
+    this.fledTimes = 0;           // 이탈 횟수 — 개체당 1회
+    this.braceT = 0;              // 돌아서는 경직
     this.skill = null;
     this.skillCd = 0;
     this.traits = null;
@@ -328,6 +337,29 @@ export class Enemy {
   get headY() { return (this.def.float ? 1.9 : this.radius * 3.2 + 0.5) * this.def.scale; }
 
   // ─────────────────── 프레임 ───────────────────
+  /**
+   * 속성을 **몸에 입힌다.**
+   *
+   * 툴팁이나 이름표로만 알리면 「읽어야 아는」 정보가 된다. 이미 빛나고 있는
+   * 부위(눈·핵·불꽃)의 색을 갈아끼우면 멀리서 색 하나로 판별된다 —
+   * 그게 docs/ELEMENTS.md §0 의 성공 조건이다.
+   */
+  setElement(key) {
+    this.element = key;
+    const el = ELEMENTS[key];
+    if (!el || key === 'none') return this;
+    this.obj.traverse((o) => {
+      // MeshBasicMaterial 로 만든 것이 곧 「스스로 빛나는 부위」다
+      if (o.isMesh && o.material?.isMeshBasicMaterial) o.material.color.setHex(el.hex);
+    });
+    for (const mm of this.mats) {
+      if (!mm.emissive) continue;
+      mm.emissive.setHex(el.hex);
+      mm.emissiveIntensity = Math.max(mm.emissiveIntensity || 0, 0.1);
+    }
+    return this;
+  }
+
   /** 화면에 보이는 이름. 정예는 특성이 앞에 붙는다 */
   get displayName() { return this.eliteName || this.def.name; }
 
@@ -370,6 +402,19 @@ export class Enemy {
     this.flash = Math.max(0, this.flash - dt);
     this.repathCd -= dt;
 
+    // 외침 시전 — 끝나야 전파된다. 도중에 죽거나 기절하면 아무 일도 없다.
+    if (this.shoutT > 0) {
+      this.shoutT -= dt;
+      if (this.shoutMark) {
+        this.shoutMark.position.set(0, this.headY + 0.85, 0);
+        this.shoutMark.scale.setScalar(0.42 + Math.sin(G.time * 18) * 0.08);
+      }
+      if (this.shoutT <= 0) {
+        this._shoutOut(G);
+        if (this.shoutMark) this.shoutMark.visible = false;
+      }
+    }
+
     // 정예 — 특성 지속 효과와 스킬 쿨다운
     if (this.traits) {
       for (const t of this.traits) TRAITS[t].tick?.(this, dt);
@@ -389,6 +434,8 @@ export class Enemy {
     // 선딜 중에 기절한 놈이 깨어나며 예고 없이 때린다 — 예고 링과 타격이
     // 어긋나는 그 사고다. 그래서 stateT 를 되돌려 공격 시계까지 같이 세운다.
     if (this.stunT > 0) {
+      // 기절은 외침을 끊는다 — 「입을 막으면 지원이 안 온다」
+      if (this.shoutT > 0) { this.shoutT = 0; if (this.shoutMark) this.shoutMark.visible = false; }
       this.stunT -= dt;
       this.stateT -= dt * ATTACK_SCALE;
       this.rig.group.rotation.z = Math.sin(G.time * 17) * 0.11;   // 비틀거린다
@@ -431,7 +478,9 @@ export class Enemy {
     }
 
     let moving = 0;
-    if (this.state === 'returning') {
+    if (this.state === 'search') {
+      moving = this._search(dt, G, p);
+    } else if (this.state === 'returning') {
       moving = this._returnHome(dt, G);
     } else if (this.aggro && !p.dead) {
       moving = this._combat(dt, G, p, dist);
@@ -489,6 +538,29 @@ export class Enemy {
     switch (this.state) {
       case 'idle':
       case 'chase': {
+        // 이탈 — 체력이 바닥나면 전투를 포기하고 도망친다 (§6-2).
+        //
+        // **이 판정은 공격 판정보다 먼저여야 한다.** 처음엔 아래쪽에 뒀는데,
+        // 사거리 안이면 그 전에 windup 으로 빠져 이탈이 영영 안 걸렸다
+        // (실측: 체력 20% 로 160프레임을 굴려도 flee 상태가 한 번도 안 나옴).
+        //
+        // 이 행동이 기획 전체에서 제일 위험하다: **잘못 만들면 궁수를 못 잡는다.**
+        // 그래서 안전장치가 셋이다.
+        //   · 개체당 1회. 두 번째는 도망치지 않고 싸운다
+        //   · 도망 속도는 전투 속도의 105% 까지 — 플레이어(4.34)가 잡을 수 있다
+        //   · 시작할 때 1.2초 경직. 돌아서는 동작이라, 이때 붙으면 못 도망친다
+        if (AI.archerFlee && d.ranged && this.fledTimes < FLEE.maxTimes
+            && this.hp < this.maxHp * FLEE.hpPct) {
+          this.fledTimes++;
+          this.state = 'flee';
+          this.stateT = 0;
+          this.braceT = FLEE.brace;
+          this.path.length = 0;
+          G.dialogue?.say(G, this, 'flee');
+          // 도망 중 외침 1회는 무료다 — 「도망가서 다른 적들을 불러온다」
+          if (AI.shout && SHOUT[d.key]) { this.shouted = false; this.shoutT = SHOUT[d.key].cast; }
+          break;
+        }
         const want = d.ranged ? Math.min(d.range * 0.8, 9) : d.range * 0.85;
         const see = this._canSee(G, p);
         if (dist <= want && see && this.attackCd <= 0) {
@@ -562,6 +634,31 @@ export class Enemy {
         break;
       }
 
+      case 'flee': {
+        // 경직 — 돌아서는 동안은 못 움직인다. 추격이 보상받는 창이다.
+        if (this.braceT > 0) {
+          this.braceT -= dt;
+          this._face(p.pos.x, p.pos.z);
+          break;
+        }
+        // 목적지: 가장 가까운 **다른 적**. 없으면 집.
+        // 다른 적에게 닿으면 그 적이 수색 상태가 된다 — 어그로가 아니다.
+        let dest = this.home, best = Infinity;
+        for (const o of G.enemies) {
+          if (o === this || o.dead || o.aggro) continue;
+          const dd = Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z);
+          if (dd < best) { best = dd; dest = o.pos; }
+        }
+        moving = this._step(dt, G, dest.x, dest.z, this.speed * FLEE.speedMul);
+        // 도망 중에는 안 쏜다 — 등을 보이므로 추격이 보상받아야 한다
+        if (Math.hypot(dest.x - this.pos.x, dest.z - this.pos.z) < 2.2
+            || this.stateT > 6) {
+          this.state = 'chase';
+          this.stateT = 0;
+        }
+        break;
+      }
+
       case 'cast': {
         this._face(p.pos.x, p.pos.z);
         const sk = ELITE_SKILLS[this.skill];
@@ -624,6 +721,92 @@ export class Enemy {
     // 「누구냐! 정지!」 — 발견의 순간에만 말한다. 대사 조건(거리·벽·간격)은
     // game/dialogue.js 가 판단하므로 여기서는 부르기만 한다.
     G.dialogue?.say(G, this, 'spot');
+
+    // 외침 — 어그로가 붙는 순간 확률로 시전한다 (§5-1).
+    // **개체당 층당 1회.** 반복 호출로 방 전체가 오는 일은 없다.
+    const sh = AI.shout && SHOUT[this.def.key];
+    if (sh && !this.shouted && Math.random() < sh.chance) {
+      this.shouted = true;
+      this.shoutT = sh.cast;
+      // 시전 중 머리 위 표식. 죽거나 기절하면 전파되지 않는다 —
+      // 「입을 막으면 지원이 안 온다」가 플레이어의 판단거리가 된다.
+      if (!this.shoutMark) {
+        this.shoutMark = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: alertTexture(), color: 0xffd070, transparent: true, depthTest: false,
+        }));
+        this.shoutMark.renderOrder = 991;
+        this.obj.add(this.shoutMark);
+      }
+      this.shoutMark.visible = true;
+      Sfx.enemyAggro(this.def.key, volAt(G, this.pos) * 1.1);
+    }
+  }
+
+  /**
+   * 소리를 듣는다 — 어그로가 **아니다.** 「저기서 무슨 소리가 났다」만 안다.
+   * 소리가 난 지점으로 가 보고, 거기서 플레이어를 보면 그때 어그로가 붙는다.
+   * 이 완충이 없으면 소음 = 즉시 추가 교전이 되어 풀링이 무너진다 (§5-3).
+   */
+  hear(G, srcX, srcZ, toX = srcX, toZ = srcZ) {
+    if (this.dead || this.aggro || this.state === 'search') return false;
+    // 들리는지는 **소리가 난 곳**까지로 잰다. 처음엔 듣는 쪽에서 플레이어까지의
+    // 시야를 봤는데, 그건 정반대다 — 외침의 존재 이유가 「안 보이는 것을
+    // 알려주는 것」이다. 그렇게 두니 전파가 아예 안 됐다(실측 0마리).
+    //
+    // 닫힌 문은 소리를 막는다. lineOfSight 가 walkable() 을 쓰고 그게 문 상태를
+    // 보므로 자동이다 — 문을 닫고 싸우면 옆방이 안 온다.
+    if (!lineOfSight(G.dungeon,
+      ...worldToGrid(this.pos.x, this.pos.z, G.dungeon.w, G.dungeon.h),
+      ...worldToGrid(srcX, srcZ, G.dungeon.w, G.dungeon.h))) return false;
+    this.state = 'search';
+    this.stateT = 0;
+    // 가 볼 곳은 **소리가 가리킨 곳**이다. 외침이면 외친 놈이 본 플레이어 위치.
+    this.searchAt = { x: toX, z: toZ };
+    this.searchT = 0;
+    this.path.length = 0;
+    return true;
+  }
+
+  /**
+   * 수색 — 소리가 난 곳으로 가 보고 두리번거린다.
+   * **플레이어 위치를 모른다.** 가는 길에 눈에 들어와야 어그로가 붙는다.
+   */
+  _search(dt, G, p) {
+    // 가는 도중이라도 실제로 보이면 그때 어그로. 이것만이 수색 → 전투 경로다.
+    if (!p.dead && this._canSee(G, p)) {
+      const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+      if (d < this.def.aggro * visionFactor(this, p.pos.x, p.pos.z)) { this._pull(G); return 0; }
+    }
+    const t = this.searchAt;
+    if (!t) { this.state = 'returning'; return 0; }
+    const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z);
+    if (d > 1.4) {
+      return this._step(dt, G, t.x, t.z, this.speed * SEARCH.speed);
+    }
+    // 도착 — 두리번거린다. 못 찾으면 집으로.
+    this.searchT += dt;
+    this.facing += dt * 1.6;
+    if (this.searchT >= SEARCH.look) {
+      this.searchAt = null;
+      this.state = 'returning';
+      this.stateT = 0;
+    }
+    return 0;
+  }
+
+  /** 외침이 닿는 범위의 적들을 수색 상태로 (어그로가 아니다) */
+  _shoutOut(G) {
+    const sh = SHOUT[this.def.key];
+    if (!sh) return;
+    let n = 0;
+    for (const o of G.enemies) {
+      if (o === this || o.dead) continue;
+      if (Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) > sh.radius) continue;
+      // 들리는 기준은 **외친 놈의 위치**, 가 볼 곳은 그가 본 플레이어 위치
+      if (o.hear(G, this.pos.x, this.pos.z, G.player.pos.x, G.player.pos.z)) n++;
+    }
+    G.fx.ground(this.pos, { r0: 0.5, r1: sh.radius, color: 0xffd070, life: 0.6, opacity: 0.35 });
+    if (n) G.ui?.toast(`${this.displayName}의 외침 — ${n}마리가 움직인다`, '#ffd070');
   }
 
   /** 귀환: 원래 자리로 돌아가며 회복하고 어그로를 푼다 */
@@ -864,22 +1047,52 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
     let roomElite = false;
     const kinds = [];
     for (let i = 0; i < n; i++) kinds.push(rnd.pick(roster));
+
+    // 조 편성 (docs/ENEMY-AI.md §4) — 「세 마리가 모여 있다」는 그림은 나오되
+    // **어그로는 여전히 개별**이다. 가장자리 한 마리에게 다가가면 그 한 마리만 온다.
+    //
+    // 다만 가까이 있으므로 외침이 닿을 확률이 높다 — 그래서 「조를 어떻게 흩뜨릴까」가
+    // 판단거리가 된다. 뭉치는 것 자체가 벌이 아니라 **문제**여야 한다.
+    //
+    // 나머지는 단독으로 둔다. 단독 개체가 있어야 안전한 시작점이 남는다.
+    const squadRate = [0.30, 0.45, 0.55][Math.min(2, floorNo - 1)] ?? 0.55;
+    const squadSize = AI.squads && rnd.chance(squadRate) ? rnd.int(2, 3) : 0;
+    let squadCenter = null;
     if (rnd.chance(0.2 + floorNo * 0.1 + tier * 0.05)) kinds.push('golem');
 
+    let inSquad = 0;
     for (const key of kinds) {
       let x = null, z = null;
+      // 조원은 조 중심 근처에, 그 밖은 방 전체에 흩어 놓는다.
+      // 조원끼리는 MIN_GAP 을 줄여 실제로 「모여 있게」 한다.
+      const squad = squadCenter && inSquad < squadSize;
+      const gap = squad ? 2.6 : MIN_GAP;
       for (let tries = 0; tries < 40; tries++) {
-        const gx = rnd.int(room.x + 1, room.x + room.w - 2);
-        const gz = rnd.int(room.y + 1, room.y + room.h - 2);
+        let gx, gz;
+        if (squad) {
+          gx = squadCenter.gx + rnd.int(-2, 2);
+          gz = squadCenter.gz + rnd.int(-2, 2);
+        } else {
+          gx = rnd.int(room.x + 1, room.x + room.w - 2);
+          gz = rnd.int(room.y + 1, room.y + room.h - 2);
+        }
         if (!dg.isFloor(gx, gz)) continue;
         const [wx, wz] = gridToWorld(gx, gz, dg.w, dg.h);
-        if (placed.some((q) => Math.hypot(q.x - wx, q.z - wz) < MIN_GAP)) continue;
+        if (placed.some((q) => Math.hypot(q.x - wx, q.z - wz) < gap)) continue;
         x = wx; z = wz;
+        if (squad) inSquad++;
+        else if (squadSize && !squadCenter) {
+          // 첫 개체가 조의 중심이 된다
+          squadCenter = { gx, gz };
+          inSquad = 1;
+        }
         break;
       }
       if (x == null) continue;   // 자리를 못 찾으면 그냥 덜 놓는다 — 뭉치게 두지 않는다
       placed.push({ x, z });
       const e = new Enemy(G, key, x, z, powerMult);
+      // 층 분포가 종족 기본값을 덮는다 — 2층이 빙 특화층이 되는 것이 설계다
+      e.setElement(rollElement(rnd, floorNo));
       // 정예 승격 — 층이 깊을수록 잦다. 골렘은 이미 정예 취급이라 제외한다.
       // 방마다 하나까지만: 정예 둘이 같은 방에 있으면 「한 마리씩」이 성립하지 않는다.
       if (key !== 'golem' && !roomElite && rnd.chance(0.10 + floorNo * 0.05 + tier * 0.03)) {

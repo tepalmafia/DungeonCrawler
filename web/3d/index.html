@@ -37,17 +37,23 @@
     <!-- 미니맵 -->
     <canvas id="minimap" width="180" height="180"></canvas>
 
-    <!-- 하단 — 구슬을 단축키 양옆에 붙여 시선이 한곳에 모이게 한다 -->
+    <!-- 하단 — 디아블로2 배치.
+         구슬 둘이 **하나로 이어진 돌판**을 양쪽에서 받친다. 예전엔 셋이 따로 떠
+         있어서 「UI 조각 세 개」로 읽혔다. 붙여 놓아야 하나의 조작대가 된다. -->
     <div id="bottom">
       <div id="orbHp" class="orb"><div class="fill"></div><span class="num"></span></div>
-      <div id="center-hud">
+      <div id="beltbar">
         <div id="lanternBar" hidden>
           <span class="lic">🕯</span>
           <div class="ltrack"><div class="lfill"></div><div class="lrefuel"></div></div>
           <span class="lnum"></span>
         </div>
         <div id="xpbar"><div class="fill"></div><span id="lvLabel">Lv 1</span></div>
-        <div id="skillbar"></div>
+        <div class="beltrow">
+          <div id="skillbar"></div>
+          <div class="bdiv"></div>
+          <div id="beltSlots"></div>
+        </div>
       </div>
       <div id="orbMp" class="orb"><div class="fill"></div><span class="num"></span></div>
     </div>
@@ -86,27 +92,22 @@
         <button id="invClose" type="button" aria-label="닫기">✕</button>
       </header>
 
-      <!-- 종이인형 배치 — 왼쪽 손에 든 것, 가운데 몸에 걸친 것, 오른쪽 곁들이는 것.
-           가운데 열은 위에서 아래로 투구→갑옷, 오른쪽은 장갑→장신구.
-           「어디에 걸치는가」가 위치로 읽혀야 슬롯이 다섯이어도 헷갈리지 않는다. -->
+      <!-- 종이인형 — 디아블로2 배치를 그대로 따른다.
+           칸을 목록으로 늘어놓지 않고 **사람 모양**으로 놓는 것이 핵심이다:
+           투구가 맨 위, 목걸이가 그 옆, 무기는 손 쪽(왼쪽), 갑옷이 몸통,
+           장갑·허리띠가 오른쪽, 반지와 장화가 아래.
+           위치만 봐도 어디에 걸치는 물건인지 알 수 있어 여덟 칸이어도 안 헷갈린다. -->
       <div class="doll">
-        <div class="dollcol left">
-          <div class="slot tall" data-slot="weapon"><span class="sl">무기</span><div class="cell"></div></div>
-          <div class="slot" data-slot="gloves"><span class="sl">장갑</span><div class="cell"></div></div>
-        </div>
-        <div class="dollcol mid">
-          <div class="slot" data-slot="helm"><span class="sl">투구</span><div class="cell"></div></div>
-          <div class="slot tall" data-slot="armor"><span class="sl">갑옷</span><div class="cell"></div></div>
-          <div class="slot" data-slot="belt"><span class="sl">허리띠</span><div class="cell"></div></div>
-        </div>
-        <div class="dollcol right">
-          <div class="slot" data-slot="amulet"><span class="sl">목걸이</span><div class="cell"></div></div>
-          <div class="slot" data-slot="ring"><span class="sl">반지</span><div class="cell"></div></div>
-          <div class="slot" data-slot="boots"><span class="sl">장화</span><div class="cell"></div></div>
-        </div>
+        <div class="slot s-helm"   data-slot="helm"><span class="sl">투구</span><div class="cell"></div></div>
+        <div class="slot s-amul"   data-slot="amulet"><span class="sl">목걸이</span><div class="cell"></div></div>
+        <div class="slot s-weap"   data-slot="weapon"><span class="sl">무기</span><div class="cell"></div></div>
+        <div class="slot s-armor"  data-slot="armor"><span class="sl">갑옷</span><div class="cell"></div></div>
+        <div class="slot s-glov"   data-slot="gloves"><span class="sl">장갑</span><div class="cell"></div></div>
+        <div class="slot s-belt"   data-slot="belt"><span class="sl">허리띠</span><div class="cell"></div></div>
+        <div class="slot s-ring"   data-slot="ring"><span class="sl">반지</span><div class="cell"></div></div>
+        <div class="slot s-boots"  data-slot="boots"><span class="sl">장화</span><div class="cell"></div></div>
+        <div class="lantern s-lant" id="invLantern"></div>
       </div>
-
-      <div class="lantern" id="invLantern"></div>
 
       <div class="stats" id="statList"></div>
 
@@ -114,9 +115,10 @@
         <h3>가방</h3>
         <button id="bagSort" type="button">정렬</button>
         <span class="dim" id="bagCount"></span>
-        <span class="coin" id="invCoin"></span>
       </div>
       <div class="bag" id="bagGrid"></div>
+      <!-- 소지금 — 디아블로2 처럼 가방 아래 액자 안에 -->
+      <div class="goldbar"><span class="gi">◈</span><span id="invCoin">0</span></div>
       <p class="invhint">좌클릭 착용·해제 · <b>우클릭</b> 바닥에 버리기 · <b>I</b>/<b>Esc</b> 닫기</p>
     </div>
   </div>
@@ -130,6 +132,7 @@
       <ul class="keys">
         <li><b>좌클릭</b> 이동 · 적 클릭 시 공격 (누르고 있으면 계속 이동)</li>
         <li><b>Q W E R</b> 스킬 · <b>1 2</b> 물약 · <b>I</b> 인벤토리 · <b>Alt</b> 바닥 아이템 표시</li>
+        <li><b>E</b> 스위치·상자·상인·함정 해제 · <b>C</b> 휴식 (모닥불 — 연료가 3배로 탄다)</li>
         <li><b>Space</b> 포탈 진입 / 재시작</li>
       </ul>
       <button id="startBtn">시작</button>

@@ -1,6 +1,7 @@
 // 스킬 4종 — 마나를 계속 쓰면서 싸우는 리듬을 만든다.
 // 데이터 + cast() 만 추가하면 새 스킬이 붙는다.
 
+import { SKILL_CD_SCALE } from './pace.js';
 import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { playerRoll, hitEnemy } from './combat.js';
@@ -43,7 +44,9 @@ export const SKILLS = [
       const hits = enemiesInArc(G, p.pos, p.facing, radius, spread);
       for (const e of hits) {
         const r = playerRoll(p);
-        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 1.1, color: 0xffd090 });
+        // 소용돌이 베기는 **무기 속성을 따른다** — 무기를 휘두르는 동작이므로.
+        // element 를 안 넘기면 hitEnemy 가 무기 속성을 쓴다.
+        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 1.1, color: 0xffd090, skill: true });
       }
       return true;
     },
@@ -51,7 +54,7 @@ export const SKILLS = [
 
   {
     key: 'dash', name: '그림자 돌진', label: 'W', hot: 'KeyW', icon: '💨',
-    cost: 20, cd: 5,
+    cost: 20, cd: 5, element: 'soul',   // 그림자 — 혼
     desc: '커서 방향으로 돌진한다. 돌진 중 무적.',
     cast(G, aim) {
       const p = G.player;
@@ -70,7 +73,7 @@ export const SKILLS = [
 
   {
     key: 'nova', name: '화염 신성', label: 'E', hot: 'KeyE', icon: '🔥',
-    cost: 35, cd: 9,
+    cost: 35, cd: 9, element: 'fire',   // 화염 신성 — 화
     desc: '주변으로 불길이 퍼지고 잠시 장판이 남는다.',
     cast(G) {
       const p = G.player;
@@ -84,7 +87,7 @@ export const SKILLS = [
 
       for (const e of enemiesInArc(G, p.pos, 0, radius, Math.PI * 2)) {
         const r = playerRoll(p);
-        hitEnemy(G, e, r.dmg * 2.2, { crit: r.crit, knock: 2.0, color: 0xff9a4a });
+        hitEnemy(G, e, r.dmg * 2.2, { crit: r.crit, knock: 2.0, color: 0xff9a4a, element: 'fire', skill: true });
       }
       // 장판 — 계속 서 있으면 계속 아프다
       G.fields.push({
@@ -97,7 +100,7 @@ export const SKILLS = [
 
   {
     key: 'meteor', name: '운석 낙하', label: 'R', hot: 'KeyR', icon: '☄',
-    cost: 60, cd: 22,
+    cost: 60, cd: 22, element: 'fire',  // 운석 — 화
     desc: '지정한 곳에 운석을 떨어뜨린다.',
     cast(G, aim) {
       const p = G.player;
@@ -123,7 +126,7 @@ export const SKILLS = [
             if (d > radius + e.radius) continue;
             const r = playerRoll(p);
             const falloff = 1 - Math.min(0.55, (d / radius) * 0.55);
-            hitEnemy(G, e, r.dmg * 5.0 * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos });
+            hitEnemy(G, e, r.dmg * 5.0 * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos, element: 'fire', skill: true });
           }
           G.fields.push({ x: target.x, z: target.z, r: radius * 0.8, life: 2.6, tick: 0, dps: (p.dmgMin + p.dmgMax) * 0.3, color: 0xff7a2a });
         },
@@ -147,7 +150,8 @@ export function trySkill(G, skill, aim) {
   }
   if (!skill.cast(G, aim || p.pos)) return false;
   p.mp -= skill.cost;
-  G.cooldowns[skill.key] = skill.cd * (1 - p.cdr);
+  // 배수는 pace.js 가 정한다. SKILLS 의 cd 를 하나씩 고치면 언젠가 하나를 빠뜨린다.
+  G.cooldowns[skill.key] = skill.cd * SKILL_CD_SCALE * (1 - p.cdr);
   G.ui.fireSkill(skill.key);
   return true;
 }
@@ -185,7 +189,7 @@ export function updateDashHits(G, dt) {
     if (Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) < e.radius + p.radius + 0.7) {
       d.hitSet.add(e);
       const r = playerRoll(p);
-      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 1.6, color: 0x8a6bff });
+      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 1.6, color: 0x8a6bff, element: 'soul', skill: true });
     }
   }
 }

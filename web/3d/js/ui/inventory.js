@@ -114,7 +114,7 @@ export class Inventory {
     // 가방
     this.bag.innerHTML = '';
     this.bagCount.textContent = `${p.bag.length} / ${p.bagMax}`;
-    if (this.coinEl) this.coinEl.textContent = `◈ ${p.coin}`;
+    if (this.coinEl) this.coinEl.textContent = String(p.coin);
     // 꽉 찬 것이 눈에 보여야 한다. 토스트는 지나가면 사라지고,
     // 그러면 「왜 안 주워지지」로 남는다.
     const head = this.bagCount.parentElement;

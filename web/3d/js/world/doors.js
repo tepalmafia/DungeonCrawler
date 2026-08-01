@@ -51,28 +51,42 @@ export class Doors {
       this.groups.push({ door, group: g, t: 0 });
     }
 
-    // 스위치 — 벽에 붙은 손잡이. 멀리서도 보이도록 스스로 빛난다.
+    // 스위치 — **벽에 붙은** 손잡이.
+    //
+    // 방 한가운데 서 있으면 「어디에 달린 건지」가 안 읽힌다. 벽에 박힌 판에
+    // 손잡이가 달려 있어야 「이걸 당기면 뭔가 열린다」로 보인다.
+    // 멀리서도 눈에 들어오게 스스로 빛나되, 당긴 뒤에는 잦아든다.
     const sw = dg.switchAt;
     if (sw) {
       const [x, z] = gridToWorld(sw.gx, sw.gz, dg.w, dg.h);
       const grp = new THREE.Group();
-      const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.13, 0.18, 1.5, 7),
-        new THREE.MeshStandardMaterial({ color: 0x554636, roughness: 0.8 }));
-      post.position.y = 0.75;
+      // 벽에 박은 판 — 벽 쪽으로 붙이고 방 안쪽을 본다
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.72, 0.9, 0.16),
+        new THREE.MeshStandardMaterial({ color: 0x4a3d2e, roughness: 0.8, metalness: 0.3 }));
+      plate.position.set(0, 1.45, 0);
       const handle = new THREE.Mesh(
-        new THREE.BoxGeometry(0.16, 0.72, 0.16),
+        new THREE.BoxGeometry(0.14, 0.62, 0.14),
         new THREE.MeshStandardMaterial({
           color: 0xc8a24a, metalness: 0.85, roughness: 0.3,
           emissive: 0xc8a24a, emissiveIntensity: 0.8,
         }));
-      handle.position.set(0, 1.62, 0);
-      handle.rotation.x = -0.55;
-      grp.add(post, handle);
-      grp.position.set(x, 0, z);
+      handle.position.set(0, 1.5, 0.22);
+      handle.rotation.x = -0.6;
+      grp.add(plate, handle);
+
+      // 벽 방향으로 밀어 붙이고, 그 반대(방 안쪽)를 향하게 돌린다
+      let px = x, pz = z;
+      if (sw.wall) {
+        const [wx, wz] = sw.wall;
+        px += wx * (CELL / 2 - 0.12);
+        pz += wz * (CELL / 2 - 0.12);
+        grp.rotation.y = Math.atan2(-wx, -wz);
+      }
+      grp.position.set(px, 0, pz);
       grp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       scene.add(grp);
-      this.lever = { group: grp, handle, at: sw, pulled: false, x, z };
+      this.lever = { group: grp, handle, at: sw, pulled: false, x: px, z: pz };
     }
   }
 
