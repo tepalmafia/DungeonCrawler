@@ -85,6 +85,8 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     G.player.hp = Math.min(G.player.maxHp, G.player.hp + G.player.leech);
   }
 
+  G.metrics?.hit(e, dmg, !!opts.crit);
+
   if (e.hp <= 0) killEnemy(G, e);
   return dmg;
 }
@@ -97,9 +99,12 @@ export function killEnemy(G, e) {
   G.fx.burst(c, { count: 30, color: e.def.gib ?? 0xb03a3a, speed: 6.5, size: 0.42, life: 0.75, grav: 13 });
   G.fx.burst(c, { count: 14, color: 0x6a4a7a, speed: 2.4, size: 0.7, life: 1.0, grav: -1, up: 1.4 });
   G.fx.ground(e.pos, { r0: 0.7, r1: 1.7, color: 0x8a2a2a, life: 0.5 });
+  // 죽은 자리에 종족에 맞는 잔해를 남긴다 (world/remains.js)
+  G.remains?.spawn(e.def.key, e.pos, e.def.scale || 1);
   Sfx.enemyDie(e.def.key, volAt(G, e.pos));
   G.hitStop = Math.max(G.hitStop || 0, 0.11);      // 마무리 일격은 더 길게 붙잡는다
 
+  G.metrics?.kill(e);
   G.onEnemyKilled(e);
 }
 
@@ -118,6 +123,8 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   G.ui.hurtFlash(Math.min(1, dmg / (p.maxHp * 0.28)));
   Sfx.playerHurt();
   Sfx.playerGrunt(Math.min(1, 0.5 + dmg / (p.maxHp * 0.3)));
+
+  G.metrics?.taken(dmg);
 
   if (p.hp <= 0) { p.hp = 0; G.onPlayerDeath(); }
   return dmg;

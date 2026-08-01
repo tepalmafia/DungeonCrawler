@@ -202,12 +202,16 @@ export class Drop {
     this.group.add(this.mesh);
     this.mat = mat;
 
+    // ── 등급이 멀리서도 읽혀야 한다 ────────────────────────
+    // 어두운 던전에서 바닥의 물건은 「빛기둥의 크기」로 먼저 판별된다.
+    // 등급 사이 차이를 선형으로 두면 전설이 희귀와 구분이 안 간다 — 벌린다.
+    const R = item.rarity;
     const beam = new THREE.Sprite(new THREE.SpriteMaterial({
       map: beamTexture(), color: r.hex, blending: THREE.AdditiveBlending,
-      depthWrite: false, transparent: true, opacity: item.rarity >= 2 ? 0.8 : 0.42,
+      depthWrite: false, transparent: true, opacity: [0.34, 0.5, 0.72, 0.95][R],
     }));
-    beam.scale.set(1.1, 2.6 + item.rarity * 0.45, 1);
-    beam.position.y = 1.3;
+    beam.scale.set([0.9, 1.15, 1.5, 1.95][R], [2.2, 2.9, 4.0, 5.4][R], 1);
+    beam.position.y = [1.1, 1.4, 1.9, 2.5][R];
     this.group.add(beam);
     this.beam = beam;
 
@@ -215,10 +219,41 @@ export class Drop {
       map: softDot(), color: r.hex, blending: THREE.AdditiveBlending,
       depthWrite: false, transparent: true, opacity: 0.5,
     }));
-    glow.scale.set(1.5, 1.5, 1);
+    glow.scale.setScalar([1.2, 1.6, 2.2, 3.0][R]);
     glow.position.y = 0.1;
     this.group.add(glow);
     this.glow = glow;
+
+    // 희귀 이상은 바닥에 도는 고리가 하나 더 붙는다 — 빛기둥만으로는
+    // 벽 너머에서 안 보이는데, 바닥 고리는 위에서 내려다보는 각도에 잘 걸린다.
+    if (R >= 2) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.42, 0.62 + (R - 2) * 0.22, 24),
+        new THREE.MeshBasicMaterial({
+          color: r.hex, transparent: true, opacity: 0.5,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+        }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.04;
+      this.group.add(ring);
+      this.ring = ring;
+    }
+
+    // 전설은 주위를 도는 불티까지 — 여기까지 오면 「특별한 게 떨어졌다」가
+    // 소리를 듣지 않아도 눈으로 전달된다.
+    if (R >= 3) {
+      this.motes = [];
+      for (let i = 0; i < 5; i++) {
+        const m = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: softDot(), color: r.hex, blending: THREE.AdditiveBlending,
+          depthWrite: false, transparent: true, opacity: 0.85,
+        }));
+        m.scale.setScalar(0.3);
+        m.userData.phase = (i / 5) * Math.PI * 2;
+        this.group.add(m);
+        this.motes.push(m);
+      }
+    }
 
     this.labelTex = labelTexture(item.name, r.css);
     this.label = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -239,6 +274,17 @@ export class Drop {
     this.mesh.rotation.y += dt * 1.6;
     this.mesh.position.y = 0.55 + Math.sin(this.t * 2.2) * 0.09;
     this.glow.material.opacity = 0.38 + Math.sin(this.t * 3.1) * 0.14;
+    if (this.ring) {
+      this.ring.rotation.z += dt * 0.9;
+      this.ring.material.opacity = 0.35 + Math.sin(this.t * 2.4) * 0.18;
+    }
+    if (this.motes) {
+      for (const m of this.motes) {
+        const a = this.t * 1.5 + m.userData.phase;
+        m.position.set(Math.cos(a) * 0.55, 0.35 + Math.sin(a * 1.7) * 0.42, Math.sin(a) * 0.55);
+        m.material.opacity = 0.55 + Math.sin(a * 2.3) * 0.35;
+      }
+    }
     this.label.visible = showLabel;
   }
 
@@ -247,6 +293,9 @@ export class Drop {
     this.mat.dispose();
     this.beam.material.dispose();
     this.glow.material.dispose();
+    // 등급별 추가 연출도 같이 버린다 — 빠뜨리면 층을 넘길 때마다 조금씩 샌다
+    if (this.ring) { this.ring.geometry.dispose(); this.ring.material.dispose(); }
+    if (this.motes) for (const m of this.motes) m.material.dispose();
     this.label.material.dispose();
     this.labelTex.dispose();
   }

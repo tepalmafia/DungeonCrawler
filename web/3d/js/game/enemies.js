@@ -8,6 +8,7 @@ import { Sfx } from '../core/audio.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
+import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank } from './ai.js';
 
 const V = new THREE.Vector3();
 
@@ -252,6 +253,17 @@ export class Enemy {
     this.recoilT = 0;
     this.recoilDir = { x: 0, z: 1 };
     this.recoilPow = 1;
+    this.knockMoved = 0;              // 넉백으로 실제 밀려난 거리 — 실측용(core/metrics.js)
+
+    // 미발견 상태의 「하는 일」 (game/ai.js). 종족마다 어울리는 것이 다르다.
+    this.idleKind = pickIdle(defKey);
+    this.idleT = Math.random() * 2.5;
+    this.idleMoving = false;
+    this.idleTarget = null;
+    this.idleFace = null;
+    this.spotT = 0;                   // 뒤에서 발견했을 때의 반응 지연
+    this.flankCd = 0;                 // 우회 지점 재탐색 쿨다운
+    this.flankTarget = null;
     this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
 
@@ -321,6 +333,7 @@ export class Enemy {
     this.stateT += dt * ATTACK_SCALE;
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.leapCd = Math.max(0, this.leapCd - dt);
+    this.flankCd = Math.max(0, this.flankCd - dt);
     this.flash = Math.max(0, this.flash - dt);
     this.repathCd -= dt;
 
@@ -328,8 +341,17 @@ export class Enemy {
 
     // 어그로는 「개체별」로만 붙는다. 옆의 동료에게 번지지 않는다 —
     // 그래야 가장자리 한 마리만 끌어내는 플레이가 성립한다.
-    if (!this.aggro && !p.dead && dist < this.def.aggro && this._canSee(G, p)) {
-      this._pull(G);
+    // 시야가 부채꼴이라 같은 거리라도 앞뒤에 따라 발견 시점이 다르다.
+    // busy(등을 보이고 뭔가를 뒤지는 중)는 뒤가 특히 무디다 — 기습이 성립한다.
+    if (!this.aggro && !p.dead && this._canSee(G, p)) {
+      const reach = this.def.aggro * visionFactor(this, p.pos.x, p.pos.z);
+      if (dist < reach) {
+        // 뒤에서 다가오면 알아채는 데 시간이 걸린다
+        this.spotT += dt;
+        if (this.spotT >= reactionDelay(this, p.pos.x, p.pos.z)) this._pull(G);
+      } else {
+        this.spotT = 0;
+      }
     }
 
     // 리쉬 — 처음 자리에서 너무 멀어지면 돌아가며 체력을 회복한다.
@@ -348,14 +370,24 @@ export class Enemy {
       moving = this._returnHome(dt, G);
     } else if (this.aggro && !p.dead) {
       moving = this._combat(dt, G, p, dist);
+    } else if (!this.aggro) {
+      // 아직 못 봤다 — 각자 자기 일을 한다 (game/ai.js)
+      moving = updateIdle(this, dt, G);
     }
 
     // 넉백 감쇠
     if (this.knock.lengthSq() > 0.0001) {
       const kx = this.knock.x * dt * 9, kz = this.knock.z * dt * 9;
+      const before = { x: this.pos.x, z: this.pos.z };
       const r = resolveCollision(G.dungeon, this.pos.x + kx, this.pos.z + kz, this.radius);
       this.pos.set(r.x, 0, r.z);
+      // 벽에 막히면 임펄스만큼 못 밀린다 — 그래서 「의도한 값」이 아니라
+      // 실제 이동 합계를 잰다. 이게 사장님이 화면에서 보는 거리다.
+      this.knockMoved += Math.hypot(this.pos.x - before.x, this.pos.z - before.z);
       this.knock.multiplyScalar(Math.max(0, 1 - dt * 9));
+    } else if (this.knockMoved > 0) {
+      G.metrics?.knock(this.knockMoved);
+      this.knockMoved = 0;
     }
 
     this._separate(dt, G);
@@ -385,14 +417,37 @@ export class Enemy {
       case 'idle':
       case 'chase': {
         const want = d.ranged ? Math.min(d.range * 0.8, 9) : d.range * 0.85;
-        if (dist <= want && this._canSee(G, p) && this.attackCd <= 0) {
+        const see = this._canSee(G, p);
+        if (dist <= want && see && this.attackCd <= 0) {
           this.state = 'windup';
           this.stateT = 0;
           this._telegraph(G);
           break;
         }
-        // 궁수는 너무 가까우면 물러난다 (카이팅)
-        if (d.ranged && dist < d.keepAway) {
+        // 사거리 안인데 벽·기둥이 사선을 막았다 → 옆으로 돌아 각을 연다.
+        // 이 분기가 없으면 궁수는 뒤로 물러나기만 하고 영영 못 쏘고,
+        // 근접은 이미 가까워 추격도 의미가 없어 그 자리에 굳는다.
+        // **후퇴(카이팅)보다 먼저 판단해야 한다** — 순서를 바꾸면 궁수가
+        // 막힌 채로 계속 물러나기만 한다.
+        if (dist <= want && !see) {
+          if (this.flankCd <= 0 || !this.flankTarget) {
+            this.flankCd = 0.5;
+            this.flankTarget = findFlank(this, G, p);
+          }
+          if (this.flankTarget) {
+            const fd = Math.hypot(this.flankTarget.x - this.pos.x, this.flankTarget.z - this.pos.z);
+            if (fd < 0.45) {
+              this.flankTarget = null;          // 도착 — 다음 프레임에 사선을 다시 본다
+            } else {
+              moving = this._step(dt, G, this.flankTarget.x, this.flankTarget.z, this.speed);
+              break;
+            }
+          }
+        } else {
+          this.flankTarget = null;
+        }
+        // 궁수는 너무 가까우면 물러난다 (카이팅) — 단, 사선이 열려 있을 때만.
+        if (d.ranged && dist < d.keepAway && see) {
           moving = this._step(dt, G, this.pos.x * 2 - p.pos.x, this.pos.z * 2 - p.pos.z, this.speed * 0.9, true);
           break;
         }
@@ -445,6 +500,8 @@ export class Enemy {
     G.fx.ground(this.pos, { r0: this.radius * 2.6, color: 0xff3a3a, life: 0.7 });
     G.fx.burst(this.center(), { count: 6, color: 0xff5a4a, speed: 1.6, size: 0.32, life: 0.5, grav: -1 });
     Sfx.enemyAggro(this.def.key, volAt(G, this.pos));
+    // 등을 보이고 있을 때 걸렸는가 — 기습이 실제로 성립하는지 재는 지표
+    G.metrics?.aggroOn(this.def.key, this.idleKind === 'busy');
 
     // 머리 위 느낌표 — 튀어올랐다가 사그라든다
     if (!this.alert) {
@@ -467,6 +524,12 @@ export class Enemy {
       this.aggro = false;
       this.state = 'idle';
       this.path.length = 0;
+      // 집에 돌아왔으면 하던 일을 처음부터 다시 시작한다.
+      // 안 지우면 귀환 전에 잡아둔 낡은 목적지로 곧장 걸어간다.
+      this.idleMoving = false;
+      this.idleTarget = null;
+      this.idleT = 0.5 + Math.random();
+      this.spotT = 0;
       return 0;
     }
     if (this.repathCd <= 0 || !this.path.length) {
