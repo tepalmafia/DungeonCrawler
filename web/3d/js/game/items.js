@@ -362,11 +362,14 @@ export class Drop {
     this.group = new THREE.Group();
     this.group.position.copy(pos);
 
+    const coin = item.kind === 'coin';
+    const tint = coin ? 0xd8b45e : r.hex;
     const mat = new THREE.MeshStandardMaterial({
-      color: r.hex, emissive: r.hex, emissiveIntensity: 0.55,
-      roughness: 0.4, metalness: 0.6,
+      color: tint, emissive: tint, emissiveIntensity: coin ? 0.7 : 0.55,
+      roughness: 0.4, metalness: coin ? 0.9 : 0.6,
     });
     this.mesh = new THREE.Mesh(ITEM_GEO[item.slot] || ITEM_GEO.ring, mat);
+    if (coin) this.mesh.rotation.x = Math.PI / 2.6;   // 비스듬히 눕혀 원반으로 읽히게
     this.mesh.position.y = 0.55;
     this.mesh.rotation.z = 0.4;
     this.group.add(this.mesh);
@@ -377,7 +380,7 @@ export class Drop {
     // 등급 사이 차이를 선형으로 두면 전설이 희귀와 구분이 안 간다 — 벌린다.
     const R = item.rarity;
     const beam = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: beamTexture(), color: r.hex, blending: THREE.AdditiveBlending,
+      map: beamTexture(), color: tint, blending: THREE.AdditiveBlending,
       depthWrite: false, transparent: true, opacity: [0.34, 0.5, 0.72, 0.95][R],
     }));
     beam.scale.set([0.9, 1.15, 1.5, 1.95][R], [2.2, 2.9, 4.0, 5.4][R], 1);
@@ -386,7 +389,7 @@ export class Drop {
     this.beam = beam;
 
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: softDot(), color: r.hex, blending: THREE.AdditiveBlending,
+      map: softDot(), color: tint, blending: THREE.AdditiveBlending,
       depthWrite: false, transparent: true, opacity: 0.5,
     }));
     glow.scale.setScalar([1.2, 1.6, 2.2, 3.0][R]);
@@ -425,7 +428,7 @@ export class Drop {
       }
     }
 
-    this.labelTex = labelTexture(item.name, r.css);
+    this.labelTex = labelTexture(item.name, coin ? '#d8b45e' : r.css);
     this.label = new THREE.Sprite(new THREE.SpriteMaterial({
       map: this.labelTex, depthTest: false, transparent: true,
     }));

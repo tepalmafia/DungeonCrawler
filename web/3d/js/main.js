@@ -274,18 +274,24 @@ function onEnemyKilled(e) {
     dropItem(roll(), e.pos, 0);
   }
 
-  // 영혼 조각 — 잡몹도 **확정**으로 떨군다 (자동 획득, 줍는 동작 없음).
+  // 영혼 조각 — **바닥에 떨어진다.** 자동으로 들어오지 않는다.
   //
-  // 장비 드랍을 17% → 9% 로 절반 아래로 내렸으니, 그대로 두면 「아무것도 없는 판」이
-  // 대부분이 된다. 그건 절제가 아니라 그냥 빈 게임이다. 확정 화폐가 그 바닥을 받친다:
-  // 장비가 안 나와도 상점 쪽으로 조금씩 다가간다 (docs/ITEM-ECONOMY.md §4-1).
+  // 처음엔 확정 자동 획득이었다. 그게 「빈손으로 나가는 판이 없다」는 목적에는
+  // 맞았지만, 잡을 때마다 숫자가 알아서 오르니 **줍는 행위에 감정이 없었다.**
+  // 화면 구석의 카운터가 조용히 올라갈 뿐이다.
+  //
+  // 이제 확률로 떨어지고, 걸어가서 밟아야 들어온다. 잡몹은 절반이 조금 안 되고
+  // 정예·보스는 확정이다. 떨어지는 빈도를 낮춘 만큼 한 번의 양을 키워서
+  // 층당 수입은 유지한다 — 줄이려는 게 아니라 **손이 가게** 하려는 것이다.
   if (!e.summoned) {
-    const base = 3 + G.floorNo * 2 + G.tier * 3;
-    const mult = e.isBoss ? 25 : e.elite ? 6 : 1;
-    const coin = Math.max(1, Math.round(base * mult * rnd.range(0.7, 1.3)));
-    G.player.coin += coin;
-    G.metrics?.coin(coin);
-    fx.number(e.center().setY(1.5), `+${coin}`, { color: '#c9a44a' });
+    const chance = e.isBoss || e.elite ? 1 : 0.45;
+    if (rnd.chance(chance)) {
+      const base = 3 + G.floorNo * 2 + G.tier * 3;
+      // 잡몹은 확률이 0.45 라 1/0.45 ≈ 2.2 배를 실어야 기댓값이 같다
+      const mult = e.isBoss ? 25 : e.elite ? 6 : 2.2;
+      const coin = Math.max(1, Math.round(base * mult * rnd.range(0.7, 1.3)));
+      dropCoin(coin, e.pos, e.isBoss || e.elite);
+    }
   }
 
   // 랜턴 — 빛이 곧 정보다. 잡몹도 낮은 확률로 떨군다.
@@ -300,6 +306,30 @@ function onEnemyKilled(e) {
     G.player.potions[k]++;
     ui.toast(`${k === 'hp' ? '체력' : '마나'} 물약 +1`, '#b8b8b8');
   }
+}
+
+/**
+ * 영혼 조각을 바닥에 떨어뜨린다.
+ *
+ * 장비 드랍과 같은 Drop 을 쓰지 않는다 — 조각은 가방에 안 들어가고, 툴팁도
+ * 비교도 없으며, 줍는 즉시 사라진다. 규칙이 다른 것은 따로 두는 편이 낫다.
+ */
+function dropCoin(amount, pos, big = false) {
+  const dg = G.dungeon;
+  const a = Math.random() * Math.PI * 2;
+  const res = resolveCollision(dg, pos.x + Math.cos(a) * 0.5, pos.z + Math.sin(a) * 0.5, 0.3);
+  const item = {
+    kind: 'coin', slot: 'coin', amount,
+    name: `영혼 조각 ${amount}`, icon: '◈',
+    // 큰 무더기는 등급 체계의 「희귀」 색을 빌려 온다 — 멀리서 크기로 읽힌다
+    rarity: big ? 2 : 0,
+  };
+  const d = new Drop(scene, item, new THREE.Vector3(res.x, 0, res.z));
+  G.drops.push(d);
+  Audio.Sfx.itemDrop(0);
+  fx.burst(d.pos.clone().setY(0.2), {
+    count: big ? 14 : 7, color: 0xd8b45e, speed: 2.4, size: 0.24, life: 0.45, grav: 9, spread: 0.4,
+  });
 }
 
 function dropItem(item, pos, i = 0) {
@@ -609,6 +639,16 @@ function updatePickups(dt) {
     d.update(G.time, dt, showLabels || d === G.pickupTarget);
     if (p.dead) continue;
     if (Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) < 1.15) {
+      if (d.item.kind === 'coin') {
+        p.coin += d.item.amount;
+        G.metrics?.coin(d.item.amount);
+        Audio.Sfx.pickup(0);
+        fx.number(p.center().setY(1.6), `◈ +${d.item.amount}`, { color: '#d8b45e' });
+        if (d === G.pickupTarget) G.pickupTarget = null;
+        d.dispose();
+        G.drops.splice(i, 1);
+        continue;
+      }
       if (d.item.kind === 'lantern') {
         // 랜턴은 가방에 쌓지 않는다. 더 좋으면 바꿔 들고, 아니면 기름으로 쓴다.
         const r = acquire(p, d.item);
