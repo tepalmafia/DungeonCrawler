@@ -252,6 +252,7 @@ export class Enemy {
     this.recoilT = 0;
     this.recoilDir = { x: 0, z: 1 };
     this.recoilPow = 1;
+    this.knockMoved = 0;              // 넉백으로 실제 밀려난 거리 — 실측용(core/metrics.js)
     this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
 
@@ -353,9 +354,16 @@ export class Enemy {
     // 넉백 감쇠
     if (this.knock.lengthSq() > 0.0001) {
       const kx = this.knock.x * dt * 9, kz = this.knock.z * dt * 9;
+      const before = { x: this.pos.x, z: this.pos.z };
       const r = resolveCollision(G.dungeon, this.pos.x + kx, this.pos.z + kz, this.radius);
       this.pos.set(r.x, 0, r.z);
+      // 벽에 막히면 임펄스만큼 못 밀린다 — 그래서 「의도한 값」이 아니라
+      // 실제 이동 합계를 잰다. 이게 사장님이 화면에서 보는 거리다.
+      this.knockMoved += Math.hypot(this.pos.x - before.x, this.pos.z - before.z);
       this.knock.multiplyScalar(Math.max(0, 1 - dt * 9));
+    } else if (this.knockMoved > 0) {
+      G.metrics?.knock(this.knockMoved);
+      this.knockMoved = 0;
     }
 
     this._separate(dt, G);
@@ -445,6 +453,7 @@ export class Enemy {
     G.fx.ground(this.pos, { r0: this.radius * 2.6, color: 0xff3a3a, life: 0.7 });
     G.fx.burst(this.center(), { count: 6, color: 0xff5a4a, speed: 1.6, size: 0.32, life: 0.5, grav: -1 });
     Sfx.enemyAggro(this.def.key, volAt(G, this.pos));
+    G.metrics?.aggroOn(this.def.key);
 
     // 머리 위 느낌표 — 튀어올랐다가 사그라든다
     if (!this.alert) {

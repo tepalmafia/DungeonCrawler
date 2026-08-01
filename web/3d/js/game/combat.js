@@ -85,6 +85,8 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     G.player.hp = Math.min(G.player.maxHp, G.player.hp + G.player.leech);
   }
 
+  G.metrics?.hit(e, dmg, !!opts.crit);
+
   if (e.hp <= 0) killEnemy(G, e);
   return dmg;
 }
@@ -100,6 +102,7 @@ export function killEnemy(G, e) {
   Sfx.enemyDie(e.def.key, volAt(G, e.pos));
   G.hitStop = Math.max(G.hitStop || 0, 0.11);      // 마무리 일격은 더 길게 붙잡는다
 
+  G.metrics?.kill(e);
   G.onEnemyKilled(e);
 }
 
@@ -118,6 +121,8 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   G.ui.hurtFlash(Math.min(1, dmg / (p.maxHp * 0.28)));
   Sfx.playerHurt();
   Sfx.playerGrunt(Math.min(1, 0.5 + dmg / (p.maxHp * 0.3)));
+
+  G.metrics?.taken(dmg);
 
   if (p.hp <= 0) { p.hp = 0; G.onPlayerDeath(); }
   return dmg;

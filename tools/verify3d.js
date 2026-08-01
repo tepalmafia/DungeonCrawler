@@ -627,12 +627,16 @@ async function shot(page, name) {
     const cm = await import('./js/game/combat.js');
     const drops0 = G.drops.length;
     cm.killEnemy(G, G.boss);
-    for (let i = 0; i < 60; i++) await new Promise((r) => requestAnimationFrame(r));
-    const added = G.drops.slice(drops0);
+    // 드랍은 killEnemy 안에서 **동기적으로** 생성된다. 기다릴 이유가 없다.
+    // 예전에는 60프레임을 기다린 뒤 셌는데, 그 사이 옆에 서 있던 플레이어가
+    // 주워 버려서 프레임 속도에 따라 결과가 달라졌다 — 검사가 아니라 도박이었다.
+    const added = G.drops.slice(drops0).map((d) => d.item.kind);
+    // 출구 열림은 몇 프레임 뒤에 반영될 수 있으니 그것만 기다린다
+    for (let i = 0; i < 10; i++) await new Promise((r) => requestAnimationFrame(r));
     return {
       exitOpen: G.level.exitOpen, bossKills: G.stats.bossKills,
-      gear: added.filter((d) => d.item.kind !== 'lantern').length,
-      lanterns: added.filter((d) => d.item.kind === 'lantern').length,
+      gear: added.filter((k) => k !== 'lantern').length,
+      lanterns: added.filter((k) => k === 'lantern').length,
     };
   });
   ok('boss.kill.dropsRare', kill.gear === 3 && kill.lanterns === 1,

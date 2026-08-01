@@ -12,6 +12,7 @@ import { Input } from './core/input.js';
 import { FX } from './core/fx.js';
 import * as Audio from './core/audio.js';
 import { Bot } from './core/bot.js';
+import { Metrics } from './core/metrics.js';
 
 import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
@@ -66,6 +67,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
 const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
+const lastPos = { x: 0, z: 0 };       // 이동 거리 적산용 (실측)
 let camDist = CAM_DIST_DEFAULT;      // 목표 거리 (휠로 조절)
 let camDistNow = CAM_DIST_DEFAULT;   // 실제 거리 — 목표로 부드럽게 따라간다
 
@@ -96,6 +98,7 @@ const G = {
   stats: { kills: 0, floorsCleared: 0, bossKills: 0, deaths: 0, itemsFound: 0 },
   perf: { logicMs: 0, frameMs: 0 },
   hitStop: 0,                                        // core/main frame() 에서 소모된다
+  metrics: new Metrics(),                            // 실측 — window.G3.metrics.report()
   exitTouchT: 0,
   onEnemyKilled, onPlayerDeath, onLanternOut,
 };
@@ -180,6 +183,7 @@ function loadFloor(floorNo) {
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
 
   applyLantern();
+  G.metrics.floorStart(floorNo);
 
   // 카메라를 즉시 플레이어 위로 (줌 배율은 층을 넘어가도 유지한다)
   camDistNow = camDist;
@@ -249,6 +253,7 @@ function dropItem(item, pos, i = 0) {
 }
 
 function onPlayerDeath() {
+  G.metrics.death();
   if (G.state !== 'play') return;
   G.player.dead = true;
   G.state = 'dead';
@@ -483,6 +488,7 @@ function updatePickups(dt) {
           ? `${d.item.name} → 연료 +${r.gained}초`
           : `${d.item.name} (연료 ${Math.round(r.gained)}초)`, RARITIES[d.item.rarity].css);
         Audio.Sfx.pickup(d.item.rarity);
+        G.metrics.pickup(d.item.rarity);
         fx.burst(d.pos.clone().setY(0.6), { count: 16, color: d.item.def.color, speed: 3, size: 0.4, life: 0.6, grav: -2 });
         d.dispose();
         G.drops.splice(i, 1);
@@ -490,6 +496,7 @@ function updatePickups(dt) {
       }
       if (!p.pickUp(d.item)) { ui.toast('가방이 가득 찼다', '#e07272'); continue; }
       Audio.Sfx.pickup(d.item.rarity);
+      G.metrics.pickup(d.item.rarity);
       const gain = power(d.item) - power(p.equipped[d.item.slot]);
       ui.toast(`${d.item.name}${gain > 0 ? '  ▲ +' + gain : ''}`, RARITIES[d.item.rarity].css);
       fx.burst(d.pos.clone().setY(0.6), { count: 14, color: RARITIES[d.item.rarity].hex, speed: 3, size: 0.35, life: 0.5, grav: -2 });
@@ -607,35 +614,19 @@ let last = performance.now();
 let acc = 0;
 const MAX_DT = 1 / 20;
 
-function frame(now) {
-  requestAnimationFrame(frame);
-  let dt = (now - last) / 1000;
-  last = now;
-  if (!Number.isFinite(dt)) dt = 0;
-  dt = Math.min(dt, 0.1) * params.ff;
-
-  // ── 히트스톱 ──────────────────────────────────────────────
-  // 타격 순간 시뮬레이션을 몇십 밀리초 거의 멈춘다. 액션 게임에서 「손맛」의
-  // 가장 큰 지분이 여기 있다 — 밀어내지 않고도 맞았다는 감각을 준다.
-  // 렌더는 계속 돌아가므로 화면이 멈추는 게 아니라 「걸리는」 느낌이 된다.
-  if (G.hitStop > 0) {
-    G.hitStop = Math.max(0, G.hitStop - dt);
-    dt *= 0.12;
-  }
-  G.dt = dt;
-  G.time += dt;
-
-  handleInput(dt);
-  const tLogic = performance.now();
-
+// ── 시뮬레이션 한 스텝 ──────────────────────────────────────
+// frame() 에서 떼어냈다. 이유는 계측이다:
+// 렌더러가 느린 환경(소프트웨어 렌더링)에서 프레임에 묶여 측정하면
+// 배속을 올릴 수밖에 없고, 그러면 한 스텝이 0.8초가 되어 충돌·경로가
+// 실제 게임과 달라진다. **그렇게 잰 수치는 이 게임의 수치가 아니다.**
+// 그래서 벤치는 렌더링 없이 이 함수를 고정 dt 로 반복 호출한다.
+function simulate(dt) {
   if (G.state === 'play' && G.dungeon) {
     if (G.bot) G.bot.update(dt);
 
-    // 쿨다운
     for (const k of Object.keys(G.cooldowns))
       if (G.cooldowns[k] > 0) G.cooldowns[k] = Math.max(0, G.cooldowns[k] - dt);
 
-    // 타이머 (지연 발동)
     for (let i = G.timers.length - 1; i >= 0; i--) {
       G.timers[i].t -= dt;
       if (G.timers[i].t <= 0) { const f = G.timers[i].fn; G.timers.splice(i, 1); f(); }
@@ -661,6 +652,76 @@ function frame(now) {
     updateFloorClear();
     updateBossBar();
     updateExit(dt);
+  }
+}
+
+/** 실측 기록 — 게임 상태를 읽기만 한다. 측정이 게임을 바꾸면 안 된다. */
+function record(dt, rawDt) {
+  if (G.state !== 'play' || !G.player) return;
+  const p = G.player;
+  const walked = Math.hypot(p.pos.x - lastPos.x, p.pos.z - lastPos.z);
+  lastPos.x = p.pos.x; lastPos.z = p.pos.z;
+  let anyAggro = false;
+  for (const e of G.enemies) if (!e.dead && e.aggro) { anyAggro = true; break; }
+  G.metrics.frame(dt, rawDt, {
+    logicMs: G.perf.logicMs,
+    frameMs: G.perf.frameMs,
+    anyAggro,
+    hpPct: p.maxHp ? p.hp / p.maxHp : 0,
+    fuel: p.lantern ? p.lantern.fuel : 0,
+    walked,
+    stuck: p.stuckEvents
+      ? p.stuckEvents.skipWaypoint + p.stuckEvents.unsmooth + p.stuckEvents.giveUp
+      : 0,
+  });
+}
+
+/**
+ * 렌더링 없이 고정 dt 로 N 스텝 돌린다 — tools/bench3d.js 전용.
+ * 60Hz 와 같은 간격(1/60)으로 밟으므로 화면에서 도는 것과 같은 시뮬레이션이다.
+ */
+function headlessRun(seconds, step = 1 / 60) {
+  const n = Math.max(1, Math.round(seconds / step));
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) {
+    if (G.state !== 'play') break;
+    G.hitStop = Math.max(0, G.hitStop - step);
+    const d = G.hitStop > 0 ? step * 0.12 : step;
+    G.dt = d;
+    G.time += d;
+    const t = performance.now();
+    simulate(d);
+    G.perf.logicMs = performance.now() - t;
+    record(d, step);
+  }
+  return { steps: n, ms: +(performance.now() - t0).toFixed(0) };
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000;
+  last = now;
+  if (!Number.isFinite(dt)) dt = 0;
+  dt = Math.min(dt, 0.1) * params.ff;
+  const rawDt = dt;            // 히트스톱 전 — 실제 흐른 시간
+
+  // ── 히트스톱 ──────────────────────────────────────────────
+  // 타격 순간 시뮬레이션을 몇십 밀리초 거의 멈춘다. 액션 게임에서 「손맛」의
+  // 가장 큰 지분이 여기 있다 — 밀어내지 않고도 맞았다는 감각을 준다.
+  // 렌더는 계속 돌아가므로 화면이 멈추는 게 아니라 「걸리는」 느낌이 된다.
+  if (G.hitStop > 0) {
+    G.hitStop = Math.max(0, G.hitStop - dt);
+    dt *= 0.12;
+  }
+  G.dt = dt;
+  G.time += dt;
+
+  handleInput(dt);
+  const tLogic = performance.now();
+
+  simulate(dt);
+
+  if (G.state === 'play' && G.dungeon) {
     G.level.update(G.time, dt);
     // 벽에 가려 캐릭터가 안 보이면 조작이 불가능해진다 — 사이에 낀 벽을 흐린다
     G.level.updateOcclusion(camera, G.player.pos, dt);
@@ -677,6 +738,9 @@ function frame(now) {
   // 시뮬레이션 비용만 따로 잰다 — GPU가 느린 환경(소프트웨어 렌더링)에서도
   // 게임 로직이 예산 안에 있는지 판단할 수 있어야 한다.
   G.perf.logicMs = performance.now() - tLogic;
+
+  record(dt, rawDt);
+
   G.perf.frameMs = dt * 1000 / params.ff;
 
   input.endFrame();
@@ -699,6 +763,7 @@ window.G3.nextFloor = nextFloor;
 window.G3.VERSION = VERSION;
 window.G3.params = params;
 window.G3.applyLantern = applyLantern;
+window.G3.headlessRun = headlessRun;   // tools/bench3d.js
 window.G3.BASE_LIGHT = BASE_LIGHT;
 window.G3.getZoom = () => ({ target: camDist, now: camDistNow, min: CAM_DIST_MIN, max: CAM_DIST_MAX });
 window.G3.setZoom = (d) => { camDist = THREE.MathUtils.clamp(d, CAM_DIST_MIN, CAM_DIST_MAX); return camDist; };
