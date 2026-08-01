@@ -182,7 +182,7 @@ export function hitPlayer(G, rawDmg, opts = {}) {
 const PROJ_GEO = new THREE.SphereGeometry(0.17, 8, 6);
 
 export class Projectile {
-  constructor(G, { from, dir, speed = 13, dmg = 8, color = 0x9a6bff, life = 3, fromPlayer = false, radius = 0.3, pierce = 0 }) {
+  constructor(G, { from, dir, speed = 13, dmg = 8, color = 0x9a6bff, life = 3, fromPlayer = false, radius = 0.3, pierce = 0, neutral = false }) {
     this.G = G;
     this.pos = from.clone();
     this.dir = dir.clone().setY(0).normalize();
@@ -192,6 +192,9 @@ export class Projectile {
     this.fromPlayer = fromPlayer;
     this.radius = radius;
     this.pierce = pierce;
+    // 함정이 쏜 화살은 **편이 없다.** 적이 맞으면 적이 아프다 —
+    // 함정을 「도구」로 쓰는 플레이가 성립하려면 여기가 중립이어야 한다.
+    this.neutral = neutral;
     this.hitSet = new Set();
     this.dead = false;
 
@@ -244,7 +247,7 @@ export class Projectile {
       return Math.hypot(px - (from.x + vx * t), pz - (from.z + vz * t));
     };
 
-    if (this.fromPlayer) {
+    if (this.fromPlayer || this.neutral) {
       for (const e of this.G.enemies) {
         if (e.dead || this.hitSet.has(e)) continue;
         if (segDist(e.pos.x, e.pos.z) < e.radius + this.radius + 0.2) {
@@ -253,7 +256,8 @@ export class Projectile {
           if (this.pierce-- <= 0) return this.kill();
         }
       }
-    } else {
+    }
+    if (!this.fromPlayer) {
       const p = this.G.player;
       if (!p.dead && segDist(p.pos.x, p.pos.z) < p.radius + this.radius + 0.25) {
         hitPlayer(this.G, this.dmg, { ranged: true });

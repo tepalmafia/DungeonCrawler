@@ -24,6 +24,7 @@ import { resolveCollision, nearestWalkable, sweep } from './world/nav.js';
 import { Player } from './game/player.js';
 import { spawnFloor } from './game/enemies.js';
 import { Doors } from './world/doors.js';
+import { Traps } from './world/traps.js';
 import { Shop } from './game/shop.js';
 import { Dialogue } from './game/dialogue.js';
 import { spawnBoss } from './game/boss.js';
@@ -110,7 +111,7 @@ const G = {
   metrics: new Metrics(),                            // 실측 — window.G3.metrics.report()
   exitTouchT: 0,
   onEnemyKilled, onPlayerDeath, onLanternOut,
-  doors: null, shop: null, dialogue: null, interact: null,
+  doors: null, traps: null, shop: null, dialogue: null, interact: null,
   acquireLantern: null,      // 아래에서 채운다 (game/shop.js 가 쓴다)
   dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
@@ -147,11 +148,13 @@ function clearFloor() {
   if (G.lighting) G.lighting.dispose();
   if (G.remains) G.remains.dispose();
   if (G.doors) G.doors.dispose();
+  if (G.traps) G.traps.dispose();
   if (G.shop) G.shop.dispose();
   G.level = null;
   G.lighting = null;
   G.remains = null;
   G.doors = null;
+  G.traps = null;
   G.shop = null;
   ui.setShop(null);
 }
@@ -170,6 +173,7 @@ function loadFloor(floorNo) {
   G.remains = new Remains(scene);
   G.lighting.setTorches(G.level.torches);
   G.doors = new Doors(scene, dg);
+  G.traps = new Traps(scene, dg, makeRng(`${G.seed}-trap-${floorNo}-${G.tier}`));
   if (!G.dialogue) G.dialogue = new Dialogue(scene);
 
   const rnd = makeRng(`${G.seed}-spawn-${floorNo}-${G.tier}`);
@@ -760,6 +764,8 @@ function simulate(dt) {
     updateBossBar();
     updateExit(dt);
     G.doors?.update(dt);
+    G.traps?.update(dt, G);
+    updateDisarm(dt);
     G.shop?.update(dt, G.time);
     G.dialogue?.update(dt, G);
     updateInteract();
@@ -773,14 +779,41 @@ function simulate(dt) {
 function updateInteract() {
   const p = G.player;
   if (p.dead) { G.interact = null; return; }
+  const trap = G.traps?.nearestDisarmable(p.pos.x, p.pos.z);
   if (G.doors?.leverInRange(p.pos.x, p.pos.z)) {
     G.interact = { kind: 'lever', label: 'E — 스위치를 당긴다' };
   } else if (G.shop?.inRange(p.pos.x, p.pos.z)) {
     G.interact = { kind: 'shop', label: 'E — 재의 행상과 거래' };
+  } else if (trap) {
+    // 해제는 도박이 아니라 **시간 대 안전의 교환**이다 — 실패 확률이 없다.
+    G.interact = { kind: 'trap', trap, label: `E — ${trap.def.name} 해제 (2초)` };
   } else {
     G.interact = null;
   }
   ui.setInteract(G.interact);
+}
+
+/**
+ * 함정 해제 — 2초 동안 **가만히** 있어야 한다.
+ * 벽 횃불 보충과 같은 규칙이다: 움직이면 처음부터. 「머무는」 행동이어야
+ * 함정 해제가 대가를 치르는 선택이 된다.
+ */
+let disarmT = 0, disarmTarget = null;
+function updateDisarm(dt) {
+  const p = G.player;
+  if (!disarmTarget) return;
+  const still = !p.path.length && !p.dead
+    && G.traps?.list.includes(disarmTarget) && disarmTarget.state === 'armed';
+  if (!still) { disarmT = 0; disarmTarget = null; ui.setRefuel(0); return; }
+  disarmT += dt;
+  ui.setRefuel(Math.min(1, disarmT / 2));
+  if (disarmT >= 2) {
+    G.traps.disarm(G, disarmTarget);
+    ui.toast(`${disarmTarget.def.name} 해제`, '#8fd08a');
+    disarmT = 0;
+    disarmTarget = null;
+    ui.setRefuel(0);
+  }
 }
 
 /** E 키 — 손 닿는 것을 쓴다 */
@@ -799,6 +832,10 @@ function doInteract() {
     }
   } else if (it.kind === 'shop') {
     ui.setShop(G.shop);
+  } else if (it.kind === 'trap') {
+    disarmTarget = it.trap;
+    disarmT = 0;
+    G.player.stop();
   }
 }
 

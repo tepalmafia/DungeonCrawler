@@ -36,6 +36,28 @@ async function shot(page, name) {
   page.on('pageerror', (e) => errs.push(String(e.message).slice(0, 200)));
   page.on('console', (m) => { if (m.type() === 'error') errs.push('console: ' + m.text().slice(0, 200)); });
 
+  // ── 시작 화면이 실제로 눌리는가 ──────────────────────────
+  //
+  // 이 검사는 사고를 겪고 추가했다. 상점 창(#shop)에 display:flex 를 주면서
+  // [hidden] 규칙을 빠뜨렸더니, hidden 속성이 붙어 있는데도 창이 계속 떠서
+  // 전체 화면을 덮는 배경이 클릭을 삼켰다 — **게임을 시작할 수 없었다.**
+  //
+  // 그래서 hidden 속성 값을 보지 않는다. 그건 이미 true 였다.
+  // **시작 버튼 좌표의 최상위 요소가 무엇인가**를 본다. 무엇이 가리든 걸린다.
+  await page.goto(`${BASE}/?seed=VERIFY`, { waitUntil: 'load' });
+  await page.waitForFunction(() => document.getElementById('startBtn'), { timeout: 30000 });
+  const gate = await page.evaluate(() => {
+    const b = document.getElementById('startBtn').getBoundingClientRect();
+    const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    const shown = [...document.querySelectorAll('#stage > div[hidden]')]
+      .filter((e) => getComputedStyle(e).display !== 'none')
+      .map((e) => e.id || e.className);
+    return { topId: top ? (top.id || top.tagName) : null, shown };
+  });
+  ok('boot.startClickable', gate.topId === 'startBtn' && gate.shown.length === 0,
+    `시작 버튼 위 최상위 = ${gate.topId}`
+    + (gate.shown.length ? ` · hidden 인데 안 숨은 것: ${gate.shown.join(', ')}` : ''));
+
   // ── 부팅 ────────────────────────────────────────────────
   await page.goto(`${BASE}/?seed=VERIFY&autostart=1`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.G3 && window.G3.state === 'play' && window.G3.dungeon, { timeout: 30000 });

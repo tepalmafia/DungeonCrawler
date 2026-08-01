@@ -147,11 +147,23 @@ export class Post {
     const size = renderer.getSize(new THREE.Vector2());
     // 반정밀 부동소수 버퍼. 8비트로 받으면 밝은 부분이 이미 잘려서
     // 블룸이 번질 재료가 남지 않는다.
+    //
+    // samples: 4 — **이걸 0 으로 두고 한 번 배포했다.**
+    // renderer 는 antialias:true 로 만들지만 그 MSAA 는 **기본 프레임버퍼에만**
+    // 붙는다. 후처리를 켜면 씬은 여기 렌더타깃에 그려지므로, 멀티샘플이 없으면
+    // 계단현상이 그대로 남는다. 그리고 이 게임은 상자 모양 저폴리라
+    // 모서리가 전부 직선이다 — AA 가 빠지면 정확히 「더 상자 같아」 보인다.
+    // 분위기를 살리려고 넣은 후처리가 형태를 망치고 있었다.
     const target = new THREE.WebGLRenderTarget(size.x, size.y, {
       type: THREE.HalfFloatType,
-      samples: 0,
+      samples: 4,
     });
     this.composer = new EffectComposer(renderer, target);
+    // EffectComposer 는 **넘겨받은** 타깃의 크기를 그대로 논리 크기로 삼는다.
+    // renderer.getSize() 는 CSS 픽셀이라, devicePixelRatio 2 인 기기에서는
+    // 체인 전체가 화면 해상도의 절반으로 돈다 — 흐릿해진다.
+    // setSize 를 한 번 불러 pixelRatio 를 반영시킨다.
+    this.composer.setSize(size.x, size.y);
     this.composer.addPass(new RenderPass(scene, camera));
 
     if (quality === 'high') {
@@ -183,8 +195,12 @@ export class Post {
 
   setSize(w, h) {
     if (!this.enabled) return;
+    // composer.setSize 가 **모든 패스에** setSize(w*pixelRatio, ...) 를 돌린다.
+    // 여기서 bloom.setSize(w, h) 를 또 부르면 방금 맞춰 놓은 장치 픽셀 크기를
+    // 논리 픽셀로 덮어써서, dpr 2 인 기기에서는 창을 한 번 리사이즈하는 순간
+    // 블룸 밉 체인이 절반이 되고 halo 반경이 두 배로 벌어진다.
+    // 실측으로 고른 radius 0.4 가 리사이즈 한 번에 무의미해진다.
     this.composer.setSize(w, h);
-    if (this.bloom) this.bloom.setSize(w, h);
   }
 
   /** 층 테마에 맞춰 색을 갈아끼운다 — 수몰층은 더 푸르고, 왕좌는 더 붉다 */

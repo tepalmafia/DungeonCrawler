@@ -19,8 +19,11 @@ export const RARITIES = [
 const RARITY_W = [55, 30, 12, 3];
 
 /** 장비 슬롯 — 표시 순서이자 종이인형 배치 순서 */
-export const SLOTS = ['weapon', 'helm', 'armor', 'gloves', 'ring'];
-export const SLOT_NAME = { weapon: '무기', helm: '투구', armor: '갑옷', gloves: '장갑', ring: '장신구' };
+export const SLOTS = ['weapon', 'helm', 'armor', 'gloves', 'belt', 'boots', 'ring', 'amulet'];
+export const SLOT_NAME = {
+  weapon: '무기', helm: '투구', armor: '갑옷', gloves: '장갑',
+  belt: '허리띠', boots: '장화', ring: '반지', amulet: '목걸이',
+};
 
 // ─────────────────────── 기반 아이템 ───────────────────────
 //
@@ -42,36 +45,65 @@ const BASES = {
   weapon: [
     { name: '녹슨 검',     icon: '🗡', fam: '검',   lvl: 1, dmg: [6, 11],  spd: 1.00 },
     { name: '장검',        icon: '🗡', fam: '검',   lvl: 2, dmg: [8, 13],  spd: 0.98 },
+    { name: '기사의 검',   icon: '🗡', fam: '검',   lvl: 2, dmg: [9, 14],  spd: 0.97 },
     { name: '룬검',        icon: '🗡', fam: '검',   lvl: 3, dmg: [10, 14], spd: 0.96 },
     { name: '강철 도끼',   icon: '🪓', fam: '도끼', lvl: 1, dmg: [9, 14],  spd: 0.86 },
+    { name: '전투 도끼',   icon: '🪓', fam: '도끼', lvl: 2, dmg: [10, 16], spd: 0.84 },
     { name: '쌍날 도끼',   icon: '🪓', fam: '도끼', lvl: 3, dmg: [11, 17], spd: 0.82 },
     { name: '사슬 철퇴',   icon: '🔨', fam: '둔기', lvl: 1, dmg: [10, 14], spd: 0.78, base: { stun: 4 } },
+    { name: '별철퇴',      icon: '🔨', fam: '둔기', lvl: 2, dmg: [11, 16], spd: 0.74, base: { stun: 6 } },
     { name: '성전 망치',   icon: '🔨', fam: '둔기', lvl: 3, dmg: [12, 18], spd: 0.70, base: { stun: 8 } },
     { name: '흑요석 대검', icon: '⚔',  fam: '대검', lvl: 1, dmg: [12, 16], spd: 0.70, base: { range: 0.5 } },
+    { name: '무덤 파쇄기', icon: '⚔',  fam: '대검', lvl: 2, dmg: [13, 18], spd: 0.67, base: { range: 0.62 } },
     { name: '처형자',      icon: '⚔',  fam: '대검', lvl: 3, dmg: [14, 20], spd: 0.64, base: { range: 0.75 } },
     { name: '단검',        icon: '🔪', fam: '단검', lvl: 1, dmg: [4, 7],   spd: 1.45, base: { crit: 5 } },
+    { name: '가시 단검',   icon: '🔪', fam: '단검', lvl: 2, dmg: [5, 8],   spd: 1.50, base: { crit: 6 } },
     { name: '독니',        icon: '🔪', fam: '단검', lvl: 2, dmg: [5, 9],   spd: 1.58, base: { crit: 8 } },
     { name: '재의 지팡이', icon: '🪄', fam: '지팡이', lvl: 1, dmg: [7, 10], spd: 0.95, base: { cdr: 7, mp: 20 } },
+    { name: '영혼의 홀',   icon: '🪄', fam: '지팡이', lvl: 3, dmg: [8, 12], spd: 0.93, base: { cdr: 10, mp: 32 } },
   ],
   helm: [
-    { name: '가죽 두건', icon: '🧢', lvl: 1, armor: [2, 4] },
-    { name: '사슬 투구', icon: '⛑', lvl: 2, armor: [4, 7] },
-    { name: '판금 투구', icon: '🪖', lvl: 3, armor: [7, 11] },
+    { name: '가죽 두건',   icon: '🧢', lvl: 1, armor: [2, 4] },
+    { name: '뼈 투구',     icon: '💀', lvl: 1, armor: [3, 5] },
+    { name: '사슬 투구',   icon: '⛑', lvl: 2, armor: [4, 7] },
+    { name: '판금 투구',   icon: '🪖', lvl: 3, armor: [7, 11] },
+    { name: '대관식 투구', icon: '👑', lvl: 3, armor: [8, 13] },
   ],
   armor: [
+    { name: '누비 옷',   icon: '👕', lvl: 1, armor: [2, 5] },
     { name: '가죽 갑옷', icon: '🎽', lvl: 1, armor: [3, 6] },
     { name: '사슬 갑옷', icon: '🥋', lvl: 2, armor: [6, 11] },
+    { name: '비늘 갑옷', icon: '🐉', lvl: 2, armor: [7, 12] },
     { name: '판금 갑옷', icon: '🛡', lvl: 3, armor: [10, 17] },
   ],
   gloves: [
     { name: '천 장갑',     icon: '🧤', lvl: 1, armor: [1, 3] },
     { name: '가죽 장갑',   icon: '🧤', lvl: 2, armor: [2, 5] },
+    { name: '사슬 손모아', icon: '🤲', lvl: 2, armor: [3, 6] },
     { name: '판금 건틀릿', icon: '🥊', lvl: 3, armor: [4, 8] },
+  ],
+  belt: [
+    { name: '노끈 허리띠', icon: '🪢', lvl: 1, armor: [1, 2] },
+    { name: '가죽 허리띠', icon: '🩹', lvl: 1, armor: [2, 4] },
+    { name: '사슬 허리띠', icon: '⛓', lvl: 2, armor: [3, 6] },
+    { name: '전쟁띠',      icon: '🎗', lvl: 3, armor: [5, 9] },
+  ],
+  boots: [
+    { name: '해진 신',     icon: '🥿', lvl: 1, armor: [1, 3] },
+    { name: '가죽 장화',   icon: '👢', lvl: 1, armor: [2, 4] },
+    { name: '사슬 장화',   icon: '🥾', lvl: 2, armor: [3, 6] },
+    { name: '판금 강철화', icon: '🦿', lvl: 3, armor: [5, 9] },
   ],
   ring: [
     { name: '구리 반지', icon: '💍', lvl: 1, armor: [0, 1] },
+    { name: '은 반지',   icon: '💍', lvl: 1, armor: [0, 2] },
     { name: '흑철 반지', icon: '💍', lvl: 2, armor: [1, 3] },
     { name: '영혼 인장', icon: '🔮', lvl: 3, armor: [1, 2] },
+  ],
+  amulet: [
+    { name: '뼈 목걸이',   icon: '📿', lvl: 1, armor: [0, 2] },
+    { name: '호박 부적',   icon: '🧿', lvl: 2, armor: [1, 3] },
+    { name: '왕관의 조각', icon: '⚜', lvl: 3, armor: [1, 4] },
   ],
 };
 
@@ -116,7 +148,10 @@ const SLOT_AFFIX = {
   helm:   ['hp', 'armor', 'mp', 'fuel', 'find'],
   armor:  ['armor', 'hp', 'thorns', 'regen'],
   gloves: ['aspd', 'crit', 'cdmg', 'dmg'],
+  belt:   ['hp', 'armor', 'regen', 'thorns'],
+  boots:  ['speed', 'armor', 'hp'],
   ring:   ['cdr', 'speed', 'leech', 'mp', 'find', 'fuel'],
+  amulet: ['find', 'mp', 'cdr', 'cdmg', 'fuel', 'crit'],
 };
 
 let uid = 1;
@@ -289,7 +324,10 @@ const ITEM_GEO = {
   helm: new THREE.SphereGeometry(0.26, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
   armor: new THREE.BoxGeometry(0.5, 0.55, 0.22),
   gloves: new THREE.BoxGeometry(0.26, 0.3, 0.18),
+  belt: new THREE.TorusGeometry(0.26, 0.055, 5, 12),
+  boots: new THREE.BoxGeometry(0.22, 0.24, 0.4),
   ring: new THREE.TorusGeometry(0.22, 0.07, 6, 14),
+  amulet: new THREE.TorusGeometry(0.17, 0.05, 5, 12),
   lantern: new THREE.CylinderGeometry(0.16, 0.2, 0.42, 6),
   coin: new THREE.CylinderGeometry(0.17, 0.17, 0.05, 10),
 };
