@@ -167,7 +167,8 @@ export function updateFields(G, dt) {
     for (const e of G.enemies) {
       if (e.dead) continue;
       if (Math.hypot(e.pos.x - f.x, e.pos.z - f.z) < f.r + e.radius)
-        hitEnemy(G, e, f.dps * 0.35, { knock: 0, color: f.color, silent: true });
+        // 장판은 바닥에 깔린 것이라 근원이 장판 중심이다
+        hitEnemy(G, e, f.dps * 0.35, { knock: 0, color: f.color, silent: true, from: f.pos ?? f });
     }
   }
 }

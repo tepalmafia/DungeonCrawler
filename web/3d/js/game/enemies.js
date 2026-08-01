@@ -625,12 +625,12 @@ export class Enemy {
       G.fx.addShake(0.14);
       G.lighting.flash(this.center(), 0xff7a2a, 70, 0.3);
       if (Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < d.slam)
-        hitPlayer(G, this.dmg);
+        hitPlayer(G, this.dmg, { from: this.pos });
       return;
     }
 
     // 근접: 예고 후에도 사거리 안에 있어야 맞는다 — 피할 수 있다
-    if (dist <= d.range + 0.5) hitPlayer(G, this.dmg);
+    if (dist <= d.range + 0.5) hitPlayer(G, this.dmg, { from: this.pos });
     G.fx.arc(this.pos, this.facing, { radius: d.range, spread: Math.PI * 0.55, color: 0xff9a7a, life: 0.16 });
   }
 
