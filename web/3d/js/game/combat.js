@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
 import { worldToGrid } from '../world/dungeon.js';
+import { ELEMENTS, elementalMult } from './elements.js';
 
 /**
  * 벽 너머로 때리거나 맞지 않게 막는다.
@@ -59,15 +60,23 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     const src = opts.from || G.player.pos;
     if (!hasLine(G, src.x, src.z, e.pos.x, e.pos.z)) return 0;
   }
-  const dmg = Math.max(1, Math.round(mitigate(rawDmg, e.armor, G.player.level)));
+  // 속성 상성 — 공격 속성은 opts.element, 없으면 무기 속성을 따른다.
+  // 「무기 속성을 따른다」가 기본인 이유: 평타와 소용돌이 베기는 무기를
+  // 휘두르는 동작이므로 무기가 곧 속성이다. 스킬은 자기 속성을 넘긴다.
+  const atkEl = opts.element ?? G.player.element ?? 'none';
+  const mult = elementalMult(atkEl, e.element);
+  const dmg = Math.max(1, Math.round(mitigate(rawDmg * mult, e.armor, G.player.level)));
   e.hp -= dmg;
   e.flash = 0.14;
   e.aggro = true;
 
   const c = e.center();
-  G.fx.number(c.clone().setY(c.y + 0.5), dmg, {
-    color: opts.crit ? '#ffe066' : '#ffffff',
-    big: !!opts.crit,
+  // 숫자로 상성을 알린다. **한 대만 때려 봐도 맞는지 틀리는지 안다** —
+  // 이게 실질적인 학습 경로다. 표를 외우게 만들면 아무도 안 외운다.
+  const strong = mult > 1.05, weak = mult < 0.95;
+  G.fx.number(c.clone().setY(c.y + 0.5), (strong ? '▲' : weak ? '▼' : '') + dmg, {
+    color: strong ? ELEMENTS[atkEl].css : weak ? '#8d8577' : (opts.crit ? '#ffe066' : '#ffffff'),
+    big: !!opts.crit || strong,
   });
   // 타격 방향 — 스파크가 이 방향으로 뿜어져야 「어디서 맞았는지」가 보인다
   const src = opts.from || G.player.pos;

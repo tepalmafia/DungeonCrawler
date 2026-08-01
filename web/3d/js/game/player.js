@@ -200,6 +200,7 @@ export class Player {
     this.stunChance = a.stun;             // combat.hitEnemy 가 굴린다
     this.reach = a.range;                 // 평타 사거리에 더해진다
     this.regen = a.regen;                 // 초당 회복
+    this.element = a.element || 'none';   // 무기 속성 — combat.hitEnemy 가 읽는다
     this.hp = Math.min(this.hp ?? this.maxHp, this.maxHp);
     this.mp = Math.min(this.mp ?? this.maxMp, this.maxMp);
     this._syncBlade();

@@ -493,6 +493,7 @@ async function shot(page, name) {
       return { x: b.x, y: b.y, w: b.width, h: b.height }; };
     const hp = box('#orbHp'), mp = box('#orbMp'), bar = box('#skillbar');
     const rows = [...document.querySelectorAll('.skillrow')];
+    const belt = [...document.querySelectorAll('#beltSlots .skill')];
     // 게이지는 「내가 넣은 값」이 아니라 **읽는 시점의 실제 스탯**과 맞아야 한다.
     // 마나는 매 프레임 자연 회복하므로 고정값과 비교하면 안 된다.
     const hpFill = parseFloat(document.querySelector('#orbHp .fill').style.height);
@@ -501,18 +502,24 @@ async function shot(page, name) {
     return {
       hpLeft: hp.x + hp.w <= bar.x + 2,
       mpRight: mp.x >= bar.x + bar.w - 2,
-      sameRow: Math.abs((hp.y + hp.h / 2) - (bar.y + bar.h / 2)) < 40,
+      // 구슬은 디아블로2 처럼 돌판에 **걸쳐 내려온다.** 정확히 같은 높이가 아니라
+      // 「같은 띠 안에 있는가」를 본다 — 세로 중심이 60px 안이면 한 덩어리로 읽힌다.
+      sameRow: Math.abs((hp.y + hp.h / 2) - (bar.y + bar.h / 2)) < 60,
       rows: rows.length,
       perRow: rows.map((r) => r.children.length),
+      beltCount: belt.length,
       hpFill, mpFill, hpWant, mpWant,
       hpOk: Math.abs(hpFill - hpWant) < 1.5,
       mpOk: Math.abs(mpFill - mpWant) < 1.5,
     };
   });
   ok('hud.orbsFlankHotkeys', hud.hpLeft && hud.mpRight && hud.sameRow,
-    '체력·마나 구슬이 단축키 양옆 같은 높이에');
-  ok('hud.twoRows', hud.rows === 2 && hud.perRow.every((n) => n === 4),
-    `단축키 ${hud.rows}줄 × ${hud.perRow.join('/')}칸`);
+    '체력·마나 구슬이 단축바 양옆 같은 띠에');
+  // 예전엔 「두 줄 × 4칸」이었다. 디아블로2 배치로 바꾸면서 스킬은 한 줄,
+  // 물약은 **벨트**로 따로 뺐다 — 스킬과 소모품은 성격이 다르다
+  // (스킬은 마나·쿨다운, 물약은 개수). 그래서 보는 것도 바꾼다.
+  ok('hud.skillsAndBelt', hud.rows === 1 && hud.perRow[0] === 4 && hud.beltCount === 4,
+    `스킬 ${hud.perRow.join('/')}칸 · 벨트 ${hud.beltCount}칸`);
   ok('hud.orbsReflectStats', hud.hpOk && hud.mpOk,
     `체력 게이지 ${hud.hpFill.toFixed(1)}% (실제 ${hud.hpWant.toFixed(1)}%) · `
     + `마나 ${hud.mpFill.toFixed(1)}% (실제 ${hud.mpWant.toFixed(1)}%)`);

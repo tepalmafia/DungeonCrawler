@@ -10,6 +10,7 @@ import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 import { AI, pickIdle, updateIdle, visionFactor, reactionDelay, findFlank, SHOUT, NOISE, SEARCH, FLEE } from './ai.js';
 import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
+import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
 
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
 // 아이템·스킬이 늘면서 플레이어 쪽만 세졌다. 한 곳에서 올린다 —
@@ -241,6 +242,8 @@ export class Enemy {
     this.dmg = d.dmg * powerMult;
     this.armor = d.armor * powerMult;
     this.atkSpeedMul = 1;      // 정예 특성이 올린다
+    // 속성 — 기본은 종족값. spawnFloor 가 층 분포로 덮어쓴다 (game/elements.js).
+    this.element = ENEMY_ELEMENT[defKey] || 'none';
     this.speed = d.speed * MOVE_SCALE;   // 전체 템포는 game/pace.js
     this.radius = d.radius;
     this.heavy = !!d.heavy;
@@ -334,6 +337,29 @@ export class Enemy {
   get headY() { return (this.def.float ? 1.9 : this.radius * 3.2 + 0.5) * this.def.scale; }
 
   // ─────────────────── 프레임 ───────────────────
+  /**
+   * 속성을 **몸에 입힌다.**
+   *
+   * 툴팁이나 이름표로만 알리면 「읽어야 아는」 정보가 된다. 이미 빛나고 있는
+   * 부위(눈·핵·불꽃)의 색을 갈아끼우면 멀리서 색 하나로 판별된다 —
+   * 그게 docs/ELEMENTS.md §0 의 성공 조건이다.
+   */
+  setElement(key) {
+    this.element = key;
+    const el = ELEMENTS[key];
+    if (!el || key === 'none') return this;
+    this.obj.traverse((o) => {
+      // MeshBasicMaterial 로 만든 것이 곧 「스스로 빛나는 부위」다
+      if (o.isMesh && o.material?.isMeshBasicMaterial) o.material.color.setHex(el.hex);
+    });
+    for (const mm of this.mats) {
+      if (!mm.emissive) continue;
+      mm.emissive.setHex(el.hex);
+      mm.emissiveIntensity = Math.max(mm.emissiveIntensity || 0, 0.1);
+    }
+    return this;
+  }
+
   /** 화면에 보이는 이름. 정예는 특성이 앞에 붙는다 */
   get displayName() { return this.eliteName || this.def.name; }
 
@@ -1065,6 +1091,8 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
       if (x == null) continue;   // 자리를 못 찾으면 그냥 덜 놓는다 — 뭉치게 두지 않는다
       placed.push({ x, z });
       const e = new Enemy(G, key, x, z, powerMult);
+      // 층 분포가 종족 기본값을 덮는다 — 2층이 빙 특화층이 되는 것이 설계다
+      e.setElement(rollElement(rnd, floorNo));
       // 정예 승격 — 층이 깊을수록 잦다. 골렘은 이미 정예 취급이라 제외한다.
       // 방마다 하나까지만: 정예 둘이 같은 방에 있으면 「한 마리씩」이 성립하지 않는다.
       if (key !== 'golem' && !roomElite && rnd.chance(0.10 + floorNo * 0.05 + tier * 0.03)) {
