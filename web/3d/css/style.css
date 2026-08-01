@@ -357,6 +357,11 @@ body[data-post="low"] #vignette {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   background: rgba(3,2,6,.55); z-index: 30;
 }
+/* display 를 지정한 요소는 hidden 속성만으로 안 숨는다 — 브라우저 기본
+   [hidden]{display:none} 을 이 규칙이 덮어쓰기 때문이다.
+   이걸 빠뜨려서 상점 창이 시작 화면부터 떠 클릭을 통째로 막았다.
+   #inv 에는 같은 규칙이 처음부터 있었는데 상점에만 없었다. */
+#shop[hidden] { display: none; }
 #shop .panel { width: min(470px, 92vw); }
 .shoptop { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
 .shoptop h2 { margin: 0; font-size: 15px; font-weight: normal; letter-spacing: 4px; color: #d8c9a4; }
