@@ -154,8 +154,12 @@ export class UI {
     const el = this.el.shop;
     if (!el) return;
     this.shop = shop || null;
-    if (!shop) { el.hidden = true; return; }
+    // hidden 속성 **하나만** 믿지 않는다. CSS 가 display 를 명시하면 hidden 은
+    // 무시되고, 전면을 덮는 창이 클릭을 통째로 삼킨다 — 실제로 겪었다.
+    // 인라인 style 은 스타일시트를 이기므로 CSS 가 낡아 있어도 안전하다.
+    if (!shop) { el.hidden = true; el.style.display = 'none'; return; }
     el.hidden = false;
+    el.style.display = '';
     this.renderShop();
   }
 
