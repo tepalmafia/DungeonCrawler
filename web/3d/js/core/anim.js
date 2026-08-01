@@ -189,7 +189,7 @@ export function poseHumanoid(rig, P, st, c) {
   // 다리는 걷기가 계속 굴린다. 걸으면서 휘두르는 게 이 게임의 조작이므로
   // 공격이 다리를 뺏으면 이동이 끊겨 보인다.
   if (attacking) poseAttack(rig, P, st, clamp01(atk), dt);
-  else restArms(rig, P, st, dt, moving);
+  else restArms(rig, P, st, dt, moving, walkT);
 
   // ── 4. 피격 — 마지막에 **모든 것 위에** 겹친다 ────────────
   // 이게 없어서 지금까지 맞아도 몸이 아무 말을 안 했다.
@@ -232,31 +232,55 @@ function poseIdle(rig, P, st, t, dt) {
 // 허벅지가 뒤로 갈 때 정강이가 따라 접히고, 앞으로 뻗을 때는 펴진다.
 // 예전에는 다리 전체가 통짜라 앞뒤로 흔들리는 진자였다.
 function poseWalk(rig, P, st, walkT, dt) {
-  const sn = Math.sin(walkT);
-  const cs = Math.cos(walkT);
-  const s = st.stride;
+  const phi = walkT;
+  const c = Math.cos(phi), sn = Math.sin(phi);
+  const stride = st.stride;
 
   if (rig.thighL) {
-    P.set('thighL', 'x', sn * s, 22, dt);
-    P.set('thighR', 'x', -sn * s, 22, dt);
-    // 무릎: 다리가 뒤로 간 쪽만 접힌다 (음수 구간만) → max(0, -sn)
-    P.set('shinL', 'x', -Math.max(0, -sn) * st.kneeBend - 0.06, 20, dt);
-    P.set('shinR', 'x', -Math.max(0, sn) * st.kneeBend - 0.06, 20, dt);
-    // 발끝은 착지 직전에 들린다
-    P.set('footL', 'x', Math.max(0, -sn) * st.kneeBend * 0.55 + 0.06, 18, dt);
-    P.set('footR', 'x', Math.max(0, sn) * st.kneeBend * 0.55 + 0.06, 18, dt);
+    // 허벅지 — **음수가 앞**이다. 사지는 관절에서 아래로 뻗으므로 몸통(위로
+    // 뻗음)과 부호가 반대다. 이 부호를 추측했다가 한 번 틀렸으므로 적어 둔다.
+    // φ=0 에서 왼발이 제일 앞(디딤), φ=π 에서 제일 뒤(차고 나감).
+    P.set('thighL', 'x', -c * stride, 22, dt);
+    P.set('thighR', 'x', c * stride, 22, dt);
+
+    // 무릎 — **뒤로만 굽는다(양수).**
+    //
+    // 처음에 음수로 줘서 무릎이 **앞으로** 꺾였다. 새 다리처럼 보였고,
+    // 그게 「걷는 게 이상하다」의 절반이었다. 사람 무릎은 한 방향으로만 굽는다.
+    //
+    // 굽는 때가 두 번인 것도 중요하다:
+    //   · 들어 올릴 때(유각기) 크게 — 안 굽히면 발끝이 땅에 끌린다
+    //   · 디딜 때(입각기) 조금 — 체중을 받아 살짝 주저앉는다. 이게 없으면
+    //     통통 튀는 인형처럼 보인다.
+    const kneeL = st.kneeBend * (Math.max(0, -sn) * 0.95 + Math.max(0, sn) * 0.18);
+    const kneeR = st.kneeBend * (Math.max(0, sn) * 0.95 + Math.max(0, -sn) * 0.18);
+    P.set('shinL', 'x', kneeL + 0.05, 20, dt);
+    P.set('shinR', 'x', kneeR + 0.05, 20, dt);
+
+    // 발목 — 발은 정강이에 매달려 있으니 무릎이 굽은 만큼 되돌려야 바닥과
+    // 나란해진다. 거기에 두 가지를 더한다:
+    //   · 차고 나가는 순간 발끝을 민다 (양수 = 발끝 아래)
+    //   · 디디기 직전 발끝을 든다 (뒤꿈치부터 닿는다)
+    const push = 0.42, lift = 0.2;
+    const toeL = Math.max(0, Math.sin(phi - 2.4)) * push - Math.max(0, c) * lift;
+    const toeR = Math.max(0, Math.sin(phi + Math.PI - 2.4)) * push - Math.max(0, -c) * lift;
+    P.set('footL', 'x', -kneeL * 0.55 + toeL, 18, dt);
+    P.set('footR', 'x', -kneeR * 0.55 + toeR, 18, dt);
   }
 
-  // 골반과 가슴은 **서로 반대로** 돈다. 이 비틀림이 걷기의 정체성이다
-  P.set('hips', 'y', -sn * 0.14, 16, dt);
-  P.set('chest', 'y', sn * 0.17, 14, dt);
-  P.set('hips', 'z', cs * 0.05, 14, dt);
+  // 골반과 가슴은 **서로 반대로** 돈다. 이 비틀림이 걷기의 정체성이다.
+  // 앞으로 나가는 다리 쪽 골반이 따라 나가고, 어깨는 반대로 남는다.
+  P.set('hips', 'y', -c * 0.13, 16, dt);
+  P.set('chest', 'y', c * 0.16, 14, dt);
+  // 골반은 **들린 다리 쪽이 내려간다** (지지하는 다리가 없으니까)
+  P.set('hips', 'z', sn * 0.055, 14, dt);
   P.set('spine', 'x', st.lean + 0.05, 10, dt);
-  // 위아래 흔들림은 **보폭의 두 배** 주기 — 한 걸음마다 한 번 솟는다
-  P.pos('root', 'y', Math.abs(Math.sin(walkT)) * 0.045 * (st.stride || 1), 18, dt);
-  P.set('head', 'y', -sn * 0.06, 8, dt);   // 고개는 가슴과 반대로 = 시선 고정
-}
+  P.set('head', 'y', -c * 0.09, 8, dt);   // 고개는 가슴과 반대로 = 시선 고정
 
+  // 위아래 흔들림 — **한 걸음에 한 번**(주기의 두 배)씩 솟는다.
+  // 제일 높은 때가 다리가 몸 아래를 지날 때, 제일 낮은 때가 두 발이 다 닿을 때.
+  P.pos('root', 'y', (1 - Math.cos(phi * 2)) * 0.5 * 0.05 * (stride || 1), 18, dt);
+}
 /**
  * 공격 중이 아닐 때의 팔 — **겨눔 자세.**
  *
@@ -265,15 +289,24 @@ function poseWalk(rig, P, st, walkT, dt) {
  * 검이 화면 밖으로 나갈 뻔했다. 팔꿈치를 접어 무기를 **몸 앞 가슴 높이**로
  * 올리면, 가만히 서 있어도 「지금 싸우는 중」으로 읽힌다.
  */
-function restArms(rig, P, st, dt, moving) {
-  const swing = moving > 0.05 ? 1 : 0;
-  P.set('armR', 'x', st.restR ?? -0.25, 8, dt);
+function restArms(rig, P, st, dt, moving, walkT) {
+  // 걸을 때는 **다리와 반대로** 흔든다.
+  //
+  // 이게 없어서 다리만 움직이고 팔은 얼어 있었다. 다리를 아무리 잘 만들어도
+  // 팔이 안 흔들리면 「걷는다」가 아니라 「미끄러진다」로 보인다.
+  // poseWalk 가 아니라 여기서 하는 이유는, 여기가 poseWalk **뒤에** 불려서
+  // 팔을 마지막으로 잡는 곳이기 때문이다. poseWalk 에서 하면 덮인다.
+  const w = moving > 0.05 ? 1 : 0;
+  const c = Math.cos(walkT || 0) * w;
+  const sw = st.armSwing;
+
+  P.set('armR', 'x', (st.restR ?? -0.25) - c * sw, 10, dt);
   P.set('armR', 'z', st.restRz ?? 0, 8, dt);
-  P.set('foreR', 'x', st.restForeR ?? -1.0, 8, dt);
-  P.set('armL', 'x', (st.restL ?? -0.28) + swing * 0.05, 8, dt);
+  P.set('armL', 'x', (st.restL ?? -0.28) + c * sw, 10, dt);
   P.set('armL', 'z', st.restLz ?? 0, 8, dt);
-  P.set('foreL', 'x', st.restForeL ?? -1.15, 8, dt);
-  P.set('chest', 'z', 0, 8, dt);
+  // 팔꿈치는 앞으로 나올 때 조금 더 접힌다 — 뒤로 갈 때는 펴진다
+  P.set('foreR', 'x', (st.restForeR ?? -1.0) - Math.max(0, c) * sw * 0.55, 10, dt);
+  P.set('foreL', 'x', (st.restForeL ?? -1.15) - Math.max(0, -c) * sw * 0.55, 10, dt);
 }
 
 // ───────────────────────── 공격 ─────────────────────────

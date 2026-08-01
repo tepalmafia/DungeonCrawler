@@ -911,16 +911,30 @@ async function shot(page, name) {
     }
     P.moveTo(dg, (far.cx - dg.w / 2 + 0.5) * 2, (far.cy - dg.h / 2 + 0.5) * 2);
     let minThigh = 9, maxThigh = -9, minShin = 9, maxShin = -9;
+    let minArm = 9, maxArm = -9, worstKnee = 0;
     for (let i = 0; i < 60; i++) {
       await frame();
-      const t = P.rig.thighL.rotation.x, sh = P.rig.shinL.rotation.x;
+      const t = P.rig.thighL.rotation.x, sh = P.rig.shinL.rotation.x, a = P.rig.armR.rotation.x;
       if (t < minThigh) minThigh = t; if (t > maxThigh) maxThigh = t;
       if (sh < minShin) minShin = sh; if (sh > maxShin) maxShin = sh;
+      if (a < minArm) minArm = a; if (a > maxArm) maxArm = a;
+      // 무릎이 **앞으로** 꺾인 정도. 사람 무릎은 한 방향으로만 굽는다.
+      if (sh < worstKnee) worstKnee = sh;
+      const sh2 = P.rig.shinR.rotation.x;
+      if (sh2 < worstKnee) worstKnee = sh2;
     }
-    return { thigh: maxThigh - minThigh, shin: maxShin - minShin };
+    return { thigh: maxThigh - minThigh, shin: maxShin - minShin, arm: maxArm - minArm, worstKnee };
   });
   ok('actor.playerActuallyWalks', walk.thigh > 0.5 && walk.shin > 0.2,
     `허벅지 진폭 ${walk.thigh.toFixed(2)} · 무릎 진폭 ${walk.shin.toFixed(2)}`);
+  // 팔이 안 흔들리면 다리를 아무리 잘 만들어도 「미끄러진다」로 보인다.
+  // 실제로 restArms 가 팔을 고정값으로 잡고 있어서 걷는 내내 얼어 있었다.
+  ok('actor.armsSwingWhileWalking', walk.arm > 0.25,
+    `팔 진폭 ${walk.arm.toFixed(2)} (다리와 반대로 흔들려야)`);
+  // 무릎 방향. 부호 하나 뒤집혔더니 무릎이 앞으로 꺾여 새 다리처럼 보였다 —
+  // 코드를 읽어서는 안 보이고, 옆에서 찍어 봐야 나온다. 그래서 숫자로 못박는다.
+  ok('actor.kneesBendBackward', walk.worstKnee > -0.12,
+    `가장 앞으로 꺾인 무릎 ${walk.worstKnee.toFixed(3)} (0 이상이어야 = 뒤로만 굽는다)`);
 
   // 뜨는 것이 실제로 떠 있는가.
   //
