@@ -43,7 +43,7 @@ function merge(reports) {
   // 표본 수가 다른 시드가 같은 무게를 갖게 되어 왜곡된다.
   const acc = {
     elapsed: 0, kills: 0, deaths: 0, walkDist: 0, stuck: 0,
-    combatRatio: [], knock: [], dealt: [], taken: [], logic: [],
+    combatRatio: [], knock: [], dealt: [], taken: [], logic: [], concurrent: [], backstabs: 0,
     fuel: [], hpPct: [], pickups: [0, 0, 0, 0], floors: [],
     kind: {},
   };
@@ -54,6 +54,8 @@ function merge(reports) {
     acc.deaths += r.flow.deaths;
     acc.walkDist += r.flow.walkDist;
     acc.stuck += r.flow.stuck;
+    acc.backstabs += r.flow.backstabs || 0;
+    if (r.flow.concurrentAggro) acc.concurrent.push(r.flow.concurrentAggro);
     acc.combatRatio.push(r.flow.combatRatio);
     acc.floors.push(...r.flow.floors);
     for (const [k, v] of [['knock', r.combat.knockDist], ['dealt', r.combat.dmgDealt],
@@ -104,6 +106,8 @@ function merge(reports) {
     combatRatio: avg(acc.combatRatio),
     walkPerKill: acc.kills ? +(acc.walkDist / acc.kills).toFixed(1) : null,
     stuck: acc.stuck,
+    concurrentAggro: roll(acc.concurrent),
+    backstabs: acc.backstabs,
     knockDist: roll(acc.knock),
     dmgDealt: roll(acc.dealt),
     dmgTaken: roll(acc.taken),
@@ -183,6 +187,10 @@ function row(label, val, prev, opt) {
   row('처치당 이동 거리', m.walkPerKill, p.walkPerKill, { lowerBetter: true });
   row('총 사망', m.deaths, p.deaths, { lowerBetter: true });
   row('끼임 탈출 발동', m.stuck, p.stuck, { lowerBetter: true });
+  // ★ 이 게임 설계의 생사. 중앙값이 1 을 넘으면 「한 마리씩」이 아니라 난전이다.
+  row('★ 동시 교전 중앙값', m.concurrentAggro?.med, p.concurrentAggro?.med, { lowerBetter: true });
+  row('★ 동시 교전 p95', m.concurrentAggro?.p95, p.concurrentAggro?.p95, { lowerBetter: true });
+  row('뒤치기 성사', m.backstabs, p.backstabs);
 
   console.log('\n══ 전투');
   row('넉백 거리 중앙값', m.knockDist?.med, p.knockDist?.med);

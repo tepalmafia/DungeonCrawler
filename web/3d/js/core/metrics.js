@@ -62,6 +62,12 @@ export class Metrics {
     this.deaths = 0;
     this.kills = 0;
     this.aggro = {};                  // 종족 → 어그로가 붙은 횟수
+    // ★ 이 게임 설계의 생사가 걸린 지표.
+    // 「한 마리씩 신중하게 끌어와 잡는다」가 성립하려면 중앙값이 1 이어야 한다.
+    // 1 을 넘어가면 난전이 된 것이고, 그 변경은 되돌려야 한다.
+    // (docs/ENEMY-AI.md §8-1)
+    this.concurrent = [];
+    this.backstabs = 0;               // busy 상태의 적을 뒤에서 먼저 친 교전 수
 
     // 자원
     this.fuel = [];                   // 랜턴 연료 시계열 (5초 간격)
@@ -84,13 +90,14 @@ export class Metrics {
 
   // ── 프레임 ────────────────────────────────────────────
   /** @param anyAggro 어그로가 붙은 적이 하나라도 있는가 */
-  frame(dt, wallDt, { logicMs, frameMs, anyAggro, hpPct, fuel, walked, stuck }) {
+  frame(dt, wallDt, { logicMs, frameMs, anyAggro, aggroCount, hpPct, fuel, walked, stuck }) {
     this.t += dt;
     this.wall += wallDt;
     this._floorT += dt;
     if (anyAggro) this.combatT += dt;
     this.walkDist += walked || 0;
     if (stuck != null) this.stuck = stuck;
+    if (aggroCount != null) push(this.concurrent, aggroCount);
     push(this.logicMs, logicMs);
     push(this.frameMs, frameMs);
 
@@ -119,7 +126,10 @@ export class Metrics {
 
   taken(dmg) { push(this.dmgTaken, dmg); }
 
-  aggroOn(kind) { this.aggro[kind] = (this.aggro[kind] || 0) + 1; }
+  aggroOn(kind, fromBehind = false) {
+    this.aggro[kind] = (this.aggro[kind] || 0) + 1;
+    if (fromBehind) this.backstabs++;
+  }
 
   kill(e) {
     this.kills++;
@@ -179,6 +189,9 @@ export class Metrics {
         walkPerKill: this.kills ? +(this.walkDist / this.kills).toFixed(1) : null,
         floors: this.floors.slice(),
         stuck: this.stuck,
+        // ★ 풀링이 살아있는가 — docs/ENEMY-AI.md §8-1
+        concurrentAggro: stats(this.concurrent),
+        backstabs: this.backstabs,
       },
       combat: {
         dmgDealt: dealt,

@@ -665,12 +665,13 @@ function record(dt, rawDt) {
   const p = G.player;
   const walked = Math.hypot(p.pos.x - lastPos.x, p.pos.z - lastPos.z);
   lastPos.x = p.pos.x; lastPos.z = p.pos.z;
-  let anyAggro = false;
-  for (const e of G.enemies) if (!e.dead && e.aggro) { anyAggro = true; break; }
+  let aggroCount = 0;
+  for (const e of G.enemies) if (!e.dead && e.aggro) aggroCount++;
   G.metrics.frame(dt, rawDt, {
     logicMs: G.perf.logicMs,
     frameMs: G.perf.frameMs,
-    anyAggro,
+    anyAggro: aggroCount > 0,
+    aggroCount,
     hpPct: p.maxHp ? p.hp / p.maxHp : 0,
     fuel: p.lantern ? p.lantern.fuel : 0,
     walked,

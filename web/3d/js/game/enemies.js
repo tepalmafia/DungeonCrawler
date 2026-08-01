@@ -8,6 +8,7 @@ import { Sfx } from '../core/audio.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, lineOfSight, unstick } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
+import { AI, pickIdle, updateIdle, visionFactor, reactionDelay } from './ai.js';
 
 const V = new THREE.Vector3();
 
@@ -253,6 +254,14 @@ export class Enemy {
     this.recoilDir = { x: 0, z: 1 };
     this.recoilPow = 1;
     this.knockMoved = 0;              // 넉백으로 실제 밀려난 거리 — 실측용(core/metrics.js)
+
+    // 미발견 상태의 「하는 일」 (game/ai.js). 종족마다 어울리는 것이 다르다.
+    this.idleKind = pickIdle(defKey);
+    this.idleT = Math.random() * 2.5;
+    this.idleMoving = false;
+    this.idleTarget = null;
+    this.idleFace = null;
+    this.spotT = 0;                   // 뒤에서 발견했을 때의 반응 지연
     this.baseScale = d.scale;
     this.leapCd = 2 + Math.random() * 2;
 
@@ -329,8 +338,17 @@ export class Enemy {
 
     // 어그로는 「개체별」로만 붙는다. 옆의 동료에게 번지지 않는다 —
     // 그래야 가장자리 한 마리만 끌어내는 플레이가 성립한다.
-    if (!this.aggro && !p.dead && dist < this.def.aggro && this._canSee(G, p)) {
-      this._pull(G);
+    // 시야가 부채꼴이라 같은 거리라도 앞뒤에 따라 발견 시점이 다르다.
+    // busy(등을 보이고 뭔가를 뒤지는 중)는 뒤가 특히 무디다 — 기습이 성립한다.
+    if (!this.aggro && !p.dead && this._canSee(G, p)) {
+      const reach = this.def.aggro * visionFactor(this, p.pos.x, p.pos.z);
+      if (dist < reach) {
+        // 뒤에서 다가오면 알아채는 데 시간이 걸린다
+        this.spotT += dt;
+        if (this.spotT >= reactionDelay(this, p.pos.x, p.pos.z)) this._pull(G);
+      } else {
+        this.spotT = 0;
+      }
     }
 
     // 리쉬 — 처음 자리에서 너무 멀어지면 돌아가며 체력을 회복한다.
@@ -349,6 +367,9 @@ export class Enemy {
       moving = this._returnHome(dt, G);
     } else if (this.aggro && !p.dead) {
       moving = this._combat(dt, G, p, dist);
+    } else if (!this.aggro) {
+      // 아직 못 봤다 — 각자 자기 일을 한다 (game/ai.js)
+      moving = updateIdle(this, dt, G);
     }
 
     // 넉백 감쇠
@@ -453,7 +474,8 @@ export class Enemy {
     G.fx.ground(this.pos, { r0: this.radius * 2.6, color: 0xff3a3a, life: 0.7 });
     G.fx.burst(this.center(), { count: 6, color: 0xff5a4a, speed: 1.6, size: 0.32, life: 0.5, grav: -1 });
     Sfx.enemyAggro(this.def.key, volAt(G, this.pos));
-    G.metrics?.aggroOn(this.def.key);
+    // 등을 보이고 있을 때 걸렸는가 — 기습이 실제로 성립하는지 재는 지표
+    G.metrics?.aggroOn(this.def.key, this.idleKind === 'busy');
 
     // 머리 위 느낌표 — 튀어올랐다가 사그라든다
     if (!this.alert) {
@@ -476,6 +498,12 @@ export class Enemy {
       this.aggro = false;
       this.state = 'idle';
       this.path.length = 0;
+      // 집에 돌아왔으면 하던 일을 처음부터 다시 시작한다.
+      // 안 지우면 귀환 전에 잡아둔 낡은 목적지로 곧장 걸어간다.
+      this.idleMoving = false;
+      this.idleTarget = null;
+      this.idleT = 0.5 + Math.random();
+      this.spotT = 0;
       return 0;
     }
     if (this.repathCd <= 0 || !this.path.length) {
