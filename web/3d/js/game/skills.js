@@ -43,7 +43,7 @@ export const SKILLS = [
       const hits = enemiesInArc(G, p.pos, p.facing, radius, spread);
       for (const e of hits) {
         const r = playerRoll(p);
-        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 3.2, color: 0xffd090 });
+        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 1.1, color: 0xffd090 });
       }
       return true;
     },
@@ -84,7 +84,7 @@ export const SKILLS = [
 
       for (const e of enemiesInArc(G, p.pos, 0, radius, Math.PI * 2)) {
         const r = playerRoll(p);
-        hitEnemy(G, e, r.dmg * 2.2, { crit: r.crit, knock: 5.5, color: 0xff9a4a });
+        hitEnemy(G, e, r.dmg * 2.2, { crit: r.crit, knock: 2.0, color: 0xff9a4a });
       }
       // 장판 — 계속 서 있으면 계속 아프다
       G.fields.push({
@@ -123,7 +123,7 @@ export const SKILLS = [
             if (d > radius + e.radius) continue;
             const r = playerRoll(p);
             const falloff = 1 - Math.min(0.55, (d / radius) * 0.55);
-            hitEnemy(G, e, r.dmg * 5.0 * falloff, { crit: r.crit, knock: 7, color: 0xffb04a, from: pos });
+            hitEnemy(G, e, r.dmg * 5.0 * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos });
           }
           G.fields.push({ x: target.x, z: target.z, r: radius * 0.8, life: 2.6, tick: 0, dps: (p.dmgMin + p.dmgMax) * 0.3, color: 0xff7a2a });
         },
@@ -184,7 +184,7 @@ export function updateDashHits(G, dt) {
     if (Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) < e.radius + p.radius + 0.7) {
       d.hitSet.add(e);
       const r = playerRoll(p);
-      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 4.5, color: 0x8a6bff });
+      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 1.6, color: 0x8a6bff });
     }
   }
 }
