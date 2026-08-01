@@ -500,8 +500,11 @@ async function shot(page, name) {
     const mpFill = parseFloat(document.querySelector('#orbMp .fill').style.height);
     const hpWant = (P.hp / P.maxHp) * 100, mpWant = (P.mp / P.maxMp) * 100;
     return {
-      hpLeft: hp.x + hp.w <= bar.x + 2,
-      mpRight: mp.x >= bar.x + bar.w - 2,
+      // 「양옆에 있는가」는 **중심**으로 본다. 디아블로2 배치에서는 돌판이
+      // 구슬 뒤로 파고들어 몇 픽셀 겹치는데, 그건 의도한 것이지 어긋난 게 아니다.
+      // 가장자리로 재면 그 겹침이 실패로 잡힌다 (실측 407 vs 404).
+      hpLeft: hp.x + hp.w / 2 < bar.x,
+      mpRight: mp.x + mp.w / 2 > bar.x + bar.w,
       // 구슬은 디아블로2 처럼 돌판에 **걸쳐 내려온다.** 정확히 같은 높이가 아니라
       // 「같은 띠 안에 있는가」를 본다 — 세로 중심이 60px 안이면 한 덩어리로 읽힌다.
       sameRow: Math.abs((hp.y + hp.h / 2) - (bar.y + bar.h / 2)) < 60,

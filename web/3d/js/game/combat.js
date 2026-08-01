@@ -23,7 +23,17 @@ export function hasLine(G, ax, az, bx, bz) {
   if (!dg) return true;
   const [gx0, gz0] = worldToGrid(ax, az, dg.w, dg.h);
   const [gx1, gz1] = worldToGrid(bx, bz, dg.w, dg.h);
-  if (gx0 === gx1 && gz0 === gz1) return true;
+  // **맞닿은 칸끼리는 언제나 통한다.**
+  //
+  // lineOfSight 는 양 끝 칸의 walkable 도 본다. 그래서 적이 벽에 살짝 낀 채로
+  // 서 있으면(밀치기·넉백·도약이 겹치면 실제로 생긴다 — unstick 이 그걸 빼내려고
+  // 있는 것이다) 코앞에 있는데도 시야가 막혔다고 나오고, **그 적은 무적이 된다.**
+  // 실측에서 거리 1.1 에 los=false, 피해 0 이 나왔다.
+  //
+  // 맞닿은 두 칸 사이에는 「사이에 낀 것」이 있을 수 없다. 벽이 있다면 그 벽이
+  // 곧 두 칸 중 하나다. 이 검사의 목적은 **사이를 막는 것**을 잡는 것이지
+  // 서 있는 자리를 심판하는 게 아니다.
+  if (Math.abs(gx0 - gx1) <= 1 && Math.abs(gz0 - gz1) <= 1) return true;
   return lineOfSight(dg, gx0, gz0, gx1, gz1);
 }
 
