@@ -3,8 +3,9 @@
 
 import { SKILLS } from '../game/skills.js';
 import { FLOOR, worldToGrid } from '../world/dungeon.js';
-import { RARITIES } from '../game/items.js';
+import { RARITIES, priceOf } from '../game/items.js';
 import { fuelCap } from '../game/lantern.js';
+import { SELL_MULT } from '../game/shop.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -36,6 +37,8 @@ export class UI {
       interact: $('#interact'),
       shop: $('#shop'),
       shopList: $('#shopList'),
+      gambleList: $('#gambleList'),
+      sellList: $('#sellList'),
       shopCoin: $('#shopCoin'),
     };
     const sc = $('#shopClose');
@@ -160,28 +163,95 @@ export class UI {
     const shop = this.shop;
     if (!shop) return;
     const p = this.G.player;
-    const body = this.el.shopList;
     this.el.shopCoin.textContent = `◈ ${p.coin}`;
+
+    // ── 재고 ──
+    const body = this.el.shopList;
     body.innerHTML = '';
     shop.stock.forEach((s, i) => {
-      const row = document.createElement('div');
-      row.className = 'srow' + (s.sold ? ' sold' : '') + (p.coin < s.price ? ' poor' : '');
-      const rar = s.item && s.item.rarity != null ? RARITIES[s.item.rarity] : null;
-      row.innerHTML = `<span class="si">${s.icon}</span>`
-        + `<span class="sn" ${rar ? `style="color:${rar.css}"` : ''}>${s.sold ? '— 팔림 —' : s.name}</span>`
-        + `<span class="sp">◈ ${s.price}</span>`;
+      const row = this._srow(s.icon, s.sold ? '— 팔림 —' : s.name, s.price,
+        s.item && s.item.rarity != null ? RARITIES[s.item.rarity] : null,
+        { sold: s.sold, poor: p.coin < s.price });
       if (!s.sold) {
-        row.onmouseenter = () => { if (s.item && s.item.slot) this._shopTip(s.item, p.equipped[s.item.slot]); };
-        row.onmouseleave = () => { this.G.inv._hideTooltip(); };
+        if (s.item && s.item.slot) this._hover(row, s.item);
         row.onclick = () => {
           const r = shop.buy(this.G, i);
-          if (!r.ok) { this.toast(r.why, '#e07272'); return; }
+          if (!r.ok) return this.toast(r.why, '#e07272');
           this.toast(`${s.name} 구입`, '#d8b45e');
           this.renderShop();
         };
       }
       body.appendChild(row);
     });
+
+    // ── 갬블 ──
+    // 부위만 보이고 등급은 사고 나서야 안다. 그게 갬블이다.
+    const gb = this.el.gambleList;
+    if (gb) {
+      gb.innerHTML = '';
+      shop.gamble.forEach((g, i) => {
+        const row = this._srow(g.icon, g.name, g.price, null, { poor: p.coin < g.price });
+        row.classList.add('gam');
+        row.onclick = () => {
+          const r = shop.gambleBuy(this.G, i);
+          if (!r.ok) return this.toast(r.why, '#e07272');
+          const rr = RARITIES[r.item.rarity];
+          this.toast(`${r.item.name}`, rr.css);
+          // 등급이 높으면 화면에도 알린다 — 목록만 바뀌면 뭘 뽑았는지 놓친다
+          if (r.item.rarity >= 2) {
+            this.center(r.item.name, `${rr.name} ${r.item.baseName}`);
+            this.G.fx?.burst(this.G.player.center(), {
+              count: 30, color: rr.hex, speed: 5, size: 0.5, life: 0.9, grav: -2,
+            });
+          }
+          this.renderShop();
+        };
+        gb.appendChild(row);
+      });
+    }
+
+    // ── 팔기 ──
+    // 갬블을 넣으면 조각이 금방 마른다. 팔 곳이 없으면 갬블이 한 번 쓰고 끝나는
+    // 버튼이 된다 — 안 쓰는 장비를 조각으로 바꾸는 출구가 같이 있어야 돈다.
+    const sl = this.el.sellList;
+    if (sl) {
+      sl.innerHTML = '';
+      const bag = p.bag.filter((it) => it.slot && it.kind !== 'lantern');
+      if (!bag.length) {
+        sl.innerHTML = '<p class="shopline">팔 물건이 없다.</p>';
+      } else {
+        for (const it of bag) {
+          const got = Math.max(1, Math.round(priceOf(it) * SELL_MULT));
+          const row = this._srow(it.icon, it.name, got, RARITIES[it.rarity], {});
+          row.classList.add('sell');
+          this._hover(row, it);
+          row.onclick = () => {
+            const r = shop.sell(this.G, it);
+            if (!r.ok) return;
+            this.toast(`${it.name} 판매 ◈ +${r.got}`, '#d8b45e');
+            this.G.inv._hideTooltip();
+            this.renderShop();
+          };
+          sl.appendChild(row);
+        }
+      }
+    }
+  }
+
+  /** 상점 줄 하나 — 재고·갬블·팔기가 같은 모양을 쓴다 */
+  _srow(icon, name, price, rar, { sold = false, poor = false } = {}) {
+    const row = document.createElement('div');
+    row.className = 'srow' + (sold ? ' sold' : '') + (poor ? ' poor' : '');
+    row.innerHTML = `<span class="si">${icon}</span>`
+      + `<span class="sn"${rar ? ` style="color:${rar.css}"` : ''}>${name}</span>`
+      + `<span class="sp">◈ ${price}</span>`;
+    return row;
+  }
+
+  _hover(row, item) {
+    const same = this.G.player.equipped[item.slot];
+    row.onmouseenter = () => this.G.inv._showTooltip(item, same);
+    row.onmouseleave = () => this.G.inv._hideTooltip();
   }
 
   _shopTip(item, same) { this.G.inv._showTooltip(item, same); }
