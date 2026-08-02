@@ -15,6 +15,7 @@ import { buildSkeleton, buildGhoul, buildArcher, buildGolem } from '../core/mode
 import { Pose } from '../core/rig.js';
 import { poseHumanoid, faceTowards, STANCE } from '../core/anim.js';
 import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
+import { floorDef } from '../world/floors.js';
 
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
 // 아이템·스킬이 늘면서 플레이어 쪽만 세졌다. 한 곳에서 올린다 —
@@ -976,11 +977,15 @@ export class Enemy {
  */
 export function spawnFloor(G, dg, rnd, floorNo, tier) {
   const out = [];
-  const powerMult = 1 + (floorNo - 1) * 0.45 + tier * 0.35;
+  // 층별 값은 전부 world/floors.js 에서 온다. tier(반복 회차)만 여기서 얹는다 —
+  // 층은 「새로운 것」이고 tier 는 「같은 것이 더 세다」라 역할이 다르다
+  // (docs/FLOORS.md §1-4).
+  const F = floorDef(floorNo);
+  const powerMult = F.powerMult + tier * 0.35;
   const MIN_GAP = 6.5;          // 월드 유닛 — 어그로 반경(8~9)보다 조금 좁다
   const placed = [];
 
-  const roster = ['skeleton', 'skeleton', 'ghoul', 'archer'];
+  const roster = F.roster;
 
   for (const room of dg.rooms) {
     if (room === dg.startRoom || room.boss) continue;
@@ -1005,10 +1010,10 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
     // 판단거리가 된다. 뭉치는 것 자체가 벌이 아니라 **문제**여야 한다.
     //
     // 나머지는 단독으로 둔다. 단독 개체가 있어야 안전한 시작점이 남는다.
-    const squadRate = [0.30, 0.45, 0.55][Math.min(2, floorNo - 1)] ?? 0.55;
+    const squadRate = F.squadRate;
     const squadSize = AI.squads && rnd.chance(squadRate) ? rnd.int(2, 3) : 0;
     let squadCenter = null;
-    if (rnd.chance(0.2 + floorNo * 0.1 + tier * 0.05)) kinds.push('golem');
+    if (rnd.chance(F.golemChance + tier * 0.05)) kinds.push('golem');
 
     let inSquad = 0;
     for (const key of kinds) {
@@ -1045,7 +1050,7 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
       e.setElement(rollElement(rnd, floorNo));
       // 정예 승격 — 층이 깊을수록 잦다. 골렘은 이미 정예 취급이라 제외한다.
       // 방마다 하나까지만: 정예 둘이 같은 방에 있으면 「한 마리씩」이 성립하지 않는다.
-      if (key !== 'golem' && !roomElite && rnd.chance(0.10 + floorNo * 0.05 + tier * 0.03)) {
+      if (key !== 'golem' && !roomElite && rnd.chance(F.eliteChance + tier * 0.03)) {
         e.promote(rnd, floorNo);
         roomElite = true;
       }
