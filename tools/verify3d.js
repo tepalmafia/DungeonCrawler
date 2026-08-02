@@ -1139,12 +1139,23 @@ async function shot(page, name) {
     alive: !window.G3.player.dead,
   }));
   ok('bot.fights', botState.kills > 0, `처치 ${botState.kills} · 획득 ${botState.items} · Lv ${botState.level}`);
-  // 로직 예산: 60fps 프레임(16.7ms) 중 시뮬레이션이 6ms를 넘지 않아야 한다.
-  // **적 24마리 고정** 장면에서 잰다 (위 참조) — 봇 전투 중에 재면 살아 있는
-  // 적 수가 판마다 달라 같은 코드도 ±1.4ms 로 흔들린다.
-  ok('perf.logicBudget', budget.med < 6,
-    `적 ${budget.n}마리 고정 · 중앙값 ${budget.med.toFixed(2)}ms · p95 ${budget.p95.toFixed(2)}ms`);
-  console.log(`  (참고) 봇 전투 중 실측 중앙값 ${frames.logicMed.toFixed(2)}ms — 장면이 매번 달라 비교용으로는 못 쓴다`);
+  // 시뮬레이션 예산 — **적 24마리 고정, 60fps 한 스텝의 simulate() 비용.**
+  //
+  // 이름과 기준을 바꾼 이유를 적어 둔다. 원래 검사(perf.logicBudget, 기준 6ms)는
+  // 봇 전투 중 렌더 프레임마다 재는 값이었고, 거기에는 simulate() 말고도
+  // 레벨·조명·이펙트·카메라·UI 갱신이 다 들어 있었다. 게다가 소프트웨어
+  // 렌더링이라 한 프레임이 1초짜리였다.
+  //
+  // 장면을 고정해 잡음을 없애면서 headlessRun 을 썼는데, 그건 **simulate() 만**
+  // 재고 한 스텝이 1/60 초다. 즉 훨씬 작은 부분집합이라 6ms 기준이 저절로
+  // 통과한다(0.40ms) — 기준을 안 건드렸을 뿐 **검사를 무력화한 것**이다.
+  //
+  // 그래서 이름을 바꾸고 기준을 실제 재는 것에 맞춘다. 1.5ms 는 60fps 프레임
+  // 예산(16.7ms)의 9% 다. 이 작업으로 자세 계산이 마리당 3배가 됐으니,
+  // 여기서 3배 더 나빠지면 걸린다.
+  ok('perf.simBudget', budget.med < 1.5,
+    `적 ${budget.n}마리 · simulate() 한 스텝 중앙값 ${budget.med.toFixed(2)}ms · p95 ${budget.p95.toFixed(2)}ms`);
+  console.log(`  (참고) 봇 전투 중 렌더 프레임 로직 ${frames.logicMed.toFixed(2)}ms — 재는 대상이 달라 위 숫자와 비교 못 한다`);
   console.log(`  (참고) 전체 프레임 중앙값 ${frames.frameMed.toFixed(1)}ms — SwiftShader 소프트웨어 렌더링이라 GPU 성능을 대변하지 않는다`);
 
   await shot(page, '05-bot.png');
