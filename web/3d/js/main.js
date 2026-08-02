@@ -448,12 +448,48 @@ function nextFloor() {
   Audio.Sfx.portal();
   if (G.floorNo >= MAX_FLOOR) {
     G.stats.floorsCleared++;
-    restartRun(true);
+    onRunCleared();
     return;
   }
   G.stats.floorsCleared++;
   G.player.hp = Math.min(G.player.maxHp, G.player.hp + G.player.maxHp * 0.35);
   loadFloor(G.floorNo + 1);
+}
+
+/**
+ * 마지막 층을 깼다 — **끝맺음.**
+ *
+ * 여기가 비어 있었다. `G.state` 주석에 'cleared' 가 적혀 있는데 그 값을
+ * 대입하는 코드가 저장소 어디에도 없었고, 마지막 층 출구를 밟으면
+ * `restartRun(true)` 로 곧장 1층이 됐다 — **아홉 층을 내려가 왕관을 부순 판이
+ * 화면 한 번 안 뜨고 끊겼다.** 층이 셋일 땐 덜 아팠지만 아홉이면 크게 다친다.
+ *
+ * 다음 회차로 넘어가는 것 자체는 그대로 둔다(이 게임의 끝은 반복이다).
+ * 다만 **넘어가기 전에 멈춰 세운다** — 무엇을 끝냈는지 읽고 누르게.
+ * 이야기의 마지막 줄(docs/STORY.md §1)이 여기 놓일 자리다.
+ */
+function onRunCleared() {
+  if (G.state !== 'play') return;
+  G.state = 'cleared';
+  Audio.stopAmbient();
+  Audio.Sfx.victory();
+  fx.addShake(0.3, 3);
+  ui.setBoss(null);
+  const t = G.metrics?.t ?? 0;   // metrics.t 가 살아 있는 경과 시간이다
+  const mm = String(Math.floor(t / 60)).padStart(2, '0');
+  const ss = String(Math.floor(t % 60)).padStart(2, '0');
+  showOverlay(`
+    <h1 style="color:#ffd08a">왕관을 부쉈다</h1>
+    <p class="sub">${MAX_FLOOR}층까지 내려가 심연의 군주를 끝냈다</p>
+    <ul class="keys">
+      <li>그들은 괴물이 아니라 <b>끝나지 못한 사람들</b>이었다. 이제 끝났다.</li>
+      <li>처치 <b>${G.stats.kills}</b> · 획득 아이템 <b>${G.stats.itemsFound}</b>
+          · 레벨 <b>${G.player.level}</b> · 사망 <b>${G.stats.deaths}</b></li>
+      <li>걸린 시간 <b>${mm}:${ss}</b></li>
+      <li>장비와 레벨은 그대로 들고 <b>파밍 ${G.tier + 2}회차</b>로 넘어간다 —
+          적이 더 강해지고 전리품이 좋아진다.</li>
+    </ul>
+    <button id="startBtn">더 깊이</button>`, () => restartRun(true));
 }
 
 // ───────────────────────── 오버레이 ─────────────────────────

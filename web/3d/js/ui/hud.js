@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { SKILLS } from '../game/skills.js';
 import { FLOOR, worldToGrid } from '../world/dungeon.js';
-import { RARITIES, priceOf } from '../game/items.js';
+import { RARITIES, priceOf, power, affixLine, AFFIX_BY_KEY, SLOTS } from '../game/items.js';
 import { ELEMENTS } from '../game/elements.js';
 import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
@@ -186,7 +186,7 @@ export class UI {
     shop.stock.forEach((s, i) => {
       const row = this._srow(s.icon, s.sold ? '— 팔림 —' : s.name, s.price,
         s.item && s.item.rarity != null ? RARITIES[s.item.rarity] : null,
-        { sold: s.sold, poor: p.coin < s.price });
+        { sold: s.sold, poor: p.coin < s.price, item: s.item });
       if (!s.sold) {
         if (s.item && s.item.slot) this._hover(row, s.item);
         row.onclick = () => {
@@ -237,7 +237,7 @@ export class UI {
       } else {
         for (const it of bag) {
           const got = Math.max(1, Math.round(priceOf(it) * SELL_MULT));
-          const row = this._srow(it.icon, it.name, got, RARITIES[it.rarity], {});
+          const row = this._srow(it.icon, it.name, got, RARITIES[it.rarity], { item: it });
           row.classList.add('sell');
           this._hover(row, it);
           row.onclick = () => {
@@ -253,12 +253,68 @@ export class UI {
     }
   }
 
+  /**
+   * 물건 한 줄에 붙는 **능력치 요약.**
+   *
+   * 예전에는 아이콘·이름·값 셋뿐이라 「이게 좋은 건지」를 알려면 한 칸씩
+   * 커서를 올려 툴팁을 봐야 했다. 재고가 여섯에 갬블 셋에 팔 것까지 있으면
+   * 그건 쇼핑이 아니라 순회다. **목록에서 바로 비교되어야** 「무엇을 살까」가
+   * 판단이 된다.
+   *
+   * 툴팁을 없애지는 않는다 — 여기는 **고르는 데 필요한 만큼**만 적고
+   * (무기 피해 · 방어도 · 속성 · 접사 둘), 전부는 툴팁이 계속 맡는다.
+   */
+  _statLine(item) {
+    // 랜턴은 슬롯 장비가 아니다 — SLOTS 에 없는 것은 비교도 요약도 안 한다
+    if (!item || !SLOTS.includes(item.slot)) return '';
+    const bits = [];
+    if (item.slot === 'weapon') {
+      bits.push(`<b>${item.dmgMin}–${item.dmgMax}</b> 피해`);
+      if (item.aspd) bits.push(`속도 ${item.aspd.toFixed(2)}`);
+    }
+    if (item.stats?.armor && item.slot !== 'weapon') bits.push(`방어 <b>${item.stats.armor}</b>`);
+    // 계열 고유 보너스 + 접사 — 앞의 둘만. 셋을 넘기면 줄이 길어져 안 읽힌다
+    const extra = [
+      ...Object.entries(item.baseStats || {}).map(([k, v]) => AFFIX_BY_KEY[k].fmt(v)),
+      ...(item.affixes || []).map(affixLine),
+    ];
+    bits.push(...extra.slice(0, 2));
+    const more = extra.length - 2;
+    if (more > 0) bits.push(`<span class="smore">+${more}</span>`);
+
+    let el = '';
+    if (item.element && item.element !== 'none') {
+      const e = ELEMENTS[item.element];
+      el = `<span class="sel" style="color:${e.css}">${e.icon}${e.name}</span>`;
+    }
+    return `<span class="sd">${el}${bits.join(' · ')}</span>`;
+  }
+
+  /**
+   * 착용 중인 것과 견준 값. **이게 제일 중요한 한 글자다.**
+   * 숫자를 다 읽지 않아도 살지 말지가 여기서 갈린다.
+   */
+  _cmpTag(item) {
+    if (!item || !SLOTS.includes(item.slot)) return '';
+    const same = this.G.player.equipped[item.slot];
+    if (!same || same.id === item.id) return '<span class="scmp new">새 부위</span>';
+    const d = power(item) - power(same);
+    if (d === 0) return '';
+    const cls = d > 0 ? 'up' : 'dn';
+    return `<span class="scmp ${cls}">${d > 0 ? '▲ +' : '▼ '}${d}</span>`;
+  }
+
   /** 상점 줄 하나 — 재고·갬블·팔기가 같은 모양을 쓴다 */
-  _srow(icon, name, price, rar, { sold = false, poor = false } = {}) {
+  _srow(icon, name, price, rar, { sold = false, poor = false, item = null } = {}) {
     const row = document.createElement('div');
     row.className = 'srow' + (sold ? ' sold' : '') + (poor ? ' poor' : '');
+    const stat = sold ? '' : this._statLine(item);
     row.innerHTML = `<span class="si">${icon}</span>`
-      + `<span class="sn"${rar ? ` style="color:${rar.css}"` : ''}>${name}</span>`
+      + `<span class="sb">`
+      + `<span class="sn"${rar ? ` style="color:${rar.css}"` : ''}>${name}`
+      + (sold ? '' : this._cmpTag(item)) + `</span>`
+      + stat
+      + `</span>`
       + `<span class="sp">◈ ${price}</span>`;
     return row;
   }

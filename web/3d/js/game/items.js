@@ -134,7 +134,7 @@ const AFFIXES = [
   { key: 'range',  label: '공격 사거리', fmt: (v) => `+${v} 공격 사거리`,      roll: (r, s) => +(r.range(0.1, 0.26) * Math.min(1.5, s)).toFixed(2) },
   { key: 'regen',  label: '체력 재생',   fmt: (v) => `초당 ${v} 회복`,         roll: (r, s) => +(r.range(0.4, 1.1) * s).toFixed(1) },
 ];
-const AFFIX_BY_KEY = Object.fromEntries(AFFIXES.map((a) => [a.key, a]));
+export const AFFIX_BY_KEY = Object.fromEntries(AFFIXES.map((a) => [a.key, a]));
 
 /** 접사 키 전체 — aggregate 의 빈 그릇을 여기서 만든다 (추가할 때 빠뜨리지 않도록) */
 const STAT_KEYS = AFFIXES.map((a) => a.key);

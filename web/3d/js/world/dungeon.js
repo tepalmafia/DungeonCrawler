@@ -323,12 +323,20 @@ export function generate(floorNo, seed) {
   const trapTaken = new Set();
   const farFrom = (gx, gz, p, r) => Math.abs(gx - p.gx) + Math.abs(gz - p.gz) > r;
 
-  const addTrap = (gx, gz, kind) => {
-    const key = gz * w + gx;
-    if (trapTaken.has(key)) return false;
+  // 놓을 수 있는 자리인가 — 실제로 놓기 전에 물어볼 수 있어야 한다.
+  // 길목은 **단면을 통째로** 막아야 하므로 「둘 다 되는가」를 먼저 확인하고
+  // 그다음에 놓는다. 하나만 놓이고 마는 반쪽 봉쇄가 제일 나쁘다.
+  const canTrap = (gx, gz, near = false) => {
+    if (trapTaken.has(gz * w + gx)) return false;
     if (at(gx, gz) !== FLOOR) return false;
     if (!farFrom(gx, gz, spawn, 6) || !farFrom(gx, gz, exit, 4)) return false;
-    if (traps.some((t) => Math.abs(t.gx - gx) + Math.abs(t.gz - gz) < 3)) return false;
+    // near = 같은 길목의 짝이다. 짝끼리는 붙어 있어야 하므로 간격 규칙을 면제한다.
+    if (!near && traps.some((t) => Math.abs(t.gx - gx) + Math.abs(t.gz - gz) < 3)) return false;
+    return true;
+  };
+
+  const addTrap = (gx, gz, kind, near = false, choke = false) => {
+    if (!canTrap(gx, gz, near)) return false;
     // 화살 발사기는 벽을 등져야 한다 — 허공에서 화살이 나오면 안 된다
     let dir = null;
     if (kind === 'dart') {
@@ -337,8 +345,10 @@ export function generate(floorNo, seed) {
       const back = rnd.pick(walls);
       dir = [-back[0], -back[1]];        // 벽 반대쪽으로 쏜다
     }
-    trapTaken.add(key);
-    traps.push({ gx, gz, kind, dir });
+    trapTaken.add(gz * w + gx);
+    // choke = 길목 봉쇄로 놓은 것. 흩뿌린 함정이 우연히 복도에 떨어진 것과
+    // 구분해야 「길목이 실제로 막혔는가」를 잴 수 있다 (tools/choke-audit.js).
+    traps.push({ gx, gz, kind, dir, choke });
     return true;
   };
 
@@ -353,20 +363,46 @@ export function generate(floorNo, seed) {
   // 방 한가운데 함정은 그냥 돌아가면 그만이라 아무 결정도 만들지 않는다.
   // **양옆이 벽인 칸**(복도·문턱)에 놓으면 돌아갈 길이 없다 —
   // 「해제할까(2초 멈춤), 밟고 갈까」가 진짜 판단이 된다.
+  // ★ 이 블록은 **한 번도 작동한 적이 없었다.**
+  //
+  //   예전 조건은 「양옆이 바로 벽인 칸」이었다. 그런데 복도를 파는 carveH/carveV
+  //   가 y 와 y+1 을 함께 파므로 복도는 **폭이 2칸**이고, 그런 칸은 층 전체에
+  //   하나도 안 나온다 (실측 0.0개. 폭을 1로 바꾸면 83.0개).
+  //   층 표의 chokeTraps 5·6·3 이 전부 0개로 죽어 있었다 — 오류도 로그도 없이.
+  //
+  //   그리고 조건을 고쳐도 부족하다. 폭 2칸 복도의 **한 칸에만** 놓으면
+  //   옆 차선으로 그냥 지나간다: 차선 간격이 2.0 유닛인데 가시 반경은 1.5,
+  //   화살은 1.2 다 (낙석 2.0·독가스 2.4 만 겨우 닿는다). 「돌아갈 길이 없다」가
+  //   성립하려면 **단면을 통째로** 막아야 한다.
+  //
+  //   그래서 길목을 「칸」이 아니라 **「복도 단면」**으로 잡고, 한 길목에
+  //   같은 종류의 함정을 단면 수만큼 놓는다. chokeTraps 는 이제 함정 개수가
+  //   아니라 **막는 길목 수**다.
   const chokes = [];
   for (let y = 2; y < h - 2; y++)
     for (let x = 2; x < w - 2; x++) {
       if (at(x, y) !== FLOOR) continue;
-      const ns = at(x - 1, y) === WALL && at(x + 1, y) === WALL;
-      const ew = at(x, y - 1) === WALL && at(x, y + 1) === WALL;
-      if (ns || ew) chokes.push([x, y]);
+      // 폭 1칸 (문턱 등) — 양옆이 바로 벽
+      if (at(x - 1, y) === WALL && at(x + 1, y) === WALL) { chokes.push([[x, y]]); continue; }
+      if (at(x, y - 1) === WALL && at(x, y + 1) === WALL) { chokes.push([[x, y]]); continue; }
+      // 폭 2칸 — 벽·바닥·바닥·벽. 위/왼쪽 칸에서만 잡아 같은 단면을 두 번 안 넣는다
+      if (at(x, y - 1) === WALL && at(x, y + 1) === FLOOR && at(x, y + 2) === WALL)
+        chokes.push([[x, y], [x, y + 1]]);
+      if (at(x - 1, y) === WALL && at(x + 1, y) === FLOOR && at(x + 2, y) === WALL)
+        chokes.push([[x, y], [x + 1, y]]);
     }
   rnd.shuffle(chokes);
   const wantChoke = F.chokeTraps;
   let placedChoke = 0;
-  for (const [cx, cy] of chokes) {
+  for (const cells of chokes) {
     if (placedChoke >= wantChoke) break;
-    if (addTrap(cx, cy, rnd.pick(TRAP_POOL))) placedChoke++;
+    // 둘 다 놓을 수 있을 때만 놓는다 — 반쪽만 막힌 길목은 함정이 아니라 장식이다
+    if (!cells.every(([cx, cy], i) => canTrap(cx, cy, i > 0))) continue;
+    const kind = rnd.pick(TRAP_POOL);        // 한 길목은 한 종류 — 하나의 위협으로 읽히게
+    let n = 0;
+    for (let i = 0; i < cells.length; i++)
+      if (addTrap(cells[i][0], cells[i][1], kind, i > 0, true)) n++;
+    if (n === cells.length) placedChoke++;
   }
 
   const wantLoose = F.looseTraps;

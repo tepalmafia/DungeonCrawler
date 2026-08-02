@@ -24,6 +24,10 @@ export const HP_SCALE = 1.3;
 
 const V = new THREE.Vector3();
 
+// 개체마다 다른 상수 하나. 완전히 겹친 둘을 떼어낼 때 방향을 만드는 데 쓴다 —
+// 같은 방향으로 밀면 둘이 나란히 움직여 영원히 겹쳐 있다.
+let UID = 0;
+
 // 「!」 — 적이 나를 발견한 순간을 눈으로 알린다.
 // 붉은 바닥 원은 발밑이라 카메라 각도에 따라 가려진다. 머리 위 표식은 안 가려진다.
 let ALERT_TEX = null;
@@ -95,6 +99,7 @@ export const ARCHETYPES = {
 export class Enemy {
   constructor(G, defKey, x, z, powerMult = 1) {
     this.G = G;
+    this.uid = ++UID;
     this.def = ARCHETYPES[defKey];
     const d = this.def;
 
@@ -156,6 +161,9 @@ export class Enemy {
     this.recoilPow = 1;
     this.knockMoved = 0;              // 넉백으로 실제 밀려난 거리 — 실측용(core/metrics.js)
     this.lastGood = null;             // 마지막으로 걸을 수 있는 칸에 있었던 위치
+    this._stepAcc = Math.random() * 1.5;   // 발 맞춰 걷지 않게 흩뜨린다
+    this._stepFromX = x; this._stepFromZ = z;
+    this._stepRight = Math.random() < 0.5;
 
     // 미발견 상태의 「하는 일」 (game/ai.js). 종족마다 어울리는 것이 다르다.
     // 위와 같은 이유로 `d.key`. 인덱스로 찾으면 변종이 전부 'post'(기본값)로
@@ -422,6 +430,7 @@ export class Enemy {
       }
     }
     this.obj.position.copy(this.pos);
+    this._footsteps(G, moving);
     this._animate(dt, moving);
 
     // HP바는 다쳤거나 커서가 올라갔을 때만
@@ -823,23 +832,86 @@ export class Enemy {
     G.fx.arc(this.pos, this.facing, { radius: d.range, spread: Math.PI * 0.55, color: 0xff9a7a, life: 0.16 });
   }
 
-  /** 서로 겹치지 않게 살짝 밀어낸다 */
+  /**
+   * 몸이 겹치지 않게 밀어낸다 — **서로도, 플레이어와도.**
+   *
+   * 예전 판에는 두 가지 구멍이 있었다.
+   *
+   *   ① **플레이어가 목록에 없었다.** 적끼리만 밀어냈으므로 몬스터가
+   *      플레이어 몸 안으로 그대로 걸어 들어왔다. 근접 사거리가 1.4~2.4 라
+   *      「붙어서 때린다」가 「겹쳐서 때린다」가 됐다.
+   *   ② **밀어내기가 너무 약했다.** `px * dt * 7` 은 스프링이라 한 프레임에
+   *      겹침의 일부만 푼다. 그런데 추격은 매 프레임 다시 밀고 들어오므로,
+   *      추격 속도가 밀어내는 속도보다 빠르면 **영영 안 풀린다.** 실제로
+   *      여러 마리가 한 점에 뭉쳐 하나처럼 보였다.
+   *
+   * 그래서 **겹친 만큼을 그 프레임에 바로 없앤다**(dt 와 무관). 둘이 겹치면
+   * 각자 절반씩 물러나므로 서로 밀어내는 셈이 되고, 진동하지 않는다.
+   * 플레이어는 안 민다 — 조작 중인 몸이 밀리면 조작감이 무너진다. 적만 물러난다.
+   *
+   * 벽 안으로 밀려 들어가는 것은 `sweep` 이 막고, 그래도 끼면 바로 뒤의
+   * `unstick` 이 빼낸다.
+   */
   _separate(dt, G) {
     let px = 0, pz = 0, n = 0;
+
+    const push = (ox, oz, orad, share) => {
+      const dx = this.pos.x - ox, dz = this.pos.z - oz;
+      const d2 = dx * dx + dz * dz;
+      const rr = this.radius + orad;
+      if (d2 > rr * rr) return;
+      let ux, uz, d;
+      if (d2 < 1e-6) {
+        // 완전히 같은 자리 — 방향이 없으므로 하나 만들어 준다.
+        // 개체마다 다른 각도를 써야 둘이 같은 쪽으로 밀려 계속 겹치지 않는다.
+        const a = (this.uid ?? 0) * 2.399963;      // 황금각 — 고르게 흩어진다
+        ux = Math.sin(a); uz = Math.cos(a); d = 0;
+      } else {
+        d = Math.sqrt(d2); ux = dx / d; uz = dz / d;
+      }
+      const overlap = (rr - d) * share;
+      px += ux * overlap; pz += uz * overlap;
+      n++;
+    };
+
     for (const o of G.enemies) {
       if (o === this || o.dead) continue;
-      const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z;
-      const d2 = dx * dx + dz * dz;
-      const rr = this.radius + o.radius;
-      if (d2 > rr * rr || d2 < 1e-6) continue;
-      const d = Math.sqrt(d2);
-      px += (dx / d) * (rr - d);
-      pz += (dz / d) * (rr - d);
-      n++;
+      push(o.pos.x, o.pos.z, o.radius, 0.5);       // 둘이 절반씩 물러난다
     }
+    // ★ 플레이어. **플레이어는 안 밀고 적만 물러난다** — 조작 중인 몸이
+    //   떠밀리면 「내가 움직였다」와 「밀렸다」가 구분이 안 된다.
+    const p = G.player;
+    if (p && !p.dead) push(p.pos.x, p.pos.z, p.radius, 1.0);
+
     if (!n) return;
-    const r = sweep(G.dungeon, this.pos.x, this.pos.z, px * dt * 7, pz * dt * 7, this.radius);
+    const r = sweep(G.dungeon, this.pos.x, this.pos.z, px, pz, this.radius);
     this.pos.set(r.x, 0, r.z);
+  }
+
+  /**
+   * 적 발소리 — **가까운 놈만.**
+   *
+   * 랜턴 반경(9) 밖은 안 보이므로 「뭔가 다가온다」를 귀로 먼저 알 수 있어야
+   * 한다. 다만 스물여섯 마리가 다 소리를 내면 그건 정보가 아니라 소음이다.
+   * volAt() 이 거리로 깎고(28유닛 밖은 무음), 골렘은 무겁게 운다.
+   * 궁수는 떠다니므로 발소리가 없다 — 그게 실루엣과도 맞다.
+   */
+  _footsteps(G, moving) {
+    if (this.dead || !moving || this.def.float) return;
+    const d = Math.hypot(this.pos.x - this._stepFromX, this.pos.z - this._stepFromZ);
+    this._stepFromX = this.pos.x; this._stepFromZ = this.pos.z;
+    const stride = 1.55 * (this.def.scale || 1);
+    this._stepAcc += d;
+    if (this._stepAcc < stride) return;
+    this._stepAcc -= stride;
+    this._stepRight = !this._stepRight;
+    const v = volAt(G, this.pos);
+    if (v < 0.06) return;
+    Sfx.step({
+      vol: v * 0.4, right: this._stepRight,
+      heavy: this.heavy ? 1 : 0,
+      wet: G.dungeon?.act === 'flood',
+    });
   }
 
   _animate(dt, moving) {

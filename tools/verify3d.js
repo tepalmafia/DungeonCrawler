@@ -347,6 +347,71 @@ async function shot(page, name) {
     stress.ev.skipWaypoint + stress.ev.unsmooth + stress.ev.giveUp > 0,
     `탈출 발동 ${JSON.stringify(stress.ev)} — 0이면 시험이 그 상황을 못 만든 것이다`);
 
+  // ── 소리가 시뮬레이션을 멈추지 않는가 ────────────────────
+  //
+  // 실제로 겪었다: 타격음에 겹을 하나 더하면서 거리 감쇠 vol 을 gain 에
+  // **곱해 넣었다.** tone/noise 는 `vol <= 0.02` 면 아예 안 울리는데 그 관문을
+  // 지나쳐 gain 0 으로 exponentialRampToValueAtTime(0) 에 도달했고, Web Audio 가
+  // 예외를 던져 **게임 루프가 통째로 죽었다.** 먼 적을 함정이 때리는 순간이었다.
+  //
+  // 소리는 연출이라 안 나도 그만이지만, **예외를 던지면 그건 연출이 아니다.**
+  // 그래서 모든 효과음을 vol 0 과 1 로 한 번씩 울려 보고 아무것도 안 터지는지 본다.
+  const audio = await page.evaluate(async () => {
+    const A = await import('./js/core/audio.js');
+    const kinds = ['skeleton', 'ghoul', 'archer', 'golem', 'lord', 'nosuchkind'];
+    const bad = [];
+    const call = (label, fn) => { try { fn(); } catch (e) { bad.push(`${label}: ${e.message.slice(0, 80)}`); } };
+    for (const v of [0, 0.001, 1]) {
+      for (const k of kinds) {
+        call(`enemyHit(${k},${v})`, () => A.Sfx.enemyHit(k, false, v));
+        call(`enemyHit!(${k},${v})`, () => A.Sfx.enemyHit(k, true, v));
+        call(`enemyAttack(${k},${v})`, () => A.Sfx.enemyAttack(k, v));
+        call(`enemyAggro(${k},${v})`, () => A.Sfx.enemyAggro(k, v));
+        call(`enemyDie(${k},${v})`, () => A.Sfx.enemyDie(k, v));
+      }
+      call(`step(${v})`, () => A.Sfx.step({ vol: v, heavy: 1, right: true, wet: true }));
+      call(`grunt(${v})`, () => A.Sfx.playerGrunt(v));
+    }
+    for (const f of ['swing', 'hit', 'dash', 'nova', 'meteor', 'potion', 'levelUp',
+      'portal', 'bossRoar', 'death', 'victory', 'cast', 'playerHurt'])
+      call(f, () => A.Sfx[f]());
+    return bad;
+  });
+  ok('audio.neverThrows', audio.length === 0,
+    audio.length ? audio.slice(0, 3).join(' | ') : '전 효과음 × vol 0/0.001/1 — 예외 0건');
+
+  // ── 길목 함정이 실제로 놓이고, 실제로 막는가 ──────────────
+  //
+  // 층 표는 길목 함정을 층당 3~8개로 적어 뒀는데 **한 개도 안 놓이고 있었다.**
+  // 조건이 「양옆이 바로 벽인 칸」이었고 복도 폭이 2칸이라 그런 칸이 층 전체에
+  // 없었다 — 오류도 로그도 없이 설계 절반이 죽어 있었다. 표에 숫자를 적는 것과
+  // 그 숫자가 화면에 나오는 것은 다른 일이라, 그 사이를 검사가 이어야 한다.
+  //
+  // 그리고 **놓였다고 막히는 것도 아니다.** 폭 2칸 복도에서 한 칸만 놓으면
+  // 옆 차선으로 지나간다(차선 간격 2.0 유닛 · 가시 반경 1.5 · 화살 1.2).
+  // 그래서 개수와 「단면이 다 막혔는가」를 같이 본다.
+  const choke = await page.evaluate(async () => {
+    const dun = await import('./js/world/dungeon.js');
+    const fl = await import('./js/world/floors.js');
+    const tr = await import('./js/world/traps.js');
+    const RAD = {};
+    for (const [k, v] of Object.entries(tr.TRAP_KINDS || {})) RAD[k] = v.radius;
+    const rows = [];
+    for (const f of [1, 5, 9]) {
+      const dg = dun.generate(f, `VERIFY-CHOKE-${f}`);
+      const ct = dg.traps.filter((t) => t.choke);
+      // 반경이 옆 차선(2.0)에 못 닿는데 짝도 없으면 그 길목은 그냥 지나갈 수 있다
+      const bypass = ct.filter((t) => (RAD[t.kind] ?? 1.5) < 2.0
+        && !dg.traps.some((o) => o !== t && Math.abs(o.gx - t.gx) + Math.abs(o.gz - t.gz) === 1)).length;
+      rows.push({ f, want: fl.floorDef(f).chokeTraps, placed: ct.length, bypass });
+    }
+    return rows;
+  });
+  ok('trap.chokesPlaced', choke.every((r) => r.placed > 0),
+    choke.map((r) => `${r.f}층 표${r.want}길목→${r.placed}개`).join(' · ') + ' (0이면 조건이 죽은 것이다)');
+  ok('trap.chokesBlockFullWidth', choke.every((r) => r.bypass === 0),
+    '그냥 지나갈 수 있는 길목 ' + choke.map((r) => `${r.f}층 ${r.bypass}`).join(' · '));
+
   // ── 엄폐물 우회 (docs/ENEMY-AI.md §6-3) ─────────────────
   // 벽을 사이에 두고 마주 세운 뒤, 사선을 여는 데 걸리는 시간을 잰다.
   // 근접은 원래도 A* 로 돌아갔다 — 이 검사가 지키는 것은 **원거리**다.
