@@ -506,6 +506,84 @@ async function shot(page, name) {
     + `(해골 ${tonal.skeleton} 구울 ${tonal.ghoul} 궁수 ${tonal.archer} 골렘 ${tonal.golem} `
     + `기본 ${tonal.fallback} 발 ${tonal.step}) — 0.35 넘으면 「뿅/핑」이다`);
 
+  // ── 스킬 트리 칸이 실제로 효과를 내는가 ──────────────────
+  //
+  // 칸이 스무 개인데 각각 다른 파일을 만진다 — skills.js · combat.js ·
+  // enemies.js · player.js · main.js. 표에 `flag: { twice: 0.6 }` 을 적어 두고
+  // **읽는 쪽을 안 붙이면 조용히 아무 일도 안 일어난다.** 오류도 안 난다.
+  // 층 표의 chokeTraps 가 전 층 0개였던 것과 같은 종류의 침묵이다.
+  //
+  // 자세한 수치는 tools/tree-audit.js 가 낸다. 여기서는 **하나라도 죽어 있으면
+  // 빨개지게** 대표 칸 몇 개만 본다.
+  const tree = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const sk = await import('./js/game/skills.js');
+    const tr = await import('./js/game/skilltree.js');
+    const realRandom = Math.random;
+    P.maxHp = 1e9; P.hp = 1e9; P.invuln = 1e9; P.maxMp = 1e9;
+
+    function run(skillKey, node) {
+      let s = 20260802;
+      Math.random = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+      G.tree = new tr.SkillTree();
+      if (node) { G.tree.grant(1); G.tree.take(node); }
+      G.fields.length = 0; G.timers.length = 0; G.slowZones.length = 0;
+      G.cooldowns = {}; P.mp = P.maxMp;
+      const live = G.enemies.filter((e) => !e.dead).slice(0, 4);
+      if (live.length < 2) return null;
+      const save = live.map((e) => ({ e, x: e.pos.x, z: e.pos.z, hp: e.hp, max: e.maxHp }));
+      live.forEach((e, i) => {
+        const a = (i - (live.length - 1) / 2) * 0.5;
+        e.pos.set(P.pos.x + Math.sin(a) * 2.2, 0, P.pos.z + Math.cos(a) * 2.2);
+        e.hp = e.maxHp = 1e7; e.dead = false;
+      });
+      P.facing = 0;
+      const before = live.reduce((a, e) => a + e.hp, 0);
+      const def = sk.SKILLS.find((x) => x.key === skillKey);
+      const cx = live.reduce((a, e) => a + e.pos.x, 0) / live.length;
+      const cz = live.reduce((a, e) => a + e.pos.z, 0) / live.length;
+      sk.trySkill(G, def, { x: cx, z: cz });
+      const STEP = 1 / 60;
+      for (let i = 0; i < 60 * 8; i++) {
+        for (let j = G.timers.length - 1; j >= 0; j--) {
+          G.timers[j].t -= STEP;
+          if (G.timers[j].t <= 0) { G.timers[j].fn(); G.timers.splice(j, 1); }
+        }
+        sk.updateFields(G, STEP);
+      }
+      const dmg = Math.round(before - live.reduce((a, e) => a + e.hp, 0));
+      const slow = G.slowZones.length;
+      for (const v of save) { v.e.pos.set(v.x, 0, v.z); v.e.hp = v.hp; v.e.maxHp = v.max; }
+      Math.random = realRandom;
+      return { dmg, slow };
+    }
+
+    const out = {};
+    const CASES = [['cleave', 'cleaveWide'], ['cleave', 'cleaveCombo'],
+      ['nova', 'novaFocus'], ['nova', 'novaLinger'],
+      ['meteor', 'meteorDirect'], ['meteor', 'meteorShards'], ['meteor', 'meteorWake']];
+    for (const [sk2] of [['cleave'], ['nova'], ['meteor']]) out[`base_${sk2}`] = run(sk2, null);
+    for (const [s2, n] of CASES) out[n] = run(s2, n);
+    G.tree = new tr.SkillTree();
+    Math.random = realRandom;
+    return out;
+  });
+  const dead = [];
+  if (tree && tree.base_cleave) {
+    const chk = (node, skill, alsoSlow = false) => {
+      const b = tree[`base_${skill}`], v = tree[node];
+      if (!b || !v) { dead.push(`${node}(측정불가)`); return; }
+      if (Math.abs(v.dmg - b.dmg) < 1 && !(alsoSlow && v.slow > 0)) dead.push(node);
+    };
+    chk('cleaveWide', 'cleave'); chk('cleaveCombo', 'cleave');
+    chk('novaFocus', 'nova'); chk('novaLinger', 'nova');
+    chk('meteorDirect', 'meteor'); chk('meteorShards', 'meteor');
+    chk('meteorWake', 'meteor', true);
+  }
+  ok('skilltree.nodesDoSomething', tree && tree.base_cleave && dead.length === 0,
+    dead.length ? `효과 없는 칸: ${dead.join(', ')}`
+      : `칸 7종 확인 — 연격 ${tree?.cleaveCombo?.dmg} vs 기본 ${tree?.base_cleave?.dmg}`);
+
   // ── 길목 함정이 실제로 놓이고, 실제로 막는가 ──────────────
   //
   // 층 표는 길목 함정을 층당 3~8개로 적어 뒀는데 **한 개도 안 놓이고 있었다.**

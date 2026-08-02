@@ -52,7 +52,25 @@ export const SKILLS = [
         // 넉백 없음 — 이건 무기를 휘두르는 동작이다. 평타의 넓은 판본이지
         // 밀어내는 기술이 아니다 (combat.js 의 넉백 주석).
         hitEnemy(G, e, r.dmg * 1.35 * (M.dmg ?? 1),
-          { crit: r.crit, knock: 0, color: 0xffd090, skill: true });
+          { crit: r.crit, knock: 0, color: 0xffd090, skill: true, armorPierce: M.pierce ?? 0 });
+      }
+
+      // 「연격」 — 한 박자 뒤에 한 번 더. 같은 자리가 아니라 **그때의 조준**을
+      // 다시 본다: 첫 타로 밀려난 적을 두 번째가 못 맞히면 연격이 아니다.
+      if (M.twice) {
+        G.timers.push({
+          t: 0.22,
+          fn: () => {
+            if (p.dead) return;
+            G.fx.arc(p.pos, p.facing, { radius, spread, color: 0xffd0b0, life: 0.2 });
+            Sfx.swing();
+            for (const e2 of enemiesInArc(G, p.pos, p.facing, radius, spread)) {
+              const r2 = playerRoll(p);
+              hitEnemy(G, e2, r2.dmg * 1.35 * (M.dmg ?? 1) * M.twice,
+                { crit: r2.crit, knock: 0, color: 0xffc080, skill: true, armorPierce: M.pierce ?? 0 });
+            }
+          },
+        });
       }
       return true;
     },
@@ -72,7 +90,31 @@ export const SKILLS = [
 
       // 지나간 자리의 적을 벤다
       const hitSet = new Set();
-      G.pendingDashHits = { hitSet, until: 0.28 };
+      const M = G.tree ? G.tree.mods('dash') : {};
+      G.pendingDashHits = { hitSet, until: 0.28, mods: M };
+
+      // 「충격」 — 끝나는 지점에서 터진다. 돌진이 도망치는 기술에서
+      // **파고드는 기술**로 성격이 바뀐다.
+      if (M.endBlast) {
+        G.timers.push({
+          t: 0.26,
+          fn: () => {
+            const at = { x: p.pos.x, z: p.pos.z };
+            const R = M.endBlast;
+            G.fx.shockwave(p.pos, { r0: 0.4, r1: R, color: 0x9a6bff, life: 0.4, y: 0.3 });
+            G.fx.burst(p.center(), { count: 24, color: 0x9a6bff, speed: 7, size: 0.5, life: 0.5 });
+            G.lighting?.flash(p.center(), 0x9a6bff, 70, 0.25);
+            for (const e of enemiesInArc(G, at, 0, R, Math.PI * 2)) {
+              const r = playerRoll(p);
+              hitEnemy(G, e, r.dmg * 1.1, {
+                crit: r.crit, knock: 1.6, color: 0x9a6bff, element: 'soul', skill: true, from: at,
+              });
+            }
+          },
+        });
+      }
+      // 「잔상」 — 적 시선을 끈다. 자리만 남기고 실제 처리는 ai 가 본다.
+      if (M.decoy) G.decoy = { x: p.pos.x, z: p.pos.z, t: M.decoy };
       return true;
     },
   },
@@ -130,12 +172,47 @@ export const SKILLS = [
           G.lighting.flash(pos.clone().setY(1.5), 0xffb04a, 190, 0.7);
           G.fx.addShake(0.35, 4);
 
+          // 「파편」 — 본체 주변에 작은 운석 셋. 본체는 약해진 대신 범위가 넓다.
+          if (M.shards) {
+            for (let i = 0; i < M.shards; i++) {
+              const a = (i / M.shards) * Math.PI * 2 + 0.4;
+              // **본체 범위와 겹치게** 둔다. 처음에 1.15배 밖에 뒀더니
+              // 뭉친 적에게는 본체가 25% 약해진 만큼만 손해였다 —
+              // 「넓어지는 대신 약해진다」가 아니라 그냥 약해지는 칸이었다.
+              // (tools/tree-audit.js 가 −1% 로 잡았다.)
+              const sx = target.x + Math.cos(a) * radius * 0.8;
+              const sz = target.z + Math.sin(a) * radius * 0.8;
+              G.timers.push({
+                t: 0.18 + i * 0.09,
+                fn: () => {
+                  const sp = new THREE.Vector3(sx, 0, sz);
+                  G.fx.shockwave(sp, { r0: 0.3, r1: radius * 0.55, color: 0xffa03a, life: 0.4, y: 0.3 });
+                  G.fx.burst(sp.clone().setY(0.4), { count: 18, color: 0xffa03a, speed: 6, size: 0.5, life: 0.6, grav: 8 });
+                  for (const e of G.enemies) {
+                    if (e.dead) continue;
+                    const dd = Math.hypot(e.pos.x - sx, e.pos.z - sz);
+                    if (dd > radius * 0.55 + e.radius) continue;
+                    const rr = playerRoll(p);
+                    hitEnemy(G, e, rr.dmg * 1.2, {
+                      crit: rr.crit, knock: 0.8, color: 0xffa03a, element: 'fire',
+                      skill: true, from: { x: sx, z: sz },
+                    });
+                  }
+                },
+              });
+            }
+          }
+          // 「여운」 — 떨어진 자리가 잠시 적을 느리게 한다. 젖은 칸과 같은 원리.
+          if (M.slow) G.slowZones.push({ x: target.x, z: target.z, r: radius, t: M.slow, mul: 0.6 });
+
           for (const e of G.enemies) {
             if (e.dead) continue;
             const d = Math.hypot(e.pos.x - target.x, e.pos.z - target.z);
             if (d > radius + e.radius) continue;
             const r = playerRoll(p);
-            const falloff = 1 - Math.min(0.55, (d / radius) * 0.55);
+            let falloff = 1 - Math.min(0.55, (d / radius) * 0.55);
+            // 「직격」 — 중심 반경 안이면 두 배. 조준이 판단거리가 된다.
+            if (M.core && d < 1.5) falloff *= M.core;
             hitEnemy(G, e, r.dmg * 5.0 * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos, element: 'fire', skill: true });
           }
           G.fields.push({ x: target.x, z: target.z, r: radius * 0.8, life: 2.6, tick: 0, dps: (p.dmgMin + p.dmgMax) * 0.3, color: 0xff7a2a });
@@ -164,6 +241,18 @@ export function trySkill(G, skill, aim) {
   G.cooldowns[skill.key] = skill.cd * SKILL_CD_SCALE * (1 - p.cdr);
   G.ui.fireSkill(skill.key);
   return true;
+}
+
+/**
+ * 이 자리에 장판이 있나 — 「재점화」가 처치 시점에 묻는다.
+ * 처치 처리(main.js)가 스킬 내부를 몰라도 되게 여기서 답한다.
+ */
+export function fieldAt(G, x, z) {
+  for (const f of G.fields) {
+    if (f.rekindled) continue;                 // 재점화가 또 재점화하면 끝없이 번진다
+    if (Math.hypot(f.x - x, f.z - z) < f.r) return f;
+  }
+  return null;
 }
 
 /** 장판 데미지 — 0.35초마다 틱 */

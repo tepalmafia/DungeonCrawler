@@ -275,7 +275,8 @@ export class Player {
 
     // 랜턴 연료 — 시간이 자원이다
     if (this.lantern && this.lantern.fuel > 0) {
-      this.lantern.fuel -= dt;
+      // 「랜턴 심지」가 소모를 줄인다 (game/skilltree.js). 안 찍었으면 1 이다.
+      this.lantern.fuel -= dt * (G.tree ? (G.tree.mods('common').fuelBurn ?? 1) : 1);
       if (this.lantern.fuel <= 0) {
         this.lantern.fuel = 0;
         G.onLanternOut(this.lantern);

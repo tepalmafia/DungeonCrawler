@@ -76,7 +76,12 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
   // 휘두르는 동작이므로 무기가 곧 속성이다. 스킬은 자기 속성을 넘긴다.
   const atkEl = opts.element ?? G.player.element ?? 'none';
   const mult = elementalMult(atkEl, e.element);
-  const dmg = Math.max(1, Math.round(mitigate(rawDmg * mult, e.armor, G.player.level)));
+  // 방어도 관통 — 「가르기」가 켠다 (game/skilltree.js). 기본은 0.
+  // **`pierce` 라고 안 부른다** — Projectile 의 `pierce` 는 「적을 몇 명 뚫고
+  // 지나가나」라서 뜻이 다르다. 같은 이름을 두 뜻으로 쓰면 언젠가 섞인다.
+  const ap = opts.armorPierce || 0;
+  const dmg = Math.max(1, Math.round(
+    mitigate(rawDmg * mult, e.armor * (1 - ap), G.player.level)));
   e.hp -= dmg;
   e.flash = 0.14;
   e.aggro = true;
