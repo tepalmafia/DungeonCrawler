@@ -860,6 +860,34 @@ async function shot(page, name) {
     `정면에서 맞으면 가슴이 ${hitPose.frontX?.toFixed(3)} 젖혀진다`);
   ok('actor.hitHeadLag', hitPose.skipped || hitPose.headLags,
     `머리 ${hitPose.headLag?.toFixed(3)} (가슴보다 0.06초 늦게 젖혀진다)`);
+  // 무기를 **바로 쥐고 있는가.**
+  //
+  // 칼날이 손에서 팔뚝 쪽(몸 쪽)으로 뻗어 있었다 — 얼음송곳 쥐듯 거꾸로다.
+  // 서 있을 때는 검이 위로 서 있어 그럴듯해 보이지만, 들어올리면 손잡이가
+  // 위로 가고 칼끝이 아래-뒤를 향한다. 팔이 아무리 큰 호를 그려도 칼끝은
+  // 몸 앞에서 오르내리기만 한다 — 「몸 앞에서 내려가잖아」가 이것이었다.
+  //
+  // 판정: **칼끝이 손보다 어깨에서 멀어야 한다.** 거꾸로 쥐면 가까워진다.
+  const grip = await page.evaluate(async () => {
+    const THREE = await import('three');
+    const em = await import('./js/game/enemies.js');
+    const G = window.G3;
+    const out = {};
+    const check = (rig) => {
+      rig.group.updateMatrixWorld(true);
+      const sh = new THREE.Vector3(), hand = new THREE.Vector3(), tip = new THREE.Vector3();
+      rig.armR.getWorldPosition(sh);
+      rig.handR.getWorldPosition(hand);
+      rig.blade.getWorldPosition(tip);
+      return +(tip.distanceTo(sh) - hand.distanceTo(sh)).toFixed(3);
+    };
+    out.knight = check(G.player.rig);
+    out.skeleton = check(em.ARCHETYPES.skeleton.build());
+    return out;
+  });
+  ok('actor.weaponHeldForward', grip.knight > 0.15 && grip.skeleton > 0.1,
+    `칼끝이 손보다 어깨에서 먼 정도 — 기사 ${grip.knight} · 해골 ${grip.skeleton} (음수면 거꾸로 쥔 것)`);
+
   // 시간이 지나도 **제자리에 있는가.**
   //
   // 사고를 겪고 넣었다. poseHit 이 root.x / root.z 를 `+=` 로 더하는데 되돌리는
@@ -1055,6 +1083,48 @@ async function shot(page, name) {
     const p95 = (a) => a[Math.floor(a.length * 0.95)];
     return { logicMed: med(logic), logicP95: p95(logic), frameMed: med(frame), frameP95: p95(frame) };
   });
+
+  // ── 로직 비용: **장면을 고정해 놓고** 잰다 ────────────────
+  //
+  // 원래는 위의 봇 소크 도중에 쟀다. 그런데 그때는 봇이 싸우는 중이라
+  // **살아 있는 적 수가 판마다 다르다.** 실측이 그대로 흔들렸다:
+  //   6.20 → 5.50 → 6.30 → 5.90 → 5.80 → 6.90 ms
+  // 마지막 판은 **무기를 매단 각도만** 바꾼 것이라 로직 비용에 영향을 줄 수
+  // 없는 변경이었다. 즉 ±1.4ms 는 코드가 아니라 장면 구성의 차이였고,
+  // 기준선(6ms)이 그 잡음 폭 한가운데 있었다.
+  //
+  // 무작위로 실패하는 검사는 쓸모없는 정도가 아니라 **해롭다** — 무시하는
+  // 습관이 든다. 그래서 잰 값을 못 믿게 만든 원인을 없앤다:
+  // 적 수를 못박고, 전부 깨우고, 렌더링 없이 고정 시간을 밟는다.
+  const budget = await page.evaluate(async () => {
+    const G = window.G3;
+    const em = await import('./js/game/enemies.js');
+    for (const e of G.enemies) e.dispose();
+    G.enemies.length = 0;
+    G.boss = null;
+    // 24 마리 — 실제 한 층의 상한(방마다 1~4 × 방 8개)에 가깝다.
+    // 플레이어 주위 4~26 유닛에 고르게 뿌려 자세 LOD 의 경계를 모두 지나게 한다.
+    const P = G.player;
+    const kinds = ['skeleton', 'ghoul', 'archer', 'golem'];
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      const r = 4 + (i % 6) * 4.4;
+      const e = new em.Enemy(G, kinds[i % 4], P.pos.x + Math.cos(a) * r, P.pos.z + Math.sin(a) * r);
+      e.aggro = true; e.state = 'chase';
+      G.enemies.push(e);
+    }
+    const samples = [];
+    for (let i = 0; i < 90; i++) {
+      G.headlessRun(1 / 60);
+      samples.push(G.perf.logicMs);
+    }
+    samples.sort((x, y) => x - y);
+    return {
+      n: G.enemies.length,
+      med: samples[Math.floor(samples.length / 2)],
+      p95: samples[Math.floor(samples.length * 0.95)],
+    };
+  });
   // 벽시계 9초를 기다리는 대신 시뮬레이션 12초를 밟는다.
   // 렌더링이 느린 환경에서 벽시계로 기다리면 게임 내 시간이 거의 안 흐른다 —
   // 「9초 기다렸는데 봇이 한 마리도 못 잡았다」가 되면 검사가 무의미하다.
@@ -1069,9 +1139,23 @@ async function shot(page, name) {
     alive: !window.G3.player.dead,
   }));
   ok('bot.fights', botState.kills > 0, `처치 ${botState.kills} · 획득 ${botState.items} · Lv ${botState.level}`);
-  // 로직 예산: 60fps 프레임(16.7ms) 중 시뮬레이션이 6ms를 넘지 않아야 한다
-  ok('perf.logicBudget', frames.logicMed < 6,
-    `시뮬레이션 중앙값 ${frames.logicMed.toFixed(2)}ms · p95 ${frames.logicP95.toFixed(2)}ms`);
+  // 시뮬레이션 예산 — **적 24마리 고정, 60fps 한 스텝의 simulate() 비용.**
+  //
+  // 이름과 기준을 바꾼 이유를 적어 둔다. 원래 검사(perf.logicBudget, 기준 6ms)는
+  // 봇 전투 중 렌더 프레임마다 재는 값이었고, 거기에는 simulate() 말고도
+  // 레벨·조명·이펙트·카메라·UI 갱신이 다 들어 있었다. 게다가 소프트웨어
+  // 렌더링이라 한 프레임이 1초짜리였다.
+  //
+  // 장면을 고정해 잡음을 없애면서 headlessRun 을 썼는데, 그건 **simulate() 만**
+  // 재고 한 스텝이 1/60 초다. 즉 훨씬 작은 부분집합이라 6ms 기준이 저절로
+  // 통과한다(0.40ms) — 기준을 안 건드렸을 뿐 **검사를 무력화한 것**이다.
+  //
+  // 그래서 이름을 바꾸고 기준을 실제 재는 것에 맞춘다. 1.5ms 는 60fps 프레임
+  // 예산(16.7ms)의 9% 다. 이 작업으로 자세 계산이 마리당 3배가 됐으니,
+  // 여기서 3배 더 나빠지면 걸린다.
+  ok('perf.simBudget', budget.med < 1.5,
+    `적 ${budget.n}마리 · simulate() 한 스텝 중앙값 ${budget.med.toFixed(2)}ms · p95 ${budget.p95.toFixed(2)}ms`);
+  console.log(`  (참고) 봇 전투 중 렌더 프레임 로직 ${frames.logicMed.toFixed(2)}ms — 재는 대상이 달라 위 숫자와 비교 못 한다`);
   console.log(`  (참고) 전체 프레임 중앙값 ${frames.frameMed.toFixed(1)}ms — SwiftShader 소프트웨어 렌더링이라 GPU 성능을 대변하지 않는다`);
 
   await shot(page, '05-bot.png');

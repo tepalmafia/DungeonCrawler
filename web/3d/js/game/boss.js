@@ -99,7 +99,9 @@ function buildLord() {
   // 낫 — 초승달 날. 겨눔 자세의 팔 접힘을 되돌려 자루를 세운다
   const scythe = new THREE.Group();
   scythe.position.set(0, -0.08, 0.06);
-  scythe.rotation.x = 0.9;
+  // 낫도 마찬가지 — 자루가 손 바깥으로 뻗어야 초승달 날이 궤적을 그린다.
+  // 반대로 달아 두면 날이 등 뒤에서 오르내릴 뿐이다.
+  scythe.rotation.x = Math.PI - 0.34;
   new Part(scythe)
     .add(prism(0.055, 0.055, 2.5, 0.06, 0.06, { sides: 6, hang: false }), m(0x3a2c22), { y: 0.75 })
     .finish();
