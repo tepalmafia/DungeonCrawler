@@ -769,6 +769,21 @@ export class Enemy {
 
   /** 시야가 트이면 직진, 막히면 A* */
   _chase(dt, G, p) {
+    // ★ **잔상** — 「그림자 돌진」의 「잔상」 칸이 남긴 미끼 (game/skilltree.js).
+    //   지나간 자리로 시선을 끈다: 돌진이 「도망치는 기술」에서
+    //   **「떼어내는 기술」**이 된다.
+    //
+    //   미끼를 쫓을지 말지는 **거리로 정한다.** 무조건 쫓게 하면 코앞의
+    //   플레이어를 두고 뒤돌아 걷는 우스운 그림이 나온다 — 미끼가 나보다
+    //   가까울 때만 쫓는다.
+    if (G.decoy && !this.isBoss) {
+      const dd = Math.hypot(G.decoy.x - this.pos.x, G.decoy.z - this.pos.z);
+      const dp = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+      if (dd < dp && dd > 0.6) {
+        this.path.length = 0;
+        return this._step(dt, G, G.decoy.x, G.decoy.z, this.speed);
+      }
+    }
     if (this._canSee(G, p)) {
       this.path.length = 0;
       return this._step(dt, G, p.pos.x, p.pos.z, this.speed);

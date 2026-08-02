@@ -506,6 +506,75 @@ async function shot(page, name) {
     + `(해골 ${tonal.skeleton} 구울 ${tonal.ghoul} 궁수 ${tonal.archer} 골렘 ${tonal.golem} `
     + `기본 ${tonal.fallback} 발 ${tonal.step}) — 0.35 넘으면 「뿅/핑」이다`);
 
+  // ── 속성 방어가 실제로 피해를 줄이는가 ──────────────────
+  //
+  // 배선의 절반은 처음부터 되어 있었다 — hitPlayer 가 attacker 를 받는데
+  // **아무도 그 속성을 안 읽고 있었다.** 그런 「반쯤 된 배선」은 코드를 읽으면
+  // 되어 있는 것처럼 보인다. 실제로 숫자가 달라지는지는 재야 안다.
+  const edef = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const cm = await import('./js/game/combat.js');
+    const save = { hp: P.hp, max: P.maxHp, inv: P.invuln, de: P.defElement, dc: P.defCover, ar: P.armor };
+    P.maxHp = 1e9; P.armor = 0;
+    const hit = (defEl, cover, atkEl) => {
+      P.defElement = defEl; P.defCover = cover;
+      P.hp = 1e9; P.invuln = 0;
+      cm.hitPlayer(G, 1000, { element: atkEl });
+      return Math.round(1e9 - P.hp);
+    };
+    // 빙 갑옷은 뇌를 이긴다(ELEMENTS.ice.beats === 'bolt') → 뇌 공격을 덜 받는다
+    const out = {
+      none: hit('none', 0, 'bolt'),
+      full: hit('ice', 1, 'bolt'),      // 다 맞췄다 — 제일 적게 받아야
+      half: hit('ice', 0.5, 'bolt'),    // 절반만 — 중간
+      bad: hit('ice', 1, 'fire'),       // 화는 빙을 이긴다 — 더 받아야
+      off: hit('ice', 1, 'soul'),       // 상성 없음 — 기준과 같아야
+    };
+    Object.assign(P, { hp: save.hp, maxHp: save.max, invuln: save.inv,
+      defElement: save.de, defCover: save.dc, armor: save.ar });
+    return out;
+  });
+  ok('element.armorDefends',
+    edef.full < edef.none && edef.half < edef.none && edef.half > edef.full
+      && edef.bad > edef.none && edef.off === edef.none,
+    `기준 ${edef.none} · 다맞춤 ${edef.full} · 절반 ${edef.half} · 역상성 ${edef.bad} · 무관 ${edef.off}`);
+
+  // ── 「잔상」이 실제로 시선을 끄는가 ──────────────────────
+  //
+  // 자리만 만들어 두고 AI 가 안 보는 상태로 한 번 배포됐다 — 그림자는 남는데
+  // 아무도 안 쫓아갔다. 화면에는 이펙트가 뜨므로 **되는 것처럼 보인다.**
+  const decoy = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const e = G.enemies.find((x) => !x.dead && !x.isBoss);
+    if (!e) return null;
+    const save = { x: e.pos.x, z: e.pos.z, st: e.state, ag: e.aggro,
+      hx: e.home.x, hz: e.home.z, dec: G.decoy, hp: e.hp, max: e.maxHp };
+    P.invuln = 1e9;
+    e.hp = e.maxHp = 1e9;
+    const run = (withDecoy) => {
+      e.pos.set(P.pos.x + 6, 0, P.pos.z);
+      // ★ **집도 같이 옮긴다.** 안 옮기면 리쉬가 걸려 상태가 'returning' 이
+      //   되고, 귀환은 _chase 를 안 지나가므로 미끼 분기에 **도달조차 안 한다.**
+      //   처음에 이걸 빠뜨려서 「미끼가 안 먹는다」로 읽혔다 — 기능이 아니라
+      //   검사가 상황을 잘못 만든 것이었다.
+      e.home.set(P.pos.x + 6, 0, P.pos.z);
+      e.aggro = true; e.state = 'chase'; e.path.length = 0;
+      e.flankTarget = null; e.attackCd = 1e9;   // 때리느라 멈추지 않게
+      G.decoy = withDecoy ? { x: P.pos.x + 9, z: P.pos.z, t: 9 } : null;
+      for (let i = 0; i < 40; i++) e.update(1 / 60, G);
+      return +(e.pos.x - P.pos.x).toFixed(2);
+    };
+    const без = run(false), with_ = run(true);
+    e.pos.set(save.x, 0, save.z); e.home.set(save.hx, 0, save.hz);
+    e.state = save.st; e.aggro = save.ag; e.path.length = 0;
+    e.hp = save.hp; e.maxHp = save.max; e.attackCd = 0;
+    G.decoy = save.dec;
+    return { without: без, with: with_ };
+  });
+  ok('skilltree.decoyPulls', !decoy || decoy.with > decoy.without,
+    decoy ? `미끼 없을 때 x+${decoy.without} · 있을 때 x+${decoy.with} (커져야 미끼로 간 것)`
+      : '적이 없어 못 잼');
+
   // ── 스킬 트리 칸이 실제로 효과를 내는가 ──────────────────
   //
   // 칸이 스무 개인데 각각 다른 파일을 만진다 — skills.js · combat.js ·

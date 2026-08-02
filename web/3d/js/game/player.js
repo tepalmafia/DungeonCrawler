@@ -150,6 +150,11 @@ export class Player {
     this.reach = a.range;                 // 평타 사거리에 더해진다
     this.regen = a.regen;                 // 초당 회복
     this.element = a.element || 'none';   // 무기 속성 — combat.hitEnemy 가 읽는다
+    // 방어 속성 — combat.hitPlayer 가 읽는다 (docs/ELEMENTS.md §6-5).
+    // **여기서 한 번 계산해 둔다.** 매 타격마다 장비를 훑으면 스물여섯 마리가
+    // 때릴 때 그 일을 스물여섯 번 한다.
+    this.defElement = a.defElement || 'none';
+    this.defCover = a.defCover || 0;
     this.hp = Math.min(this.hp ?? this.maxHp, this.maxHp);
     this.mp = Math.min(this.mp ?? this.maxMp, this.maxMp);
     this._syncBlade();

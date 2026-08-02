@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
 import { worldToGrid } from '../world/dungeon.js';
-import { ELEMENTS, elementalMult } from './elements.js';
+import { ELEMENTS, elementalMult, defenseMult } from './elements.js';
 import { DIE_TIME } from './pace.js';
 
 /**
@@ -232,12 +232,36 @@ export function killEnemy(G, e) {
 }
 
 /** 플레이어 피격 */
+/**
+ * 이 속성 공격을 얼마나 받나. 플레이어가 `recompute()` 때 넣어 둔 값을 쓴다 —
+ * 매 타격마다 장비를 훑으면 26마리가 때릴 때 그 일을 26번 한다.
+ */
+function elementalDefMult(p, atkEl) {
+  if (!atkEl || atkEl === 'none' || !p.defElement || p.defElement === 'none') return 1;
+  return defenseMult(atkEl, p.defElement, p.defCover || 0);
+}
+
 export function hitPlayer(G, rawDmg, opts = {}) {
   const p = G.player;
   if (p.dead || p.invuln > 0) return 0;
   if (opts.from && !hasLine(G, opts.from.x, opts.from.z, p.pos.x, p.pos.z)) return 0;
-  const dmg = Math.max(1, Math.round(mitigate(rawDmg, p.armor, p.level)));
+  // ★ **속성 방어** (docs/ELEMENTS.md §6-5). 4순환은 공격과 같고 배율만 작다.
+  //   때린 쪽 속성은 opts.element 가 우선, 없으면 공격자의 속성이다 —
+  //   장판·투사체는 자기 속성을 넘기고 근접은 몸의 속성으로 때린다.
+  //   배선의 절반은 이미 되어 있었다: hitPlayer 는 처음부터 attacker 를 받는데
+  //   **아무도 그 속성을 안 읽고 있었다.**
+  const atkEl = opts.element || opts.attacker?.element || 'none';
+  const em = elementalDefMult(p, atkEl);
+  const dmg = Math.max(1, Math.round(mitigate(rawDmg * em, p.armor, p.level)));
   p.hp -= dmg;
+  // 상성이 걸리면 눈에 보여야 한다 — 안 보이면 배웠는지 알 수 없다
+  if (em !== 1 && atkEl !== 'none') {
+    const el = ELEMENTS[atkEl];
+    G.fx.burst(p.center(), {
+      count: em < 1 ? 10 : 16, color: el.hex,
+      speed: em < 1 ? 2.4 : 5.5, size: 0.4, life: 0.45, grav: em < 1 ? -1 : 3,
+    });
+  }
   p.hurtT = 0.18;
   // 플레이어도 맞으면 몸이 반응한다. 맞은 방향은 때린 쪽에서 나에게로.
   p.hitT = 0.38;
