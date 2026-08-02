@@ -46,7 +46,9 @@ export const SKILLS = [
         const r = playerRoll(p);
         // 소용돌이 베기는 **무기 속성을 따른다** — 무기를 휘두르는 동작이므로.
         // element 를 안 넘기면 hitEnemy 가 무기 속성을 쓴다.
-        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 1.1, color: 0xffd090, skill: true });
+        // 넉백 없음 — 이건 무기를 휘두르는 동작이다. 평타의 넓은 판본이지
+        // 밀어내는 기술이 아니다 (combat.js 의 넉백 주석).
+        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 0, color: 0xffd090, skill: true });
       }
       return true;
     },
@@ -189,7 +191,9 @@ export function updateDashHits(G, dt) {
     if (Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) < e.radius + p.radius + 0.7) {
       d.hitSet.add(e);
       const r = playerRoll(p);
-      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 1.6, color: 0x8a6bff, element: 'soul', skill: true });
+      // 넉백 없음 — 뚫고 **지나가는** 기술이다. 밀어내면 내가 지나갈 자리가
+      // 사라져서 돌진이 적을 앞에서 밀고 가는 모양이 된다.
+      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 0, color: 0x8a6bff, element: 'soul', skill: true });
     }
   }
 }

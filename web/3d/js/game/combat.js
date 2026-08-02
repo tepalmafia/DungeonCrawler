@@ -103,13 +103,20 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
     dir, cone: opts.crit ? 0.75 : 0.55,
   });
 
-  // 넉백 — 근원에서 멀어지는 방향.
+  // 넉백 — 근원에서 멀어지는 방향. **기본값은 0 이다. 부르는 쪽이 켜야 한다.**
   //
   // 이 값이 곧 밀려나는 「거리」다. 감쇠가 지수라 이동량 ≈ 임펄스이고,
-  // 격자 한 칸이 2.0 이다. 예전 평타 2.0 은 한 대에 정확히 한 칸을 밀어내서
-  // 근접 사거리(1.6~2.2) 밖으로 보냈고, 매 스윙마다 다시 붙어야 했다.
-  // 넉백은 타격의 강조지 위치를 바꾸는 수단이 아니다 → 사거리를 넘지 않게 잡는다.
-  const knock = opts.knock ?? (opts.crit ? 0.9 : 0.5);
+  // 격자 한 칸이 2.0 이다.
+  //
+  // 예전에는 여기서 평타에 0.5(치명타 0.9)를 **기본으로 먹였다.** 한 대는
+  // 4분의 1칸이라 작아 보이지만 평타는 초당 한 대 이상 들어간다 — 때리는
+  // 내내 몹이 뒤로 밀려 나가고, 쫓아가서 다시 붙는 동작이 반복됐다.
+  // 「손맛」은 리코일(아래)과 히트스톱이 내는 것이지 위치를 옮겨서 내는 게
+  // 아니다. 그래서 밀어내기는 **밀어내는 것이 정체성인 기술**만 쓴다:
+  //   화염 신성 2.0 · 운석 낙하 2.6 · 폭발 함정 0.6  (전부 충격파다)
+  // 무기를 휘두르는 것(평타·회전 베기)과 몸으로 스치는 것(그림자 돌진),
+  // 날아와 박히는 것(함정 화살)은 밀지 않는다.
+  const knock = opts.knock ?? 0;
   if (knock && !e.heavy) {
     e.knock.set(dir.x * knock, 0, dir.z * knock);
   }
@@ -316,7 +323,8 @@ export class Projectile {
         if (e.dead || this.hitSet.has(e)) continue;
         if (segDist(e.pos.x, e.pos.z) < e.radius + this.radius + 0.2) {
           this.hitSet.add(e);
-          hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 0.7, los: false });
+          // 화살은 박히는 것이지 밀어내는 것이 아니다 — 넉백 없음
+          hitEnemy(this.G, e, this.dmg, { color: this.color, from: this.pos, knock: 0, los: false });
           if (this.pierce-- <= 0) return this.kill();
         }
       }

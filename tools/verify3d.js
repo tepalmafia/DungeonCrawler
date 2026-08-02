@@ -991,6 +991,70 @@ async function shot(page, name) {
   ok('actor.hitDirectional', hitPose.skipped || hitPose.directional,
     `왼쪽에서 맞음 z ${hitPose.leftZ?.toFixed(4)} · 오른쪽에서 맞음 z ${hitPose.rightZ?.toFixed(4)} (부호가 반대여야)`);
 
+  // ── 넉백은 **밀어내는 기술만** ────────────────────────────
+  //
+  // 평타에 기본 넉백 0.5(치명타 0.9)가 붙어 있었다. 한 대는 4분의 1칸이라
+  // 코드를 읽어서는 작아 보이는데, 평타는 초당 한 대 이상 들어간다 —
+  // 때리는 내내 몹이 뒤로 물러나서 쫓아가 다시 붙기를 반복했다.
+  //
+  // 「기본값이 0 이 아니다」는 눈으로 안 보인다. 부르는 쪽에는 `knock` 이
+  // 아예 안 적혀 있고, 값은 hitEnemy 안의 ?? 뒤에 숨어 있기 때문이다.
+  // 그래서 **임펄스를 직접 잰다.** 한 프레임도 안 흘려보내고 hitEnemy 직후에
+  // e.knock 을 읽으므로 AI 이동이 섞이지 않는다.
+  const kb = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const cb = await import('./js/game/combat.js');
+    const sk = await import('./js/game/skills.js');
+    const e = G.enemies.find((x) => !x.dead && !x.isBoss && !x.heavy);
+    if (!e) return { skipped: true };
+
+    const save = { hp: e.hp, maxHp: e.maxHp, mp: P.mp, fields: G.fields.length };
+    e.maxHp = 1e9; e.hp = 1e9;                 // 재는 동안 안 죽게
+    const place = () => { e.pos.set(P.pos.x + 1.4, 0, P.pos.z); e.knock.set(0, 0, 0); };
+    const imp = (fn) => { place(); fn(); return +e.knock.length().toFixed(3); };
+    const skill = (key) => sk.SKILLS.find((s) => s.key === key);
+    const cast = (key) => {
+      P.mp = 999; G.cooldowns[key] = 0;
+      return imp(() => sk.trySkill(G, skill(key), { x: e.pos.x, z: e.pos.z }));
+    };
+
+    const out = {};
+    out.basic = imp(() => cb.hitEnemy(G, e, 1, { silent: true, los: false }));
+    out.crit = imp(() => cb.hitEnemy(G, e, 1, { silent: true, los: false, crit: true }));
+    out.cleave = cast('cleave');
+    out.nova = cast('nova');
+
+    // 그림자 돌진은 cast 가 아니라 매 프레임 훑기에서 때린다
+    place();
+    e.pos.set(P.pos.x + 0.5, 0, P.pos.z);
+    G.pendingDashHits = { hitSet: new Set(), until: 0.28 };
+    sk.updateDashHits(G, 1 / 60);
+    out.dash = +e.knock.length().toFixed(3);
+    G.pendingDashHits = null;
+
+    // 운석은 0.85초 뒤 타이머에서 터진다 — 손으로 민다.
+    // 조준점을 **적에게서 살짝 비껴** 놓는다: 정확히 발밑에 떨어지면
+    // 밀어낼 방향 벡터가 0 이라 넉백이 0 으로 나온다(게임에서도 그렇다).
+    place();
+    P.mp = 999; G.cooldowns.meteor = 0;
+    const nTimer = G.timers.length;
+    sk.trySkill(G, skill('meteor'), { x: e.pos.x - 1.2, z: e.pos.z });
+    for (const t of G.timers.slice(nTimer)) t.fn();
+    G.timers.length = nTimer;
+    out.meteor = +e.knock.length().toFixed(3);
+
+    e.hp = save.hp; e.maxHp = save.maxHp; e.knock.set(0, 0, 0);
+    P.mp = save.mp;
+    G.fields.length = save.fields;             // 장판이 남아 뒤 검사를 오염시키지 않게
+    return out;
+  });
+  ok('combat.noKnockOnWeaponHits',
+    kb.skipped || (kb.basic === 0 && kb.crit === 0 && kb.cleave === 0 && kb.dash === 0),
+    `평타 ${kb.basic} · 치명타 ${kb.crit} · 회전 베기 ${kb.cleave} · 그림자 돌진 ${kb.dash} (전부 0 이어야)`);
+  ok('combat.knockOnBlasts',
+    kb.skipped || (kb.nova > 1 && kb.meteor > 1),
+    `화염 신성 ${kb.nova} · 운석 낙하 ${kb.meteor} (충격파는 밀어내야)`);
+
   // ── 아이템: 롤 → 장착 → 스탯 상승 ────────────────────────
   const items = await page.evaluate(async () => {
     const G = window.G3;
