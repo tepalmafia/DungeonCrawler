@@ -161,7 +161,12 @@ let uid = 1;
 function rollRarity(rnd, floorNo, tier, find = 0) {
   // 상위 등급 쪽으로 미는 힘. 등급이 한 칸 올라갈 때마다 제곱으로 걸리므로
   // 전설은 층이 깊어질 때 눈에 띄게 늘고, 일반은 자연히 줄어든다.
-  const push = 1 + (floorNo - 1) * 0.10 + tier * 0.22 + find / 100;
+  // **상한을 둔다.** push 는 등급마다 거듭제곱으로 걸리므로 선형으로 키우면
+  // 결과가 지수로 튄다. 층이 셋일 때 9층 push 는 존재하지 않았는데, 아홉 층이
+  // 되면 1.8 이 되어 전설 가중치가 3 → 17.5 (5.8배), 실효 확률이 3% → 10.6%
+  // 로 뛴다. 「드랍이 억제돼 있어 장비가 바뀌는 순간이 드물다」는 이 파일의
+  // 설계 전제가 후반에 무너진다 (정찰에서 잡았다).
+  const push = Math.min(2.0, 1 + (floorNo - 1) * 0.10 + tier * 0.22 + find / 100);
   const w = RARITY_W.map((base, i) => base * Math.pow(push, i));
   const total = w.reduce((a, b) => a + b, 0);
   let u = rnd() * total;

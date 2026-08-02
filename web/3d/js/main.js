@@ -28,7 +28,7 @@ import { Traps } from './world/traps.js';
 import { Shop } from './game/shop.js';
 import { Dialogue } from './game/dialogue.js';
 import { Rest } from './game/rest.js';
-import { spawnBoss } from './game/boss.js';
+import { spawnBoss, bossNameFor } from './game/boss.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
@@ -40,7 +40,9 @@ import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 
 export const VERSION = 1;
-const MAX_FLOOR = 3;
+// 아홉 층 세 막 (docs/FLOORS.md §2). world/floors.js 의 표가 아홉 칸이므로
+// 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
+const MAX_FLOOR = 9;
 // 카메라 거리는 줌으로 바뀐다. 피치는 고정 — 각도까지 흔들면 쿼터뷰 실루엣이 무너진다.
 const CAM_DIST_MIN = 10, CAM_DIST_MAX = 34, CAM_DIST_DEFAULT = 19;
 const CAM_PITCH = 52 * Math.PI / 180;
@@ -225,7 +227,8 @@ function loadFloor(floorNo) {
   Audio.stopAmbient();
   Audio.startAmbient(dg.theme.key);
 
-  ui.center(`${floorNo}층 — ${dg.theme.name}`, dg.isBossFloor ? '심연의 군주가 기다린다' : '출구를 찾아라');
+  ui.center(`${floorNo}층 — ${dg.name || dg.theme.name}`,
+    dg.isBossFloor ? `${bossNameFor(floorNo)}가 기다린다` : '출구를 찾아라');
   ui.toast(`시드 ${G.seed} · ${floorNo}층 진입`, '#9fd0ff');
   // 문·스위치 안내. 미니맵에 안개가 깔린 뒤로는 **있다는 사실조차** 알 방법이
   // 없었다 (실측: 금고 방이 시작점에서 중앙값 39칸). 존재만 알리고 위치는 안 준다 —
@@ -271,7 +274,7 @@ function onEnemyKilled(e) {
     for (let i = 0; i < 2; i++) dropItem(roll({ minRarity: 2 }), e.pos, i);
     G.level.openExit();
     ui.setBoss(null);
-    ui.center('심연의 군주 처치', '포탈이 열렸다');
+    ui.center(`${bossNameFor(G.floorNo)} 처치`, '포탈이 열렸다');
     Audio.Sfx.victory();
     fx.addShake(0.3, 3);
   } else if (e.elite) {
@@ -728,7 +731,7 @@ function updateBossBar() {
   if (!G.boss || G.boss.dead) return;
   if (!ui.boss && G.boss.pos.distanceTo(G.player.pos) < 18) {
     ui.setBoss(G.boss);
-    ui.center('심연의 군주', '왕관은 무덤 위에 있다');
+    ui.center(bossNameFor(G.floorNo), '왕관은 무덤 위에 있다');
     Audio.Sfx.bossRoar();
     fx.addShake(0.22, 3);
   }

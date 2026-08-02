@@ -136,8 +136,13 @@ const SKILL_BY_KIND = {
  * @returns {{traits:string[], skill:string, name:string}}
  */
 export function makeElite(e, rnd, floorNo = 1) {
-  // 특성 수 — 층이 깊을수록 둘 붙을 확률이 오른다
-  const n = rnd.chance(0.25 + floorNo * 0.1) ? 2 : 1;
+  // 특성 수 — 층이 깊을수록 둘 붙을 확률이 오른다.
+  //
+  // **상한이 필요하다.** 층이 셋일 때는 0.25 + 3×0.1 = 0.55 라 문제가 없었는데,
+  // 아홉 층이 되면 8층에서 1.05 가 되고 `rnd.chance` 는 `rnd() < p` 라
+  // **p ≥ 1 이면 항상 참**이다 — 8·9층의 모든 정예가 무조건 2특성이 된다.
+  // 확률이 조용히 확률이 아니게 되는 자리다 (정찰에서 잡았다).
+  const n = rnd.chance(Math.min(0.85, 0.25 + floorNo * 0.1)) ? 2 : 1;
   const pool = TRAIT_KEYS.slice();
   rnd.shuffle(pool);
   const traits = pool.slice(0, n);
