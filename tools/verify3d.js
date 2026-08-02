@@ -506,6 +506,67 @@ async function shot(page, name) {
     + `(해골 ${tonal.skeleton} 구울 ${tonal.ghoul} 궁수 ${tonal.archer} 골렘 ${tonal.golem} `
     + `기본 ${tonal.fallback} 발 ${tonal.step}) — 0.35 넘으면 「뿅/핑」이다`);
 
+  // ── 변종이 실제로 다르게 행동하는가 ────────────────────
+  //
+  // 변종은 **원본과 같은 `key`** 를 쓴다 — 소리·시체·대사 등 종족 키로 찾는
+  // 표 여덟 개가 그대로 돌게 하려고 그렇게 뒀다. 그 대가로 **겉으로는 원본과
+  // 구분이 안 간다.** 규칙 필드를 아무도 안 읽으면 그냥 이름이 다른 해골이고,
+  // 오류는 한 줄도 안 난다. 자세한 수치는 tools/variant-audit.js 가 낸다.
+  const vari = await page.evaluate(async () => {
+    const G = window.G3, P = G.player;
+    const em = await import('./js/game/enemies.js');
+    const cm = await import('./js/game/combat.js');
+    P.maxHp = 1e9; P.hp = 1e9; P.invuln = 1e9;
+    const spawn = (k, x, z) => { const e = new em.Enemy(G, k, x, z, 1); G.enemies.push(e); e.hp = e.maxHp = 1e7; return e; };
+    const clean = (e) => { const i = G.enemies.indexOf(e); if (i >= 0) G.enemies.splice(i, 1); e.dispose(); };
+    const out = { keys: [] };
+    for (const v of ['spearman', 'shieldman', 'gatekeeper', 'drowned', 'chainer', 'statue'])
+      out.keys.push({ v, key: em.ARCHETYPES[v]?.key });
+
+    const sh = spawn('shieldman', P.pos.x + 3, P.pos.z);
+    sh.facing = Math.atan2(P.pos.x - sh.pos.x, P.pos.z - sh.pos.z);
+    const b0 = sh.hp;
+    cm.hitEnemy(G, sh, 1000, { from: P.pos, los: false });
+    out.front = Math.round(b0 - sh.hp);
+    sh.hp = b0; sh.facing += Math.PI;
+    cm.hitEnemy(G, sh, 1000, { from: P.pos, los: false });
+    out.back = Math.round(b0 - sh.hp);
+    clean(sh);
+
+    const st = spawn('statue', P.pos.x + 5, P.pos.z);
+    st.home.set(st.pos.x, 0, st.pos.z); st.aggro = true; st.state = 'chase';
+    const x0 = st.pos.x;
+    for (let i = 0; i < 120; i++) st.update(1 / 60, G);
+    out.statueMoved = +Math.abs(st.pos.x - x0).toFixed(3);
+    clean(st);
+
+    G.slowZones.length = 0;
+    const dr = spawn('drowned', P.pos.x + 3, P.pos.z);
+    dr.hp = 1;
+    cm.hitEnemy(G, dr, 1e6, { from: P.pos, los: false });
+    out.puddle = G.slowZones.length;
+    G.slowZones.length = 0; clean(dr);
+
+    const ch = spawn('chainer', P.pos.x + 8, P.pos.z);
+    const n0 = G.projectiles.length;
+    ch._strike(G, P, 8);
+    const pr = G.projectiles[G.projectiles.length - 1];
+    out.pierce = pr ? pr.pierce : -1;
+    out.root = pr ? pr.root : -1;
+    G.projectiles.length = n0; clean(ch);
+    out.spearRange = em.ARCHETYPES.spearman.range > em.ARCHETYPES.skeleton.range;
+    return out;
+  });
+  const badKey = vari.keys.filter((k) => !['skeleton', 'ghoul', 'archer', 'golem'].includes(k.key));
+  ok('variant.keepsSpeciesKey', badKey.length === 0,
+    badKey.length ? `원본 키가 아님: ${badKey.map((k) => `${k.v}=${k.key}`).join(', ')} — 소리·시체·대사 표가 죽는다`
+      : '여섯 종 전부 원본 key 유지');
+  ok('variant.rulesApply',
+    vari.front < vari.back && vari.statueMoved < 0.05 && vari.puddle > 0
+    && vari.pierce > 0 && vari.root > 0 && vari.spearRange,
+    `방패 정면 ${vari.front}/등 ${vari.back} · 조각상 이동 ${vari.statueMoved} · `
+    + `웅덩이 ${vari.puddle} · 관통 ${vari.pierce} · 속박 ${vari.root}`);
+
   // ── 속성 방어가 실제로 피해를 줄이는가 ──────────────────
   //
   // 배선의 절반은 처음부터 되어 있었다 — hitPlayer 가 attacker 를 받는데
@@ -744,7 +805,11 @@ async function shot(page, name) {
 
     const out = {};
     for (const kind of ['skeleton', 'archer']) {
-      const e = G.enemies.find((x) => !x.dead && !x.isBoss && x.def.key === kind);
+      // ★ **변종을 제외한다.** 변종은 원본과 같은 key 를 쓰므로(의도적이다 —
+      // 소리·시체·대사 표 여덟 개가 key 로 찾는다) 여기서 그냥 key 로 고르면
+      // 해골 창병(사거리 2.9·선딜 0.68)이 'skeleton' 표본으로 뽑힐 수 있다.
+      // 그러면 리쉬·어그로·선딜 검사가 **조용히 다른 개체를 잰다.**
+      const e = G.enemies.find((x) => !x.dead && !x.isBoss && x.def.key === kind && !x.def.variant);
       if (!e) { out[kind] = null; continue; }
       // **원상복구할 것을 먼저 적어 둔다.** 검사가 게임 상태를 바꾼 채로
       // 끝나면 뒤의 검사가 엉뚱하게 깨진다 — 실제로 그렇게 당했다.

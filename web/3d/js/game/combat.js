@@ -79,9 +79,26 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
   // 방어도 관통 — 「가르기」가 켠다 (game/skilltree.js). 기본은 0.
   // **`pierce` 라고 안 부른다** — Projectile 의 `pierce` 는 「적을 몇 명 뚫고
   // 지나가나」라서 뜻이 다르다. 같은 이름을 두 뜻으로 쓰면 언젠가 섞인다.
+  // 방패병 — **정면에서 온 피해를 막는다.** 각도로 도는 것이 답이다
+  // (docs/FLOORS.md §5-2). 뒤나 옆을 잡으면 그대로 들어간다.
+  let guard = 1;
+  if (e.def.frontGuard) {
+    const src = opts.from || G.player.pos;
+    const ang = Math.atan2(src.x - e.pos.x, src.z - e.pos.z);
+    let ad = ang - e.facing;
+    while (ad > Math.PI) ad -= Math.PI * 2;
+    while (ad < -Math.PI) ad += Math.PI * 2;
+    if (Math.abs(ad) < Math.PI / 3) {          // 정면 ±60도
+      guard = 1 - e.def.frontGuard;
+      G.fx.burst(e.center(), {
+        count: 5, color: 0xbfc8d8, speed: 2.6, size: 0.32, life: 0.3,
+        dir: { x: Math.sin(ang), z: Math.cos(ang) }, cone: 0.5,
+      });
+    }
+  }
   const ap = opts.armorPierce || 0;
   const dmg = Math.max(1, Math.round(
-    mitigate(rawDmg * mult, e.armor * (1 - ap), G.player.level)));
+    mitigate(rawDmg * mult * guard, e.armor * (1 - ap), G.player.level)));
   e.hp -= dmg;
   e.flash = 0.14;
   e.aggro = true;
@@ -275,6 +292,14 @@ export function hitPlayer(G, rawDmg, opts = {}) {
     p.hitFrom = { x: Math.sin(p.facing), z: Math.cos(p.facing) };
   }
   p.invuln = Math.max(p.invuln, 0.12);
+  // 속박 — 사슬 궁수의 화살. **짧아야 한다.** 못 움직이는 시간이 길면
+  // 그건 난이도가 아니라 조작을 뺏는 것이다 (docs/FLOORS.md §3-6).
+  if (opts.root) {
+    p.rootT = Math.max(p.rootT || 0, opts.root);
+    p.stop?.();
+    G.fx.ground(p.pos, { r0: 1.0, color: 0xc8b0ff, life: opts.root, opacity: 0.55 });
+    G.ui.toast('사슬에 묶였다', '#c8b0ff');
+  }
 
   G.fx.number(p.center().setY(1.85), dmg, { color: '#ff8080' });
   G.fx.burst(p.center(), { count: 12, color: 0xd03a3a, speed: 4.2, size: 0.35, life: 0.42 });
@@ -308,7 +333,7 @@ export function hitPlayer(G, rawDmg, opts = {}) {
 const PROJ_GEO = new THREE.SphereGeometry(0.17, 8, 6);
 
 export class Projectile {
-  constructor(G, { from, dir, speed = 13, dmg = 8, color = 0x9a6bff, life = 3, fromPlayer = false, radius = 0.3, pierce = 0, neutral = false }) {
+  constructor(G, { from, dir, speed = 13, dmg = 8, color = 0x9a6bff, life = 3, fromPlayer = false, radius = 0.3, pierce = 0, neutral = false, root = 0 }) {
     this.G = G;
     this.pos = from.clone();
     this.dir = dir.clone().setY(0).normalize();
@@ -318,6 +343,7 @@ export class Projectile {
     this.fromPlayer = fromPlayer;
     this.radius = radius;
     this.pierce = pierce;
+    this.root = root;      // 사슬 궁수 — 맞으면 잠깐 못 움직인다
     // 함정이 쏜 화살은 **편이 없다.** 적이 맞으면 적이 아프다 —
     // 함정을 「도구」로 쓰는 플레이가 성립하려면 여기가 중립이어야 한다.
     this.neutral = neutral;
@@ -388,7 +414,7 @@ export class Projectile {
     if (!this.fromPlayer) {
       const p = this.G.player;
       if (!p.dead && segDist(p.pos.x, p.pos.z) < p.radius + this.radius + 0.25) {
-        hitPlayer(this.G, this.dmg, { ranged: true });
+        hitPlayer(this.G, this.dmg, { ranged: true, root: this.root, from: this.pos });
         return this.kill();
       }
     }

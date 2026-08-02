@@ -61,6 +61,7 @@ export class Player {
     this._stepAcc = 0;
     this._stepFromX = 0; this._stepFromZ = 0;
     this._stepRight = false;
+    this.rootT = 0;              // 속박 남은 시간 (사슬 궁수)
 
     // 진행
     this.level = 1;
@@ -263,6 +264,13 @@ export class Player {
 
   // ── 프레임 ──────────────────────────────────────────────
   update(dt, G) {
+    // 속박 — 사슬 궁수(docs/FLOORS.md §5-2). 남은 동안은 못 걷는다.
+    // 스킬과 공격은 막지 않는다: 완전히 아무것도 못 하면 조작을 뺏는 것이다.
+    if (this.rootT > 0) {
+      this.rootT -= dt;
+      if (this.rootT <= 0) this.rootT = 0;
+      else this.path.length = 0;
+    }
     if (this.dead) { this._animate(dt, 0); return; }
 
     this.attackCd = Math.max(0, this.attackCd - dt);
@@ -301,6 +309,10 @@ export class Player {
       this.facing = Math.atan2(this.dashDir.x, this.dashDir.z);
       moved = 1;
       if (r.hit) this.dashT = 0;
+    } else if (this.rootT > 0) {
+      // 묶여 있는 동안은 안 걷는다. 대시(위)는 **막지 않는다** —
+      // 벗어날 수단이 하나는 있어야 「묶였다」가 사고가 아니라 판단이 된다.
+      moved = 0;
     } else if (this.path.length) {
       const wp = this.path[0];
       const dx = wp.x - this.pos.x, dz = wp.z - this.pos.z;

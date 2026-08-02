@@ -95,6 +95,63 @@ export const ARCHETYPES = {
   },
 };
 
+// ───────────────────────── 변종 ─────────────────────────
+//
+// **같은 몸, 다른 규칙** (docs/FLOORS.md §1-2 · §5-2).
+// 종족을 새로 만드는 것보다 훨씬 싸고, 난이도 설계에는 더 좋다 —
+// 「아는 실루엣인데 규칙이 다르다」가 「모르는 실루엣」보다 긴장을 만든다.
+//
+// ★ **`key` 는 원본 그대로 둔다.** 이게 이 파일에서 제일 중요한 규칙이다.
+//   저장소에 종족 키로 찾는 표가 여덟 개 있다 — 소리(VOICE) · 시체(REMAINS) ·
+//   대사(LINES·TINT) · 정예 기술(SKILL_BY_KIND) · 외침(SHOUT) · 대기 자세
+//   (BY_KIND) · 속성(ENEMY_ELEMENT) · 랜턴 드랍. 새 키를 주면 **여덟 곳이
+//   전부 조용히 기본값으로 떨어진다** — 소리 없는 어그로, 시체 없는 죽음,
+//   벙어리, 전부 대지 강타. 오류는 한 줄도 안 난다. (정찰에서 확인했다.)
+//
+//   그래서 인덱스 이름만 새로 주고 `key` 는 원본을 쓴다.
+//   구분은 `variant`(계측·검사용)와 **규칙 필드**로 한다.
+const variant = (base, over) => ({ ...ARCHETYPES[base], ...over });
+
+// 해골 창병 — 사거리가 길고 선딜이 길다. **간격 관리**를 가르친다 (2층)
+ARCHETYPES.spearman = variant('skeleton', {
+  variant: 'spearman', name: '해골 창병',
+  range: 2.9, windup: 0.68, recover: 0.95, dmg: 9, xp: 19,
+});
+
+// 해골 방패병 — 정면이 단단하다. **각도**를 가르친다 (3층)
+ARCHETYPES.shieldman = variant('skeleton', {
+  variant: 'shieldman', name: '해골 방패병',
+  hp: 110, armor: 6, speed: 2.7, xp: 22,
+  frontGuard: 0.6,       // 정면 60도 안에서 온 피해를 60% 막는다
+});
+
+// 성문 파수병 — 조 편성으로 나온다. 혼자면 평범하다 (7층)
+ARCHETYPES.gatekeeper = variant('skeleton', {
+  variant: 'gatekeeper', name: '성문 파수병',
+  hp: 120, dmg: 11, armor: 7, aggro: 10, xp: 24,
+});
+
+// 익사한 순례자 — 죽으면 웅덩이를 남긴다. **죽인 자리가 함정이 된다** (5층)
+ARCHETYPES.drowned = variant('ghoul', {
+  variant: 'drowned', name: '익사한 순례자',
+  hp: 70, speed: 4.6, xp: 18,
+  deathPuddle: { r: 2.6, t: 5, mul: 0.55 },
+});
+
+// 사슬 궁수 — 화살이 관통하고 잠깐 묶는다. **엄폐를 강요한다** (6층)
+ARCHETYPES.chainer = variant('archer', {
+  variant: 'chainer', name: '사슬 궁수',
+  hp: 78, dmg: 10, recover: 1.5, xp: 26,
+  arrowPierce: 2, arrowRoot: 0.55,
+});
+
+// 왕의 조각상 — 부술 때까지 안 움직인다. **선택할 수 있는 위협**이다 (8층)
+ARCHETYPES.statue = variant('golem', {
+  variant: 'statue', name: '왕의 조각상',
+  hp: 420, dmg: 22, armor: 16, aggro: 6, xp: 90,
+  immobile: true,
+});
+
 // ───────────────────────── 개체 ─────────────────────────
 export class Enemy {
   constructor(G, defKey, x, z, powerMult = 1) {
@@ -802,6 +859,10 @@ export class Enemy {
   }
 
   _step(dt, G, tx, tz, speed, away = false) {
+    // 왕의 조각상 — **부술 때까지 안 움직인다.** 그래서 「지금 상대할지
+    // 지나칠지」를 고를 수 있다 — 이 게임에 그런 위협이 하나도 없었다.
+    // 시선은 돌린다: 완전히 굳어 있으면 조형물로 읽혀 위협이 안 된다.
+    if (this.def.immobile) { this._face(tx, tz); return 0; }
     speed *= this.slowMul ?? 1;      // 느린 구역 (「여운」)
     const dx = tx - this.pos.x, dz = tz - this.pos.z;
     const l = Math.hypot(dx, dz);
@@ -837,8 +898,12 @@ export class Enemy {
     if (d.ranged) {
       const from = this.center();
       const dir = V.set(p.pos.x - this.pos.x, 0, p.pos.z - this.pos.z).normalize();
+      // 사슬 궁수 — 화살이 **관통하고 잠깐 묶는다.** 엄폐를 강요한다:
+      // 한 마리 뒤에 숨어도 화살이 지나오고, 맞으면 잠깐 못 움직인다.
       G.projectiles.push(new Projectile(G, {
-        from, dir, speed: 15, dmg: this.dmg, color: 0x9fd8ff, fromPlayer: false, life: 2.4,
+        from, dir, speed: 15, dmg: this.dmg,
+        color: d.arrowRoot ? 0xc8b0ff : 0x9fd8ff, fromPlayer: false, life: 2.4,
+        pierce: d.arrowPierce || 0, root: d.arrowRoot || 0,
       }));
       return;
     }
