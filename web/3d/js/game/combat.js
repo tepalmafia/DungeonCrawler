@@ -138,8 +138,35 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
   if (!opts.silent) Sfx.enemyHit(e.def.key, opts.crit, vol);
 
   // 히트스톱 — 프레임을 잠깐 붙잡는다. 크리티컬은 두 배 이상 길게.
-  if (!opts.silent) G.hitStop = Math.max(G.hitStop || 0, opts.crit ? 0.09 : 0.04);
-  G.fx.addShake(opts.crit ? 0.075 : 0.022);
+  if (!opts.silent) G.hitStop = Math.max(G.hitStop || 0, opts.crit ? 0.11 : 0.055);
+  G.fx.addShake(opts.crit ? 0.09 : 0.03);
+
+  // ── 임팩트 — 「닿은 자리」를 눈으로 찍는다 ────────────────
+  //
+  // 지금까지 타격의 시각 신호는 **불꽃과 숫자**뿐이었다. 둘 다 맞은 뒤에
+  // 흩어지는 것이라 「닿는 순간」이 없다. 소리에 클릭(2ms)이 필요했던 것과
+  // 같은 이유로 화면에도 **한 프레임짜리 도장**이 필요하다.
+  //
+  // 세 겹이다 — 소리와 같은 구성이라 귀와 눈이 같은 순간을 가리킨다:
+  //   ① 섬광  닿은 자리가 하얗게 튄다 (아주 짧게)
+  //   ② 파문  거기서 고리가 퍼진다 (치명타만 — 매번 나면 화면이 시끄럽다)
+  //   ③ 빛    점광원 한 번. 주변 벽까지 같이 밝아져야 「거기서」 났다고 읽힌다
+  //
+  // 위치는 몸 중심이 아니라 **맞은 쪽 표면**이다. 중심에서 터지면 몸 안에서
+  // 빛나는 것으로 보인다.
+  if (!opts.silent) {
+    const surf = c.clone();
+    surf.x -= dir.x * e.radius * 0.8;
+    surf.z -= dir.z * e.radius * 0.8;
+    const col = opts.color ?? (opts.crit ? 0xffe8a0 : 0xffb070);
+    G.fx.burst(surf, {
+      count: opts.crit ? 10 : 6, color: 0xffffff,
+      speed: 0.6, size: opts.crit ? 1.5 : 1.0, life: opts.crit ? 0.13 : 0.09, grav: 0,
+    });
+    if (opts.crit)
+      G.fx.shockwave(surf, { r0: 0.25, r1: 1.9, color: col, life: 0.26, y: surf.y });
+    G.lighting?.flash(surf, col, opts.crit ? 46 : 22, opts.crit ? 0.16 : 0.1);
+  }
 
   // 흡혈
   if (G.player.leech && !e.dead) {

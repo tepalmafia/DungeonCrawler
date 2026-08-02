@@ -380,6 +380,46 @@ async function shot(page, name) {
   ok('audio.neverThrows', audio.length === 0,
     audio.length ? audio.slice(0, 3).join(' | ') : '전 효과음 × vol 0/0.001/1 — 예외 0건');
 
+  // ── 넣은 소리가 실제로 들리는가 (마스킹) ────────────────
+  //
+  // 실제로 겪었다: 타격에 겹을 둘 더했는데 **안 들렸다.** 코드는 분명히
+  // 부르고 있었다 — 종족 타격음보다 RMS 로 12.1 dB 아래였을 뿐이다.
+  // 12 dB 는 마스킹 한계선이라 사람 귀에는 없는 소리다.
+  //
+  // 「불렸는가」는 코드로 알 수 있지만 「들리는가」는 **재야** 안다.
+  // OfflineAudioContext 로 겹만 따로 렌더링해 종족음과의 차이를 본다.
+  const mask = await page.evaluate(async () => {
+    const SR = 48000, LEN = SR * 0.8;
+    async function render(fn) {
+      const real = window.AudioContext;
+      let off = null;
+      window.AudioContext = function () { off = new OfflineAudioContext(1, LEN, SR); return off; };
+      window.webkitAudioContext = window.AudioContext;
+      const A = await import(`./js/core/audio.js?t=${Math.random()}`);
+      A.resume(); fn(A);
+      window.AudioContext = real; window.webkitAudioContext = real;
+      const buf = await off.startRendering();
+      const d = buf.getChannelData(0);
+      let sum = 0, peak = 0;
+      for (let i = 0; i < d.length; i++) { sum += d[i] * d[i]; const a = Math.abs(d[i]); if (a > peak) peak = a; }
+      return { rms: Math.sqrt(sum / d.length), peak };
+    }
+    const body = await render((A) => A.impactBody(false, 1));
+    const full = await render((A) => A.Sfx.enemyHit('skeleton', false, 1));
+    // 종족음만의 세기 — 전체는 두 소리의 합이므로 제곱으로 뺀다
+    const speciesRms = Math.sqrt(Math.max(1e-12, full.rms * full.rms - body.rms * body.rms));
+    return {
+      bodyDb: +(20 * Math.log10(body.rms)).toFixed(1),
+      speciesDb: +(20 * Math.log10(speciesRms)).toFixed(1),
+      gap: +(20 * Math.log10(body.rms / speciesRms)).toFixed(1),
+      peak: +full.peak.toFixed(3),
+    };
+  });
+  ok('audio.impactAudible', mask.gap > -12,
+    `타격 겹 ${mask.bodyDb}dB · 종족음 ${mask.speciesDb}dB · 차이 ${mask.gap}dB `
+    + '(−12 아래면 묻혀서 안 들린다)');
+  ok('audio.noClip', mask.peak < 0.8, `타격 최대 진폭 ${mask.peak} (1.0 넘으면 찢어진다)`);
+
   // ── 길목 함정이 실제로 놓이고, 실제로 막는가 ──────────────
   //
   // 층 표는 길목 함정을 층당 3~8개로 적어 뒀는데 **한 개도 안 놓이고 있었다.**

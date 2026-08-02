@@ -23,7 +23,12 @@ function ensure() {
 
 export function resume() {
   ensure();
-  if (ctx && ctx.state === 'suspended') ctx.resume();
+  // **OfflineAudioContext 는 resume 을 못 받는다** — 렌더가 시작되기 전에는
+  // state 가 'suspended' 인데 resume() 을 부르면 예외를 던진다.
+  // 계측 도구(tools/audio-audit.js)가 소리를 재려고 컨텍스트를 오프라인으로
+  // 바꿔 끼우므로 여기서 걸러야 한다. 안 그러면 계측이 페이지 오류를 남기고,
+  // runtime.noPageError 검사가 **측정 때문에** 빨개진다 (실제로 겪었다).
+  if (ctx && ctx.state === 'suspended' && typeof ctx.startRendering !== 'function') ctx.resume();
 }
 export function setEnabled(v) {
   enabled = v;
@@ -289,17 +294,100 @@ function voiceOk(key, ms) {
 //
 // 그래서 한 대는 세 겹이 된다 — **금속(재질) · 젖은 것(살) · 음성(생명)**.
 // 셋 중 하나만 있으면 「소리가 났다」이지 「때렸다」가 아니다.
-function impactBody(crit = false, vol = 1) {
-  // **vol 을 gain 에 곱해 넣으면 안 된다.** tone/noise 는 `vol` 을 따로 받아
-  // `vol <= 0.02` 에서 아예 소리를 안 낸다. gain 에 섞으면 그 관문을 지나쳐
-  // gain 0 인 채로 exponentialRampToValueAtTime(0) 에 도달하고, Web Audio 가
-  // 예외를 던진다 — 먼 적을 함정으로 때리는 순간 게임 루프가 통째로 죽었다.
-  // (검증에서 잡았다. 소리 하나가 시뮬레이션을 멈춘다.)
-  //
-  // 젖은 겹 — 낮게 눌린 짧은 잡음. 길면 「철퍽」이 되어 우스워지므로 40ms 안쪽.
-  noise({ dur: crit ? 0.055 : 0.038, gain: crit ? 0.3 : 0.22, lp: 520, lpTo: 130, q: 1.4, vol });
-  // 금속 겹 — 짧게 링. 리니지 계열의 건조한 「캉」은 잔향이 아니라 **짧음**에서 온다.
-  tone(crit ? 2100 : 1650, { type: 'square', dur: 0.035, gain: 0.055, to: crit ? 700 : 560, vol });
+// **내보낸다** — 겹 하나만 따로 재기 위해서다 (tools/audio-audit.js).
+// 「넣었는데 안 들린다」는 코드를 읽어서는 못 가린다. 겹을 따로 렌더링해
+// 같이 나는 소리와 dB 차이를 봐야 「묻혔다」인지 「안 불렸다」인지 알 수 있다.
+/**
+ * ── 타격음 ──────────────────────────────────────────────────
+ *
+ * 두 번 틀리고 세 번째다. 틀린 것을 적어 둔다 — 같은 길로 다시 안 가려고.
+ *
+ *   ① 사각파 오실레이터로 「캉」을 만들려 했다 → 배음이 정수배라 게임기 소리
+ *   ② 모달 합성으로 바꾸며 Q 를 100~370 까지 올렸다 → **「핑핑」 거리는 종소리.**
+ *      공진이 오래 울리면 그건 타격이 아니라 **음정**이다. 오래 울릴수록
+ *      좋아지는 줄 알았는데 정확히 반대였다.
+ *
+ * 타격음의 정체는 **음정이 아니라 과도(transient)** 다. 세 겹으로 만든다 —
+ * 드럼의 킥을 만드는 방법과 같다:
+ *
+ *   ① 클릭 (2ms 광대역 잡음) — 「닿았다」. 이게 없으면 물렁하다
+ *   ② 몸통 (사인파가 180Hz → 45Hz 로 **급강하**) — 「무겁다」.
+ *      음정이 빠르게 떨어지므로 음으로 안 들리고 **충격**으로 들린다
+ *   ③ 재질 (짧은 대역 잡음, **Q 는 낮게**) — 「무엇을 때렸나」.
+ *      Q 를 낮게 두어야 음정이 아니라 색깔이 된다
+ *
+ * 전부 80ms 안에 끝난다. 길면 그 순간 타격이 아니라 여운이 된다.
+ */
+
+/** 물질 — 색깔만 정한다. 음정이 되면 안 되므로 Q 는 전부 낮다. */
+const MATERIAL = {
+  //        몸통 시작Hz  끝Hz  잡음 중심Hz  잡음 Q  잡음 길이  몸통 길이
+  bone:   { f0: 210, f1: 62, nf: 1900, nq: 2.2, nd: 0.045, bd: 0.055, crack: 1.0 },
+  flesh:  { f0: 150, f1: 42, nf: 520,  nq: 1.2, nd: 0.055, bd: 0.075, crack: 0.0 },
+  stone:  { f0: 120, f1: 38, nf: 780,  nq: 1.6, nd: 0.075, bd: 0.11,  crack: 0.5 },
+  spirit: { f0: 175, f1: 55, nf: 1250, nq: 1.8, nd: 0.06,  bd: 0.07,  crack: 0.3 },
+};
+
+/**
+ * 종족마다 **무엇을 때렸는가**가 다르다.
+ *
+ * 젖은 겹을 전 종족에 똑같이 깔면 해골과 골렘에서도 「퍽」 소리가 난다 —
+ * 뼈와 돌에는 살이 없다. 반대로 구울에 금속 소리를 깔면 갑옷을 입은 게 된다.
+ *
+ * body/edge 값은 **재서** 정했다. 종족음 자체가 −35 ~ −44 dB 로 9 dB 넘게
+ * 차이 나므로 같은 겹을 얹으면 시끄러운 종족에서만 묻힌다.
+ * (`tools/audio-audit.js` — 씨앗 고정 상태에서 잰다)
+ */
+export const BODY_MIX = {
+  skeleton: { mat: 'bone',   body: 1.00, edge: 0.60 },
+  ghoul:    { mat: 'flesh',  body: 1.30, edge: 0.20 },
+  archer:   { mat: 'spirit', body: 1.80, edge: 0.35 },
+  golem:    { mat: 'stone',  body: 2.40, edge: 0.55 },
+  lord:     { mat: 'stone',  body: 1.90, edge: 0.50 },
+};
+
+/**
+ * 한 대의 「몸통」 — 종족 음색(VOICE) 위에 얹는 공통 겹이다.
+ *
+ * ★ 음량은 재서 정했다. 처음엔 이 겹이 종족 타격음보다 12.1 dB 아래여서
+ *   **코드는 부르는데 안 들렸다** (−56.3 vs −44.2). 12 dB 는 마스킹 한계선이다.
+ */
+export function impactBody(crit = false, vol = 1, mix = null) {
+  if (!ensure() || !enabled || vol <= 0.02) return;
+  const m = mix || { mat: 'flesh', body: 1, edge: 0.3 };
+  const M = MATERIAL[m.mat] || MATERIAL.flesh;
+  const k = crit ? 1.3 : 1;
+  const t = now();
+  // 매번 조금씩 다르게 — 똑같은 소리가 반복되면 뇌가 곧바로 「기계」로 판정한다
+  const wob = 0.92 + Math.random() * 0.16;
+
+  // ① 클릭 — 「닿았다」. 2ms. 이게 타격의 첫인상 전부다.
+  noise({ dur: 0.016, gain: 0.11 * k, lp: 9000, lpTo: 3000, hp: 1200, vol: vol * m.body });
+
+  // ② 몸통 — 음정이 급강하하는 사인파. 킥드럼과 같은 원리다.
+  //    **빠르게 떨어져야** 음이 아니라 충격으로 들린다 (「핑」과 「퍽」의 차이).
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(M.f0 * wob * k, t);
+  o.frequency.exponentialRampToValueAtTime(M.f1, t + M.bd * 0.9);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.17 * k * vol * m.body, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + M.bd);
+  o.connect(g).connect(master);
+  o.start(t); o.stop(t + M.bd + 0.05);
+
+  // ③ 재질 — 짧은 대역 잡음. Q 를 낮게 둬야 음정이 아니라 색깔이 된다.
+  noise({
+    dur: M.nd, gain: 0.1 * k * m.body, lp: M.nf * wob, lpTo: M.nf * 0.35,
+    hp: M.nf * 0.35, q: M.nq, vol,
+  });
+
+  // ④ 날 — 단단한 것을 벨 때만. 아주 짧게, 아주 조금. 여기가 길면 다시 「핑」이다.
+  if (m.edge > 0.05)
+    noise({ dur: 0.022, gain: 0.085 * m.edge * k, lp: 6800 * wob, lpTo: 2600, hp: 2600, q: 2.4, vol });
+  if (M.crack > 0.05)
+    noise({ dur: 0.03, gain: 0.06 * M.crack * k, lp: 3400, lpTo: 900, hp: 700, q: 1.6, vol, at: 0.006 });
 }
 
 // ── 발소리 ──────────────────────────────────────────────────
@@ -349,7 +437,7 @@ export const Sfx = {
     if (V.cry && voiceOk('c' + kind, 170)) {
       setTimeout(() => V.cry(vol, crit), crit ? 18 : 28);
     }
-    impactBody(crit, vol);            // 젖은 겹 + 금속 겹을 종족음 위에 얹는다
+    impactBody(crit, vol, BODY_MIX[kind]);   // 젖은 겹 + 금속 겹 — 종족마다 비율이 다르다
   },
 
   /** 종족별 공격음 — 무엇을 휘두르는지가 들려야 예고가 귀로도 온다 */
