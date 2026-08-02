@@ -6,7 +6,9 @@ import { BOSS_PHASE_ELEMENT, ELEMENTS } from './elements.js';
 import { hitPlayer } from './combat.js';
 import { Sfx } from '../core/audio.js';
 import { gridToWorld } from '../world/dungeon.js';
+import { floorDef } from '../world/floors.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
+import { MOVES, pickForDistance } from './bossmoves.js';
 import { prism, slab, spike, Part, skeleton } from '../core/rig.js';
 
 const V = new THREE.Vector3();
@@ -133,16 +135,42 @@ ARCHETYPES.lord = {
   heavy: true, elite: true, float: true, boss: true,
 };
 
-const PHASES = [
-  { at: 1.00, name: '1페이즈', moves: ['cleave', 'combo', 'charge'] },
-  { at: 0.66, name: '2페이즈 — 소환', moves: ['cleave', 'summon', 'firering', 'combo'] },
-  { at: 0.33, name: '3페이즈 — 격노', moves: ['sweep', 'combo', 'firering', 'charge', 'cleave'] },
-];
+/**
+ * 보스 정의 — **보스마다 하나.**
+ *
+ * 예전에는 PHASES 가 모듈 상수라 보스가 하나뿐일 수밖에 없었다. 층마다
+ * 보스를 두려면(docs/FLOORS.md §5-3) 이게 데이터여야 한다.
+ *
+ * 기술 자체는 game/bossmoves.js 의 표에 있다. 여기서는 **어느 페이즈에
+ * 무엇을 쓰는가**만 고른다 — 그게 「같은 몸, 다른 싸움」을 만드는 축이다.
+ */
+export const BOSSES = {
+  lord: {
+    key: 'lord',
+    arch: 'lord',                 // ARCHETYPES 항목
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['cleave', 'combo', 'charge'] },
+      { at: 0.66, name: '2페이즈 — 소환', moves: ['cleave', 'summon', 'firering', 'combo'] },
+      { at: 0.33, name: '3페이즈 — 격노', moves: ['sweep', 'combo', 'firering', 'charge', 'cleave'] },
+    ],
+    // 페이즈마다 속성이 바뀐다 (docs/ELEMENTS.md §5)
+    phaseElement: BOSS_PHASE_ELEMENT,
+    enragePerPhase: 0.22,
+    summonKinds: ['skeleton', 'ghoul'],
+  },
+};
 
 export class Boss extends Enemy {
-  constructor(G, x, z, powerMult = 1) {
-    super(G, 'lord', x, z, powerMult);
+  /**
+   * @param bossKey  BOSSES 의 키. 층마다 다른 보스를 세우는 축이다
+   *                 (docs/FLOORS.md §5-3 — 몸 셋 × 기술 조합).
+   */
+  constructor(G, x, z, powerMult = 1, bossKey = 'lord') {
+    const bdef = BOSSES[bossKey] || BOSSES.lord;
+    super(G, bdef.arch, x, z, powerMult);
     this.phase = 0;
+    this.bossDef = bdef;                // 기술 명단 · 페이즈 · 속성 전환
+    this.phases = bdef.phases;
     this.move = null;
     this.moveT = 0;
     this.nextMove = 1.2;
@@ -156,7 +184,7 @@ export class Boss extends Enemy {
   _checkPhase(G) {
     const k = this.hp / this.maxHp;
     let want = 0;
-    for (let i = PHASES.length - 1; i >= 0; i--) if (k <= PHASES[i].at) { want = i; break; }
+    for (let i = this.phases.length - 1; i >= 0; i--) if (k <= this.phases[i].at) { want = i; break; }
     if (want <= this.phase) return;
     this.phase = want;
     this.enrage = 1 + this.phase * 0.22;
@@ -166,10 +194,11 @@ export class Boss extends Enemy {
     // 이유는 하나다: **무기를 두 개 이상 챙길 이유를 만드는 것.** 지금 보스전은
     // 「피하고 때린다」뿐이라 판단할 것이 없다. 가방에 속성 무기를 몇 개 들고
     // 다니다가 페이즈마다 바꿔 끼는 것이 보스전의 조작이 된다.
-    this.setElement(BOSS_PHASE_ELEMENT[Math.min(this.phase, BOSS_PHASE_ELEMENT.length - 1)]);
+    const pe = this.bossDef.phaseElement;
+    this.setElement(pe[Math.min(this.phase, pe.length - 1)]);
     G.ui.toast(`군주가 ${ELEMENTS[this.element].name}으로 물든다`, ELEMENTS[this.element].css);
-    G.ui.setBossPhase(PHASES[this.phase].name);
-    G.ui.center(PHASES[this.phase].name, '심연이 요동친다');
+    G.ui.setBossPhase(this.phases[this.phase].name);
+    G.ui.center(this.phases[this.phase].name, '심연이 요동친다');
     G.fx.shockwave(this.pos, { r0: 1, r1: 12, color: 0x9a5aff, life: 0.9, y: 0.5 });
     G.fx.burst(this.center(), { count: 70, color: 0x9a5aff, speed: 11, size: 0.7, life: 1.1, grav: 3 });
     G.lighting.flash(this.center(), 0x9a5aff, 180, 0.9);
@@ -190,11 +219,11 @@ export class Boss extends Enemy {
 
     this.nextMove -= dt * this.enrage * ATTACK_SCALE;
     if (this.nextMove <= 0) {
-      const moves = PHASES[this.phase].moves;
-      let pick = moves[Math.floor(Math.random() * moves.length)];
-      // 거리에 안 맞는 기술은 다시 뽑는다
-      if ((pick === 'cleave' || pick === 'combo') && dist > 6) pick = 'charge';
-      if (pick === 'charge' && dist < 4) pick = 'cleave';
+      const moves = this.phases[this.phase].moves;
+      // 거리에 안 맞는 기술은 표가 스스로 바꾼다 (bossmoves.pickForDistance).
+      // 예전에는 이 규칙이 기술 이름으로 여기 박혀 있어서, 기술이 늘 때마다
+      // 이 두 줄을 고쳐야 했다.
+      const pick = pickForDistance(moves[Math.floor(Math.random() * moves.length)], dist);
       this._start(G, pick, p);
       return 0;
     }
@@ -209,37 +238,10 @@ export class Boss extends Enemy {
     this.move = move;
     this.moveT = 0;
     this.state = 'windup';
-
-    switch (move) {
-      case 'cleave':
-        this.windupDur = 0.8 / this.enrage;
-        G.fx.ground(this.pos, { r0: 5.4, color: 0xff3a5a, life: this.windupDur * ATTACK_TIME, fade: 'in', opacity: 0.55 });
-        this._face(p.pos.x, p.pos.z);
-        break;
-      case 'combo':
-        this.windupDur = 0.42 / this.enrage;
-        this.comboLeft = 3;
-        break;
-      case 'charge':
-        this.windupDur = 0.6 / this.enrage;
-        this.chargeDir = V.set(p.pos.x - this.pos.x, 0, p.pos.z - this.pos.z).normalize().clone();
-        this._face(p.pos.x, p.pos.z);
-        G.fx.burst(this.center(), { count: 20, color: 0x9a5aff, speed: 3, size: 0.5, life: 0.5, grav: -2 });
-        break;
-      case 'summon':
-        this.windupDur = 0.9;
-        G.fx.ground(this.pos, { r0: 3.2, color: 0x9a5aff, life: 0.9 * ATTACK_TIME, fade: 'in', opacity: 0.6 });
-        break;
-      case 'firering':
-        this.windupDur = 0.4;
-        this.ringSpots = [];
-        break;
-      case 'sweep':
-        this.windupDur = 0.7;
-        this.sweepAngle = Math.atan2(p.pos.x - this.pos.x, p.pos.z - this.pos.z) - Math.PI;
-        this.sweepT = 0;
-        G.fx.ground(this.pos, { r0: 9, color: 0xff6a2a, life: 0.7 * ATTACK_TIME, fade: 'in', opacity: 0.4 });
-        break;
+    const m = MOVES[move];
+    if (m) {
+      this.windupDur = m.windup(this);
+      m.start?.(this, G, p);
     }
     Sfx.cast();
   }
@@ -249,117 +251,15 @@ export class Boss extends Enemy {
     // +0.85, +1.5)가 이 시계를 쓰므로 한 번에 30% 느려진다. 대신 이 시계는
     // 「초」가 아니게 되니, 실시간으로 도는 것(지면 예고 링·이동)은 따로 환산한다.
     this.moveT += dt * ATTACK_SCALE;
-    const done = () => { this.move = null; this.state = 'recover'; this.stateT = 0; this.nextMove = (1.5 + Math.random() * 1.2) / this.enrage; };
-
-    switch (this.move) {
-      case 'cleave': {
-        if (this.moveT < this.windupDur) { this._face(p.pos.x, p.pos.z); return 0; }
-        if (this.state === 'windup') {
-          this.state = 'attack';
-          G.fx.arc(this.pos, this.facing, { radius: 5.4, spread: Math.PI * 0.62, color: 0xff5a7a, life: 0.28 });
-          G.fx.addShake(0.16);
-          G.lighting.flash(this.center(), 0xff4a6a, 80, 0.3);
-          const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
-          const d = Math.hypot(dx, dz);
-          let ad = Math.atan2(dx, dz) - this.facing;
-          while (ad > Math.PI) ad -= Math.PI * 2;
-          while (ad < -Math.PI) ad += Math.PI * 2;
-          if (d < 5.4 && Math.abs(ad) < Math.PI * 0.35) hitPlayer(G, this.dmg * 1.5, { from: this.pos });
-          Sfx.swing();
-        }
-        if (this.moveT > this.windupDur + 0.45) done();
-        return 0;
-      }
-
-      case 'combo': {
-        const beat = this.windupDur + 0.28;
-        const idx = Math.floor(this.moveT / beat);
-        if (idx > 3 - this.comboLeft && this.comboLeft > 0) {
-          this.comboLeft--;
-          this.state = 'attack';
-          G.fx.arc(this.pos, this.facing, { radius: 4.0, spread: Math.PI * 0.5, color: 0xffaa7a, life: 0.18 });
-          if (dist < 4.4) hitPlayer(G, this.dmg * 0.85, { from: this.pos });
-          Sfx.swing();
-          this._face(p.pos.x, p.pos.z);
-        }
-        if (this.comboLeft <= 0 && this.moveT > beat * 3.2) done();
-        return 0;
-      }
-
-      case 'charge': {
-        if (this.moveT < this.windupDur) return 0;
-        const step = 15 * MOVE_SCALE * this.enrage * dt;   // 돌진도 이동이다
-        const r = this._stepRaw(G, this.chargeDir.x * step, this.chargeDir.z * step);
-        G.fx.burst(this.center(), { count: 3, color: 0x9a5aff, speed: 1.5, size: 0.5, life: 0.35, grav: 0 });
-        if (dist < this.radius + p.radius + 1.1) { hitPlayer(G, this.dmg * 1.15, { from: this.pos }); done(); }
-        else if (r.hit || this.moveT > this.windupDur + 0.85) {
-          if (r.hit) { G.fx.addShake(0.2); G.fx.burst(this.center(), { count: 26, color: 0x8a7a6a, speed: 6, size: 0.5, life: 0.6 }); }
-          done();
-        }
-        return 1;
-      }
-
-      case 'summon': {
-        if (this.moveT < this.windupDur) return 0;
-        this._summon(G, 4);
-        done();
-        return 0;
-      }
-
-      case 'firering': {
-        // 플레이어 주변에 원이 순차적으로 점화된다 — 계속 움직이게 만든다
-        if (this.moveT >= this.windupDur && this.ringSpots.length < 7) {
-          const want = Math.floor((this.moveT - this.windupDur) / 0.18);
-          while (this.ringSpots.length <= want && this.ringSpots.length < 7) {
-            const a = Math.random() * Math.PI * 2;
-            const rr = 1.5 + Math.random() * 6;
-            const sx = p.pos.x + Math.cos(a) * rr, sz = p.pos.z + Math.sin(a) * rr;
-            this.ringSpots.push({ x: sx, z: sz });
-            G.fx.ground({ x: sx, z: sz }, { r0: 2.1, color: 0xff5a2a, life: 0.9, fade: 'in', opacity: 0.7 });
-            G.timers.push({
-              t: 0.9,
-              fn: () => {
-                const pos = new THREE.Vector3(sx, 0, sz);
-                G.fx.shockwave(pos, { r0: 0.4, r1: 2.4, color: 0xff8a3a, life: 0.4, y: 0.3 });
-                G.fx.burst(pos.clone().setY(0.4), { count: 24, color: 0xff9a3a, speed: 8, size: 0.5, life: 0.6 });
-                G.lighting.flash(pos.clone().setY(1), 0xff8a3a, 55, 0.3);
-                if (Math.hypot(G.player.pos.x - sx, G.player.pos.z - sz) < 2.3)
-                  hitPlayer(G, this.dmg * 0.9, { from: { x: sx, z: sz } });
-              },
-            });
-          }
-        }
-        if (this.moveT > this.windupDur + 1.5) done();
-        this._face(p.pos.x, p.pos.z);
-        return 0;
-      }
-
-      case 'sweep': {
-        if (this.moveT < this.windupDur) return 0;
-        // 회전하는 광선 — 사거리 밖으로 도망치거나 뒤를 잡아야 한다
-        // 회전이 느려진 만큼 지속도 늘려야 쓸고 지나가는 각도가 그대로다
-        this.sweepT += dt * ATTACK_SCALE;
-        const speed = 2.1 * this.enrage;
-        this.sweepAngle += dt * speed * ATTACK_SCALE;
-        this.facing = this.sweepAngle;
-        const RANGE = 9.5;
-        for (let i = 1; i <= 5; i++) {
-          const d = (i / 5) * RANGE;
-          G.fx.burst({ x: this.pos.x + Math.sin(this.sweepAngle) * d, y: 0.6, z: this.pos.z + Math.cos(this.sweepAngle) * d },
-            { count: 1, color: 0xff7a3a, speed: 0.8, size: 0.7, life: 0.35, grav: -1 });
-        }
-        const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
-        const d = Math.hypot(dx, dz);
-        let ad = Math.atan2(dx, dz) - this.sweepAngle;
-        while (ad > Math.PI) ad -= Math.PI * 2;
-        while (ad < -Math.PI) ad += Math.PI * 2;
-        if (d < RANGE && Math.abs(ad) < 0.22) hitPlayer(G, this.dmg * 0.55, { from: this.pos });
-        if (this.sweepT > 3.2) done();
-        return 0;
-      }
-    }
-    done();
-    return 0;
+    const done = () => {
+      this.move = null;
+      this.state = 'recover';
+      this.stateT = 0;
+      this.nextMove = (1.5 + Math.random() * 1.2) / this.enrage;
+    };
+    const m = MOVES[this.move];
+    if (!m) { done(); return 0; }
+    return m.run(this, dt, G, p, dist, done);
   }
 
   _stepRaw(G, dx, dz) {
@@ -376,7 +276,7 @@ export class Boss extends Enemy {
       const a = (i / n) * Math.PI * 2 + Math.random();
       const rr = 3 + Math.random() * 2.5;
       const x = this.pos.x + Math.cos(a) * rr, z = this.pos.z + Math.sin(a) * rr;
-      const e = new Enemy(G, Math.random() < 0.5 ? 'skeleton' : 'ghoul', x, z, 1 + G.floorNo * 0.25 + G.tier * 0.3);
+      const e = new Enemy(G, this.bossDef.summonKinds[Math.floor(Math.random() * this.bossDef.summonKinds.length)], x, z, 1 + G.floorNo * 0.25 + G.tier * 0.3);
       e.aggro = true;
       e.summoned = true;
       G.enemies.push(e);
@@ -409,6 +309,10 @@ export class Boss extends Enemy {
 export function spawnBoss(G, dg, floorNo, tier) {
   const room = dg.bossRoom || dg.rooms[dg.rooms.length - 1];
   const [x, z] = gridToWorld(room.cx, room.cy, dg.w, dg.h);
-  const boss = new Boss(G, x, z, 1 + (floorNo - 1) * 0.4 + tier * 0.42);
+  // 어느 보스를 세울지는 층 표가 정한다 (world/floors.js 의 boss).
+  // 지금은 층이 셋뿐이라 늘 군주지만, 표에 줄을 더하면 층마다 갈린다.
+  const F = floorDef(floorNo);
+  const key = typeof F.boss === 'string' ? F.boss : 'lord';
+  const boss = new Boss(G, x, z, 1 + (floorNo - 1) * 0.4 + tier * 0.42, key);
   return boss;
 }
