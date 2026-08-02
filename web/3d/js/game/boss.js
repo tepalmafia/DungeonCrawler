@@ -144,10 +144,113 @@ ARCHETYPES.lord = {
  * 기술 자체는 game/bossmoves.js 의 표에 있다. 여기서는 **어느 페이즈에
  * 무엇을 쓰는가**만 고른다 — 그게 「같은 몸, 다른 싸움」을 만드는 축이다.
  */
+// ── 아홉 층, 아홉 보스 ──────────────────────────────────────
+//
+// 몸은 아직 하나다(`arch: 'lord'`). 새 몸 둘(매장인·수문지기)은 종족 하나와
+// 같은 비용이라 별건이다 (docs/FLOORS.md §5-1). **그래도 아홉이 서로 다른
+// 싸움인 이유는 기술 조합과 페이즈 수가 다르기 때문이다** — 정예 특성이
+// 이미 그 방식으로 돌아가고 있다 (§5-3-1).
+//
+// 난이도가 오르는 방식은 「한 막 안에서 같은 놈을 세 번 만난다」이다 (§5-3-3):
+//   막의 1층 — 기술 하나~둘 · 1페이즈 (배우는 보스)
+//   막의 2층 — 거기에 소환이 붙는다
+//   막의 3층 — 그 위에 광역이 얹힌다
+// 막이 바뀌면(4·7층) 다시 1페이즈부터 — 호흡이 생긴다.
+const ACT1_SUMMON = ['skeleton', 'ghoul'];
+const ACT2_SUMMON = ['ghoul', 'archer'];
+const ACT3_SUMMON = ['skeleton', 'golem'];
+
 export const BOSSES = {
+  // ── 막 1 · 납골당 — 혼(soul) ──
+  gravedigger1: {
+    key: 'gravedigger1', arch: 'lord', name: '첫 매장인',
+    // **배우는 보스** (§5-3-4). 기술 하나 · 1페이즈 · 예고가 길다.
+    // 죽으라고 두는 게 아니라 「지면 예고를 보고 피한다」를 가르치는 자리다.
+    phases: [{ at: 1.00, name: '1페이즈', moves: ['cleave'] }],
+    phaseElement: ['soul'],
+    enragePerPhase: 0.22,
+    summonKinds: ACT1_SUMMON,
+  },
+  gravedigger2: {
+    key: 'gravedigger2', arch: 'lord', name: '관 나르는 자',
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['cleave', 'charge'] },
+      { at: 0.55, name: '2페이즈 — 부른다', moves: ['cleave', 'charge', 'summon'] },
+    ],
+    phaseElement: ['soul', 'soul'],
+    enragePerPhase: 0.22,
+    summonKinds: ACT1_SUMMON,
+  },
+  gravedigger3: {
+    key: 'gravedigger3', arch: 'lord', name: '매장인 우두머리',
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['cleave', 'combo', 'charge'] },
+      { at: 0.50, name: '2페이즈 — 무너뜨린다', moves: ['cleave', 'combo', 'charge', 'summon'] },
+    ],
+    phaseElement: ['soul', 'ice'],
+    enragePerPhase: 0.24,
+    summonKinds: ACT1_SUMMON,
+  },
+
+  // ── 막 2 · 침수 회랑 — 빙(ice) → 뇌(bolt) ──
+  sluice1: {
+    key: 'sluice1', arch: 'lord', name: '수문 파수',
+    // 막이 바뀌었으니 다시 1페이즈부터. 다만 기술은 둘로 시작한다 —
+    // 플레이어가 이미 보스전을 안다.
+    phases: [{ at: 1.00, name: '1페이즈', moves: ['cleave', 'charge'] }],
+    phaseElement: ['ice'],
+    enragePerPhase: 0.22,
+    summonKinds: ACT2_SUMMON,
+  },
+  sluice2: {
+    key: 'sluice2', arch: 'lord', name: '잠긴 자',
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['cleave', 'charge', 'combo'] },
+      { at: 0.55, name: '2페이즈 — 끌어당긴다', moves: ['cleave', 'charge', 'combo', 'summon'] },
+    ],
+    phaseElement: ['ice', 'ice'],
+    enragePerPhase: 0.24,
+    summonKinds: ACT2_SUMMON,
+  },
+  sluice3: {
+    key: 'sluice3', arch: 'lord', name: '수문지기',
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['cleave', 'combo', 'charge'] },
+      { at: 0.50, name: '2페이즈 — 잠긴다', moves: ['firering', 'summon', 'combo', 'charge'] },
+    ],
+    phaseElement: ['bolt', 'bolt'],
+    enragePerPhase: 0.26,
+    summonKinds: ACT2_SUMMON,
+  },
+
+  // ── 막 3 · 왕좌 — 화(fire) → 전부 ──
+  guard1: {
+    key: 'guard1', arch: 'lord', name: '근위 대장',
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['charge', 'cleave'] },
+      { at: 0.50, name: '2페이즈 — 몰아붙인다', moves: ['charge', 'cleave', 'combo'] },
+    ],
+    phaseElement: ['fire', 'fire'],
+    enragePerPhase: 0.26,
+    summonKinds: ACT3_SUMMON,
+  },
+  shadow: {
+    key: 'shadow', arch: 'lord', name: '왕관의 그림자',
+    phases: [
+      { at: 1.00, name: '1페이즈', moves: ['charge', 'firering'] },
+      { at: 0.50, name: '2페이즈 — 흩어진다', moves: ['charge', 'firering', 'combo', 'summon'] },
+    ],
+    // 8층은 「정답 없는 층」이라 보스도 한 속성으로 안 몰아준다 (§6-4)
+    phaseElement: ['fire', 'bolt'],
+    enragePerPhase: 0.26,
+    summonKinds: ACT3_SUMMON,
+  },
+
+  // ── 9층 · 최종. **지금 것 그대로다** ──
   lord: {
     key: 'lord',
     arch: 'lord',                 // ARCHETYPES 항목
+    name: '심연의 군주',
     phases: [
       { at: 1.00, name: '1페이즈', moves: ['cleave', 'combo', 'charge'] },
       { at: 0.66, name: '2페이즈 — 소환', moves: ['cleave', 'summon', 'firering', 'combo'] },
@@ -159,6 +262,13 @@ export const BOSSES = {
     summonKinds: ['skeleton', 'ghoul'],
   },
 };
+
+/** 층의 보스 이름 — UI 가 「무엇이 기다리는가」를 적을 때 쓴다 */
+export function bossNameFor(floorNo) {
+  const F = floorDef(floorNo);
+  const b = BOSSES[typeof F.boss === 'string' ? F.boss : 'lord'];
+  return (b && b.name) || '심연의 군주';
+}
 
 export class Boss extends Enemy {
   /**
@@ -187,7 +297,8 @@ export class Boss extends Enemy {
     for (let i = this.phases.length - 1; i >= 0; i--) if (k <= this.phases[i].at) { want = i; break; }
     if (want <= this.phase) return;
     this.phase = want;
-    this.enrage = 1 + this.phase * 0.22;
+    // 격노 폭도 보스가 들고 있다 — 뒤 막 보스일수록 페이즈 전환이 매섭다
+    this.enrage = 1 + this.phase * (this.bossDef.enragePerPhase ?? 0.22);
     this.speed = this.def.speed * MOVE_SCALE * this.enrage;
     // 페이즈마다 속성이 바뀐다 (docs/ELEMENTS.md §5).
     //
@@ -196,7 +307,8 @@ export class Boss extends Enemy {
     // 다니다가 페이즈마다 바꿔 끼는 것이 보스전의 조작이 된다.
     const pe = this.bossDef.phaseElement;
     this.setElement(pe[Math.min(this.phase, pe.length - 1)]);
-    G.ui.toast(`군주가 ${ELEMENTS[this.element].name}으로 물든다`, ELEMENTS[this.element].css);
+    G.ui.toast(`${this.bossDef.name || '군주'}가 ${ELEMENTS[this.element].name}으로 물든다`,
+      ELEMENTS[this.element].css);
     G.ui.setBossPhase(this.phases[this.phase].name);
     G.ui.center(this.phases[this.phase].name, '심연이 요동친다');
     G.fx.shockwave(this.pos, { r0: 1, r1: 12, color: 0x9a5aff, life: 0.9, y: 0.5 });
@@ -212,8 +324,12 @@ export class Boss extends Enemy {
     this._checkPhase(G);
     this.hpBar.visible = false;
 
-    // 왕관과 낫이 늘 미세하게 빛난다
-    this.rig.scytheBladeMat.emissiveIntensity = 0.4 + Math.sin(G.time * 3) * 0.18 + this.phase * 0.25;
+    // 왕관과 낫이 늘 미세하게 빛난다.
+    // **몸마다 부위가 다르므로 있는지 보고 만진다** — 보스가 아홉이 되면
+    // 낫도 왕관도 없는 몸이 생기는데, 여기서 곧바로 매 프레임 크래시한다.
+    // (군주 하나뿐일 때는 없어도 되던 방어다.)
+    if (this.rig.scytheBladeMat)
+      this.rig.scytheBladeMat.emissiveIntensity = 0.4 + Math.sin(G.time * 3) * 0.18 + this.phase * 0.25;
 
     if (this.move) return this._runMove(dt, G, p, dist);
 
@@ -300,7 +416,7 @@ export class Boss extends Enemy {
       this.bossAtk = 0;
     }
     super._animate(dt, moving);
-    this.rig.crown.rotation.y += dt * 0.5;
+    if (this.rig.crown) this.rig.crown.rotation.y += dt * 0.5;   // 몸마다 부위가 다르다
     this.walkT += dt * 1.4;
   }
 }
@@ -313,6 +429,9 @@ export function spawnBoss(G, dg, floorNo, tier) {
   // 지금은 층이 셋뿐이라 늘 군주지만, 표에 줄을 더하면 층마다 갈린다.
   const F = floorDef(floorNo);
   const key = typeof F.boss === 'string' ? F.boss : 'lord';
-  const boss = new Boss(G, x, z, 1 + (floorNo - 1) * 0.4 + tier * 0.42, key);
+  // 강함의 출처를 **일반 적과 같은 곳**으로 맞춘다. 예전엔 여기서만
+  // `1 + (floorNo−1)×0.4` 로 따로 계산해서, 층 표의 powerMult 를 고쳐도
+  // 보스만 안 따라오는 상태였다 (정찰에서 잡았다).
+  const boss = new Boss(G, x, z, F.powerMult + tier * 0.42, key);
   return boss;
 }

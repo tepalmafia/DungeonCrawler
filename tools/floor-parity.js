@@ -32,7 +32,7 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137/3d';
     const shm = await import('./js/game/shop.js');
     const rngm = await import('./js/core/rng.js');
     const lines = [];
-    for (let f = 1; f <= 3; f++) {
+    for (let f = 1; f <= 9; f++) {   // 9층까지 — 표를 아홉 칸으로 늘렸다
       // 던전 — 같은 시드로 생성해 방·문·함정 지문
       const dg = dgm.generate(f, 'PARITY-t0');
       let floorCells = 0, doors = 0;

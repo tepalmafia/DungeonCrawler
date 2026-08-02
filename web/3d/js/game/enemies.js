@@ -119,7 +119,12 @@ export class Enemy {
     this.armor = d.armor * powerMult;
     this.atkSpeedMul = 1;      // 정예 특성이 올린다
     // 속성 — 기본은 종족값. spawnFloor 가 층 분포로 덮어쓴다 (game/elements.js).
-    this.element = ENEMY_ELEMENT[defKey] || 'none';
+    // **`defKey` 가 아니라 `d.key` 로 찾는다.** 둘은 지금 같지만 곧 갈라진다 —
+    // 변종(해골 창병 등)은 ARCHETYPES 인덱스가 'spearman' 이면서 `key: 'skeleton'`
+    // 을 들고 있게 된다(docs/FLOORS.md §5-2). 인덱스로 찾으면 그 순간
+    // `ENEMY_ELEMENT['spearman']` 이 undefined 가 되어 **조용히 무속성**이 된다.
+    // 층 스폰은 setElement 가 덮어써서 안 보이지만 보스 소환은 안 덮는다.
+    this.element = ENEMY_ELEMENT[d.key] || 'none';
     this.speed = d.speed * MOVE_SCALE;   // 전체 템포는 game/pace.js
     this.radius = d.radius;
     this.heavy = !!d.heavy;
@@ -153,7 +158,9 @@ export class Enemy {
     this.lastGood = null;             // 마지막으로 걸을 수 있는 칸에 있었던 위치
 
     // 미발견 상태의 「하는 일」 (game/ai.js). 종족마다 어울리는 것이 다르다.
-    this.idleKind = pickIdle(defKey);
+    // 위와 같은 이유로 `d.key`. 인덱스로 찾으면 변종이 전부 'post'(기본값)로
+    // 떨어져 **모두가 같은 자세로 서 있게** 된다 — 오류는 안 난다.
+    this.idleKind = pickIdle(d.key);
     this.idleT = Math.random() * 2.5;
     this.idleMoving = false;
     this.idleTarget = null;
@@ -1050,7 +1057,10 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
       e.setElement(rollElement(rnd, floorNo));
       // 정예 승격 — 층이 깊을수록 잦다. 골렘은 이미 정예 취급이라 제외한다.
       // 방마다 하나까지만: 정예 둘이 같은 방에 있으면 「한 마리씩」이 성립하지 않는다.
-      if (key !== 'golem' && !roomElite && rnd.chance(F.eliteChance + tier * 0.03)) {
+      // `key`(스폰 문자열)가 아니라 `e.def.key`(종족)로 판단한다. 변종이
+      // 들어오면 스폰 문자열이 'statue' 같은 것이 되는데, 그건 골렘 몸이면서
+      // 이름이 달라 **이미 정예인 놈이 또 정예로 승격**된다.
+      if (e.def.key !== 'golem' && !roomElite && rnd.chance(F.eliteChance + tier * 0.03)) {
         e.promote(rnd, floorNo);
         roomElite = true;
       }

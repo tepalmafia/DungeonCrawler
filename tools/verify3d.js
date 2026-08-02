@@ -113,10 +113,17 @@ async function shot(page, name) {
     // 몇 쌍이 붙어 있는 건 의도이고, 전체가 붙어 있으면 사고다.
     // 「한 마리만 끌어낼 수 있는가」의 진짜 보증은 아래 pull.noPackAggro 다 —
     // 뭉쳐 있어도 어그로가 안 번지면 설계는 살아 있다.
+    // **배치 자리(home)로 잰다. 현재 위치(pos)가 아니다.**
+    //
+    // 배치는 `enemies.js` 가 조원끼리 2.6, 그 밖은 MIN_GAP 이상을 보장한다.
+    // 그런데 여기서 pos 로 재면 스폰 뒤 배회·분리 밀림으로 움직인 결과를
+    // 재게 되어, 같은 코드로 돌려도 2.8 이었다 2.2 였다 한다(실측). 그러면
+    // 「배치가 깨졌다」와 「걸어다니다 가까워졌다」를 구분할 수 없다.
+    // home 은 스폰 자리라 배치 규칙을 그대로 반영한다.
     const gaps = [];
     for (let i = 0; i < G.enemies.length; i++)
       for (let j = i + 1; j < G.enemies.length; j++)
-        gaps.push(G.enemies[i].pos.distanceTo(G.enemies[j].pos));
+        gaps.push(G.enemies[i].home.distanceTo(G.enemies[j].home));
     gaps.sort((a, b) => a - b);
     const minGap = gaps[0] ?? Infinity;
     const medGap = gaps[gaps.length >> 1] ?? Infinity;
@@ -350,21 +357,48 @@ async function shot(page, name) {
     const dun = await import('./js/world/dungeon.js');
     P.invuln = 1e9;
 
-    let setup = null;
-    for (let gz = 2; gz < dg.h - 2 && !setup; gz++) {
-      for (let gx = 2; gx < dg.w - 2; gx++) {
-        if (dg.at(gx, gz) !== 2) continue;
-        for (const [dx, dz] of [[1, 0], [0, 1]]) {
-          const a = [gx - dx, gz - dz], c = [gx + dx, gz + dz];
-          if (dg.at(a[0], a[1]) !== 1 || dg.at(c[0], c[1]) !== 1) continue;
-          if (nav.lineOfSight(dg, a[0], a[1], c[0], c[1])) continue;
-          setup = { a, c };
-          break;
+    // 자리 고르기 — 「양쪽이 바닥인 한 칸 벽」을 찾는다.
+    //
+    // ★ **돌아갈 길이 있는지까지 봐야 한다.** 예전엔 「벽이고 양쪽이 바닥이고
+    //   사선이 막힌다」만 봤다. 층이 셋일 때는 우연히 늘 통했는데, 1층에
+    //   보스방과 봉인된 금고가 생기자 **첫 후보가 길이 없는 칸**이 됐다 —
+    //   적이 40초 동안 0유닛 움직였고(실측) 검사는 「우회 실패」로 빨개졌다.
+    //   게임이 퇴행한 게 아니라 검사가 엉뚱한 자리를 잡은 것이다.
+    //
+    //   그래서 후보마다 c→a 경로를 실제로 뽑아 보고, 길이 없거나 너무 길면
+    //   다음 후보로 넘어간다. 이러면 검사가 재는 것이 「우회 능력」으로 좁혀진다.
+    // 「한 칸 벽을 사이에 둔 정확한 두 칸」을 찾던 방식은 못 쓴다.
+    // 복도 폭이 2칸이라 그런 자리가 층 전체에 **한 개**밖에 없고, 1층에
+    // 보스방·금고가 생기자 그 하나마저 길이 없는 칸이 됐다. 그대로 두면
+    // 검사가 「상황을 못 만듦」으로 **조용히 통과**한다 — 그건 검사가 아니다.
+    //
+    // 재려는 것은 원래부터 「사선이 막혔을 때 돌아가는가」이지 벽 두께가
+    // 아니다. 그래서 조건을 그것으로 바꾼다:
+    //   · 서로 사선이 막힌 두 바닥 칸
+    //   · 걸어서 갈 수 있고(경로 존재), 8초 안에 닿을 만한 거리(≤ MAX_DETOUR)
+    //   · 너무 가깝지도 멀지도 않게 (직선 4~14칸)
+    // 후보가 여럿이면 **가장 짧은 우회**를 고른다 — 검사가 매번 같은 난이도를
+    // 재도록. 그리고 후보 수를 같이 뱉어 「몇 개 중에 골랐나」가 보이게 한다.
+    const MAX_DETOUR = 26;          // 격자 칸. 초당 약 1.5칸 × 8초 = 12칸이 실사용선
+    let setup = null, cand = 0;
+    for (let az = 2; az < dg.h - 2; az++) {
+      for (let ax = 2; ax < dg.w - 2; ax++) {
+        if (dg.at(ax, az) !== 1) continue;
+        for (const [dx, dz] of [[6, 0], [0, 6], [8, 0], [0, 8], [5, 5], [5, -5]]) {
+          const c = [ax + dx, az + dz];
+          if (c[0] < 2 || c[1] < 2 || c[0] >= dg.w - 2 || c[1] >= dg.h - 2) continue;
+          if (dg.at(c[0], c[1]) !== 1) continue;
+          if (nav.lineOfSight(dg, ax, az, c[0], c[1])) continue;   // 막혀 있어야 한다
+          cand++;
+          const path = nav.findPath(dg, c[0], c[1], ax, az);
+          if (!path || path.length > MAX_DETOUR) continue;
+          if (setup && path.length >= setup.detour) continue;
+          setup = { a: [ax, az], c, detour: path.length };
         }
-        if (setup) break;
       }
     }
-    if (!setup) return { skipped: true };
+    // **못 찾으면 실패다.** skipped 로 통과시키면 검사가 무력해진다.
+    if (!setup) return { noSpot: true, cand };
 
     const [px, pz] = dun.gridToWorld(setup.a[0], setup.a[1], dg.w, dg.h);
     const [ex, ez] = dun.gridToWorld(setup.c[0], setup.c[1], dg.w, dg.h);
@@ -400,12 +434,14 @@ async function shot(page, name) {
       e.path.length = 0;
       e.flankTarget = null;
     }
+    out.detour = setup.detour;      // 몇 칸 돌아가야 했는지 — 검사가 뭘 쟀는지 보이게
+    out.cand = cand;
     return out;
   });
   ok('ai.flanksAroundCover',
-    flank.skipped || (!flank.archer || (flank.archer.opened && flank.archer.sec < 8)),
-    flank.skipped ? '엄폐 상황을 못 만듦'
-      : `궁수 ${flank.archer ? flank.archer.sec + '초' : '없음'}`
+    !flank.noSpot && !!flank.archer && flank.archer.opened && flank.archer.sec < 8,
+    flank.noSpot ? `★ 엄폐 상황을 못 만듦 — 후보 ${flank.cand}개. 검사가 아무것도 안 쟀다`
+      : `우회 ${flank.detour}칸(후보 ${flank.cand}개) · 궁수 ${flank.archer ? flank.archer.sec + '초' : '없음'}`
         + ` · 해골 ${flank.skeleton ? flank.skeleton.sec + '초' : '없음'}`
         + ' — 막히면 돌아가야 한다');
 
@@ -1079,7 +1115,12 @@ async function shot(page, name) {
   ok('item.tooltip', items.tooltip && items.named);
 
   // ── 보스층 직행 ──────────────────────────────────────────
-  await page.goto(`${BASE}/?seed=VERIFY&autostart=1&floor=3&jump=boss`, { waitUntil: 'load' });
+  //
+  // **9층으로 간다.** 예전엔 3층이 유일한 보스층이자 3페이즈 군주였다.
+  // 이제 보스는 매 층이고 층마다 페이즈 수가 다르다(1~2페이즈로 시작해
+  // 막마다 다시 오른다 — docs/FLOORS.md §5-3-3). 3페이즈 전이를 재려면
+  // 3페이즈를 가진 보스, 즉 9층의 심연의 군주를 세워야 한다.
+  await page.goto(`${BASE}/?seed=VERIFY&autostart=1&floor=9&jump=boss`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.G3 && window.G3.state === 'play' && window.G3.boss, { timeout: 30000 });
   await page.evaluate(() => { window.G3.player.invuln = 1e9; });
   await page.waitForTimeout(800);

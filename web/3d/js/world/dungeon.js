@@ -2,7 +2,7 @@
 // 격자만 만든다. 메시 생성은 level.js, 길찾기는 nav.js 가 맡는다.
 
 import { makeRng } from '../core/rng.js';
-import { floorDef } from './floors.js';
+import { floorDef, mapOf } from './floors.js';
 
 export const CELL = 2;            // 한 칸 = 2 월드 유닛
 // DOOR 는 「열려 있으면 바닥, 닫혀 있으면 벽」인 칸이다. 상태는 격자가 아니라
@@ -39,7 +39,12 @@ function rectsOverlap(a, b, pad) {
 export function generate(floorNo, seed) {
   const rnd = makeRng(`${seed}-f${floorNo}`);
   const F = floorDef(floorNo);
-  const isBossFloor = F.boss;
+  // `boss` 는 이제 보스 키 문자열이다 (world/floors.js). 불리언으로 받는다.
+  const isBossFloor = !!F.boss;
+  // 맵 파라미터 — 예전엔 아래에 상수로 박혀 있던 것들. 층마다 모양을 다르게
+  // 하려면 표에서 와야 한다 (docs/FLOORS.md §4 · §5-4).
+  // **1~3층은 기본값이 옛 상수와 같아 rnd 호출 순서까지 동일하다.**
+  const M = mapOf(floorNo);
 
   const w = 54, h = 54;
   const cells = new Uint8Array(w * h);          // 기본값 VOID
@@ -52,9 +57,9 @@ export function generate(floorNo, seed) {
   // 한 번만 더 뽑아도 그 뒤 생성이 전부 달라진다 (world/floors.js 주석).
   const want = Array.isArray(F.rooms) ? rnd.int(F.rooms[0], F.rooms[1]) : F.rooms;
   for (let tries = 0; tries < 400 && rooms.length < want; tries++) {
-    const rw = rnd.int(6, 12), rh = rnd.int(6, 11);
+    const rw = rnd.int(M.roomW[0], M.roomW[1]), rh = rnd.int(M.roomH[0], M.roomH[1]);
     const r = { x: rnd.int(2, w - rw - 3), y: rnd.int(2, h - rh - 3), w: rw, h: rh };
-    if (rooms.some((o) => rectsOverlap(r, o, 3))) continue;
+    if (rooms.some((o) => rectsOverlap(r, o, M.roomGap))) continue;
     r.cx = Math.floor(r.x + r.w / 2);
     r.cy = Math.floor(r.y + r.h / 2);
     rooms.push(r);
@@ -71,8 +76,11 @@ export function generate(floorNo, seed) {
       const d = (r.cx - startRoom.cx) ** 2 + (r.cy - startRoom.cy) ** 2;
       if (d > best) { best = d; far = r; }
     }
-    far.x = Math.max(2, far.cx - 8); far.y = Math.max(2, far.cy - 8);
-    far.w = Math.min(17, w - far.x - 3); far.h = Math.min(17, h - far.y - 3);
+    // 보스방 크기는 층이 정한다. 9층 「왕좌」는 방 하나처럼 보여야 하므로
+    // 여기를 키운다 — 방 개수를 3 밑으로 줄이면 생성기가 무한 재귀로 터진다.
+    const half = M.bossRoom >> 1;
+    far.x = Math.max(2, far.cx - half); far.y = Math.max(2, far.cy - half);
+    far.w = Math.min(M.bossRoom, w - far.x - 3); far.h = Math.min(M.bossRoom, h - far.y - 3);
     far.cx = Math.floor(far.x + far.w / 2);
     far.cy = Math.floor(far.y + far.h / 2);
     far.boss = true;
@@ -102,7 +110,9 @@ export function generate(floorNo, seed) {
     connect(linked[bi], rest[bj]);
     linked.push(rest.splice(bj, 1)[0]);
   }
-  for (let i = 0; i < 2; i++) {   // 고리 — 막다른 길만 있는 던전은 답답하다
+  // 고리 — 막다른 길만 있는 던전은 답답하다.
+  // 7층 「근위 회랑」은 0 이다: 「직선. 숨을 곳이 없다」가 그 층의 성격이다.
+  for (let i = 0; i < M.loops; i++) {
     const a = rnd.pick(rooms), b = rnd.pick(rooms);
     if (a !== b) connect(a, b);
   }
@@ -130,22 +140,28 @@ export function generate(floorNo, seed) {
       candidates.push({ gx: x, gz: y, dir: dirs[0] });
     }
   rnd.shuffle(candidates);
-  const MIN_GAP = 7;
+  // 횃불 밀도는 층이 정한다. 5층 「잠긴 예배당」의 고유 위협이 **어둠**이라
+  // 거기서 절반으로 줄어든다 (docs/FLOORS.md §3-3) — 랜턴 연료가 그 층에서
+  // 처음으로 「있으면 좋은 것」이 아니라 자원이 된다.
+  const MIN_GAP = M.torchGap;
   for (const c of candidates) {
     if (torches.some((t) => Math.abs(t.gx - c.gx) + Math.abs(t.gz - c.gz) < MIN_GAP)) continue;
     torches.push(c);
-    if (torches.length >= 46) break;
+    if (torches.length >= M.torchMax) break;
   }
 
   // ── 소품: 방 안쪽 바닥 칸 몇 개 ──────────────────────────
   const props = [];
   for (const r of rooms) {
-    const n = rnd.int(1, r.boss ? 4 : 3);
+    // 소품 밀도·종류도 층이 정한다. 8층 「왕관의 그림자」가 기둥으로 가득한
+    // 큰 방이 되는 것이 이 값이다 — 기둥이 유일한 엄폐가 된다 (§4).
+    const pr = r.boss ? M.propsBoss : M.props;
+    const n = rnd.int(pr[0], pr[1]);
     for (let i = 0; i < n; i++) {
       const gx = rnd.int(r.x + 1, r.x + r.w - 2);
       const gz = rnd.int(r.y + 1, r.y + r.h - 2);
       if (Math.abs(gx - r.cx) < 2 && Math.abs(gz - r.cy) < 2) continue;   // 중앙은 비워둔다
-      props.push({ gx, gz, kind: rnd.pick(['pillar', 'coffin', 'rubble', 'rubble']), rot: rnd() * Math.PI * 2 });
+      props.push({ gx, gz, kind: rnd.pick(M.propMix), rot: rnd() * Math.PI * 2 });
     }
   }
 
@@ -197,10 +213,22 @@ export function generate(floorNo, seed) {
   //
   // 안에는 상점(재의 행상)이 들어간다. 「함정이 도사리는 특정한 방」이라는
   // 지시와 맞물려, 여기가 이 층에서 유일하게 판단이 필요한 장소가 된다.
+  // ── 보스층에도 금고를 둔다 ────────────────────────────────
+  //
+  // 예전엔 이 블록 전체가 `if (!isBossFloor)` 로 막혀 있었다. 보스층이
+  // 3층 하나뿐일 때는 「마지막 층은 보스만」이 말이 됐다.
+  //
+  // 그런데 보스를 **매 층**에 두기로 했다 (docs/FLOORS.md §5-3). 그러면
+  // 그 조건 하나 때문에 **아홉 층 전부에서 상점·문·스위치·금고가 사라진다.**
+  // 게임에서 상점이 통째로 없어지는데 오류는 한 줄도 안 난다.
+  //
+  // 조건을 뺀다. 보스방은 이미 아래 후보 필터의 `!r.boss` 가 제외하고 있고,
+  // 마땅한 방이 없으면 `vaultRoom` 이 null 로 남아 예전 보스층과 같아진다.
+  // 즉 이 변경으로 나빠지는 경우가 없다.
   const doors = [];
   const doorAt = new Map();
   let vaultRoom = null, switchAt = null;
-  if (!isBossFloor) {
+  {
     // 후보: 시작도 출구도 아닌 방 중 시작에서 먼 순서
     const cands = rooms
       .filter((r) => r !== startRoom && r !== exitRoom && !r.boss)
@@ -379,6 +407,8 @@ export function generate(floorNo, seed) {
     doors, doorAt, vaultRoom, switchAt, traps,
     startRoom, bossRoom, isBossFloor,
     theme: F.theme,
+    name: F.name,          // 층 이름 — 테마 이름과 다르다 (막은 셋, 층은 아홉)
+    act: F.act,
     floorNo, seed,
     isFloor: (gx, gz) => at(gx, gz) === FLOOR,
     at,
