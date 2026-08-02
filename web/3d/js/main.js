@@ -30,6 +30,7 @@ import { Dialogue } from './game/dialogue.js';
 import { Rest } from './game/rest.js';
 import { spawnBoss, bossNameFor } from './game/boss.js';
 import { SkillTree } from './game/skilltree.js';
+import { fieldAt } from './game/skills.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
@@ -111,6 +112,10 @@ const G = {
   dungeon: null, level: null, lighting: null,
   player: null, enemies: [], drops: [], projectiles: [],
   fields: [], timers: [], cooldowns: {},
+  // 스킬 트리가 켜는 것들 (game/skilltree.js). 안 찍었으면 늘 비어 있다.
+  slowZones: [],          // 「여운」 — 운석 자리가 잠시 적을 느리게
+  decoy: null,            // 「잔상」 — 돌진이 남긴 그림자
+  deathSaveUsed: false,   // 「죽음의 대가」 — 판당 한 번
   boss: null, hover: null, pickupTarget: null,
   fx: null, ui: null, inv: null, input: null, bot: null, remains: null, post: null,
   nav: { resolveCollision, nearestWalkable, sweep },
@@ -256,6 +261,24 @@ function onEnemyKilled(e) {
   const ups = G.player.gainXp(e.def.xp * (e.xpMul || 1) * (1 + G.tier * 0.25));
   // 레벨업이 **선택**을 준다. 지금까지는 숫자만 올랐다 (docs/SKILL-TREE.md §0).
   if (ups) G.tree.grant(ups);
+
+  // ── 스킬 트리: 처치 시점에 켜지는 것들 ──
+  const CM = G.tree.mods('common');
+  if (CM.killMana) G.player.mp = Math.min(G.player.maxMp, G.player.mp + CM.killMana);
+  // 「회오리」 — 처치할수록 회전 베기가 빨리 돌아온다. **겹친다** —
+  // 여럿을 한 번에 벨수록 이득이 커지는 것이 이 칸의 성격이다.
+  const CL = G.tree.mods('cleave');
+  if (CL.killCdr && G.cooldowns.cleave > 0)
+    G.cooldowns.cleave = Math.max(0, G.cooldowns.cleave - CL.killCdr);
+  // 「재점화」 — 장판 위에서 죽으면 그 자리에 작은 장판이 하나 더
+  const NV = G.tree.mods('nova');
+  if (NV.rekindle) {
+    const f = fieldAt(G, e.pos.x, e.pos.z);
+    if (f) G.fields.push({
+      x: e.pos.x, z: e.pos.z, r: f.r * 0.45, life: f.life * 0.6, tick: 0,
+      dps: f.dps * 0.7, color: f.color, rekindled: true,
+    });
+  }
   if (ups) {
     Audio.Sfx.levelUp();
     ui.center(`레벨 ${G.player.level}`, '체력과 마나가 가득 찼다');
@@ -399,7 +422,11 @@ function applyDeathPenalty() {
   const item = p.equipped[slot];
   const lost = [];
 
-  if (item && rnd.chance(LOSE_CHANCE[item.rarity] ?? 0.4)) {
+  // 「죽음의 대가」 — 한 판에 한 번만. 보험이지 면제가 아니다.
+  if (item && !G.deathSaveUsed && G.tree.mods('common').deathSave) {
+    G.deathSaveUsed = true;
+    ui.toast('죽음의 대가 — 장비를 지켰다', '#7fc47a');
+  } else if (item && rnd.chance(LOSE_CHANCE[item.rarity] ?? 0.4)) {
     p.equipped[slot] = null;
     p.recompute();
     dropItem(item, p.pos, 0);
@@ -453,6 +480,7 @@ function restartRun(advanceTier) {
   // 트리도 판과 함께 사라진다 — 남기면 「판이 끝나면 레벨이 사라진다」와
   // 어긋나고, 회차를 돌수록 전부 찍혀 빌드가 사라진다 (docs/SKILL-TREE.md §4)
   G.tree = new SkillTree();
+  G.deathSaveUsed = false;
   G.state = 'play';
   loadFloor(1);
   if (advanceTier) ui.center(`파밍 ${G.tier + 1}회차`, '적이 더 강해지고 전리품이 좋아진다');
@@ -890,6 +918,13 @@ function simulate(dt) {
     updateAutoAttack(dt);
     updateDashHits(G, dt);
     updateFields(G, dt);
+  // 「여운」·「잔상」 수명. 안 찍었으면 배열이 늘 비어 있어 공짜다.
+  for (let i = G.slowZones.length - 1; i >= 0; i--) {
+    const z = G.slowZones[i];
+    z.t -= dt;
+    if (z.t <= 0) G.slowZones.splice(i, 1);
+  }
+  if (G.decoy) { G.decoy.t -= dt; if (G.decoy.t <= 0) G.decoy = null; }
 
     for (const e of G.enemies) e.update(dt, G);
     for (let i = G.enemies.length - 1; i >= 0; i--) {

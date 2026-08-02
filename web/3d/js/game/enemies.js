@@ -430,6 +430,16 @@ export class Enemy {
       }
     }
     this.obj.position.copy(this.pos);
+    // 「여운」 — 운석 자리가 잠시 느리게 한다 (game/skilltree.js).
+    // 젖은 칸(docs/FLOORS.md §3-2)과 같은 원리라, 그게 들어오면 여기 합친다.
+    this.slowMul = 1;
+    if (G.slowZones && G.slowZones.length) {
+      for (const z of G.slowZones)
+        if (Math.hypot(this.pos.x - z.x, this.pos.z - z.z) < z.r + this.radius) {
+          this.slowMul = Math.min(this.slowMul, z.mul);
+        }
+    }
+
     this._footsteps(G, moving);
     this._animate(dt, moving);
 
@@ -777,6 +787,7 @@ export class Enemy {
   }
 
   _step(dt, G, tx, tz, speed, away = false) {
+    speed *= this.slowMul ?? 1;      // 느린 구역 (「여운」)
     const dx = tx - this.pos.x, dz = tz - this.pos.z;
     const l = Math.hypot(dx, dz);
     if (l < 0.001) return 0;
