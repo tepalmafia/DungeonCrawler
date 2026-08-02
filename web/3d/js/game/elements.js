@@ -82,3 +82,42 @@ export const BOSS_PHASE_ELEMENT = ['soul', 'bolt', 'fire'];
  * 일반 등급에는 안 붙는다 — 일반 무기가 「안전한 기본값」으로 남아야 한다.
  */
 export const WEAPON_ELEMENT_CHANCE = 0.28;
+
+/**
+ * 방어구에 붙는 속성 등장률. 무기보다 낮다.
+ *
+ * 방어구는 일곱 칸이라 무기와 같은 확률로 두면 **거의 항상 뭔가 붙는다** —
+ * 그러면 「속성을 맞췄다」가 선택이 아니라 기본값이 된다.
+ */
+export const ARMOR_ELEMENT_CHANCE = 0.16;
+
+/**
+ * 방어 쪽 배율 — **공격보다 훨씬 작다.**
+ *
+ * 공격은 1.6 / 0.6 인데 방어는 0.78 / 1.26 이다. 왜 다르냐면:
+ * 무기는 **하나**를 고르는 것이고 방어구는 **일곱 개**를 모으는 것이다.
+ * 같은 배율을 주면 일곱 개를 맞춘 사람이 피해를 절반 이하로 받게 되어
+ * 「속성 안 맞추면 못 버틴다」가 된다 — 무기 쪽에서 ×2.0 을 버린 것과 같은 이유다.
+ * (docs/ELEMENTS.md §6-5)
+ */
+export const DEF_STRONG = 0.78, DEF_WEAK = 1.26;
+
+/**
+ * 공격 속성 → 방어 속성 배율. **얼마나 맞췄는가(coverage)로 세기가 정해진다.**
+ *
+ * 한 칸만 맞춘 사람과 일곱 칸을 다 맞춘 사람이 같으면 「모으는 것」이 의미가
+ * 없다. 반대로 한 칸에 전부 주면 나머지 여섯 칸이 장식이 된다.
+ * 그래서 **비율만큼만** 효과가 난다 — 절반 맞추면 절반이다.
+ *
+ * @param atk   때린 쪽 속성
+ * @param def   방어구 다수 속성
+ * @param cover 그 속성인 방어구 비율 (0~1)
+ */
+export function defenseMult(atk, def, cover = 1) {
+  if (!atk || !def || atk === 'none' || def === 'none' || cover <= 0) return 1;
+  let base = 1;
+  if (ELEMENTS[def]?.beats === atk) base = DEF_STRONG;        // 내 갑옷이 그 속성을 이긴다
+  else if (ELEMENTS[atk]?.beats === def) base = DEF_WEAK;     // 그 속성이 내 갑옷을 이긴다
+  if (base === 1) return 1;
+  return 1 + (base - 1) * Math.min(1, cover);
+}

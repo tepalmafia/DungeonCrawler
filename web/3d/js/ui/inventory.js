@@ -7,6 +7,7 @@
 
 import { RARITIES, SLOTS, tooltipHtml, power } from '../game/items.js';
 import { fuelCap } from '../game/lantern.js';
+import { ELEMENTS } from '../game/elements.js';
 
 // 정렬 순서 — 같은 부위끼리 모으고, 그 안에서 좋은 것이 앞에 온다.
 // 「좋은 것」은 등급이 아니라 power() 다. 고급 무기가 희귀 반지보다 나을 수 있다.
@@ -172,6 +173,22 @@ export class Inventory {
       ['재사용 감소', `${(p.cdr * 100).toFixed(0)}%`],
       ['타격 시 회복', p.leech || 0],
     ];
+    // 방어 속성 — **맞췄는지 안 보이면 시스템이 없는 것과 같다.**
+    // 무기 속성은 이름 앞 아이콘으로 보이는데 방어구는 일곱 칸에 흩어져 있어
+    // 「내가 지금 무슨 속성인가」를 셀 방법이 없었다.
+    if (p.defElement && p.defElement !== 'none' && p.defCover > 0) {
+      const de = ELEMENTS[p.defElement];
+      rows.push(['방어 속성',
+        `<span style="color:${de.css}">${de.icon} ${de.name}</span>`
+        + ` <small>${Math.round(p.defCover * 100)}%</small>`]);
+      // 무엇에 강하고 약한지도 같이 — 4순환을 외우게 만들면 안 된다
+      const strongVs = Object.values(ELEMENTS).find((e) => e.key === de.beats);
+      const weakVs = Object.values(ELEMENTS).find((e) => e.beats === de.key);
+      if (strongVs && weakVs)
+        rows.push(['상성',
+          `<span style="color:${strongVs.css}">${strongVs.icon}</span> 에 강함 · `
+          + `<span style="color:${weakVs.css}">${weakVs.icon}</span> 에 약함`]);
+    }
     // 두 열로 나눠 담는다 — 한 줄씩 세로로 쌓으면 창이 길어져 가방이 밀린다
     this.statList.innerHTML = rows.map(([k, v]) => `<div>${k} <span>${v}</span></div>`).join('');
   }

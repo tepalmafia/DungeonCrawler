@@ -114,7 +114,14 @@ export const SKILLS = [
         });
       }
       // 「잔상」 — 적 시선을 끈다. 자리만 남기고 실제 처리는 ai 가 본다.
-      if (M.decoy) G.decoy = { x: p.pos.x, z: p.pos.z, t: M.decoy };
+      if (M.decoy) {
+        G.decoy = { x: p.pos.x, z: p.pos.z, t: M.decoy };
+        // 보이게 한다 — 적이 엉뚱한 데로 걸어가는데 이유가 안 보이면
+        // 고장으로 읽힌다. 바닥 원 + 연기가 「저기 뭔가 있다」를 말한다.
+        G.fx.ground(G.decoy, { r0: 1.1, color: 0x8a6bff, life: M.decoy, opacity: 0.5 });
+        G.fx.burst({ x: G.decoy.x, y: 0.8, z: G.decoy.z },
+          { count: 14, color: 0x8a6bff, speed: 1.1, size: 0.5, life: M.decoy * 0.8, grav: -0.4 });
+      }
       return true;
     },
   },

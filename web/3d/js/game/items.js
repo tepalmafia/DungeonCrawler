@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { softDot, beamTexture } from '../core/textures.js';
-import { ELEMENTS, ELEMENT_KEYS, WEAPON_ELEMENT_CHANCE } from './elements.js';
+import { ELEMENTS, ELEMENT_KEYS, WEAPON_ELEMENT_CHANCE, ARMOR_ELEMENT_CHANCE, defenseMult } from './elements.js';
 
 export const RARITIES = [
   { key: 'common', name: '일반',  css: '#b8b8b8', hex: 0xb8b8b8, affixes: 1, mult: 1.00 },
@@ -256,8 +256,17 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
 
   // 속성 — **무기에만**, 마법 등급 이상에만 붙는다.
   // 일반 무기가 「안전한 기본값」으로 남아야 속성이 선택이 된다 (docs/ELEMENTS.md §6-1).
+  // ★ **방어구에도 붙는다** (docs/ELEMENTS.md §6-5). 4순환은 같고 배율만 작다.
+  //   방어구가 일곱 칸이라 확률을 낮게 둔다 — 무기와 같으면 거의 항상 붙어서
+  //   「맞췄다」가 선택이 아니라 기본값이 된다.
+  //
+  //   ※ 이 변경은 **난수 소비를 늘린다.** 예전에는 무기일 때만 chance() 를
+  //     뽑았으므로, 방어구에서 한 번 더 뽑으면 그 뒤 모든 굴림이 밀린다
+  //     (드랍·상점·층 지문). 기능상 불가피하고, tools/floor-parity.js 로
+  //     무엇이 달라졌는지 확인해 기록한다.
   item.element = 'none';
-  if (slot === 'weapon' && ri >= 1 && rnd.chance(WEAPON_ELEMENT_CHANCE)) {
+  const elChance = slot === 'weapon' ? WEAPON_ELEMENT_CHANCE : ARMOR_ELEMENT_CHANCE;
+  if (ri >= 1 && rnd.chance(elChance)) {
     item.element = rnd.pick(ELEMENT_KEYS.filter((k) => k !== 'none'));
   }
   // 호출한 쪽이 속성을 지정할 수 있다 — 상점의 「오늘의 물건」이 층별 대항 속성을
@@ -278,15 +287,34 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
 export function aggregate(equipped) {
   const s = Object.fromEntries(STAT_KEYS.map((k) => [k, 0]));
   let dmgMin = 2, dmgMax = 4, wSpd = 1, element = 'none';
+  // 방어 속성 — **다수결**이다. 몇 칸이나 같은 속성인지가 세기를 정한다
+  // (docs/ELEMENTS.md §6-5). 한 칸만 맞춘 사람과 다 맞춘 사람이 같으면
+  // 「모으는 것」이 의미가 없다.
+  const tally = {};
+  let armorSlots = 0;
   for (const it of Object.values(equipped)) {
     if (!it) continue;
     for (const [k, v] of Object.entries(it.stats)) s[k] = (s[k] || 0) + v;
     if (it.slot === 'weapon') {
       dmgMin = it.dmgMin; dmgMax = it.dmgMax; wSpd = it.aspd;
       element = it.element || 'none';
+    } else {
+      armorSlots++;
+      const e = it.element || 'none';
+      if (e !== 'none') tally[e] = (tally[e] || 0) + 1;
     }
   }
-  return { ...s, dmgMin, dmgMax, weaponSpeed: wSpd, element };
+  let defElement = 'none', best = 0;
+  for (const [k, n] of Object.entries(tally)) if (n > best) { best = n; defElement = k; }
+  // 착용한 방어구 칸 수 기준이다. 두 칸만 낀 사람이 그 둘을 맞췄으면
+  // 「다 맞춘 것」이 맞다 — 안 낀 칸까지 세면 초반이 영원히 0 이 된다.
+  const defCover = armorSlots ? best / armorSlots : 0;
+  return { ...s, dmgMin, dmgMax, weaponSpeed: wSpd, element, defElement, defCover };
+}
+
+/** 지금 장비로 이 속성 공격을 얼마나 받나 — UI 와 전투가 같은 답을 쓰게 */
+export function incomingMult(agg, atkElement) {
+  return defenseMult(atkElement, agg.defElement, agg.defCover);
 }
 
 /** 대략적인 강함 — 비교 화살표용 */
@@ -320,6 +348,13 @@ export function tooltipHtml(item, equippedSame) {
   }
   if (item.stats.armor && item.slot !== 'weapon')
     h += `<div>방어도 <b>${item.stats.armor}</b></div>`;
+  // 방어구 속성 — 무기와 **반대로 읽어야** 한다. 무기는 「무엇을 이기나」,
+  // 방어구는 「무엇을 막나」다. 같은 표를 쓰지만 문장이 다르다.
+  if (item.slot !== 'weapon' && item.element && item.element !== 'none') {
+    const el = ELEMENTS[item.element];
+    h += `<div class="telem" style="color:${el.css}">${el.icon} ${el.name} 방어 — `
+      + `${ELEMENTS[el.beats].name} 공격을 덜 받는다</div>`;
+  }
   // 계열 고유 보너스는 접사와 색을 달리한다 — 「이건 이 무기의 성질이지
   // 운 좋게 붙은 게 아니다」가 읽혀야 계열을 고르는 재미가 생긴다
   for (const [k, v] of Object.entries(item.baseStats || {}))
