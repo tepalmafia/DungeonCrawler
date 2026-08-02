@@ -148,7 +148,8 @@ export const FLOORS = [
     name: '매장인의 통로',
     theme: THEME.crypt,
 
-    roster: ['skeleton', 'skeleton', 'ghoul', 'archer'],
+    // 새 변종: **해골 창병** — 사거리 2.9. 간격 관리를 가르친다 (§5-2)
+    roster: ['skeleton', 'spearman', 'ghoul', 'archer'],
     golemChance: 0.4,
     squadRate: 0.45,
     eliteChance: 0.20,
@@ -169,7 +170,8 @@ export const FLOORS = [
     name: '봉인된 묘실',
     theme: THEME.crypt,
 
-    roster: ['skeleton', 'skeleton', 'ghoul', 'archer'],
+    // 새 변종: **해골 방패병** — 정면 피해 −60%. 각도를 가르친다
+    roster: ['skeleton', 'spearman', 'shieldman', 'ghoul', 'archer'],
     golemChance: 0.5,
     squadRate: 0.55,
     eliteChance: 0.25,
@@ -198,7 +200,7 @@ export const FLOORS = [
     name: '수문',
     theme: THEME.flood,
 
-    roster: ['skeleton', 'ghoul', 'archer', 'archer'],   // 궁수 비중 ↑
+    roster: ['skeleton', 'shieldman', 'ghoul', 'archer', 'archer'],   // 궁수 비중 ↑
     golemChance: 0.45,
     squadRate: 0.50,
     eliteChance: 0.28,
@@ -219,7 +221,8 @@ export const FLOORS = [
     name: '잠긴 예배당',
     theme: THEME.flood,
 
-    roster: ['skeleton', 'ghoul', 'ghoul', 'archer'],
+    // 새 변종: **익사한 순례자** — 죽은 자리가 웅덩이가 된다
+    roster: ['skeleton', 'drowned', 'ghoul', 'archer'],
     golemChance: 0.5,
     squadRate: 0.55,
     eliteChance: 0.30,
@@ -242,7 +245,8 @@ export const FLOORS = [
     name: '수문지기의 방',
     theme: THEME.flood,
 
-    roster: ['skeleton', 'ghoul', 'archer', 'archer'],
+    // 새 변종: **사슬 궁수** — 화살이 관통하고 묶는다. 엄폐를 강요한다
+    roster: ['skeleton', 'drowned', 'chainer', 'archer'],
     golemChance: 0.55,
     squadRate: 0.60,
     eliteChance: 0.33,
@@ -265,7 +269,8 @@ export const FLOORS = [
     name: '근위 회랑',
     theme: THEME.throne,
 
-    roster: ['skeleton', 'skeleton', 'golem', 'archer'],
+    // 새 변종: **성문 파수병** — 조 편성으로 나온다
+    roster: ['gatekeeper', 'shieldman', 'golem', 'chainer'],
     golemChance: 0.6,
     squadRate: 0.62,
     // ★ 이 층의 고유 위협 = **정예 밀도** (§3-4)
@@ -288,7 +293,8 @@ export const FLOORS = [
     name: '왕관의 그림자',
     theme: THEME.throne,
 
-    roster: ['skeleton', 'golem', 'archer', 'ghoul'],
+    // 새 변종: **왕의 조각상** — 부술 때까지 안 움직인다. 지나칠 수 있다
+    roster: ['gatekeeper', 'statue', 'chainer', 'drowned'],
     golemChance: 0.65,
     squadRate: 0.65,
     eliteChance: 0.40,
@@ -312,7 +318,7 @@ export const FLOORS = [
     name: '왕좌의 방',
     theme: THEME.throne,
 
-    roster: ['skeleton', 'golem', 'golem', 'archer'],
+    roster: ['gatekeeper', 'statue', 'golem', 'chainer'],
     golemChance: 0.7,
     squadRate: 0.70,
     eliteChance: 0.42,

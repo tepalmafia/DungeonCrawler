@@ -258,6 +258,15 @@ function loadFloor(floorNo) {
 // ───────────────────────── 콜백 ─────────────────────────
 function onEnemyKilled(e) {
   G.stats.kills++;
+  // 익사한 순례자 — **죽인 자리가 함정이 된다** (docs/FLOORS.md §5-2).
+  // 운석의 「여운」과 같은 장치(slowZones)를 그대로 쓴다 — 느린 칸을 두 벌
+  // 만들면 언젠가 한쪽만 고치게 된다.
+  const pud = e.def.deathPuddle;
+  if (pud) {
+    G.slowZones.push({ x: e.pos.x, z: e.pos.z, r: pud.r, t: pud.t, mul: pud.mul });
+    fx.ground(e.pos, { r0: pud.r, color: 0x4f7a6a, life: pud.t, opacity: 0.5 });
+    fx.burst(e.center(), { count: 20, color: 0x6fa890, speed: 3, size: 0.5, life: 0.7, grav: 6 });
+  }
   const ups = G.player.gainXp(e.def.xp * (e.xpMul || 1) * (1 + G.tier * 0.25));
   // 레벨업이 **선택**을 준다. 지금까지는 숫자만 올랐다 (docs/SKILL-TREE.md §0).
   if (ups) G.tree.grant(ups);
