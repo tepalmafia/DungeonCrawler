@@ -8,6 +8,7 @@ import { RARITIES, priceOf, power, affixLine, AFFIX_BY_KEY, SLOTS } from '../gam
 import { ELEMENTS } from '../game/elements.js';
 import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
+import { NODES as TREE_NODES } from '../game/skilltree.js';
 
 const $ = (s) => document.querySelector(s);
 const V = new THREE.Vector3();      // 투영용 재사용 벡터
@@ -42,6 +43,7 @@ export class UI {
       shopList: $('#shopList'),
       enemyName: $('#enemyName'),
       gambleList: $('#gambleList'),
+      tree: $('#tree'), treeBody: $('#treeBody'), treePoints: $('#treePoints'),
       sellList: $('#sellList'),
       shopCoin: $('#shopCoin'),
       beltSlots: $('#beltSlots'),
@@ -172,6 +174,67 @@ export class UI {
     el.hidden = false;
     el.style.display = '';
     this.renderShop();
+  }
+
+  /**
+   * 스킬 창 — **「무엇을 버렸나」가 보여야 한다.**
+   *
+   * 못 찍게 된 반대편을 목록에서 지우지 않고 ✗ 로 남긴다. 사라지면
+   * 선택을 했다는 사실 자체가 안 보이고, 그러면 빌드가 아니라 그냥
+   * 「찍은 것들」이 된다 (docs/SKILL-TREE.md §1-4).
+   */
+  setTree(open) {
+    const el = this.el.tree;
+    if (!el) return;
+    // hidden 만 믿지 않는다 — CSS 가 display 를 명시하면 무시된다 (상점에서 겪었다)
+    if (!open) { el.hidden = true; el.style.display = 'none'; return; }
+    el.hidden = false; el.style.display = '';
+    this.treeOpen = true;
+    this.renderTree();
+  }
+
+  get isTreeOpen() { return !!this.el.tree && !this.el.tree.hidden; }
+
+  renderTree() {
+    const T = this.G.tree;
+    const body = this.el.treeBody;
+    if (!T || !body) return;
+    this.el.treePoints.textContent = `남은 포인트 ◈ ${T.points}`;
+    body.innerHTML = '';
+
+    const GROUPS = [
+      ['cleave', '🌀', '회전 베기'], ['dash', '💨', '그림자 돌진'],
+      ['nova', '🔥', '화염 신성'], ['meteor', '☄', '운석 낙하'],
+      ['common', '◆', '공용'],
+    ];
+    for (const [skill, icon, label] of GROUPS) {
+      const g = document.createElement('div');
+      g.className = 'tgroup';
+      g.innerHTML = `<h4><span class="ti">${icon}</span>${label}</h4>`;
+      const ids = Object.keys(TREE_NODES).filter((id) => TREE_NODES[id].skill === skill);
+      for (const id of ids) {
+        const n = TREE_NODES[id];
+        const on = T.taken.has(id);
+        const blocked = !!(n.excl && T.taken.has(n.excl));
+        const poor = !on && !blocked && T.points < 1;
+        const row = document.createElement('div');
+        row.className = 'tnode' + (on ? ' on' : blocked ? ' off' : poor ? ' poor' : '');
+        row.innerHTML = `<span class="tk">${on ? '✔' : blocked ? '✗' : '○'}</span>`
+          + `<span><span class="tn">${n.name}</span>`
+          + (n.excl ? ` <span class="texcl">— ${TREE_NODES[n.excl].name} 와 택일</span>` : '')
+          + `<br><span class="td">${n.desc}</span></span>`;
+        if (!on && !blocked && !poor) {
+          row.onclick = () => {
+            if (this.G.tree.take(id)) {
+              this.toast(`${n.name} 습득`, '#7fc47a');
+              this.renderTree();
+            }
+          };
+        }
+        g.appendChild(row);
+      }
+      body.appendChild(g);
+    }
   }
 
   renderShop() {
@@ -371,6 +434,25 @@ export class UI {
     if (!p) return;
 
     this._hoverName(G);
+
+    // 스킬 포인트가 있으면 스킬바에 표시한다. **누를 것이 생겼다가 안 보이면
+    // 시스템이 없는 것과 같다** (docs/SKILL-TREE.md §5-2).
+    const pts = G.tree ? G.tree.points : 0;
+    if (pts !== this._lastPts) {
+      this._lastPts = pts;
+      const bar = this.el.skillbar;
+      if (bar) {
+        let dot = bar.querySelector('.skillDot');
+        if (pts > 0) {
+          if (!dot) { dot = document.createElement('div'); dot.className = 'skillDot'; bar.appendChild(dot); }
+          dot.title = `스킬 포인트 ${pts} — K`;
+        } else if (dot) dot.remove();
+      }
+      if (pts > 0 && !this._toldTree) {
+        this._toldTree = true;
+        this.toast('스킬 포인트를 얻었다 — K', '#7fc47a');
+      }
+    }
 
     // 랜턴 — 연료가 자원이므로 남은 시간을 초 단위로 보여준다
     const lan = p.lantern;

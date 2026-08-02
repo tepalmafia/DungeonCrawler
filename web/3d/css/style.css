@@ -468,3 +468,39 @@ body[data-post="low"] #vignette {
 .srow .scmp.dn { color: #c07272; }
 .srow .scmp.new { color: #7d738c; font-style: italic; }
 .srow.sold .sb { opacity: .45; }
+
+/* ── 스킬 트리 ────────────────────────────────────────────────
+   상점과 같은 창 규격을 쓴다 — 조작 규칙을 늘리지 않기 위해서다.
+   칸은 「무엇을 버렸나」가 보여야 하므로, 못 찍게 된 반대편을 지우지 않고
+   ✗ 로 남긴다. 사라지면 선택을 했다는 사실 자체가 안 보인다. */
+#tree .panel { max-width: 640px; }
+#treePoints { color: #d8b45e; font-weight: bold; }
+.tgroup { margin: 10px 0 14px; }
+.tgroup h4 {
+  margin: 0 0 6px; font-size: 13px; color: #cfc4b0;
+  display: flex; align-items: baseline; gap: 7px;
+}
+.tgroup h4 .ti { font-size: 16px; }
+.tnode {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 6px 9px; margin: 3px 0; border: 1px solid #3a3446;
+  border-radius: 4px; background: rgba(26,22,34,.5); cursor: pointer;
+}
+.tnode:hover { border-color: #7a6a9a; background: rgba(48,40,66,.6); }
+.tnode .tn { font-size: 12px; color: #e6dcc8; }
+.tnode .td { font-size: 11px; color: #9a90a8; line-height: 1.35; }
+.tnode .tk { font-size: 14px; width: 16px; text-align: center; }
+/* 찍은 칸 */
+.tnode.on { border-color: #7fc47a; background: rgba(30,58,30,.45); cursor: default; }
+.tnode.on .tn { color: #a8e3a2; }
+/* 반대편을 찍어서 못 찍게 된 칸 — 지우지 않는다 */
+.tnode.off { opacity: .38; cursor: not-allowed; border-style: dashed; }
+/* 포인트가 없어 지금은 못 찍는 칸 */
+.tnode.poor { opacity: .62; cursor: not-allowed; }
+.tnode .texcl { font-size: 10px; color: #a98a4a; font-style: italic; }
+/* 레벨업 알림 — 누를 것이 생겼다가 안 보이면 시스템이 없는 것과 같다 */
+#skillbar { position: relative; }
+#skillbar .skillDot {
+  position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
+  border-radius: 50%; background: #e05a4a; box-shadow: 0 0 6px #e05a4a;
+}
