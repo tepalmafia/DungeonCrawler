@@ -2,6 +2,7 @@
 // 격자만 만든다. 메시 생성은 level.js, 길찾기는 nav.js 가 맡는다.
 
 import { makeRng } from '../core/rng.js';
+import { floorDef } from './floors.js';
 
 export const CELL = 2;            // 한 칸 = 2 월드 유닛
 // DOOR 는 「열려 있으면 바닥, 닫혀 있으면 벽」인 칸이다. 상태는 격자가 아니라
@@ -18,19 +19,10 @@ export function worldToGrid(x, z, w, h) {
   return [Math.floor(x / CELL + w / 2), Math.floor(z / CELL + h / 2)];
 }
 
-// postShadow/postHigh 는 후처리의 스플릿 톤(core/post.js)이 쓴다.
-// 그림자로 스미는 색과 하이라이트로 스미는 색을 층마다 달리해 온도를 가른다.
-const THEMES = [
-  { key: 'crypt',  name: '납골당', floor: 0x59506a, wall: 0x453c56, moss: '#4c6b3a', mossP: 0.30, fog: 0x07060c, torch: 0xffa04a,
-    postShadow: 0x8fa8d4, postHigh: 0xffd6a0 },
-  { key: 'flood',  name: '침수 회랑', floor: 0x4a5a5e, wall: 0x37464d, moss: '#3f7a68', mossP: 0.46, fog: 0x05090c, torch: 0x9fd8ff,
-    postShadow: 0x7fbcd6, postHigh: 0xd8f0ff },   // 물 — 위아래 다 차갑다
-  { key: 'throne', name: '왕좌의 방', floor: 0x63505c, wall: 0x4e3b48, moss: '#7a3a3a', mossP: 0.18, fog: 0x0b0508, torch: 0xff7a3a,
-    postShadow: 0xa88ac0, postHigh: 0xffb070 },   // 영혼빛 그림자 + 붉은 불
-];
-export function themeFor(floorNo) {
-  return THEMES[Math.min(floorNo - 1, THEMES.length - 1)];
-}
+// 테마·방 개수·보스층·함정 개수는 전부 **world/floors.js** 로 옮겼다.
+// 층을 늘릴 때 고칠 곳이 한 곳이어야 하기 때문이다 — 여기 두면 층을 추가할
+// 때마다 네 파일을 고치게 되고, 언젠가 하나를 빠뜨린다.
+export { themeFor } from './floors.js';
 
 // 함정 종류 뽑기 주머니. 압력판이 제일 흔하고 낙석이 제일 드물다 —
 // 제일 아픈 것(18%)이 제일 자주 나오면 함정이 벌이 된다.
@@ -46,7 +38,8 @@ function rectsOverlap(a, b, pad) {
  */
 export function generate(floorNo, seed) {
   const rnd = makeRng(`${seed}-f${floorNo}`);
-  const isBossFloor = floorNo >= 3;
+  const F = floorDef(floorNo);
+  const isBossFloor = F.boss;
 
   const w = 54, h = 54;
   const cells = new Uint8Array(w * h);          // 기본값 VOID
@@ -55,7 +48,9 @@ export function generate(floorNo, seed) {
 
   // ── 방 배치 ──────────────────────────────────────────────
   const rooms = [];
-  const want = isBossFloor ? 7 : rnd.int(9, 12);
+  // 배열이면 범위, 숫자면 고정. **고정일 때 난수를 안 뽑는 것이 중요하다** —
+  // 한 번만 더 뽑아도 그 뒤 생성이 전부 달라진다 (world/floors.js 주석).
+  const want = Array.isArray(F.rooms) ? rnd.int(F.rooms[0], F.rooms[1]) : F.rooms;
   for (let tries = 0; tries < 400 && rooms.length < want; tries++) {
     const rw = rnd.int(6, 12), rh = rnd.int(6, 11);
     const r = { x: rnd.int(2, w - rw - 3), y: rnd.int(2, h - rh - 3), w: rw, h: rh };
@@ -339,14 +334,14 @@ export function generate(floorNo, seed) {
       if (ns || ew) chokes.push([x, y]);
     }
   rnd.shuffle(chokes);
-  const wantChoke = isBossFloor ? 3 : 4 + floorNo;
+  const wantChoke = F.chokeTraps;
   let placedChoke = 0;
   for (const [cx, cy] of chokes) {
     if (placedChoke >= wantChoke) break;
     if (addTrap(cx, cy, rnd.pick(TRAP_POOL))) placedChoke++;
   }
 
-  const wantLoose = isBossFloor ? 3 : 4 + Math.floor(floorNo);
+  const wantLoose = F.looseTraps;
   const before = traps.length;
   for (let tries = 0; tries < 400 && traps.length < before + wantLoose; tries++) {
     addTrap(rnd.int(2, w - 3), rnd.int(2, h - 3), rnd.pick(TRAP_POOL));
@@ -383,7 +378,7 @@ export function generate(floorNo, seed) {
     solids, solidAt,
     doors, doorAt, vaultRoom, switchAt, traps,
     startRoom, bossRoom, isBossFloor,
-    theme: themeFor(floorNo),
+    theme: F.theme,
     floorNo, seed,
     isFloor: (gx, gz) => at(gx, gz) === FLOOR,
     at,

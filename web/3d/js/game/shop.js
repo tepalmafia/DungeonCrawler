@@ -12,12 +12,7 @@ import * as THREE from 'three';
 import { rollItem, RARITIES, SLOTS, SLOT_NAME, priceOf } from './items.js';
 import { makeLantern } from './lantern.js';
 import { gridToWorld } from '../world/dungeon.js';
-
-// 층별 주력 속성을 이기는 속성 (docs/ELEMENTS.md §4 의 FLOOR_MIX 를 뒤집은 것).
-//   1층 혼 30% → 뇌가 혼을 이긴다
-//   2층 빙 50% → 화가 빙을 이긴다
-//   3층 뇌·혼  → 빙이 뇌를 이긴다
-const COUNTER_BY_FLOOR = ['bolt', 'fire', 'ice'];
+import { floorDef } from '../world/floors.js';
 
 // 파는 값 대비 사는 값.
 //
@@ -51,7 +46,8 @@ export function rollStock(rnd, floorNo, tier, player) {
   // 「오늘의 물건」은 **그 층의 주력 속성에 강한 속성**으로 고정한다 (§6-3).
   // 값이 비싼 이유가 「등급이 높아서」가 아니라 **「지금 필요한 것이라서」**가 된다.
   // 2층(빙 특화)에 화염 무기가 놓이는 것이 이 시스템의 교육 지점이다.
-  const counter = COUNTER_BY_FLOOR[Math.min(2, floorNo - 1)];
+  // 그 층의 주력을 이기는 속성 (world/floors.js 의 counter)
+  const counter = floorDef(floorNo).counter;
   const today = rollItem(rnd, floorNo, tier, {
     minRarity: 2, prefer, find: player?.find || 0, slot: 'weapon', element: counter,
   });

@@ -9,6 +9,8 @@
 // 공략이 아니라 운이다. 그래서 이 파일에는 규칙뿐 아니라 **보여주는 방법**
 // (색·입자)까지 같이 들어 있다. 둘이 떨어져 있으면 반드시 한쪽이 뒤처진다.
 
+import { floorDef } from '../world/floors.js';
+
 /**
  * 순환 넷.  화 → 빙 → 뇌 → 혼 → 화
  *
@@ -62,15 +64,10 @@ export const ENEMY_ELEMENT = {
  * 빙 특화층이라, 1층에서 화염 무기를 하나 챙겼다면 눈에 띄게 쉬워진다.
  * 그 한 번의 경험이 「속성을 챙겨야 하는구나」를 가르친다. 설명문으로는 못 가르친다.
  */
-export const FLOOR_MIX = [
-  { none: 60, soul: 30, ice: 10 },
-  { ice: 50, soul: 25, bolt: 25 },
-  { bolt: 40, soul: 40, fire: 20 },
-];
-
+// 층별 분포는 **world/floors.js** 의 mix 로 옮겼다 (층 설정이 한 곳에 있어야 하므로).
 /** 층 분포에 따라 속성을 굴린다. 종족 기본값을 덮어쓴다. */
 export function rollElement(rnd, floorNo) {
-  const mix = FLOOR_MIX[Math.min(FLOOR_MIX.length - 1, floorNo - 1)];
+  const mix = floorDef(floorNo).mix;
   const total = Object.values(mix).reduce((a, b) => a + b, 0);
   let u = rnd() * total;
   for (const [k, w] of Object.entries(mix)) { u -= w; if (u <= 0) return k; }
