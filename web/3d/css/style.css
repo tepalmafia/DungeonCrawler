@@ -448,3 +448,23 @@ body[data-post="low"] #vignette {
 .srow.poor .sp { color: #e07272; }
 .srow.sold { opacity: .3; cursor: default; }
 .srow.sold:hover { border-color: #2f2740; background: rgba(0,0,0,.3); }
+
+/* ── 상점 줄의 능력치 요약 ────────────────────────────────────
+   예전에는 아이콘·이름·값 셋뿐이라 「좋은 건지」를 알려면 한 칸씩 커서를
+   올려야 했다. 재고 여섯 + 갬블 셋 + 팔 것까지 있으면 그건 쇼핑이 아니라
+   순회다. 목록에서 바로 견줄 수 있어야 「무엇을 살까」가 판단이 된다. */
+.srow .sb { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.srow .sn { display: flex; align-items: baseline; gap: 6px; }
+.srow .sd {
+  font-size: 11px; color: #9a90a8; line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.srow .sd b { color: #cfc4b0; font-weight: normal; }
+.srow .sel { margin-right: 5px; }
+.srow .smore { color: #6f6580; font-style: italic; }
+/* 착용 중인 것과의 차이 — 숫자를 다 안 읽어도 살지 말지가 여기서 갈린다 */
+.srow .scmp { font-size: 11px; letter-spacing: 0; }
+.srow .scmp.up { color: #7fc47a; }
+.srow .scmp.dn { color: #c07272; }
+.srow .scmp.new { color: #7d738c; font-style: italic; }
+.srow.sold .sb { opacity: .45; }

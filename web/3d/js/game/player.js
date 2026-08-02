@@ -10,6 +10,11 @@ import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
+import { Sfx } from '../core/audio.js';
+
+// 한 걸음의 보폭(월드 유닛). 격자 한 칸이 2.0 이므로 한 칸에 약 1.3 걸음이다 —
+// 화면의 다리 움직임과 맞춰 귀로 들어 정한 값이다.
+const STRIDE = 1.55;
 
 const RADIUS = 0.42;
 const BASE_SPEED = 6.2;
@@ -52,6 +57,10 @@ export class Player {
     this.pos = new THREE.Vector3();
     this.facing = 0;
     this.radius = RADIUS;
+    // 발소리 — 걸은 거리를 모아 한 걸음씩 낸다
+    this._stepAcc = 0;
+    this._stepFromX = 0; this._stepFromZ = 0;
+    this._stepRight = false;
 
     // 진행
     this.level = 1;
@@ -335,6 +344,7 @@ export class Player {
     // 예전엔 실패 시 그냥 두어서, 비보행 칸에 남은 채 경로가 비면 영구 정지했다.
     const esc = unstick(dg, this.pos.x, this.pos.z, this.lastGood);
     if (esc.moved) this.pos.set(esc.x, 0, esc.z);
+    this._footsteps(dt, dg);
     // 이번 프레임 위치가 합법이면 다음 사고 때 쓸 안전지대로 기억한다
     {
       const [lgx, lgz] = worldToGrid(this.pos.x, this.pos.z, dg.w, dg.h);
@@ -346,6 +356,25 @@ export class Player {
 
     this.obj.position.copy(this.pos);
     this._animate(dt, moved);
+  }
+
+  /**
+   * 발소리 — **걸은 거리**로 낸다. 시간으로 내면 벽에 밀려 제자리걸음 할 때도
+   * 소리가 나고, 이동 속도 접사를 붙이면 걸음과 소리가 어긋난다.
+   *
+   * 이 게임에서 발소리는 분위기가 아니라 정보다: 랜턴 반경(9) 밖은 안 보이므로
+   * **귀가 눈을 대신하는 구간**이 있다. 걸음마다 발을 번갈아 내야 두 걸음이
+   * 한 소리로 뭉치지 않는다.
+   */
+  _footsteps(dt, dg) {
+    const d = Math.hypot(this.pos.x - this._stepFromX, this.pos.z - this._stepFromZ);
+    this._stepFromX = this.pos.x; this._stepFromZ = this.pos.z;
+    if (this.dead || this.resting) { this._stepAcc = STRIDE * 0.6; return; }
+    this._stepAcc += d;
+    if (this._stepAcc < STRIDE) return;
+    this._stepAcc -= STRIDE;
+    this._stepRight = !this._stepRight;
+    Sfx.step({ vol: 0.62, right: this._stepRight, wet: dg?.act === 'flood' });
   }
 
   _animate(dt, moved) {
