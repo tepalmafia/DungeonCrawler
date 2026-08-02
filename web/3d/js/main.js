@@ -29,6 +29,7 @@ import { Shop } from './game/shop.js';
 import { Dialogue } from './game/dialogue.js';
 import { Rest } from './game/rest.js';
 import { spawnBoss, bossNameFor } from './game/boss.js';
+import { SkillTree } from './game/skilltree.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
 import { rollItem, Drop, RARITIES, SLOTS, power, priceOf } from './game/items.js';
@@ -101,6 +102,9 @@ const G = {
   scene, camera, renderer,
   time: 0, dt: 0,
   state: 'title',            // title | play | dead | cleared
+  // 스킬 트리 — 판 단위다 (이 게임에 저장이 없다). 아무것도 안 찍은 상태에서는
+  // mods() 가 전부 1 을 돌려주므로 지금과 동작이 같다 (game/skilltree.js).
+  tree: new SkillTree(),
   seed: params.seed,
   floorNo: params.floor,
   tier: 0,
@@ -250,6 +254,8 @@ function loadFloor(floorNo) {
 function onEnemyKilled(e) {
   G.stats.kills++;
   const ups = G.player.gainXp(e.def.xp * (e.xpMul || 1) * (1 + G.tier * 0.25));
+  // 레벨업이 **선택**을 준다. 지금까지는 숫자만 올랐다 (docs/SKILL-TREE.md §0).
+  if (ups) G.tree.grant(ups);
   if (ups) {
     Audio.Sfx.levelUp();
     ui.center(`레벨 ${G.player.level}`, '체력과 마나가 가득 찼다');
@@ -274,7 +280,12 @@ function onEnemyKilled(e) {
     for (let i = 0; i < 2; i++) dropItem(roll({ minRarity: 2 }), e.pos, i);
     G.level.openExit();
     ui.setBoss(null);
-    ui.center(`${bossNameFor(G.floorNo)} 처치`, '포탈이 열렸다');
+    // 층의 끝에 보상이 하나 더 붙는다. 막의 끝(3·6·9층)은 하나 더 —
+    // 「막을 넘었다」를 몸으로 알린다 (docs/SKILL-TREE.md §2).
+    const bonus = 1 + (G.floorNo % 3 === 0 ? 1 : 0);
+    G.tree.grant(bonus);
+    ui.center(`${bossNameFor(G.floorNo)} 처치`,
+      `포탈이 열렸다 · 스킬 포인트 +${bonus}`);
     Audio.Sfx.victory();
     fx.addShake(0.3, 3);
   } else if (e.elite) {
@@ -439,6 +450,9 @@ function restartRun(advanceTier) {
   G.player.potions.hp = Math.max(G.player.potions.hp, 4);
   G.player.potions.mp = Math.max(G.player.potions.mp, 4);
   G.cooldowns = {};
+  // 트리도 판과 함께 사라진다 — 남기면 「판이 끝나면 레벨이 사라진다」와
+  // 어긋나고, 회차를 돌수록 전부 찍혀 빌드가 사라진다 (docs/SKILL-TREE.md §4)
+  G.tree = new SkillTree();
   G.state = 'play';
   loadFloor(1);
   if (advanceTier) ui.center(`파밍 ${G.tier + 1}회차`, '적이 더 강해지고 전리품이 좋아진다');
@@ -533,6 +547,12 @@ function handleInput(dt) {
     camDist = CAM_DIST_DEFAULT;
 
   if (input.wasPressed('KeyI')) { inv.toggle(); if (inv.open) { input.down = false; G.player.stop(); } }
+  // 스킬 창 — 인벤토리와 같은 규격이다. 조작 규칙을 늘리지 않는다.
+  if (input.wasPressed('KeyK')) {
+    const open = !ui.isTreeOpen;
+    ui.setTree(open);
+    if (open) { input.down = false; G.player.stop(); }
+  }
   // C — 휴식. 모닥불을 피우고 앉는다 (game/rest.js).
   if (input.wasPressed('KeyC')) {
     if (G.rest?.active) G.rest.stop(G, '일어섰다');
@@ -546,7 +566,11 @@ function handleInput(dt) {
     // 열려 있으면 닫는다 — 같은 키로 열고 닫아야 손이 헤매지 않는다
     if (ui.shop) ui.setShop(null); else doInteract();
   }
-  if (input.wasPressed('Escape')) { if (ui.shop) ui.setShop(null); else if (inv.open) inv.toggle(false); }
+  if (input.wasPressed('Escape')) {
+    if (ui.shop) ui.setShop(null);
+    else if (ui.isTreeOpen) ui.setTree(false);
+    else if (inv.open) inv.toggle(false);
+  }
 
   if (G.state !== 'play' || p.dead) {
     if (input.wasPressed('Space') && G.overlayAction) G.overlayAction();

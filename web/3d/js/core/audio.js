@@ -1,6 +1,8 @@
 // 사운드 — 오디오 파일 0. 전부 Web Audio 오실레이터/노이즈로 합성한다.
 // (기존 2D 게임 web/js/core/audio.js 와 같은 사상. 여기서는 샘플에 필요한 만큼만.)
 
+import * as Samples from './samples.js';
+
 let ctx = null, master = null, noiseBuf = null;
 let ambient = null;
 let enabled = true;
@@ -18,7 +20,22 @@ function ensure() {
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  // 녹음 샘플을 뒤에서 읽어 온다. **없어도 아무 일도 안 일어난다** —
+  // 준비되기 전이나 파일이 없으면 아래 sample() 이 false 를 돌려주고
+  // 각 소리가 합성으로 떨어진다 (core/samples.js).
+  try { Samples.preload(ctx); } catch { /* 어떤 이유로든 실패하면 합성만 쓴다 */ }
   return ctx;
+}
+
+/**
+ * 샘플을 먼저 시도한다. 성공하면 true — 부르는 쪽은 거기서 끝낸다.
+ * 실패하면 false — 부르는 쪽이 지금까지 쓰던 합성을 그대로 낸다.
+ *
+ * 이 한 줄 규칙 덕에 **음원이 없는 지금도 게임이 똑같이 돈다.**
+ */
+function sample(key, opt = {}) {
+  if (!ctx || !enabled) return false;
+  try { return Samples.play(ctx, master, key, opt); } catch { return false; }
 }
 
 export function resume() {
@@ -190,8 +207,10 @@ const VOICE = {
   ghoul: {
     hit: (v, crit) => {                       // 젖은 살 — 퍽
       // 젖은 살 — 음정이 없다. 필터가 닫히는 것만으로 무게가 난다.
-      noise({ dur: crit ? 0.14 : 0.09, gain: crit ? 0.42 : 0.32, lp: crit ? 1300 : 900, lpTo: 130, q: 1.1, vol: v });
-      thump({ f0: 700, f1: 70, dur: crit ? 0.11 : 0.08, gain: crit ? 0.4 : 0.3, q: 1.0, vol: v });
+      // f1 을 70 까지 닫았더니 대역이 좁아져 주기성이 0.385 까지 올라갔다
+      // (0.35 넘으면 「뿅」). 살은 원래 넓게 퍼지는 소리다 — 덜 닫는다.
+      noise({ dur: crit ? 0.14 : 0.09, gain: crit ? 0.42 : 0.32, lp: crit ? 1300 : 900, lpTo: 220, q: 0.9, vol: v });
+      thump({ f0: 700, f1: 150, dur: crit ? 0.11 : 0.08, gain: crit ? 0.4 : 0.3, q: 0.85, vol: v });
     },
     attack: (v) => {                          // 할퀴기
       noise({ dur: 0.14, gain: 0.18, lp: 3800, lpTo: 700, hp: 600, vol: v });
@@ -448,9 +467,12 @@ function footstep({ vol = 1, heavy = 0, right = false, wet = false } = {}) {
   // 주기성을 재 보니 0.847 이었다 (0.35 넘으면 음정). 발소리가 「뿅」이었다.
   // 발이 바닥에 닿는 것도 충돌이다 — 음정이 없다.
   // vol 은 gain 이 아니라 `vol:` 로 넘긴다 (gain 0 은 Web Audio 예외다)
+  // f1 을 55 로 두었더니 대역이 너무 좁아져 **주기성이 0.372** 로 올라갔다
+  // (0.35 넘으면 「뿅」). 필터를 끝까지 닫지 않고, 중역을 조금 남긴다 —
+  // 실제 발소리도 순수 저역이 아니라 신발과 바닥이 스치는 소리가 섞인다.
   thump({
-    f0: (620 - heavy * 120) * p, f1: 55, dur: 0.055 + heavy * 0.03,
-    gain: 0.72 + heavy * 0.4, q: 1.2, vol,
+    f0: (620 - heavy * 120) * p, f1: 130, dur: 0.055 + heavy * 0.03,
+    gain: 0.72 + heavy * 0.4, q: 0.9, vol,
   });
   noise({
     dur: 0.05 + heavy * 0.02, gain: 0.13 + heavy * 0.07,
@@ -462,7 +484,10 @@ function footstep({ vol = 1, heavy = 0, right = false, wet = false } = {}) {
 
 // ─────────────────────── 효과음 ───────────────────────
 export const Sfx = {
-  swing() { noise({ dur: 0.13, gain: 0.14, lp: 5200, lpTo: 900, hp: 700 }); },
+  swing() {
+    if (sample('swing', { vol: 1 })) return;
+    noise({ dur: 0.13, gain: 0.14, lp: 5200, lpTo: 900, hp: 700 });
+  },
 
   /** VOICE 가 없는 대상용 기본 타격음. 여기도 오실레이터를 안 쓴다 (주기성 0.602 였다). */
   hit(crit = false) {
@@ -477,7 +502,12 @@ export const Sfx = {
     const V = VOICE[kind];
     if (!V) return Sfx.hit(crit);
     if (!voiceOk('h' + kind, 45)) return;
-    V.hit(vol, crit);
+    // **녹음이 있으면 그걸 쓴다.** 물질별로 파일이 갈린다 (core/samples.js).
+    // 없으면 아래 합성이 그대로 난다 — 지금 저장소 상태가 그렇다.
+    const mat = BODY_MIX[kind]?.mat || 'flesh';
+    const played = sample(crit && Samples.has('hit.crit') ? 'hit.crit' : `hit.${mat}`,
+      { vol, rate: crit ? 0.92 : 1 });
+    if (!played) V.hit(vol, crit);
     // 타격음(재질)과 비명(생명)은 다른 층위다. 둘 다 있어야 「맞았다」가 산다.
     // 비명은 타격음보다 조금 늦게 나와야 자연스럽다 — 맞고 나서 소리를 지른다.
     // 리니지 계열은 **비명이 타격감의 중심**이다 (위 impactBody 주석 ①).
@@ -486,7 +516,9 @@ export const Sfx = {
     if (V.cry && voiceOk('c' + kind, 170)) {
       setTimeout(() => V.cry(vol, crit), crit ? 18 : 28);
     }
-    impactBody(crit, vol, BODY_MIX[kind]);   // 젖은 겹 + 금속 겹 — 종족마다 비율이 다르다
+    // 합성으로 갔을 때만 겹을 얹는다. 녹음은 이미 완성된 소리라 겹을 더하면
+    // 두 번 때린 것처럼 들린다.
+    if (!played) impactBody(crit, vol, BODY_MIX[kind]);
   },
 
   /** 종족별 공격음 — 무엇을 휘두르는지가 들려야 예고가 귀로도 온다 */
@@ -549,7 +581,11 @@ export const Sfx = {
    * 발소리. `right` 로 좌우를 번갈아 주고, `heavy` 는 몸무게(골렘 1, 사람 0),
    * `wet` 은 젖은 바닥이다. 거리 감쇠는 부르는 쪽이 vol 로 넘긴다.
    */
-  step(opt = {}) { footstep(opt); },
+  step(opt = {}) {
+    const key = opt.wet ? 'step.water' : (opt.heavy ? 'step.stone' : 'step');
+    if (sample(key, { vol: opt.vol ?? 1, rate: opt.right ? 1.04 : 0.96 })) return;
+    footstep(opt);
+  },
 
   nova() {
     tone(90, { type: 'sine', dur: 0.55, gain: 0.32, to: 34 });

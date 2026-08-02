@@ -433,6 +433,13 @@ async function shot(page, name) {
     const SR = 48000, LEN = SR * 0.5;
     let bust = 0;
     async function tone1(fn) {
+      // ★ **재는 동안 난수를 고정한다.** 타격음은 매번 주파수를 흔들어서
+      //   (그래야 기계처럼 안 들린다) 같은 코드로 재도 구울이 0.251 → 0.385 로
+      //   튄다. 고정하지 않으면 이 검사가 코드가 아니라 운을 잰다 —
+      //   tools/audio-audit.js 에서 이미 같은 함정을 밟았다.
+      const realRandom = Math.random;
+      let seed = 20260802;
+      Math.random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
       const real = window.AudioContext;
       let off = null;
       window.AudioContext = function () { off = new OfflineAudioContext(1, LEN, SR); return off; };
@@ -441,6 +448,7 @@ async function shot(page, name) {
       A.resume(); fn(A);
       window.AudioContext = real; window.webkitAudioContext = real;
       const d = (await off.startRendering()).getChannelData(0);
+      Math.random = realRandom;
       const N = Math.min(d.length, SR * 0.25);
       let e0 = 0;
       for (let i = 0; i < N; i++) e0 += d[i] * d[i];
@@ -461,6 +469,37 @@ async function shot(page, name) {
     out.step = await tone1((A) => A.Sfx.step({ vol: 1 }));
     return out;
   });
+  // ── 음원이 없어도 소리가 나는가 ────────────────────────
+  //
+  // 녹음 샘플을 쓰기로 했지만(docs/AUDIO-ASSETS.md) 저장소에 파일이 아직
+  // 없다. 이 층의 계약은 **「없으면 합성으로 떨어진다」** 하나뿐이고,
+  // 그게 깨지면 게임이 조용해진다 — 그런데 오류는 한 줄도 안 난다.
+  // 파일을 넣은 뒤에도 이 검사는 의미가 있다: 이름을 틀리게 넣으면
+  // 그 소리만 조용해지는데, 여기서 「샘플 0개인데 소리는 난다」로 잡힌다.
+  const fallback = await page.evaluate(async () => {
+    const A = await import('./js/core/audio.js');
+    const S = await import('./js/core/samples.js');
+    A.resume();
+    // 샘플이 없는 상태에서 타격음이 실제로 소리를 내는지 오프라인으로 확인
+    const SR = 48000;
+    const real = window.AudioContext;
+    let off = null;
+    window.AudioContext = function () { off = new OfflineAudioContext(1, SR * 0.4, SR); return off; };
+    window.webkitAudioContext = window.AudioContext;
+    const A2 = await import(`./js/core/audio.js?fb=${Math.random()}`);
+    A2.resume();
+    A2.Sfx.enemyHit('skeleton', false, 1);
+    A2.Sfx.step({ vol: 1 });
+    window.AudioContext = real; window.webkitAudioContext = real;
+    const d = (await off.startRendering()).getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+    return { samples: S.count(), peak: +peak.toFixed(4) };
+  });
+  ok('audio.samplesOptional', fallback.peak > 0.01,
+    `녹음 ${fallback.samples}종 · 그래도 소리 최대 진폭 ${fallback.peak} `
+    + '(0 이면 음원이 없을 때 조용해진다)');
+
   const worst = Object.entries(tonal).sort((a, b) => b[1] - a[1])[0];
   ok('audio.impactNotTonal', worst[1] < 0.35,
     `주기성 최대 ${worst[0]} ${worst[1]} `

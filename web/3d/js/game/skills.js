@@ -36,7 +36,10 @@ export const SKILLS = [
       const p = G.player;
       p.facing = Math.atan2(aim.x - p.pos.x, aim.z - p.pos.z);
       p.swing = 1;
-      const spread = Math.PI * 0.78, radius = 3.5;
+      // 스킬 트리가 값을 곱한다 (game/skilltree.js). **안 찍었으면 전부 1**
+      // 이므로 지금 값과 한 글자도 다르지 않다 — 그게 단계 A 의 계약이다.
+      const M = G.tree ? G.tree.mods('cleave') : {};
+      const spread = Math.PI * 0.78 * (M.spread ?? 1), radius = 3.5 * (M.radius ?? 1);
       G.fx.arc(p.pos, p.facing, { radius, spread, color: 0xffe0a0, life: 0.24 });
       G.fx.addShake(0.03);
       Sfx.swing();
@@ -48,7 +51,8 @@ export const SKILLS = [
         // element 를 안 넘기면 hitEnemy 가 무기 속성을 쓴다.
         // 넉백 없음 — 이건 무기를 휘두르는 동작이다. 평타의 넓은 판본이지
         // 밀어내는 기술이 아니다 (combat.js 의 넉백 주석).
-        hitEnemy(G, e, r.dmg * 1.35, { crit: r.crit, knock: 0, color: 0xffd090, skill: true });
+        hitEnemy(G, e, r.dmg * 1.35 * (M.dmg ?? 1),
+          { crit: r.crit, knock: 0, color: 0xffd090, skill: true });
       }
       return true;
     },
@@ -79,7 +83,8 @@ export const SKILLS = [
     desc: '주변으로 불길이 퍼지고 잠시 장판이 남는다.',
     cast(G) {
       const p = G.player;
-      const radius = 6.4;
+      const M = G.tree ? G.tree.mods('nova') : {};
+      const radius = 6.4 * (M.radius ?? 1);
       G.fx.shockwave(p.pos, { r0: 0.6, r1: radius, color: 0xff8a3a, life: 0.55, y: 0.35 });
       G.fx.burst(p.center(), { count: 46, color: 0xff9a3a, speed: 9, size: 0.55, life: 0.7, grav: 5 });
       G.fx.ground(p.pos, { r0: radius, color: 0xff6a2a, life: 0.5 });
@@ -89,12 +94,13 @@ export const SKILLS = [
 
       for (const e of enemiesInArc(G, p.pos, 0, radius, Math.PI * 2)) {
         const r = playerRoll(p);
-        hitEnemy(G, e, r.dmg * 2.2, { crit: r.crit, knock: 2.0, color: 0xff9a4a, element: 'fire', skill: true });
+        hitEnemy(G, e, r.dmg * 2.2 * (M.dmg ?? 1),
+          { crit: r.crit, knock: 2.0, color: 0xff9a4a, element: 'fire', skill: true });
       }
       // 장판 — 계속 서 있으면 계속 아프다
       G.fields.push({
-        x: p.pos.x, z: p.pos.z, r: radius * 0.72, life: 3.4, tick: 0,
-        dps: (p.dmgMin + p.dmgMax) * 0.28, color: 0xff6a2a,
+        x: p.pos.x, z: p.pos.z, r: radius * 0.72, life: 3.4 * (M.fieldLife ?? 1), tick: 0,
+        dps: (p.dmgMin + p.dmgMax) * 0.28 * (M.fieldDps ?? 1), color: 0xff6a2a,
       });
       return true;
     },
@@ -106,13 +112,15 @@ export const SKILLS = [
     desc: '지정한 곳에 운석을 떨어뜨린다.',
     cast(G, aim) {
       const p = G.player;
-      const radius = 4.6;
+      const M = G.tree ? G.tree.mods('meteor') : {};
+      const radius = 4.6 * (M.radius ?? 1);
+      const delay = 0.85 * (M.delay ?? 1);
       const target = { x: aim.x, z: aim.z };
       G.fx.ground(target, { r0: radius, color: 0xff3a2a, life: 0.85, fade: 'in', opacity: 0.75 });
       Sfx.meteor();
 
       G.timers.push({
-        t: 0.85,
+        t: delay,
         fn: () => {
           const pos = new THREE.Vector3(target.x, 0, target.z);
           G.fx.shockwave(pos, { r0: 0.8, r1: radius * 1.5, color: 0xffb04a, life: 0.7, y: 0.4 });
