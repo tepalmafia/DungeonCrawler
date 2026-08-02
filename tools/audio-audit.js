@@ -90,7 +90,30 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137/3d';
         bands[2] += (d[i] - mid) * (d[i] - mid);
       }
       const tot = bands[0] + bands[1] + bands[2] || 1;
+
+      // ★ **주기성(tonality)** — 「뿅/핑」인지 「퍽/챙」인지를 가르는 수치.
+      //
+      //   음정이 있는 소리는 파형이 **되풀이된다.** 자기상관(자기 자신을
+      //   조금 밀어서 곱한 값)이 특정 지연에서 크게 튄다. 잡음은 안 튄다.
+      //   dB·대역만 봐서는 사인파와 저역 잡음을 구분할 수 없다 —
+      //   실제로 그래서 「저역 90%」를 보고 「퍽으로 바뀌었다」고 착각했다.
+      //   사인파를 아래로 쓸어내린 것도 저역 90% 다. 그게 레트로 점프음이다.
+      //
+      //   40~800Hz 대역(사람이 음정으로 듣는 구간)만 본다.
+      let tonality = 0;
+      const N = Math.min(d.length, SR * 0.25);
+      let e0 = 0;
+      for (let i = 0; i < N; i++) e0 += d[i] * d[i];
+      if (e0 > 1e-9) {
+        for (let lag = Math.floor(SR / 800); lag < Math.floor(SR / 40); lag++) {
+          let c = 0;
+          for (let i = 0; i + lag < N; i += 3) c += d[i] * d[i + lag];
+          const norm = Math.abs(c * 3) / e0;
+          if (norm > tonality) tonality = norm;
+        }
+      }
       return {
+        tonality: +tonality.toFixed(3),
         peak: +peak.toFixed(4),
         rms: +rms.toFixed(5),
         db: +(20 * Math.log10(rms || 1e-9)).toFixed(1),
@@ -125,14 +148,18 @@ const BASE = process.env.VERIFY_URL || 'http://127.0.0.1:8137/3d';
     return out;
   });
 
-  console.log('\n소리                       peak     RMS      dB    저역 중역 고역');
+  console.log('\n소리                       peak     RMS      dB    저역 중역 고역   ★음정');
   for (const r of rows)
     console.log(r.label.padEnd(26)
       + String(r.peak).padStart(7) + String(r.rms).padStart(9) + String(r.db).padStart(8)
-      + String(r.lo + '%').padStart(6) + String(r.mid + '%').padStart(5) + String(r.hi + '%').padStart(5));
+      + String(r.lo + '%').padStart(6) + String(r.mid + '%').padStart(5) + String(r.hi + '%').padStart(5)
+      + String(r.tonality ?? '-').padStart(8) + ((r.tonality ?? 0) > 0.35 ? '  ← 뿅/핑' : ''));
 
   console.log('\n※ dB 는 RMS 기준. 두 소리가 같이 날 때 **12dB 이상 차이**가 나면');
   console.log('   작은 쪽은 사실상 안 들린다 (마스킹).');
+  console.log('※ 음정 = 자기상관 최대값. **0.35 넘으면 음정이 있는 소리**다 —');
+  console.log('   타격음이 그러면 「뿅/핑」으로 들린다. 잡음 기반이면 0.1 근처가 나온다.');
+  console.log('   비명·마법·UI 는 음정이 있어야 맞으므로 이 기준을 안 쓴다.');
 
   if (errs.length) console.log('\nERR ' + [...new Set(errs)].slice(0, 3).join(' | '));
   await browser.close();

@@ -420,6 +420,53 @@ async function shot(page, name) {
     + '(−12 아래면 묻혀서 안 들린다)');
   ok('audio.noClip', mask.peak < 0.8, `타격 최대 진폭 ${mask.peak} (1.0 넘으면 찢어진다)`);
 
+  // ── 타격음에 **음정이 있으면 안 된다** ──────────────────
+  //
+  // 세 번 틀린 뒤에 넣는 검사다. 사각파 → 고Q 공진 → 사인파 음정 급강하,
+  // 전부 「뿅/핑」이었고 셋 다 dB·대역만 봐서는 안 잡혔다 —
+  // **사인파를 아래로 쓸어내리면 저역 90% 가 나온다.** 그게 레트로 점프음이다.
+  //
+  // 음정이 있는 소리는 파형이 되풀이되므로 자기상관이 특정 지연에서 튄다.
+  // 잡음은 안 튄다. 사람이 음정으로 듣는 40~800Hz 만 본다.
+  // 비명·마법·UI 는 음정이 있어야 맞으므로 **타격음에만** 적용한다.
+  const tonal = await page.evaluate(async () => {
+    const SR = 48000, LEN = SR * 0.5;
+    let bust = 0;
+    async function tone1(fn) {
+      const real = window.AudioContext;
+      let off = null;
+      window.AudioContext = function () { off = new OfflineAudioContext(1, LEN, SR); return off; };
+      window.webkitAudioContext = window.AudioContext;
+      const A = await import(`./js/core/audio.js?v=${++bust}`);
+      A.resume(); fn(A);
+      window.AudioContext = real; window.webkitAudioContext = real;
+      const d = (await off.startRendering()).getChannelData(0);
+      const N = Math.min(d.length, SR * 0.25);
+      let e0 = 0;
+      for (let i = 0; i < N; i++) e0 += d[i] * d[i];
+      if (e0 < 1e-9) return 0;
+      let best = 0;
+      for (let lag = Math.floor(SR / 800); lag < Math.floor(SR / 40); lag++) {
+        let c = 0;
+        for (let i = 0; i + lag < N; i += 3) c += d[i] * d[i + lag];
+        const n = Math.abs(c * 3) / e0;
+        if (n > best) best = n;
+      }
+      return +best.toFixed(3);
+    }
+    const out = {};
+    for (const k of ['skeleton', 'ghoul', 'archer', 'golem'])
+      out[k] = await tone1((A) => A.Sfx.enemyHit(k, false, 1));
+    out.fallback = await tone1((A) => A.Sfx.hit(false));
+    out.step = await tone1((A) => A.Sfx.step({ vol: 1 }));
+    return out;
+  });
+  const worst = Object.entries(tonal).sort((a, b) => b[1] - a[1])[0];
+  ok('audio.impactNotTonal', worst[1] < 0.35,
+    `주기성 최대 ${worst[0]} ${worst[1]} `
+    + `(해골 ${tonal.skeleton} 구울 ${tonal.ghoul} 궁수 ${tonal.archer} 골렘 ${tonal.golem} `
+    + `기본 ${tonal.fallback} 발 ${tonal.step}) — 0.35 넘으면 「뿅/핑」이다`);
+
   // ── 길목 함정이 실제로 놓이고, 실제로 막는가 ──────────────
   //
   // 층 표는 길목 함정을 층당 3~8개로 적어 뒀는데 **한 개도 안 놓이고 있었다.**
