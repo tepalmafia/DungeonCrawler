@@ -168,9 +168,11 @@ function vox(f0, { dur = 0.3, gain = 0.22, at = 0, vowel = 'a', bend = 0.8, rasp
 const VOICE = {
   skeleton: {
     hit: (v, crit) => {                       // 마른 뼈 — 딱, 잔향 없음
-      noise({ dur: crit ? 0.13 : 0.07, gain: crit ? 0.34 : 0.24, lp: 7000, lpTo: 1400, hp: 1500, vol: v });
-      tone(crit ? 320 : 240, { type: 'square', dur: 0.05, gain: 0.14, to: 120, vol: v });
-      tone(crit ? 900 : 720, { type: 'square', dur: 0.04, gain: 0.07, at: 0.015, to: 380, vol: v });
+      // **오실레이터를 안 쓴다** — 사각파 240→120 과 720→380 이 「뿅」의 정체였다.
+      // 마른 뼈는 짧고 건조하다: 딱(고역) + 속이 빈 울림(필터가 급히 닫힌다).
+      noise({ dur: crit ? 0.05 : 0.032, gain: crit ? 0.4 : 0.3, lp: 8000, lpTo: 2200, hp: 2400, q: 1.3, vol: v });
+      thump({ f0: 1700, f1: 190, dur: crit ? 0.07 : 0.05, gain: crit ? 0.34 : 0.26, q: 1.5, vol: v });
+      grit({ n: crit ? 4 : 2, f: 7200, gain: 0.09, vol: v });
     },
     attack: (v) => noise({ dur: 0.12, gain: 0.16, lp: 5400, lpTo: 1000, hp: 900, vol: v }),
     // 해골은 폐가 없다 — 비명 대신 텅 빈 그르렁. 그래도 「소리를 낸다」가 중요하다.
@@ -187,9 +189,9 @@ const VOICE = {
   },
   ghoul: {
     hit: (v, crit) => {                       // 젖은 살 — 퍽
-      noise({ dur: crit ? 0.2 : 0.13, gain: crit ? 0.4 : 0.3, lp: crit ? 1300 : 900, lpTo: 150, vol: v });
-      tone(crit ? 130 : 104, { type: 'triangle', dur: 0.14, gain: 0.22, to: 44, vol: v });
-      tone(196, { type: 'sawtooth', dur: 0.18, gain: 0.09, to: 78, at: 0.02, vol: v });  // 짧은 신음
+      // 젖은 살 — 음정이 없다. 필터가 닫히는 것만으로 무게가 난다.
+      noise({ dur: crit ? 0.14 : 0.09, gain: crit ? 0.42 : 0.32, lp: crit ? 1300 : 900, lpTo: 130, q: 1.1, vol: v });
+      thump({ f0: 700, f1: 70, dur: crit ? 0.11 : 0.08, gain: crit ? 0.4 : 0.3, q: 1.0, vol: v });
     },
     attack: (v) => {                          // 할퀴기
       noise({ dur: 0.14, gain: 0.18, lp: 3800, lpTo: 700, hp: 600, vol: v });
@@ -209,9 +211,12 @@ const VOICE = {
   },
   archer: {
     hit: (v, crit) => {                       // 망령 — 실체가 없다. 공허한 울림.
-      tone(crit ? 660 : 520, { type: 'sine', dur: 0.26, gain: 0.2, to: 170, vol: v });
-      tone(crit ? 990 : 780, { type: 'sine', dur: 0.22, gain: 0.1, at: 0.03, to: 260, vol: v });
-      noise({ dur: 0.14, gain: 0.14, lp: 3400, lpTo: 500, hp: 800, vol: v });
+      // **여기가 제일 심했다** — 0.26초짜리 사인파 두 개는 그냥 「핑」이다.
+      // 망령은 실체가 없으므로 **바람이 빠지는 소리**로 낸다. 음정 없음.
+      noise({ dur: crit ? 0.12 : 0.08, gain: crit ? 0.3 : 0.22, lp: 3800, lpTo: 700, hp: 900, q: 1.4, vol: v });
+      thump({ f0: 1200, f1: 130, dur: crit ? 0.09 : 0.065, gain: 0.26, q: 1.2, vol: v });
+      // 흩어지는 꼬리 — 위로 열리는 잡음. 음정이 아니라 **밝아지는 것**이 「사라짐」이다
+      noise({ dur: 0.16, gain: 0.09, lp: 900, lpTo: 4200, hp: 600, at: 0.03, vol: v });
     },
     attack: (v) => {                          // 시위를 놓는 팅
       tone(430, { type: 'triangle', dur: 0.14, gain: 0.16, to: 160, vol: v });
@@ -230,9 +235,11 @@ const VOICE = {
   },
   golem: {
     hit: (v, crit) => {                       // 돌 — 저역이 몸통이고 자갈이 표면이다
-      tone(crit ? 78 : 62, { type: 'sine', dur: 0.22, gain: 0.34, to: 30, vol: v });
-      noise({ dur: crit ? 0.24 : 0.16, gain: 0.3, lp: 2200, lpTo: 200, vol: v });
-      noise({ dur: 0.18, gain: 0.12, lp: 7000, lpTo: 2000, hp: 2500, at: 0.02, vol: v });  // 부스러기
+      // 돌 — 저역이 몸통이고 자갈이 표면이다. 사인파 62→30 을 뺐다:
+      // 아주 낮아도 사인파는 사인파라 스피커가 작으면 「뿅」으로 들린다.
+      thump({ f0: 700, f1: 55, dur: crit ? 0.17 : 0.13, gain: crit ? 0.5 : 0.4, q: 1.3, vol: v });
+      noise({ dur: crit ? 0.16 : 0.11, gain: 0.28, lp: 2000, lpTo: 220, q: 1.1, vol: v });
+      grit({ n: crit ? 6 : 4, f: 6800, gain: 0.11, vol: v, spread: 0.07 });
     },
     attack: (v) => {                          // 육중한 스윙
       noise({ dur: 0.24, gain: 0.2, lp: 1400, lpTo: 300, vol: v });
@@ -298,6 +305,43 @@ function voiceOk(key, ms) {
 // 「넣었는데 안 들린다」는 코드를 읽어서는 못 가린다. 겹을 따로 렌더링해
 // 같이 나는 소리와 dB 차이를 봐야 「묻혔다」인지 「안 불렸다」인지 알 수 있다.
 /**
+ * ── 타격음에 **오실레이터를 쓰지 않는다** ────────────────────
+ *
+ * 세 번 틀리고 네 번째다. 사장님 말씀이 정확했다 — 「뿅뿅 핑핑 기계음」.
+ *
+ *   ① 사각파로 「캉」 → 배음이 정수배라 게임기 소리
+ *   ② 모달 합성 Q 100~370 → 공진이 길어 종소리(「핑」)
+ *   ③ 사인파 음정 급강하 → **그 자체가 「뿅」이다.** 레트로 게임의 점프음이
+ *      정확히 「사인파를 아래로 쓸어내리는 것」이다. 빠르게 떨어뜨리면
+ *      충격으로 들릴 줄 알았는데, 사람 귀는 여전히 **음정**으로 듣는다.
+ *
+ * 결론: **충돌음에는 음정이 없다.** 오실레이터를 한 개도 쓰지 않는다.
+ * 무게는 「낮은 음」이 아니라 **「필터가 빠르게 닫히는 잡음」** 으로 만든다 —
+ * 주파수가 아니라 **음색이 어두워지는 것**이 무게로 읽힌다.
+ *
+ * 이 규칙은 타격음에만 적용한다. 마법·UI·비명은 음정이 있어야 맞다.
+ * `tools/audio-audit.js` 의 주기성(tonality) 수치가 이걸 지킨다 —
+ * 자기상관 최대값이 0.35 를 넘으면 그건 음정이지 타격이 아니다.
+ */
+
+/** 무게 — 필터가 급히 닫히는 저역 잡음. 「퍽」·「쿵」. 음정이 없다. */
+function thump({ f0 = 900, f1 = 90, dur = 0.06, gain = 0.5, q = 1.1, vol = 1, at = 0 } = {}) {
+  noise({ dur, gain, lp: f0, lpTo: f1, q, vol, at });
+}
+
+/** 금속 — 높고 아주 짧은 대역 잡음. 「챙」. 길면 「핑」이 된다. */
+function clang({ f = 4200, dur = 0.035, gain = 0.3, q = 2.6, vol = 1, at = 0 } = {}) {
+  noise({ dur, gain, lp: f, lpTo: f * 0.45, hp: f * 0.42, q, vol, at });
+}
+
+/** 파편 — 부스러기가 튀는 소리. 아주 짧은 고역 잡음 여러 개. */
+function grit({ n = 3, f = 6500, gain = 0.14, vol = 1, spread = 0.05 } = {}) {
+  for (let i = 0; i < n; i++)
+    noise({ dur: 0.018, gain, lp: f * (0.8 + Math.random() * 0.5), lpTo: f * 0.3,
+      hp: f * 0.35, at: Math.random() * spread, vol });
+}
+
+/**
  * ── 타격음 ──────────────────────────────────────────────────
  *
  * 두 번 틀리고 세 번째다. 틀린 것을 적어 둔다 — 같은 길로 다시 안 가려고.
@@ -319,13 +363,19 @@ function voiceOk(key, ms) {
  * 전부 80ms 안에 끝난다. 길면 그 순간 타격이 아니라 여운이 된다.
  */
 
-/** 물질 — 색깔만 정한다. 음정이 되면 안 되므로 Q 는 전부 낮다. */
+/**
+ * 물질 — **주파수가 아니라 필터 컷오프**다. 음정이 아니라 음색을 정한다.
+ *
+ *   f0 시작 컷오프 · f1 끝 컷오프 · bd 무게 길이
+ *   nf 재질 잡음 중심 · nq 예리함(낮게!) · nd 재질 길이
+ *   cl 금속 「챙」 세기 · gr 부스러기 개수
+ */
 const MATERIAL = {
-  //        몸통 시작Hz  끝Hz  잡음 중심Hz  잡음 Q  잡음 길이  몸통 길이
-  bone:   { f0: 210, f1: 62, nf: 1900, nq: 2.2, nd: 0.045, bd: 0.055, crack: 1.0 },
-  flesh:  { f0: 150, f1: 42, nf: 520,  nq: 1.2, nd: 0.055, bd: 0.075, crack: 0.0 },
-  stone:  { f0: 120, f1: 38, nf: 780,  nq: 1.6, nd: 0.075, bd: 0.11,  crack: 0.5 },
-  spirit: { f0: 175, f1: 55, nf: 1250, nq: 1.8, nd: 0.06,  bd: 0.07,  crack: 0.3 },
+  //          무게(필터가 닫히는 범위)      재질 잡음            금속  부스러기
+  bone:   { f0: 1500, f1: 150, bd: 0.05,  nf: 2600, nq: 1.5, nd: 0.04,  cl: 1.0, gr: 3 },
+  flesh:  { f0: 800,  f1: 80,  bd: 0.075, nf: 620,  nq: 0.9, nd: 0.06,  cl: 0.0, gr: 0 },
+  stone:  { f0: 620,  f1: 60,  bd: 0.12,  nf: 900,  nq: 1.2, nd: 0.09,  cl: 0.4, gr: 5 },
+  spirit: { f0: 1100, f1: 120, bd: 0.07,  nf: 1500, nq: 1.3, nd: 0.055, cl: 0.3, gr: 2 },
 };
 
 /**
@@ -357,37 +407,31 @@ export function impactBody(crit = false, vol = 1, mix = null) {
   const m = mix || { mat: 'flesh', body: 1, edge: 0.3 };
   const M = MATERIAL[m.mat] || MATERIAL.flesh;
   const k = crit ? 1.3 : 1;
-  const t = now();
   // 매번 조금씩 다르게 — 똑같은 소리가 반복되면 뇌가 곧바로 「기계」로 판정한다
-  const wob = 0.92 + Math.random() * 0.16;
+  const wob = 0.9 + Math.random() * 0.2;
 
-  // ① 클릭 — 「닿았다」. 2ms. 이게 타격의 첫인상 전부다.
-  noise({ dur: 0.016, gain: 0.11 * k, lp: 9000, lpTo: 3000, hp: 1200, vol: vol * m.body });
+  // ① 클릭 — 「닿았다」. 16ms. 타격의 첫인상 전부다.
+  noise({ dur: 0.016, gain: 0.2 * k, lp: 9000, lpTo: 3000, hp: 1200, vol: vol * m.body });
 
-  // ② 몸통 — 음정이 급강하하는 사인파. 킥드럼과 같은 원리다.
-  //    **빠르게 떨어져야** 음이 아니라 충격으로 들린다 (「핑」과 「퍽」의 차이).
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = 'sine';
-  o.frequency.setValueAtTime(M.f0 * wob * k, t);
-  o.frequency.exponentialRampToValueAtTime(M.f1, t + M.bd * 0.9);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.17 * k * vol * m.body, t + 0.004);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + M.bd);
-  o.connect(g).connect(master);
-  o.start(t); o.stop(t + M.bd + 0.05);
-
-  // ③ 재질 — 짧은 대역 잡음. Q 를 낮게 둬야 음정이 아니라 색깔이 된다.
-  noise({
-    dur: M.nd, gain: 0.1 * k * m.body, lp: M.nf * wob, lpTo: M.nf * 0.35,
-    hp: M.nf * 0.35, q: M.nq, vol,
+  // ② 무게 — **음정이 아니라 필터가 닫히는 잡음.** 여기가 「뿅」의 근원이었다.
+  //    사인파를 210→60Hz 로 쓸어내렸는데 그게 정확히 레트로 점프음이다.
+  thump({
+    f0: M.f0 * wob * (crit ? 1.2 : 1), f1: M.f1, dur: M.bd,
+    gain: 0.4 * k * m.body, q: 1.25, vol,
   });
 
-  // ④ 날 — 단단한 것을 벨 때만. 아주 짧게, 아주 조금. 여기가 길면 다시 「핑」이다.
-  if (m.edge > 0.05)
-    noise({ dur: 0.022, gain: 0.085 * m.edge * k, lp: 6800 * wob, lpTo: 2600, hp: 2600, q: 2.4, vol });
-  if (M.crack > 0.05)
-    noise({ dur: 0.03, gain: 0.06 * M.crack * k, lp: 3400, lpTo: 900, hp: 700, q: 1.6, vol, at: 0.006 });
+  // ③ 재질 — 「무엇을 때렸나」. Q 를 낮게 둬야 음정이 아니라 색깔이 된다.
+  noise({
+    dur: M.nd, gain: 0.2 * k * m.body, lp: M.nf * wob, lpTo: M.nf * 0.3,
+    hp: M.nf * 0.3, q: M.nq, vol,
+  });
+
+  // ④ 챙 — 단단한 것을 벨 때만. 아주 짧게. 길면 다시 「핑」이다.
+  const cl = m.edge * (M.cl || 0);
+  if (cl > 0.03) clang({ f: 4200 * wob, dur: crit ? 0.045 : 0.032, gain: 0.3 * cl * k, vol });
+
+  // ⑤ 부스러기 — 뼈·돌만. 표면이 부서지는 소리가 「단단함」을 마무리한다.
+  if (M.gr) grit({ n: M.gr, f: 6500, gain: 0.1 * k * m.body, vol });
 }
 
 // ── 발소리 ──────────────────────────────────────────────────
@@ -400,26 +444,31 @@ export function impactBody(crit = false, vol = 1, mix = null) {
 function footstep({ vol = 1, heavy = 0, right = false, wet = false } = {}) {
   if (vol <= 0.02) return;
   const p = right ? 1.06 : 0.94;                 // 좌우 발 — 같은 소리면 기계가 된다
-  // vol 은 gain 이 아니라 `vol:` 로 넘긴다 (impactBody 주석 참조 — gain 0 은 예외다)
-  tone(64 * p * (1 + heavy * 0.1), {
-    type: 'sine', dur: 0.07 + heavy * 0.03, gain: 0.09 + heavy * 0.07, to: 38, vol,
+  // **여기도 사인파가 박혀 있었다.** 64Hz 사인파를 38Hz 로 쓸어내렸는데,
+  // 주기성을 재 보니 0.847 이었다 (0.35 넘으면 음정). 발소리가 「뿅」이었다.
+  // 발이 바닥에 닿는 것도 충돌이다 — 음정이 없다.
+  // vol 은 gain 이 아니라 `vol:` 로 넘긴다 (gain 0 은 Web Audio 예외다)
+  thump({
+    f0: (620 - heavy * 120) * p, f1: 55, dur: 0.055 + heavy * 0.03,
+    gain: 0.72 + heavy * 0.4, q: 1.2, vol,
   });
   noise({
-    dur: 0.05 + heavy * 0.02, gain: 0.055 + heavy * 0.03,
+    dur: 0.05 + heavy * 0.02, gain: 0.13 + heavy * 0.07,
     lp: (wet ? 1600 : 3200) * p, lpTo: 400, hp: 300, vol,
   });
   // 젖은 바닥(침수 회랑)은 물이 튄다 — 층 테마가 귀에도 오게
-  if (wet) noise({ dur: 0.08, gain: 0.05, lp: 5200, lpTo: 1400, hp: 1800, at: 0.012, vol });
+  if (wet) noise({ dur: 0.08, gain: 0.11, lp: 5200, lpTo: 1400, hp: 1800, at: 0.012, vol });
 }
 
 // ─────────────────────── 효과음 ───────────────────────
 export const Sfx = {
   swing() { noise({ dur: 0.13, gain: 0.14, lp: 5200, lpTo: 900, hp: 700 }); },
 
+  /** VOICE 가 없는 대상용 기본 타격음. 여기도 오실레이터를 안 쓴다 (주기성 0.602 였다). */
   hit(crit = false) {
-    noise({ dur: crit ? 0.2 : 0.12, gain: crit ? 0.38 : 0.26, lp: crit ? 2600 : 1700, lpTo: 260 });
-    tone(crit ? 165 : 120, { type: 'triangle', dur: crit ? 0.17 : 0.1, gain: 0.2, to: crit ? 60 : 50 });
-    if (crit) tone(880, { type: 'square', dur: 0.09, gain: 0.09, at: 0.01, to: 440 });
+    noise({ dur: crit ? 0.12 : 0.075, gain: crit ? 0.4 : 0.3, lp: crit ? 2600 : 1700, lpTo: 240, q: 1.2 });
+    thump({ f0: 900, f1: 80, dur: crit ? 0.11 : 0.08, gain: crit ? 0.42 : 0.32, q: 1.2 });
+    if (crit) clang({ f: 4600, dur: 0.04, gain: 0.14 });
     impactBody(crit);
   },
 
