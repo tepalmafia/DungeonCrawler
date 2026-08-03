@@ -593,8 +593,11 @@ export function buildGhoul() {
 // 아니라 「아래가 사라지는 중이다」여야 하고, 그건 아래로 갈수록 좁아지는
 // 단면 + 길이가 제각각인 자락이 만든다.
 export function buildArcher() {
-  const robe = M(0x3a4a63, { roughness: 1, metalness: 0 });
-  const inner = M(0x1a2338, { roughness: 1, metalness: 0 });
+  // 색을 올렸다. 던전이 어둡고 이 몸까지 어두우면 **검은 덩어리 하나**가 되어
+  // 형태를 아무리 고쳐도 화면에서 안 보인다 — 어두운 무대의 어두운 옷은
+  // 실루엣이 아니라 공백이다
+  const robe = M(0x4a5c78, { roughness: 1, metalness: 0 });
+  const inner = M(0x28324a, { roughness: 1, metalness: 0 });
   const wood = M(0x5a4630, { roughness: 0.85 });
   const boneM = M(0xb9b09a, { roughness: 0.6 });
 
@@ -611,15 +614,15 @@ export function buildArcher() {
 
   const hips = new Part(rig.hips)
     .add(loft([
-      { y: -0.62, w: 0.055, d: 0.055 }, { y: -0.40, w: 0.180, d: 0.175 },
-      { y: -0.16, w: 0.290, d: 0.280 }, { y: 0.04, w: 0.330, d: 0.315 },
+      { y: -0.60, w: 0.075, d: 0.075 }, { y: -0.38, w: 0.230, d: 0.222 },
+      { y: -0.14, w: 0.335, d: 0.322 }, { y: 0.04, w: 0.348, d: 0.330 },
     ], { round: 2.4 }), robe);
   // 찢어진 자락 — **길이가 제각각**이라야 아래 경계가 들쭉날쭉해진다
   for (let i = 0; i < 9; i++) {
     const a = i / 9 * Math.PI * 2;
-    const len = 0.34 + ((i * 4) % 5) * 0.10;
-    hips.add(tatter(0.13, len), inner,
-      { x: Math.sin(a) * 0.125, z: Math.cos(a) * 0.125, y: -0.24,
+    const len = 0.30 + ((i * 4) % 5) * 0.09;
+    hips.add(tatter(0.16, len), inner,
+      { x: Math.sin(a) * 0.165, z: Math.cos(a) * 0.165, y: -0.18,
         rx: Math.cos(a) * 0.13, rz: -Math.sin(a) * 0.13, ry: -a });
   }
   hips.finish();
@@ -630,8 +633,13 @@ export function buildArcher() {
     .add(loft([
       { y: 0.00, w: 0.340, d: 0.300 }, { y: 0.12, w: 0.360, d: 0.300 }, { y: 0.22, w: 0.260, d: 0.220 },
     ], { round: 2.5 }), robe)
-    // 어깨 망토 — 유령의 어깨선을 만들어 준다. 없으면 그냥 자루다
-    .add(loft([{ y: 0.05, w: 0.430, d: 0.375 }, { y: 0.16, w: 0.330, d: 0.290 }], { round: 2.5 }), inner);
+    // 어깨 망토 — 유령의 어깨선을 만들어 준다. 없으면 그냥 자루다.
+    // **폭을 몸통보다 조금만 키운다.** 0.43 으로 크게 둘렀더니 어두운 재질이
+    // 몸통을 통째로 덮어서 화면에는 **검은 널빤지 하나**로 나왔다 —
+    // 어깨선을 만들려던 것이 실루엣을 지워 버렸다
+    .add(loft([
+      { y: 0.06, w: 0.375, d: 0.325 }, { y: 0.15, w: 0.330, d: 0.285 }, { y: 0.20, w: 0.250, d: 0.215 },
+    ], { round: 2.5 }), inner);
   for (let i = 0; i < 5; i++) {
     const t = (i - 2) / 2;
     chest.add(tatter(0.14, 0.50 - Math.abs(t) * 0.12), inner,
@@ -646,8 +654,10 @@ export function buildArcher() {
       { y: -0.04, w: 0.250, d: 0.250 }, { y: 0.06, w: 0.235, d: 0.240 },
       { y: 0.15, w: 0.150, d: 0.155 }, { y: 0.22, w: 0.030, d: 0.030 },
     ], { round: 2.4 }), robe)
-    .add(loft([{ y: -0.04, w: 0.190, d: 0.120 }, { y: 0.10, w: 0.175, d: 0.110 }], { round: 2.6 }),
-      inner, { z: 0.062 })
+    // 얼굴 자리 — **작고 깊어야** 「비어 있다」로 읽힌다. 크게 잡으면
+    // 두건이 아니라 검은 상자가 머리에 얹힌 꼴이 된다
+    .add(loft([{ y: -0.03, w: 0.130, d: 0.085 }, { y: 0.075, w: 0.120, d: 0.080 }], { round: 2.6 }),
+      inner, { z: 0.075 })
     .add(arc(0.112, 0.020, Math.PI * 1.1, 12), robe, { y: 0.02, z: 0.085, rx: Math.PI / 2, ry: Math.PI / 2 })
     .finish();
   eyes(rig.head, 0x9fd8ff, 0.042, 0.030, 0.105, 0.026, 0.018);
@@ -656,12 +666,12 @@ export function buildArcher() {
 
   for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
     new Part(g).add(limb(0.26, [
-      [0.00, 0.155, 0.155], [0.30, 0.140, 0.140], [1.00, 0.100, 0.100],
+      [0.00, 0.185, 0.185], [0.30, 0.170, 0.170], [1.00, 0.130, 0.130],
     ], { round: 2.4 }), robe, { rz: s * 0.1 }).finish();
   }
   for (const g of [rig.foreL, rig.foreR]) {
     new Part(g).add(limb(0.24, [
-      [0.00, 0.105, 0.105], [1.00, 0.078, 0.078],
+      [0.00, 0.138, 0.138], [0.35, 0.128, 0.128], [1.00, 0.088, 0.088],
     ], { round: 2.4 }), robe).finish();
   }
   // 손 — 소매에서 **뼈만** 나온다. 유령의 손은 옷의 일부가 아니다

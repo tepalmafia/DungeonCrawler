@@ -47,10 +47,17 @@ export const STANCE = {
     // 내려베기 — 오른쪽 위에서 왼쪽 아래로. windup 이 드는 높이다.
     windup: 2.15, follow: 0.95, out: 0.55, across: 0.35,
     guard: 0.35, weight: 1.0,
-    // 검과 방패 — 검은 **몸에서 떨어뜨려** 오른쪽 앞에 세운다.
-    // 예전 값(restForeR −1.05)은 팔꿈치를 너무 접어 검이 가슴에 붙었다.
-    restR: -0.55, restForeR: -0.62, restRz: -0.40,
-    restL: -0.34, restForeL: -1.45, restLz: 0.16,
+    // 검과 방패 — 검은 **내린다.**
+    //
+    // 예전 값(restR −0.55 · restForeR −0.62)은 위팔을 앞으로 들고 팔꿈치를
+    // 거의 안 접은 것이라, 검이 몸 앞으로 수평하게 튀어나왔다. 화면에서는
+    // 「겨눔」이 아니라 **「무언가를 가리키는 사람」**으로 보인다 —
+    // 서 있는 시간이 제일 긴 자세라 이게 캐릭터의 인상을 다 정한다.
+    //
+    // 위팔을 내리고(양수 = 뒤로) 팔꿈치를 접어 칼끝이 **아래 앞을 향하게**
+    // 한다. 방패만 살짝 올려 「싸울 준비는 되어 있다」를 남긴다.
+    restR: 0.08, restForeR: -0.40, restRz: -0.20,
+    restL: -0.30, restForeL: -1.32, restLz: 0.16,
   },
   // 해골 — 가볍고 덜그럭거린다. 예비 동작이 짧고 회복이 길다(관절이 헐겁다)
   skeleton: {
@@ -130,28 +137,28 @@ export const WEAPON_STANCE = {
   // 단검 — 짧고 빠르게. 크게 드는 순간이 없어야 「빠르다」가 읽힌다
   단검: {
     windup: 1.45, follow: 0.72, out: 0.42, across: 0.52, weight: 0.55,
-    restR: -0.62, restForeR: -0.95, restRz: -0.30,
+    restR: -0.06, restForeR: -0.66, restRz: -0.24,
   },
   // 대검 — 크게 돌려 벤다. 두 손이라 왼팔이 손잡이로 온다
   대검: {
     windup: 2.42, follow: 1.10, out: 0.82, across: 0.86, weight: 1.55, twoHand: true, elbowExt: -0.62,
-    restR: -0.44, restForeR: -0.80, restRz: -0.26,
+    restR: -0.02, restForeR: -0.58, restRz: -0.20,
   },
   // 둔기 — 위에서 아래로 정직하게 내리찍는다. 가로지름이 거의 없다
   둔기: {
     windup: 2.34, follow: 1.08, out: 0.30, across: 0.20, weight: 1.65, twoHand: true, elbowExt: -0.18,
-    restR: -0.50, restForeR: -0.84, restRz: -0.20,
+    restR: -0.02, restForeR: -0.62, restRz: -0.16,
   },
   도끼: { windup: 2.24, follow: 1.02, out: 0.62, across: 0.52, weight: 1.30, elbowExt: -0.22 },
   지팡이: {
     windup: 1.78, follow: 0.82, out: 0.52, across: 0.64, weight: 0.72, twoHand: true, elbowExt: -0.48,
-    restR: -0.52, restForeR: -0.90, restRz: -0.16,
+    restR: -0.08, restForeR: -0.66, restRz: -0.14,
   },
   // 창 — **베는 게 아니라 찌른다.** 궁수가 poseDraw 로 갈라지는 것과 같은 이유로
   // 갈라진다. 1.5 미터짜리를 머리 위로 들어 내려치면 그건 창이 아니다.
   창: {
     thrust: true, weight: 1.0, twoHand: true,
-    restR: -0.52, restForeR: -1.02, restRz: -0.24,
+    restR: -0.14, restForeR: -0.78, restRz: -0.20,
   },
 };
 

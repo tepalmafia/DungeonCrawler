@@ -45,7 +45,7 @@ import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 6;
+export const VERSION = 7;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -87,7 +87,12 @@ try {
 // 줄어 후처리까지 전부 싸지고, 확대는 CSS 의 image-rendering:pixelated 가 한다.
 // dpr 은 곱하지 않는다. 곱하면 고해상도 기기에서만 도트가 잘아져서 **기기마다
 // 그림체가 달라진다** — 도트 크기는 화면 크기가 아니라 그림체의 일부다.
-renderer.setPixelRatio(DOT.scale);
+//
+// `?dot=N` — N 분의 1 로 그린다. 1 이면 도트 없음(원래 화질), 3 이 기본, 5 면 아주 굵다.
+// 화면 크기와 눈에 따라 적정값이 다르므로 **재배포 없이 맞춰 볼 수 있어야** 한다.
+const dotArg = parseFloat(qs.get('dot'));
+const dotDiv = Number.isFinite(dotArg) && dotArg >= 1 ? Math.min(dotArg, 8) : 1 / DOT.scale;
+renderer.setPixelRatio(1 / dotDiv);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;   // r185에서 PCFSoft 는 폐기 예정
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
