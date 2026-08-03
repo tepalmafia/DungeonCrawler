@@ -758,3 +758,13 @@ body[data-post="low"] #vignette {
 
 /* 강화 단계 — 툴팁에서 눈에 띄어야 한다. 제일 오래 걸린 노가다의 결과다 */
 #tooltip .tplus { margin-top: 5px; color: #d8b45e; font-size: 11.5px; }
+
+/* 회차로 잠긴 칸 — **포인트 부족과 다르게 보여야 한다.** 둘 다 회색이면
+   「포인트만 모으면 되나 보다」로 읽히고, 회차를 넘을 이유가 안 보인다. */
+.tn.lock { opacity: .32; cursor: not-allowed; border-style: dashed; }
+.tn u.lk {
+  position: absolute; right: -6px; bottom: -6px;
+  font-size: 9px; text-decoration: none; color: #d8b45e;
+  background: #1a1522; border: 1px solid #6b5530; border-radius: 6px; padding: 0 3px;
+}
+.tinfo em.lk { color: #d8b45e; }

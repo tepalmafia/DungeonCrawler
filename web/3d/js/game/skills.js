@@ -47,6 +47,14 @@ export const SKILLS = [
       Sfx.swing();
 
       const hits = enemiesInArc(G, p.pos, p.facing, radius, spread);
+      // 「갈증」 — 맞힌 **수**에 비례해 회복한다. 뭉친 무리를 쓸수록 크다.
+      // 피해량이 아니라 수를 세는 이유: 피해에 비례하면 장비가 좋아질수록
+      // 회복이 폭발해서 나중에 아예 안 죽게 된다.
+      if (M.drain && hits.length) {
+        const heal = p.maxHp * M.drain * hits.length;
+        p.hp = Math.min(p.maxHp, p.hp + heal);
+        G.fx.number(p.center().setY(1.5), `+${Math.round(heal)}`, { color: '#7fc47a' });
+      }
       for (const e of hits) {
         const r = playerRoll(p);
         // 소용돌이 베기는 **무기 속성을 따른다** — 무기를 휘두르는 동작이므로.
@@ -70,6 +78,26 @@ export const SKILLS = [
               const r2 = playerRoll(p);
               hitEnemy(G, e2, r2.dmg * N.dmg * (M.dmg ?? 1) * M.twice,
                 { crit: r2.crit, knock: 0, color: 0xffc080, skill: true, armorPierce: M.pierce ?? 0 });
+            }
+          },
+        });
+      }
+
+      // 「메아리」 — 연격과 달리 **그 자리**가 한 번 더 돈다. 연격은 내가
+      // 다시 휘두르는 것이라 내 조준을 따라가고, 메아리는 남은 잔향이라
+      // 자리에 고정된다. 둘이 같으면 양자택일이 아니다.
+      if (M.echo) {
+        const ex = p.pos.x, ez = p.pos.z, ef = p.facing;
+        G.timers.push({
+          t: 0.45,
+          fn: () => {
+            if (p.dead) return;
+            const at = { x: ex, y: 0, z: ez };
+            G.fx.arc(at, ef, { radius, spread, color: 0x9fd0ff, life: 0.22 });
+            for (const e2 of enemiesInArc(G, at, ef, radius, spread)) {
+              const r2 = playerRoll(p);
+              hitEnemy(G, e2, r2.dmg * N.dmg * (M.dmg ?? 1) * M.echo,
+                { crit: r2.crit, knock: 0, color: 0x9fd0ff, skill: true, armorPierce: M.pierce ?? 0 });
             }
           },
         });
@@ -116,6 +144,35 @@ export const SKILLS = [
         });
       }
       // 「잔상」 — 적 시선을 끈다. 자리만 남기고 실제 처리는 ai 가 본다.
+      // 「불의 자취」 — 지나간 길이 탄다. 장판 장치를 그대로 쓴다 (새 시스템 X)
+      if (M.trail) {
+        const sx = p.pos.x, sz = p.pos.z;
+        G.timers.push({
+          t: SKILL_NUM.dash.window,
+          fn: () => {
+            const steps = 3;
+            for (let i = 1; i <= steps; i++) {
+              const k = i / steps;
+              G.fields.push({
+                x: sx + (p.pos.x - sx) * k, z: sz + (p.pos.z - sz) * k,
+                r: 1.5, life: M.trail, tick: 0,
+                dps: (p.dmgMin + p.dmgMax) * 0.16, color: 0xff7a3a,
+              });
+            }
+          },
+        });
+      }
+      // 「공백」 — 끝난 자리가 붙잡는다. 운석 「여운」과 같은 slowZones 를 쓴다.
+      // 느린 칸을 두 벌 만들면 언젠가 한쪽만 고치게 된다 (main.js 의 같은 주석).
+      if (M.vortex) {
+        G.timers.push({
+          t: SKILL_NUM.dash.window,
+          fn: () => {
+            G.slowZones.push({ x: p.pos.x, z: p.pos.z, r: 2.6, t: M.vortex, mul: 0.35 });
+            G.fx.ground(p.pos, { r0: 2.6, color: 0x8a6bff, life: M.vortex, opacity: 0.55 });
+          },
+        });
+      }
       if (M.decoy) {
         G.decoy = { x: p.pos.x, z: p.pos.z, t: M.decoy };
         // 보이게 한다 — 적이 엉뚱한 데로 걸어가는데 이유가 안 보이면
@@ -153,6 +210,10 @@ export const SKILLS = [
       G.fields.push({
         x: p.pos.x, z: p.pos.z, r: radius * N.field.r, life: N.field.life * (M.fieldLife ?? 1), tick: 0,
         dps: (p.dmgMin + p.dmgMax) * N.field.dps * (M.fieldDps ?? 1), color: 0xff6a2a,
+        // 정점 둘은 장판에 **표시만** 남긴다. 실제 동작은 updateFields 와
+        // main.onEnemyKilled 이 읽는다 — 장판이 스킬 코드를 안 들고 다니게.
+        grow: M.grow ?? 0,
+        burst: M.burst ? (p.dmgMin + p.dmgMax) * 0.5 * M.burst : 0,
       });
       return true;
     },
@@ -225,6 +286,14 @@ export const SKILLS = [
             // 「직격」 — 중심 반경 안이면 두 배. 조준이 판단거리가 된다.
             if (M.core && d < 1.5) falloff *= M.core;
             hitEnemy(G, e, r.dmg * N.dmg * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos, element: 'fire', skill: true });
+            // 「심연」 — 이 운석이 하나라도 죽였으면 재사용 대기가 사라진다.
+            // **때린 뒤에** 본다 — 때리기 전에는 죽을지 모른다.
+            // 단일 표적기로 바뀐 운석(skill-table.js)과 짝이다: 정예를 끊으면
+            // 곧바로 다음 정예에 쓴다.
+            if (M.reset && e.dead) {
+              G.cooldowns.meteor = 0;
+              G.ui?.toast?.('심연 — 운석이 다시 차올랐다', '#e35b5b');
+            }
           }
           G.fields.push({ x: target.x, z: target.z, r: radius * N.field.r, life: N.field.life, tick: 0, dps: (p.dmgMin + p.dmgMax) * N.field.dps, color: 0xff7a2a });
         },
@@ -249,7 +318,10 @@ export function trySkill(G, skill, aim) {
   if (!skill.cast(G, aim || p.pos)) return false;
   p.mp -= skill.cost;
   // 배수는 pace.js 가 정한다. SKILLS 의 cd 를 하나씩 고치면 언젠가 하나를 빠뜨린다.
-  G.cooldowns[skill.key] = skill.cd * SKILL_CD_SCALE * (1 - p.cdr);
+  // 트리가 재사용 대기를 곱할 수 있다 (「유성우」). **여기 한 곳에서만** 곱한다 —
+  // 스킬마다 따로 곱하면 언젠가 하나를 빠뜨린다.
+  const cdMod = G.tree ? (G.tree.mods(skill.key).cd ?? 1) : 1;
+  G.cooldowns[skill.key] = skill.cd * SKILL_CD_SCALE * (1 - p.cdr) * cdMod;
   G.ui.fireSkill(skill.key);
   return true;
 }
@@ -272,7 +344,22 @@ export function updateFields(G, dt) {
     const f = G.fields[i];
     f.life -= dt;
     f.tick -= dt;
-    if (f.life <= 0) { G.fields.splice(i, 1); continue; }
+    if (f.life <= 0) {
+      // 「폭심」 — 꺼지는 순간 한 번 터진다. 장판이 끝나는 것을 **기다릴**
+      // 이유가 생긴다 (여진과 겹쳐야 제일 크다).
+      if (f.burst) {
+        G.fx.shockwave({ x: f.x, y: 0, z: f.z }, { r0: 0.6, r1: f.r * 1.6, color: 0xff9a4a, life: 0.45 });
+        G.fx.burst({ x: f.x, y: 0.4, z: f.z },
+          { count: 26, color: 0xff8a3a, speed: 6, size: 0.5, life: 0.6, grav: 2 });
+        for (const e of G.enemies) {
+          if (e.dead) continue;
+          if (Math.hypot(e.pos.x - f.x, e.pos.z - f.z) < f.r * 1.6 + e.radius)
+            hitEnemy(G, e, f.burst, { knock: 0, color: 0xff8a3a, skill: true, from: f });
+        }
+      }
+      G.fields.splice(i, 1);
+      continue;
+    }
     if (Math.random() < dt * 14)
       G.fx.burst({ x: f.x + (Math.random() - 0.5) * f.r * 1.6, y: 0.1, z: f.z + (Math.random() - 0.5) * f.r * 1.6 },
         { count: 1, color: f.color, speed: 1.2, size: 0.5, life: 0.6, grav: -2 });

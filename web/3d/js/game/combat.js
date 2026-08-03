@@ -320,8 +320,12 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   // 가시 — 때린 놈에게 되돌려준다. 근접해서 때린 경우만이다:
   // 화살에 반사가 걸리면 화면 밖 궁수가 스스로 죽는 우스운 그림이 된다.
   if (p.thorns > 0 && opts.attacker && !opts.attacker.dead && !opts.ranged) {
-    hitEnemy(G, opts.attacker, p.thorns, {
-      color: 0xc0d8ff, knock: 0, silent: true, los: false, stun: false, crit: false,
+    // 「원한」(트리 4단 공용) — 체력이 35% 아래로 떨어지면 반사가 세 배다.
+    // **몰릴수록 세지는** 칸이라, 물약을 아끼고 버티는 판단이 생긴다.
+    const spite = G.tree?.mods('common').spite ?? 0;
+    const mult = (spite && p.hp < p.maxHp * 0.35) ? spite : 1;
+    hitEnemy(G, opts.attacker, p.thorns * mult, {
+      color: mult > 1 ? 0xff6a8a : 0xc0d8ff, knock: 0, silent: true, los: false, stun: false, crit: false,
     });
   }
 

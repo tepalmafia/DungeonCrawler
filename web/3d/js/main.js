@@ -48,7 +48,7 @@ import { Inventory } from './ui/inventory.js';
 import { Forge } from './ui/forge.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 11;
+export const VERSION = 12;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -326,6 +326,15 @@ function onEnemyKilled(e) {
     G.cooldowns.cleave = Math.max(0, G.cooldowns.cleave - CL.killCdr);
   // 「재점화」 — 장판 위에서 죽으면 그 자리에 작은 장판이 하나 더
   const NV = G.tree.mods('nova');
+  // 「번짐」 — 장판 위에서 죽을 때마다 그 장판이 넓어진다. 무리를 장판에
+  // 몰아넣을수록 커지므로 「끌고 와서 한 곳에 태운다」가 성립한다.
+  if (NV.grow) {
+    const gf = fieldAt(G, e.pos.x, e.pos.z);
+    if (gf) {
+      gf.r *= (1 + NV.grow);
+      fx.ground({ x: gf.x, y: 0, z: gf.z }, { r0: gf.r, color: 0xff8a3a, life: 0.35, opacity: 0.4 });
+    }
+  }
   if (NV.rekindle) {
     const f = fieldAt(G, e.pos.x, e.pos.z);
     if (f) G.fields.push({
@@ -407,7 +416,8 @@ function onEnemyKilled(e) {
     const ch = e.isBoss ? SCRAP.chance.boss : e.elite ? SCRAP.chance.elite : SCRAP.chance.normal;
     if (!e.summoned && rnd.chance(ch)) {
       const mult = e.isBoss ? SCRAP.mult.boss : e.elite ? SCRAP.mult.elite : SCRAP.mult.normal;
-      const n = Math.max(1, Math.round(SCRAP.base(G.floorNo, G.tier) * mult * rnd.range(...SCRAP.jitter)));
+      const bonus = 1 + (G.tree.mods('common').scrapBonus ?? 0);   // 「수집벽」
+      const n = Math.max(1, Math.round(SCRAP.base(G.floorNo, G.tier) * mult * rnd.range(...SCRAP.jitter) * bonus));
       G.player.scrap += n;
       fx.number(e.center().setY(1.3), `잔해 +${n}`, { color: '#9fb0c4' });
     }
@@ -559,7 +569,12 @@ function restartRun(advanceTier) {
   loadFloor(1);
   if (advanceTier) {
     const u = tierUnlock(G.tier);
+    // **회차가 스킬 포인트를 준다.** 레벨이 20 에서 멈추면(paragon-table) 그
+    // 뒤로 포인트가 안 나오는데, 4단 12칸은 회차로 잠겨 있다 — 열리기만 하고
+    // 찍을 수가 없으면 그건 안 넣은 것과 같다.
+    G.tree.grant(2);
     ui.center(`${G.tier + 1}회차`, u.note || '적이 더 강해지고 전리품이 좋아진다');
+    ui.toast('회차 보상 — 스킬 포인트 +2', '#ffd84d');
   }
   saveGame(G);   // 회차를 넘은 것은 이 게임에서 제일 큰 마디다
 }
@@ -793,7 +808,8 @@ function usePotion(kind) {
   p.potions[kind]--;
   // 8 → 24초. 물약을 연달아 들이켜면 「버티는 판단」이 사라진다 —
   // 체력이 자원이 되려면 다음 한 모금까지가 멀어야 한다.
-  p.potionCd[kind] = POTION_CD;
+  // 「담대함」이 곱한다 (트리 4단 공용). 안 찍었으면 1 이다.
+  p.potionCd[kind] = POTION_CD * (G.tree.mods('common').potCd ?? 1);
   if (kind === 'hp') {
     const heal = p.maxHp * 0.42;
     p.hp = Math.min(p.maxHp, p.hp + heal);

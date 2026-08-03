@@ -3,14 +3,25 @@
 // 설계는 docs/SKILL-TREE.md 를 따른다. 한 문장으로 줄이면
 // **레벨업이 숫자가 아니라 선택을 준다.**
 //
-// ── 이 파일이 지금 하는 일 (단계 A) ──────────────────────────
-// 표와 `mods()` 만 있다. 포인트 획득·창 UI·양자택일 잠금은 다음 단계다.
+// ── 32칸 · 4단 ──────────────────────────────────────────────
+// 1~3단 20칸은 **1~2회차면 다 찬다.** 목적이 「계속 도는 것」인데 트리가
+// 한 시간 만에 끝나면 그 뒤로는 레벨업도 보스도 아무것도 안 준다.
 //
-// **아무것도 안 찍은 상태에서 `mods()` 는 전부 1 을 돌려준다.**
-// 그래서 이 단계가 끝나도 게임은 지금과 한 글자도 다르지 않아야 한다 —
-// `tools/verify3d.js` 의 스킬 검사가 그것을 확인한다.
-// 「새 기능이 하나도 안 늘어나는」 작업이라 미루기 쉽지만, 미루면 칸을
-// 하나 만들 때마다 skills.js 를 헤집게 된다 (docs/FLOORS.md 의 A·B 와 같다).
+// 그래서 **4단 「정점」 12칸을 회차로 잠가** 뒀다 (docs/GRIND.md §10 —
+// 「회차마다 새로 열리는 것이 있어야 하는데 §5-1 의 목록은 숫자뿐이다」가
+// 답 없이 남아 있던 자리다):
+//
+//   2회차 해금 — 스킬 넷 × 양자택일 한 쌍 (8칸)
+//   4회차 해금 — 공용 4칸
+//
+// **잠긴 칸을 감추지 않는다.** 「저기 아직 못 찍는 게 있다」가 보이는 것
+// 자체가 한 회차 더 도는 이유다. 감추면 그 이유가 사라진다.
+//
+// ★ 옛 기획(docs/SKILL-TREE.md §4)은 「무한 성장을 넣으면 결국 전부 찍혀
+//   빌드가 사라진다. **상한이 있어야 선택이다**」라고 적어 두고 이 방향을
+//   버렸다. 그건 「한 판이 끝나면 사라지는」 옛 목적의 논리다. 목적이 바뀌었고
+//   (docs/GRIND.md §0) 저장이 생겼으므로 뒤집는다. 다만 **양자택일은 남긴다** —
+//   4단도 짝지어 잠그므로, 다 찍어도 갈래마다 한쪽은 영영 못 본다.
 //
 // ── 지켜야 할 것 ────────────────────────────────────────────
 // · **난수를 쓰지 않는다.** 트리가 rnd 를 부르면 층 지문이 흔들려
@@ -18,7 +29,8 @@
 // · **장비 스탯을 만지지 않는다.** 그건 items.js 의 aggregate() 몫이다.
 //   두 곳에서 같은 수치가 흐르면 나중에 어느 쪽이 원인인지 못 찾는다.
 //   트리는 **스킬 동작만** 만진다.
-// · 판이 끝나면 사라진다. 이 게임에 저장이 없다.
+// · **깃발을 만들면 읽는 곳을 같이 만든다.** 표에만 있고 아무도 안 읽는
+//   깃발은 「찍었는데 아무 일도 안 일어난다」가 되고, 오류도 안 난다.
 
 /**
  * 칸 하나.
@@ -91,7 +103,49 @@ export const NODES = {
     desc: '한 판에 한 번, 쓰러져도 장비를 안 잃는다', flag: { deathSave: 1 } },
   comSense:     { skill: 'common', tier: 1, name: '상성 감각',
     desc: '적 이름표에 약점 속성이 뜬다', flag: { showWeak: 1 } },
+
+  // ══ 4단 「정점」 — 회차가 열어 준다 ═══════════════════════
+  //
+  // `unlock` 은 **회차 인덱스**다 (0 = 1회차). 1 이면 2회차부터 찍을 수 있다.
+  // 전부 기존 장치에 걸리는 칸이다 — 새 시스템을 만들지 않는다.
+
+  // ── 회전 베기 정점 (2회차) ──
+  cleaveEcho:   { skill: 'cleave', tier: 4, unlock: 1, name: '메아리', excl: 'cleaveDrain',
+    desc: '0.45초 뒤 같은 자리가 한 번 더 돈다 (피해 55%)', flag: { echo: 0.55 } },
+  cleaveDrain:  { skill: 'cleave', tier: 4, unlock: 1, name: '갈증', excl: 'cleaveEcho',
+    desc: '맞힌 적 하나마다 최대 체력의 2%를 회복한다', flag: { drain: 0.02 } },
+
+  // ── 그림자 돌진 정점 (2회차) ──
+  dashStorm:    { skill: 'dash', tier: 4, unlock: 1, name: '불의 자취', excl: 'dashVoid',
+    desc: '지나간 자리가 3초간 탄다', flag: { trail: 3 } },
+  dashVoid:     { skill: 'dash', tier: 4, unlock: 1, name: '공백', excl: 'dashStorm',
+    desc: '끝난 자리가 2초간 적을 느리게 붙잡는다', flag: { vortex: 2 } },
+
+  // ── 화염 신성 정점 (2회차) ──
+  novaGrow:     { skill: 'nova', tier: 4, unlock: 1, name: '번짐', excl: 'novaBurst',
+    desc: '장판 위에서 적이 죽을 때마다 장판이 넓어진다', flag: { grow: 0.16 } },
+  novaBurst:    { skill: 'nova', tier: 4, unlock: 1, name: '폭심', excl: 'novaGrow',
+    desc: '장판이 사라질 때 그 자리가 한 번 터진다', flag: { burst: 2.4 } },
+
+  // ── 운석 낙하 정점 (2회차) ──
+  meteorRain:   { skill: 'meteor', tier: 4, unlock: 1, name: '유성우', excl: 'meteorAbyss',
+    desc: '재사용 대기가 절반, 대신 피해 60%', mod: { dmg: 0.6, cd: 0.5 } },
+  meteorAbyss:  { skill: 'meteor', tier: 4, unlock: 1, name: '심연', excl: 'meteorRain',
+    desc: '운석으로 처치하면 재사용 대기가 즉시 사라진다', flag: { reset: 1 } },
+
+  // ── 공용 정점 (4회차) ──
+  comHoard:     { skill: 'common', tier: 4, unlock: 3, name: '수집벽',
+    desc: '잔해를 40% 더 얻는다', flag: { scrapBonus: 0.4 } },
+  comSteady:    { skill: 'common', tier: 4, unlock: 3, name: '담대함',
+    desc: '물약 재사용 대기가 35% 짧아진다', mod: { potCd: 0.65 } },
+  comSpite:     { skill: 'common', tier: 4, unlock: 3, name: '원한',
+    desc: '체력이 35% 아래면 반사 피해가 세 배가 된다', flag: { spite: 3 } },
+  comSeer:      { skill: 'common', tier: 4, unlock: 3, name: '예지',
+    desc: '미니맵에 상점과 스위치가 늘 보인다', flag: { seer: 1 } },
 };
+
+/** 그 칸이 열려 있나 (회차 잠금). `unlock` 이 없으면 늘 열려 있다. */
+export const unlockedAt = (id, tier = 0) => (NODES[id]?.unlock ?? 0) <= tier;
 
 /** 안 찍었을 때의 값. **전부 1** — 그래서 트리가 없는 것과 같다. */
 const ONE = {};
@@ -109,24 +163,31 @@ export class SkillTree {
     this._cache = new Map();      // 찍을 때마다 비운다 — 매 프레임 다시 계산하면 낭비다
   }
 
-  /** 찍을 수 있나 — 포인트가 있고, 이미 안 찍었고, 반대편을 안 찍었다 */
-  canTake(id) {
+  /**
+   * 찍을 수 있나 — 포인트가 있고, 이미 안 찍었고, 반대편을 안 찍었고,
+   * **회차가 열어 줬다.**
+   *
+   * `tier` 를 인자로 받는다. 트리가 G 를 들고 있으면 시뮬(three 없는 환경)에서
+   * 못 쓴다 — 이 파일은 tools/tiers.js 도 읽는다.
+   */
+  canTake(id, tier = 0) {
     const n = NODES[id];
     if (!n || this.taken.has(id)) return false;
     if (this.points < 1) return false;
     if (n.excl && this.taken.has(n.excl)) return false;
+    if (!unlockedAt(id, tier)) return false;
     return true;
   }
 
-  take(id) {
-    if (!this.canTake(id)) return false;
+  take(id, tier = 0) {
+    if (!this.canTake(id, tier)) return false;
     this.taken.add(id);
     this.points--;
     this._cache.clear();
     return true;
   }
 
-  /** 「기억의 재」 — 전부 되돌린다. 값은 상점이 받는다 (docs/SKILL-TREE.md §1-5) */
+  /** 「기억의 재」 — 전부 되돌린다. 값은 부르는 쪽이 받는다 (docs/SKILL-TREE.md §1-5) */
   refund() {
     this.points += this.taken.size;
     this.taken.clear();

@@ -11,6 +11,7 @@ import { SELL_MULT } from '../game/shop.js';
 import { renderTreeGraph } from './treeview.js';
 import { iconHTML } from '../core/assets.js';
 import { PARAGON, PARA_KEYS, LEVEL_SOFT_CAP, paraProgress } from '../game/paragon-table.js';
+import { respecCost } from '../game/economy-table.js';
 
 const $ = (s) => document.querySelector(s);
 const V = new THREE.Vector3();      // 투영용 재사용 벡터
@@ -69,11 +70,16 @@ export class UI {
     // **이게 함수만 있고 부르는 데가 한 군데도 없었다.** 되돌릴 수 없으면
     // 사람은 안전한 것만 찍고, 그러면 양자택일 칸이 있으나 마나가 된다.
     this.el.respec?.addEventListener('click', () => {
-      const T = this.G.tree;
+      const T = this.G.tree, p = this.G.player;
       if (!T?.taken.size) { this.toast('아직 찍은 것이 없다', '#b8b8b8'); return; }
+      // **공짜가 아니다.** 공짜면 층마다 갈아 끼워서 선택이 사라진다
+      // (docs/SKILL-TREE.md §1-5). 값은 economy-table 에 있다.
+      const cost = respecCost(T.taken.size);
+      if ((p?.coin | 0) < cost) { this.toast(`영혼 조각 ${cost} 이 필요하다`, '#e07272'); return; }
       const n = T.taken.size;
+      p.coin -= cost;
       T.refund();
-      this.toast(`기억의 재 — ${n}점을 되돌렸다`, '#9fd0ff');
+      this.toast(`기억의 재 — ${n}점을 되돌렸다 (◈ ${cost})`, '#9fd0ff');
       this.renderTree();
     });
     this.mm = this.el.minimap.getContext('2d');
@@ -232,13 +238,20 @@ export class UI {
     const T = this.G.tree;
     const body = this.el.treeBody;
     if (!T || !body) return;
+    const tier = this.G.tier || 0;
     this.el.treePoints.textContent = `남은 포인트 ◈ ${T.points}`;
+    // 「기억의 재」 값을 버튼에 그대로 적는다 — 누르기 전에 얼마인지 보여야 한다
+    if (this.el.respec) {
+      this.el.respec.textContent = T.taken.size
+        ? `기억의 재 — 전부 되돌리기 (◈ ${respecCost(T.taken.size)})`
+        : '기억의 재 — 전부 되돌리기';
+    }
     renderTreeGraph(body, T, (id, n) => {
-      if (this.G.tree.take(id)) {
+      if (this.G.tree.take(id, tier)) {
         this.toast(`${n.name} 습득`, '#7fc47a');
         this.renderTree();
       }
-    });
+    }, tier);
     this.renderPara();
   }
 
@@ -664,6 +677,16 @@ export class UI {
     //
     // 위치를 알려 주는 것과 가는 길을 알려 주는 것은 다르다 — 길은 여전히
     // 안개 속에서 찾아야 한다. 목적지만 찍어 준다.
+    // 「예지」(트리 4단 공용) — 상점 위치를 안개 너머로 찍어 준다.
+    // 위치만 준다. 가는 길은 여전히 안개 속이다 (스위치와 같은 규칙).
+    if ((G.tree?.mods('common').seer ?? 0) && G.shop?.pos) {
+      const [sx, sz] = worldToGrid(G.shop.pos.x, G.shop.pos.z, dg.w, dg.h);
+      ctx.fillStyle = '#7fdd9f';
+      ctx.beginPath();
+      ctx.arc(ox + sx * scale + scale / 2, oz + sz * scale + scale / 2, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     const dr = G.doors;
     if (dr?.lever && !dr.lever.pulled) {
       const [lx, lz] = worldToGrid(dr.lever.x, dr.lever.z, dg.w, dg.h);
