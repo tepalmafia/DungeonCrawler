@@ -30,7 +30,7 @@ function enemiesInArc(G, origin, facing, radius, spread) {
 export const SKILLS = [
   {
     key: 'cleave', name: '회전 베기', label: 'Q', hot: 'KeyQ', icon: '🌀',
-    cost: 12, cd: 0.9,
+    cost: 16, cd: 0.9,
     desc: '전방을 크게 휩쓴다.',
     cast(G, aim) {
       const p = G.player;

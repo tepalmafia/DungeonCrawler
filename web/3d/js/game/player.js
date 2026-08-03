@@ -144,8 +144,23 @@ export class Player {
     this.attackSpeed = a.weaponSpeed * ATTACK_SCALE * (1 + a.aspd / 100) * (1 + lv * 0.012);
     this.cdr = Math.min(0.45, a.cdr / 100);
     this.leech = a.leech;
-    this.dmgMin = a.dmgMin + a.dmg + lv * 1.6;
-    this.dmgMax = a.dmgMax + a.dmg + lv * 2.4;
+    // ── 평평한 피해는 **초당**이지 타격당이 아니다 ──────────────
+    //
+    // 레벨 보너스와 「+피해」 접사를 타격마다 그냥 더하면, **빠른 무기가
+    // 그 보너스를 더 자주 적용해서** 계열 균형이 레벨과 함께 무너진다.
+    // 기반 표는 계열별 초당 피해를 8~11.5 안에 맞춰 뒀는데(items.js),
+    // 실제로 9층에서 재 보니 단검 92.5 대 대검 77.3 으로 21% 벌어져 있었다.
+    // 원인은 무기 표가 아니라 이 두 줄이었다.
+    //
+    // 공격 속도로 나누면 **초당 기여가 계열과 무관해진다.** 느린 무기는
+    // 한 대가 커지고(대검이 큰 숫자를 띄운다) 빠른 무기는 작아진다 —
+    // 그게 원래 의도한 그림이기도 하다.
+    //
+    // **무기 속도로만 나눈다.** attackSpeed 로 나누면 「+공격 속도」 접사가
+    // 스스로를 상쇄해서 아무 효과가 없는 접사가 된다.
+    const perHit = 1 / (a.weaponSpeed || 1);
+    this.dmgMin = a.dmgMin + (a.dmg + lv * 1.6) * perHit;
+    this.dmgMax = a.dmgMax + (a.dmg + lv * 2.4) * perHit;
     // 이 게임에만 있는 축들 (docs/ITEM-ECONOMY.md §3-3).
     // 접사를 스탯으로만 두고 아무 데서도 안 읽으면 그건 그냥 툴팁 장식이다 —
     // 여섯 개 전부 실제로 쓰이는 곳을 정해 뒀다.
@@ -227,7 +242,12 @@ export class Player {
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level++;
-      this.xpNext = Math.round(this.xpNext * 1.42 + 8);
+      // 1.42 는 너무 가팔랐다. 경험치에 층 배수가 없으므로(파밍 방지 —
+      // docs/FLOORS.md §7-b-4) 곡선이 성장의 전부인데, 5층부터 9층까지
+      // 다섯 층 동안 레벨이 10 → 12 로 두 칸밖에 안 올랐다. 그동안 적은
+      // powerMult 2.80 → 4.60 으로 강해진다. 1.34 로 낮추면 같은 구간이
+      // 11 → 14 가 되어 스킬 포인트도 셋 더 나온다.
+      this.xpNext = Math.round(this.xpNext * 1.34 + 8);
       ups++;
     }
     if (ups) {
