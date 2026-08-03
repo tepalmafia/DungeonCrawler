@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
 import { worldToGrid } from '../world/dungeon.js';
-import { mitigate } from './growth-table.js';
+import { mitigate, tierRef } from './growth-table.js';
 export { mitigate };
 import { ELEMENTS, elementalMult, defenseMult } from './elements.js';
 import { DIE_TIME } from './pace.js';
@@ -96,7 +96,9 @@ export function hitEnemy(G, e, rawDmg, opts = {}) {
   }
   const ap = opts.armorPierce || 0;
   const dmg = Math.max(1, Math.round(
-    mitigate(rawDmg * mult * guard, e.armor * (1 - ap), G.player.level)));
+    // **회차 눈금을 같이 넘긴다.** 안 넘기면 감쇠식이 포화해서 늦은 회차에
+    // 내 피해가 바닥값 1 로 눌린다 (growth-table.mitigate 주석 참조).
+    mitigate(rawDmg * mult * guard, e.armor * (1 - ap), G.player.level, tierRef(G.tier || 0))));
   e.hp -= dmg;
   e.flash = 0.14;
   e.aggro = true;
@@ -267,7 +269,7 @@ export function hitPlayer(G, rawDmg, opts = {}) {
   //   **아무도 그 속성을 안 읽고 있었다.**
   const atkEl = opts.element || opts.attacker?.element || 'none';
   const em = elementalDefMult(p, atkEl);
-  const dmg = Math.max(1, Math.round(mitigate(rawDmg * em, p.armor, p.level)));
+  const dmg = Math.max(1, Math.round(mitigate(rawDmg * em, p.armor, p.level, tierRef(G.tier || 0))));
   p.hp -= dmg;
   // 상성이 걸리면 눈에 보여야 한다 — 안 보이면 배웠는지 알 수 없다
   if (em !== 1 && atkEl !== 'none') {

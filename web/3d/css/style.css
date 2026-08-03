@@ -672,3 +672,89 @@ body[data-post="low"] #vignette {
 /* 마름모 칸은 45도 돌아가 있다 — 안쪽 <i> 가 되돌리므로 여기선 할 게 없다.
    다만 이모지보다 그림이 크게 잡히므로 조금 줄인다 */
 .tn .ico { width: 1.35em; height: 1.35em; }
+
+/* ── 무한 성장 (game/paragon-table.js) ──────────────────────────
+   스킬 트리 **아래**에 붙는다. 레벨이 상한에 닿기 전에는 통째로 감춘다 —
+   못 쓰는 칸이 보이면 트리가 덜 만들어진 것처럼 읽힌다. */
+#para { margin: 6px 16px 0; padding: 10px 12px; border-top: 1px solid #2a2333; }
+#para[hidden] { display: none; }
+.parahead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.parahead b { font-size: 12px; letter-spacing: 3px; color: #cbbd9f; font-weight: normal; }
+.parahead span { font-size: 11px; color: var(--dim); }
+#paraBar {
+  flex: 1; height: 5px; border-radius: 3px; background: #241d2e;
+  box-shadow: inset 0 1px 0 rgba(0,0,0,.6); overflow: hidden;
+}
+#paraBar i { display: block; height: 100%; width: 0; background: #d8b45e; transition: width .2s; }
+#paraRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.pnode {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 8px 4px; border-radius: 4px; cursor: pointer;
+  background: #201a2a; border: 1px solid var(--hue, #4a3f58); color: #cbc2d6;
+  font: inherit;
+}
+.pnode:hover:not(:disabled) { background: #2b2338; box-shadow: 0 0 12px -3px var(--hue); }
+.pnode:disabled { opacity: .45; cursor: default; }
+.pnode b { font-size: 12px; color: var(--hue); font-weight: normal; }
+.pnode span { font-size: 10px; color: var(--dim); }
+.pnode em { font-style: normal; font-size: 17px; font-variant-numeric: tabular-nums; }
+.pnode i { font-style: normal; font-size: 10px; color: #8d8577; }
+
+/* 기억의 재 — 문장 안의 버튼이라 링크처럼 보여야 한다 */
+.linkbtn {
+  background: none; border: none; padding: 0; font: inherit; font-size: inherit;
+  color: #9fd0ff; text-decoration: underline; cursor: pointer;
+}
+.linkbtn:hover { color: #cfe6ff; }
+
+/* ── 대장간 (ui/forge.js) ───────────────────────────────────── */
+#forge {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4,3,8,.62);
+}
+#forge[hidden] { display: none; }
+#forge .panel { width: min(560px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
+#forgeBody { overflow-y: auto; min-height: 0; padding: 0 16px 4px; }
+#forgeSlots {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px;
+  padding: 0 16px 10px;
+}
+.fslot {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  position: relative; padding: 6px 2px; border-radius: 3px; cursor: pointer;
+  background: #201a2a; border: 1px solid #3a3047; color: #cbc2d6; font: inherit;
+}
+.fslot i { font-style: normal; font-size: 19px; line-height: 1.1; height: 22px; }
+.fslot span { font-size: 9px; color: var(--dim); }
+.fslot em { position: absolute; top: 1px; right: 3px; font-style: normal; font-size: 10px; color: #d8b45e; }
+.fslot.on { border-color: #d8b45e; box-shadow: 0 0 12px -3px #d8b45e; }
+.fslot.empty { opacity: .45; }
+.fhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.fhead b { font-size: 14px; font-weight: normal; }
+.fhead span { font-size: 11.5px; color: #a9a0b5; }
+.fhead .fmul { color: #d8b45e; }
+.fbox {
+  margin-bottom: 10px; padding: 10px 12px; border-radius: 4px;
+  background: rgba(0,0,0,.25); border: 1px solid #2a2333;
+}
+.fbox h4 { margin: 0 0 5px; font-size: 12px; font-weight: normal; letter-spacing: 2px; color: #cbbd9f; }
+.fbox h4 small { color: var(--dim); letter-spacing: 0; }
+.fbox p { margin: 0 0 8px; font-size: 11.5px; line-height: 1.6; color: #a9a0b5; }
+.fbox .poor { color: #e07272; }
+.fnone { color: var(--dim); font-style: italic; }
+.fbtn {
+  font: inherit; font-size: 12px; padding: 6px 18px; cursor: pointer;
+  color: #e9d9a8; background: #2a2216; border: 1px solid #6b5530; border-radius: 4px;
+}
+.fbtn:hover:not(:disabled) { background: #3a2e1d; border-color: #9a7a42; }
+.fbtn:disabled { opacity: .4; cursor: default; }
+.fbtn.small { font-size: 11px; padding: 3px 10px; }
+.faff > div {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 4px 0; border-top: 1px solid #241d2e; font-size: 11.5px; color: #b9b1a5;
+}
+.faff > div:first-child { border-top: none; }
+
+/* 강화 단계 — 툴팁에서 눈에 띄어야 한다. 제일 오래 걸린 노가다의 결과다 */
+#tooltip .tplus { margin-top: 5px; color: #d8b45e; font-size: 11.5px; }

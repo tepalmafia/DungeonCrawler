@@ -5,7 +5,7 @@
 // 지금 슬롯은 셋뿐이지만 배치가 그 규칙을 따르므로, 투구·장갑이 늘어도
 // 각 열에 한 칸씩 얹으면 된다 (docs/ITEM-ECONOMY.md §3-1).
 
-import { RARITIES, SLOTS, tooltipHtml, power } from '../game/items.js';
+import { RARITIES, SLOTS, tooltipHtml, power, displayName } from '../game/items.js';
 import { fuelCap } from '../game/lantern.js';
 import { ELEMENTS } from '../game/elements.js';
 import { iconHTML } from '../core/assets.js';
@@ -138,7 +138,7 @@ export class Inventory {
         d.onclick = () => {
           const gain = power(item) - power(p.equipped[item.slot]);
           p.equip(item);
-          this.G.ui.toast(`${item.name} 장착 ${gain >= 0 ? '▲ +' : '▼ '}${gain}`, RARITIES[item.rarity].css);
+          this.G.ui.toast(`${displayName(item)} 장착 ${gain >= 0 ? '▲ +' : '▼ '}${gain}`, RARITIES[item.rarity].css);
           this.render();
           this._hideTooltip();
         };
