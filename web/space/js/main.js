@@ -17,7 +17,7 @@ import { Input } from './core/input.js';
 import { buildShip, inside, roomAt } from './world/ship.js';
 import { BODY, HEAT, VALVE } from './game/systems-table.js';
 
-export const VERSION = 2;
+export const VERSION = 3;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -34,6 +34,32 @@ const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 400);
 // 그림 통로를 **게임 로직보다 먼저** 연다 (docs/POSTMORTEM.md §2 0단계).
 // 한 장도 없어도 정상으로 끝나고, 배는 민무늬로 선다.
 await preload();
+
+// ★ 환경맵 — **금속이 검게 나오지 않게 하는 것.**
+//   반응로를 세웠더니 새까만 덩어리로 나왔다. 조명이 모자란 게 아니라,
+//   three 에서 metalness 가 높은 재질은 **반사할 환경이 없으면 검다.**
+//   세기를 올려도 안 바뀐다 — 포스트모템 §1-④ 의 「계수를 만지지 말고
+//   값을 찍는다」가 정확히 이런 경우다.
+//   실내라 하늘이 없으므로, 위아래 밝기만 있는 아주 싼 환경을 만들어 준다.
+function makeEnvironment(renderer) {
+  const cv = document.createElement('canvas');
+  cv.width = 16; cv.height = 64;
+  const c = cv.getContext('2d');
+  const g = c.createLinearGradient(0, 0, 0, 64);
+  g.addColorStop(0, '#4a5666');      // 천장 쪽 — 밝다
+  g.addColorStop(0.5, '#232a33');
+  g.addColorStop(1, '#0e1114');      // 바닥 쪽 — 어둡다
+  c.fillStyle = g; c.fillRect(0, 0, 16, 64);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const env = pmrem.fromEquirectangular(tex).texture;
+  pmrem.dispose();
+  tex.dispose();
+  return env;
+}
+scene.environment = makeEnvironment(renderer);
+scene.environmentIntensity = 0.55;
 
 const ship = buildShip(scene);
 const input = new Input(canvas);
@@ -113,6 +139,10 @@ function heatStep(dt, cooling) {
   ship.lampEngine2.color.copy(ship.lampEngine.color);
   ship.lampEngine2.intensity = 34 + 40 * hot;
   ship.matEngine.emissive?.setHSL(0.03, 0.9, 0.14 * hot);
+  // 반응로가 스스로 달아오른다 — 기관실에 들어서는 순간 눈에 들어와야 한다
+  ship.coreGlow.material.color.setHSL(0.09 - 0.09 * hot, 0.85, 0.45 + 0.35 * hot);
+  ship.lampCore.color.copy(ship.coreGlow.material.color);
+  ship.lampCore.intensity = 8 + 22 * hot;
 }
 
 // 화면 확인용 손잡이. **게임 로직은 이걸 안 쓴다** — 스크린샷을 찍고

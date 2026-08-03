@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { surface } from '../core/assets.js';
 import { buildCockpit, buildOutside } from './cockpit.js';
+import { ZONE, MAT, rackRun, handrail, conduit, doorFrame, sign } from './kit.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -136,6 +137,84 @@ export function buildShip(scene) {
   const cock = buildCockpit(ship, cockpit, H);
   buildOutside(scene, cockpit.z0);
 
+  // ── 통로 ────────────────────────────────────────────────
+  // 실제 우주선의 문법대로 짓는다: **규격 랙이 벽을 채우고, 가운데만
+  // 사람이 지나가고, 손잡이가 사방에 있고, 배관은 정리하지 않는다.**
+  // (조사 내용은 docs/space/INTERIOR.md)
+  //
+  // ★ 통로가 좁아서 랙을 못 세운다 — 폭이 2.2 뿐이다. 그래서 통로에는
+  //   **얇은 것**만 붙인다. 랙은 넓은 기관실 몫이다. 좁은 데를 억지로
+  //   채우면 지나갈 수가 없고, 그러면 왕복 노동이 더 나빠진다.
+  const CZ = ZONE.corridor;
+  for (const sx of [-1, 1]) {
+    conduit(ship, 'z', sx * (DOOR - 0.14), corridor.z0 + 0.2, corridor.z1 - 0.2, H - 0.3, CZ.accent);
+    handrail(ship, 'z', sx * DOOR, corridor.z0 + 0.3, corridor.z1 - 0.3, 1.32, -sx * 0.12);
+    // 얇은 정비 패널 몇 장 — 벽이 비어 있으면 통로가 복도가 된다
+    for (let i = 0; i < 4; i++) {
+      const z = corridor.z0 + 1.0 + i * 1.35;
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.9, 0.7), MAT.faceD);
+      p.position.set(sx * (DOOR - 0.05), 0.95, z);
+      ship.add(p);
+      const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.5),
+        new THREE.MeshBasicMaterial({ color: CZ.accent }));
+      led.position.set(sx * (DOOR - 0.09), 1.34, z);
+      ship.add(led);
+    }
+  }
+  conduit(ship, 'z', 0.34, corridor.z0, corridor.z1, H - 0.14, CZ.light);
+
+  // 문틀 — **발광시킨다.** 추격 중에 통로 입구를 못 찾으면 그것만으로 죽는다
+  doorFrame(ship, 0, cockpit.z1, DOOR, H, 0, ZONE.cockpit.light);
+  doorFrame(ship, 0, engine.z0, DOOR, H, Math.PI, ZONE.engine.light);
+  sign(ship, '조종석', 0, 2.35, cockpit.z1 + 0.03, 0, ZONE.cockpit.light, 0.5);
+  sign(ship, '기관실', 0, 2.35, engine.z0 - 0.03, Math.PI, ZONE.engine.light, 0.5);
+
+  // ── 기관실 안 ───────────────────────────────────────────
+  // 여기가 랙이 진짜로 서는 곳이다. 폭 9 라 양쪽 벽을 채워도 가운데가 남는다
+  const EZ = ZONE.engine;
+  rackRun(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.7, engine.z1 - 0.7, 1, EZ.accent, 1);
+  rackRun(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.7, engine.z1 - 0.7, -1, EZ.accent, 3);
+  for (const sx of [-1, 1]) {
+    handrail(ship, 'z', sx * (engine.x1 - 0.56), engine.z0 + 1.0, engine.z1 - 1.0, 1.42, 0);
+    conduit(ship, 'z', sx * (engine.x1 - 0.3), engine.z0 + 0.3, engine.z1 - 0.3, H - 0.32, EZ.light);
+  }
+  conduit(ship, 'x', engine.z1 - 0.9, engine.x0 + 0.6, engine.x1 - 0.6, H - 0.3, EZ.light);
+
+  // 반응로 — 방 한가운데 서 있는 덩어리. 「여기가 심장」이라고 말해 준다.
+  // 지나갈 수 있게 벽에서 떼어 놓는다 (걷기 충돌은 아직 방 사각형만 본다)
+  const core = new THREE.Group();
+  // ★ 위치를 옮겼다. 처음엔 z0+2.4 였는데 **기관실 등이 정확히 그 안에**
+  //   들어가 있었다 — 반응로가 새까맣게 나왔고, 나는 금속 재질(환경맵) 탓인
+  //   줄 알고 엉뚱한 데를 고쳤다. 등이 물체 속에 있으면 그 물체는 안 밝다.
+  //   물체와 조명의 자리를 **같이** 봐야 한다.
+  core.position.set(0, 0, engine.z0 + 3.6);
+  ship.add(core);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 2.1, 14), MAT.metal);
+  drum.position.y = 1.05;
+  core.add(drum);
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.05, 8, 20), MAT.pipe);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.45 + i * 0.62;
+    core.add(ring);
+  }
+  // 반응로가 스스로 빛난다 — 열이 오르면 main.js 가 이 색을 민다
+  const coreGlow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 0.34, 14),
+    new THREE.MeshBasicMaterial({ color: 0xff9a4a }),
+  );
+  coreGlow.position.y = 1.28;
+  core.add(coreGlow);
+  // 반응로에서 천장으로 올라가는 관 넷.
+  // ★ 처음엔 비스듬히 기울였더니 **방을 가로지르는 거대한 막대**로 보였다.
+  //   좁은 방에서 기울어진 긴 것은 전부 시야를 막는다. 수직으로 세웠다.
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const up = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, H - 2.1, 8), MAT.pipe);
+    up.position.set(Math.cos(a) * 0.66, 2.1 + (H - 2.1) / 2, Math.sin(a) * 0.66 + engine.z0 + 3.6);
+    ship.add(up);
+  }
+
   // ── 기관실 밸브 ─────────────────────────────────────────
   // 뒷벽에 붙어 있다. **끝까지 돌려야** 냉각이 열린다
   const valve = new THREE.Group();
@@ -176,15 +255,19 @@ export function buildShip(scene) {
 
   // 기관실 등은 **열에 따라 붉어진다.** 계기를 안 보고도 뜨겁다는 걸 알 수
   // 있어야 한다 (docs/space/PLAN.md §3-1 — 글로 안 알려준다)
-  const lampEngine = new THREE.PointLight(0xffb072, 60, 18, 2);
-  lampEngine.position.set(0, H - 0.35, engine.z0 + 2.2);
+  const lampEngine = new THREE.PointLight(0xffb072, 34, 14, 2);
+  lampEngine.position.set(0, H - 0.35, engine.z0 + 1.1);   // 문 쪽. 반응로에서 뗀다
   scene.add(lampEngine);
   // 기관실은 9 x 7 이라 등 하나로는 뒤쪽 밸브가 안 보인다.
   // 벽에 너무 붙이면 그 벽만 하얗게 타서 밸브가 되레 안 읽힌다 — 2.8 로 뗐다
-  const lampEngine2 = new THREE.PointLight(0xffa060, 20, 12, 2);
-  lampEngine2.position.set(0, H - 0.45, engine.z1 - 2.8);
+  const lampEngine2 = new THREE.PointLight(0xffa060, 14, 10, 2);
+  lampEngine2.position.set(0, H - 0.45, engine.z1 - 1.3);  // 밸브 쪽
   scene.add(lampEngine2);
+  // 반응로가 방을 데운다 — 열이 오르면 main.js 가 세기를 민다
+  const lampCore = new THREE.PointLight(0xff8a3c, 8, 5.5, 2);
+  lampCore.position.set(0, 1.35, engine.z0 + 3.6);
+  scene.add(lampCore);
 
-  return { cock, valve, wheel, lampEngine, lampEngine2, matEngine };
+  return { cock, valve, wheel, lampEngine, lampEngine2, lampCore, matEngine, coreGlow };
 }
 
