@@ -13,7 +13,7 @@ import { TRAITS, ELITE_SKILLS, makeElite, makeAura } from './elites.js';
 import { makeActor } from '../core/actor.js';
 import { buildSkeleton, buildGhoul, buildArcher, buildGolem } from '../core/models.js';
 import { Pose } from '../core/rig.js';
-import { poseHumanoid, faceTowards, STANCE } from '../core/anim.js';
+import { poseHumanoid, faceTowards, STANCE, stanceFor } from '../core/anim.js';
 import { ELEMENTS, ENEMY_ELEMENT, rollElement } from './elements.js';
 import { floorDef } from '../world/floors.js';
 
@@ -59,7 +59,10 @@ function alertTexture() {
  */
 function enemyPoser(rig) {
   const P = new Pose(rig);
-  const st = STANCE[rig.stance] || STANCE.skeleton;
+  // 무기 계열이 자세를 덮어쓴다 — 창을 든 해골은 베지 않고 **찌른다.**
+  // 종족 자세를 대체하는 게 아니라 얹는 것이라, 걸음걸이와 덜그럭거림은
+  // 해골 것으로 남는다. 적은 무기를 바꿔 끼지 않으므로 여기서 한 번만 합친다.
+  const st = stanceFor(STANCE[rig.stance] || STANCE.skeleton, rig.weaponFam);
   const body = (r, t, k, c) => poseHumanoid(r, P, st, c);
   return { idle: body, walk: body, attack: body, hit: body, die: body };
 }
@@ -113,21 +116,24 @@ export const ARCHETYPES = {
 const variant = (base, over) => ({ ...ARCHETYPES[base], ...over });
 
 // 해골 창병 — 사거리가 길고 선딜이 길다. **간격 관리**를 가르친다 (2층)
+// **무기가 규칙을 설명한다.** 사거리 2.9 는 숫자로는 안 보이고 자루 길이로
+// 보인다. 이게 없으면 원본과 똑같이 생긴 해골이 두 배 먼 데서 때리는 꼴이라
+// 「왜 저기서 맞지」가 된다.
 ARCHETYPES.spearman = variant('skeleton', {
-  variant: 'spearman', name: '해골 창병',
+  variant: 'spearman', name: '해골 창병', build: () => buildSkeleton({ weapon: '창' }),
   range: 2.9, windup: 0.68, recover: 0.95, dmg: 9, xp: 19,
 });
 
 // 해골 방패병 — 정면이 단단하다. **각도**를 가르친다 (3층)
 ARCHETYPES.shieldman = variant('skeleton', {
-  variant: 'shieldman', name: '해골 방패병',
+  variant: 'shieldman', name: '해골 방패병', build: () => buildSkeleton({ shield: true }),
   hp: 110, armor: 6, speed: 2.7, xp: 22,
   frontGuard: 0.6,       // 정면 60도 안에서 온 피해를 60% 막는다
 });
 
 // 성문 파수병 — 조 편성으로 나온다. 혼자면 평범하다 (7층)
 ARCHETYPES.gatekeeper = variant('skeleton', {
-  variant: 'gatekeeper', name: '성문 파수병',
+  variant: 'gatekeeper', name: '성문 파수병', build: () => buildSkeleton({ weapon: '둔기' }),
   hp: 120, dmg: 11, armor: 7, aggro: 10, xp: 24,
 });
 

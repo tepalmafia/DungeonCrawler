@@ -105,6 +105,63 @@ export const STANCE = {
 };
 
 /**
+ * 무기 계열이 자세를 덮어쓴다 — **STANCE 위에 얹는 얇은 표.**
+ *
+ * 예전에는 STANCE.knight 하나뿐이라 `windup 2.15 · weight 1.0` 로 고정이었다.
+ * 그래서 **단검을 껴도 대검처럼 크게 휘둘렀다.** 공격 속도(aspd 0.64~1.58,
+ * 2.5 배 차이)만 빨라지므로 빠른 무기일수록 큰 동작이 잘려 보였다 —
+ * 「모션이 어색하다」의 상당 부분이 이것이었다.
+ *
+ * 종족 자세를 **대체하지 않고 덮어쓴다.** 해골이 창을 들어도 걸음걸이와
+ * 덜그럭거림은 해골 것이어야 하기 때문이다. 무기는 팔이 하는 일만 바꾼다.
+ */
+// ── across 를 왜 계열마다 크게 잡는가 ──
+//
+// 무기 끝이 바닥을 뚫는 순간은 **휘두르는 끝**이 아니라 팔이 수직을 지나는
+// 순간(진행도 0.52)이다. 그때 손은 바닥에서 0.79 밖에 안 되므로, 그보다 긴
+// 무기는 수직으로 지나가는 한 반드시 바닥 아래로 들어간다. 대검(끝까지 1.39)은
+// −0.65 까지 내려갔다 — 실측 없이는 못 찾을 값이다 (tools/weapon-audit.js).
+//
+// 각도를 줄이는 걸로는 못 고친다. 지나가는 지점은 그대로이기 때문이다.
+// **궤적을 옆으로 눕히면**(across) 같은 순간에 팔이 몸 밖으로 벌어져 있어서
+// 무기가 비스듬히 지나간다. 길수록 더 눕혀야 한다.
+export const WEAPON_STANCE = {
+  검: { across: 0.52, elbowExt: -0.26 },
+  // 단검 — 짧고 빠르게. 크게 드는 순간이 없어야 「빠르다」가 읽힌다
+  단검: {
+    windup: 1.45, follow: 0.72, out: 0.42, across: 0.52, weight: 0.55,
+    restR: -0.62, restForeR: -0.95, restRz: -0.30,
+  },
+  // 대검 — 크게 돌려 벤다. 두 손이라 왼팔이 손잡이로 온다
+  대검: {
+    windup: 2.42, follow: 1.10, out: 0.82, across: 0.86, weight: 1.55, twoHand: true, elbowExt: -0.62,
+    restR: -0.44, restForeR: -0.80, restRz: -0.26,
+  },
+  // 둔기 — 위에서 아래로 정직하게 내리찍는다. 가로지름이 거의 없다
+  둔기: {
+    windup: 2.34, follow: 1.08, out: 0.30, across: 0.20, weight: 1.65, twoHand: true, elbowExt: -0.18,
+    restR: -0.50, restForeR: -0.84, restRz: -0.20,
+  },
+  도끼: { windup: 2.24, follow: 1.02, out: 0.62, across: 0.52, weight: 1.30, elbowExt: -0.22 },
+  지팡이: {
+    windup: 1.78, follow: 0.82, out: 0.52, across: 0.64, weight: 0.72, twoHand: true, elbowExt: -0.48,
+    restR: -0.52, restForeR: -0.90, restRz: -0.16,
+  },
+  // 창 — **베는 게 아니라 찌른다.** 궁수가 poseDraw 로 갈라지는 것과 같은 이유로
+  // 갈라진다. 1.5 미터짜리를 머리 위로 들어 내려치면 그건 창이 아니다.
+  창: {
+    thrust: true, weight: 1.0, twoHand: true,
+    restR: -0.52, restForeR: -1.02, restRz: -0.24,
+  },
+};
+
+/** STANCE 하나와 무기 계열을 합친다. 자세를 만들 때 **한 번만** 부른다. */
+export function stanceFor(base, fam) {
+  const w = WEAPON_STANCE[fam];
+  return w ? { ...base, ...w } : base;
+}
+
+/**
  * 한 프레임의 자세를 만든다.
  *
  * @param rig  skeleton() 이 돌려준 것
@@ -161,6 +218,9 @@ export function poseHumanoid(rig, P, st, c) {
   P.set('head', 'z', 0, 7, dt);
   P.set('chest', 'x', 0, 7, dt);      // poseIdle 이 호흡으로 덮어쓴다
   P.set('chest', 'z', 0, 8, dt);
+  // 손목. poseAttack 만 만지므로 여기서 안 되돌리면 **공격이 끝나도 손목이
+  // 꺾인 채로 남는다** — 위의 사고와 정확히 같은 함정이다.
+  P.set('handR', 'x', 0, 9, dt);
   P.pos('root', 'x', 0, 16, dt);
   P.pos('root', 'z', 0, 16, dt);      // poseAttack 이 체중 싣기로 덮어쓴다
 
@@ -300,13 +360,25 @@ function restArms(rig, P, st, dt, moving, walkT) {
   const c = Math.cos(walkT || 0) * w;
   const sw = st.armSwing;
 
-  P.set('armR', 'x', (st.restR ?? -0.25) - c * sw, 10, dt);
+  const armRx = (st.restR ?? -0.25) - c * sw;
+  const foreRx = (st.restForeR ?? -1.0) - Math.max(0, c) * sw * 0.55;
+  P.set('armR', 'x', armRx, 10, dt);
   P.set('armR', 'z', st.restRz ?? 0, 8, dt);
-  P.set('armL', 'x', (st.restL ?? -0.28) + c * sw, 10, dt);
-  P.set('armL', 'z', st.restLz ?? 0, 8, dt);
   // 팔꿈치는 앞으로 나올 때 조금 더 접힌다 — 뒤로 갈 때는 펴진다
-  P.set('foreR', 'x', (st.restForeR ?? -1.0) - Math.max(0, c) * sw * 0.55, 10, dt);
-  P.set('foreL', 'x', (st.restForeL ?? -1.15) - Math.max(0, -c) * sw * 0.55, 10, dt);
+  P.set('foreR', 'x', foreRx, 10, dt);
+
+  if (st.twoHand) {
+    // 두 손 무기는 **걸을 때도 왼손이 손잡이에 있다.** 팔을 반대로 흔들면
+    // 대검을 든 채 왼팔만 앞뒤로 흔드는 꼴이 된다 — 그게 「무기가 안 무거워
+    // 보인다」의 절반이다. 흔들림은 두 팔이 **같이** 받는다.
+    P.set('armL', 'x', armRx * 0.84 + 0.10, 10, dt);
+    P.set('armL', 'z', -0.42, 8, dt);      // 음수 = 몸을 가로질러 손잡이로
+    P.set('foreL', 'x', foreRx * 0.72 - 0.36, 10, dt);
+  } else {
+    P.set('armL', 'x', (st.restL ?? -0.28) + c * sw, 10, dt);
+    P.set('armL', 'z', st.restLz ?? 0, 8, dt);
+    P.set('foreL', 'x', (st.restForeL ?? -1.15) - Math.max(0, -c) * sw * 0.55, 10, dt);
+  }
 }
 
 // ───────────────────────── 공격 ─────────────────────────
@@ -321,6 +393,7 @@ function restArms(rig, P, st, dt, moving, walkT) {
 //   0.60–1.00  여운  — 지나간 뒤 몸이 따라 돌고 되돌아온다.
 function poseAttack(rig, P, st, k, dt) {
   if (st.ranged) return poseDraw(rig, P, st, k, dt);
+  if (st.thrust) return poseThrust(rig, P, st, k, dt);
 
   // 어깨 회전의 부호는 **넣어 보고** 정했다 (추측하면 반대로 나온다):
   //   armR.x 음수 = 팔이 위로·뒤로  (= 든다)      양수 = 아래로·앞으로 (= 내려친다)
@@ -329,6 +402,14 @@ function poseAttack(rig, P, st, k, dt) {
   // 그래서 이 동작은 **오른쪽 위 → 왼쪽 아래 대각선**이다. 위에서 아래로
   // 내려오면서 몸을 가로지른다 — 검을 쥔 사람이 실제로 하는 궤적이고,
   // 화면에서도 궤적이 제일 길게 보인다.
+  // 타격 순간 팔꿈치를 **얼마나 펴는가.**
+  //
+  // 예전에는 −0.08(거의 곧게)로 고정이었다. 짧은 검은 그래도 됐지만, 긴
+  // 무기는 팔이 수직을 지나는 그 순간(진행도 0.52) 무기가 팔의 연장이 되어
+  // 그대로 바닥에 박힌다 — 손 높이가 0.94 인데 대검은 끝까지 1.39 다.
+  // 실제로 큰 무기를 휘두르는 사람도 팔꿈치를 다 펴지 않는다. 다 펴면
+  // 무기 무게에 팔이 끌려간다.
+  const ext = st.elbowExt ?? -0.08;
   let armX, armZ, fore, chestY, chestZ, rootY = 0, lunge = 0;
 
   if (k < 0.30) {                              // 예비 — 높이 든다
@@ -350,34 +431,132 @@ function poseAttack(rig, P, st, k, dt) {
     const e = 1 - (1 - u) * (1 - u) * (1 - u);
     armX = lerp(-st.windup, st.follow, e);
     armZ = lerp(-(st.out ?? 0.5), st.across ?? 0.3, e);
-    fore = lerp(-0.62, -0.08, Math.min(1, e * 1.5));   // 팔꿈치가 **먼저** 펴진다
+    fore = lerp(-0.62, ext, Math.min(1, e * 1.5));     // 팔꿈치가 **먼저** 펴진다
     chestY = lerp(-0.36, 0.44, e);
     chestZ = lerp(0.12, -0.14, e);
     rootY = lerp(-0.03, 0.01, e);
     // 앞으로 체중을 싣는다. **작게** 둔다 — 이건 눈에 보이는 위치 이동이라
     // 벽을 등지고 때리면 그만큼 벽에 들어간다. 충돌은 이걸 모른다.
     lunge = Math.sin(u * Math.PI) * 0.045 * st.weight;
-  } else {                                     // 여운
-    const u = (k - 0.60) / 0.40;
+  } else if (k < 0.72) {
+    // ── 여운(follow-through) ── **지나친다.**
+    //
+    // 예전에는 여기가 없었다. 0.60 을 넘으면 곧장 대기 자세로 보간해서,
+    // 검이 최저점을 **찍고 곧바로 되돌아왔다.** 실제로는 관성 때문에 최저점을
+    // 지나쳐서 잠깐 멈췄다가 되돌아온다 — 조사한 애니메이션 원칙이 이걸
+    // 「물리적 무게를 알리는 주요 신호」로 꼽는다.
+    //
+    // 지나치는 양은 **무게에 비례**한다. 대검(1.55)은 크게 지나치고
+    // 단검(0.55)은 거의 안 지나친다 — 그게 무기의 무게 차이로 읽힌다.
+    const u = (k - 0.60) / 0.12;
+    const over = 1 + 0.14 * (st.weight ?? 1) * Math.sin(u * Math.PI);
+    armX = (st.follow) * over;
+    armZ = (st.across ?? 0.3) * over;
+    fore = ext;
+    chestY = 0.44 * over;
+    chestZ = -0.14;
+  } else {                                     // 회수
+    const u = (k - 0.72) / 0.28;
     armX = lerp(st.follow, st.restR ?? -0.3, u);
     armZ = lerp(st.across ?? 0.3, st.restRz ?? 0, u);
-    fore = lerp(-0.08, st.restForeR ?? -1.0, u);
+    // **팔꿈치를 먼저 접는다.** 어깨보다 두 배 빠르게 돌려놓는다.
+    //
+    // 이유가 둘이다. 하나는 사람이 실제로 그렇게 한다 — 큰 것부터 되돌리는
+    // 게 아니라 작은 관절부터 추스른다. 다른 하나는 **바닥이다**: 어깨가
+    // 되돌아오는 길에 팔이 수직을 한 번 더 지나는데, 그때 팔꿈치가 펴져
+    // 있으면 대검 칼끝이 바닥 아래 0.58 까지 내려간다. 팔꿈치를 먼저 접으면
+    // 그 순간 무기가 몸 쪽으로 접혀 올라온다.
+    fore = lerp(ext, st.restForeR ?? -1.0, Math.min(1, u * 2));
     chestY = lerp(0.44, 0, u);
     chestZ = lerp(-0.14, 0, u);
   }
 
-  const r = 26;                                // 공격은 빠르게 붙어야 한다
-  P.set('armR', 'x', armX, r, dt);
-  P.set('armR', 'z', armZ, r, dt);
-  P.set('foreR', 'x', fore, r, dt);
-  P.set('chest', 'y', chestY, r * 0.8, dt);
-  P.set('chest', 'z', chestZ, r * 0.8, dt);
-  P.set('hips', 'y', -chestY * 0.35, r * 0.6, dt);   // 골반은 가슴을 늦게 따라간다
-  P.set('head', 'y', chestY * 0.4, r * 0.5, dt);     // 고개는 표적을 계속 본다
-  // 반대 팔이 균형을 잡는다 — 벌린 만큼 반대로 벌린다
-  P.set('armL', 'x', -chestY * 0.5 + (st.restL ?? -0.3), r * 0.7, dt);
-  P.set('armL', 'z', -armZ * 0.45 + (st.restLz ?? 0), r * 0.7, dt);
+  // ── 관절마다 도착 시점을 어긋나게 한다 ──
+  //
+  // 「주니어 애니메이터가 가장 흔히 하는 실수는 캐릭터의 모든 요소가 같은
+  // 순간에 시작하고 같은 순간에 도착하게 하는 것」 — 조사 문서의 지적이고,
+  // 이 함수가 정확히 그랬다. armR·foreR·chest 가 전부 rate 26 이었다.
+  // 어깨를 먼저(32), 팔꿈치를 늦게(21), 손목을 제일 늦게(16) 붙이면
+  // 같은 궤적이 채찍처럼 이어진다. **값은 그대로고 타이밍만 어긋난다.**
+  P.set('armR', 'x', armX, 32, dt);
+  P.set('armR', 'z', armZ, 30, dt);
+  P.set('foreR', 'x', fore, 21, dt);
+  // 손목 — 팔꿈치가 펴진 만큼 무기 끝이 뒤늦게 따라 넘어간다
+  P.set('handR', 'x', (armX - (st.restR ?? -0.3)) * 0.22, 16, dt);
+  P.set('chest', 'y', chestY, 21, dt);
+  P.set('chest', 'z', chestZ, 21, dt);
+  P.set('hips', 'y', -chestY * 0.35, 16, dt);   // 골반은 가슴을 늦게 따라간다
+  P.set('head', 'y', chestY * 0.4, 13, dt);     // 고개는 표적을 계속 본다
+  if (st.twoHand) {
+    // 두 손 무기 — 왼손이 **손잡이를 같이 쥔다.** 오른팔을 따라가되 조금
+    // 덜 벌린다. 균형을 잡는 반대 팔(아래)과는 정반대의 움직임이라,
+    // 이 갈래가 없으면 대검을 한 손으로 휘두르면서 왼팔은 뒤로 벌어진다.
+    // **armL.z 는 음수여야 한다.** 왼어깨는 +X 쪽이므로 양수면 몸 **밖**으로
+    // 벌어진다 — 처음에 `-armZ*0.62 + 0.26` 으로 뒀더니 예비 동작에서 0.77 이
+    // 되어 왼팔이 오른손 반대편 허공으로 뻗었다. 두 손으로 쥔 게 아니라
+    // 만세를 부르는 모양이었다. 몸을 가로질러야 손잡이에 닿는다.
+    P.set('armL', 'x', armX * 0.84 + 0.10, 28, dt);
+    P.set('armL', 'z', -0.55 + armZ * 0.35, 26, dt);
+    P.set('foreL', 'x', fore * 0.72 - 0.36, 20, dt);
+  } else {
+    // 반대 팔이 균형을 잡는다 — 벌린 만큼 반대로 벌린다
+    P.set('armL', 'x', -chestY * 0.5 + (st.restL ?? -0.3), 18, dt);
+    P.set('armL', 'z', -armZ * 0.45 + (st.restLz ?? 0), 18, dt);
+  }
   P.pos('root', 'y', rootY, 20, dt);
+  P.pos('root', 'z', lunge, 22, dt);
+}
+
+/**
+ * 찌르기 — 창 전용. 내려베기와 아예 다른 동작이라 갈라 둔다 (poseDraw 와 같은 이유).
+ *
+ * 해골 창병은 사거리가 2.9 다. 그 거리에서 머리 위로 크게 들어 내려치면
+ * 무기가 표적 앞 허공을 지나간다 — **동작과 판정이 따로 논다.** 찌르기는
+ * 팔꿈치를 펴는 것이 곧 사거리라 둘이 맞아떨어진다.
+ *
+ * 핵심은 **어깨가 아니라 팔꿈치**다. 어깨는 거의 안 움직이고, 접힌 팔꿈치가
+ * 펴지면서 창끝이 나간다. 그래서 예비 동작에서 팔꿈치를 깊이 접는다.
+ */
+function poseThrust(rig, P, st, k, dt) {
+  let armX, fore, chestY, lunge = 0, wrist = 0;
+  const rest = st.restForeR ?? -1.0;
+  if (k < 0.32) {                              // 예비 — 뒤로 뺀다
+    const u = k / 0.32; const e = u * u;
+    armX = lerp(st.restR ?? -0.5, -0.72, e);
+    fore = lerp(rest, -1.75, e);               // 팔꿈치를 깊이 접는다
+    chestY = lerp(0, -0.40, e);
+  } else if (k < 0.44) {                       // 정지
+    armX = -0.72; fore = -1.75; chestY = -0.40;
+  } else if (k < 0.56) {                       // 찌른다 — 여기서만 맞는다
+    const u = (k - 0.44) / 0.12;
+    const e = 1 - (1 - u) * (1 - u) * (1 - u);
+    armX = lerp(-0.72, -0.92, e);
+    fore = lerp(-1.75, -0.05, e);              // 곧게 편다 = 사거리
+    chestY = lerp(-0.40, 0.30, e);
+    lunge = Math.sin(u * Math.PI) * 0.08 * (st.weight ?? 1);
+    wrist = e * 0.10;
+  } else if (k < 0.66) {                       // 여운 — 조금 더 뻗는다
+    const u = (k - 0.56) / 0.10;
+    armX = -0.92; fore = -0.05 + 0.03 * Math.sin(u * Math.PI);
+    chestY = 0.30; lunge = 0.03 * (1 - u); wrist = 0.10;
+  } else {                                     // 회수 — 뺄 때가 더 느리다
+    const u = (k - 0.66) / 0.34;
+    armX = lerp(-0.92, st.restR ?? -0.5, u);
+    fore = lerp(-0.05, rest, u);
+    chestY = lerp(0.30, 0, u);
+    wrist = 0.10 * (1 - u);
+  }
+  P.set('armR', 'x', armX, 30, dt);
+  P.set('armR', 'z', st.restRz ?? -0.24, 16, dt);
+  P.set('foreR', 'x', fore, 24, dt);
+  P.set('handR', 'x', wrist, 16, dt);
+  P.set('chest', 'y', chestY, 20, dt);
+  P.set('hips', 'y', -chestY * 0.35, 15, dt);
+  P.set('head', 'y', chestY * 0.35, 12, dt);
+  // 왼손이 자루 뒤쪽을 잡는다 — 두 손으로 밀어 넣는 모양
+  P.set('armL', 'x', armX * 0.70 + 0.14, 26, dt);
+  P.set('armL', 'z', -0.30, 20, dt);
+  P.set('foreL', 'x', fore * 0.55 - 0.50, 22, dt);
   P.pos('root', 'z', lunge, 22, dt);
 }
 

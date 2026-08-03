@@ -76,7 +76,21 @@ async function shot(page, name) {
     startLantern ? `${startLantern.name} · 연료 ${Math.round(startLantern.fuel)}초` : '없음');
 
   ok('boot.noPageError', errs.length === 0, errs[0] || '오류 0건');
-  ok('boot.version', await page.evaluate(() => window.G3.VERSION === 1));
+  // **VERSION 과 index.html 의 ?v= 가 같아야 한다.**
+  //
+  // 사장님이 「K 키가 안 되는데?」라고 하셔서 찾아보니, 3D 쪽은 `?v=3` 이
+  // 처음 만들 때 박힌 뒤로 **스무 번 넘게 배포되는 동안 한 번도 안 올라갔다.**
+  // main.js 의 URL 이 그대로면 브라우저는 캐시에 있는 옛 main.js 를 그냥 쓴다 —
+  // 새 기능(스킬 창 K)이 통째로 없는 채로 돌 수 있다는 뜻이다. 화면에는
+  // 아무 오류도 안 난다. 2D 쪽은 이걸 v190 에서 겪고 도구를 만들었는데
+  // (tools/bump-version.js 머리말) 3D 쪽에는 그 회귀 검사가 없었다.
+  const rel = await page.evaluate(async () => {
+    const html = await (await fetch('index.html?probe=1', { cache: 'no-store' })).text();
+    return { v: window.G3.VERSION, tags: [...new Set([...html.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]))] };
+  });
+  ok('boot.version', rel.v > 0 && rel.tags.length === 1 && rel.tags[0] === rel.v,
+    `VERSION ${rel.v} · index.html 캐시버스트 ${rel.tags.join(',') || '없음'}`
+    + ' (어긋나면 브라우저가 옛 파일을 계속 쓴다)');
 
   const info = await page.evaluate(() => ({
     walls: window.G3.level.wallMesh.count,
@@ -1326,6 +1340,118 @@ async function shot(page, name) {
   });
   ok('actor.weaponHeldForward', grip.knight > 0.15 && grip.skeleton > 0.1,
     `칼끝이 손보다 어깨에서 먼 정도 — 기사 ${grip.knight} · 해골 ${grip.skeleton} (음수면 거꾸로 쥔 것)`);
+
+  // **장착한 무기가 화면에 보이는가.**
+  //
+  // 이 검사가 없던 동안 무기 열여덟 개가 전부 같은 검 하나로 보였고,
+  // 게임은 아무 오류도 안 냈다 — _syncBlade() 가 색만 바꾸고 조용히 끝났으므로.
+  // 계열이 늘거나 장착 경로가 바뀌면 같은 방식으로 또 조용히 죽는다.
+  // 자세한 것은 tools/weapon-audit.js, 여기서는 제일 굵은 것만 본다.
+  const weap = await page.evaluate(async () => {
+    const THREE = await import('three');
+    const P = window.G3.player;
+    const an = await import('./js/core/anim.js');
+    const { Pose } = await import('./js/core/rig.js');
+    const FAMS = ['검', '대검', '도끼', '둔기', '단검', '지팡이'];
+    // **끝나면 원래 무기를 돌려놓는다.** 처음에 안 돌려놨더니 가짜 무기를
+    // 낀 채로 남아서 한참 뒤의 item.equip 이 실패했다 — 「장착하면 피해가
+    // 오르는가」를 재는데 기준값이 이 검사가 남긴 가짜였다.
+    // 검사가 게임 상태를 바꾸면 그 뒤의 모든 검사가 그 상태를 물려받는다.
+    const prev = P.equipped.weapon;
+    const box = new THREE.Box3(), size = new THREE.Vector3();
+    const hand = new THREE.Vector3(), tip = new THREE.Vector3();
+    const sil = new Set(), len = [];
+    for (const f of FAMS) {
+      P.equipped.weapon = { name: f, slot: 'weapon', fam: f, rarity: 0, ilvl: 1, dmg: [5, 9], spd: 1, stats: {}, baseStats: {} };
+      P.recompute();
+      P.rig.group.updateMatrixWorld(true);
+      box.setFromObject(P.rig.weapon).getSize(size);
+      sil.add([size.x, size.y, size.z].map((v) => v.toFixed(2)).join('×'));
+      P.rig.handR.getWorldPosition(hand);
+      P.rig.blade.getWorldPosition(tip);
+      len.push(+tip.distanceTo(hand).toFixed(2));
+    }
+    // 여운 — 휘두름이 최저점을 **지나쳤다가** 되돌아오는가 (관성 = 무게)
+    const peakOf = (fam) => {
+      const rig = P.rig, Ps = new Pose(rig), st = an.stanceFor(an.STANCE.knight, fam);
+      let peak = -9;
+      for (let i = 0; i <= 60; i++) {
+        an.poseHumanoid(rig, Ps, st, { dt: 1 / 60, time: i / 60, atk: i / 60, moving: 0, facing: 0, hitT: 0, dieK: 0 });
+        peak = Math.max(peak, rig.armR.rotation.x);
+      }
+      return { peak: +peak.toFixed(2), follow: st.follow };
+    };
+    const heavy = peakOf('대검'), light = peakOf('단검');
+    // 무기를 여러 번 갈아 끼워도 손에 하나만 남는가 (옛 것을 안 버리면 쌓인다)
+    let meshes = 0;
+    P.rig.handR.traverse((m) => { if (m.isMesh) meshes++; });
+    P.equipped.weapon = prev;
+    P.recompute();
+    return { sils: sil.size, fams: FAMS.length, min: Math.min(...len), max: Math.max(...len), heavy, light, meshes };
+  });
+  // ── 창이 **화면 안에 있는가 · 눌러서 열고 닫히는가** ─────────
+  //
+  // 「K가 안 되는데?」의 정체가 여기였다. K 는 정상이었고 hidden 도 풀렸는데,
+  // #tree 에 화면 중앙에 띄우는 CSS 가 통째로 없어서 창이 문서 흐름대로 쌓여
+  // **화면 아래 바깥**(1080 화면에서 y=1080)에 그려졌다. 오류도 경고도 없다.
+  // 상점도 예전에 같은 종류의 CSS 누락으로 사고가 났다 — 두 번 겪었으면
+  // 검사로 만들어야 한다. 여는 버튼이 실제로 눌리는지도 같이 본다
+  // (#hud 가 pointer-events:none 이라 auto 를 안 켜면 캔버스가 클릭을 먹는다).
+  const panels = await page.evaluate(() => {
+    const ui = window.G3.ui;
+    const out = [];
+    const openers = [
+      ['스킬', '#tree', () => ui.setTree(true), () => ui.setTree(false), '#treeBtn', '#treeClose'],
+      ['인벤토리', '#inv', null, null, null, null],
+    ];
+    for (const [name, sel, open, close, btn, x] of openers) {
+      const el = document.querySelector(sel);
+      if (!el) { out.push({ name, missing: true }); continue; }
+      const clickable = (s) => {
+        const b = s && document.querySelector(s);
+        if (!b) return null;
+        const bb = b.getBoundingClientRect();
+        if (!bb.width) return false;
+        // 그 지점에서 실제로 잡히는 요소가 이 버튼인가 — 캔버스가 먹으면 아니다
+        const hit = document.elementFromPoint(bb.x + bb.width / 2, bb.y + bb.height / 2);
+        return !!hit && (hit === b || b.contains(hit));
+      };
+      // **여는 버튼은 창이 닫혀 있을 때 재야 한다.** 열어 놓고 재면 화면을
+      // 덮는 창(inset:0)이 그 자리를 가져가서 「안 눌린다」로 나온다 —
+      // 처음에 그렇게 재서 멀쩡한 버튼을 실패로 찍었다.
+      const openOk = clickable(btn);
+      if (open) open(); else el.hidden = false;
+      const pane = el.querySelector('.panel') || el;
+      const r = pane.getBoundingClientRect();
+      out.push({
+        name,
+        inside: r.top >= -1 && r.left >= -1 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1,
+        rect: `${Math.round(r.width)}x${Math.round(r.height)} @${Math.round(r.x)},${Math.round(r.y)}`,
+        vp: `${innerWidth}x${innerHeight}`,
+        openBtn: openOk, closeBtn: clickable(x),
+      });
+      if (close) close(); else el.hidden = true;
+    }
+    return out;
+  });
+  const badPanel = panels.find((p) => p.missing || !p.inside);
+  ok('ui.panelsOnScreen', !badPanel,
+    panels.map((p) => `${p.name} ${p.missing ? '없음' : p.rect + (p.inside ? '' : ' ← 화면 밖')}`).join(' · ')
+    + ` (화면 ${panels[0]?.vp})`);
+  const treePanel = panels[0];
+  ok('ui.treeButtonsWork', treePanel && treePanel.openBtn === true && treePanel.closeBtn === true,
+    `여는 버튼 ${treePanel?.openBtn} · 닫는 ✕ ${treePanel?.closeBtn}`
+    + ' (false 면 캔버스가 클릭을 먹거나 아무 데도 안 걸려 있다)');
+
+  ok('weapon.familyMesh', weap.sils === weap.fams && weap.max - weap.min > 0.5,
+    `계열 ${weap.fams} 종의 실루엣 ${weap.sils} 가지 · 길이 ${weap.min}~${weap.max}`
+    + ' (같으면 장착이 화면에 안 보인다는 뜻)');
+  ok('weapon.swapLeavesOne', weap.meshes <= 6,
+    `여섯 번 갈아 낀 뒤 오른손에 남은 메시 ${weap.meshes} 개 (옛 무기를 안 버리면 쌓인다)`);
+  ok('weapon.followThrough',
+    weap.heavy.peak > weap.heavy.follow * 1.05 && weap.heavy.peak / weap.heavy.follow > weap.light.peak / weap.light.follow,
+    `최저점을 지나치는 정도 — 대검 ${weap.heavy.peak}/${weap.heavy.follow} · 단검 ${weap.light.peak}/${weap.light.follow}`
+    + ' (무거울수록 더 지나쳐야 무게가 읽힌다)');
 
   // 시간이 지나도 **제자리에 있는가.**
   //

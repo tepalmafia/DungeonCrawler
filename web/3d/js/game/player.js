@@ -5,7 +5,8 @@ import { makeBlobShadow } from '../core/fx.js';
 import { makeActor } from '../core/actor.js';
 import { buildKnight } from '../core/models.js';
 import { Pose } from '../core/rig.js';
-import { poseHumanoid, poseRest, STANCE } from '../core/anim.js';
+import { poseHumanoid, poseRest, STANCE, stanceFor } from '../core/anim.js';
+import { attachWeapon } from '../core/weapons.js';
 import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
@@ -32,11 +33,15 @@ export { buildKnight };
  * 같은 동사를 AnimationMixer 로 수행한다 (core/actor.js).
  */
 function knightPoser(rig, P) {
-  const body = (r, t, k, c) => poseHumanoid(r, P, STANCE.knight, c);
+  // **rig 에서 매번 읽는다.** 무기를 바꿔 끼면 자세도 바뀌는데, 여기서 한 번
+  // 잡아 두면 그 순간의 자세가 영원히 남는다 — 대검을 껴도 한손검 동작이 나온다.
+  // 참조 하나 읽는 비용이라 프레임 예산에는 안 잡힌다.
+  const st = () => rig.stanceObj || STANCE.knight;
+  const body = (r, t, k, c) => poseHumanoid(r, P, st(), c);
   return {
     idle: body, walk: body, attack: body, hit: body, die: body,
     // 앉기(C) 만 따로다. 다른 동작 위에 겹치는 게 아니라 **대체**하므로.
-    rest: (r, t, k, c) => poseRest(r, P, STANCE.knight, c.resting, Math.min(c.dt, 0.05)),
+    rest: (r, t, k, c) => poseRest(r, P, st(), c.resting, Math.min(c.dt, 0.05)),
   };
 }
 
@@ -158,7 +163,29 @@ export class Player {
     this.defCover = a.defCover || 0;
     this.hp = Math.min(this.hp ?? this.maxHp, this.maxHp);
     this.mp = Math.min(this.mp ?? this.maxMp, this.maxMp);
+    this._syncWeapon();
     this._syncBlade();
+  }
+
+  /**
+   * 장착한 무기의 **계열이 화면에 보이게** 한다.
+   *
+   * 예전에는 이 함수가 없었고 _syncBlade(색만 바꿈)가 전부였다. 그래서
+   * 처형자(대검)를 껴도 짧은 한손검이 보였고, 단검을 껴도 대검처럼 휘둘렀다.
+   * 무기를 바꿔 끼는 것이 이 게임의 핵심 보상인데 그게 화면에 없었다.
+   *
+   * **계열이 그대로면 아무것도 안 한다.** 이 함수는 recalc() 를 타고
+   * 레벨업·물약·층 이동마다 불리는데, 매번 메시를 새로 만들면 지오메트리를
+   * 계속 버리고 만들게 된다.
+   */
+  _syncWeapon() {
+    const fam = this.equipped.weapon?.fam || '검';
+    if (fam === this.rig.weaponFam) return;
+    attachWeapon(this.rig, fam, this.rig.weaponPal);
+    // 자세도 같이 간다 — 무기가 바뀌면 **팔이 하는 일**이 바뀐다.
+    // 한 번 합쳐서 들고 있는다. 매 프레임 합치면 프레임마다 객체가 하나 생긴다.
+    this.rig.stanceObj = stanceFor(STANCE.knight, this.rig.weaponFam);
+    this._syncBlade();     // 새 날에 등급 발광을 다시 입힌다
   }
 
   _syncBlade() {
