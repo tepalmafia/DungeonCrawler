@@ -20,7 +20,7 @@ import { floorDef } from '../world/floors.js';
 // 전 종족 체력 배수. 「한 마리씩 오래 싸운다」는 설계라 한 판이 길어야 하는데,
 // 아이템·스킬이 늘면서 플레이어 쪽만 세졌다. 한 곳에서 올린다 —
 // 종족마다 hp 를 손보면 종족 간 균형이 같이 흔들린다.
-export const HP_SCALE = 1.3;
+export { HP_SCALE };
 
 const V = new THREE.Vector3();
 
@@ -72,91 +72,17 @@ function enemyPoser(rig) {
 // 그래서 (1) 어그로가 무리로 번지지 않고, (2) 어그로 반경이 좁고,
 // (3) 개체 HP가 높아 한 판이 길고, (4) 너무 멀어지면 제자리로 돌아간다(리쉬).
 // 궁수만 어그로 반경이 넓다 — 잘못 끌면 곤란해지는 존재가 하나는 있어야 한다.
-export const ARCHETYPES = {
-  skeleton: {
-    key: 'skeleton', name: '해골 병사', build: buildSkeleton,
-    hp: 92, dmg: 8, armor: 4, speed: 3.0, radius: 0.42, range: 1.6,
-    windup: 0.45, recover: 0.85, aggro: 8.5, leash: 20, xp: 16, scale: 1.0, gib: 0xd6cdb4,
-  },
-  ghoul: {
-    key: 'ghoul', name: '구울', build: buildGhoul,
-    hp: 58, dmg: 8, armor: 1, speed: 5.0, radius: 0.38, range: 1.4,
-    windup: 0.3, recover: 0.6, aggro: 9.5, leash: 22, xp: 14, scale: 1.0, gib: 0x7d8a5a,
-    leap: true,
-  },
-  archer: {
-    key: 'archer', name: '망령 궁수', build: buildArcher,
-    hp: 66, dmg: 11, armor: 2, speed: 3.2, radius: 0.4, range: 11,
-    windup: 0.7, recover: 1.05, aggro: 12.5, leash: 24, xp: 20, scale: 1.0, gib: 0x7fb4d6,
-    ranged: true, keepAway: 6.5, float: true,
-  },
-  golem: {
-    key: 'golem', name: '무덤 골렘', build: buildGolem,
-    hp: 265, dmg: 21, armor: 13, speed: 2.3, radius: 0.75, range: 2.4,
-    windup: 0.9, recover: 1.25, aggro: 8, leash: 18, xp: 75, scale: 1.15, gib: 0x8a8a92,
-    heavy: true, elite: true, slam: 3.4,
-  },
-};
+import { ARCHETYPES } from './enemy-table.js';
+import { HP_SCALE, enemyDmgMult } from './growth-table.js';
 
-// ───────────────────────── 변종 ─────────────────────────
-//
-// **같은 몸, 다른 규칙** (docs/FLOORS.md §1-2 · §5-2).
-// 종족을 새로 만드는 것보다 훨씬 싸고, 난이도 설계에는 더 좋다 —
-// 「아는 실루엣인데 규칙이 다르다」가 「모르는 실루엣」보다 긴장을 만든다.
-//
-// ★ **`key` 는 원본 그대로 둔다.** 이게 이 파일에서 제일 중요한 규칙이다.
-//   저장소에 종족 키로 찾는 표가 여덟 개 있다 — 소리(VOICE) · 시체(REMAINS) ·
-//   대사(LINES·TINT) · 정예 기술(SKILL_BY_KIND) · 외침(SHOUT) · 대기 자세
-//   (BY_KIND) · 속성(ENEMY_ELEMENT) · 랜턴 드랍. 새 키를 주면 **여덟 곳이
-//   전부 조용히 기본값으로 떨어진다** — 소리 없는 어그로, 시체 없는 죽음,
-//   벙어리, 전부 대지 강타. 오류는 한 줄도 안 난다. (정찰에서 확인했다.)
-//
-//   그래서 인덱스 이름만 새로 주고 `key` 는 원본을 쓴다.
-//   구분은 `variant`(계측·검사용)와 **규칙 필드**로 한다.
-const variant = (base, over) => ({ ...ARCHETYPES[base], ...over });
-
-// 해골 창병 — 사거리가 길고 선딜이 길다. **간격 관리**를 가르친다 (2층)
-// **무기가 규칙을 설명한다.** 사거리 2.9 는 숫자로는 안 보이고 자루 길이로
-// 보인다. 이게 없으면 원본과 똑같이 생긴 해골이 두 배 먼 데서 때리는 꼴이라
-// 「왜 저기서 맞지」가 된다.
-ARCHETYPES.spearman = variant('skeleton', {
-  variant: 'spearman', name: '해골 창병', build: () => buildSkeleton({ weapon: '창' }),
-  range: 2.9, windup: 0.68, recover: 0.95, dmg: 9, xp: 19,
-});
-
-// 해골 방패병 — 정면이 단단하다. **각도**를 가르친다 (3층)
-ARCHETYPES.shieldman = variant('skeleton', {
-  variant: 'shieldman', name: '해골 방패병', build: () => buildSkeleton({ shield: true }),
-  hp: 110, armor: 6, speed: 2.7, xp: 22,
-  frontGuard: 0.6,       // 정면 60도 안에서 온 피해를 60% 막는다
-});
-
-// 성문 파수병 — 조 편성으로 나온다. 혼자면 평범하다 (7층)
-ARCHETYPES.gatekeeper = variant('skeleton', {
-  variant: 'gatekeeper', name: '성문 파수병', build: () => buildSkeleton({ weapon: '둔기' }),
-  hp: 120, dmg: 11, armor: 7, aggro: 10, xp: 24,
-});
-
-// 익사한 순례자 — 죽으면 웅덩이를 남긴다. **죽인 자리가 함정이 된다** (5층)
-ARCHETYPES.drowned = variant('ghoul', {
-  variant: 'drowned', name: '익사한 순례자',
-  hp: 70, speed: 4.6, xp: 18,
-  deathPuddle: { r: 2.6, t: 5, mul: 0.55 },
-});
-
-// 사슬 궁수 — 화살이 관통하고 잠깐 묶는다. **엄폐를 강요한다** (6층)
-ARCHETYPES.chainer = variant('archer', {
-  variant: 'chainer', name: '사슬 궁수',
-  hp: 78, dmg: 10, recover: 1.5, xp: 26,
-  arrowPierce: 2, arrowRoot: 0.55,
-});
-
-// 왕의 조각상 — 부술 때까지 안 움직인다. **선택할 수 있는 위협**이다 (8층)
-ARCHETYPES.statue = variant('golem', {
-  variant: 'statue', name: '왕의 조각상',
-  hp: 300, dmg: 21, armor: 16, aggro: 6, xp: 90,
-  immobile: true,
-});
+// 표의 `body` 문자열을 실제 빌더로 바꾼다. **표가 순수하게 남는 대가**이고,
+// 새 몸을 추가할 때 여기 한 줄만 늘리면 된다.
+const BODY = { skeleton: buildSkeleton, ghoul: buildGhoul, archer: buildArcher, golem: buildGolem };
+for (const d of Object.values(ARCHETYPES)) {
+  const make = BODY[d.body] || buildSkeleton;
+  d.build = () => make({ weapon: d.weapon, shield: d.shield });
+}
+export { ARCHETYPES };
 
 // ───────────────────────── 개체 ─────────────────────────
 export class Enemy {
@@ -193,7 +119,7 @@ export class Enemy {
     // 체력만 올리면 「더 오래 두들기는」 게임이 되고, 피해를 같이 올려야
     // 「조심하는」 게임이 된다. 지수 1.24 면 1층은 그대로(1^1.28 = 1)이고
     // 9층만 4.60 → 6.9 로 오른다 — **초반은 안 건드리고 후반만 조인다.**
-    this.dmg = d.dmg * Math.pow(powerMult, 1.24);
+    this.dmg = d.dmg * enemyDmgMult(powerMult);
     this.armor = d.armor * powerMult;
     this.atkSpeedMul = 1;      // 정예 특성이 올린다
     // 속성 — 기본은 종족값. spawnFloor 가 층 분포로 덮어쓴다 (game/elements.js).
