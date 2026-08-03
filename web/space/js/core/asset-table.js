@@ -20,12 +20,48 @@ export const ASSET_ROOT = 'assets/';
 //
 // **이어 붙는(tiling) 그림이어야 한다.** 왼쪽 끝과 오른쪽 끝이 만나도
 // 티가 안 나야 한다. 벽 한 장이 월드 4 x 2.6 유닛을 덮는다.
-const SURFACES = {
+const BASE_SURFACES = {
   'surf/hull_wall': { w: 512, h: 512, tile: 'xy', what: '선체 벽 — 금속판·리벳' },
   'surf/hull_floor': { w: 512, h: 512, tile: 'xy', what: '바닥 — 격자 발판' },
   'surf/hull_ceil': { w: 512, h: 512, tile: 'xy', what: '천장 — 배관이 지나간다' },
   'surf/engine_wall': { w: 512, h: 512, tile: 'xy', what: '기관실 벽 — 더 거칠고 그을렸다' },
 };
+
+// ─────────────────────── 곁그림 — 무늬 한 장에 딸려 오는 것들 ───────────────
+//
+// ★ 왜 이걸 미리 넣어 두는가
+//   색 한 장(map)만 붙이면 **평평한 종이에 사진을 바른 것**으로 보인다.
+//   등이 지나가도 리벳에 그림자가 안 생기고, 젖은 바닥과 마른 벽이 똑같이
+//   번들거린다. 우리 배는 등이 움직이고(추격 중 경고등) 창밖 빛이 바뀌므로
+//   그 차이가 특히 크게 난다.
+//
+//   내려받는 CC0 무늬는 거의 다 이 세 장을 **한 묶음으로** 준다
+//   (`*_Color` · `*_NormalGL` · `*_Roughness`). 받아 놓고 색만 쓰면
+//   나머지 두 장은 그냥 버려지는 셈이다.
+//
+// ★ 이름 규칙 — 뒤에 꼬리표만 붙인다
+//   `surf/hull_wall.png` · `surf/hull_wall_n.png` · `surf/hull_wall_r.png`
+//   색 한 장만 넣어도 된다. 곁그림은 **있으면 쓰고 없으면 없는 대로 돈다.**
+//
+// ★ 색 공간을 갈라야 한다 — 안 가르면 조용히 틀린다
+//   색(map)은 sRGB, 굴곡·거칠기는 **선형**이다. 전부 sRGB 로 읽으면
+//   거칠기 값이 감마만큼 어긋나 「무늬는 붙었는데 어딘가 미끈거린다」가
+//   되고, 원인을 화면만 봐서는 못 찾는다. 그래서 표가 슬롯을 들고 있다.
+export const MAP_KINDS = {
+  _n: { slot: 'normalMap', what: '굴곡 — 노멀맵 (보라빛. OpenGL 방향)' },
+  _r: { slot: 'roughnessMap', what: '거칠기 — 흑백. 흰 곳이 거칠다' },
+};
+
+const SURFACES = {};
+for (const [key, spec] of Object.entries(BASE_SURFACES)) {
+  SURFACES[key] = { ...spec, slot: 'map' };
+  for (const [suffix, kind] of Object.entries(MAP_KINDS)) {
+    SURFACES[key + suffix] = {
+      ...spec, slot: kind.slot, of: key, optional: true,
+      what: `${spec.what} — ${kind.what}`,
+    };
+  }
+}
 
 // ─────────────────────── 2순위 · 계기와 라벨 ───────────────────────
 // 배가 「누가 만든 물건」으로 보이게 하는 것. 한 장에 몰아 담는다.
@@ -66,3 +102,12 @@ export const ASSETS = { ...SURFACES, ...DECALS, ...FX, ...SKY };
 
 /** 없어도 게임이 도는가 — 지금은 **전부 그렇다.** 하나도 없이 시작한다. */
 export const OPTIONAL = new Set(Object.keys(ASSETS));
+
+/**
+ * 곁그림(`_n` · `_r`) 열쇠. 「몇 장 들어왔나」를 셀 때 이건 따로 센다 —
+ * 안 그러면 색 네 장을 다 넣고도 「12장 중 4장」이라 찍혀서 **다 넣었는데
+ * 덜 넣은 것처럼 보인다.** 숫자가 사람을 속이면 그 숫자는 안 보게 된다.
+ */
+export const COMPANION = new Set(
+  Object.keys(ASSETS).filter((k) => ASSETS[k].of),
+);

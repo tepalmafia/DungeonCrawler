@@ -150,13 +150,15 @@ node tools/sim.js                밸런스·템포 (1초) · 던전 전용
 node tools/sim.js --csv          엑셀용
 node tools/bump-version.js 3d N     던전 캐시버스트 동기화
 node tools/bump-version.js space N  스페이스워 캐시버스트 동기화
-node tools/assets.js             그림 몇 장 들어왔나 (--write 로 목록 갱신)
+node tools/assets.js 3d          던전 — 그림 몇 장 들어왔나 (--write 로 목록 갱신)
+node tools/assets.js space       스페이스워 — 같은 것 (넣는 법은 web/space/assets/CREDITS.md)
 node tools/export-starter.js ../새저장소   다음 게임으로 뼈대 뽑기 (docs/REUSE.md)
 node tools/space-sim.js          스페이스워 — 추격이 90~180초인가 (브라우저 없이)
 node tools/space-missions.js     스페이스워 — 마주치는 것들이 규칙을 지키나
 node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
 node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
-                                 (walk·chase 는 serve.py 를 먼저 띄운다)
+node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
+                                 (walk·chase·skin 은 serve.py 를 먼저 띄운다)
 ```
 
 **그림은 `web/3d/assets/` 에 떨어뜨리면 게임에 나옵니다.** 규격은
