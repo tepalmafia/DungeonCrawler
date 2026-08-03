@@ -1,23 +1,43 @@
-// 몸 — 기사와 몬스터 다섯의 메시. core/rig.js 의 골격 위에 살을 붙인다.
+// 몸 — 전사와 몬스터 넷. **형태는 단면 쌓기(core/form.js)로 짓는다.**
 //
-// ── 예전 것과 무엇이 다른가 ──────────────────────────────────
-//   관절   6 개  → 18 개  (팔꿈치·무릎·목·발이 생겼다)
-//   부위   ~14   → ~34    (허리띠·정강이받이·손·갈비 하나하나)
-//   모서리 직각  → 8 각   (모따기 — 하이라이트가 모서리를 타고 흐른다)
-//   메시   ~14   → ~20    (관절마다 재질별로 합치므로 부위 수만큼 늘지 않는다)
+// ── 왜 통째로 다시 썼는가 ────────────────────────────────────
+// 예전 판은 관절 하나에 각기둥 하나를 매다는 방식이었다. 부위를 34 개까지
+// 늘리고 모따기를 8 각으로 올려도 형태가 안 나왔는데, 이유가 부위 수나
+// 폴리곤이 아니었다 — **한 부위 안에서 굵기가 안 변했기 때문**이다.
 //
-// 폴리곤은 캐릭터당 1,200 ~ 2,600 삼각형이다. 저폴리의 범주 안이고,
-// 화면에 20 마리가 떠도 5 만 삼각형이라 문제가 되는 규모가 아니다.
-// **품질을 올린 것은 폴리곤이 아니라 관절과 실루엣이다.**
+// 사람 몸의 실루엣은 전부 거기서 나온다:
+//
+//   · 어깨에서 허리로 좁아졌다가 골반에서 다시 벌어진다 (V 자)
+//   · 허벅지는 위가 굵고 무릎에서 잘록하다
+//   · 종아리는 **위쪽 1/4 이 가장 굵다** — 가운데가 아니다
+//   · 팔뚝은 팔꿈치 바로 아래가 굵고 손목에서 절반으로 준다
+//
+// 도형 하나로는 못 한다. 높이마다 단면을 놓고 이어 붙인다(loft). 링 네댓
+// 개면 위 곡선이 다 나오고, 위 규칙을 **숫자로 그대로** 옮길 수 있다.
+// 아래의 `[0.24, 0.190, 0.205]` 같은 줄이 그 규칙 한 줄씩이다.
+//
+// 골렘만 예외로 **깨진 돌덩이(rock)** 를 쓴다. 살과 갑옷에 쓰면 「관절에
+// 매단 풍선」이 되지만 바위한테는 그게 맞다.
+//
+// ── 그리고 플레이어는 사람이다 ───────────────────────────────
+// 예전 기사는 얼굴 없는 통조림이었다. 몬스터 넷이 전부 얼굴 없는 것들이라
+// **그 대비가 곧 주인공**이 된다 — 얼굴이 있는 쪽이 하나뿐이면 그쪽이 「나」다.
+// 다만 이목구비를 세공하지는 않는다. 이 크기에서 얼굴로 읽히는 것은
+// **눈두덩 그늘 · 코의 능선 · 수염 덩어리** 셋이고, 그 위치만 맞으면 된다.
+//
+// 골격(rig.js)은 그대로 18 관절이다 — 동작 코드는 한 줄도 안 바뀐다.
 
 import * as THREE from 'three';
-// 무기 지오메트리(blade)는 여기서 안 쓴다 — 전부 core/weapons.js 로 옮겼다.
 import { prism, slab, spike, Part, skeleton } from './rig.js';
+import { loft, limb, snout, arc, rock } from './form.js';
 import { attachWeapon, attachBuckler } from './weapons.js';
 
 function M(color, opt = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1, ...opt });
 }
+
+/** 뜯긴 천 조각 — 아래가 좁아지는 판. 길이를 다르게 겹치면 넝마가 된다 */
+const tatter = (w, h, d = 0.02) => prism(w * 0.35, d, h, w, d, { sides: 4 });
 
 /** 모든 몸이 공통으로 하는 마무리 */
 function done(rig, mats) {
@@ -27,208 +47,413 @@ function done(rig, mats) {
   return rig;
 }
 
-// ═══════════════════════════ 기사 ═══════════════════════════
+/** 발광하는 눈 — 몬스터용. 뒤에 가산 원반이 없으면 「밝은 점」으로 끝난다 */
+function eyes(head, color, x, y, z, w = 0.03, h = 0.024) {
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const g = prism(w, h * 0.8, h, w, h * 0.8, { hang: false, sides: 4 });
+  for (const sx of [x, -x]) {
+    const e = new THREE.Mesh(g, mat);
+    e.position.set(sx, y, z);
+    head.add(e);
+  }
+  return mat;
+}
+
+/**
+ * **속의 불** — 골렘의 심장에서 온 것. 몬스터마다 하나씩 가진다.
+ * 어두운 던전에서는 이게 형태보다 먼저 읽히고, 「속이 비지 않았다」가 된다.
+ */
+function core(parent, color, r, x, y, z) {
+  const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0),
+    new THREE.MeshBasicMaterial({ color }));
+  c.position.set(x, y, z);
+  parent.add(c);
+  return c;
+}
+
+// ═══════════════════════════ 전사 (사람) ═══════════════════════════
 //
-// 실루엣 규칙: **어깨가 제일 넓고, 허리가 잘록하고, 투구에 볏이 있다.**
+// 실루엣 규칙: **어깨가 제일 넓고, 허리가 잘록하고, 투구 위가 뾰족하다.**
 // 던전은 어두워서 대부분 역광 실루엣으로만 읽힌다 — 그 셋만 지키면
-// 멀리서도 「내 캐릭터」로 구분된다.
+// 멀리서도 「내 캐릭터」로 구분된다. 거기에 하나 더: **얼굴이 보인다.**
 export function buildKnight() {
-  const steel = M(0x9aa2b8, { metalness: 0.86, roughness: 0.28 });
-  const dark = M(0x3a3746, { metalness: 0.4, roughness: 0.62 });
-  const gold = M(0xb99a4e, { metalness: 0.85, roughness: 0.3 });
-  const cloth = M(0xa93b45, { roughness: 0.95, metalness: 0.02 });
-  const leather = M(0x59422e, { roughness: 0.88, metalness: 0.04 });
-  const bladeMat = M(0xd7dbe6, { metalness: 0.9, roughness: 0.18 });
+  const skin = M(0xc99a72, { roughness: 0.8, metalness: 0 });
+  const hair = M(0x2b1f18, { roughness: 0.95, metalness: 0 });
+  const steel = M(0x8c96ac, { metalness: 0.85, roughness: 0.32 });
+  const dark = M(0x2b2936, { metalness: 0.4, roughness: 0.65 });
+  const gold = M(0xc0a054, { metalness: 0.9, roughness: 0.28 });
+  const cloth = M(0x9e2f3a, { roughness: 0.98, metalness: 0.02 });
+  const leather = M(0x54402c, { roughness: 0.9, metalness: 0.04 });
+  const bladeMat = M(0xd8dce6, { metalness: 0.92, roughness: 0.16 });
 
   // hipY 는 **허벅지 + 정강이 + 발목 높이**여야 한다. 처음에 허벅지+정강이만
-  // 더해 놨더니 다섯 중 셋이 발목까지 바닥에 파묻혀 부츠가 잘려 나왔다.
+  // 더해 놨더니 발목까지 바닥에 파묻혀 부츠가 잘려 나왔다.
   const rig = skeleton({
-    hipY: 0.98, legX: 0.14, thigh: 0.44, shin: 0.42,   // 0.44+0.42+발목 0.12
+    hipY: 0.98, legX: 0.15, thigh: 0.44, shin: 0.42,
     spineY: 0.04, chestY: 0.24, neckY: 0.22, headY: 0.1,
-    armX: 0.28, armY: 0.12, upper: 0.32, fore: 0.30,
+    armX: 0.29, armY: 0.12, upper: 0.32, fore: 0.30,
   });
 
-  // ── 다리 ── 허벅지는 위가 굵고 아래가 가늘다. 정강이받이는 판을 덧댄다.
-  // prism(아래폭, 아래깊이, 높이, 위폭, 위깊이) 다 — 처음에 뒤집어 적어서
-  // 허벅지가 무릎보다 가늘었다. 사지는 **관절 쪽(위)이 굵다.**
-  const thighG = prism(0.155, 0.175, 0.44, 0.21, 0.23);
-  const shinG = prism(0.13, 0.15, 0.42, 0.16, 0.18);
-  const greave = slab(0.17, 0.30, 0.06, 0.02);
-  const footG = prism(0.16, 0.30, 0.10, 0.14, 0.24);
+  // ── 다리 ──
+  // 허벅지: 사타구니 쪽이 제일 굵고 무릎에서 2/3 로 준다
+  // 종아리: **위에서 1/4 지점이 최대.** 가운데를 최대로 하면 소시지가 된다
   for (const [th, sh, ft] of [[rig.thighL, rig.shinL, rig.footL], [rig.thighR, rig.shinR, rig.footR]]) {
-    new Part(th).add(thighG, dark).finish();
-    new Part(sh).add(shinG, dark).add(greave, steel, { y: -0.19, z: 0.09 }).finish();
-    new Part(ft).add(footG, steel, { y: -0.02, z: 0.05 }).finish();
+    new Part(th).add(limb(0.44, [
+      [0.00, 0.235, 0.245], [0.16, 0.240, 0.250], [0.62, 0.190, 0.205], [1.00, 0.160, 0.175],
+    ], { round: 2.3 }), dark)
+      .add(loft([{ y: -0.30, w: 0.20, d: 0.115 }, { y: -0.16, w: 0.235, d: 0.13 }, { y: -0.02, w: 0.215, d: 0.12 }],
+        { round: 3.2 }), steel, { z: 0.075 })        // 넓적다리 판
+      .finish();
+    new Part(sh).add(limb(0.42, [
+      [0.00, 0.170, 0.185], [0.24, 0.190, 0.205], [0.70, 0.120, 0.135], [1.00, 0.098, 0.115],
+    ], { round: 2.3 }), dark)
+      .add(loft([{ y: -0.30, w: 0.135, d: 0.10 }, { y: -0.16, w: 0.175, d: 0.12 }, { y: -0.01, w: 0.185, d: 0.125 }],
+        { round: 3.4 }), steel, { z: 0.055 })        // 정강이받이
+      .add(loft([{ y: -0.06, w: 0.145, d: 0.10 }, { y: 0.01, w: 0.185, d: 0.13 }, { y: 0.06, w: 0.155, d: 0.11 }],
+        { round: 3.0 }), steel, { z: 0.03 })         // 무릎덮개
+      .finish();
+    // 발 — 앞으로 뻗고 앞코가 좁다. 네모난 발은 실루엣을 뭉갠다
+    new Part(ft).add(snout(0.30, [
+      [0.00, 0.135, 0.115], [0.30, 0.150, 0.135], [0.80, 0.115, 0.095], [1.00, 0.060, 0.055],
+    ], { round: 2.8 }), steel, { y: -0.055, z: -0.06 }).finish();
   }
 
-  // ── 골반 · 허리띠 ── 허리를 좁히면 어깨가 상대적으로 넓어 보인다
+  // ── 골반 ── 위는 허리로 좁아지고 아래는 다시 벌어진다
   new Part(rig.hips)
-    .add(prism(0.38, 0.26, 0.20, 0.34, 0.24, { hang: false }), dark, { y: -0.06 })
-    .add(prism(0.40, 0.28, 0.08, 0.40, 0.28, { hang: false }), leather, { y: 0.06 })
-    .add(slab(0.11, 0.09, 0.04, 0.015), gold, { y: 0.06, z: 0.15 })     // 버클
-    .add(slab(0.13, 0.22, 0.03, 0.02), leather, { y: -0.06, z: 0.14 })  // 앞치마
+    .add(loft([
+      { y: -0.16, w: 0.29, d: 0.215 }, { y: -0.07, w: 0.345, d: 0.245 },
+      { y: 0.02, w: 0.325, d: 0.225 }, { y: 0.07, w: 0.300, d: 0.205 },
+    ], { round: 2.9 }), dark)
+    .add(arc(0.175, 0.022, Math.PI * 2, 18), gold, { y: 0.035, rx: Math.PI / 2, sz: 0.78 })
+    .add(tatter(0.17, 0.32), cloth, { y: 0.02, z: 0.135 })
     .finish();
 
-  // ── 몸통 ── 두 덩이로 나눠 허리에서 가슴으로 넓어지게
+  // ── 허리 ── **여기가 제일 가늘다.** V 자의 아래 꼭짓점
   new Part(rig.spine)
-    .add(prism(0.36, 0.24, 0.22, 0.44, 0.28, { hang: false }), steel, { y: 0.11 })
+    .add(loft([
+      { y: -0.02, w: 0.310, d: 0.215 }, { y: 0.09, w: 0.295, d: 0.200 },
+      { y: 0.24, w: 0.360, d: 0.230 },
+    ], { round: 2.9 }), steel)
     .finish();
 
-  const chest = new Part(rig.chest)
-    .add(prism(0.48, 0.30, 0.30, 0.44, 0.28, { hang: false }), steel, { y: 0.06 })
-    .add(slab(0.30, 0.24, 0.05, 0.03), steel, { y: 0.08, z: 0.15 })        // 가슴받이
-    .add(slab(0.10, 0.16, 0.03, 0.02), gold, { y: 0.10, z: 0.18 })         // 문장
-    // 망토 — 두 겹으로 접어 두면 평면 한 장보다 훨씬 천처럼 보인다
-    .add(slab(0.46, 0.62, 0.02, 0.03), cloth, { y: -0.16, z: -0.17, rx: 0.1 })
-    .add(slab(0.34, 0.44, 0.02, 0.03), cloth, { y: -0.24, z: -0.21, rx: 0.2 });
-  chest.finish();
-
-  // ── 어깨 갑주 ── 실루엣의 핵심. 세 겹으로 겹쳐 「층」을 만든다
-  for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
-    const p = new Part(g);
-    p.add(prism(0.26, 0.26, 0.12, 0.30, 0.30, { hang: false }), steel, { y: 0.04, rz: s * 0.18 });
-    p.add(prism(0.30, 0.30, 0.08, 0.26, 0.26, { hang: false }), steel, { y: -0.04, rz: s * 0.14 });
-    p.add(prism(0.115, 0.125, 0.32, 0.15, 0.16), dark, { y: -0.06 });      // 위팔
-    p.finish();
+  // ── 가슴 ──
+  // **단면 높이가 관절과 맞아야 한다.** 위쪽 단을 0.34 까지 올린 적이 있는데,
+  // 목 관절이 로컬 0.22 · 머리가 0.32 라서 **가슴이 머리를 통째로 삼켰다.**
+  // 화면에는 목 없는 갑옷 덩어리가 나왔다 — 단면 높이는 장식이 아니라
+  // 골격과 맞물리는 치수다.
+  const ch = new Part(rig.chest)
+    .add(loft([
+      { y: 0.00, w: 0.360, d: 0.230 }, { y: 0.07, w: 0.455, d: 0.265 },
+      { y: 0.135, w: 0.495, d: 0.265 }, { y: 0.185, w: 0.430, d: 0.235 },
+      { y: 0.220, w: 0.290, d: 0.190 },
+    ], { round: 3.0 }), steel)
+    // 가슴받이 — 몸통보다 살짝 앞에 덧댄 판. 두 겹이라야 「입은 것」이다
+    .add(loft([
+      { y: 0.01, w: 0.230, d: 0.09 }, { y: 0.09, w: 0.320, d: 0.10 }, { y: 0.165, w: 0.300, d: 0.09 },
+    ], { round: 3.4 }), steel, { z: 0.10 })
+    .add(slab(0.10, 0.15, 0.03, 0.02), gold, { y: 0.10, z: 0.165 })
+    .add(arc(0.145, 0.015, Math.PI, 14), gold, { y: 0.195, z: 0.055, rx: Math.PI / 2 });
+  for (let i = 0; i < 3; i++) {                 // 망토 — 세 장이면 충분하다
+    const t = i - 1;
+    ch.add(tatter(0.21, 0.60 - Math.abs(t) * 0.10), cloth,
+      { x: t * 0.185, y: 0.10, z: -0.14, rx: 0.12, rz: -t * 0.14 });
   }
-  const foreG = prism(0.095, 0.105, 0.30, 0.125, 0.135);
-  const bracer = slab(0.15, 0.20, 0.05, 0.02);
-  new Part(rig.foreL).add(foreG, dark).add(bracer, steel, { y: -0.13, z: 0.07 }).finish();
-  new Part(rig.foreR).add(foreG, dark).add(bracer, steel, { y: -0.13, z: 0.07 }).finish();
+  ch.finish();
 
-  // ── 목 · 머리 · 투구 ── 볏이 있으면 실루엣이 위로 뾰족해진다
-  new Part(rig.neck).add(prism(0.11, 0.11, 0.10, 0.12, 0.12), dark).finish();
-  new Part(rig.head)
-    .add(prism(0.22, 0.24, 0.24, 0.20, 0.22, { hang: false }), steel, { y: 0.06 })
-    .add(slab(0.20, 0.05, 0.06, 0.015), dark, { y: 0.04, z: 0.12 })        // 눈 틈새
-    .add(prism(0.10, 0.20, 0.10, 0.06, 0.14, { hang: false }), steel, { y: 0.0, z: 0.14 })  // 얼굴가리개
-    .add(slab(0.04, 0.16, 0.26, 0.015), cloth, { y: 0.21 })                // 볏
-    .add(spike(0.03, 0.10, 4), gold, { x: 0.10, y: 0.16, rz: -0.4 })
-    .add(spike(0.03, 0.10, 4), gold, { x: -0.10, y: 0.16, rz: 0.4 })
+  // ── 팔 ── 삼각근에서 팔꿈치로 좁아지고, 팔뚝은 **팔꿈치 바로 아래**가 굵다
+  for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
+    new Part(g)
+      .add(limb(0.32, [
+        [0.00, 0.175, 0.180], [0.18, 0.190, 0.190], [0.70, 0.140, 0.145], [1.00, 0.128, 0.135],
+      ], { round: 2.3 }), dark)
+      // 어깨 갑주 — 위가 넓고 아래로 접힌 그릇 모양. 실루엣의 핵심
+      .add(loft([
+        { y: -0.145, w: 0.245, d: 0.245 }, { y: -0.06, w: 0.310, d: 0.300 },
+        { y: 0.035, w: 0.300, d: 0.290 }, { y: 0.085, w: 0.215, d: 0.210 },
+      ], { round: 2.6, capB: false }), steel, { rz: s * 0.15 })
+      .add(arc(0.155, 0.020, Math.PI * 1.4, 16), gold, { y: -0.055, rx: Math.PI / 2, rz: s * 0.15 })
+      .add(spike(0.034, 0.13, 5), gold, { x: s * 0.15, y: 0.03, rz: s * 0.95 })
+      .finish();
+  }
+  for (const g of [rig.foreL, rig.foreR]) {
+    new Part(g)
+      .add(limb(0.30, [
+        [0.00, 0.135, 0.145], [0.22, 0.152, 0.158], [0.75, 0.090, 0.098], [1.00, 0.078, 0.085],
+      ], { round: 2.3 }), dark)
+      .add(loft([{ y: -0.26, w: 0.100, d: 0.075 }, { y: -0.15, w: 0.150, d: 0.105 }, { y: -0.03, w: 0.165, d: 0.115 }],
+        { round: 3.2 }), steel, { z: 0.035 })       // 팔뚝받이
+      .finish();
+  }
+  // 손 — 주먹 하나. 손가락은 이 크기에서 안 보인다
+  for (const g of [rig.handL, rig.handR]) {
+    new Part(g).add(limb(0.14, [
+      [0.00, 0.105, 0.115], [0.45, 0.125, 0.135], [1.00, 0.100, 0.110],
+    ], { round: 3.0 }), steel).finish();
+  }
+
+  // ── 목 ── 살이 보여야 머리와 몸이 이어진다. 뒤는 목가리개로 가린다
+  new Part(rig.neck)
+    .add(limb(0.12, [[0, 0.115, 0.115], [1, 0.105, 0.105]], { round: 2.2 }), skin)
+    .add(arc(0.108, 0.018, Math.PI * 1.25, 14), steel, { y: -0.045, rx: Math.PI / 2, ry: Math.PI })
     .finish();
 
-  // ── 손 ── 있으면 팔이 「끝나는」 곳이 생겨서 팔꿈치가 읽힌다
-  new Part(rig.handL).add(prism(0.11, 0.13, 0.12, 0.10, 0.12), steel).finish();
-  new Part(rig.handR).add(prism(0.11, 0.13, 0.12, 0.10, 0.12), steel).finish();
+  // ── 머리 ── 턱끝 → 턱 → 광대 → 관자 → 정수리. **다섯 단이면 두개골이 된다**
+  new Part(rig.head)
+    .add(loft([
+      { y: -0.100, w: 0.120, d: 0.140, cz: 0.012 },
+      { y: -0.045, w: 0.170, d: 0.200, cz: 0.010 },
+      { y: 0.020, w: 0.205, d: 0.235 },
+      { y: 0.095, w: 0.200, d: 0.235, cz: -0.006 },
+      { y: 0.165, w: 0.152, d: 0.180, cz: -0.012 },
+      { y: 0.205, w: 0.070, d: 0.090, cz: -0.015 },
+    ], { round: 2.4 }), skin)
+    // 코 — **능선 하나면 된다.** 콧구멍을 만들면 이 크기에서 얼룩이 된다
+    .add(loft([
+      { y: -0.020, w: 0.048, d: 0.055 }, { y: 0.030, w: 0.036, d: 0.048 }, { y: 0.070, w: 0.026, d: 0.030 },
+    ], { round: 2.2 }), skin, { z: 0.098 })
+    .finish();
+  // 눈두덩 그늘 · 눈 · 수염 · 뒷머리
+  new Part(rig.head)
+    .add(arc(0.082, 0.017, Math.PI, 12), skin, { y: 0.075, z: 0.070, rx: Math.PI / 2, ry: Math.PI / 2 })
+    // 눈은 **판이 아니라 구멍**이라 그늘에 묻히기 쉽다. 확대해 보니 수염과
+    // 구분이 안 돼서 조금 키우고 앞으로 냈다
+    .mirror(loft([{ y: -0.017, w: 0.060, d: 0.034 }, { y: 0.016, w: 0.050, d: 0.028 }], { round: 2.2, seg: 10 }),
+      dark, { x: 0.048, y: 0.044, z: 0.092 })
+    // 수염 — 턱을 감싼다. 턱선이 무거워야 「어른」으로 보인다
+    .add(loft([
+      { y: -0.105, w: 0.128, d: 0.150, cz: 0.012 },
+      { y: -0.050, w: 0.180, d: 0.212, cz: 0.010 },
+      { y: 0.005, w: 0.196, d: 0.230 },
+    ], { round: 2.4, capT: false }), hair, { z: -0.004 })
+    .add(loft([
+      { y: 0.010, w: 0.190, d: 0.130 }, { y: 0.100, w: 0.210, d: 0.150 }, { y: 0.175, w: 0.160, d: 0.120 },
+    ], { round: 2.6 }), hair, { z: -0.055 })
+    .finish();
 
-  // ── 방패 ── 아래가 뾰족한 연꼴. 사각형보다 중세로 읽힌다.
+  // ── 투구 ── 정수리 그릇 + 볼가리개 + 콧대. 얼굴 앞은 **비워 둔다**
+  const helm = new Part(rig.head)
+    .add(loft([
+      { y: 0.090, w: 0.246, d: 0.268, cz: -0.008 },
+      { y: 0.150, w: 0.238, d: 0.256, cz: -0.010 },
+      { y: 0.205, w: 0.180, d: 0.196, cz: -0.014 },
+      { y: 0.240, w: 0.085, d: 0.095, cz: -0.016 },
+    ], { round: 2.5, capB: false }), steel)
+    .mirror(loft([
+      { y: -0.055, w: 0.030, d: 0.135 }, { y: 0.020, w: 0.034, d: 0.175 }, { y: 0.085, w: 0.034, d: 0.190 },
+    ], { round: 3.0 }), steel, { x: 0.108 })
+    .add(loft([{ y: -0.035, w: 0.030, d: 0.045 }, { y: 0.085, w: 0.036, d: 0.050 }], { round: 3.0 }),
+      steel, { z: 0.115 })                                    // 콧대
+    .add(arc(0.150, 0.016, Math.PI * 2, 20), gold, { y: 0.094, rx: Math.PI / 2, sz: 1.06 })
+    .add(spike(0.032, 0.125, 5), gold, { x: 0.115, y: 0.185, rz: -0.45 })
+    .add(spike(0.032, 0.125, 5), gold, { x: -0.115, y: 0.185, rz: 0.45 });
+  for (let i = 0; i < 4; i++) {                     // 볏
+    helm.add(tatter(0.055, 0.12), cloth, { y: 0.225, z: 0.01 - i * 0.05, rx: -0.25 - i * 0.07 });
+  }
+  helm.finish();
+
+  // ── 방패 ──
   //
   // **손이 아니라 아래팔에 단다.** 손에 달았더니 팔이 내려간 대기 자세에서
   // 방패가 무릎 옆에 매달려 「들고 있다」로 안 보였다. 실제로도 방패는 팔뚝의
-  // 끈으로 고정한다 — 팔꿈치를 굽히면 방패가 몸 앞으로 올라온다.
+  // 끈으로 고정한다.
   //
-  // 방패는 **받침 그룹**에 얹는다. 아래팔에 바로 붙였더니, 겨눔 자세에서
-  // 아래팔이 1.45 라디안 접히는 만큼 방패도 같이 누워서 가슴 높이에 널빤지가
-  // 가로로 걸린 꼴이 됐다. 받침이 그 접힘을 되돌려 주면 **평소에는 앞을 보고,
-  // 팔이 움직일 때만 따라 기운다** — 원하는 건 정확히 그것이다.
-  const shieldMount = new THREE.Group();
-  shieldMount.position.set(0, -0.16, 0.04);
-  shieldMount.rotation.x = 1.45;             // = -(restL + restForeL), anim.js 의 기사 자세
-  rig.foreL.add(shieldMount);
-  new Part(shieldMount)
-    .add(slab(0.40, 0.42, 0.06, 0.03), leather, { y: -0.02, z: 0.12, ry: -0.34 })
-    .add(prism(0.10, 0.06, 0.18, 0.36, 0.06), leather, { y: -0.23, z: 0.12, ry: -0.34 })
-    .add(slab(0.38, 0.06, 0.03, 0.02), steel, { y: 0.02, z: 0.16, ry: -0.34 })
-    .add(prism(0.11, 0.11, 0.05, 0.11, 0.11, { hang: false }), steel, { y: -0.04, z: 0.17, ry: -0.34 })
+  // 그리고 **받침 그룹**에 얹는다. 아래팔에 바로 붙였더니 겨눔 자세에서
+  // 아래팔이 1.45 라디안 접히는 만큼 방패도 같이 누워 가슴 높이에 널빤지가
+  // 가로로 걸린 꼴이 됐다. 받침이 그 접힘을 되돌려 준다.
+  const sm = new THREE.Group();
+  sm.position.set(0, -0.16, 0.04);
+  sm.rotation.x = 1.45;              // = -(restL + restForeL), anim.js 의 기사 자세
+  rig.foreL.add(sm);
+  new Part(sm)
+    .add(loft([
+      { y: -0.30, w: 0.075, d: 0.045 }, { y: -0.16, w: 0.300, d: 0.070 },
+      { y: 0.00, w: 0.380, d: 0.085 }, { y: 0.14, w: 0.360, d: 0.070 }, { y: 0.20, w: 0.300, d: 0.050 },
+    ], { round: 2.8 }), leather, { y: -0.02, z: 0.12, ry: -0.34 })
+    .add(arc(0.058, 0.018, Math.PI * 2, 14), gold, { y: -0.02, z: 0.165, ry: -0.34 })
+    .add(loft([{ y: 0.0, w: 0.085, d: 0.085 }, { y: 0.05, w: 0.045, d: 0.045 }], { round: 2.2 }),
+      steel, { y: -0.02, z: 0.155, rx: Math.PI / 2, ry: -0.34 })
     .finish();
-  rig.shield = shieldMount;
+  rig.shield = sm;
+
+  // ── 등의 검집 ── **비어 있다.**
+  //
+  // 검은 손에 들려야 싸울 수 있으니 등에 또 한 자루를 매달면 두 자루가 된다.
+  // 그래서 칼집만 단다 — 「저기서 뽑아 든 것」이라는 설명이 되고, 등이
+  // 밋밋하지 않아 뒤에서 봐도 실루엣이 산다. 대각선으로 매야 어깨 너머로
+  // 삐져나오는 선이 생긴다(세로로 매면 망토에 묻힌다).
+  const scab = new THREE.Group();
+  // 칼집 입구가 머리 뒤를 가로지르지 않게 내려 단다 — 어깨 너머로만 나온다
+  scab.position.set(-0.02, -0.02, -0.145);
+  scab.rotation.set(-0.18, 0, 0.50);
+  rig.chest.add(scab);
+  new Part(scab)
+    .add(loft([
+      { y: -0.34, w: 0.048, d: 0.030 }, { y: -0.26, w: 0.070, d: 0.042 },
+      { y: 0.22, w: 0.082, d: 0.048 }, { y: 0.30, w: 0.076, d: 0.044 },
+    ], { round: 3.4, seg: 10 }), leather)
+    .add(arc(0.045, 0.012, Math.PI * 2, 10), gold, { y: 0.28, rx: Math.PI / 2, sz: 0.6 })
+    .add(arc(0.038, 0.012, Math.PI * 2, 10), gold, { y: -0.24, rx: Math.PI / 2, sz: 0.6 })
+    .finish();
+  rig.scabbard = scab;
 
   // ── 무기 (오른손) ── 계열별 메시는 core/weapons.js 가 만든다.
-  //
-  // 예전에는 여기서 **검 하나를 고정으로** 만들었다. 그래서 대검을 껴도
-  // 화면에는 짧은 한손검이 보였다. 지금은 팔레트만 넘기고, 장착이 바뀌면
-  // player.js 의 _syncWeapon() 이 같은 팔레트로 갈아 끼운다.
-  //
-  // 쥐는 방향(π 뒤집기)과 쥐는 위치는 전부 weapons.js 가 안다 — 그게 무기의
-  // 성질이지 몸의 성질이 아니기 때문이다.
-  rig.weaponPal = { wrap: leather, dark: dark, accent: gold, bladeMat };
+  // 예전에는 여기서 **검 하나를 고정으로** 만들어서 대검을 껴도 한손검이
+  // 보였다. 지금은 팔레트만 넘기고 player.js 의 _syncWeapon() 이 갈아 끼운다.
+  rig.weaponPal = { wrap: leather, dark, accent: gold, bladeMat };
   rig.bladeMat = bladeMat;
   attachWeapon(rig, '검', rig.weaponPal);
   rig.stance = 'knight';
-  return done(rig, [steel, dark, gold, cloth, leather, bladeMat]);
+  return done(rig, [skin, hair, steel, dark, gold, cloth, leather, bladeMat]);
 }
 
 // ═══════════════════════════ 해골 병사 ═══════════════════════════
-// 실루엣: **키가 크고 얇다.** 갈비뼈 사이가 비어 있어 뒤가 비쳐 보인다.
+// 실루엣: **키가 크고 얇다.** 갈비 사이가 비어 뒤가 비쳐 보인다.
+//
+// 뼈도 단면으로 짓는다. 「뼈는 매끈한데?」 싶지만, 사람 뼈는 **가운데가
+// 가늘고 양 끝이 굵다** — 각기둥으로 만든 뼈가 대나무처럼 보였던 이유가
+// 정확히 그것이다. 관절머리를 위아래 둘 다 넣으면 그것만으로 뼈가 된다.
 export function buildSkeleton(opt = {}) {
-  const bone = M(0xcfc6ad, { roughness: 0.62, metalness: 0.05 });
-  const rag = M(0x453f4e, { roughness: 1 });
-  const rust = M(0x7d6a52, { roughness: 0.6, metalness: 0.5 });
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff4a2a });
+  const bone = M(0xc9bfa4, { roughness: 0.68, metalness: 0.03 });
+  const rag = M(0x3d3846, { roughness: 1 });
+  const rust = M(0x7a6449, { roughness: 0.62, metalness: 0.55 });
+  const bladeMat = M(0x9aa2b0, { metalness: 0.75, roughness: 0.45 });
 
   const rig = skeleton({
-    hipY: 0.84, legX: 0.11, thigh: 0.40, shin: 0.38,   // 0.40+0.38+발목 0.06
+    hipY: 0.84, legX: 0.11, thigh: 0.40, shin: 0.38,
     spineY: 0.03, chestY: 0.22, neckY: 0.20, headY: 0.08,
     armX: 0.21, armY: 0.10, upper: 0.30, fore: 0.28,
   });
 
-  const boneG = prism(0.075, 0.075, 0.40, 0.06, 0.06, { sides: 6 });
-  const jointG = prism(0.10, 0.10, 0.07, 0.10, 0.10, { sides: 6, hang: false });
   for (const [th, sh, ft] of [[rig.thighL, rig.shinL, rig.footL], [rig.thighR, rig.shinR, rig.footR]]) {
-    new Part(th).add(jointG, bone, { y: -0.02 }).add(boneG, bone).finish();
-    new Part(sh).add(jointG, bone, { y: -0.02 }).add(boneG, bone, { sy: 0.95 }).finish();
-    new Part(ft).add(prism(0.10, 0.22, 0.06, 0.09, 0.18), bone, { z: 0.05 }).finish();
+    new Part(th).add(limb(0.40, [
+      [0.00, 0.095, 0.095], [0.12, 0.062, 0.062], [0.85, 0.058, 0.058], [1.00, 0.088, 0.088],
+    ], { round: 2.2, seg: 10 }), bone).finish();
+    new Part(sh).add(limb(0.38, [
+      [0.00, 0.086, 0.086], [0.14, 0.052, 0.052], [0.86, 0.046, 0.046], [1.00, 0.072, 0.072],
+    ], { round: 2.2, seg: 10 }), bone)
+      // 종아리뼈는 **둘**이다. 하나면 막대기고 둘이면 정강이다
+      .add(limb(0.34, [[0, 0.028, 0.028], [1, 0.024, 0.024]], { round: 2.2, seg: 8 }), bone, { x: 0.042, y: -0.02 })
+      .finish();
+    const f = new Part(ft).add(snout(0.20, [
+      [0.00, 0.085, 0.055], [0.40, 0.090, 0.052], [1.00, 0.050, 0.030],
+    ], { round: 2.4, seg: 10 }), bone, { y: -0.02, z: -0.02 });
+    f.finish();
   }
 
+  // 골반 — 가운데가 뚫린 고리 + 좌우로 벌어진 날개
   new Part(rig.hips)
-    .add(prism(0.26, 0.16, 0.14, 0.22, 0.14, { hang: false, sides: 6 }), bone, { y: -0.04 })
-    .add(slab(0.30, 0.34, 0.02, 0.02), rag, { y: -0.16, z: -0.05 })       // 넝마
+    .add(arc(0.10, 0.032, Math.PI * 2, 14), bone, { y: -0.05, rx: Math.PI / 2 })
+    .mirror(loft([{ y: -0.08, w: 0.048, d: 0.10 }, { y: 0.02, w: 0.062, d: 0.135 }, { y: 0.07, w: 0.040, d: 0.10 }],
+      { round: 2.6, seg: 10 }), bone, { x: 0.095, rz: 0.45, ry: 0.35 })
+    .add(tatter(0.30, 0.36), rag, { y: -0.16, z: -0.05 })
+    .add(tatter(0.16, 0.28), rag, { x: 0.13, y: -0.14, z: -0.02, rz: 0.2 })
     .finish();
 
-  new Part(rig.spine).add(prism(0.07, 0.07, 0.22, 0.08, 0.08, { hang: false, sides: 6 }), bone, { y: 0.1 }).finish();
-
-  // 갈비뼈 — 가로 막대 다섯. **해골의 정체성이라 개수와 간격이 중요하다.**
-  const chest = new Part(rig.chest);
-  chest.add(prism(0.08, 0.08, 0.26, 0.09, 0.09, { hang: false, sides: 6 }), bone, { y: 0.06 });
+  // 척추 — 마디 다섯 + 뒤로 튀어나온 돌기. 통짜 기둥이 아니다
+  const spine = new Part(rig.spine);
   for (let i = 0; i < 5; i++) {
-    const w = 0.34 - Math.abs(i - 1.6) * 0.035;
-    chest.add(prism(w, 0.20, 0.035, w * 0.95, 0.18, { hang: false, sides: 6 }), bone, { y: -0.03 + i * 0.075 });
+    spine.add(loft([{ y: -0.016, w: 0.058, d: 0.058 }, { y: 0.016, w: 0.052, d: 0.052 }], { round: 3, seg: 8 }),
+      bone, { y: 0.01 + i * 0.045 });
+    spine.add(spike(0.016, 0.042, 4), bone, { y: 0.01 + i * 0.045, z: -0.048, rx: 2.1 });
   }
-  chest.add(slab(0.30, 0.10, 0.03, 0.02), rust, { y: 0.19, z: 0.02 });    // 어깨 갑주 잔해
-  chest.add(slab(0.40, 0.52, 0.02, 0.03), rag, { y: -0.02, z: -0.13, rx: 0.12 });  // 망토
+  spine.finish();
+
+  // 갈비 — 활 반쪽을 좌우 다섯 쌍. **해골의 정체성이라 개수와 간격이 중요하다.**
+  // 예전에는 납작한 가로 막대 다섯이었고, 옆에서 보면 널빤지 더미였다.
+  // 갈비는 등뼈에서 나와 **앞으로 감겨** 가슴 앞에서 만난다.
+  const chest = new Part(rig.chest);
+  chest.add(limb(0.30, [[0, 0.052, 0.052], [1, 0.046, 0.046]], { round: 2.4, seg: 8 }), bone, { y: 0.20, z: -0.055 });
+  for (let i = 0; i < 5; i++) {
+    const r = 0.155 - i * 0.012;
+    const y = 0.20 - i * 0.062;
+    const rib = arc(r, 0.016, Math.PI * 0.92, 10, 4);
+    chest.add(rib, bone, { y, z: -0.05, rx: Math.PI / 2, ry: Math.PI / 2, rz: -0.12 - i * 0.03 });
+    chest.add(rib, bone, { y, z: -0.05, rx: Math.PI / 2, ry: -Math.PI / 2, rz: 0.12 + i * 0.03 });
+  }
+  chest.add(loft([{ y: -0.06, w: 0.032, d: 0.026 }, { y: 0.06, w: 0.048, d: 0.030 }], { round: 3, seg: 8 }),
+    bone, { y: 0.06, z: 0.105 })                                      // 복장뼈
+    .mirror(limb(0.20, [[0, 0.020, 0.020], [1, 0.018, 0.018]], { round: 2.4, seg: 8 }), bone,
+      { x: 0.10, y: 0.21, z: 0.04, rz: Math.PI / 2 - 0.25, ry: -0.3 })  // 쇄골
+    // 갑주 잔해는 **한쪽에만.** 좌우가 같으면 「제복」이고 한쪽만이면 「주워 입은 것」
+    .add(loft([{ y: -0.04, w: 0.155, d: 0.115 }, { y: 0.04, w: 0.175, d: 0.125 }], { round: 3.2, seg: 10 }),
+      rust, { x: 0.12, y: 0.20, rz: 0.25 });
+  for (let i = 0; i < 4; i++) {
+    const t = (i - 1.5) / 1.5;
+    chest.add(tatter(0.13, 0.50 - Math.abs(t) * 0.14), rag,
+      { x: t * 0.13, y: 0.0, z: -0.13, rx: 0.14, rz: -t * 0.1 });
+  }
   chest.finish();
 
+  // **혼불** — 갈비 안이 비어 있으면 해골은 그냥 뼈 무더기지만, 거기서 불이
+  // 새어 나오면 **무엇이 이 뼈를 세우고 있는가**에 대한 답이 된다.
+  // 눈빛과 같은 색이라야 한 몬스터로 읽힌다.
+  rig.core = core(rig.chest, 0xff5a2a, 0.042, 0, 0.06, -0.01);
+
   for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
-    new Part(g)
-      .add(jointG, bone, { y: 0.01 })
-      .add(prism(0.065, 0.065, 0.30, 0.055, 0.055, { sides: 6 }), bone, { y: -0.02 })
-      .add(slab(0.16, 0.09, 0.05, 0.02), rust, { y: 0.03, rz: s * 0.2 })
+    new Part(g).add(limb(0.30, [
+      [0.00, 0.086, 0.086], [0.14, 0.052, 0.052], [0.86, 0.046, 0.046], [1.00, 0.070, 0.070],
+    ], { round: 2.2, seg: 10 }), bone)
+      .add(loft([{ y: -0.03, w: 0.145, d: 0.105 }, { y: 0.05, w: 0.165, d: 0.115 }], { round: 3.2, seg: 10 }),
+        rust, { y: 0.02, rz: s * 0.2 })
       .finish();
   }
-  const armBone = prism(0.055, 0.055, 0.28, 0.05, 0.05, { sides: 6 });
-  new Part(rig.foreL).add(armBone, bone).finish();
-  new Part(rig.foreR).add(armBone, bone).finish();
-  const handG = prism(0.08, 0.09, 0.09, 0.07, 0.08, { sides: 6 });
-  new Part(rig.handL).add(handG, bone).finish();
-  new Part(rig.handR).add(handG, bone).finish();
-
-  new Part(rig.neck).add(prism(0.06, 0.06, 0.08, 0.07, 0.07, { sides: 6 }), bone).finish();
-  new Part(rig.head)
-    .add(prism(0.20, 0.22, 0.19, 0.17, 0.19, { hang: false, sides: 8 }), bone, { y: 0.07 })  // 두개골
-    .add(prism(0.14, 0.14, 0.07, 0.13, 0.16, { hang: false }), bone, { y: -0.02, z: 0.05 })  // 턱
-    .add(slab(0.06, 0.05, 0.04, 0.01), rag, { x: 0.05, y: 0.08, z: 0.10 })                   // 눈구멍
-    .add(slab(0.06, 0.05, 0.04, 0.01), rag, { x: -0.05, y: 0.08, z: 0.10 })
-    .finish();
-  // 눈빛은 발광 재질이라 합치지 않는다
-  const eg = prism(0.045, 0.03, 0.04, 0.045, 0.03, { hang: false, sides: 4 });
-  for (const x of [0.05, -0.05]) {
-    const e = new THREE.Mesh(eg, eyeMat);
-    e.position.set(x, 0.08, 0.115);
-    rig.head.add(e);
+  for (const g of [rig.foreL, rig.foreR]) {
+    new Part(g).add(limb(0.28, [
+      [0.00, 0.070, 0.070], [0.14, 0.044, 0.044], [0.86, 0.038, 0.038], [1.00, 0.058, 0.058],
+    ], { round: 2.2, seg: 10 }), bone)
+      .add(limb(0.26, [[0, 0.024, 0.024], [1, 0.020, 0.020]], { round: 2.2, seg: 8 }), bone, { x: 0.030, y: -0.01 })
+      .finish();
+  }
+  // 손 — 손바닥 + 손가락 넷. 뭉툭한 덩이 하나면 「장갑」이지 「해골 손」이 아니다
+  for (const g of [rig.handL, rig.handR]) {
+    const p = new Part(g).add(loft([{ y: -0.07, w: 0.052, d: 0.024 }, { y: 0, w: 0.062, d: 0.028 }],
+      { round: 3, seg: 8 }), bone);
+    for (let i = -1; i <= 2; i++) {
+      p.add(limb(0.075, [[0, 0.014, 0.014], [1, 0.010, 0.010]], { round: 2.2, seg: 6 }), bone,
+        { x: i * 0.019, y: -0.065, rz: i * 0.12 });
+    }
+    p.add(limb(0.05, [[0, 0.015, 0.015], [1, 0.011, 0.011]], { round: 2.2, seg: 6 }), bone,
+      { x: -0.035, y: -0.035, rz: -0.9 });
+    p.finish();
   }
 
+  // ── 두개골 ── 각기둥 두 개였을 때는 어느 각도에서도 **양동이**였다.
+  // 머리통은 위로 좁아지고 뒤통수가 튀어나오고, 눈구멍은 **깊어야** 한다
+  new Part(rig.neck).add(limb(0.085, [[0, 0.042, 0.042], [1, 0.036, 0.036]], { round: 2.2, seg: 8 }), bone).finish();
+  const skull = new Part(rig.head)
+    .add(loft([
+      { y: -0.075, w: 0.120, d: 0.145, cz: 0.014 },
+      { y: -0.030, w: 0.165, d: 0.195, cz: 0.008 },
+      { y: 0.030, w: 0.196, d: 0.225 },
+      { y: 0.100, w: 0.185, d: 0.215, cz: -0.010 },
+      { y: 0.155, w: 0.120, d: 0.145, cz: -0.014 },
+    ], { round: 2.4 }), bone)
+    // 눈구멍 — 검은 판을 얹으면 그냥 검은 점이다. **파야** 한다
+    .mirror(loft([{ y: -0.026, w: 0.058, d: 0.040 }, { y: 0.026, w: 0.052, d: 0.036 }], { round: 2.4, seg: 10 }),
+      rag, { x: 0.050, y: 0.052, z: 0.080 })
+    .add(prism(0.024, 0.026, 0.042, 0.010, 0.018, { hang: false, sides: 4 }), rag, { y: 0.010, z: 0.098 })  // 코 구멍
+    // 아래턱 — 위턱보다 좁다
+    .add(loft([{ y: -0.058, w: 0.118, d: 0.130, cz: 0.014 }, { y: -0.012, w: 0.150, d: 0.165, cz: 0.008 }],
+      { round: 2.6 }), bone);
+  for (let i = -2; i <= 2; i++) {                    // 이빨
+    skull.add(prism(0.014, 0.012, 0.024, 0.011, 0.010, { hang: false, sides: 4 }), bone,
+      { x: i * 0.022, y: -0.014, z: 0.088 - Math.abs(i) * 0.006 });
+    skull.add(prism(0.014, 0.012, 0.022, 0.011, 0.010, { hang: false, sides: 4 }), bone,
+      { x: i * 0.022, y: -0.040, z: 0.088 - Math.abs(i) * 0.006 });
+  }
+  skull.add(loft([{ y: -0.06, w: 0.030, d: 0.115 }, { y: 0.05, w: 0.034, d: 0.130 }], { round: 3, seg: 10 }),
+    rust, { x: 0.088, y: 0.070, rz: 0.2, ry: -0.4 });   // 투구 잔해 — 한쪽만
+  skull.finish();
+  eyes(rig.head, 0xff4a2a, 0.050, 0.052, 0.078, 0.026, 0.018);
+
   // ── 무기 ── **변종마다 다르다.**
-  //
-  // 해골 창병은 사거리가 2.9 로 원본(1.6)의 두 배 가까이 되는데, 지금까지
-  // 같은 녹슨 검을 들고 있었다. 규칙만 다르고 화면은 같으니 「왜 저기서
-  // 맞지」가 된다 — 사거리를 눈으로 알려 주는 것은 숫자가 아니라 자루 길이다.
-  // 방패병도 같다: frontGuard 0.6 이 규칙으로만 있고 표시가 없었다.
-  const bladeMat = M(0xa9b0bd, { metalness: 0.72, roughness: 0.42 });
+  // 해골 창병은 사거리가 원본의 두 배 가까이 되는데 같은 검을 들고 있었다.
+  // 사거리를 눈으로 알려 주는 것은 숫자가 아니라 자루 길이다.
   rig.weaponPal = { wrap: rag, dark: rag, accent: rust, bladeMat };
   rig.bladeMat = bladeMat;
   attachWeapon(rig, opt.weapon || '검', rig.weaponPal, { y: -0.05, z: 0.03 });
   // 방패는 무기보다 **먼저** 볼 것이 아니다 — attachWeapon 이 두 손 무기일 때
-  // rig.shield 를 숨기므로, 방패는 그 뒤에 단다 (창 + 방패는 없다).
+  // rig.shield 를 숨기므로 방패는 그 뒤에 단다 (창 + 방패는 없다)
   if (opt.shield && !rig.twoHand) attachBuckler(rig, rig.weaponPal, 1.0);
   rig.stance = 'skeleton';
   return done(rig, [bone, rag, rust, bladeMat]);
@@ -236,73 +461,120 @@ export function buildSkeleton(opt = {}) {
 
 // ═══════════════════════════ 구울 ═══════════════════════════
 // 실루엣: **낮고 넓다.** 앞으로 굽은 등 · 긴 팔 · 머리가 몸보다 앞에 있다.
+//
+// 사람과 다르게 만드는 것은 셋이다:
+//   · 가슴이 골반보다 훨씬 굵다 (사람은 어깨가 넓고 가슴은 얇다)
+//   · **팔이 다리보다 길다.** 그래서 앞으로 짚는 자세가 자연스럽다
+//   · 목이 앞으로 뻗어 머리가 몸보다 앞에 온다
+//
+// 좌우 비대칭은 남긴다. 오른팔이 굵고 길다 — 값이 싸고 효과가 크다.
 export function buildGhoul() {
-  const skin = M(0x6d7a4e, { roughness: 0.96, metalness: 0 });
-  const belly = M(0x8a9464, { roughness: 0.98, metalness: 0 });
-  const claw = M(0xd8cdb0, { roughness: 0.5, metalness: 0.15 });
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
+  const skin = M(0x64714b, { roughness: 0.95, metalness: 0 });
+  const belly = M(0x8e9769, { roughness: 0.96, metalness: 0 });
+  const claw = M(0xd4c8a8, { roughness: 0.45, metalness: 0.15 });
 
   const rig = skeleton({
-    hipY: 0.57, legX: 0.13, thigh: 0.26, shin: 0.24,   // 0.26+0.24+발목 0.07
-    spineY: 0.02, chestY: 0.16, neckY: 0.12, headY: 0.02,
-    armX: 0.22, armY: 0.06, upper: 0.30, fore: 0.30,
+    hipY: 0.62, legX: 0.145, thigh: 0.30, shin: 0.27,
+    spineY: 0.02, chestY: 0.17, neckY: 0.17, headY: 0.07,
+    armX: 0.235, armY: 0.06, upper: 0.34, fore: 0.33,
   });
   // 굽은 자세는 **기본 각도**로 넣는다 — 매 프레임 더하면 동작이 이걸 못 이긴다
-  rig.spine.rotation.x = 0.38;
-  rig.chest.rotation.x = 0.22;
-  rig.neck.rotation.x = -0.5;                 // 목은 반대로 들어 앞을 본다
-  rig.armL.rotation.x = 0.3; rig.armR.rotation.x = 0.3;
+  rig.spine.rotation.x = 0.42; rig.chest.rotation.x = 0.18;
+  rig.neck.rotation.x = -0.62; rig.chest.rotation.z = 0.06;
+  rig.armL.rotation.x = 0.32; rig.armR.rotation.x = 0.26;
 
-  const thighG = prism(0.135, 0.155, 0.26, 0.18, 0.20);
-  const shinG = prism(0.105, 0.115, 0.24, 0.13, 0.15);
+  // 짐승은 허벅지가 아주 굵고 정강이가 가늘다 (도약용)
   for (const [th, sh, ft] of [[rig.thighL, rig.shinL, rig.footL], [rig.thighR, rig.shinR, rig.footR]]) {
-    new Part(th).add(thighG, skin).finish();
-    new Part(sh).add(shinG, skin).finish();
-    const f = new Part(ft).add(prism(0.14, 0.22, 0.07, 0.12, 0.18), skin, { z: 0.04 });
-    for (let i = -1; i <= 1; i++) f.add(spike(0.022, 0.09, 4), claw, { x: i * 0.045, y: -0.05, z: 0.13, rx: 1.5 });
+    new Part(th).add(limb(0.30, [
+      [0.00, 0.205, 0.215], [0.22, 0.215, 0.230], [0.70, 0.150, 0.165], [1.00, 0.120, 0.135],
+    ], { round: 2.2 }), skin).finish();
+    new Part(sh).add(limb(0.27, [
+      [0.00, 0.130, 0.145], [0.20, 0.148, 0.165], [0.75, 0.078, 0.090], [1.00, 0.066, 0.076],
+    ], { round: 2.2 }), skin).finish();
+    const f = new Part(ft).add(snout(0.24, [
+      [0.00, 0.120, 0.095], [0.35, 0.135, 0.105], [0.85, 0.100, 0.075], [1.00, 0.070, 0.055],
+    ], { round: 2.4 }), skin, { y: -0.04, z: -0.05 });
+    for (let i = -1; i <= 1; i++) f.add(spike(0.020, 0.10, 4), claw, { x: i * 0.042, y: -0.045, z: 0.155, rx: 1.5 });
     f.finish();
   }
 
-  new Part(rig.hips).add(prism(0.30, 0.24, 0.16, 0.28, 0.24, { hang: false }), skin, { y: -0.03 }).finish();
-  new Part(rig.spine).add(prism(0.30, 0.28, 0.18, 0.34, 0.32, { hang: false }), skin, { y: 0.08 }).finish();
+  new Part(rig.hips).add(loft([
+    { y: -0.11, w: 0.235, d: 0.215 }, { y: -0.02, w: 0.265, d: 0.240 }, { y: 0.06, w: 0.240, d: 0.225 },
+  ], { round: 2.3 }), skin).finish();
 
-  new Part(rig.chest)
-    .add(prism(0.38, 0.36, 0.26, 0.30, 0.28, { hang: false }), skin, { y: 0.04 })
-    .add(prism(0.26, 0.16, 0.20, 0.22, 0.14, { hang: false }), belly, { y: 0.02, z: 0.14 })  // 배
-    // 등뼈 돌기 — 굽은 등을 실루엣으로 보이게 하는 것
-    .add(spike(0.035, 0.11, 4), claw, { y: 0.14, z: -0.14, rx: -0.5 })
-    .add(spike(0.03, 0.09, 4), claw, { y: 0.02, z: -0.15, rx: -0.4 })
-    .add(spike(0.025, 0.07, 4), claw, { y: -0.08, z: -0.14, rx: -0.3 })
+  new Part(rig.spine).add(loft([
+    { y: -0.01, w: 0.245, d: 0.235 }, { y: 0.09, w: 0.290, d: 0.285, cz: 0.015 },
+    { y: 0.18, w: 0.330, d: 0.310, cz: 0.010 },
+  ], { round: 2.3 }), skin).finish();
+
+  const ch = new Part(rig.chest)
+    .add(loft([
+      { y: 0.00, w: 0.330, d: 0.310, cz: 0.010 },
+      { y: 0.055, w: 0.395, d: 0.330, cz: 0.005 },
+      { y: 0.115, w: 0.390, d: 0.305 },
+      { y: 0.165, w: 0.270, d: 0.225, cz: -0.010 },
+    ], { round: 2.4 }), skin)
+    // 배 — 앞으로 늘어진다. 굶은 시체가 아니라 **불은 시체**다
+    .add(loft([
+      { y: -0.02, w: 0.190, d: 0.120 }, { y: 0.05, w: 0.250, d: 0.150 }, { y: 0.115, w: 0.205, d: 0.120 },
+    ], { round: 2.3 }), belly, { z: 0.115 });
+  // 등뼈 돌기 — 굽은 등을 실루엣으로 보이게 하는 것
+  for (let i = 0; i < 4; i++) {
+    const t = i / 3;
+    ch.add(spike(0.036 - t * 0.013, 0.155 - t * 0.05, 4), claw,
+      { x: (i % 2 ? 0.012 : -0.012), y: 0.135 - i * 0.052, z: -0.135 - t * 0.01, rx: -0.55 + t * 0.25 });
+  }
+  ch.finish();
+
+  // 목 — 앞으로 뻗는다. **짧으면 아무리 각도를 줘도 어깨 사이에 파묻힌다**
+  new Part(rig.neck).add(limb(0.18, [
+    [0, 0.145, 0.155], [0.5, 0.135, 0.145], [1, 0.120, 0.130],
+  ], { round: 2.2 }), skin).finish();
+
+  // 머리 — 두개골(세로) + 주둥이(가로). 둘을 나눠야 「주둥이」가 된다
+  const hd = new Part(rig.head)
+    .add(loft([
+      { y: -0.075, w: 0.150, d: 0.175, cz: 0.020 },
+      { y: -0.020, w: 0.195, d: 0.235, cz: 0.010 },
+      { y: 0.050, w: 0.205, d: 0.240 },
+      { y: 0.110, w: 0.145, d: 0.180, cz: -0.010 },
+    ], { round: 2.4 }), skin)
+    .add(snout(0.20, [
+      [0.00, 0.180, 0.150], [0.35, 0.165, 0.130], [0.80, 0.130, 0.100], [1.00, 0.105, 0.080],
+    ], { round: 2.5 }), skin, { y: -0.012, z: 0.055 })
+    // 아래턱 — 위턱보다 짧고 넓다. 이빨이 밖으로 삐져나온다
+    .add(snout(0.155, [
+      [0.00, 0.155, 0.075], [0.45, 0.145, 0.070], [1.00, 0.098, 0.052],
+    ], { round: 2.6 }), belly, { y: -0.068, z: 0.070 });
+  for (let i = 0; i < 5; i++) {
+    const x = -0.052 + i * 0.026;
+    hd.add(spike(0.017, 0.060, 4), claw, { x, y: -0.030, z: 0.150 - Math.abs(i - 2) * 0.008, rx: Math.PI });
+    hd.add(spike(0.014, 0.045, 4), claw, { x, y: -0.072, z: 0.145 });
+  }
+  hd.add(spike(0.033, 0.17, 4), claw, { x: 0.092, y: 0.095, z: -0.02, rz: -0.40, rx: -0.25 })   // 귀 — 길이가 다르다
+    .add(spike(0.027, 0.11, 4), claw, { x: -0.092, y: 0.088, z: -0.02, rz: 0.55, rx: -0.12 })
     .finish();
+  eyes(rig.head, 0xffd23a, 0.055, 0.040, 0.115, 0.030, 0.024);
 
-  new Part(rig.neck).add(prism(0.13, 0.13, 0.12, 0.14, 0.14), skin).finish();
-  const head = new Part(rig.head)
-    .add(prism(0.22, 0.24, 0.18, 0.19, 0.26, { hang: false }), skin, { y: 0.03, z: 0.03 })
-    .add(prism(0.15, 0.16, 0.10, 0.11, 0.12, { hang: false }), belly, { y: -0.02, z: 0.16 });  // 주둥이
-  for (let i = 0; i < 4; i++) {                // 이빨
-    head.add(spike(0.018, 0.06, 4), claw, { x: -0.045 + i * 0.03, y: -0.05, z: 0.19, rx: Math.PI });
+  for (const [g, k] of [[rig.armL, 0.82], [rig.armR, 1.18]]) {
+    new Part(g).add(limb(0.34, [
+      [0.00, 0.165 * k, 0.170 * k], [0.20, 0.180 * k, 0.185 * k],
+      [0.72, 0.120 * k, 0.128 * k], [1.00, 0.108 * k, 0.115 * k],
+    ], { round: 2.2 }), skin).finish();
   }
-  head.add(spike(0.03, 0.13, 4), claw, { x: 0.09, y: 0.11, z: -0.02, rz: -0.35 });   // 귀
-  head.add(spike(0.03, 0.13, 4), claw, { x: -0.09, y: 0.11, z: -0.02, rz: 0.35 });
-  head.finish();
-  const eg = prism(0.04, 0.03, 0.035, 0.04, 0.03, { hang: false, sides: 4 });
-  for (const x of [0.06, -0.06]) {
-    const e = new THREE.Mesh(eg, eyeMat);
-    e.position.set(x, 0.06, 0.13);
-    rig.head.add(e);
-  }
-
-  for (const g of [rig.armL, rig.armR]) {
-    new Part(g).add(prism(0.105, 0.115, 0.30, 0.14, 0.15), skin).finish();
-  }
-  for (const g of [rig.foreL, rig.foreR]) {
-    new Part(g).add(prism(0.085, 0.095, 0.30, 0.115, 0.125), skin).finish();
+  for (const [g, k] of [[rig.foreL, 0.82], [rig.foreR, 1.18]]) {
+    new Part(g).add(limb(0.33, [
+      [0.00, 0.118 * k, 0.126 * k], [0.24, 0.132 * k, 0.140 * k],
+      [0.78, 0.078 * k, 0.086 * k], [1.00, 0.068 * k, 0.074 * k],
+    ], { round: 2.2 }), skin).finish();
   }
   // 손톱 — 구울의 무기다. 세 개씩, 길고 굽었다
-  for (const g of [rig.handL, rig.handR]) {
-    const p = new Part(g).add(prism(0.10, 0.11, 0.09, 0.10, 0.11), skin);
+  for (const [g, k] of [[rig.handL, 0.85], [rig.handR, 1.20]]) {
+    const p = new Part(g).add(limb(0.13, [
+      [0.00, 0.085 * k, 0.095 * k], [0.50, 0.105 * k, 0.115 * k], [1.00, 0.080 * k, 0.090 * k],
+    ], { round: 2.6 }), skin);
     for (let i = -1; i <= 1; i++) {
-      p.add(spike(0.028, 0.20, 4), claw, { x: i * 0.05, y: -0.14, z: 0.02, rx: Math.PI + 0.2 });
+      p.add(spike(0.024 * k, 0.145, 4), claw, { x: i * 0.048 * k, y: -0.105, z: 0.015, rx: Math.PI + 0.22 });
     }
     p.finish();
   }
@@ -314,13 +586,17 @@ export function buildGhoul() {
   return done(rig, [skin, belly, claw]);
 }
 
-// ═══════════════════════════ 유령 궁수 ═══════════════════════════
+// ═══════════════════════════ 망령 궁수 ═══════════════════════════
 // 실루엣: **다리가 없고 아래가 흩어진다.** 유일하게 바닥에 닿지 않는 적.
+//
+// 예전에는 아래가 가늘어지기만 하는 **원뿔**이었다. 유령은 「아래가 없다」가
+// 아니라 「아래가 사라지는 중이다」여야 하고, 그건 아래로 갈수록 좁아지는
+// 단면 + 길이가 제각각인 자락이 만든다.
 export function buildArcher() {
   const robe = M(0x3a4a63, { roughness: 1, metalness: 0 });
-  const inner = M(0x24304a, { roughness: 1, metalness: 0 });
+  const inner = M(0x1a2338, { roughness: 1, metalness: 0 });
   const wood = M(0x5a4630, { roughness: 0.85 });
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff });
+  const boneM = M(0xb9b09a, { roughness: 0.6 });
 
   const rig = skeleton({
     hipY: 0.98, legX: 0, thigh: 0, shin: 0,
@@ -333,130 +609,167 @@ export function buildArcher() {
   rig.legL = rig.legR = null;
   rig.float = true;
 
-  // 아래로 갈수록 **가늘어지며 흩어지는** 옷자락 — 세 겹으로 층을 만든다.
-  //
-  // prism(아래폭, 아래깊이, 높이, 위폭, 위깊이) 다. 처음에 아래를 넓게 적어서
-  // 위아래가 뒤집힌 원기둥이 되었고, 게다가 세 겹 합이 골반보다 길어 바닥을
-  // 뚫었다 — 화면에는 **그냥 상자**로 나왔다. 유령은 아래가 사라져야 유령이다.
-  new Part(rig.hips)
-    .add(prism(0.30, 0.28, 0.34, 0.36, 0.33), robe, { y: 0.02 })
-    .add(prism(0.20, 0.19, 0.28, 0.29, 0.27), robe, { y: -0.30 })
-    .add(prism(0.05, 0.05, 0.22, 0.19, 0.18), inner, { y: -0.56 })
-    .finish();
-  new Part(rig.spine).add(prism(0.30, 0.28, 0.26, 0.34, 0.30, { hang: false }), robe, { y: 0.1 }).finish();
-  new Part(rig.chest)
-    .add(prism(0.36, 0.30, 0.28, 0.30, 0.26, { hang: false }), robe, { y: 0.04 })
-    .add(slab(0.34, 0.44, 0.02, 0.03), inner, { y: -0.06, z: -0.15, rx: 0.1 })   // 등 뒤 천
-    .finish();
-
-  new Part(rig.neck).add(prism(0.10, 0.10, 0.08, 0.11, 0.11), inner).finish();
-  new Part(rig.head)
-    // 두건 — 위가 뾰족한 원뿔. 얼굴 자리는 **비워 둔다**(검은 재질)
-    .add(prism(0.24, 0.24, 0.26, 0.02, 0.02, { hang: false, sides: 6 }), robe, { y: 0.06 })
-    .add(prism(0.17, 0.10, 0.16, 0.15, 0.10, { hang: false }), inner, { y: 0.02, z: 0.08 })
-    .finish();
-  const eg = prism(0.035, 0.028, 0.03, 0.035, 0.028, { hang: false, sides: 4 });
-  for (const x of [0.045, -0.045]) {
-    const e = new THREE.Mesh(eg, glowMat);
-    e.position.set(x, 0.04, 0.14);
-    rig.head.add(e);
+  const hips = new Part(rig.hips)
+    .add(loft([
+      { y: -0.62, w: 0.055, d: 0.055 }, { y: -0.40, w: 0.180, d: 0.175 },
+      { y: -0.16, w: 0.290, d: 0.280 }, { y: 0.04, w: 0.330, d: 0.315 },
+    ], { round: 2.4 }), robe);
+  // 찢어진 자락 — **길이가 제각각**이라야 아래 경계가 들쭉날쭉해진다
+  for (let i = 0; i < 9; i++) {
+    const a = i / 9 * Math.PI * 2;
+    const len = 0.34 + ((i * 4) % 5) * 0.10;
+    hips.add(tatter(0.13, len), inner,
+      { x: Math.sin(a) * 0.125, z: Math.cos(a) * 0.125, y: -0.24,
+        rx: Math.cos(a) * 0.13, rz: -Math.sin(a) * 0.13, ry: -a });
   }
+  hips.finish();
+  new Part(rig.spine).add(loft([
+    { y: -0.02, w: 0.300, d: 0.285 }, { y: 0.26, w: 0.340, d: 0.300 },
+  ], { round: 2.5 }), robe).finish();
+  const chest = new Part(rig.chest)
+    .add(loft([
+      { y: 0.00, w: 0.340, d: 0.300 }, { y: 0.12, w: 0.360, d: 0.300 }, { y: 0.22, w: 0.260, d: 0.220 },
+    ], { round: 2.5 }), robe)
+    // 어깨 망토 — 유령의 어깨선을 만들어 준다. 없으면 그냥 자루다
+    .add(loft([{ y: 0.05, w: 0.430, d: 0.375 }, { y: 0.16, w: 0.330, d: 0.290 }], { round: 2.5 }), inner);
+  for (let i = 0; i < 5; i++) {
+    const t = (i - 2) / 2;
+    chest.add(tatter(0.14, 0.50 - Math.abs(t) * 0.12), inner,
+      { x: t * 0.13, y: 0.04, z: -0.14, rx: 0.1, rz: -t * 0.12 });
+  }
+  chest.finish();
+
+  new Part(rig.neck).add(limb(0.09, [[0, 0.100, 0.100], [1, 0.092, 0.092]], { round: 2.2, seg: 10 }), inner).finish();
+  // 두건 — 위가 뾰족하고 **얼굴 자리는 비워 둔다**(검은 재질)
+  new Part(rig.head)
+    .add(loft([
+      { y: -0.04, w: 0.250, d: 0.250 }, { y: 0.06, w: 0.235, d: 0.240 },
+      { y: 0.15, w: 0.150, d: 0.155 }, { y: 0.22, w: 0.030, d: 0.030 },
+    ], { round: 2.4 }), robe)
+    .add(loft([{ y: -0.04, w: 0.190, d: 0.120 }, { y: 0.10, w: 0.175, d: 0.110 }], { round: 2.6 }),
+      inner, { z: 0.062 })
+    .add(arc(0.112, 0.020, Math.PI * 1.1, 12), robe, { y: 0.02, z: 0.085, rx: Math.PI / 2, ry: Math.PI / 2 })
+    .finish();
+  eyes(rig.head, 0x9fd8ff, 0.042, 0.030, 0.105, 0.026, 0.018);
+  // 두건 속의 등불 — 눈 두 개보다 **하나의 빛**이 더 무섭다
+  rig.core = core(rig.head, 0x9fd8ff, 0.022, 0, 0.035, 0.055);
 
   for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
-    new Part(g).add(prism(0.14, 0.14, 0.26, 0.10, 0.10), robe, { rz: s * 0.1 }).finish();
+    new Part(g).add(limb(0.26, [
+      [0.00, 0.155, 0.155], [0.30, 0.140, 0.140], [1.00, 0.100, 0.100],
+    ], { round: 2.4 }), robe, { rz: s * 0.1 }).finish();
   }
-  new Part(rig.foreL).add(prism(0.10, 0.10, 0.24, 0.08, 0.08), robe).finish();
-  new Part(rig.foreR).add(prism(0.10, 0.10, 0.24, 0.08, 0.08), robe).finish();
-  new Part(rig.handL).add(prism(0.08, 0.08, 0.08, 0.07, 0.07), inner).finish();
-  new Part(rig.handR).add(prism(0.08, 0.08, 0.08, 0.07, 0.07), inner).finish();
+  for (const g of [rig.foreL, rig.foreR]) {
+    new Part(g).add(limb(0.24, [
+      [0.00, 0.105, 0.105], [1.00, 0.078, 0.078],
+    ], { round: 2.4 }), robe).finish();
+  }
+  // 손 — 소매에서 **뼈만** 나온다. 유령의 손은 옷의 일부가 아니다
+  for (const g of [rig.handL, rig.handR]) {
+    const p = new Part(g).add(loft([{ y: -0.06, w: 0.044, d: 0.024 }, { y: 0, w: 0.052, d: 0.028 }],
+      { round: 3, seg: 8 }), boneM);
+    for (let i = -1; i <= 1; i++) {
+      p.add(limb(0.07, [[0, 0.012, 0.012], [1, 0.008, 0.008]], { round: 2.2, seg: 6 }), boneM,
+        { x: i * 0.018, y: -0.055, rz: i * 0.15 });
+    }
+    p.finish();
+  }
 
-  // 활 — 오른손. 굽은 팔 두 개 + 시위. 토러스보다 실루엣이 명확하다.
-  //
-  // **활대는 세로다.** 처음에 z 로 90 도 눕혀 놨더니 화면에서 막대기 하나로
-  // 보였다 — 활은 실루엣이 곧 정체성인 물건이라 그러면 활을 든 줄 모른다.
-  // 시위는 그립보다 **뒤(−Z)** 에 있어야 한다. 화살은 +Z 로 날아가므로.
+  // ── 활 ── 리커브. **활대는 세로다.** z 로 눕히면 막대기 하나로 보인다.
+  // 시위는 그립보다 **뒤(−Z)** 에 있어야 한다 — 화살은 +Z 로 날아가므로.
   const bow = new THREE.Group();
-  // 활도 마찬가지 — 겨눔 자세의 팔 접힘(−1.2)을 되돌려 세로로 세운다
-  bow.rotation.x = 1.16;
-  new Part(bow)
-    .add(prism(0.035, 0.05, 0.32, 0.02, 0.03, { hang: false }), wood, { y: 0.18, rz: -0.26, rx: -0.12 })
-    .add(prism(0.035, 0.05, 0.32, 0.02, 0.03, { hang: false }), wood, { y: -0.18, rz: 0.26, rx: 0.12 })
-    .add(prism(0.05, 0.07, 0.14, 0.045, 0.06, { hang: false }), wood)
-    .finish();
-  const stringMat = M(0xbfb49a, { roughness: 0.9 });
-  const str = new THREE.Mesh(prism(0.012, 0.012, 0.66, 0.012, 0.012, { sides: 4, hang: false }), stringMat);
-  str.position.z = -0.07;
+  bow.rotation.x = 1.16;             // 겨눔 자세의 팔 접힘을 되돌려 세로로 세운다
+  const bp = new Part(bow)
+    .add(loft([{ y: -0.075, w: 0.048, d: 0.070 }, { y: 0.075, w: 0.048, d: 0.070 }], { round: 3, seg: 8 }), wood);
+  for (const s of [1, -1]) {
+    bp.add(loft([{ y: -0.13, w: 0.040, d: 0.058 }, { y: 0.13, w: 0.026, d: 0.040 }], { round: 3, seg: 8 }),
+      wood, { y: s * 0.20, rz: -s * 0.30, rx: -s * 0.10 });
+    bp.add(loft([{ y: -0.08, w: 0.026, d: 0.040 }, { y: 0.08, w: 0.014, d: 0.022 }], { round: 3, seg: 8 }),
+      wood, { y: s * 0.40, z: -0.045, rz: s * 0.34, rx: s * 0.16 });     // 끝이 반대로 휜다
+  }
+  bp.finish();
+  const stringMat = M(0xd8cfb4, { roughness: 0.9, emissive: 0x2a3a55, emissiveIntensity: 0.6 });
+  const str = new THREE.Mesh(prism(0.010, 0.010, 0.92, 0.010, 0.010, { sides: 4, hang: false }), stringMat);
+  str.position.z = -0.075;
   bow.add(str);
   rig.handR.add(bow);
   rig.weapon = bow; rig.blade = str; rig.bladeMat = stringMat;
   rig.bowString = str;
   rig.stance = 'archer';
-  return done(rig, [robe, inner, wood, stringMat]);
+  return done(rig, [robe, inner, wood, boneM, stringMat]);
 }
 
 // ═══════════════════════════ 석상 골렘 ═══════════════════════════
 // 실루엣: **어깨가 머리보다 높다.** 목이 없고 팔이 땅에 닿을 만큼 길다.
+//
+// **여기만 단면이 아니라 깨진 돌덩이(rock)다.** 골렘은 원래 「깎인 것」이고
+// 단면이 매끈하면 안 된다. 그리고 균열에서 심장 빛이 샌다 — 어두운 화면에서
+// 형태보다 먼저 읽히고 「속이 비지 않았다」는 인상을 준다.
 export function buildGolem() {
-  const stone = M(0x6b6a72, { roughness: 0.97, metalness: 0.02 });
-  const dark = M(0x4a4950, { roughness: 0.98, metalness: 0 });
-  const coreMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
+  const stone = M(0x8a8894, { roughness: 0.98, metalness: 0.02 });
+  const dark = M(0x56555f, { roughness: 0.99, metalness: 0 });
+  const runeMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
 
   const rig = skeleton({
-    hipY: 0.90, legX: 0.24, thigh: 0.40, shin: 0.36,   // 0.40+0.36+발목 0.14
+    hipY: 0.90, legX: 0.24, thigh: 0.40, shin: 0.36,
     spineY: 0.06, chestY: 0.30, neckY: 0.26, headY: 0.02,
     armX: 0.52, armY: 0.14, upper: 0.44, fore: 0.40,
   });
 
-  const thighG = prism(0.255, 0.275, 0.40, 0.31, 0.33);
-  const shinG = prism(0.255, 0.275, 0.36, 0.29, 0.31);
-  for (const [th, sh, ft] of [[rig.thighL, rig.shinL, rig.footL], [rig.thighR, rig.shinR, rig.footR]]) {
-    new Part(th).add(thighG, stone).add(prism(0.34, 0.34, 0.10, 0.32, 0.32, { hang: false }), dark, { y: -0.02 }).finish();
-    new Part(sh).add(shinG, stone).finish();
-    new Part(ft).add(prism(0.32, 0.44, 0.14, 0.30, 0.38), stone, { z: 0.06 }).finish();
+  for (const [th, sh, ft, sd] of [[rig.thighL, rig.shinL, rig.footL, 1], [rig.thighR, rig.shinR, rig.footR, 2]]) {
+    new Part(th)
+      .add(rock(0.20, 0.26, 1, sd), stone, { y: -0.13, sy: 1.5 })
+      .add(rock(0.19, 0.30, 1, sd + 10), dark, { y: -0.03, sy: 0.7 })
+      .finish();
+    new Part(sh).add(rock(0.185, 0.28, 1, sd + 20), stone, { y: -0.16, sy: 1.35 }).finish();
+    new Part(ft).add(rock(0.20, 0.22, 1, sd + 30), stone, { y: -0.04, z: 0.05, sy: 0.6, sz: 1.25 }).finish();
   }
 
-  new Part(rig.hips).add(prism(0.56, 0.42, 0.26, 0.52, 0.40, { hang: false }), stone, { y: -0.06 }).finish();
-  new Part(rig.spine).add(prism(0.54, 0.40, 0.26, 0.72, 0.48, { hang: false }), stone, { y: 0.13 }).finish();
+  new Part(rig.hips).add(rock(0.30, 0.24, 1, 40), stone, { y: -0.05, sy: 0.72, sz: 0.78 }).finish();
+  new Part(rig.spine).add(rock(0.32, 0.26, 1, 41), stone, { y: 0.12, sy: 0.62, sz: 0.72 }).finish();
 
   new Part(rig.chest)
-    .add(prism(0.80, 0.52, 0.44, 0.92, 0.56, { hang: false }), stone, { y: 0.14 })
-    // 갈라진 틈 — 여기서 심장이 비친다
-    .add(prism(0.30, 0.12, 0.30, 0.22, 0.10, { hang: false }), dark, { y: 0.16, z: 0.24 })
+    .add(rock(0.44, 0.22, 1, 42), stone, { y: 0.15, sy: 0.62, sz: 0.66 })
+    // 왼쪽 어깨가 깨져 나갔다 — 어둠으로 파고 그 자리에서 심장이 더 밝게 샌다
+    .add(rock(0.20, 0.35, 1, 43), dark, { x: 0.30, y: 0.28, sy: 0.75 })
+    .add(prism(0.30, 0.14, 0.32, 0.20, 0.10, { hang: false }), dark, { y: 0.16, z: 0.24 })
     .finish();
-  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 0), coreMat);
-  core.position.set(0, 0.16, 0.30);
-  rig.chest.add(core);
-  rig.core = core;
+  rig.core = core(rig.chest, 0xffb050, 0.15, 0, 0.17, 0.28);
+  for (let i = 0; i < 3; i++) {                    // 룬 — 어둠 속에서 먼저 읽힌다
+    const r = new THREE.Mesh(slab(0.18 - i * 0.03, 0.022, 0.02, 0.006), runeMat);
+    r.position.set(0, 0.38 - i * 0.05, 0.30);
+    rig.chest.add(r);
+  }
 
-  // 목이 없다 — 머리가 어깨 사이에 파묻힌다
+  // 목이 없다 — 머리가 어깨 사이에 파묻힌다. 다만 **아예 안 보이면 안 된다**
   new Part(rig.head)
-    .add(prism(0.34, 0.34, 0.28, 0.30, 0.30, { hang: false }), stone, { y: 0.06 })
+    .add(rock(0.23, 0.20, 1, 50), stone, { y: 0.16, sy: 0.82 })
     .add(prism(0.26, 0.12, 0.10, 0.24, 0.10, { hang: false }), dark, { y: 0.08, z: 0.17 })
-    .add(spike(0.05, 0.16, 4), stone, { x: 0.14, y: 0.16, rz: -0.5 })
-    .add(spike(0.05, 0.16, 4), stone, { x: -0.14, y: 0.16, rz: 0.5 })
+    .add(prism(0.07, 0.11, 0.13, 0.05, 0.09, { hang: false }), stone, { y: 0.0, z: 0.16 })   // 코
+    .add(spike(0.05, 0.17, 4), stone, { x: 0.14, y: 0.17, rz: -0.5 })
+    .add(spike(0.038, 0.11, 4), stone, { x: -0.14, y: 0.15, rz: 0.5 })                        // 짧다 = 부러졌다
+    .add(rock(0.05, 0.30, 1, 51), dark, { x: -0.15, y: 0.20, rz: 0.4 })
     .finish();
-  const eg = prism(0.05, 0.04, 0.04, 0.05, 0.04, { hang: false, sides: 4 });
-  for (const x of [0.08, -0.08]) {
-    const e = new THREE.Mesh(eg, coreMat);
-    e.position.set(x, 0.08, 0.19);
-    rig.head.add(e);
-  }
+  eyes(rig.head, 0xff7a2a, 0.082, 0.085, 0.19, 0.05, 0.038);
 
-  for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
-    new Part(g)
-      .add(prism(0.36, 0.38, 0.16, 0.40, 0.42, { hang: false }), stone, { y: 0.04, rz: s * 0.1 })
-      .add(prism(0.255, 0.275, 0.44, 0.29, 0.31), stone, { y: -0.06 })
-      .add(spike(0.05, 0.14, 4), stone, { x: s * 0.16, y: 0.1, rz: s * 0.8 })
-      .finish();
+  for (const [g, s, sd] of [[rig.armL, 1, 60], [rig.armR, -1, 61]]) {
+    const p = new Part(g)
+      .add(rock(0.24, 0.22, 1, sd), stone, { y: 0.02, sy: 0.72 })
+      .add(rock(0.185, 0.26, 1, sd + 2), stone, { y: -0.26, sy: 1.3 });
+    for (let i = 0; i < 3; i++) {      // 어깨에서 삐죽 나온 돌 — 골렘의 실루엣
+      p.add(spike(0.045, 0.15 - i * 0.03, 4), stone,
+        { x: s * (0.14 + i * 0.02), y: 0.10 - i * 0.09, rz: s * (0.8 + i * 0.2) });
+    }
+    p.finish();
   }
-  for (const g of [rig.foreL, rig.foreR]) {
-    new Part(g).add(prism(0.255, 0.275, 0.40, 0.275, 0.295), stone).finish();
+  for (const [g, sd] of [[rig.foreL, 70], [rig.foreR, 71]]) {
+    new Part(g).add(rock(0.185, 0.24, 1, sd), stone, { y: -0.18, sy: 1.25 }).finish();
   }
   // 주먹 — 골렘의 무기. 팔보다 굵어야 「내려찍는 것」으로 읽힌다
-  for (const g of [rig.handL, rig.handR]) {
+  for (const [g, sd] of [[rig.handL, 80], [rig.handR, 81]]) {
     new Part(g)
-      .add(prism(0.36, 0.38, 0.30, 0.34, 0.36), stone, { y: -0.02 })
-      .add(prism(0.12, 0.12, 0.10, 0.10, 0.10, { hang: false }), dark, { y: -0.24, z: 0.10 })
+      .add(rock(0.24, 0.28, 1, sd), stone, { y: -0.14, sy: 0.9 })
+      .add(rock(0.09, 0.35, 1, sd + 2), dark, { y: -0.26, z: 0.10 })
       .finish();
   }
 

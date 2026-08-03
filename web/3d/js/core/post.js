@@ -129,6 +129,42 @@ const GradeShader = {
 /** 블룸 설정 — 값의 근거는 위 ClampShader 주석과 tune.json 실측표에 있다 */
 export const BLOOM = { strength: 0.26, radius: 0.4, threshold: 1.0, clamp: 2.5 };
 
+/**
+ * 도트 — **이 게임의 그림체다.** (스타일 판에서 고른 E)
+ *
+ * ── 어떻게 하는가 ────────────────────────────────────────────
+ * 후처리로 화면을 네모나게 뭉개는 게 아니라, **애초에 작게 그리고 확대한다.**
+ * `renderer.setPixelRatio(scale)` 하나면 three 가 그리기 버퍼를 그만큼 줄이고,
+ * CSS `image-rendering: pixelated` 가 확대할 때 뭉개지 않고 네모를 유지한다.
+ *
+ * 이쪽이 나은 이유가 둘이다:
+ *   · **공짜가 아니라 이득이다.** 픽셀이 1/9 로 줄어드니 후처리까지 전부
+ *     싸진다. 화면에 적이 스무 마리 뜨는 게임이라 이게 크다
+ *   · 후처리로 뭉개면 원본이 그대로 남아 **가장자리만 계단**이 되는데,
+ *     작게 그리면 조명도 그림자도 같은 격자에 얹혀 진짜 도트가 된다
+ *
+ * ── 값 ──────────────────────────────────────────────────────
+ * scale 1/3 — 1600 폭이면 약 530 픽셀로 그린다. 1/4 은 얼굴이 뭉개졌고
+ * 1/2 은 도트로 안 읽혔다. levels 10 — 색을 이 단계로 끊는다. 8 은
+ * 하늘·바닥의 완만한 그러데이션에서 띠가 보였다.
+ *
+ * antialias 는 **꺼야 한다.** 켜 두면 네모의 가장자리를 부드럽게 만들어서
+ * 작게 그리는 의미가 사라진다 — 흐릿한 저해상도 화면이 될 뿐이다.
+ */
+export const DOT = { scale: 1 / 3, levels: 10 };
+
+/** 색을 계단으로 끊는다. 톤 매핑·색보정이 **다 끝난 뒤**여야 한다 */
+const QuantShader = {
+  uniforms: { tDiffuse: { value: null }, uLevels: { value: DOT.levels } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse; uniform float uLevels; varying vec2 vUv;
+    void main(){
+      vec4 t = texture2D(tDiffuse, vUv);
+      gl_FragColor = vec4(floor(t.rgb * uLevels + 0.5) / uLevels, t.a);
+    }`,
+};
+
 export class Post {
   /**
    * @param quality 'high' | 'low' | 'off'
@@ -186,6 +222,10 @@ export class Post {
     // 색보정은 톤 매핑된 표시 공간 위에서. 여기서는 0.5 가 진짜 중간이다.
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
+
+    // 색 끊기는 **맨 마지막**이다. 색보정 앞에 두면 보정이 계단 사이를 다시
+    // 메워서 단이 흐려진다 — 끊어 놓고 나서 아무것도 안 건드려야 한다
+    if (quality !== 'off') this.composer.addPass(new ShaderPass(QuantShader));
   }
 
   /** 광원 코어를 자를 상한. 0 이하면 자르지 않는다 (튜닝 도구가 쓴다) */
