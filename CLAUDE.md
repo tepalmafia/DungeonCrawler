@@ -128,7 +128,13 @@ python3 tools/serve.py 8137      로컬 서버 (게임을 열려면 필요)
 node tools/sim.js                밸런스·템포 (1초)
 node tools/sim.js --csv          엑셀용
 node tools/bump-version.js N     캐시버스트 동기화
+node tools/assets.js             그림 몇 장 들어왔나 (--write 로 목록 갱신)
 ```
+
+**그림은 `web/3d/assets/` 에 떨어뜨리면 게임에 나옵니다.** 규격은
+`docs/ART-REQUEST.md`, 기계가 읽는 판본은 `web/3d/js/core/asset-table.js`
+한 곳뿐입니다. 이름이 틀리면 콘솔이 그 자리에서 알려 줍니다 — 조용히
+무시하지 않습니다.
 
 감사·회귀 스크립트는 폐기했습니다. 실제로 버그를 찾은 것은 늘 **직접 돌려
 보고 나온 보고**였고, 13분짜리 전체 검사는 그걸 못 잡았습니다.

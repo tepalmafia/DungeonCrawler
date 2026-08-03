@@ -6,23 +6,31 @@
 
 import * as THREE from 'three';
 
-/** 회색조 높이 캔버스 → 노멀 캔버스 (Sobel 근사) */
+/**
+ * 회색조 높이 캔버스 → 노멀 캔버스 (Sobel 근사)
+ *
+ * **가로·세로를 따로 잡는다.** 예전엔 `width` 하나로 둘 다 썼다 —
+ * 코드 그림이 전부 정사각형이라 안 드러났을 뿐이고, 사장님이 주시는
+ * 벽 높이맵은 512x870 이다. 그대로 뒀으면 아래 3분의 1이 통째로
+ * 검게 나오면서 **오류는 안 났을** 것이다 (POSTMORTEM §1-⑤).
+ */
 export function normalFromHeight(heightCanvas, strength = 2.2) {
-  const S = heightCanvas.width;
-  const src = heightCanvas.getContext('2d').getImageData(0, 0, S, S).data;
+  const W = heightCanvas.width, H = heightCanvas.height;
+  const src = heightCanvas.getContext('2d', { willReadFrequently: true })
+    .getImageData(0, 0, W, H).data;
   const out = document.createElement('canvas');
-  out.width = out.height = S;
+  out.width = W; out.height = H;
   const ctx = out.getContext('2d');
-  const img = ctx.createImageData(S, S);
+  const img = ctx.createImageData(W, H);
   // 타일링되므로 가장자리는 반대편으로 감는다 — 안 그러면 이음매에 선이 생긴다
-  const h = (x, y) => src[((((y + S) % S) * S + ((x + S) % S)) * 4)] / 255;
+  const h = (x, y) => src[((((y + H) % H) * W + ((x + W) % W)) * 4)] / 255;
 
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
       const dx = (h(x - 1, y) - h(x + 1, y)) * strength;
       const dy = (h(x, y - 1) - h(x, y + 1)) * strength;
       const len = Math.hypot(dx, dy, 1);
-      const i = (y * S + x) * 4;
+      const i = (y * W + x) * 4;
       img.data[i] = ((dx / len) * 0.5 + 0.5) * 255;
       img.data[i + 1] = ((dy / len) * 0.5 + 0.5) * 255;
       img.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;

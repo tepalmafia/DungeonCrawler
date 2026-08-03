@@ -22,6 +22,7 @@
 // (창이 화면 밖에 그려진 사고를 겪었으므로, 고정 픽셀은 안 쓴다.)
 
 import { NODES } from '../game/skilltree.js';
+import { iconHTML } from '../core/assets.js';
 
 const CX = 360, CY = 360;
 const R1 = 122, R2 = 216, R3 = 302;
@@ -160,7 +161,7 @@ export function renderTreeGraph(body, T, onTake) {
     lab.className = 'tbranch';
     lab.style.left = pct(clamp(p.x)); lab.style.top = pct(clamp(p.y));
     lab.style.color = b.hue;
-    lab.innerHTML = `<i>${b.icon}</i><span>${b.name}</span>`;
+    lab.innerHTML = `<i>${iconHTML(b.icon)}</i><span>${b.name}</span>`;
     wrap.appendChild(lab);
   }
 
@@ -180,7 +181,7 @@ export function renderTreeGraph(body, T, onTake) {
     el.className = `tn ${nd.shape} ${st}`;
     el.style.left = pct(nd.x); el.style.top = pct(nd.y);
     el.style.setProperty('--hue', nd.hue);
-    el.innerHTML = `<i>${GLYPH[nd.id] || '◆'}</i>`
+    el.innerHTML = `<i>${iconHTML(GLYPH[nd.id] || '◆', nd.id)}</i>`
       + (st === 'on' ? '<u>✔</u>' : st === 'off' ? '<u class="x">✕</u>' : '');
     const show = () => {
       info.innerHTML = `<b style="color:${nd.hue}">${n.name}</b>`

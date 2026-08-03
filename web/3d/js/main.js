@@ -14,6 +14,7 @@ import * as Audio from './core/audio.js';
 import { Bot } from './core/bot.js';
 import { Metrics } from './core/metrics.js';
 import { Post, DOT } from './core/post.js';
+import { preloadAssets, assetReport } from './core/assets.js';
 
 import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
@@ -45,7 +46,7 @@ import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 9;
+export const VERSION = 10;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -158,6 +159,17 @@ const G = {
   dropItem: null,            // 아래에서 채운다 (ui/inventory.js 가 쓴다)
 };
 window.G3 = G;
+G.assets = assetReport;      // 콘솔에서 `G3.assets()` — 무엇이 들어왔고 무엇이 빠졌나
+
+// ── 그림 통로 (core/assets.js) ─────────────────────────────────
+//
+// **지금 시작하고, 첫 층을 만들기 전에 기다린다.** 타이틀 화면이 떠 있는
+// 동안 받아 두면 사장님은 기다림을 못 느낀다.
+//
+// 순서가 중요하다 — 텍스처는 한 번 만들면 캐시에 박힌다. 목록을 받기 전에
+// 층을 만들면 코드 그림이 캐시에 들어앉아서, **파일을 넣어도 안 바뀐다.**
+// 그러면 「넣었는데 그대로다」가 되고 원인은 안 보인다.
+const assetsReady = preloadAssets();
 
 post = new Post(renderer, scene, camera, params.post);
 // `?q=N` — 색을 몇 단계로 끊을지. 0 이면 안 끊는다. 어두운 던전에서 이 값이
@@ -600,7 +612,8 @@ function showOverlay(html, onStart) {
  * @param cont  이어하기인가. **저장을 지울지 말지가 여기서 갈린다** —
  *              「시작」이 저장을 안 지우면 새 캐릭터에 옛 장비가 남는다.
  */
-function startGame(cont = false) {
+async function startGame(cont = false) {
+  await assetsReady;          // 첫 텍스처를 만들기 **전에** (위 주석 참조)
   Audio.resume();
   ui.el.overlay.hidden = true;
   ui.show();

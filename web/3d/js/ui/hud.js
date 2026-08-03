@@ -9,6 +9,7 @@ import { ELEMENTS } from '../game/elements.js';
 import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
 import { renderTreeGraph } from './treeview.js';
+import { iconHTML } from '../core/assets.js';
 
 const $ = (s) => document.querySelector(s);
 const V = new THREE.Vector3();      // 투영용 재사용 벡터
@@ -86,7 +87,7 @@ export class UI {
       const d = document.createElement('div');
       d.className = cls;
       if (title) d.title = title;
-      d.innerHTML = `<span class="key">${label}</span><span>${icon}</span>`
+      d.innerHTML = `<span class="key">${label}</span><span>${iconHTML(icon)}</span>`
         + `<span class="cost">${cost}</span><div class="cd"></div><div class="cdnum"></div>`;
       return d;
     };
@@ -384,7 +385,7 @@ export class UI {
     const row = document.createElement('div');
     row.className = 'srow' + (sold ? ' sold' : '') + (poor ? ' poor' : '');
     const stat = sold ? '' : this._statLine(item);
-    row.innerHTML = `<span class="si">${icon}</span>`
+    row.innerHTML = `<span class="si">${iconHTML(icon)}</span>`
       + `<span class="sb">`
       + `<span class="sn"${rar ? ` style="color:${rar.css}"` : ''}>${name}`
       + (sold ? '' : this._cmpTag(item)) + `</span>`

@@ -656,3 +656,19 @@ body[data-post="low"] #vignette {
 }
 .bulksell:hover:not(:disabled) { background: #3a2e1d; border-color: #9a7a42; }
 .bulksell:disabled { opacity: .45; cursor: default; }
+
+/* ── 그림 아이콘 (core/assets.js) ────────────────────────────────
+   `assets/icons/*.png` 이 있으면 이모지 자리에 이 <img> 가 들어온다.
+   크기를 px 로 못 박지 않고 **em 으로 둔다** — 칸마다 font-size 가 이미
+   다르게 잡혀 있어서(가방 17px · 스킬 24px · 무기칸 32px), em 이면
+   그 조절이 그대로 따라온다. px 로 적으면 칸마다 다시 적어야 하고,
+   그러면 칸이 하나 늘 때마다 어긋난다. */
+.ico {
+  width: 1.5em; height: 1.5em;
+  object-fit: contain;
+  display: inline-block; vertical-align: middle;
+  image-rendering: auto;
+}
+/* 마름모 칸은 45도 돌아가 있다 — 안쪽 <i> 가 되돌리므로 여기선 할 게 없다.
+   다만 이모지보다 그림이 크게 잡히므로 조금 줄인다 */
+.tn .ico { width: 1.35em; height: 1.35em; }
