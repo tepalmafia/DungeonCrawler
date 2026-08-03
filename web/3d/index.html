@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>심연의 왕관 — 3D 액션 RPG 샘플</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2307060c'/><path d='M3 11h10l-1-5-2 2-2-3-2 3-2-2z' fill='%23ffb257'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=5">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -154,14 +154,19 @@
         <li><b>E</b> 스위치·상자·상인·함정 해제 · <b>C</b> 휴식 (모닥불 — 연료가 3배로 탄다)</li>
         <li><b>Space</b> 포탈 진입 / 재시작</li>
       </ul>
-      <button id="startBtn">시작</button>
-      <p class="tip">아홉 층 세 막. 층마다 보스가 기다립니다.</p>
+      <!-- 저장이 있으면 「이어하기」가 앞에 뜬다. 노가다 게임에서 **기본은
+           이어하기**여야 하고, 새로 시작은 한 번 더 묻는 자리에 둔다. -->
+      <div id="startRow">
+        <button id="continueBtn" hidden>이어하기</button>
+        <button id="startBtn">시작</button>
+      </div>
+      <p class="tip" id="saveTip">아홉 층 세 막. 층마다 보스가 기다립니다.</p>
     </div>
   </div>
 </div>
 
 <div id="nowebgl" hidden>WebGL을 사용할 수 없는 브라우저입니다.</div>
 
-<script type="module" src="js/main.js?v=4"></script>
+<script type="module" src="js/main.js?v=5"></script>
 </body>
 </html>

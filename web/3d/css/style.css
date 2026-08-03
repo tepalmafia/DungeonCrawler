@@ -625,3 +625,9 @@ body[data-post="low"] #vignette {
   position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
   border-radius: 50%; background: #e05a4a; box-shadow: 0 0 6px #e05a4a;
 }
+
+/* 타이틀 버튼 두 개 — 저장이 있으면 「이어하기」가 앞에 선다 */
+#startRow { display: flex; gap: 10px; justify-content: center; align-items: center; }
+#continueBtn[hidden] { display: none; }
+#continueBtn { background: #3a2f1c; border-color: #8a6f3a; color: #ffd9a8; }
+#continueBtn:hover { background: #4b3d24; border-color: #b9924e; }
