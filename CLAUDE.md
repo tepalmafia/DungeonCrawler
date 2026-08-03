@@ -129,6 +129,7 @@ node tools/sim.js                밸런스·템포 (1초)
 node tools/sim.js --csv          엑셀용
 node tools/bump-version.js N     캐시버스트 동기화
 node tools/assets.js             그림 몇 장 들어왔나 (--write 로 목록 갱신)
+node tools/export-starter.js ../새저장소   다음 게임으로 뼈대 뽑기 (docs/REUSE.md)
 ```
 
 **그림은 `web/3d/assets/` 에 떨어뜨리면 게임에 나옵니다.** 규격은
