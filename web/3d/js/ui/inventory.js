@@ -8,6 +8,7 @@
 import { RARITIES, SLOTS, tooltipHtml, power } from '../game/items.js';
 import { fuelCap } from '../game/lantern.js';
 import { ELEMENTS } from '../game/elements.js';
+import { iconHTML } from '../core/assets.js';
 
 // 정렬 순서 — 같은 부위끼리 모으고, 그 안에서 좋은 것이 앞에 온다.
 // 「좋은 것」은 등급이 아니라 power() 다. 고급 무기가 희귀 반지보다 나을 수 있다.
@@ -86,7 +87,10 @@ export class Inventory {
       return;
     }
     const r = RARITIES[item.rarity];
-    cell.innerHTML = `<span style="color:${r.css}">${item.icon}</span>`;
+    // 이 `color:` 는 사실상 안 먹는다 — 이모지는 컬러 폰트라 CSS 색을 무시한다.
+    // 그림(assets/icons/)으로 바뀌어도 마찬가지다. 등급은 아이템 이름 색이
+    // 말해 주므로 그대로 두되, 「걸려 있는데 안 걸린다」는 걸 적어 둔다.
+    cell.innerHTML = `<span style="color:${r.css}">${iconHTML(item.icon)}</span>`;
     cell.classList.add('filled');
     cell.style.setProperty('--rc', r.css);
   }

@@ -1,11 +1,11 @@
 // ══════════════════════════════════════════════════════════════════════════
-//  버전 올리기 — GAME_VERSION 과 index.html 캐시버스트를 **한 번에** 맞춘다.
+//  버전 올리기 — VERSION 과 index.html 캐시버스트를 **한 번에** 맞춘다.
 //    node tools/bump-version.js 190     (지정)
-//    node tools/bump-version.js         (현재 GAME_VERSION 으로 index.html만 동기화)
+//    node tools/bump-version.js         (현재 VERSION 으로 index.html만 동기화)
 //
 //  ★ 왜 도구가 필요한가 (v190 실사고)
 //    v187·v188·v189 세 번의 빌드 동안 index.html 의 `?v=` 25개가 전부 186에 멈춰 있었다.
-//    GAME_VERSION 은 main.js 에 있고 캐시버스트는 index.html 에 있어서, 버전을 올릴 때마다
+//    VERSION 은 main.js 에 있고 캐시버스트는 index.html 에 있어서, 버전을 올릴 때마다
 //    한쪽만 올라갔다. 그러면 브라우저가 파일마다 제각각 갱신돼
 //    **main.js 는 v189인데 enemies.js 는 v186** 인 상태가 만들어질 수 있다 —
 //    화면에는 v189라고 찍히면서 그 버전의 변경은 적용되지 않는다.
@@ -16,17 +16,14 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-// ★ **어느 게임인가** — 이 도구는 원래 옛 2D 게임(web/)용이었다. 지금 만드는
-//   것은 web/3d/ 라서, 아무 생각 없이 돌리면 **엉뚱한 파일의 버전이 올라가고
-//   3D 는 그대로 남는다.** 실제로 한 번 그랬다(로그에는 성공이라고 찍힌다).
-//   기본을 3d 로 두고, 옛 게임은 `--legacy` 로만 만진다.
-const LEGACY = process.argv.includes('--legacy');
-const DIR = LEGACY ? 'web' : 'web/3d';
-const MAIN = path.join(ROOT, DIR, 'js/main.js');
-const HTML = path.join(ROOT, DIR, 'index.html');
+// ★ 이 도구는 원래 옛 2D 게임(web/)을 보고 있었다. 3D 버전을 올리려고 돌렸더니
+//   **엉뚱한 파일이 바뀌고 3D 는 그대로 남았다** — 로그에는 성공이라고 찍힌다.
+//   옛 2D 게임은 지웠고, 이제 대상은 web/3d 하나뿐이다.
+const MAIN = path.join(ROOT, 'web/3d/js/main.js');
+const HTML = path.join(ROOT, 'web/3d/index.html');
 
 let main = fs.readFileSync(MAIN, 'utf8');
-const RE = LEGACY ? /const GAME_VERSION = (\d+)/ : /export const VERSION = (\d+)/;
+const RE = /export const VERSION = (\d+)/;
 const cur = parseInt((main.match(RE) || [, '0'])[1], 10);
 const want = parseInt(process.argv[2] || String(cur), 10);
 if (!Number.isFinite(want) || want <= 0) {
@@ -35,7 +32,7 @@ if (!Number.isFinite(want) || want <= 0) {
 }
 
 if (want !== cur) {
-  main = main.replace(RE, LEGACY ? `const GAME_VERSION = ${want}` : `export const VERSION = ${want}`);
+  main = main.replace(RE, `export const VERSION = ${want}`);
   fs.writeFileSync(MAIN, main);
 }
 
@@ -45,7 +42,7 @@ html = html.replace(/\?v=\d+/g, `?v=${want}`);
 fs.writeFileSync(HTML, html);
 
 const uniqBefore = [...new Set(before)];
-console.log(`GAME_VERSION ${cur} → ${want}`);
+console.log(`VERSION ${cur} → ${want}`);
 console.log(`index.html 캐시버스트 ${before.length}개: ${uniqBefore.join(',')} → ${want}`);
 if (uniqBefore.length === 1 && uniqBefore[0] === String(cur) && want === cur) {
   console.log('  (이미 일치)');

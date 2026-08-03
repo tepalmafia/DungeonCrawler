@@ -7,7 +7,7 @@ import { buildKnight } from '../core/models.js';
 import { Pose } from '../core/rig.js';
 import { poseHumanoid, poseRest, STANCE, stanceFor } from '../core/anim.js';
 import { GROWTH, perHit } from './growth-table.js';
-import { attachWeapon } from '../core/weapons.js';
+import { attachWeapon, setSheathed } from '../core/weapons.js';
 import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
@@ -111,6 +111,7 @@ export class Player {
     // 전투
     this.attackCd = 0;
     this.swing = 0;              // 0..1 스윙 진행도
+    this.drawT = 0;              // 검을 뽑고 있는 남은 시간(초)
     this.walkT = 0;
     this.hurtT = 0;
     // 피격 동작 (core/anim.js). hurtT 는 재질 플래시, hitT 는 자세다 — 서로 다르다.
@@ -199,6 +200,9 @@ export class Player {
     const fam = this.equipped.weapon?.fam || '검';
     if (fam === this.rig.weaponFam) return;
     attachWeapon(this.rig, fam, this.rig.weaponPal);
+    // attachWeapon 은 **늘 손에** 붙인다. 넣어 둔 상태였으면 다시 넣는다 —
+    // 안 그러면 상점에서 무기를 바꾸는 순간 손에 검이 뽑혀 있다
+    if (this.drawT <= 0 && this.swing <= 0) setSheathed(this.rig, true);
     // 자세도 같이 간다 — 무기가 바뀌면 **팔이 하는 일**이 바뀐다.
     // 한 번 합쳐서 들고 있는다. 매 프레임 합치면 프레임마다 객체가 하나 생긴다.
     this.rig.stanceObj = stanceFor(STANCE.knight, this.rig.weaponFam);
@@ -449,6 +453,15 @@ export class Player {
     // 모델을 사서 갈아 끼우면 이 함수는 한 줄도 안 바뀐다 (core/actor.js).
     if (moved > 0.05) this.walkT += dt * 11 * MOVE_SCALE;
     if (this.swing > 0) this.swing = Math.max(0, this.swing - dt * 4.4 * ATTACK_SCALE);
+
+    // ── 검을 뽑고 넣는다 ──────────────────────────────────
+    // 공격하면 뽑고, 마지막 공격에서 조금 지나면 도로 넣는다.
+    // **여유를 넉넉히(3.2초) 준다.** 짧으면 잡몹 사이를 오갈 때마다
+    // 넣었다 뺐다 해서 깜빡이는 것으로 보인다 — 노가다 게임이라 그 간격이
+    // 짧다. 죽었을 때도 넣지 않는다(쓰러진 손에 검이 있어야 한다).
+    if (this.swing > 0) this.drawT = 3.2;
+    else if (this.drawT > 0) this.drawT -= dt;
+    setSheathed(this.rig, !(this.dead || this.swing > 0 || this.drawT > 0));
     if (this.hitT > 0) this.hitT = Math.max(0, this.hitT - dt);
     // 대기 동작(호흡·무게중심)의 시계. 게임 시각과 따로 두는 이유는
     // 층을 넘어도 호흡이 이어져야 하기 때문 — G.time 은 층마다 초기화된다.

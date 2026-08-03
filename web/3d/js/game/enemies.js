@@ -1,5 +1,5 @@
 // 적 — 실루엣이 서로 겹치지 않게 「머리 × 몸 비율 × 무기」를 종족마다 확정한다.
-// (docs/ART-PLAN-v200.md §3-3 의 원칙을 3D 메시에 적용)
+// (원칙: 몬스터는 실루엣으로 구분된다 — 색이 아니라 형태)
 
 import * as THREE from 'three';
 import { makeBlobShadow } from '../core/fx.js';

@@ -1,11 +1,16 @@
-// 절차 생성 텍스처 — 외부 이미지 에셋 0. 전부 캔버스에 코드로 그린다.
+// 던전 표면 텍스처.
 //
-// 규칙 (docs/ART-PLAN-v200.md §2-1 의 2D 결론을 3D에 그대로 적용):
+// **파일이 있으면 파일을, 없으면 코드 그림을 쓴다** (core/assets.js).
+// 아래 캔버스 그림들은 사장님이 주신 그림이 올 때까지의 대역이다 —
+// 그림이 오면 이 파일을 건드리지 않고 `assets/tiles/` 에 넣기만 하면 된다.
+//
+// 규칙 (코드 그림 쪽):
 //   바닥 = 큰 석판 / 벽 = 잔 벽돌  → 패턴 크기 대비로 벽·바닥이 즉시 구분된다.
 //   타일마다 시드를 달리해 균열·이끼를 뿌려 반복이 눈에 띄지 않게 한다.
 
 import * as THREE from 'three';
 import { makeRng } from './rng.js';
+import { assetTexture, tintedAssetTexture, assetCanvas } from './assets.js';
 
 const cache = new Map();
 
@@ -67,6 +72,11 @@ function cracks(ctx, size, rnd, n, color = 'rgba(0,0,0,.5)') {
 // ─────────────────────────── 바닥 ───────────────────────────
 /** 어긋난 석판 + 줄눈 + 균열 + 이끼. 512px 안에 4x4 석판. */
 export function floorTexture(theme, seed = 1) {
+  // 그림이 들어오면 시드 변주는 없어진다 — 테마당 한 장이므로 1층과 2층의
+  // 바닥이 같아진다. 그게 정상이다(디아블로도 그렇다). 변주는 코드 그림만의 것.
+  const a = assetTexture(`tiles/floor_${theme.key}`);
+  if (a) return a;
+
   const key = `floor:${theme.key}:${seed}`;
   if (cache.has(key)) return cache.get(key);
 
@@ -121,6 +131,12 @@ export function floorTexture(theme, seed = 1) {
 // ─────────────────────────── 벽 ───────────────────────────
 /** 잔 벽돌 — 바닥 석판보다 훨씬 촘촘하게. 256px 안에 8행. */
 export function wallTexture(theme) {
+  // 그림은 512x870 (1:1.7) 이다 — 벽 한 칸이 CELL 2 x WALL_H 3.4 이므로.
+  // 아래 코드 그림은 정사각형이라 **세로로 1.7배 늘어난 상태**로 붙어 있다.
+  // 그림이 들어오면 그 왜곡이 사라진다.
+  const a = assetTexture(`tiles/wall_${theme.key}`);
+  if (a) return a;
+
   const key = `wall:${theme.key}`;
   if (cache.has(key)) return cache.get(key);
 
@@ -162,6 +178,9 @@ export function wallTexture(theme) {
 
 /** 벽 윗면 — 거칠고 밝다. 위에서 빛을 받는 면이라 지형 윤곽을 만든다. */
 export function wallTopTexture(theme) {
+  const a = assetTexture(`tiles/walltop_${theme.key}`);
+  if (a) return a;
+
   const key = `walltop:${theme.key}`;
   if (cache.has(key)) return cache.get(key);
 
@@ -186,6 +205,12 @@ export function wallTopTexture(theme) {
 // ─────────────────────── 스프라이트류 ───────────────────────
 /** 부드러운 원 — 파티클·광원 헤일로·발밑 그림자에 공통으로 쓴다 */
 export function softDot(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)') {
+  // 그림(`fx/dot.png`)은 **흰색 + 알파**다. 부르는 쪽이 색을 정하므로
+  // 여기서 입혀 준다 — 안 그러면 발밑 그림자가 하얗게 빛난다.
+  // (`outer` 는 그림 쪽 알파 감쇠가 대신한다)
+  const a = tintedAssetTexture('fx/dot', inner);
+  if (a) return a;
+
   const key = `dot:${inner}:${outer}`;
   if (cache.has(key)) return cache.get(key);
   const S = 64;
@@ -204,6 +229,11 @@ export function softDot(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255
 
 /** 횃불 불꽃 — 위로 갈수록 좁아지는 물방울 */
 export function flameTexture() {
+  // 쓰는 쪽(world/level.js)이 `color: theme.torch` 를 곱한다.
+  // 그림은 흰색/회색 + 알파면 되고, 그래야 층마다 불꽃 색이 달라진다.
+  const a = assetTexture('fx/flame');
+  if (a) return a;
+
   if (cache.has('flame')) return cache.get('flame');
   const S = 64;
   const c = canvas(S), ctx = c.getContext('2d');
@@ -226,6 +256,9 @@ export function flameTexture() {
 
 /** 아이템 광기둥 — 위로 갈수록 사라지는 세로 그라데이션 */
 export function beamTexture() {
+  const a = assetTexture('fx/beam');
+  if (a) return a;
+
   if (cache.has('beam')) return cache.get('beam');
   const c = canvas(64), ctx = c.getContext('2d');
   const g = ctx.createLinearGradient(0, 64, 0, 0);
@@ -242,6 +275,11 @@ export function beamTexture() {
 
 /** 지면 예고 원 (보스/정예 텔레그래프) — 링 */
 export function ringTexture(thickness = 0.12) {
+  // 그림이 들어오면 `thickness` 는 무시된다 — 두께는 그림이 가진 것이다.
+  // (규격서에 「테두리 두께 = 지름의 12%」라 적어 둔 이유가 이것이다)
+  const a = assetTexture('fx/ring');
+  if (a) return a;
+
   const key = `ring:${thickness}`;
   if (cache.has(key)) return cache.get(key);
   const S = 128, r = S / 2;
@@ -280,6 +318,9 @@ function grayCanvas(size, draw) {
 
 /** 바닥 높이맵 — 석판이 솟고 줄눈이 파이고 균열이 깊다 */
 export function floorHeight(theme) {
+  const a = assetCanvas(`tiles/floor_${theme.key}_h`);
+  if (a) return a;
+
   const key = `fh:${theme.key}`;
   if (cache.has(key)) return cache.get(key);
   const S = 512, N = 4, cell = S / N;
@@ -322,6 +363,9 @@ export function floorHeight(theme) {
 
 /** 벽 높이맵 — 벽돌 하나하나가 솟고 줄눈이 파인다 */
 export function wallHeight(theme) {
+  const a = assetCanvas(`tiles/wall_${theme.key}_h`);
+  if (a) return a;
+
   const key = `wh:${theme.key}`;
   if (cache.has(key)) return cache.get(key);
   const S = 256, ROWS = 8, bh = S / ROWS, bw = S / 5;
