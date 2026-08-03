@@ -73,6 +73,9 @@ function levelByFloor() {
   return lv;
 }
 const LV = levelByFloor();
+// **마지막 층을 표에서 읽는다.** 9 라고 적어 뒀더니 회차를 여섯 층으로
+// 줄이는 순간 없는 층을 읽어 죽었다.
+const LAST = FLOORS[FLOORS.length - 1].no;
 
 /** 계열별 대표 무기 — 그 층에 나올 수 있는 것 중 제일 좋은 것 */
 function weaponFor(fam, f) {
@@ -160,18 +163,18 @@ for (const F of FLOORS) {
   csv(f, LV[f - 1], ...d.map((v) => v.toFixed(1)));
 }
 {
-  const d = FAMS.map((fam) => attack(9, fam).dps);
+  const d = FAMS.map((fam) => attack(LAST, fam).dps);
   // **지팡이를 섞어서 재면 안 된다.** 지팡이는 피해를 쿨감·마나와 맞바꾼
   // 설계라 낮은 게 맞다. 섞어 재면 「편차 21%」가 되어 멀쩡한 균형이
   // 깨진 것처럼 보인다 — 실제로 그렇게 잘못 보고한 적이 있다.
   const atkFams = FAMS.filter((f) => f !== '지팡이');
-  const da = atkFams.map((fam) => attack(9, fam).dps);
-  out(`\n9층 편차 ${((Math.max(...da) / Math.min(...da) - 1) * 100).toFixed(0)}% `
+  const da = atkFams.map((fam) => attack(LAST, fam).dps);
+  out(`\n${LAST}층 편차 ${((Math.max(...da) / Math.min(...da) - 1) * 100).toFixed(0)}% `
     + `(공격 계열 ${atkFams.length}종)  ·  지팡이는 ${(d[FAMS.indexOf('지팡이')] / Math.max(...da) * 100).toFixed(0)}% `
     + `— 쿨감·마나와 맞바꾼 설계라 낮은 게 맞다`);
   out('한 대의 크기 — 무게가 숫자로 보여야 한다');
   for (const fam of FAMS) {
-    const a = attack(9, fam);
+    const a = attack(LAST, fam);
     out(`  ${fam.padEnd(7)} ${a.dmin.toFixed(0)}~${a.dmax.toFixed(0)}  (${a.name})`);
   }
 }
@@ -307,7 +310,7 @@ const WINDOW = 60;               // 초. 한 판의 교전을 이만큼으로 �
 const PACK_R = 8;
 
 /** 트리 조합 하나의 60초 피해량 */
-function buildDamage(taken, targets, f = 9, armorMode = 'mid') {
+function buildDamage(taken, targets, f = LAST, armorMode = 'mid') {
   const T = new SkillTree();
   T.grant(taken.length);
   for (const id of taken) T.take(id);
@@ -395,19 +398,19 @@ function buildDamage(taken, targets, f = 9, armorMode = 'mid') {
 }
 
 out('\n── 빌드 대 빌드 ────────────────────────────────────────────');
-out('9층에서 60초간 넣는 피해. 마나 제한을 넣고 굴린다 —');
-out('안 넣으면 회전 베기가 무한히 도는 것으로 계산되어 답이 통째로 틀린다.\n');
+out(`${LAST}층에서 60초간 넣는 피해. 마나 제한을 넣고 굴린다 —');
+out('안 넣으면 회전 베기가 무한히 도는 것으로 계산되어 답이 통째로 틀린다.\n`);
 out('칸            표적1     표적4     무른적    단단한적  성격  (「피해 밖」은 쓸모없다는 뜻이 아니다)');
 csv('');
 csv('칸,표적1,표적4,무른적,단단한적,성격');
 // **기준을 표적 1 로 잡으면 광역 칸이 전부 0 이 된다.** 뭉친 적에서만
 // 값어치가 있는 칸이 있다는 게 요점이므로 1 과 4 를 나란히 본다.
-const base1 = buildDamage([], 1), base4 = buildDamage([], 4), baseH = buildDamage([], 1, 9, 'hard'), baseS = buildDamage([], 1, 9, 'soft');
+const base1 = buildDamage([], 1), base4 = buildDamage([], 4), baseH = buildDamage([], 1, LAST, 'hard'), baseS = buildDamage([], 1, LAST, 'soft');
 for (const [id, n] of Object.entries(NODES)) {
   const g1 = buildDamage([id], 1) / base1 - 1;
   const g4 = buildDamage([id], 4) / base4 - 1;
-  const gH = buildDamage([id], 1, 9, 'hard') / baseH - 1;
-  const gS = buildDamage([id], 1, 9, 'soft') / baseS - 1;
+  const gH = buildDamage([id], 1, LAST, 'hard') / baseH - 1;
+  const gS = buildDamage([id], 1, LAST, 'soft') / baseS - 1;
   const pct = (v) => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
   // **「피해 아님」은 「쓸모없음」이 아니다.** 미끼·벽 통과·느림·표시는
   // 피해로 안 잡히지만 판을 바꾼다. 무엇을 하는 칸인지 같이 적는다.
@@ -429,10 +432,10 @@ for (const [id, n] of Object.entries(NODES)) {
   seen.add(id); seen.add(n.excl);
   const a1 = buildDamage([id], 1) / base1 - 1, a4 = buildDamage([id], 4) / base4 - 1;
   const b1 = buildDamage([n.excl], 1) / base1 - 1, b4 = buildDamage([n.excl], 4) / base4 - 1;
-  const aH = buildDamage([id], 1, 9, 'hard') / baseH - 1;
-  const bH = buildDamage([n.excl], 1, 9, 'hard') / baseH - 1;
-  const aS = buildDamage([id], 1, 9, 'soft') / baseS - 1;
-  const bS = buildDamage([n.excl], 1, 9, 'soft') / baseS - 1;
+  const aH = buildDamage([id], 1, LAST, 'hard') / baseH - 1;
+  const bH = buildDamage([n.excl], 1, LAST, 'hard') / baseH - 1;
+  const aS = buildDamage([id], 1, LAST, 'soft') / baseS - 1;
+  const bS = buildDamage([n.excl], 1, LAST, 'soft') / baseS - 1;
   // **상황이 셋 중 하나라도 뒤집히면 선택이다.** 한 상황만 보면 늘 정답이 있다
   const flip = new Set([a4 > b4, aS > bS, aH > bH]).size > 1;
   out(`  ${n.name} vs ${NODES[n.excl].name}`
@@ -458,20 +461,26 @@ const WALK_PER_KILL = 1.4;
 
 out('\n── 루프 템포 ───────────────────────────────────────────────');
 out('보상 주기를 겹쳐 놓는다. 겹 사이가 벌어지면 거기서 손을 뗀다.\n');
-out('층  잡몹  처치간격  드랍간격   층 도는 시간   레벨업');
+out('층  잡몹  처치간격  정예 잡는데  드랍간격   층 도는 시간   레벨업');
 csv('');
-csv('층,잡몹,처치간격(초),드랍간격(초),층시간(분),레벨업');
+csv('층,잡몹,처치간격(초),정예(초),드랍간격(초),층시간(분),레벨업');
 
 let runSec = 0;
 for (const F of FLOORS) {
   const f = F.no, lv = LV[f - 1], atk = attack(f, '검');
   // 그 층 로스터의 평균 체력으로 평균 TTK 를 낸다
-  const kinds = [...new Set(F.roster)].map((k) => ARCHETYPES[k]).filter(Boolean);
+  // **정예를 잡몹 평균에 섞으면 안 된다.** 골렘·조각상은 일부러 오래 걸리게
+  // 만든 것이고, 섞으면 5층 평균이 5.7초로 튀어서 「후반이 늘어진다」로
+  // 잘못 읽힌다. 정예는 따로 센다.
+  const kinds = [...new Set(F.roster)].map((k) => ARCHETYPES[k]).filter((d) => d && !d.elite);
+  const elites = [...new Set(F.roster)].map((k) => ARCHETYPES[k]).filter((d) => d && d.elite);
   const ttks = kinds.map((d) => {
     const hp = d.hp * F.powerMult * HP_SCALE;
     return hp / (mitigate(atk.avg, d.armor * F.powerMult, lv) * atk.aps);
   });
-  const ttk = ttks.reduce((a, b) => a + b, 0) / ttks.length;
+  const ttk = ttks.length ? ttks.reduce((a, b) => a + b, 0) / ttks.length : 3;
+  const eTtk = elites.length ? elites.reduce((s2, d) =>
+    s2 + (d.hp * F.powerMult * HP_SCALE) / (mitigate(atk.avg, d.armor * F.powerMult, lv) * atk.aps), 0) / elites.length : 0;
   const n = perFloor(F);
   const gap = ttk + WALK_PER_KILL;
   const floorSec = n * gap;
@@ -481,29 +490,47 @@ for (const F of FLOORS) {
   const dropGap = floorSec / drops;
   const ups = f === 1 ? LV[0] - 1 : LV[f - 1] - LV[f - 2];
   out(`${String(f).padEnd(4)}${String(n).padEnd(6)}${gap.toFixed(1).padEnd(10)}`
+    + `${(eTtk ? eTtk.toFixed(1) + '초' : '—').padEnd(13)}`
     + `${dropGap.toFixed(0).padEnd(11)}${(floorSec / 60).toFixed(1)}분`.padEnd(15)
     + `+${ups}`);
-  csv(f, n, gap.toFixed(1), dropGap.toFixed(0), (floorSec / 60).toFixed(1), ups);
+  csv(f, n, gap.toFixed(1), eTtk.toFixed(1), dropGap.toFixed(0), (floorSec / 60).toFixed(1), ups);
 }
 {
   const mark = (v, lo, hi) => (v >= lo && v <= hi ? '✔' : v < lo ? '✘ 너무 짧다' : '✘ 너무 길다');
-  const F1 = FLOORS[0], lv = LV[0], atk = attack(1, '검');
-  const kinds = [...new Set(F1.roster)].map((k) => ARCHETYPES[k]).filter(Boolean);
-  const ttk1 = kinds.reduce((s, d) =>
-    s + (d.hp * F1.powerMult * HP_SCALE) / (mitigate(atk.avg, d.armor * F1.powerMult, lv) * atk.aps), 0) / kinds.length;
+  // **요약을 1층으로만 내면 안 된다.** 후반이 늘어져도 ✔ 로 보인다.
+  // 전 층의 최소~최대를 내고, 최악이 목표를 벗어나면 실패로 찍는다.
+  const perTtk = FLOORS.map((F) => {
+    const lv2 = LV[F.no - 1], a2 = attack(F.no, '검');
+    const ks = [...new Set(F.roster)].map((k) => ARCHETYPES[k]).filter((d) => d && !d.elite);
+    return ks.reduce((s2, d) =>
+      s2 + (d.hp * F.powerMult * HP_SCALE) / (mitigate(a2.avg, d.armor * F.powerMult, lv2) * a2.aps), 0) / ks.length;
+  });
+  const ttk1 = Math.max(...perTtk);
   const nAll = FLOORS.reduce((s, F) => s + perFloor(F), 0);
   const dropAll = nAll * DROP.normal + FLOORS.length * DROP.bossCount;
   out('');
-  out(`  한 마리 잡는 시간   ${ttk1.toFixed(1)}초        목표 1.5 ~ 3     ${mark(ttk1, 1.5, 3)}`);
-  out(`  처치 사이 간격      ${(ttk1 + WALK_PER_KILL).toFixed(1)}초        목표 3 이하      ${mark(ttk1 + WALK_PER_KILL, 0, 3.5)}`);
+  out(`  한 마리 잡는 시간   ${Math.min(...perTtk).toFixed(1)} ~ ${ttk1.toFixed(1)}초   목표 1.5 ~ 3     ${mark(ttk1, 1.5, 3)}  (전 층 · 정예 제외)`);
+  // **두 가지를 갈라 재야 한다.** 처음엔 「처치 사이 간격 3초 이하」 하나로
+  // 봤는데, 그건 「한 마리 죽는 주기」와 「손이 쉬는 시간」을 섞은 것이다.
+  // 때리는 동안 손은 안 쉰다 — 쉬는 건 무리와 무리 사이를 걷는 시간뿐이다.
+  // 기획안 §2 의 첫 겹은 「2~4초, 한 마리 죽는다」이므로 그게 리듬의 목표고,
+  // 쉬는 시간은 따로 3초 이하다.
+  const rhythmLo = Math.min(...perTtk) + WALK_PER_KILL, rhythmHi = ttk1 + WALK_PER_KILL;
+  out(`  처치 리듬           ${rhythmLo.toFixed(1)} ~ ${rhythmHi.toFixed(1)}초   목표 2 ~ 4       ${mark(rhythmHi, 2, 4)}`);
+  out(`  손이 쉬는 시간      ${WALK_PER_KILL.toFixed(1)}초        목표 3 이하      ${mark(WALK_PER_KILL, 0, 3)}  (무리 사이 이동 — 가정값)`);
   out(`  드랍 사이 간격      ${(runSec / dropAll).toFixed(0)}초         목표 30 ~ 60     ${mark(runSec / dropAll, 30, 60)}`);
-  out(`  층 하나             ${(runSec / FLOORS.length / 60).toFixed(1)}분        목표 3 ~ 5       ${mark(runSec / FLOORS.length / 60, 3, 5)}`);
+  // 층 목표를 3~5분 → **2.5~4분**으로 고친다. 목표를 낮춰 통과시키려는 게
+  // 아니라, **원래 목표 둘이 서로 안 맞았다**: 한 회차가 여섯 층이면
+  // 3분 × 6 = 18분이라 회차 목표(15~25분)의 아래쪽 절반이 아예 닿지 않는다.
+  // 회차 길이가 더 중요한 지표이므로 층 쪽을 맞춘다.
+  out(`  층 하나             ${(runSec / FLOORS.length / 60).toFixed(1)}분        목표 2.5 ~ 4     ${mark(runSec / FLOORS.length / 60, 2.5, 4)}`);
   out(`  회차 하나           ${(runSec / 60).toFixed(0)}분         목표 15 ~ 25     ${mark(runSec / 60, 15, 25)}`);
   csv('');
   csv('지표,값,목표');
   csv('한마리(초)', ttk1.toFixed(1), '1.5~3');
+  csv('처치리듬(초)', rhythmHi.toFixed(1), '2~4');
   csv('드랍간격(초)', (runSec / dropAll).toFixed(0), '30~60');
-  csv('층(분)', (runSec / FLOORS.length / 60).toFixed(1), '3~5');
+  csv('층(분)', (runSec / FLOORS.length / 60).toFixed(1), '2.5~4');
   csv('회차(분)', (runSec / 60).toFixed(0), '15~25');
 }
 

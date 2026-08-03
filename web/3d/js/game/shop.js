@@ -9,7 +9,7 @@
 // 재고는 층에 들어올 때 한 번 굴린다. 떠나면 다시 안 산다.
 
 import * as THREE from 'three';
-import { rollItem, RARITIES, SLOTS, SLOT_NAME, priceOf } from './items.js';
+import { rollItem, RARITIES, SLOTS, SLOT_NAME, priceOf, power } from './items.js';
 import { makeLantern } from './lantern.js';
 import { gridToWorld } from '../world/dungeon.js';
 import { floorDef } from '../world/floors.js';
@@ -255,6 +255,28 @@ export class Shop {
     const got = Math.max(1, Math.round(priceOf(item) * SELL_MULT));
     p.coin += got;
     return { ok: true, got };
+  }
+
+  /**
+   * 일괄 판매 — **드랍이 3배가 되면 하나씩 파는 건 노동이다.**
+   *
+   * 낀 것보다 나쁜 것만 판다. 등급만 보고 팔면 「전설인데 내 것보다 약한
+   * 것」이 남고 「일반인데 빈 칸을 채울 수 있는 것」이 팔린다 —
+   * 게임의 비교 화살표와 같은 함수(power)로 판단해야 어긋나지 않는다.
+   *
+   * @param maxRarity 이 등급 **이하**만 판다. 전설을 실수로 파는 사고를 막는다
+   */
+  sellBulk(G, maxRarity = 1) {
+    const p = G.player;
+    const doomed = p.bag.filter((it) => it.slot && it.kind !== 'lantern'
+      && (it.rarity ?? 0) <= maxRarity
+      && power(it) <= power(p.equipped[it.slot]));
+    let got = 0;
+    for (const it of doomed) {
+      const r = this.sell(G, it);
+      if (r.ok) got += r.got;
+    }
+    return { n: doomed.length, got };
   }
 
   update(dt, t) {
