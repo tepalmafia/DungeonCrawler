@@ -17,7 +17,7 @@ import { Input } from './core/input.js';
 import { buildShip, inside, roomAt } from './world/ship.js';
 import { BODY, HEAT, VALVE } from './game/systems-table.js';
 
-export const VERSION = 1;
+export const VERSION = 2;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -46,6 +46,7 @@ const me = {
 };
 let heat = HEAT.start;
 let turn = 0;             // 밸브를 얼마나 돌렸나 (0~1)
+let clock = 0;            // 켠 뒤 흐른 초 — 화면이 살아 있어 보이게 하는 데 쓴다
 
 const ray = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
@@ -101,17 +102,9 @@ function heatStep(dt, cooling) {
   heat += (cooling ? -HEAT.fall : HEAT.rise) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
-  const t = heat / HEAT.max;
-
-  // 계기 — 왼쪽 끝을 고정하고 길이만 준다. 가운데를 잡고 늘리면
-  // 양쪽으로 자라서 「눈금」으로 안 읽힌다
-  const full = ship.needle.userData.full;
-  ship.needle.scale.x = Math.max(0.001, t);
-  ship.needle.position.x = -full / 2 + (full * t) / 2;
-  // 색은 **경고 구간부터** 돈다. 처음에 0 부터 선형으로 깎았더니
-  // 시작 열(34)에서 이미 노랬다 — 늘 노란 계기는 경고가 아니다.
-  const alarm = Math.max(0, (heat - HEAT.warn * 0.7) / (HEAT.max - HEAT.warn * 0.7));
-  ship.needleMat.color.setHSL(0.36 * (1 - alarm), 0.7, 0.55);
+  // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다.
+  // 여섯 장을 매 프레임 다시 그린다 (캔버스라 싸다)
+  ship.cock.update({ heat, cooling, room: roomAt(me.x, me.z), t: clock });
 
   // 기관실 등이 붉어진다 — **계기를 안 봐도 뜨거운 걸 안다**
   const hot = Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn));
@@ -139,6 +132,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+  clock += dt;
 
   const look = input.takeLook();
   me.yaw -= look.dx * 0.0022;
