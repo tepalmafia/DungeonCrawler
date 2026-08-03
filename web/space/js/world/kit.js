@@ -29,6 +29,10 @@ export const ZONE = {
   cockpit: { light: 0x63b6ff, accent: 0xff9a3c },   // 파랑 — 조종·기술
   corridor: { light: 0x9fb4cc, accent: 0xffc46a },  // 중립 — 지나가는 곳
   engine: { light: 0xff7a3c, accent: 0xffd07a },    // 주황·빨강 — 정비·위험
+  observ: { light: 0x7fd8ff, accent: 0x9a7fff },    // 차가운 파랑 — 밖을 본다
+  workshop: { light: 0xffd27a, accent: 0xff8a3c },  // 노랑 — 손을 쓰는 곳
+  garden: { light: 0x8fe8a0, accent: 0xd8ff7a },    // 초록 — 유일하게 살아 있다
+  airlock: { light: 0xff5a4a, accent: 0xffd23a },   // 빨강 — 여기 너머는 진공
 };
 
 export const MAT = {
@@ -180,28 +184,6 @@ export function conduit(parent, axis, fixed, from, to, y, tint) {
   return g;
 }
 
-/**
- * 문틀 — **발광시킨다.**
- * 레벨 디자인에서 「문이 안 보여 길을 잃는」 것을 고친 방법이 이것이다.
- * 이 배는 방이 넷뿐이지만, 추격 중에 통로 입구를 못 찾으면 그것만으로 죽는다.
- */
-export function doorFrame(parent, x, z, half, H, ry, tint) {
-  const g = new THREE.Group();
-  g.position.set(x, 0, z);
-  g.rotation.y = ry;
-  parent.add(g);
-  const h = Math.min(H - 0.15, 2.15);
-  for (const sx of [-1, 1]) {
-    box(g, 0.14, h, 0.34, MAT.metal, sx * half, h / 2, 0);
-    box(g, 0.05, h - 0.2, 0.04, glow(tint), sx * (half - 0.1), h / 2, 0.17);
-  }
-  box(g, half * 2 + 0.14, 0.16, 0.34, MAT.metal, 0, h, 0);
-  box(g, half * 2 - 0.1, 0.05, 0.04, glow(tint), 0, h - 0.09, 0.17);
-  // 바닥 문턱 — 발끝에서 방이 바뀌는 것이 느껴진다
-  box(g, half * 2, 0.05, 0.3, MAT.metal, 0, 0.025, 0);
-  return g;
-}
-
 /** 글자 표지 — 방 이름·번호. 캔버스라 그림이 아니라 데이터다 */
 export function sign(parent, text, x, y, z, ry, tint = 0x8fd0ff, w = 0.62) {
   const cv = document.createElement('canvas');
@@ -221,4 +203,136 @@ export function sign(parent, text, x, y, z, ry, tint = 0x8fd0ff, w = 0.62) {
   m.rotation.y = ry;
   parent.add(m);
   return m;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  압력 용기 문법 — **「그냥 배 같다」를 고치는 것들.**
+//
+//  ★ 왜 배처럼 보였나 (2026-08-03 · 사장님 지적 + 조사)
+//    내가 만든 방은 **직육면체 + 평평한 천장**이었다. 그건 건물 논리다.
+//    조사해 보니 이유가 명확했다:
+//
+//      건물은 **중력만** 견디면 된다 → 수직 기둥 + 직각 벽
+//      우주선은 **사방에서 오는 압력**을 견뎌야 한다 → 원통 + 링 프레임
+//
+//    압력은 방향이 없으므로 모서리가 있으면 거기 힘이 몰린다. 그래서 실제
+//    우주선의 내압 껍데기는 **원통**이고, 일정 간격으로 **링 프레임**이 돈다.
+//    안쪽에는 바닥·벽·천장을 따로 깔아 장비를 덮는다 — 그래서 바닥 밑과
+//    천장 위에 공간이 있고, 패널을 열면 배선이 나온다.
+//
+//    원통을 그대로 만들면 걷기와 물건 배치가 다 어려워진다. 그래서
+//    **모따기(chamfer)** 로 흉내 낸다 — 벽과 바닥/천장이 만나는 모서리를
+//    45도로 깎는다. 팔각 단면이 되고, 이것만으로 「상자 방」이 사라진다.
+// ══════════════════════════════════════════════════════════════════════════
+
+/** 모따기 폭. 이보다 크면 걸어 다닐 바닥이 줄고, 작으면 티가 안 난다 */
+export const CHAMFER = 0.42;
+
+/**
+ * 모서리를 깎는다 — 벽이 바닥·천장으로 45도로 이어진다.
+ * **이 함수 하나가 「건물」과 「우주선」을 가른다.**
+ *
+ * `gaps` 는 문구멍이다. 바닥 쪽 모따기가 문 앞을 막으면 못 지나간다 —
+ * 벽과 **똑같은 구멍**을 내야 한다.
+ */
+export function chamfer(parent, r, H, mat, gapsBySide = {}) {
+  const c = CHAMFER, diag = c * Math.SQRT2;
+  const segs = (from, to, gaps = []) => {
+    const out = [];
+    let cur = from;
+    for (const [a, b] of [...gaps].sort((p, q) => p[0] - q[0])) {
+      if (a > cur) out.push([cur, a]);
+      cur = Math.max(cur, b);
+    }
+    if (cur < to) out.push([cur, to]);
+    return out;
+  };
+
+  for (const [y, up] of [[0, 1], [H, -1]]) {
+    // 천장 쪽(up = -1)은 구멍이 필요 없다 — 문은 바닥에서 2.05 까지다
+    const g = (side) => (up > 0 ? (gapsBySide[side] || []) : []);
+
+    for (const [zz, dir, side] of [[r.z0, 1, 'z0'], [r.z1, -1, 'z1']]) {
+      for (const [a, b] of segs(r.x0, r.x1, g(side))) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(b - a, 0.08, diag), mat);
+        m.position.set((a + b) / 2, y + up * c * 0.5, zz + dir * c * 0.5);
+        m.rotation.x = dir * up * Math.PI / 4;
+        parent.add(m);
+      }
+    }
+    for (const [xx, dir, side] of [[r.x0, 1, 'x0'], [r.x1, -1, 'x1']]) {
+      for (const [a, b] of segs(r.z0, r.z1, g(side))) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(diag, 0.08, b - a), mat);
+        m.position.set(xx + dir * c * 0.5, y + up * c * 0.5, (a + b) / 2);
+        m.rotation.z = -dir * up * Math.PI / 4;
+        parent.add(m);
+      }
+    }
+  }
+}
+
+/**
+ * 링 프레임 — 압력 껍데기를 두르는 구조재. **일정 간격**이라는 것이 요점이다.
+ * 간격이 들쭉날쭉하면 구조재가 아니라 장식으로 보인다.
+ */
+export function ringFrames(parent, r, H, along, step, tint) {
+  const W = r.x1 - r.x0, D = r.z1 - r.z0;
+  const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+  const T = 0.13, P = 0.1;                      // 두께 · 안으로 튀어나오는 깊이
+  const len = along === 'z' ? D : W;
+  const n = Math.max(1, Math.round(len / step) - 1);
+  for (let i = 1; i <= n; i++) {
+    const t = (along === 'z' ? r.z0 : r.x0) + (len * i) / (n + 1);
+    const g = new THREE.Group();
+    parent.add(g);
+    if (along === 'z') {
+      box(g, W, P, T, MAT.metal, cx, H - P / 2, t);                       // 천장
+      box(g, W, P, T, MAT.metal, cx, P / 2, t);                          // 바닥
+      for (const sx of [r.x0, r.x1]) box(g, P, H, T, MAT.metal, sx + (sx === r.x0 ? P / 2 : -P / 2), H / 2, t);
+      box(g, W * 0.86, 0.03, 0.045, new THREE.MeshBasicMaterial({ color: tint }), cx, H - 0.16, t - T / 2 - 0.02);
+    } else {
+      box(g, T, P, D, MAT.metal, t, H - P / 2, cz);
+      box(g, T, P, D, MAT.metal, t, P / 2, cz);
+      for (const sz of [r.z0, r.z1]) box(g, T, H, P, MAT.metal, t, H / 2, sz + (sz === r.z0 ? P / 2 : -P / 2));
+      box(g, 0.045, 0.03, D * 0.86, new THREE.MeshBasicMaterial({ color: tint }), t - T / 2 - 0.02, H - 0.16, cz);
+    }
+  }
+}
+
+/**
+ * 압력 해치 — 사각 문구멍을 **우주선 문**으로 바꾼다.
+ * 모서리를 둥글게(모따기로) 깎고, 잠금 손잡이(dog)를 넷 붙인다.
+ * 실제 우주선 문이 이렇게 생긴 이유도 압력이다 — 모서리에 힘이 몰린다.
+ */
+export function hatch(parent, x, z, half, H, ry, tint) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = ry;
+  parent.add(g);
+  const h = Math.min(H - 0.3, 2.05);
+  const R = 0.34;                                // 모서리를 깎는 크기
+
+  for (const sx of [-1, 1]) {
+    box(g, 0.17, h - R, 0.4, MAT.metal, sx * half, (h - R) / 2, 0);
+    box(g, 0.05, h - R - 0.2, 0.045, new THREE.MeshBasicMaterial({ color: tint }), sx * (half - 0.11), (h - R) / 2, 0.2);
+    // 모서리 — 45도로 깎는다. 이 하나로 「문」이 「해치」가 된다
+    const c = new THREE.Mesh(new THREE.BoxGeometry(0.17, R * 1.42, 0.4), MAT.metal);
+    c.position.set(sx * (half - R / 2), h - R / 2, 0);
+    c.rotation.z = sx * Math.PI / 4;
+    g.add(c);
+  }
+  box(g, half * 2 - R * 2 + 0.17, 0.18, 0.4, MAT.metal, 0, h - 0.09, 0);
+  box(g, half * 2 - R * 2, 0.05, 0.045, new THREE.MeshBasicMaterial({ color: tint }), 0, h - 0.19, 0.2);
+  box(g, half * 2, 0.06, 0.36, MAT.metal, 0, 0.03, 0);                    // 문턱
+
+  // 잠금 손잡이 넷 — 압력문의 상징이다
+  for (const [dx, dy] of [[-1, 0.34], [1, 0.34], [-1, 0.74], [1, 0.74]]) {
+    box(g, 0.16, 0.05, 0.05, MAT.rail, dx * (half - 0.09), h * dy, 0.21);
+  }
+  // 위험 줄무늬 — 문턱에. 「여기 압력 경계」라고 말해 준다
+  for (let i = 0; i < 7; i++) {
+    box(g, 0.12, 0.012, 0.3, new THREE.MeshBasicMaterial({ color: i % 2 ? 0x1a1a1a : 0xd8a13a }),
+      -half + 0.2 + i * (half * 2 - 0.4) / 6, 0.065, 0);
+  }
+  return g;
 }

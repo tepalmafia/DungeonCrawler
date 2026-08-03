@@ -72,45 +72,54 @@ ok(after.z > before.z, `방향이 맞다 — 뒤로 누르면 통로 쪽(+z)으�
 console.log('\n[2] 충돌 — 물건을 뚫고 지나가나');
 console.log(`  (막는 것 ${await p.evaluate(() => SPACE.blockers)}개 등록됨)`);
 const CASES = [
-  [0, 7.10, false, '반응로 한가운데'],
-  [1.60, 7.10, true, '반응로 옆 — 지나갈 수 있어야 한다'],
-  [4.20, 6.00, false, '기관실 오른쪽 랙'],
-  [-4.20, 8.00, false, '기관실 왼쪽 랙'],
-  [0, 5.00, true, '기관실 가운데'],
-  [0, 10.10, false, '기관실 뒷벽 밸브'],
-  [2.80, -9.00, false, '캐노피 밖 (우주로 걸어 나가는 자리)'],
-  [-2.80, -9.00, false, '캐노피 밖 (반대쪽)'],
-  [0, -8.88, false, '조종석 콘솔'],
+  [0, 12.60, false, '기관실 반응로'],
+  [1.80, 12.60, true, '반응로 옆 — 지나갈 수 있어야 한다'],
+  [4.30, 13.00, false, '기관실 오른쪽 랙'],
+  [0, 14.20, true, '기관실 가운데'],
+  [0, 15.70, false, '기관실 뒷벽 밸브'],
+  [3.00, -8.60, false, '캐노피 밖 (우주로 걸어 나가는 자리)'],
+  [0, -8.60, false, '조종석 콘솔'],
   [1.05, -6.95, false, '조종석 좌석'],
-  [0, -5.50, true, '조종석 가운데'],
-  [0, 0, true, '통로 가운데'],
-  [0.90, 0, false, '통로 벽'],
+  [0, -5.40, true, '조종석 가운데'],
+  [0, 8.00, true, '통로 가운데'],
+  [1.15, 8.00, false, '통로 벽 (곁방이 없는 자리)'],
+  [-2.30, 0.60, true, '관측실'],
+  [-3.70, 0.60, false, '관측실 해도대'],
+  [3.00, 0.60, true, '정비실'],
+  [4.50, 0.60, false, '정비실 작업대'],
+  [-2.40, 5.20, true, '온실'],
+  [-4.10, 5.15, false, '온실 재배대'],
+  [2.80, 5.70, true, '에어록'],
 ];
 for (const [x, z, want, name] of CASES) {
   const got = await p.evaluate(([x, z]) => SPACE.canStand(x, z), [x, z]);
   ok(got === want, `${name}  (${x}, ${z}) → ${got ? '설 수 있다' : '막힌다'}`);
 }
 
-console.log('\n[3] 갇히지 않나 — 배 안 전체를 훑어 본다');
+console.log('\n[3] 방마다 걸어서 닿나 — 시작 자리에서 넓혀 가며 훑는다');
+// ★ 손으로 찍은 점보다 이게 낫다. 방을 옮기거나 물건을 늘려도 검사가
+//   그대로 유효하고, **못 들어가는 방**을 놓치지 않는다.
 const reach = await p.evaluate(() => {
-  // 시작 자리에서 걸어갈 수 있는 곳을 넓혀 가며 센다. 기관실까지 닿아야 한다
-  const S = 0.25, seen = new Set(), q = [[0, -6.5]];
+  const S = 0.25, seen = new Set(), q = [[0, -5.4]];
   const key = (x, z) => `${Math.round(x / S)},${Math.round(z / S)}`;
-  seen.add(key(0, -6.5));
-  let engine = 0, total = 0;
+  seen.add(key(0, -5.4));
+  const per = {};
   while (q.length) {
     const [x, z] = q.pop();
-    total++;
-    if (z > 3.5) engine++;
+    const r = SPACE.room(x, z);
+    if (r) per[r] = (per[r] || 0) + 1;
     for (const [dx, dz] of [[S, 0], [-S, 0], [0, S], [0, -S]]) {
       const nx = x + dx, nz = z + dz, k = key(nx, nz);
       if (seen.has(k) || !SPACE.canStand(nx, nz)) continue;
       seen.add(k); q.push([nx, nz]);
     }
   }
-  return { total, engine };
+  return { per, rooms: SPACE.rooms };
 });
-ok(reach.engine > 100, `조종석에서 기관실까지 걸어갈 수 있다 (닿는 칸 ${reach.total}, 그중 기관실 ${reach.engine})`);
+for (const r of reach.rooms) {
+  const n = reach.per[r.key] || 0;
+  ok(n > 20, `${r.name.padEnd(4)} 닿는 칸 ${String(n).padStart(4)}`);
+}
 
 console.log(errs.length ? `\n오류: ${errs.join(' / ')}` : '\n오류 없음');
 console.log(fail ? `\n✘ ${fail}개 실패` : '\n✔ 전부 통과');
