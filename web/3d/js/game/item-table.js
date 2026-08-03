@@ -15,6 +15,7 @@
 // **가짓수는 늘리고 드랍 빈도는 줄인다.**
 
 import { itemScale } from './growth-table.js';
+import { plusMult } from './craft-table.js';
 import { tierUnlock } from './economy-table.js';
 import { ELEMENTS, ELEMENT_KEYS, WEAPON_ELEMENT_CHANCE, ARMOR_ELEMENT_CHANCE, defenseMult } from './elements.js';
 
@@ -224,6 +225,10 @@ export function rollItem(rnd, floorNo, tier = 0, opt = {}) {
     stats: {},
     baseStats: {},      // 계열 고유 보너스 — 접사와 구분해서 보여준다
     affixes: [],
+    // 강화 단계 (game/craft-table.js). 굴릴 때는 늘 0 이고 대장간이 올린다.
+    // **원본 수치는 안 건드린다** — 배수를 따로 두어야 「+7 을 떼고 보면
+    // 원래 어땠나」를 언제든 되돌려 볼 수 있고, 재련이 안전해진다.
+    plus: 0,
   };
 
   if (slot === 'weapon') {
@@ -304,9 +309,12 @@ export function aggregate(equipped) {
   let armorSlots = 0;
   for (const it of Object.values(equipped)) {
     if (!it) continue;
-    for (const [k, v] of Object.entries(it.stats)) s[k] = (s[k] || 0) + v;
+    // 강화 배수는 **여기 한 곳에서만** 곱한다. 굴릴 때 수치에 박아 넣으면
+    // 재련이 원본을 못 되돌리고, 두 군데서 곱하면 조용히 두 배가 된다.
+    const pm = plusMult(it.plus);
+    for (const [k, v] of Object.entries(it.stats)) s[k] = (s[k] || 0) + v * pm;
     if (it.slot === 'weapon') {
-      dmgMin = it.dmgMin; dmgMax = it.dmgMax; wSpd = it.aspd;
+      dmgMin = it.dmgMin * pm; dmgMax = it.dmgMax * pm; wSpd = it.aspd;
       element = it.element || 'none';
     } else {
       armorSlots++;
@@ -337,19 +345,46 @@ export function power(item) {
     thorns: 1.1, fuel: 0.4, find: 1.0, stun: 2.2, range: 9, regen: 6,
   };
   for (const [k, v] of Object.entries(item.stats)) p += (w[k] || 1) * v;
-  return Math.round(p);
+  return Math.round(p * plusMult(item.plus));
 }
 
 export function affixLine(a) { return AFFIX_BY_KEY[a.key].fmt(a.value); }
+
+/**
+ * 화면에 쓰는 이름. 강화했으면 뒤에 `+7` 이 붙는다.
+ *
+ * **`item.name` 을 직접 고치지 않는다.** 강화할 때마다 이름에 덧붙이면
+ * 「+1 +2 +3 검」이 되고, 되돌릴 방법도 없어진다.
+ */
+export const displayName = (item) => (item?.plus ? `${item.name} +${item.plus}` : (item?.name ?? ''));
+
+/** 강화가 반영된 수치 — 툴팁·비교가 화면에 찍는 값 */
+export function shown(item) {
+  const m = plusMult(item.plus);
+  return {
+    dmgMin: Math.round((item.dmgMin ?? 0) * m),
+    dmgMax: Math.round((item.dmgMax ?? 0) * m),
+    stat: (k) => Math.round((item.stats[k] || 0) * m),
+    // **반올림해서 보여 준다.** 강화 배수를 곱하면 「초당 1.488 회복」 같은
+    // 값이 나온다 — 계산은 그 값 그대로 하되(정확해야 한다) 화면에는
+    // 소수 한 자리까지만. 정수면 소수점을 안 찍는다.
+    affix: (a) => {
+      const v = a.value * m;
+      const r = Math.round(v * 10) / 10;
+      return { key: a.key, value: Number.isInteger(r) ? r : r };
+    },
+  };
+}
 
 /** 툴팁 HTML (비교 포함) */
 export function tooltipHtml(item, equippedSame) {
   const r = RARITIES[item.rarity];
   const kind = SLOT_NAME[item.slot] || item.slot;
-  let h = `<div class="tname" style="color:${r.css}">${item.name}</div>`;
+  const sh = shown(item);
+  let h = `<div class="tname" style="color:${r.css}">${displayName(item)}</div>`;
   h += `<div class="tkind">${r.name} ${item.fam ? `${item.fam} ` : ''}${kind} · 아이템 레벨 ${item.ilvl}</div>`;
   if (item.slot === 'weapon') {
-    h += `<div>피해 <b>${item.dmgMin}–${item.dmgMax}</b> · 속도 ${item.aspd.toFixed(2)}</div>`;
+    h += `<div>피해 <b>${sh.dmgMin}–${sh.dmgMax}</b> · 속도 ${item.aspd.toFixed(2)}</div>`;
     if (item.element && item.element !== 'none') {
       const el = ELEMENTS[item.element];
       h += `<div class="telem" style="color:${el.css}">${el.icon} ${el.name} 속성 — `
@@ -357,7 +392,7 @@ export function tooltipHtml(item, equippedSame) {
     }
   }
   if (item.stats.armor && item.slot !== 'weapon')
-    h += `<div>방어도 <b>${item.stats.armor}</b></div>`;
+    h += `<div>방어도 <b>${sh.stat('armor')}</b></div>`;
   // 방어구 속성 — 무기와 **반대로 읽어야** 한다. 무기는 「무엇을 이기나」,
   // 방어구는 「무엇을 막나」다. 같은 표를 쓰지만 문장이 다르다.
   if (item.slot !== 'weapon' && item.element && item.element !== 'none') {
@@ -369,12 +404,13 @@ export function tooltipHtml(item, equippedSame) {
   // 운 좋게 붙은 게 아니다」가 읽혀야 계열을 고르는 재미가 생긴다
   for (const [k, v] of Object.entries(item.baseStats || {}))
     h += `<div class="tbase">${AFFIX_BY_KEY[k].fmt(v)}</div>`;
-  for (const a of item.affixes) h += `<div class="taff">${affixLine(a)}</div>`;
+  for (const a of item.affixes) h += `<div class="taff">${affixLine(sh.affix(a))}</div>`;
+  if (item.plus) h += `<div class="tplus">강화 +${item.plus} — 수치 ${Math.round(plusMult(item.plus) * 100 - 100)}% 증가</div>`;
 
   if (equippedSame && equippedSame.id !== item.id) {
     const d = power(item) - power(equippedSame);
     const cls = d > 0 ? 'up' : d < 0 ? 'dn' : '';
-    h += `<div class="tcmp">착용 중: ${equippedSame.name}<br>`
+    h += `<div class="tcmp">착용 중: ${displayName(equippedSame)}<br>`
       + `종합 <span class="${cls}">${d > 0 ? '▲ +' : d < 0 ? '▼ ' : ''}${d}</span></div>`;
   }
   return h;

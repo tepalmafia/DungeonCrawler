@@ -10,11 +10,13 @@ import { ELEMENTS } from './elements.js';
 import {
   RARITIES, SLOTS, SLOT_NAME, AFFIX_BY_KEY,
   rollItem, aggregate, incomingMult, power, affixLine, tooltipHtml, priceOf,
+  displayName, shown,
 } from './item-table.js';
 
 export {
   RARITIES, SLOTS, SLOT_NAME, AFFIX_BY_KEY,
   rollItem, aggregate, incomingMult, power, affixLine, tooltipHtml, priceOf,
+  displayName, shown,
 };
 
 // ─────────────────────── 바닥 드랍 ───────────────────────

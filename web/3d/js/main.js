@@ -32,6 +32,7 @@ import { Rest } from './game/rest.js';
 import { spawnBoss, bossNameFor } from './game/boss.js';
 import { SkillTree } from './game/skilltree.js';
 import { DROP, COIN, DEATH, POTION_DROP } from './game/economy-table.js';
+import { SCRAP } from './game/craft-table.js';
 import { saveGame, loadGame, applySave, clearSave, saveInfo } from './game/save.js';
 import { tierUnlock, FLOOR_FILTER } from './game/economy-table.js';
 import { fieldAt } from './game/skills.js';
@@ -44,9 +45,10 @@ import { AI } from './game/ai.js';
 
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
+import { Forge } from './ui/forge.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 10;
+export const VERSION = 11;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -188,9 +190,11 @@ const ui = new UI(G);
 G.ui = ui;
 const inv = new Inventory(G);
 G.inv = inv;
+const forge = new Forge(G);
+G.forge = forge;
 // 창이 열려 있는 동안은 클릭이 게임으로 안 간다 (core/input.js).
 // 판단을 한 곳에 모아 둔다 — 창이 늘 때마다 여기만 고치면 된다.
-input.blocked = () => inv.open || !!ui.shop;
+input.blocked = () => inv.open || !!ui.shop || forge.open || ui.isTreeOpen;
 
 // ───────────────────────── 층 로딩 ─────────────────────────
 function clearFloor() {
@@ -389,6 +393,23 @@ function onEnemyKilled(e) {
       const mult = e.isBoss ? COIN.mult.boss : e.elite ? COIN.mult.elite : COIN.mult.normal;
       const coin = Math.max(1, Math.round(base * mult * rnd.range(...COIN.jitter)));
       dropCoin(coin, e.pos, e.isBoss || e.elite);
+    }
+  }
+
+  // ── 잔해 — **바로 들어온다** (game/craft-table.js) ──────────
+  //
+  // 조각과 달리 안 줍는다. 절반 넘는 처치에서 나오는데 그걸 전부 바닥에
+  // 놓으면 화면이 줍는 것으로 덮이고, 「손이 쉬는 시간 3초 이하」(GRIND §2)를
+  // 지키려고 만든 템포가 오히려 줍기로 채워진다.
+  // 조각은 **걸어가서 밟는 맛**이 있어서 남겨 뒀고(그 이유는 아래 주석),
+  // 잔해는 대장간에서 쓰는 재료라 손맛을 줄 자리가 그쪽에 따로 있다.
+  {
+    const ch = e.isBoss ? SCRAP.chance.boss : e.elite ? SCRAP.chance.elite : SCRAP.chance.normal;
+    if (!e.summoned && rnd.chance(ch)) {
+      const mult = e.isBoss ? SCRAP.mult.boss : e.elite ? SCRAP.mult.elite : SCRAP.mult.normal;
+      const n = Math.max(1, Math.round(SCRAP.base(G.floorNo, G.tier) * mult * rnd.range(...SCRAP.jitter)));
+      G.player.scrap += n;
+      fx.number(e.center().setY(1.3), `잔해 +${n}`, { color: '#9fb0c4' });
     }
   }
 
@@ -677,6 +698,12 @@ function handleInput(dt) {
     camDist = CAM_DIST_DEFAULT;
 
   if (input.wasPressed('KeyI')) { inv.toggle(); if (inv.open) { input.down = false; G.player.stop(); } }
+  // G — 대장간 (ui/forge.js). 강화·재련은 이 게임에서 **끝이 없는 유일한
+  // 소모처**라 (docs/GRIND.md §4-1) 상점을 못 찾은 층에서도 열려야 한다.
+  if (input.wasPressed('KeyG')) {
+    forge.toggle();
+    if (forge.open) { input.down = false; G.player.stop(); }
+  }
   // 스킬 창 — 인벤토리와 같은 규격이다. 조작 규칙을 늘리지 않는다.
   if (input.wasPressed('KeyK')) {
     const open = !ui.isTreeOpen;
@@ -698,6 +725,7 @@ function handleInput(dt) {
   }
   if (input.wasPressed('Escape')) {
     if (ui.shop) ui.setShop(null);
+    else if (forge.open) forge.toggle(false);
     else if (ui.isTreeOpen) ui.setTree(false);
     else if (inv.open) inv.toggle(false);
   }
@@ -706,7 +734,7 @@ function handleInput(dt) {
     if (input.wasPressed('Space') && G.overlayAction) G.overlayAction();
     return;
   }
-  if (inv.open) return;
+  if (inv.open || forge.open) return;
 
   // 물약
   if (input.wasPressed('Digit1')) usePotion('hp');

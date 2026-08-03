@@ -12,6 +12,7 @@ import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
 import { worldToGrid, gridToWorld } from '../world/dungeon.js';
 import { MOVE_SCALE, ATTACK_SCALE } from './pace.js';
+import { PARA_KEYS, LEVEL_SOFT_CAP, paraMult, paraProgress } from './paragon-table.js';
 import { Sfx } from '../core/audio.js';
 
 // 한 걸음의 보폭(월드 유닛). 격자 한 칸이 2.0 이므로 한 칸에 약 1.3 걸음이다 —
@@ -90,6 +91,16 @@ export class Player {
     this.bagMax = 40;
     // 영혼 조각 — 잡몹이 확정으로 떨군다. 장비가 안 나와도 판이 헛되지 않게 하는 장치.
     this.coin = 0;
+    // 잔해 — 강화·재련의 재료 (game/craft-table.js). 조각과 따로 두는 이유:
+    // 하나로 합치면 상점에서 장비를 산 만큼 강화를 못 하게 되어, 두 소모처가
+    // 서로를 잡아먹는다. 노가다 게임은 소모처가 **서로 안 겹쳐야** 한다.
+    this.scrap = 0;
+    // ── 무한 성장 (docs/GRIND.md §5-3 · game/paragon-table.js) ──
+    // 레벨이 LEVEL_SOFT_CAP 에서 멈추고, 그 뒤 경험치는 전부 이 주머니로 온다.
+    // **이게 없어서 3회차(약 40분)에 벽이었다** — node tools/tiers.js 참조.
+    this.paraXp = 0;
+    this.paraSpent = 0;                                  // 이미 찍은 점수
+    this.para = Object.fromEntries(PARA_KEYS.map((k) => [k, 0]));
 
     // 이동
     this.path = [];
@@ -136,7 +147,14 @@ export class Player {
     this.bonus = a;
     const lv = this.level - 1;
     // 성장식은 game/growth-table.js 한 곳에 있다 — tools/sim.js 도 같은 걸 읽는다
-    this.maxHp = GROWTH.hp.base + lv * GROWTH.hp.per + a.hp;
+    // 무한 성장 배수. **장비 합산이 끝난 뒤에 곱한다** — 접사(덧셈)와 같은
+    // 자리에 섞으면 「+12% 피해」와 「힘 12점」이 서로를 갉아먹는다.
+    const mStr = paraMult('str', this.para.str);
+    const mAgi = paraMult('agi', this.para.agi);
+    const mVit = paraMult('vit', this.para.vit);
+    const mLuck = paraMult('luck', this.para.luck);
+
+    this.maxHp = (GROWTH.hp.base + lv * GROWTH.hp.per + a.hp) * mVit;
     this.maxMp = GROWTH.mp.base + lv * GROWTH.mp.per + a.mp;
     this.armor = GROWTH.armor.base + lv * GROWTH.armor.per + a.armor;
     this.critChance = GROWTH.crit.base + a.crit;
@@ -144,7 +162,7 @@ export class Player {
     // 전체 템포는 pace.js 가 정한다 (game/pace.js). 장비 보너스는 그 위에 얹힌다 —
     // 순서를 바꾸면 「+5% 이동 속도」가 체감상 다른 값이 되어버린다.
     this.speed = BASE_SPEED * MOVE_SCALE * (1 + a.speed / 100);
-    this.attackSpeed = a.weaponSpeed * ATTACK_SCALE * (1 + a.aspd / 100) * (1 + lv * GROWTH.aspd.per);
+    this.attackSpeed = a.weaponSpeed * ATTACK_SCALE * (1 + a.aspd / 100) * (1 + lv * GROWTH.aspd.per) * mAgi;
     this.cdr = Math.min(0.45, a.cdr / 100);
     this.leech = a.leech;
     // ── 평평한 피해는 **초당**이지 타격당이 아니다 ──────────────
@@ -162,14 +180,14 @@ export class Player {
     // **무기 속도로만 나눈다.** attackSpeed 로 나누면 「+공격 속도」 접사가
     // 스스로를 상쇄해서 아무 효과가 없는 접사가 된다.
     const ph = perHit(a.weaponSpeed);
-    this.dmgMin = a.dmgMin + (a.dmg + lv * GROWTH.dmgMin.per) * ph;
-    this.dmgMax = a.dmgMax + (a.dmg + lv * GROWTH.dmgMax.per) * ph;
+    this.dmgMin = (a.dmgMin + (a.dmg + lv * GROWTH.dmgMin.per) * ph) * mStr;
+    this.dmgMax = (a.dmgMax + (a.dmg + lv * GROWTH.dmgMax.per) * ph) * mStr;
     // 이 게임에만 있는 축들 (docs/ITEM-ECONOMY.md §3-3).
     // 접사를 스탯으로만 두고 아무 데서도 안 읽으면 그건 그냥 툴팁 장식이다 —
     // 여섯 개 전부 실제로 쓰이는 곳을 정해 뒀다.
     this.thorns = a.thorns;               // combat.hitPlayer 가 반사한다
     this.fuelBonus = a.fuel;              // game/lantern.js 의 연료 상한에 더해진다
-    this.find = a.find;                   // rollItem 의 등급 밀기
+    this.find = a.find * mLuck;           // rollItem 의 등급 밀기
     this.stunChance = a.stun;             // combat.hitEnemy 가 굴린다
     this.reach = a.range;                 // 평타 사거리에 더해진다
     this.regen = a.regen;                 // 초당 회복
@@ -242,7 +260,23 @@ export class Player {
     return true;
   }
 
+  /** 지금 남은 무한 성장 점수 */
+  get paraPoints() { return paraProgress(this.paraXp).points - this.paraSpent; }
+
+  /** 무한 성장 한 점을 찍는다 */
+  spendPara(key) {
+    if (!(key in this.para) || this.paraPoints < 1) return false;
+    this.para[key]++;
+    this.paraSpent++;
+    this.recompute();
+    return true;
+  }
+
   gainXp(n) {
+    // 레벨이 멈춘 뒤에는 경험치가 통째로 무한 성장으로 간다.
+    // **버리지 않는다** — 버리면 만렙 뒤의 처치가 아무것도 아니게 되고,
+    // 그게 정확히 「계속 돌 이유가 없다」는 상태다.
+    if (this.level >= LEVEL_SOFT_CAP) { this.paraXp += n; return 0; }
     this.xp += n;
     let ups = 0;
     while (this.xp >= this.xpNext) {
@@ -255,6 +289,7 @@ export class Player {
       // 11 → 14 가 되어 스킬 포인트도 셋 더 나온다.
       this.xpNext = Math.round(this.xpNext * GROWTH.xp.mul + GROWTH.xp.add);
       ups++;
+      if (this.level >= LEVEL_SOFT_CAP) { this.paraXp += this.xp; this.xp = 0; break; }
     }
     if (ups) {
       this.recompute();

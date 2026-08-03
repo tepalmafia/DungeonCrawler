@@ -10,6 +10,7 @@ import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
 import { renderTreeGraph } from './treeview.js';
 import { iconHTML } from '../core/assets.js';
+import { PARAGON, PARA_KEYS, LEVEL_SOFT_CAP, paraProgress } from '../game/paragon-table.js';
 
 const $ = (s) => document.querySelector(s);
 const V = new THREE.Vector3();      // 투영용 재사용 벡터
@@ -45,6 +46,9 @@ export class UI {
       enemyName: $('#enemyName'),
       gambleList: $('#gambleList'),
       tree: $('#tree'), treeBody: $('#treeBody'), treePoints: $('#treePoints'),
+      scrapLine: $('#scrapLine'),
+      para: $('#para'), paraPts: $('#paraPts'), paraBar: $('#paraBar'), paraRow: $('#paraRow'),
+      respec: $('#respecBtn'),
       sellList: $('#sellList'),
       shopCoin: $('#shopCoin'),
       beltSlots: $('#beltSlots'),
@@ -61,6 +65,17 @@ export class UI {
     if (this.el.treeBtn) this.el.treeBtn.addEventListener('click', () => this.setTree(!this.isTreeOpen));
     const tc = $('#treeClose');
     if (tc) tc.addEventListener('click', () => this.setTree(false));
+    // 「기억의 재」 — 찍은 것을 전부 되돌린다 (docs/GRIND.md §5-4).
+    // **이게 함수만 있고 부르는 데가 한 군데도 없었다.** 되돌릴 수 없으면
+    // 사람은 안전한 것만 찍고, 그러면 양자택일 칸이 있으나 마나가 된다.
+    this.el.respec?.addEventListener('click', () => {
+      const T = this.G.tree;
+      if (!T?.taken.size) { this.toast('아직 찍은 것이 없다', '#b8b8b8'); return; }
+      const n = T.taken.size;
+      T.refund();
+      this.toast(`기억의 재 — ${n}점을 되돌렸다`, '#9fd0ff');
+      this.renderTree();
+    });
     this.mm = this.el.minimap.getContext('2d');
     this._buildSkillbar();
     this._centerT = 0;
@@ -224,6 +239,46 @@ export class UI {
         this.renderTree();
       }
     });
+    this.renderPara();
+  }
+
+  /**
+   * 무한 성장 — 레벨이 멈춘 뒤에도 끝없이 (game/paragon-table.js).
+   *
+   * **레벨이 상한에 닿기 전에는 통째로 감춘다.** 「아직 못 쓰는 칸」이
+   * 보이면 그건 정보가 아니라 소음이다 — 스킬 트리 아래에 회색 칸 넷이
+   * 붙어 있으면 트리가 덜 만들어진 것처럼 보인다.
+   */
+  renderPara() {
+    const p = this.G.player, box = this.el.para;
+    if (!box || !p) return;
+    if (p.level < LEVEL_SOFT_CAP) { box.hidden = true; return; }
+    box.hidden = false;
+
+    const prog = paraProgress(p.paraXp || 0);
+    const left = p.paraPoints;
+    this.el.paraPts.textContent = left > 0 ? `쓸 수 있는 점수 ${left}` : '다음 점수까지';
+    const bar = this.el.paraBar.firstElementChild;
+    if (bar) bar.style.width = `${Math.round((prog.into / prog.need) * 100)}%`;
+    this.el.paraBar.title = `${Math.round(prog.into)} / ${prog.need}`;
+
+    this.el.paraRow.innerHTML = '';
+    for (const k of PARA_KEYS) {
+      const d = PARAGON[k], pts = p.para[k] || 0;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pnode';
+      b.style.setProperty('--hue', d.css);
+      b.disabled = left < 1;
+      b.innerHTML = `<b>${d.name}</b><span>${d.what}</span>`
+        + `<em>${pts}</em><i>+${(d.per * pts * 100).toFixed(1)}%</i>`;
+      b.onclick = () => {
+        if (!p.spendPara(k)) return;
+        this.toast(`${d.name} +1 — ${d.what} +${(d.per * 100).toFixed(1)}%`, d.css);
+        this.renderPara();
+      };
+      this.el.paraRow.appendChild(b);
+    }
   }
 
   renderShop() {
@@ -511,6 +566,12 @@ export class UI {
 
     // 층 / 남은 적
     this.el.floor.textContent = `${G.floorNo}층 — ${G.dungeon.theme.name}`;
+    // 잔해가 모이기 전에는 안 띄운다 — 0 이 떠 있으면 그건 안내가 아니라 소음이다
+    if (this.el.scrapLine) {
+      const sc = G.player?.scrap | 0;
+      this.el.scrapLine.hidden = sc <= 0;
+      if (sc > 0) this.el.scrapLine.textContent = `잔해 ${sc} — G 대장간`;
+    }
     this.el.tier.textContent = G.tier > 0 ? `파밍 ${G.tier + 1}회차` : '';
     const alive = G.enemies.filter((e) => !e.dead).length;
     this.el.enemyLeft.textContent = G.boss && !G.boss.dead ? '보스전' : `남은 적 ${alive}`;

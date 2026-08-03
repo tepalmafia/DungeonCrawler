@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>심연의 왕관 — 3D 액션 RPG 샘플</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2307060c'/><path d='M3 11h10l-1-5-2 2-2-3-2 3-2-2z' fill='%23ffb257'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=10">
+<link rel="stylesheet" href="css/style.css?v=11">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -32,6 +32,8 @@
     <div id="topleft">
       <div class="row"><b id="floorLabel">1층</b><span id="tierLabel"></span></div>
       <div class="row dim" id="enemyLeft">남은 적 0</div>
+      <!-- 잔해 — 안 보이면 모은 줄도 모른다. 대장간(G)이 쓰는 재료다. -->
+      <div class="row dim" id="scrapLine" hidden></div>
     </div>
 
     <!-- 미니맵 -->
@@ -100,7 +102,37 @@
         <button id="treeClose" type="button" aria-label="닫기">✕</button>
       </header>
       <div id="treeBody"></div>
-      <p class="invhint">칸을 눌러 찍는다 · 같은 자리의 반대편은 못 찍는다 · <b>K</b>/<b>Esc</b> 닫기</p>
+      <!-- 무한 성장 — 레벨이 멈춘 뒤에도 끝없이 (game/paragon-table.js).
+           스킬 트리와 **같은 창**에 둔다. 둘 다 「내가 세지는 길」이고,
+           창을 따로 만들면 하나는 안 열어 보게 된다. -->
+      <div id="para" hidden>
+        <div class="parahead">
+          <b>무한 성장</b>
+          <span id="paraPts"></span>
+          <span id="paraBar"><i></i></span>
+        </div>
+        <div id="paraRow"></div>
+      </div>
+      <p class="invhint">칸을 눌러 찍는다 · 같은 자리의 반대편은 못 찍는다 ·
+        <button id="respecBtn" type="button" class="linkbtn">기억의 재 — 전부 되돌리기</button> ·
+        <b>K</b>/<b>Esc</b> 닫기</p>
+    </div>
+  </div>
+
+  <!-- 대장간 — 강화·재련. 장비가 여덟 칸 다 차도 쓸 곳이 남는 유일한 자리
+       (docs/GRIND.md §4-1). 상점 안에 두면 상점을 못 찾은 층에서는 못 하고,
+       그러면 「돌 이유」가 층 운에 걸린다. 그래서 상시 창이다. -->
+  <div id="forge" hidden>
+    <div class="panel">
+      <header class="shoptop">
+        <h2>대장간</h2>
+        <span id="forgeScrap"></span>
+        <button id="forgeClose" type="button" aria-label="닫기">✕</button>
+      </header>
+      <p class="shopline">잔해로 두드린다. <b>실패해도 부서지지 않는다</b> — 잃는 것은 잔해뿐이다.</p>
+      <div id="forgeSlots"></div>
+      <div id="forgeBody"></div>
+      <p class="invhint">장비를 골라 두드린다 · <b>G</b>/<b>Esc</b> 닫기</p>
     </div>
   </div>
 
@@ -167,6 +199,6 @@
 
 <div id="nowebgl" hidden>WebGL을 사용할 수 없는 브라우저입니다.</div>
 
-<script type="module" src="js/main.js?v=10"></script>
+<script type="module" src="js/main.js?v=11"></script>
 </body>
 </html>

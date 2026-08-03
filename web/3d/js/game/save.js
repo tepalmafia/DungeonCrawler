@@ -27,7 +27,10 @@
 import { makeLantern } from './lantern.js';
 
 const KEY = 'dc3d.save';
-const VERSION = 1;
+// 저장 판본. 올리면 옛 저장은 **버려진다** (loadGame 이 지운다).
+// 1 → 2: 무한 성장·잔해·강화(+N)가 생겼다. 옛 저장에는 그 칸이 없어서
+// 그대로 읽으면 레벨 14 짜리가 회차만 높은 채로 벽에 처박힌다.
+const VERSION = 2;
 
 /** 저장이 있는가 — 타이틀 화면이 「이어하기」를 띄울지 정할 때 쓴다 */
 export function hasSave() {
@@ -43,10 +46,12 @@ function packItem(it) {
   if (!it) return null;
   if (it.kind === 'lantern') return { kind: 'lantern', tier: it.def?.tier ?? 0, fuel: it.fuel ?? 0 };
   // 나머지는 이미 순수 객체다. 다만 화면용 필드가 섞여 들어가지 않게 골라 담는다
+  // `plus` 를 빠뜨리면 강화가 **새로고침 한 번에 통째로 날아간다.**
+  // 그게 이 게임에서 제일 오래 걸리는 노가다라 제일 아프다.
   const { id, slot, icon, rarity, ilvl, fam, stats, baseStats, affixes,
-    dmgMin, dmgMax, aspd, name, baseName, element } = it;
+    dmgMin, dmgMax, aspd, name, baseName, element, plus } = it;
   return { id, slot, icon, rarity, ilvl, fam, stats, baseStats, affixes,
-    dmgMin, dmgMax, aspd, name, baseName, element };
+    dmgMin, dmgMax, aspd, name, baseName, element, plus: plus || 0 };
 }
 
 function unpackItem(o) {
@@ -69,7 +74,10 @@ export function saveGame(G) {
     at: Date.now(),
     player: {
       level: p.level, xp: p.xp, xpNext: p.xpNext,
-      coin: p.coin, potions: { ...p.potions },
+      coin: p.coin, scrap: p.scrap || 0, potions: { ...p.potions },
+      // 무한 성장 — 이 게임에서 **유일하게 상한이 없는 것**이라
+      // 안 저장하면 오래 돈 사람일수록 크게 잃는다
+      paraXp: p.paraXp || 0, paraSpent: p.paraSpent || 0, para: { ...p.para },
       equipped: Object.fromEntries(Object.entries(p.equipped).map(([k, v]) => [k, packItem(v)])),
       bag: p.bag.map(packItem),
       lantern: packItem(p.lantern),
@@ -118,6 +126,12 @@ export function applySave(G, d) {
   p.xp = d.player.xp;
   p.xpNext = d.player.xpNext;
   p.coin = d.player.coin || 0;
+  p.scrap = d.player.scrap || 0;
+  p.paraXp = d.player.paraXp || 0;
+  p.paraSpent = d.player.paraSpent || 0;
+  // 옛 저장에는 갈래가 없다. **덮어쓰지 말고 채워 넣는다** — 통째로 대입하면
+  // 갈래를 하나 늘렸을 때 옛 저장이 그 칸을 undefined 로 만든다.
+  for (const k of Object.keys(p.para)) p.para[k] = d.player.para?.[k] || 0;
   p.potions = { hp: d.player.potions?.hp ?? 5, mp: d.player.potions?.mp ?? 5 };
   for (const [k, v] of Object.entries(d.player.equipped || {})) {
     if (k in p.equipped) p.equipped[k] = unpackItem(v);
