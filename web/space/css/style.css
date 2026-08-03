@@ -1,0 +1,49 @@
+/* UI 는 거의 없다. 조준점 하나와 처음 안내뿐 —
+   상태는 배와 손이 말한다 (docs/space/PLAN.md §5-2). */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #03040a;
+  color: #d8dee8;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+#view { display: block; width: 100%; height: 100%; cursor: none; }
+
+/* 조준점 — 손이 닿는 것을 보면 커진다.
+   글자로 「E를 눌러 상호작용」이라고 안 쓴다. */
+#cross {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 5px; height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: rgba(220, 230, 245, .55);
+  transition: width .12s, height .12s, margin .12s, background .12s;
+  pointer-events: none;
+}
+#cross.on {
+  width: 15px; height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  background: rgba(160, 230, 190, .9);
+}
+
+#hint {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, 86vw);
+  padding: 20px 22px;
+  background: rgba(8, 10, 16, .88);
+  border: 1px solid rgba(140, 160, 190, .25);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: center;
+}
+#hint b { color: #6fd8a0; }
+#hint p { margin-top: 10px; color: #9aa6b6; }
+#hint[hidden] { display: none; }

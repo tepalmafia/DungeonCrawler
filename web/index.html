@@ -3,13 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>심연의 왕관</title>
-<!-- 옛 2D 게임이 여기 있었다. 지금 만드는 것은 web/3d 하나뿐이므로
-     루트로 들어와도 그쪽으로 보낸다. 2D 는 git 이력에 남아 있다. -->
-<meta http-equiv="refresh" content="0; url=3d/">
-<link rel="canonical" href="3d/">
+<title>게임 둘</title>
+<!-- 옛 2D 게임이 여기 있었고, 그때는 루트로 들어오면 3d/ 로 넘겨 보냈다.
+     지금은 게임이 둘이라 고르게 한다. 2D 는 git 이력에 남아 있다. -->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #07060c; color: #e8e2d6;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px;
+  }
+  ul { list-style: none; width: min(460px, 100%); }
+  li + li { margin-top: 14px; }
+  a {
+    display: block; padding: 18px 20px; text-decoration: none;
+    border: 1px solid rgba(200, 190, 160, .22); border-radius: 6px;
+    color: #e8e2d6; transition: border-color .15s, background .15s;
+  }
+  a:hover { border-color: rgba(200, 190, 160, .5); background: rgba(255, 255, 255, .03); }
+  strong { display: block; font-size: 17px; }
+  span { display: block; margin-top: 6px; font-size: 13px; color: #9a938a; line-height: 1.6; }
+  .crown strong { color: #c9a24e; }
+  .space strong { color: #6fd8a0; }
+</style>
 </head>
-<body style="margin:0;background:#0a090f;color:#e8e2d6;font-family:system-ui,sans-serif">
-<p style="padding:24px"><a href="3d/" style="color:#c9a24e">심연의 왕관 — 들어가기</a></p>
+<body>
+<ul>
+  <li class="crown"><a href="3d/">
+    <strong>심연의 왕관</strong>
+    <span>3D 액션 RPG — 시간 가는 줄 모르고 계속 도는 게임</span>
+  </a></li>
+  <li class="space"><a href="space/">
+    <strong>스페이스워</strong>
+    <span>1인칭 — 따라오지 못하는 곳까지 간다. 가는 동안 먹고, 고치고, 뿌리친다<br>(만드는 중 · 1단계)</span>
+  </a></li>
+</ul>
 </body>
 </html>
