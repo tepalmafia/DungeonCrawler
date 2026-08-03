@@ -20,13 +20,15 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { preload } from './core/assets.js';
 import { Input } from './core/input.js';
+import { makeAudio } from './core/audio.js';
+import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
 import { REGIONS, REGION_BY_KEY, REGION_SECONDS } from './game/regions-table.js';
 import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, powerCount, PHASE } from './game/chase.js';
 
-export const VERSION = 14;
+export const VERSION = 15;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -80,6 +82,22 @@ scene.environmentIntensity = 0.75;
 const ship = buildShip(scene);
 const input = new Input(canvas);
 
+// ── 소리 ────────────────────────────────────────────────────
+// ★ 브라우저는 **사람이 뭔가 누르기 전엔 소리를 안 낸다.** 그래서 그래프는
+//   지금 만들어 두고(멈춘 상태로), 첫 클릭에서 깨운다. 켜자마자 만들려
+//   들면 콘솔에 경고만 남고 조용히 안 난다 — 원인을 짐작하기 어려운 모양이다.
+// ★ 소리가 안 나는 기계에서도 게임은 돌아야 한다. 통째로 감싼다.
+let audio = null;
+try { audio = makeAudio(); } catch (e) { console.warn('[audio] 소리를 못 켭니다 —', e.message); }
+addEventListener('mousedown', () => audio?.resume(), { passive: true });
+addEventListener('keydown', (e) => {
+  // M — 음소거. 소리가 있는 게임에 끄는 방법이 없으면 그건 결함이다
+  if (e.code !== 'KeyM' || e.metaKey || e.ctrlKey || e.altKey || !audio) return;
+  audio.setMuted(!audio.muted);
+  banner = audio.muted ? '소리 꺼짐 (M)' : '소리 켜짐 (M)';
+  bannerT = 1.4;
+});
+
 // ── 상태 ────────────────────────────────────────────────────
 const me = {
   // ★ 처음엔 -6.5 였다. 좌석 바로 뒤라 켜자마자 W 를 누르면 좌석에 막힌다 —
@@ -105,6 +123,9 @@ const chase = makeChase();
 let flash = 0;            // 경보 깜빡임
 let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
 let bannerT = 0;
+// 뿌리친 시각. **떨림과 소리가 같은 시계를 본다** — 따로 세면 어긋난다
+let escapedAt = -99;
+let shakeMul = SHAKE.calm;
 
 const ray = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
@@ -185,20 +206,23 @@ function interactStep(dt) {
   // 밸브 — 잡고 돌린다. 놓으면 되돌아온다. **끝까지 돌리면 걸린다**
   if (onValve && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
   else turn = Math.max(0, turn - VALVE.slip * dt);
-  if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; }
+  if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; audio?.event('latch'); }
   coolFor = Math.max(0, coolFor - dt);
   ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolFor > 0 ? dt * 0.5 : 0);
 
   // 차단기 — 누르는 순간에만 넘어간다
   const pressed = input.takePress();
   if (breaker && pressed) {
-    if (power[breaker.key]) power[breaker.key] = false;
-    else if (canTurnOn(power)) power[breaker.key] = true;
+    if (power[breaker.key]) { power[breaker.key] = false; audio?.event('click'); }
+    else if (canTurnOn(power)) { power[breaker.key] = true; audio?.event('click'); }
     else {
       // ★ 꽉 찼을 때 **조용히 아무 일도 안 일어나면** 고장인 줄 안다.
-      //   무엇이 막았는지 글자로 말해 준다 — 규칙을 알아맞히게 하지 않는다
+      //   무엇이 막았는지 글자로 말해 준다 — 규칙을 알아맞히게 하지 않는다.
+      //   소리도 **딸깍이 아닌 다른 소리**를 낸다. 같은 소리를 내면
+      //   「눌렸는데 안 먹었다」가 되어 고장으로 읽힌다
       banner = `전력이 모자랍니다 — 셋 중 ${POWER_MAX}개만`;
       bannerT = 1.6;
+      audio?.event('deny');
     }
   }
 
@@ -221,16 +245,22 @@ function systemsStep(dt, valveOpen, regionMult) {
   heat += heatRate(power, valveOpen) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
-  const was = chase.phase;
   const ev = stepChase(chase, dt, power, heat, regionMult);
   if (ev === 'contact') { banner = '접촉 — 무언가 따라붙었습니다'; bannerT = 2.6; }
-  if (ev === 'escaped') { banner = '뿌리쳤습니다'; bannerT = 3.2; }
+  if (ev === 'escaped') { banner = '뿌리쳤습니다'; bannerT = 3.2; escapedAt = clock; }
   if (ev === 'caught') { banner = '잡혔습니다'; bannerT = 3.2; }
-  void was;
+  if (ev) audio?.event(ev);
+
+  // 소리는 **상태만** 받는다. 규칙은 여기, 소리는 저기 — 섞으면 둘 다 못 고친다
+  const urgency = chase.phase === PHASE.CHASE ? 1 - chase.dist / CH.escapeAt : 0;
+  audio?.update({
+    phase: chase.phase, urgency,
+    heat01: Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn)),
+    turning: turn,
+  });
 
   // 경보 — 추격 중에만. 거리가 가까울수록 빨라진다 (PLAN §3-1 글로 안 알려준다)
   if (chase.phase === PHASE.CHASE) {
-    const urgency = 1 - chase.dist / CH.escapeAt;
     flash += dt * (2.2 + urgency * 6);
     ship.alarm.intensity = (0.5 + 0.5 * Math.sin(flash * Math.PI * 2)) * (14 + urgency * 34);
   } else {
@@ -303,6 +333,50 @@ window.SPACE = {
     }
     return out;
   },
+  /** 소리가 켜졌나 · 지금 얼마나 떠나 — 검사와 손보기용 */
+  get audio() {
+    return {
+      on: !!audio, state: audio?.state ?? null, muted: audio?.muted ?? null,
+      shake: +shakeMul.toFixed(3),
+      since: +(clock - escapedAt).toFixed(2),
+    };
+  },
+  mute(v) { audio?.setMuted(v); return audio?.muted ?? null; },
+  /**
+   * ★ 「뿌리친 3초」를 **소리로 실제로 재 본다.**
+   *
+   *   화면 검사와 달리 소리는 눈으로 못 본다. 그래서 게임과 **똑같은 코드**를
+   *   OfflineAudioContext 에 태워 파형을 뽑고, 0.1초마다 크기(RMS)를 센다.
+   *   검사용으로 따로 짠 코드를 재면 검사는 통과하는데 게임은 안 나는
+   *   상태가 생긴다 — 이 저장소가 제일 자주 밟은 함정이다.
+   *
+   *   돌려주는 것: 추격 동안의 크기 → 뿌리친 뒤 푹 꺼짐 → 되돌아옴.
+   */
+  async auditEscape({ chaseFor = 3, tail = 2, step = 0.1 } = {}) {
+    const sr = 12000;                       // 크기만 재므로 낮춰도 된다 (빠르다)
+    const len = chaseFor + ESCAPE.total + tail;
+    const off = new OfflineAudioContext(1, Math.ceil(sr * len), sr);
+    const a = makeAudio(off);
+    const tick = 0.05;
+    for (let t = 0; t < chaseFor; t += tick) a.update({ phase: 'chase', urgency: 0.6, heat01: 0.3, turning: 0 }, t);
+    a.event('escaped', chaseFor);
+    for (let t = chaseFor; t < len; t += tick) a.update({ phase: 'shaken', urgency: 0, heat01: 0.3, turning: 0 }, t);
+    const buf = await off.startRendering();
+    const d = buf.getChannelData(0);
+    const n = Math.floor(sr * step);
+    const rms = [];
+    for (let i = 0; i + n <= d.length; i += n) {
+      let s = 0;
+      for (let j = 0; j < n; j++) s += d[i + j] * d[i + j];
+      rms.push(+Math.sqrt(s / n).toFixed(5));
+    }
+    return { step, escapeAt: chaseFor, total: ESCAPE.total, rms };
+  },
+  /** 떨림도 같은 모양을 읽나 — 소리와 위상이 맞는지 밖에서 견줘 본다 */
+  shakeAt(t) {
+    const e = envelope(t);
+    return +(ESCAPE.shake + (SHAKE.calm - ESCAPE.shake) * e).toFixed(3);
+  },
   /**
    * 무게 재기 — 무엇이 몇 개인가.
    * **fps 는 여기서 못 믿는다** (헤드리스는 소프트웨어 렌더라 1fps 다).
@@ -352,10 +426,31 @@ function frame(now) {
   // 창밖을 흘려보내고, 배가 미세하게 떤다. 둘 다 없으면 **정지 화면**이다.
   ship.outside.update(dt, CRUISE.speed);
 
+  // ── 떨림 — 뿌리쳤을 때의 **낙차**를 만드는 쪽 ──────────
+  // 추격 중엔 배가 더 떤다. 그래야 뿌리친 3초가 「조용해졌다」로 읽힌다.
+  // 평소가 계속 잔잔하면 뺄 것이 없어서 보상이 안 생긴다 (USER-VIEW §3-6).
+  //
+  // ★ 소리의 덕킹과 **같은 모양 함수**를 읽는다 (audio-table.js envelope).
+  //   비슷하게 따로 짜 두면 언젠가 한쪽만 고쳐지고, 그 어긋남은 화면으로
+  //   원인을 못 찾는다.
+  const since = clock - escapedAt;
+  let wantShake;
+  if (chase.phase === PHASE.CHASE) {
+    const u = 1 - chase.dist / CH.escapeAt;
+    wantShake = SHAKE.chase[0] + (SHAKE.chase[1] - SHAKE.chase[0]) * Math.max(0, Math.min(1, u));
+  } else if (since < ESCAPE.total) {
+    const e = envelope(since);
+    wantShake = ESCAPE.shake + (SHAKE.calm - ESCAPE.shake) * e;
+  } else wantShake = SHAKE.calm;
+  // 보상 구간에서는 표가 정한 모양을 **그대로** 쓴다 (따라가면 뭉개진다).
+  // 그 밖에서는 부드럽게 따라간다 — 추격이 붙는 순간 화면이 튀지 않게.
+  shakeMul = since < ESCAPE.total ? wantShake
+    : shakeMul + (wantShake - shakeMul) * Math.min(1, dt * 2.2);
+
   // 진동은 **아주 작게.** 1인칭에서 화면 흔들림은 조금만 넘겨도 멀미가 난다.
   // 「느껴지는데 뭔지 모르겠는」 정도가 맞다.
-  const sh = CRUISE.shake * Math.sin(clock * CRUISE.shakeHz * Math.PI * 2);
-  const sw = CRUISE.sway * Math.sin(clock * CRUISE.swayHz * Math.PI * 2);
+  const sh = CRUISE.shake * shakeMul * Math.sin(clock * CRUISE.shakeHz * Math.PI * 2);
+  const sw = CRUISE.sway * shakeMul * Math.sin(clock * CRUISE.swayHz * Math.PI * 2);
   camera.position.set(me.x + sw * 0.4, BODY.eye + sh + sw * 0.25, me.z);
   camera.rotation.set(0, 0, 0, 'YXZ');
   camera.rotation.y = me.yaw;
