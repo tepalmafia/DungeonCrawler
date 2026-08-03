@@ -4,6 +4,8 @@
 // 랜턴이 보상이 된다. 예전엔 시야 21 / 어그로 8~12 라 모든 적을 먼저 봤고,
 // 그 상태에서는 「더 밝히는 물건」이 아무 의미가 없었다.
 
+import { LANTERN_DROP } from './economy-table.js';
+
 export const BASE_LIGHT = { radius: 9, intensity: 34 };
 
 export const LANTERNS = [
@@ -50,10 +52,10 @@ export function rollLantern(rnd, floorNo, farmTier) {
 
 /** 적 종류별 드랍 확률 (기획안 §1-4) */
 export function lanternDropChance(enemyKey, isBoss, isElite) {
-  if (isBoss) return 1;
-  if (isElite) return 0.22;
-  if (enemyKey === 'archer') return 0.09;   // 등불을 들고 다니는 종족이라는 설정
-  return 0.04;
+  if (isBoss) return LANTERN_DROP.boss;
+  if (isElite) return LANTERN_DROP.elite;
+  if (enemyKey === 'archer') return LANTERN_DROP.archer;   // 등불을 들고 다니는 설정
+  return LANTERN_DROP.other;
 }
 
 /**

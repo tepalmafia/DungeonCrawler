@@ -33,6 +33,12 @@ import { GROWTH, perHit, mitigate, levelAtXp, enemyDmgMult, HP_SCALE, itemScale 
 import { FLOORS } from '../web/3d/js/world/floors.js';
 import { ELEMENTS, STRONG, WEAK } from '../web/3d/js/game/elements.js';
 import { ATTACK_SCALE } from '../web/3d/js/game/pace.js';
+import { DROP, COIN, DEATH } from '../web/3d/js/game/economy-table.js';
+import { rollItem, power, priceOf, SLOTS } from '../web/3d/js/game/item-table.js';
+import { makeRng } from '../web/3d/js/core/rng.js';
+import { SKILL_NUM } from '../web/3d/js/game/skill-table.js';
+import { NODES, SkillTree } from '../web/3d/js/game/skilltree.js';
+import { SKILL_CD_SCALE } from '../web/3d/js/game/pace.js';
 
 const CSV = process.argv.includes('--csv');
 const rows = [];
@@ -101,8 +107,11 @@ function body(f) {
 out('\n── 층별 난이도 ──────────────────────────────────────────────');
 out('여유 = 내가 죽는 시간 ÷ 적을 죽이는 시간. **적 하나 기준**이므로');
 out('둘셋이 붙는 실제 상황은 절반쯤으로 봐야 한다.\n');
-out('층 Lv 적           체력   방어  내DPS  잡는데  적DPS  내체력 버티는데 여유');
-csv('층,Lv,적,체력,방어,내DPS,잡는데(초),적DPS,내체력,버티는데(초),여유');
+// 내 감쇠율도 같이 찍는다. 디아블로3 는 DR = armor/(armor + 50×레벨) 인데
+// 우리는 armor/(armor + 42 + 9×레벨) 이라 상수가 다르다 — 형태는 같으므로
+// **실제로 몇 % 를 막는지**를 봐야 같은 대역인지 알 수 있다.
+out('층 Lv 적           체력   방어  내DPS  잡는데  적DPS  내체력 내감쇠 버티는데 여유');
+csv('층,Lv,적,체력,방어,내DPS,잡는데(초),적DPS,내체력,내감쇠,버티는데(초),여유');
 for (const F of FLOORS) {
   const f = F.no, lv = LV[f - 1], me = body(f), atk = attack(f, '검');
   // 로스터는 **가중치를 중복으로** 준다 (해골이 두 번 적히면 두 배로 나온다).
@@ -116,12 +125,14 @@ for (const F of FLOORS) {
     const ttk = hp / myDps;
     const eDps = mitigate(d.dmg * enemyDmgMult(F.powerMult), me.armor, lv) / (d.windup + d.recover);
     const ttd = me.hp / eDps;
+    const myDR = me.armor / (me.armor + 42 + lv * 9);
     out(`${String(f).padEnd(3)}${String(lv).padEnd(3)}${d.name.padEnd(12)}`
       + `${String(hp).padEnd(7)}${armor.toFixed(0).padEnd(6)}${myDps.toFixed(1).padEnd(7)}`
       + `${ttk.toFixed(1).padEnd(8)}${eDps.toFixed(1).padEnd(7)}${me.hp.toFixed(0).padEnd(7)}`
+      + `${(myDR * 100).toFixed(0)}%`.padEnd(7)
       + `${ttd.toFixed(0).padEnd(9)}${(ttd / ttk).toFixed(2)}`);
     csv(f, lv, d.name, hp, armor.toFixed(1), myDps.toFixed(1), ttk.toFixed(1),
-      eDps.toFixed(1), me.hp.toFixed(0), ttd.toFixed(0), (ttd / ttk).toFixed(2));
+      eDps.toFixed(1), me.hp.toFixed(0), (myDR * 100).toFixed(0), ttd.toFixed(0), (ttd / ttk).toFixed(2));
   }
 }
 
@@ -180,6 +191,247 @@ for (const F of FLOORS) {
     + `${(vs[0].v / vs[vs.length - 1].v).toFixed(2)}배`);
   csv(F.no, `"${mix}"`, vs[0].v.toFixed(2), vs[vs.length - 1].v.toFixed(2),
     (vs[0].v / vs[vs.length - 1].v).toFixed(2));
+}
+
+
+
+
+// ── 4. 드랍 · 경제 ──────────────────────────────────────────
+//
+// **실제 RNG 로 굴린다.** 확률을 손으로 곱해서 기댓값을 내면 「등급이 어떻게
+// 섞이나」와 「몇 번 갈아입나」를 못 본다. 갈아입기는 굴려 봐야 아는 값이다 —
+// 좋은 게 떨어져도 이미 낀 게 더 좋으면 안 갈아입는다.
+//
+// 판마다 운이 다르므로 여러 판을 돌려 중앙값을 본다.
+out('\n── 드랍 · 경제 ─────────────────────────────────────────────');
+out('시드 40판을 실제 RNG 로 굴린 중앙값. **갈아입기가 드랍 설계의 지표다**');
+out('— 떨어져도 안 갈아입으면 그 드랍은 없는 것과 같다.\n');
+out('층 떨어짐 갈아입음  등급(일반/마법/희귀/전설)  조각수입  살 수 있는 것');
+csv('');
+csv('층,떨어짐,갈아입음,일반,마법,희귀,전설,조각수입,장비값,살수있는것');
+
+const RUNS = 40;
+const median = (a) => { const b = [...a].sort((x, y) => x - y); return b[b.length >> 1]; };
+
+const per = FLOORS.map(() => ({ drops: [], mob: [], ups: [], coins: [], rar: [0, 0, 0, 0], price: [] }));
+for (let run = 0; run < RUNS; run++) {
+  const rnd = makeRng(`SIM-${run}`);
+  // 시작 장비 — main.js 와 같다 (1층 무기 하나)
+  const eq = Object.fromEntries(SLOTS.map((k) => [k, null]));
+  eq.weapon = rollItem(rnd, 1, 0, { slot: 'weapon', minRarity: 0 });
+  for (const F of FLOORS) {
+    const f = F.no;
+    let drops = 0, ups = 0, coins = 0, mobDrops = 0;
+    const roll = (extra = {}) => rollItem(rnd, f, 0, {
+      prefer: SLOTS.filter((s) => eq[s]), ...extra,
+    });
+    const take = (it) => {
+      drops++;
+      per[f - 1].rar[it.rarity]++;
+      // **갈아입는가** — power() 는 게임의 비교 화살표와 같은 함수다
+      if (power(it) > power(eq[it.slot])) { eq[it.slot] = it; ups++; }
+    };
+    for (let i = 0; i < PER_FLOOR; i++) {
+      if (rnd.chance(DROP.normal)) { mobDrops++; take(roll()); }
+      if (rnd.chance(COIN.chance.normal)) {
+        coins += Math.max(1, Math.round(COIN.base(f) * COIN.mult.normal * rnd.range(...COIN.jitter)));
+      }
+    }
+    // 보스 하나
+    for (let i = 0; i < DROP.bossCount; i++) take(roll({ minRarity: DROP.bossMinRarity }));
+    coins += Math.max(1, Math.round(COIN.base(f) * COIN.mult.boss * rnd.range(...COIN.jitter)));
+    per[f - 1].mob.push(mobDrops);
+    per[f - 1].drops.push(drops);
+    per[f - 1].ups.push(ups);
+    per[f - 1].coins.push(coins);
+    per[f - 1].price.push(priceOf(roll({ minRarity: 1 })));
+  }
+}
+for (const F of FLOORS) {
+  const P = per[F.no - 1];
+  const tot = P.rar.reduce((a, b) => a + b, 0) || 1;
+  const rar = P.rar.map((n) => `${Math.round((n / tot) * 100)}%`).join('/');
+  const coin = median(P.coins), price = median(P.price);
+  out(`${String(F.no).padEnd(3)}${String(median(P.drops)).padEnd(7)}${String(median(P.ups)).padEnd(10)}`
+    + `${rar.padEnd(26)}${String(coin).padEnd(10)}${(coin / price).toFixed(1)}개 (개당 ${price})`);
+  csv(F.no, median(P.drops), median(P.ups), ...P.rar.map((n) => (n / tot).toFixed(3)),
+    coin, price, (coin / price).toFixed(1));
+}
+{
+  const upsAll = per.reduce((s, p) => s + median(p.ups), 0);
+  const dropAll = per.reduce((s, p) => s + median(p.drops), 0);
+  // **누가 장비를 주는가.** 잡몹 드랍이 층당 1개 남짓인데 보스가 확정으로
+  // 둘을 뱉으면, 장비는 사실상 보스가 준다. 그러면 잡몹을 잡을 이유가
+  // 경험치·조각뿐이 되고, 등급 분포도 보스의 minRarity 가 지배한다 —
+  // 이 표에서 희귀가 66% 로 나오는 이유가 설계표(12%)가 아니라 그것이다.
+  const mobAll = per.reduce((s, p) => s + p.mob.reduce((a, b) => a + b, 0) / RUNS, 0);
+  const bossAll = FLOORS.length * DROP.bossCount;
+  out(`\n누가 주는가 — 잡몹 ${mobAll.toFixed(1)}개 · 보스 ${bossAll}개 `
+    + `(보스가 ${Math.round(bossAll / (mobAll + bossAll) * 100)}%). `
+    + `보스 드랍은 등급 하한이 ${DROP.bossMinRarity} 라 등급 분포도 보스가 정한다`);
+  out(`\n한 판 전체 — 떨어짐 ${dropAll}개 · 갈아입음 ${upsAll}번 `
+    + `(${Math.round((upsAll / dropAll) * 100)}%)`);
+  out('죽으면 낀 것 한 칸을 등급별 확률로 잃는다 — '
+    + DEATH.loseChanceByRarity.map((v, i) => `${['일반', '마법', '희귀', '전설'][i]} ${Math.round(v * 100)}%`).join(' · ')
+    + ` · 조각 ${Math.round(DEATH.coinPct * 100)}%`);
+}
+
+
+
+// ── 5. 빌드 대 빌드 ─────────────────────────────────────────
+//
+// 「어느 칸이 센가」는 손으로 곱하면 틀린다. 실제로 그렇게 재다가
+// **연격 +60% 대 가르기 +6%** 를 오래 못 봤다 — 방어도 무시는 방어도가
+// 클 때만 값어치가 있는데, 그걸 알려면 적의 방어도까지 넣고 계산해야 한다.
+//
+// 그래서 **한 판의 피해량**을 끝까지 굴린다: 평타를 계속 치면서 스킬은
+// 쿨이 돌 때마다 쓰되, **마나가 없으면 못 쓴다.** 마나를 안 넣으면
+// 회전 베기가 무한히 도는 것으로 계산되어 답이 통째로 틀린다.
+//
+// 표적 수를 1 과 4 로 나눠 본다 — 광역 칸은 뭉친 적에게만 값어치가 있고,
+// 그 차이가 「무엇을 찍나」의 절반이다.
+
+const WINDOW = 60;               // 초. 한 판의 교전을 이만큼으로 본다
+// 적이 흩어져 있는 범위. **이게 없으면 광역 칸이 전부 0 이 된다** —
+// 표적이 이미 다 범위 안에 있다고 보면 「넓어진다」가 아무 의미가 없어서,
+// 확산(반경 1.6배·피해 0.7배)이 그냥 −30% 손해로 계산됐다.
+const PACK_R = 8;
+
+/** 트리 조합 하나의 60초 피해량 */
+function buildDamage(taken, targets, f = 9, armorMode = 'mid') {
+  const T = new SkillTree();
+  T.grant(taken.length);
+  for (const id of taken) T.take(id);
+  const lv = LV[f - 1], atk = attack(f, '검'), me = body(f);
+  const F = FLOORS[f - 1];
+  // 표적은 그 층 로스터의 **중앙값 방어도**를 쓴다 — 특정 적에 맞추면
+  // 그 적에게만 좋은 칸이 이겨 버린다
+  const armors = [...new Set(F.roster)].map((k) => (ARCHETYPES[k]?.armor || 0) * F.powerMult).sort((a, b) => a - b);
+  // **가르기(방어도 무시)를 재려면 방어도 높은 적이 필요하다.** 중앙값만
+  // 보면 「방어도 무시」의 값어치를 영원히 못 본다 — 그게 이 칸을 오래
+  // 잘못 평가한 이유다.
+  const armor = armorMode === 'hard' ? armors[armors.length - 1]
+    : armorMode === 'soft' ? armors[0]
+      : armors[armors.length >> 1];
+  const hit = (mult, ap = 0) => mitigate(atk.avg * mult, armor * (1 - ap), lv);
+
+  let dmg = 0, mp = GROWTH.mp.base + (lv - 1) * GROWTH.mp.per;
+  const regen = GROWTH.mpRegen.base + lv * GROWTH.mpRegen.per;
+  const cd = {}, M = {};
+  for (const k of Object.keys(SKILL_NUM)) { cd[k] = 0; M[k] = T.mods(k); }
+  const cdr = 0;                 // 장비 쿨감은 빌드와 무관하므로 뺀다
+
+  const DT = 0.05;
+  for (let t = 0; t < WINDOW; t += DT) {
+    mp = Math.min(GROWTH.mp.base + (lv - 1) * GROWTH.mp.per, mp + regen * DT);
+    for (const k of Object.keys(cd)) cd[k] -= DT;
+
+    // 평타 — 한 표적만 때린다
+    if (Math.random() < 0) { /* 자리 표시 */ }
+    dmg += hit(1) * atk.aps * DT;
+
+    const N = SKILL_NUM;
+    // 회전 베기 — 부채꼴이라 표적 전부에 닿는다
+    if (cd.cleave <= 0 && mp >= N.cleave.cost) {
+      const m = M.cleave;
+      // 부채꼴이 넓어지면 **더 많이 닿는다.** 이걸 안 넣으면 「넓은 호」가
+      // +0% 로 나와서 쓸모없는 칸처럼 보인다 — 실제로 그렇게 나왔다.
+      // 부채꼴은 **각도**로 얼마나 잡는지가 정해진다. 기본 0.78π 는 원의 39% 다
+      const arc = Math.min(1, (N.cleave.spread * (m.spread ?? 1)) / (Math.PI * 2));
+      const n = Math.max(1, targets * arc);
+      let d = hit(N.cleave.dmg * (m.dmg ?? 1), m.pierce ?? 0) * n;
+      if (m.twice) d += hit(N.cleave.dmg * (m.dmg ?? 1) * m.twice, m.pierce ?? 0) * n;
+      dmg += d; mp -= N.cleave.cost;
+      cd.cleave = N.cleave.cd * SKILL_CD_SCALE * (1 - cdr);
+      if (m.killCdr) cd.cleave = Math.max(0, cd.cleave - m.killCdr);   // 처치 가정 1
+    }
+    // 그림자 돌진 — 스치는 적만
+    if (cd.dash <= 0 && mp >= N.dash.cost) {
+      const m = M.dash;
+      let d = hit(N.dash.dmg) * Math.min(targets, 2);
+      if (m.endBlast) d += hit(m.endBlast) * targets;
+      dmg += d; mp -= N.dash.cost;
+      cd.dash = N.dash.cd * SKILL_CD_SCALE;
+      if (m.hitCdr) cd.dash *= (1 - m.hitCdr);
+    }
+    // 화염 신성 — 광역 + 장판
+    if (cd.nova <= 0 && mp >= N.nova.cost) {
+      const m = M.nova;
+      const R = N.nova.radius * (m.radius ?? 1);
+      const n = Math.max(1, targets * Math.min(1, (R / PACK_R) ** 2));
+      dmg += hit(N.nova.dmg * (m.dmg ?? 1)) * n;
+      // 장판 — (dmgMin+dmgMax) 기준이라 평타 평균의 두 배쯤이다
+      const fdps = (atk.dmin + atk.dmax) * N.nova.field.dps * (m.fieldDps ?? 1);
+      dmg += mitigate(fdps, armor, lv) * N.nova.field.life * (m.fieldLife ?? 1) * n;
+      mp -= N.nova.cost;
+      cd.nova = N.nova.cd * SKILL_CD_SCALE;
+    }
+    // 운석 — 단발이 제일 크다
+    if (cd.meteor <= 0 && mp >= N.meteor.cost) {
+      const m = M.meteor;
+      const R = N.meteor.radius * (m.radius ?? 1);
+      const n = Math.max(1, targets * Math.min(1, (R / PACK_R) ** 2));
+      // 가장자리 감쇠 — 평균 falloff 를 쓴다
+      const fall = 1 - N.meteor.falloff * 0.5;
+      let d = hit(N.meteor.dmg * (m.dmg ?? 1) * fall) * n;
+      if (m.core) d += hit(N.meteor.dmg * (m.dmg ?? 1) * (m.core - 1)) * 1;   // 중심 하나만
+      if (m.shards) d += hit(N.meteor.shard.dmg) * Math.min(targets, m.shards);
+      const fdps = (atk.dmin + atk.dmax) * N.meteor.field.dps;
+      d += mitigate(fdps, armor, lv) * N.meteor.field.life * n;
+      dmg += d; mp -= N.meteor.cost;
+      cd.meteor = N.meteor.cd * SKILL_CD_SCALE;
+    }
+  }
+  return dmg;
+}
+
+out('\n── 빌드 대 빌드 ────────────────────────────────────────────');
+out('9층에서 60초간 넣는 피해. 마나 제한을 넣고 굴린다 —');
+out('안 넣으면 회전 베기가 무한히 도는 것으로 계산되어 답이 통째로 틀린다.\n');
+out('칸            표적1     표적4     무른적    단단한적  성격  (「피해 밖」은 쓸모없다는 뜻이 아니다)');
+csv('');
+csv('칸,표적1,표적4,무른적,단단한적,성격');
+// **기준을 표적 1 로 잡으면 광역 칸이 전부 0 이 된다.** 뭉친 적에서만
+// 값어치가 있는 칸이 있다는 게 요점이므로 1 과 4 를 나란히 본다.
+const base1 = buildDamage([], 1), base4 = buildDamage([], 4), baseH = buildDamage([], 1, 9, 'hard'), baseS = buildDamage([], 1, 9, 'soft');
+for (const [id, n] of Object.entries(NODES)) {
+  const g1 = buildDamage([id], 1) / base1 - 1;
+  const g4 = buildDamage([id], 4) / base4 - 1;
+  const gH = buildDamage([id], 1, 9, 'hard') / baseH - 1;
+  const gS = buildDamage([id], 1, 9, 'soft') / baseS - 1;
+  const pct = (v) => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+  // **「피해 아님」은 「쓸모없음」이 아니다.** 미끼·벽 통과·느림·표시는
+  // 피해로 안 잡히지만 판을 바꾼다. 무엇을 하는 칸인지 같이 적는다.
+  const NON_DMG = {
+    dashAfter: '적 시선을 끈다', dashPierce: '벽을 통과한다', dashChain: '쿨 회복',
+    meteorAim: '예고가 짧아 덜 피한다', meteorWake: '적을 느리게', novaRekindle: '장판 연쇄',
+    cleaveWhirl: '처치할수록 쿨 감소', comMana: '마나 회수', comWick: '연료 절약',
+    comGrit: '장비 보험', comSense: '약점 표시',
+  };
+  const kind = NON_DMG[id] ? `피해 밖 — ${NON_DMG[id]}`
+    : Math.abs(g4 - g1) > 0.03 ? (g4 > g1 ? '뭉친 적에게' : '한 마리에게') : '고르게';
+  out(`  ${n.name.padEnd(12)} ${pct(g1).padEnd(9)} ${pct(g4).padEnd(9)} ${pct(gS).padEnd(9)}${pct(gH).padEnd(10)}${kind}`);
+  csv(n.name, (g1 * 100).toFixed(1), (g4 * 100).toFixed(1), (gS * 100).toFixed(1), (gH * 100).toFixed(1), kind);
+}
+out('\n양자택일 — 둘이 비슷하면 선택이 아니라 정답이 있는 것이다');
+const seen = new Set();
+for (const [id, n] of Object.entries(NODES)) {
+  if (!n.excl || seen.has(id)) continue;
+  seen.add(id); seen.add(n.excl);
+  const a1 = buildDamage([id], 1) / base1 - 1, a4 = buildDamage([id], 4) / base4 - 1;
+  const b1 = buildDamage([n.excl], 1) / base1 - 1, b4 = buildDamage([n.excl], 4) / base4 - 1;
+  const aH = buildDamage([id], 1, 9, 'hard') / baseH - 1;
+  const bH = buildDamage([n.excl], 1, 9, 'hard') / baseH - 1;
+  const aS = buildDamage([id], 1, 9, 'soft') / baseS - 1;
+  const bS = buildDamage([n.excl], 1, 9, 'soft') / baseS - 1;
+  // **상황이 셋 중 하나라도 뒤집히면 선택이다.** 한 상황만 보면 늘 정답이 있다
+  const flip = new Set([a4 > b4, aS > bS, aH > bH]).size > 1;
+  out(`  ${n.name} vs ${NODES[n.excl].name}`
+    + `   표적1 ${(a1 * 100).toFixed(1)}% : ${(b1 * 100).toFixed(1)}%`
+    + `   표적4 ${(a4 * 100).toFixed(1)}% : ${(b4 * 100).toFixed(1)}%`
+    + `   무른 ${(aS * 100).toFixed(1)}% : ${(bS * 100).toFixed(1)}%`
+    + `   단단 ${(aH * 100).toFixed(1)}% : ${(bH * 100).toFixed(1)}%`
+    + (flip ? '   ✔ 상황에 따라 뒤집힌다' : '   ← 늘 한쪽이 이긴다'));
 }
 
 if (CSV) console.log(rows.join('\n'));

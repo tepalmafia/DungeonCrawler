@@ -2,6 +2,7 @@
 // 데이터 + cast() 만 추가하면 새 스킬이 붙는다.
 
 import { SKILL_CD_SCALE } from './pace.js';
+import { SKILL_NUM, DECOY_DMG } from './skill-table.js';
 import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { playerRoll, hitEnemy } from './combat.js';
@@ -30,7 +31,7 @@ function enemiesInArc(G, origin, facing, radius, spread) {
 export const SKILLS = [
   {
     key: 'cleave', name: '회전 베기', label: 'Q', hot: 'KeyQ', icon: '🌀',
-    cost: 16, cd: 0.9,
+    cost: SKILL_NUM.cleave.cost, cd: SKILL_NUM.cleave.cd,
     desc: '전방을 크게 휩쓴다.',
     cast(G, aim) {
       const p = G.player;
@@ -39,7 +40,8 @@ export const SKILLS = [
       // 스킬 트리가 값을 곱한다 (game/skilltree.js). **안 찍었으면 전부 1**
       // 이므로 지금 값과 한 글자도 다르지 않다 — 그게 단계 A 의 계약이다.
       const M = G.tree ? G.tree.mods('cleave') : {};
-      const spread = Math.PI * 0.78 * (M.spread ?? 1), radius = 3.5 * (M.radius ?? 1);
+      const N = SKILL_NUM.cleave;
+      const spread = N.spread * (M.spread ?? 1), radius = N.radius * (M.radius ?? 1);
       G.fx.arc(p.pos, p.facing, { radius, spread, color: 0xffe0a0, life: 0.24 });
       G.fx.addShake(0.03);
       Sfx.swing();
@@ -51,7 +53,7 @@ export const SKILLS = [
         // element 를 안 넘기면 hitEnemy 가 무기 속성을 쓴다.
         // 넉백 없음 — 이건 무기를 휘두르는 동작이다. 평타의 넓은 판본이지
         // 밀어내는 기술이 아니다 (combat.js 의 넉백 주석).
-        hitEnemy(G, e, r.dmg * 1.35 * (M.dmg ?? 1),
+        hitEnemy(G, e, r.dmg * N.dmg * (M.dmg ?? 1),
           { crit: r.crit, knock: 0, color: 0xffd090, skill: true, armorPierce: M.pierce ?? 0 });
       }
 
@@ -66,7 +68,7 @@ export const SKILLS = [
             Sfx.swing();
             for (const e2 of enemiesInArc(G, p.pos, p.facing, radius, spread)) {
               const r2 = playerRoll(p);
-              hitEnemy(G, e2, r2.dmg * 1.35 * (M.dmg ?? 1) * M.twice,
+              hitEnemy(G, e2, r2.dmg * N.dmg * (M.dmg ?? 1) * M.twice,
                 { crit: r2.crit, knock: 0, color: 0xffc080, skill: true, armorPierce: M.pierce ?? 0 });
             }
           },
@@ -78,7 +80,7 @@ export const SKILLS = [
 
   {
     key: 'dash', name: '그림자 돌진', label: 'W', hot: 'KeyW', icon: '💨',
-    cost: 20, cd: 5, element: 'soul',   // 그림자 — 혼
+    cost: SKILL_NUM.dash.cost, cd: SKILL_NUM.dash.cd, element: 'soul',   // 그림자 — 혼
     desc: '커서 방향으로 돌진한다. 돌진 중 무적.',
     cast(G, aim) {
       const p = G.player;
@@ -91,7 +93,7 @@ export const SKILLS = [
       // 지나간 자리의 적을 벤다
       const hitSet = new Set();
       const M = G.tree ? G.tree.mods('dash') : {};
-      G.pendingDashHits = { hitSet, until: 0.28, mods: M };
+      G.pendingDashHits = { hitSet, until: SKILL_NUM.dash.window, mods: M };
 
       // 「충격」 — 끝나는 지점에서 터진다. 돌진이 도망치는 기술에서
       // **파고드는 기술**로 성격이 바뀐다.
@@ -106,7 +108,7 @@ export const SKILLS = [
             G.lighting?.flash(p.center(), 0x9a6bff, 70, 0.25);
             for (const e of enemiesInArc(G, at, 0, R, Math.PI * 2)) {
               const r = playerRoll(p);
-              hitEnemy(G, e, r.dmg * 1.1, {
+              hitEnemy(G, e, r.dmg * SKILL_NUM.dash.dmg, {
                 crit: r.crit, knock: 1.6, color: 0x9a6bff, element: 'soul', skill: true, from: at,
               });
             }
@@ -118,7 +120,7 @@ export const SKILLS = [
         G.decoy = { x: p.pos.x, z: p.pos.z, t: M.decoy };
         // 보이게 한다 — 적이 엉뚱한 데로 걸어가는데 이유가 안 보이면
         // 고장으로 읽힌다. 바닥 원 + 연기가 「저기 뭔가 있다」를 말한다.
-        G.fx.ground(G.decoy, { r0: 1.1, color: 0x8a6bff, life: M.decoy, opacity: 0.5 });
+        G.fx.ground(G.decoy, { r0: SKILL_NUM.dash.decoyRadius, color: 0x8a6bff, life: M.decoy, opacity: 0.5 });
         G.fx.burst({ x: G.decoy.x, y: 0.8, z: G.decoy.z },
           { count: 14, color: 0x8a6bff, speed: 1.1, size: 0.5, life: M.decoy * 0.8, grav: -0.4 });
       }
@@ -128,12 +130,13 @@ export const SKILLS = [
 
   {
     key: 'nova', name: '화염 신성', label: 'E', hot: 'KeyE', icon: '🔥',
-    cost: 35, cd: 9, element: 'fire',   // 화염 신성 — 화
+    cost: SKILL_NUM.nova.cost, cd: SKILL_NUM.nova.cd, element: 'fire',   // 화염 신성 — 화
     desc: '주변으로 불길이 퍼지고 잠시 장판이 남는다.',
     cast(G) {
       const p = G.player;
       const M = G.tree ? G.tree.mods('nova') : {};
-      const radius = 6.4 * (M.radius ?? 1);
+      const N = SKILL_NUM.nova;
+      const radius = N.radius * (M.radius ?? 1);
       G.fx.shockwave(p.pos, { r0: 0.6, r1: radius, color: 0xff8a3a, life: 0.55, y: 0.35 });
       G.fx.burst(p.center(), { count: 46, color: 0xff9a3a, speed: 9, size: 0.55, life: 0.7, grav: 5 });
       G.fx.ground(p.pos, { r0: radius, color: 0xff6a2a, life: 0.5 });
@@ -143,13 +146,13 @@ export const SKILLS = [
 
       for (const e of enemiesInArc(G, p.pos, 0, radius, Math.PI * 2)) {
         const r = playerRoll(p);
-        hitEnemy(G, e, r.dmg * 2.2 * (M.dmg ?? 1),
+        hitEnemy(G, e, r.dmg * N.dmg * (M.dmg ?? 1),
           { crit: r.crit, knock: 2.0, color: 0xff9a4a, element: 'fire', skill: true });
       }
       // 장판 — 계속 서 있으면 계속 아프다
       G.fields.push({
-        x: p.pos.x, z: p.pos.z, r: radius * 0.72, life: 3.4 * (M.fieldLife ?? 1), tick: 0,
-        dps: (p.dmgMin + p.dmgMax) * 0.28 * (M.fieldDps ?? 1), color: 0xff6a2a,
+        x: p.pos.x, z: p.pos.z, r: radius * N.field.r, life: N.field.life * (M.fieldLife ?? 1), tick: 0,
+        dps: (p.dmgMin + p.dmgMax) * N.field.dps * (M.fieldDps ?? 1), color: 0xff6a2a,
       });
       return true;
     },
@@ -157,13 +160,14 @@ export const SKILLS = [
 
   {
     key: 'meteor', name: '운석 낙하', label: 'R', hot: 'KeyR', icon: '☄',
-    cost: 60, cd: 22, element: 'fire',  // 운석 — 화
+    cost: SKILL_NUM.meteor.cost, cd: SKILL_NUM.meteor.cd, element: 'fire',  // 운석 — 화
     desc: '지정한 곳에 운석을 떨어뜨린다.',
     cast(G, aim) {
       const p = G.player;
       const M = G.tree ? G.tree.mods('meteor') : {};
-      const radius = 4.6 * (M.radius ?? 1);
-      const delay = 0.85 * (M.delay ?? 1);
+      const N = SKILL_NUM.meteor;
+      const radius = N.radius * (M.radius ?? 1);
+      const delay = N.delay * (M.delay ?? 1);
       const target = { x: aim.x, z: aim.z };
       G.fx.ground(target, { r0: radius, color: 0xff3a2a, life: 0.85, fade: 'in', opacity: 0.75 });
       Sfx.meteor();
@@ -187,20 +191,20 @@ export const SKILLS = [
               // 뭉친 적에게는 본체가 25% 약해진 만큼만 손해였다 —
               // 「넓어지는 대신 약해진다」가 아니라 그냥 약해지는 칸이었다.
               // (tools/tree-audit.js 가 −1% 로 잡았다.)
-              const sx = target.x + Math.cos(a) * radius * 0.8;
-              const sz = target.z + Math.sin(a) * radius * 0.8;
+              const sx = target.x + Math.cos(a) * radius * N.shard.at;
+              const sz = target.z + Math.sin(a) * radius * N.shard.at;
               G.timers.push({
                 t: 0.18 + i * 0.09,
                 fn: () => {
                   const sp = new THREE.Vector3(sx, 0, sz);
-                  G.fx.shockwave(sp, { r0: 0.3, r1: radius * 0.55, color: 0xffa03a, life: 0.4, y: 0.3 });
+                  G.fx.shockwave(sp, { r0: 0.3, r1: radius * N.shard.r, color: 0xffa03a, life: 0.4, y: 0.3 });
                   G.fx.burst(sp.clone().setY(0.4), { count: 18, color: 0xffa03a, speed: 6, size: 0.5, life: 0.6, grav: 8 });
                   for (const e of G.enemies) {
                     if (e.dead) continue;
                     const dd = Math.hypot(e.pos.x - sx, e.pos.z - sz);
-                    if (dd > radius * 0.55 + e.radius) continue;
+                    if (dd > radius * N.shard.r + e.radius) continue;
                     const rr = playerRoll(p);
-                    hitEnemy(G, e, rr.dmg * 1.2, {
+                    hitEnemy(G, e, rr.dmg * N.shard.dmg, {
                       crit: rr.crit, knock: 0.8, color: 0xffa03a, element: 'fire',
                       skill: true, from: { x: sx, z: sz },
                     });
@@ -217,12 +221,12 @@ export const SKILLS = [
             const d = Math.hypot(e.pos.x - target.x, e.pos.z - target.z);
             if (d > radius + e.radius) continue;
             const r = playerRoll(p);
-            let falloff = 1 - Math.min(0.55, (d / radius) * 0.55);
+            let falloff = 1 - Math.min(N.falloff, (d / radius) * N.falloff);
             // 「직격」 — 중심 반경 안이면 두 배. 조준이 판단거리가 된다.
             if (M.core && d < 1.5) falloff *= M.core;
-            hitEnemy(G, e, r.dmg * 5.0 * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos, element: 'fire', skill: true });
+            hitEnemy(G, e, r.dmg * N.dmg * falloff, { crit: r.crit, knock: 2.6, color: 0xffb04a, from: pos, element: 'fire', skill: true });
           }
-          G.fields.push({ x: target.x, z: target.z, r: radius * 0.8, life: 2.6, tick: 0, dps: (p.dmgMin + p.dmgMax) * 0.3, color: 0xff7a2a });
+          G.fields.push({ x: target.x, z: target.z, r: radius * N.field.r, life: N.field.life, tick: 0, dps: (p.dmgMin + p.dmgMax) * N.field.dps, color: 0xff7a2a });
         },
       });
       return true;
@@ -297,7 +301,7 @@ export function updateDashHits(G, dt) {
       const r = playerRoll(p);
       // 넉백 없음 — 뚫고 **지나가는** 기술이다. 밀어내면 내가 지나갈 자리가
       // 사라져서 돌진이 적을 앞에서 밀고 가는 모양이 된다.
-      hitEnemy(G, e, r.dmg * 1.1, { crit: r.crit, knock: 0, color: 0x8a6bff, element: 'soul', skill: true });
+      hitEnemy(G, e, r.dmg * DECOY_DMG, { crit: r.crit, knock: 0, color: 0x8a6bff, element: 'soul', skill: true });
     }
   }
 }
