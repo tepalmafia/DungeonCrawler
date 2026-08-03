@@ -8,7 +8,7 @@ import { RARITIES, priceOf, power, affixLine, AFFIX_BY_KEY, SLOTS } from '../gam
 import { ELEMENTS } from '../game/elements.js';
 import { fuelCap } from '../game/lantern.js';
 import { SELL_MULT } from '../game/shop.js';
-import { NODES as TREE_NODES } from '../game/skilltree.js';
+import { renderTreeGraph } from './treeview.js';
 
 const $ = (s) => document.querySelector(s);
 const V = new THREE.Vector3();      // 투영용 재사용 벡터
@@ -205,46 +205,24 @@ export class UI {
 
   get isTreeOpen() { return !!this.el.tree && !this.el.tree.hidden; }
 
+  /**
+   * 트리는 **목록이 아니라 그림**이다 (ui/treeview.js).
+   *
+   * 세로로 나열했더니 「무엇을 찍을까」가 항목 고르기가 됐고, 무엇보다
+   * **양자택일이 안 보였다** — 갈래는 그림으로 그려야 「이쪽을 가면
+   * 저쪽을 못 간다」가 설명 없이 읽힌다.
+   */
   renderTree() {
     const T = this.G.tree;
     const body = this.el.treeBody;
     if (!T || !body) return;
     this.el.treePoints.textContent = `남은 포인트 ◈ ${T.points}`;
-    body.innerHTML = '';
-
-    const GROUPS = [
-      ['cleave', '🌀', '회전 베기'], ['dash', '💨', '그림자 돌진'],
-      ['nova', '🔥', '화염 신성'], ['meteor', '☄', '운석 낙하'],
-      ['common', '◆', '공용'],
-    ];
-    for (const [skill, icon, label] of GROUPS) {
-      const g = document.createElement('div');
-      g.className = 'tgroup';
-      g.innerHTML = `<h4><span class="ti">${icon}</span>${label}</h4>`;
-      const ids = Object.keys(TREE_NODES).filter((id) => TREE_NODES[id].skill === skill);
-      for (const id of ids) {
-        const n = TREE_NODES[id];
-        const on = T.taken.has(id);
-        const blocked = !!(n.excl && T.taken.has(n.excl));
-        const poor = !on && !blocked && T.points < 1;
-        const row = document.createElement('div');
-        row.className = 'tnode' + (on ? ' on' : blocked ? ' off' : poor ? ' poor' : '');
-        row.innerHTML = `<span class="tk">${on ? '✔' : blocked ? '✗' : '○'}</span>`
-          + `<span><span class="tn">${n.name}</span>`
-          + (n.excl ? ` <span class="texcl">— ${TREE_NODES[n.excl].name} 와 택일</span>` : '')
-          + `<br><span class="td">${n.desc}</span></span>`;
-        if (!on && !blocked && !poor) {
-          row.onclick = () => {
-            if (this.G.tree.take(id)) {
-              this.toast(`${n.name} 습득`, '#7fc47a');
-              this.renderTree();
-            }
-          };
-        }
-        g.appendChild(row);
+    renderTreeGraph(body, T, (id, n) => {
+      if (this.G.tree.take(id)) {
+        this.toast(`${n.name} 습득`, '#7fc47a');
+        this.renderTree();
       }
-      body.appendChild(g);
-    }
+    });
   }
 
   renderShop() {
