@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { Sfx } from '../core/audio.js';
 import { resolveCollision, sweep, lineOfSight } from '../world/nav.js';
 import { worldToGrid } from '../world/dungeon.js';
+import { mitigate } from './growth-table.js';
+export { mitigate };
 import { ELEMENTS, elementalMult, defenseMult } from './elements.js';
 import { DIE_TIME } from './pace.js';
 
@@ -48,10 +50,6 @@ export function volAt(G, pos) {
 }
 
 /** 방어도 감산 — 수확 체감. 층이 깊어져도 방어도가 무의미해지지 않는다. */
-export function mitigate(raw, armor, level = 1) {
-  const k = armor / (armor + 42 + level * 9);
-  return Math.max(1, raw * (1 - k));
-}
 
 export function playerRoll(p) {
   const base = p.dmgMin + Math.random() * (p.dmgMax - p.dmgMin);

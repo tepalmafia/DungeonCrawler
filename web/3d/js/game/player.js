@@ -6,6 +6,7 @@ import { makeActor } from '../core/actor.js';
 import { buildKnight } from '../core/models.js';
 import { Pose } from '../core/rig.js';
 import { poseHumanoid, poseRest, STANCE, stanceFor } from '../core/anim.js';
+import { GROWTH, perHit } from './growth-table.js';
 import { attachWeapon } from '../core/weapons.js';
 import { aggregate, RARITIES, SLOTS, power } from './items.js';
 import { findPath, smoothPath, toWorldPath, resolveCollision, sweep, unstick, walkable } from '../world/nav.js';
@@ -71,7 +72,7 @@ export class Player {
     // 진행
     this.level = 1;
     this.xp = 0;
-    this.xpNext = 24;
+    this.xpNext = GROWTH.xp.first;
     this.potions = { hp: 5, mp: 5 };
     this.potionCd = { hp: 0, mp: 0 };
     // 랜턴 — 들고 있는 동안만 초당 1 씩 탄다. 다 타면 기본 등불로 돌아간다.
@@ -133,15 +134,16 @@ export class Player {
     const a = aggregate(this.equipped);
     this.bonus = a;
     const lv = this.level - 1;
-    this.maxHp = 135 + lv * 18 + a.hp;   // 1대1이 길어진 만큼 버틸 여유를 준다
-    this.maxMp = 60 + lv * 7 + a.mp;
-    this.armor = 2 + lv * 1.2 + a.armor;
-    this.critChance = 5 + a.crit;
-    this.critMult = 1.8 + a.cdmg / 100;
+    // 성장식은 game/growth-table.js 한 곳에 있다 — tools/sim.js 도 같은 걸 읽는다
+    this.maxHp = GROWTH.hp.base + lv * GROWTH.hp.per + a.hp;
+    this.maxMp = GROWTH.mp.base + lv * GROWTH.mp.per + a.mp;
+    this.armor = GROWTH.armor.base + lv * GROWTH.armor.per + a.armor;
+    this.critChance = GROWTH.crit.base + a.crit;
+    this.critMult = GROWTH.critMult.base + a.cdmg / 100;
     // 전체 템포는 pace.js 가 정한다 (game/pace.js). 장비 보너스는 그 위에 얹힌다 —
     // 순서를 바꾸면 「+5% 이동 속도」가 체감상 다른 값이 되어버린다.
     this.speed = BASE_SPEED * MOVE_SCALE * (1 + a.speed / 100);
-    this.attackSpeed = a.weaponSpeed * ATTACK_SCALE * (1 + a.aspd / 100) * (1 + lv * 0.012);
+    this.attackSpeed = a.weaponSpeed * ATTACK_SCALE * (1 + a.aspd / 100) * (1 + lv * GROWTH.aspd.per);
     this.cdr = Math.min(0.45, a.cdr / 100);
     this.leech = a.leech;
     // ── 평평한 피해는 **초당**이지 타격당이 아니다 ──────────────
@@ -158,9 +160,9 @@ export class Player {
     //
     // **무기 속도로만 나눈다.** attackSpeed 로 나누면 「+공격 속도」 접사가
     // 스스로를 상쇄해서 아무 효과가 없는 접사가 된다.
-    const perHit = 1 / (a.weaponSpeed || 1);
-    this.dmgMin = a.dmgMin + (a.dmg + lv * 1.6) * perHit;
-    this.dmgMax = a.dmgMax + (a.dmg + lv * 2.4) * perHit;
+    const ph = perHit(a.weaponSpeed);
+    this.dmgMin = a.dmgMin + (a.dmg + lv * GROWTH.dmgMin.per) * ph;
+    this.dmgMax = a.dmgMax + (a.dmg + lv * GROWTH.dmgMax.per) * ph;
     // 이 게임에만 있는 축들 (docs/ITEM-ECONOMY.md §3-3).
     // 접사를 스탯으로만 두고 아무 데서도 안 읽으면 그건 그냥 툴팁 장식이다 —
     // 여섯 개 전부 실제로 쓰이는 곳을 정해 뒀다.
@@ -247,7 +249,7 @@ export class Player {
       // 다섯 층 동안 레벨이 10 → 12 로 두 칸밖에 안 올랐다. 그동안 적은
       // powerMult 2.80 → 4.60 으로 강해진다. 1.34 로 낮추면 같은 구간이
       // 11 → 14 가 되어 스킬 포인트도 셋 더 나온다.
-      this.xpNext = Math.round(this.xpNext * 1.34 + 8);
+      this.xpNext = Math.round(this.xpNext * GROWTH.xp.mul + GROWTH.xp.add);
       ups++;
     }
     if (ups) {
@@ -329,7 +331,7 @@ export class Player {
     for (const k of ['hp', 'mp']) this.potionCd[k] = Math.max(0, this.potionCd[k] - dt);
 
     // 마나 자연 회복 — 스킬을 계속 쓸 수 있게 넉넉히
-    this.mp = Math.min(this.maxMp, this.mp + (3.2 + this.level * 0.35) * dt);
+    this.mp = Math.min(this.maxMp, this.mp + (GROWTH.mpRegen.base + this.level * GROWTH.mpRegen.per) * dt);
     // 체력은 기본으로는 안 찬다. regen 접사가 붙었을 때만 — 물약이 자원이어야 하므로.
     if (this.regen) this.hp = Math.min(this.maxHp, this.hp + this.regen * dt);
 
