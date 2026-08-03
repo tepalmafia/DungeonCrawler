@@ -11,7 +11,9 @@
 // **품질을 올린 것은 폴리곤이 아니라 관절과 실루엣이다.**
 
 import * as THREE from 'three';
-import { prism, slab, blade, spike, Part, skeleton } from './rig.js';
+// 무기 지오메트리(blade)는 여기서 안 쓴다 — 전부 core/weapons.js 로 옮겼다.
+import { prism, slab, spike, Part, skeleton } from './rig.js';
+import { attachWeapon, attachBuckler } from './weapons.js';
 
 function M(color, opt = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1, ...opt });
@@ -131,43 +133,24 @@ export function buildKnight() {
     .finish();
   rig.shield = shieldMount;
 
-  // ── 검 (오른손) ── 능선이 있는 날 + 십자 가드 + 원형 폼멜
-  const weapon = new THREE.Group();
-  weapon.position.set(0, -0.06, 0.04);
-  // ── 검을 쥐는 방향 ──
+  // ── 무기 (오른손) ── 계열별 메시는 core/weapons.js 가 만든다.
   //
-  // **칼날은 손에서 팔 바깥쪽(먼 쪽)으로 뻗어야 한다.** 처음엔 그 반대로,
-  // 칼날이 손에서 팔뚝 쪽으로 뻗어 있었다 — 얼음송곳 쥐듯 거꾸로 쥔 것이다.
-  // 서 있을 때는 검이 위로 서 있어서 그럴듯해 보였지만, 들어올리면
-  // **손잡이가 위, 칼끝이 아래-뒤**를 향했다. 그래서 팔이 아무리 큰 호를
-  // 그려도 칼끝은 몸 앞에서 오르내리기만 했다 —
-  // 「몸 앞에서 내려가잖아」가 이것이었다.
+  // 예전에는 여기서 **검 하나를 고정으로** 만들었다. 그래서 대검을 껴도
+  // 화면에는 짧은 한손검이 보였다. 지금은 팔레트만 넘기고, 장착이 바뀌면
+  // player.js 의 _syncWeapon() 이 같은 팔레트로 갈아 끼운다.
   //
-  // π 만큼 뒤집으면 칼날이 손 바깥(−Y)으로, 폼멜이 손목 쪽으로 온다.
-  // 0.28 을 덜어 칼끝을 살짝 앞으로 눕힌다.
-  weapon.rotation.x = Math.PI - 0.28;
-  const wp = new Part(weapon);
-  wp.add(prism(0.045, 0.045, 0.20, 0.05, 0.05), leather, { y: 0.06 });       // 손잡이
-  wp.add(prism(0.09, 0.09, 0.05, 0.06, 0.06, { hang: false }), gold, { y: -0.16 });  // 폼멜
-  wp.add(prism(0.32, 0.07, 0.06, 0.26, 0.05, { hang: false }), gold, { y: 0.09 });   // 가드
-  wp.finish();
-  // 날은 재질을 따로 만져야 해서(속성 발광) 합치지 않고 남긴다
-  const bladeMesh = new THREE.Mesh(blade(0.10, 0.80, 0.035), bladeMat);
-  bladeMesh.position.y = 0.52;
-  bladeMesh.castShadow = true;
-  weapon.add(bladeMesh);
-  rig.handR.add(weapon);
-
-  rig.weapon = weapon;
-  rig.blade = bladeMesh;
+  // 쥐는 방향(π 뒤집기)과 쥐는 위치는 전부 weapons.js 가 안다 — 그게 무기의
+  // 성질이지 몸의 성질이 아니기 때문이다.
+  rig.weaponPal = { wrap: leather, dark: dark, accent: gold, bladeMat };
   rig.bladeMat = bladeMat;
+  attachWeapon(rig, '검', rig.weaponPal);
   rig.stance = 'knight';
   return done(rig, [steel, dark, gold, cloth, leather, bladeMat]);
 }
 
 // ═══════════════════════════ 해골 병사 ═══════════════════════════
 // 실루엣: **키가 크고 얇다.** 갈비뼈 사이가 비어 있어 뒤가 비쳐 보인다.
-export function buildSkeleton() {
+export function buildSkeleton(opt = {}) {
   const bone = M(0xcfc6ad, { roughness: 0.62, metalness: 0.05 });
   const rag = M(0x453f4e, { roughness: 1 });
   const rust = M(0x7d6a52, { roughness: 0.6, metalness: 0.5 });
@@ -234,21 +217,19 @@ export function buildSkeleton() {
     rig.head.add(e);
   }
 
-  // 녹슨 검
-  const weapon = new THREE.Group();
-  weapon.position.set(0, -0.05, 0.03);
-  weapon.rotation.x = Math.PI - 0.22;   // 기사와 같은 이유 (칼날은 손 바깥으로)
-  new Part(weapon)
-    .add(prism(0.04, 0.04, 0.15, 0.045, 0.045), rag, { y: 0.05 })
-    .add(prism(0.20, 0.06, 0.045, 0.17, 0.05, { hang: false }), rust, { y: 0.07 })
-    .finish();
+  // ── 무기 ── **변종마다 다르다.**
+  //
+  // 해골 창병은 사거리가 2.9 로 원본(1.6)의 두 배 가까이 되는데, 지금까지
+  // 같은 녹슨 검을 들고 있었다. 규칙만 다르고 화면은 같으니 「왜 저기서
+  // 맞지」가 된다 — 사거리를 눈으로 알려 주는 것은 숫자가 아니라 자루 길이다.
+  // 방패병도 같다: frontGuard 0.6 이 규칙으로만 있고 표시가 없었다.
   const bladeMat = M(0xa9b0bd, { metalness: 0.72, roughness: 0.42 });
-  const bl = new THREE.Mesh(blade(0.075, 0.56, 0.03), bladeMat);
-  bl.position.y = 0.37;
-  bl.castShadow = true;
-  weapon.add(bl);
-  rig.handR.add(weapon);
-  rig.weapon = weapon; rig.blade = bl; rig.bladeMat = bladeMat;
+  rig.weaponPal = { wrap: rag, dark: rag, accent: rust, bladeMat };
+  rig.bladeMat = bladeMat;
+  attachWeapon(rig, opt.weapon || '검', rig.weaponPal, { y: -0.05, z: 0.03 });
+  // 방패는 무기보다 **먼저** 볼 것이 아니다 — attachWeapon 이 두 손 무기일 때
+  // rig.shield 를 숨기므로, 방패는 그 뒤에 단다 (창 + 방패는 없다).
+  if (opt.shield && !rig.twoHand) attachBuckler(rig, rig.weaponPal, 1.0);
   rig.stance = 'skeleton';
   return done(rig, [bone, rag, rust, bladeMat]);
 }

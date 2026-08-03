@@ -120,6 +120,27 @@ body[data-post="low"] #vignette {
 /* 물약 벨트 — 디아블로2 의 4칸 */
 #beltSlots { display: flex; gap: 5px; }
 
+/* 스킬 창 여는 자리 — 키(K)만으로는 「안 열린다」의 원인을 알 수 없다.
+   경험치 막대 오른쪽 끝에 얹는다. 막대는 overflow:hidden 이라 안에 못 넣는다. */
+#treeBtn {
+  position: absolute; right: 22px; top: 50%; transform: translateY(-50%);
+  z-index: 3; padding: 2px 9px; font: inherit; font-size: 11px; line-height: 1.5;
+  color: #d9cfe6; background: #221b2c; border: 1px solid #4a3f58; border-radius: 3px;
+  cursor: pointer; white-space: nowrap;
+  /* #hud 가 pointer-events:none 이라 이걸 안 켜면 **눌리지 않는다.**
+     캔버스가 클릭을 가져가고, 버튼은 보이기만 한다. */
+  pointer-events: auto;
+}
+#treeBtn:hover { background: #302742; border-color: #6d5c80; }
+/* 포인트가 남았으면 점이 붙는다 — 「찍을 게 있다」가 눈에 띄어야 한다 */
+#treeBtn i { display: none; }
+#treeBtn.has i {
+  display: block; position: absolute; right: -3px; top: -3px;
+  width: 7px; height: 7px; border-radius: 50%; background: #e35b5b;
+  box-shadow: 0 0 5px #e35b5b;
+}
+#beltbar { position: relative; }
+
 #xpbar {
   position: relative; width: 100%; height: 13px;
   background: #14101c; border: 1px solid #2d2536; border-radius: 3px; overflow: hidden;
@@ -473,7 +494,31 @@ body[data-post="low"] #vignette {
    상점과 같은 창 규격을 쓴다 — 조작 규칙을 늘리지 않기 위해서다.
    칸은 「무엇을 버렸나」가 보여야 하므로, 못 찍게 된 반대편을 지우지 않고
    ✗ 로 남긴다. 사라지면 선택을 했다는 사실 자체가 안 보인다. */
-#tree .panel { max-width: 640px; }
+/* ── 스킬 창 ─────────────────────────────────────────────────
+   **이 블록이 통째로 없었다.** #shop·#inv 에는 화면 중앙에 띄우는 규칙이
+   있는데 #tree 에는 `.panel { max-width }` 한 줄뿐이라, 창이 문서 흐름대로
+   HUD 뒤에 쌓여 **화면 아래 바깥**에 그려졌다. 실측하면 이렇다:
+
+     1920x1080  창 640x1265 @ (0,1080)   ← 화면 높이와 같은 자리에서 시작
+     1366x768   창 640x1265 @ (0,768)
+
+   K 는 정상이었고 hidden 도 풀렸다. 그냥 **안 보이는 곳에 있었다.**
+   오류도 안 나고 경고도 없다 — 「K가 안 되는데?」의 정체가 이것이었다.
+   상점도 예전에 같은 종류의 CSS 누락(#shop[hidden])으로 사고가 났었다.
+
+   높이 1265px 는 화면보다 크므로 **패널 안에서 스크롤**해야 한다.
+   화면 중앙에 띄우기만 하면 위아래가 잘려서 절반은 여전히 못 누른다. */
+#tree {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(3,2,6,.55); z-index: 30;
+}
+#tree[hidden] { display: none; }
+#tree .panel {
+  width: min(640px, 94vw); max-width: 640px;
+  max-height: 88vh; display: flex; flex-direction: column;
+}
+#tree .panel > header { flex: none; }
+#treeBody { overflow-y: auto; min-height: 0; }
 #treePoints { color: #d8b45e; font-weight: bold; }
 .tgroup { margin: 10px 0 14px; }
 .tgroup h4 {

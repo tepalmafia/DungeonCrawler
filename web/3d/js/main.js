@@ -41,7 +41,7 @@ import { AI } from './game/ai.js';
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 
-export const VERSION = 1;
+export const VERSION = 4;
 // 아홉 층 세 막 (docs/FLOORS.md §2). world/floors.js 의 표가 아홉 칸이므로
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 const MAX_FLOOR = 9;

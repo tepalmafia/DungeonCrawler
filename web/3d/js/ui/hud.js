@@ -50,6 +50,16 @@ export class UI {
     };
     const sc = $('#shopClose');
     if (sc) sc.addEventListener('click', () => this.setShop(null));
+    // 스킬 창 — **눌러서도 열고 닫을 수 있어야 한다.**
+    //
+    // K 하나에만 걸어 뒀더니 「K가 안 되는데?」가 나왔고, 키가 안 먹는
+    // 이유(캐시로 옛 main.js 가 도는 것 등)는 화면에 아무 표시도 안 남긴다.
+    // 누를 자리가 있으면 그 경우에도 열리고, 안 열리면 원인이 좁혀진다.
+    // ✕ 도 여기서 처음 연결한다 — 마크업에만 있고 아무 데도 안 걸려 있었다.
+    this.el.treeBtn = $('#treeBtn');
+    if (this.el.treeBtn) this.el.treeBtn.addEventListener('click', () => this.setTree(!this.isTreeOpen));
+    const tc = $('#treeClose');
+    if (tc) tc.addEventListener('click', () => this.setTree(false));
     this.mm = this.el.minimap.getContext('2d');
     this._buildSkillbar();
     this._centerT = 0;
@@ -448,9 +458,11 @@ export class UI {
           dot.title = `스킬 포인트 ${pts} — K`;
         } else if (dot) dot.remove();
       }
+      // 여는 버튼에도 같은 점을 붙인다 — 단축바보다 여기가 「누르는 곳」이다
+      if (this.el.treeBtn) this.el.treeBtn.classList.toggle('has', pts > 0);
       if (pts > 0 && !this._toldTree) {
         this._toldTree = true;
-        this.toast('스킬 포인트를 얻었다 — K', '#7fc47a');
+        this.toast('스킬 포인트를 얻었다 — 화면 아래 「◈ 스킬」 또는 K', '#7fc47a');
       }
     }
 
