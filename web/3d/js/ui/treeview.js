@@ -21,12 +21,15 @@
 // 바뀌어도 선과 칸이 같이 움직인다. 선은 SVG 라 viewBox 가 알아서 늘어난다.
 // (창이 화면 밖에 그려진 사고를 겪었으므로, 고정 픽셀은 안 쓴다.)
 
-import { NODES } from '../game/skilltree.js';
+import { NODES, unlockedAt } from '../game/skilltree.js';
 import { iconHTML } from '../core/assets.js';
 
 const CX = 360, CY = 360;
-const R1 = 122, R2 = 216, R3 = 302;
+// 4단(정점)이 붙으면서 고리를 하나 더 그려야 했다. 바깥으로 늘리면 이름표가
+// 720 칸을 넘으므로 **안쪽을 좁혔다** — 고리 넷이 같은 원 안에 들어온다.
+const R1 = 96, R2 = 170, R3 = 240, R4 = 310;
 const SPREAD = 0.235;              // 2단계 두 칸이 갈라지는 각(라디안) — ±13도쯤
+const SPREAD4 = 0.20;              // 4단은 조금 좁게 — 바깥일수록 호가 길어진다
 
 /** 갈래 — 각도는 화면 기준이다 (0 = 오른쪽, 양수 = 아래) */
 const BRANCHES = [
@@ -44,6 +47,10 @@ const GLYPH = {
   novaLinger: '❂', novaSpread: '✺', novaFocus: '◉', novaRekindle: '✦',
   meteorAim: '⊕', meteorShards: '✱', meteorDirect: '◎', meteorWake: '❉',
   comMana: '◈', comWick: '✧', comGrit: '❖', comSense: '⬥',
+  // 4단 정점 — 1~3단보다 굵은 글자를 쓴다. 「여기가 끝」이 모양으로 읽혀야 한다
+  cleaveEcho: '❰❱', cleaveDrain: '❥', dashStorm: '🜂', dashVoid: '◍',
+  novaGrow: '❊', novaBurst: '✷', meteorRain: '⁂', meteorAbyss: '◐',
+  comHoard: '⬢', comSteady: '⬣', comSpite: '✖', comSeer: '◉',
 };
 
 const pos = (a, r) => ({ x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r });
@@ -59,9 +66,13 @@ function layout() {
     const root = pos(b.a, 52);
     if (b.skill === 'common') {
       // 공용 — 네 칸이 전부 1단계다. 두 줄 부채꼴로 편다
+      // 공용 — 여덟 칸이 전부 독립이다. 네 줄 부채꼴로 편다
+      // (4단 넷은 회차가 열어 준다 — skilltree.js 의 `unlock`)
       const fan = [
         ['comMana', -SPREAD, R1], ['comWick', SPREAD, R1],
         ['comGrit', -SPREAD, R2], ['comSense', SPREAD, R2],
+        ['comHoard', -SPREAD4, R3], ['comSteady', SPREAD4, R3],
+        ['comSpite', -SPREAD4, R4], ['comSeer', SPREAD4, R4],
       ];
       const by = {};
       for (const [id, off, r] of fan) {
@@ -73,12 +84,17 @@ function layout() {
       links.push({ x1: root.x, y1: root.y, x2: by.comWick.x, y2: by.comWick.y, from: null, to: 'comWick' });
       links.push({ x1: by.comMana.x, y1: by.comMana.y, x2: by.comGrit.x, y2: by.comGrit.y, from: 'comMana', to: 'comGrit' });
       links.push({ x1: by.comWick.x, y1: by.comWick.y, x2: by.comSense.x, y2: by.comSense.y, from: 'comWick', to: 'comSense' });
+      links.push({ x1: by.comGrit.x, y1: by.comGrit.y, x2: by.comHoard.x, y2: by.comHoard.y, from: 'comGrit', to: 'comHoard' });
+      links.push({ x1: by.comSense.x, y1: by.comSense.y, x2: by.comSteady.x, y2: by.comSteady.y, from: 'comSense', to: 'comSteady' });
+      links.push({ x1: by.comHoard.x, y1: by.comHoard.y, x2: by.comSpite.x, y2: by.comSpite.y, from: 'comHoard', to: 'comSpite' });
+      links.push({ x1: by.comSteady.x, y1: by.comSteady.y, x2: by.comSeer.x, y2: by.comSeer.y, from: 'comSteady', to: 'comSeer' });
       continue;
     }
     const ids = Object.keys(NODES).filter((id) => NODES[id].skill === b.skill);
     const t1 = ids.find((id) => NODES[id].tier === 1);
     const t2 = ids.filter((id) => NODES[id].tier === 2);
     const t3 = ids.find((id) => NODES[id].tier === 3);
+    const t4 = ids.filter((id) => NODES[id].tier === 4);
 
     const p1 = pos(b.a, R1);
     nodes.push({ id: t1, ...p1, shape: 'tile', hue: b.hue, branch: b });
@@ -96,6 +112,16 @@ function layout() {
     nodes.push({ id: t3, ...p3, shape: 'tile', hue: b.hue, branch: b });
     links.push({ x1: pa.x, y1: pa.y, x2: p3.x, y2: p3.y, from: t2[0], to: t3 });
     links.push({ x1: pb.x, y1: pb.y, x2: p3.x, y2: p3.y, from: t2[1], to: t3 });
+
+    // 4단 정점 — 또 하나의 양자택일. 마름모로 그려 「여기서 또 갈린다」를 알린다
+    if (t4.length === 2) {
+      const qa = pos(b.a - SPREAD4, R4), qb = pos(b.a + SPREAD4, R4);
+      nodes.push({ id: t4[0], ...qa, shape: 'gem', hue: b.hue, branch: b });
+      nodes.push({ id: t4[1], ...qb, shape: 'gem', hue: b.hue, branch: b });
+      links.push({ x1: p3.x, y1: p3.y, x2: qa.x, y2: qa.y, from: t3, to: t4[0] });
+      links.push({ x1: p3.x, y1: p3.y, x2: qb.x, y2: qb.y, from: t3, to: t4[1] });
+      links.push({ x1: qa.x, y1: qa.y, x2: qb.x, y2: qb.y, from: t4[0], to: t4[1], kind: 'xor' });
+    }
   }
   return { nodes, links };
 }
@@ -107,11 +133,14 @@ const pct = (v) => `${(v / 720) * 100}%`;
  * 한 칸의 상태. **찍을 수 있는지는 SkillTree 에게 묻는다** — 여기서 다시
  * 판단하면 규칙이 두 곳에 생기고, 언젠가 둘이 어긋난다.
  */
-function stateOf(T, id) {
+function stateOf(T, id, tier) {
   if (T.taken.has(id)) return 'on';
   const n = NODES[id];
   if (n.excl && T.taken.has(n.excl)) return 'off';
-  return T.canTake(id) ? 'can' : 'far';
+  // **회차 잠금은 포인트 부족과 다르게 보여야 한다.** 둘 다 회색으로 두면
+  // 「포인트만 모으면 찍을 수 있나 보다」로 읽히고, 회차를 넘을 이유가 안 보인다.
+  if (!unlockedAt(id, tier)) return 'lock';
+  return T.canTake(id, tier) ? 'can' : 'far';
 }
 
 /**
@@ -120,7 +149,7 @@ function stateOf(T, id) {
  * @param T     SkillTree
  * @param onTake  찍었을 때 부를 것 (토스트·다시 그리기는 호출부 몫)
  */
-export function renderTreeGraph(body, T, onTake) {
+export function renderTreeGraph(body, T, onTake, tier = 0) {
   body.innerHTML = '';
 
   const wrap = document.createElement('div');
@@ -168,27 +197,32 @@ export function renderTreeGraph(body, T, onTake) {
   const info = document.createElement('div');
   info.className = 'tinfo';
   const clearInfo = () => {
+    const locked = L.nodes.filter((x) => !unlockedAt(x.id, tier)).length;
     info.innerHTML = `<b>스킬 트리</b><span>칸에 손을 올리면 설명이 나온다 · `
-      + `마름모는 <b>둘 중 하나만</b> 찍을 수 있다</span>`;
+      + `마름모는 <b>둘 중 하나만</b> 찍을 수 있다`
+      + (locked ? ` · <b style="color:#8d8577">${locked}칸이 아직 잠겨 있다</b> (회차를 넘기면 열린다)` : '')
+      + `</span>`;
   };
   clearInfo();
 
   for (const nd of L.nodes) {
     const n = NODES[nd.id];
-    const st = stateOf(T, nd.id);
+    const st = stateOf(T, nd.id, tier);
     const el = document.createElement('button');
     el.type = 'button';
     el.className = `tn ${nd.shape} ${st}`;
     el.style.left = pct(nd.x); el.style.top = pct(nd.y);
     el.style.setProperty('--hue', nd.hue);
     el.innerHTML = `<i>${iconHTML(GLYPH[nd.id] || '◆', nd.id)}</i>`
-      + (st === 'on' ? '<u>✔</u>' : st === 'off' ? '<u class="x">✕</u>' : '');
+      + (st === 'on' ? '<u>✔</u>' : st === 'off' ? '<u class="x">✕</u>'
+        : st === 'lock' ? `<u class="lk">${(n.unlock ?? 0) + 1}회</u>` : '');
     const show = () => {
       info.innerHTML = `<b style="color:${nd.hue}">${n.name}</b>`
         + `<span>${n.desc}</span>`
         + (n.excl ? `<em>${NODES[n.excl].name} 와 택일</em>` : '')
         + (st === 'off' ? '<em class="no">반대편을 찍어서 못 찍는다</em>'
-          : st === 'far' ? '<em class="no">포인트가 없다</em>' : '');
+          : st === 'lock' ? `<em class="lk">${(n.unlock ?? 0) + 1}회차부터 열린다</em>`
+            : st === 'far' ? '<em class="no">포인트가 없다</em>' : '');
     };
     el.addEventListener('mouseenter', show);
     el.addEventListener('focus', show);

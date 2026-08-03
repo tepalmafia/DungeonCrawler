@@ -101,3 +101,13 @@ export const TIER_UNLOCK = [
 
 /** 그 회차의 해금 — 표를 넘어가면 마지막 줄이 계속 적용된다 */
 export const tierUnlock = (tier) => TIER_UNLOCK[Math.min(tier, TIER_UNLOCK.length - 1)];
+
+/**
+ * 「기억의 재」 — 스킬 포인트를 전부 되돌리는 값 (docs/SKILL-TREE.md §1-5).
+ *
+ * **공짜면 매 층 갈아 끼워 선택이 사라진다.** 처음에 버튼만 달았다가
+ * 값을 붙였다 — 되돌릴 수 있어야 하지만 공짜여선 안 된다는 것이 원래 설계였다.
+ * 찍은 칸 수에 비례해서, 많이 찍었을수록 갈아엎기가 비싸다.
+ */
+export const RESPEC = { base: 60, per: 45 };
+export const respecCost = (taken) => RESPEC.base + RESPEC.per * (taken || 0);
