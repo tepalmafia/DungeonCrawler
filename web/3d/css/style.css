@@ -222,7 +222,10 @@ body[data-post="low"] #vignette {
 /* 돌판에 박아 넣은 창 — 안쪽으로 파인 느낌을 이중 테두리로 낸다 */
 /* 인벤토리와 상점은 같은 판때기를 쓴다 — 창마다 다른 재질이면
    같은 게임의 UI 로 안 읽힌다 */
-#inv .panel, #shop .panel {
+/* 창 껍데기 — **#tree 가 여기 빠져 있었다.** 그래서 스킬 창은 배경도
+   테두리도 없이 던전 위에 글자만 떠 있었다. 창을 새로 만들 때 이 선택자에
+   추가하는 걸 잊으면 매번 같은 일이 난다. */
+#inv .panel, #shop .panel, #tree .panel {
   width: 512px; max-height: 94vh; overflow-y: auto;
   background:
     linear-gradient(180deg, rgba(255,220,170,.05), rgba(0,0,0,0) 120px),
@@ -514,35 +517,108 @@ body[data-post="low"] #vignette {
 }
 #tree[hidden] { display: none; }
 #tree .panel {
-  width: min(640px, 94vw); max-width: 640px;
-  max-height: 88vh; display: flex; flex-direction: column;
+  /* 위 껍데기 규칙의 width/overflow 를 덮어쓴다 — 그림은 잘리면 안 되고
+     스크롤은 #treeBody 안에서만 일어나야 한다 */
+  width: min(680px, 94vw); max-width: 680px;
+  max-height: 92vh; overflow: visible;
+  display: flex; flex-direction: column; padding-bottom: 10px;
 }
 #tree .panel > header { flex: none; }
-#treeBody { overflow-y: auto; min-height: 0; }
+#treeBody { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
 #treePoints { color: #d8b45e; font-weight: bold; }
-.tgroup { margin: 10px 0 14px; }
-.tgroup h4 {
-  margin: 0 0 6px; font-size: 13px; color: #cfc4b0;
-  display: flex; align-items: baseline; gap: 7px;
+
+/* ── 스킬 트리 = 그림 ────────────────────────────────────────
+   칸을 세로로 나열했더니 「무엇을 찍을까」가 항목 고르기가 됐고,
+   갈래(양자택일)가 아예 안 보였다. 좌표는 ui/treeview.js 가 720×720
+   안에서 계산해 **비율(%)로** 얹으므로, 여기서는 크기만 정한다. */
+.tgraph {
+  position: relative; width: min(100%, 68vh); aspect-ratio: 1;
+  margin: 2px auto 0; flex: none;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(84,64,120,.20), rgba(0,0,0,0) 62%),
+    radial-gradient(circle at 50% 50%, rgba(255,214,150,.05), rgba(0,0,0,0) 30%);
 }
-.tgroup h4 .ti { font-size: 16px; }
-.tnode {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 6px 9px; margin: 3px 0; border: 1px solid #3a3446;
-  border-radius: 4px; background: rgba(26,22,34,.5); cursor: pointer;
+.tgraph svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* 선 — **양쪽이 다 찍혔을 때만** 켠다. 한쪽만 찍힌 선까지 켜면
+   화면이 온통 밝아져서 「어디까지 갔나」가 안 보인다. */
+.tlink { stroke: #4a4159; stroke-width: 3; }
+.tlink.lit { stroke: #d9563f; stroke-width: 4.5; filter: drop-shadow(0 0 5px #ff6a48); }
+/* 양자택일 — 점선. 「여기서 갈린다」 */
+.tlink.xor { stroke: #6a5a44; stroke-width: 2; stroke-dasharray: 5 7; }
+.tlink.xor.lit { stroke: #6a5a44; stroke-width: 2; filter: none; }
+
+/* 심장 — 갈래가 모이는 곳. 남은 포인트를 여기 띄운다 */
+.thub {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: 62px; height: 62px; border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2px solid #6b5c3c; background: radial-gradient(circle, #2a2333, #15111c);
+  color: #8c8098;
 }
-.tnode:hover { border-color: #7a6a9a; background: rgba(48,40,66,.6); }
-.tnode .tn { font-size: 12px; color: #e6dcc8; }
-.tnode .td { font-size: 11px; color: #9a90a8; line-height: 1.35; }
-.tnode .tk { font-size: 14px; width: 16px; text-align: center; }
-/* 찍은 칸 */
-.tnode.on { border-color: #7fc47a; background: rgba(30,58,30,.45); cursor: default; }
-.tnode.on .tn { color: #a8e3a2; }
-/* 반대편을 찍어서 못 찍게 된 칸 — 지우지 않는다 */
-.tnode.off { opacity: .38; cursor: not-allowed; border-style: dashed; }
+.thub b { font-size: 17px; line-height: 1; }
+.thub span { font-size: 12px; font-weight: bold; margin-top: 1px; }
+.thub.has { border-color: #d8b45e; color: #f0d89a; box-shadow: 0 0 14px rgba(216,180,94,.45); }
+
+/* 갈래 이름 — 가지의 **바깥 끝**에 붙인다 */
+.tbranch {
+  position: absolute; transform: translate(-50%,-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  pointer-events: none; text-shadow: 0 0 8px #000, 0 1px 3px #000;
+}
+.tbranch i { font-style: normal; font-size: 15px; opacity: .9; }
+.tbranch span { font-size: 10px; letter-spacing: .5px; opacity: .8; white-space: nowrap; }
+
+/* 칸 — 네모(강화) · 마름모(택일) · 원(공용).
+   **모양이 다르면 설명 없이 종류가 읽힌다.** */
+.tn {
+  position: absolute; transform: translate(-50%,-50%);
+  width: 44px; height: 44px; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid #4a4159; border-radius: 5px;
+  background: linear-gradient(#241e30, #16121e);
+  color: #6f6580; font-size: 19px; line-height: 1;
+  pointer-events: auto;      /* #hud 가 none 이라 안 켜면 캔버스가 클릭을 먹는다 */
+  transition: box-shadow .12s, border-color .12s, color .12s;
+}
+.tn i { font-style: normal; }
+/* 마름모 — 몸통만 돌리고 글자는 되돌려 세운다 */
+.tn.gem { border-radius: 4px; transform: translate(-50%,-50%) rotate(45deg); width: 40px; height: 40px; }
+.tn.gem i { transform: rotate(-45deg); }
+.tn.gem u { transform: rotate(-45deg); }
+.tn.round { width: 36px; height: 36px; border-radius: 50%; font-size: 16px; }
+
+/* 찍은 칸 — 갈래 색으로 빛난다 */
+.tn.on {
+  border-color: var(--hue); color: var(--hue); cursor: default;
+  background: linear-gradient(#2e2740, #1d1728);
+  box-shadow: 0 0 12px -1px var(--hue), inset 0 0 8px -3px var(--hue);
+}
+/* 지금 찍을 수 있는 칸 — 가장자리가 숨 쉰다 */
+.tn.can { border-color: #8a7ba8; color: #c3b7d4; }
+.tn.can:hover { border-color: var(--hue); color: var(--hue); box-shadow: 0 0 12px -2px var(--hue); }
 /* 포인트가 없어 지금은 못 찍는 칸 */
-.tnode.poor { opacity: .62; cursor: not-allowed; }
-.tnode .texcl { font-size: 10px; color: #a98a4a; font-style: italic; }
+.tn.far { opacity: .5; cursor: not-allowed; }
+/* 반대편을 찍어서 못 찍게 된 칸 — **지우지 않는다.**
+   사라지면 선택을 했다는 사실 자체가 안 보인다 (docs/SKILL-TREE.md §1-4) */
+.tn.off { opacity: .42; cursor: not-allowed; border-style: dashed; }
+.tn u {
+  position: absolute; right: -5px; bottom: -6px; text-decoration: none;
+  font-size: 11px; color: #7fc47a; text-shadow: 0 0 4px #000;
+}
+.tn u.x { color: #c05a4a; }
+
+/* 설명칸 — 툴팁을 띄우면 창 밖으로 나간다. 아래에 고정한다 */
+.tinfo {
+  flex: none; margin-top: 6px; min-height: 56px;
+  padding: 7px 10px; border: 1px solid #3a3446; border-radius: 4px;
+  background: rgba(18,15,24,.72);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.tinfo b { font-size: 13px; color: #e6dcc8; }
+.tinfo span { font-size: 11px; color: #a79cb6; line-height: 1.4; }
+.tinfo em { font-size: 10px; color: #a98a4a; font-style: italic; }
+.tinfo em.no { color: #c07a6a; }
 /* 레벨업 알림 — 누를 것이 생겼다가 안 보이면 시스템이 없는 것과 같다 */
 #skillbar { position: relative; }
 #skillbar .skillDot {
