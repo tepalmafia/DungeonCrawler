@@ -24,6 +24,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
+import { CIRCUITS, SIGN } from '../game/chase-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
   color: 0x0a1622, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
@@ -163,22 +164,30 @@ function drawHeat(ctx, w, h, s) {
   ctx.fillText(s.cooling ? '냉각 열림' : '냉각 막힘', w * 0.45, h * 0.86);
 }
 
-/** 전력 배분 — 아직 안 도는 계통이지만 자리를 잡아 둔다 (PLAN §7-0 축①) */
-function drawPower(ctx, w, h) {
+/**
+ * 전력 배분 — **실제로 켠 회로**를 보여준다.
+ * 여기서 바꾸지는 못한다. 바꾸는 것은 통로의 차단기다 (PLAN §7-0).
+ */
+function drawPower(ctx, w, h, s) {
   bg(ctx, w, h);
   label(ctx, w, h, '전력 배분');
-  const rows = [['추진', 0.55], ['냉각', 0.30], ['센서', 0.15]];
   const f = Math.round(h * 0.1);
-  rows.forEach(([name, v], i) => {
+  CIRCUITS.forEach((c, i) => {
+    const on = s.power?.[c.key];
     const y = h * (0.3 + i * 0.22);
-    ctx.fillStyle = DIM;
+    ctx.fillStyle = on ? FG : 'rgba(127,212,255,.22)';
     ctx.font = `600 ${f}px system-ui, sans-serif`;
-    ctx.fillText(name, h * 0.07, y + f);
+    ctx.fillText(c.name, h * 0.07, y + f);
     const bx = h * 0.42, bw = w - bx - h * 0.07, bh = h * 0.13;
     ctx.strokeStyle = DIM;
     ctx.strokeRect(bx, y, bw, bh);
-    ctx.fillStyle = FG;
-    ctx.fillRect(bx, y, bw * v, bh);
+    if (on) { ctx.fillStyle = '#5fe0a8'; ctx.fillRect(bx, y, bw, bh); }
+    else {
+      // 꺼진 것은 **무엇을 못 하는지**를 적어 준다. 규칙을 외우게 하지 않는다
+      ctx.fillStyle = 'rgba(255,140,90,.75)';
+      ctx.font = `600 ${Math.round(h * 0.085)}px system-ui, sans-serif`;
+      ctx.fillText(c.off, bx + h * 0.05, y + bh * 0.85);
+    }
   });
 }
 
@@ -198,9 +207,34 @@ function drawShip(ctx, w, h, s) {
   });
 }
 
-/** 항로 — 목적지가 없어도 「어디쯤 왔나」는 있다 (PLAN §4) */
+/**
+ * 항로 — 평온할 때는 「어디쯤 왔나」, **추격 중에는 거리**다.
+ * 화면을 하나 더 만드는 대신 하나가 두 일을 한다 — 조종석은 이미 빽빽하고,
+ * 급할 때 봐야 할 것이 흩어져 있으면 못 읽는다.
+ */
 function drawCourse(ctx, w, h, s) {
   bg(ctx, w, h);
+  if (s.chase?.phase === 'chase') {
+    label(ctx, w, h, '거리');
+    if (!s.power?.sensor) {
+      ctx.fillStyle = 'rgba(255,140,90,.8)';
+      ctx.font = `700 ${Math.round(h * 0.16)}px system-ui, sans-serif`;
+      ctx.fillText('센서 꺼짐', h * 0.07, h * 0.62);
+      return;
+    }
+    const d = Math.max(0, Math.min(1, s.chase.dist / 100));
+    const pad = h * 0.07, bw = w - pad * 2, by = h * 0.32, bh = h * 0.22;
+    ctx.strokeStyle = DIM; ctx.strokeRect(pad, by, bw, bh);
+    ctx.fillStyle = d > 0.6 ? '#5fe0a8' : d > 0.3 ? '#ffd27a' : '#ff6a4a';
+    ctx.fillRect(pad, by, bw * d, bh);
+    ctx.fillStyle = FG;
+    ctx.font = `700 ${Math.round(h * 0.2)}px ui-monospace, monospace`;
+    ctx.fillText(String(Math.round(s.chase.dist)), pad, h * 0.92);
+    ctx.font = `600 ${Math.round(h * 0.1)}px system-ui, sans-serif`;
+    ctx.fillStyle = DIM;
+    ctx.fillText('100 이면 뿌리친다', w * 0.34, h * 0.92);
+    return;
+  }
   label(ctx, w, h, '항로');
   ctx.strokeStyle = DIM;
   ctx.beginPath(); ctx.moveTo(h * 0.07, h * 0.62); ctx.lineTo(w - h * 0.07, h * 0.62); ctx.stroke();
@@ -224,18 +258,39 @@ function drawCourse(ctx, w, h, s) {
   }
 }
 
-/** 자국 — 얼마나 눈에 띄나. 판단의 근거라 숫자로 보여준다 (PLAN §6 ★) */
+/**
+ * 자국 — 얼마나 눈에 띄나. **판단의 근거라 숫자로 보여준다** (PLAN §6 ★).
+ *
+ * 다만 **센서를 끄면 못 본다.** 그게 「센서를 끈다」의 진짜 대가다 —
+ * 자국이 줄어드는 게 아니라 **내가 안 보이게 된다.**
+ */
 function drawSign(ctx, w, h, s) {
   bg(ctx, w, h);
   label(ctx, w, h, '자국');
-  const v = Math.min(1, 0.18 + (s.heat / 100) * 0.5);
-  const cx = w / 2, cy = h * 0.62, r = Math.min(w, h) * 0.3;
+  const cx = w / 2, cy = h * 0.6, r = Math.min(w, h) * 0.3;
   ctx.strokeStyle = DIM;
-  for (let i = 1; i <= 3; i++) {
-    ctx.beginPath(); ctx.arc(cx, cy, (r * i) / 3, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(cx, cy, (r * i) / 3, 0, Math.PI * 2); ctx.stroke(); }
+
+  if (!s.power?.sensor) {
+    ctx.fillStyle = 'rgba(255,140,90,.8)';
+    ctx.font = `700 ${Math.round(h * 0.14)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('센서 꺼짐', cx, cy + h * 0.05);
+    ctx.textAlign = 'left';
+    return;
   }
-  ctx.fillStyle = v > 0.5 ? 'rgba(255,120,90,.5)' : 'rgba(95,224,168,.4)';
+  const v = Math.min(1, (s.chase?.sign ?? 0) / SIGN.max);
+  const over = (s.chase?.sign ?? 0) > SIGN.contactAt;
+  ctx.fillStyle = over ? 'rgba(255,110,80,.55)' : 'rgba(95,224,168,.42)';
   ctx.beginPath(); ctx.arc(cx, cy, r * v, 0, Math.PI * 2); ctx.fill();
+  // 접촉 기준선 — 이 안쪽이면 안전하다는 것이 눈에 보여야 한다
+  ctx.strokeStyle = 'rgba(255,140,90,.9)';
+  ctx.beginPath(); ctx.arc(cx, cy, r * (SIGN.contactAt / SIGN.max), 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = over ? '#ffb0a0' : FG;
+  ctx.font = `700 ${Math.round(h * 0.16)}px ui-monospace, monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(String(Math.round(s.chase?.sign ?? 0)), cx, h * 0.96);
+  ctx.textAlign = 'left';
 }
 
 /** 잡다한 기록 — 배가 「돌아가고 있다」는 느낌은 이런 데서 온다 */

@@ -26,9 +26,10 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { surface } from '../core/assets.js';
+import { CIRCUITS } from '../game/chase-table.js';
 import { buildCockpit, buildOutside, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
-  ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign,
+  ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign, breakerPanel,
 } from './kit.js';
 
 const H = 2.7;          // 천장 높이
@@ -271,6 +272,18 @@ export function buildShip(scene) {
   }
   conduit(ship, 'z', 0.34, spine.z0, spine.z1, H - 0.16, CZ.light);
 
+  // ★ 차단기 — **전력 배분을 여기까지 걸어와서 손으로 한다** (PLAN §7-0 축①).
+  //   조종석 화면에 슬라이더를 띄우면 앉아서 다 되고, 그러면 방을 오가는
+  //   긴장이 통째로 사라진다. 곁방이 없는 벽(z 2.4~4.2)에 붙였다 —
+  //   조종석에서도 기관실에서도 한참 걸어야 하는 자리다.
+  const breakers = breakerPanel(ship, spine.x0 + 0.06, 3.3, Math.PI / 2, CIRCUITS, CZ.accent);
+  sign(ship, '배전', spine.x0 + 0.1, 2.28, 3.3, Math.PI / 2, CZ.accent, 0.4);
+
+  // 경보등 — 추격이 붙으면 통로가 붉어진다. **어느 방에 있든 보여야** 한다
+  const alarm = new THREE.PointLight(0xff3020, 0, 22, 2);
+  alarm.position.set(0, H - 0.25, 3.4);
+  scene.add(alarm);
+
   // ── 관측실 — 밖을 보는 방 ────────────────────────────────
   {
     const r = R.observ, Z = ZONE.observ;
@@ -463,5 +476,5 @@ export function buildShip(scene) {
   lampCore.position.set(0, 1.35, CORE_Z);
   scene.add(lampCore);
 
-  return { cock, outside, valve, wheel, lampEngine, lampCore, matEngine, coreGlow };
+  return { cock, outside, valve, wheel, breakers, alarm, lampEngine, lampCore, matEngine, coreGlow };
 }

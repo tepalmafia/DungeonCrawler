@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=10">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js"
@@ -20,13 +20,20 @@
      (docs/space/PLAN.md §5-2 손이 곧 상태창) -->
 <div id="cross"></div>
 
+<!-- 잠깐 뜨는 글자. 「접촉」·「뿌리쳤습니다」 같은 **일어난 일**만 알린다.
+     상태(열·자국·거리)는 콘솔 화면이 맡는다 — UI 를 늘리지 않는다 -->
+<div id="hud" hidden></div>
+
 <div id="hint">
-  <b>스페이스워</b> — 1단계
+  <b>스페이스워</b> — 2단계 · 추격
   <p>화면을 눌러 시작합니다. <b>WASD</b> 로 걷고 마우스로 봅니다.</p>
-  <p>기관실 뒤쪽 <b>붉은 밸브</b>를 보고 <b>마우스 왼쪽을 잡고</b> 끝까지 돌리면
-     냉각이 열립니다. 놓으면 되돌아옵니다.</p>
+  <p><b>통로 왼쪽 차단기</b>를 눌러 전력을 옮깁니다 — 추진·냉각·센서 중
+     <b>둘만</b> 켜집니다.</p>
+  <p><b>기관실 밸브</b>는 마우스 왼쪽을 <b>잡고</b> 끝까지 돌립니다.
+     냉각 회로만으로는 절반밖에 안 잡힙니다.</p>
+  <p>자국이 높으면 무언가 따라붙습니다. 뿌리치려면 <b>거리 100</b>.</p>
 </div>
 
-<script type="module" src="js/main.js?v=5"></script>
+<script type="module" src="js/main.js?v=10"></script>
 </body>
 </html>
