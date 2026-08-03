@@ -32,7 +32,7 @@ import { spawnBoss, bossNameFor } from './game/boss.js';
 import { SkillTree } from './game/skilltree.js';
 import { DROP, COIN, DEATH, POTION_DROP } from './game/economy-table.js';
 import { saveGame, loadGame, applySave, clearSave, saveInfo } from './game/save.js';
-import { tierUnlock } from './game/economy-table.js';
+import { tierUnlock, FLOOR_FILTER } from './game/economy-table.js';
 import { fieldAt } from './game/skills.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
@@ -43,11 +43,15 @@ import { AI } from './game/ai.js';
 
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
+import { FLOORS_PER_RUN } from './world/floors.js';
 
 export const VERSION = 5;
-// 아홉 층 세 막 (docs/FLOORS.md §2). world/floors.js 의 표가 아홉 칸이므로
+// 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
-const MAX_FLOOR = 9;
+// **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
+// 게임만 아홉 층을 돌려고 했다 (없는 층은 마지막 항목으로 고정되므로
+// 6층을 세 번 반복한다 — 오류는 안 난다).
+const MAX_FLOOR = FLOORS_PER_RUN;
 // 카메라 거리는 줌으로 바뀐다. 피치는 고정 — 각도까지 흔들면 쿼터뷰 실루엣이 무너진다.
 const CAM_DIST_MIN = 10, CAM_DIST_MAX = 34, CAM_DIST_DEFAULT = 19;
 const CAM_PITCH = 52 * Math.PI / 180;
@@ -809,9 +813,19 @@ function updateAutoAttack(dt) {
 function updatePickups(dt) {
   const p = G.player;
   const showLabels = input.alt || input.isDown('AltLeft') || input.isDown('AltRight');
+  // ── 바닥 필터 ──────────────────────────────────────────────
+  //
+  // 드랍을 올린 만큼 화면이 이름표로 찬다. 층이 깊어지면 하한도 올라가서
+  // 5층에서 일반 장비 이름은 안 뜬다 (economy-table FLOOR_FILTER).
+  //
+  // **감추는 것은 이름표뿐이다.** 아이템은 그대로 바닥에 있고 Alt 를 누르면
+  // 다 보인다 — 지워 버리면 「혹시」가 없어져서 줍는 재미까지 사라진다.
+  const minRar = FLOOR_FILTER.at(G.floorNo, G.tier);
   for (let i = G.drops.length - 1; i >= 0; i--) {
     const d = G.drops[i];
-    d.update(G.time, dt, showLabels || d === G.pickupTarget);
+    const worth = d.item.kind === 'coin' || d.item.kind === 'lantern'
+      || (d.item.rarity ?? 0) >= minRar;
+    d.update(G.time, dt, showLabels || d === G.pickupTarget || worth);
     if (p.dead) continue;
     if (Math.hypot(d.pos.x - p.pos.x, d.pos.z - p.pos.z) < 1.15) {
       if (d.item.kind === 'coin') {

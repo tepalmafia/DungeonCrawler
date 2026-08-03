@@ -286,6 +286,30 @@ export class UI {
       if (!bag.length) {
         sl.innerHTML = '<p class="shopline">팔 물건이 없다.</p>';
       } else {
+        // 일괄 판매 — 드랍이 3배가 되면 하나씩 파는 건 노동이다.
+        // **낀 것보다 나쁜 것만** 판다 (게임의 비교 화살표와 같은 함수).
+        //
+        // 개수를 미리 보여 주려고 sellBulk 를 한 번 불렀다가 **상점을 여는
+        // 것만으로 장비가 팔렸다.** 세는 것과 파는 것은 다른 일이므로
+        // 세는 쪽을 따로 둔다.
+        const doomed = p.bag.filter((it) => it.slot && it.kind !== 'lantern'
+          && (it.rarity ?? 0) <= 1 && power(it) <= power(p.equipped[it.slot]));
+        const worth = doomed.reduce((a, it) => a + Math.max(1, Math.round(priceOf(it) * SELL_MULT)), 0);
+        const btn = document.createElement('button');
+        btn.className = 'bulksell';
+        btn.type = 'button';
+        btn.disabled = !doomed.length;
+        btn.textContent = doomed.length
+          ? `안 쓰는 일반·마법 ${doomed.length}개 팔기 ◈ +${worth}`
+          : '팔 만한 일반·마법이 없다';
+        btn.onclick = () => {
+          const r = shop.sellBulk(this.G, 1);
+          if (!r.n) { this.toast('팔 만한 것이 없다', '#8d8577'); return; }
+          this.toast(`${r.n}개 판매 ◈ +${r.got}`, '#d8b45e');
+          this.G.inv._hideTooltip();
+          this.renderShop();
+        };
+        sl.appendChild(btn);
         for (const it of bag) {
           const got = Math.max(1, Math.round(priceOf(it) * SELL_MULT));
           const row = this._srow(it.icon, it.name, got, RARITIES[it.rarity], { item: it });
