@@ -13,7 +13,7 @@ import { FX } from './core/fx.js';
 import * as Audio from './core/audio.js';
 import { Bot } from './core/bot.js';
 import { Metrics } from './core/metrics.js';
-import { Post } from './core/post.js';
+import { Post, DOT } from './core/post.js';
 
 import { generate, gridToWorld, worldToGrid, CELL } from './world/dungeon.js';
 import { Level } from './world/level.js';
@@ -45,7 +45,7 @@ import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 5;
+export const VERSION = 6;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -74,13 +74,20 @@ const params = {
 const canvas = document.getElementById('view');
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  // antialias 는 **끈다.** 도트 그림체라 네모의 가장자리가 살아 있어야 한다 —
+  // 켜 두면 작게 그리는 의미가 사라지고 흐릿한 저해상도 화면이 될 뿐이다
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 } catch (err) {
   document.getElementById('stage').hidden = true;
   document.getElementById('nowebgl').hidden = false;
   throw err;
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+// **도트 그림체 — 작게 그려서 확대한다.** (core/post.js 의 DOT 주석 참조)
+// 예전에는 min(dpr, 2) 로 최대한 크게 그렸다. 지금은 반대다 — 픽셀이 1/9 로
+// 줄어 후처리까지 전부 싸지고, 확대는 CSS 의 image-rendering:pixelated 가 한다.
+// dpr 은 곱하지 않는다. 곱하면 고해상도 기기에서만 도트가 잘아져서 **기기마다
+// 그림체가 달라진다** — 도트 크기는 화면 크기가 아니라 그림체의 일부다.
+renderer.setPixelRatio(DOT.scale);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;   // r185에서 PCFSoft 는 폐기 예정
 renderer.toneMapping = THREE.ACESFilmicToneMapping;

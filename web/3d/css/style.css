@@ -27,7 +27,14 @@ html, body {
 }
 
 #stage { position: fixed; inset: 0; }
-#view { display: block; width: 100%; height: 100%; cursor: crosshair; }
+/* 도트 그림체 — 캔버스는 화면의 1/3 크기로 그려진다(main.js 의 setPixelRatio).
+   확대할 때 브라우저가 뭉개지 않고 네모를 유지해야 도트가 도트로 보인다.
+   이 한 줄이 빠지면 그냥 **흐릿한 저해상도 화면**이 된다. */
+#view {
+  display: block; width: 100%; height: 100%; cursor: crosshair;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;   /* 옛 파이어폭스 */
+}
 
 /* 포스트프로세싱 없이 비네트만 CSS로 — 시선을 중앙으로 모은다 */
 #vignette {

@@ -17,6 +17,7 @@
 // 된다 — 그게 loft 다. 링 네댓 개면 위의 곡선이 전부 나온다.
 
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
  * 단면 쌓기.
@@ -116,3 +117,34 @@ export function snout(len, profile, opt = {}) {
 /** 활 — 테두리·갈비·뿔 */
 export const arc = (r, t, span = Math.PI, seg = 14, sides = 6) =>
   new THREE.TorusGeometry(r, t, sides, seg, span);
+
+/**
+ * 깨진 돌덩이 — **골렘 전용.**
+ *
+ * 정이십면체를 꼭짓점 단위로 밀어 찌그러뜨린다. 살과 갑옷에 쓰면
+ * 「관절에 매단 풍선」이 되지만(그래서 다 걷어냈다), 바위한테는 이게 맞다.
+ * 골렘은 원래 「깎인 것」이고 단면이 매끈하면 안 되기 때문이다.
+ *
+ * @param seed 없으면 반지름이 같은 덩어리가 **모양까지 똑같아진다** —
+ *             팔다리 여섯 개가 복사본이 되어 찌그러뜨린 보람이 사라진다
+ */
+export function rock(r, jag = 0.3, detail = 1, seed = 0) {
+  const g = mergeVertices(new THREE.IcosahedronGeometry(r, detail));
+  const p = g.attributes.position;
+  const seen = new Map();
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+    let k = seen.get(key);
+    if (k === undefined) {
+      // 결정적 잡음 — Math.random 이면 같은 몬스터가 매번 다른 모양이 된다.
+      // 그건 다양성이 아니라 **버그처럼 보이는 흔들림**이다
+      const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 19.37) * 43758.5453;
+      k = 1 + (s - Math.floor(s) - 0.5) * jag * 2;
+      seen.set(key, k);
+    }
+    p.setXYZ(i, x * k, y * k * 0.94, z * k);
+  }
+  g.computeVertexNormals();
+  return g;
+}

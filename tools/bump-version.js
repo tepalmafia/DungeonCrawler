@@ -16,11 +16,18 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const MAIN = path.join(ROOT, 'web/js/main.js');
-const HTML = path.join(ROOT, 'web/index.html');
+// ★ **어느 게임인가** — 이 도구는 원래 옛 2D 게임(web/)용이었다. 지금 만드는
+//   것은 web/3d/ 라서, 아무 생각 없이 돌리면 **엉뚱한 파일의 버전이 올라가고
+//   3D 는 그대로 남는다.** 실제로 한 번 그랬다(로그에는 성공이라고 찍힌다).
+//   기본을 3d 로 두고, 옛 게임은 `--legacy` 로만 만진다.
+const LEGACY = process.argv.includes('--legacy');
+const DIR = LEGACY ? 'web' : 'web/3d';
+const MAIN = path.join(ROOT, DIR, 'js/main.js');
+const HTML = path.join(ROOT, DIR, 'index.html');
 
 let main = fs.readFileSync(MAIN, 'utf8');
-const cur = parseInt((main.match(/const GAME_VERSION = (\d+)/) || [, '0'])[1], 10);
+const RE = LEGACY ? /const GAME_VERSION = (\d+)/ : /export const VERSION = (\d+)/;
+const cur = parseInt((main.match(RE) || [, '0'])[1], 10);
 const want = parseInt(process.argv[2] || String(cur), 10);
 if (!Number.isFinite(want) || want <= 0) {
   console.error('사용법: node tools/bump-version.js [버전번호]');
@@ -28,7 +35,7 @@ if (!Number.isFinite(want) || want <= 0) {
 }
 
 if (want !== cur) {
-  main = main.replace(/const GAME_VERSION = \d+/, `const GAME_VERSION = ${want}`);
+  main = main.replace(RE, LEGACY ? `const GAME_VERSION = ${want}` : `export const VERSION = ${want}`);
   fs.writeFileSync(MAIN, main);
 }
 
