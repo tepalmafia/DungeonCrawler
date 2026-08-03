@@ -77,62 +77,78 @@ function core(parent, color, r, x, y, z) {
 // 던전은 어두워서 대부분 역광 실루엣으로만 읽힌다 — 그 셋만 지키면
 // 멀리서도 「내 캐릭터」로 구분된다. 거기에 하나 더: **얼굴이 보인다.**
 export function buildKnight() {
-  const skin = M(0xc99a72, { roughness: 0.8, metalness: 0 });
-  const hair = M(0x2b1f18, { roughness: 0.95, metalness: 0 });
-  const steel = M(0x8c96ac, { metalness: 0.85, roughness: 0.32 });
-  const dark = M(0x2b2936, { metalness: 0.4, roughness: 0.65 });
-  const gold = M(0xc0a054, { metalness: 0.9, roughness: 0.28 });
-  const cloth = M(0x9e2f3a, { roughness: 0.98, metalness: 0.02 });
-  const leather = M(0x54402c, { roughness: 0.9, metalness: 0.04 });
-  const bladeMat = M(0xd8dce6, { metalness: 0.92, roughness: 0.16 });
+  // 색은 참고본(어둠의 던전)을 따른다 — **은백색 판금 + 청보라 천 + 금테.**
+  // 예전 붉은 망토는 던전 바닥·횃불과 같은 계열이라 배경에 묻혔다.
+  // 청보라는 이 던전에 **없는 색**이라 어디에 서 있어도 주인공이 먼저 보인다.
+  const skin = M(0xd8ae8a, { roughness: 0.82, metalness: 0 });
+  const hair = M(0x8a6a3c, { roughness: 0.95, metalness: 0 });
+  const steel = M(0xc4c9d6, { metalness: 0.82, roughness: 0.30 });
+  const dark = M(0x3a3a5c, { metalness: 0.35, roughness: 0.62 });
+  const gold = M(0xd8b24c, { metalness: 0.9, roughness: 0.26 });
+  const cloth = M(0x4a4a8c, { roughness: 0.96, metalness: 0.02 });
+  const leather = M(0x5a4630, { roughness: 0.9, metalness: 0.04 });
+  const bladeMat = M(0xe2e6ee, { metalness: 0.92, roughness: 0.14 });
 
   // hipY 는 **허벅지 + 정강이 + 발목 높이**여야 한다. 처음에 허벅지+정강이만
   // 더해 놨더니 발목까지 바닥에 파묻혀 부츠가 잘려 나왔다.
+  // ── 비율 ── **머리 다섯 개 반 키.** 여덟 개가 아니다.
+  //
+  // 처음엔 실사 영웅 비율(8 등신)로 잡았다. 정지 컷에서는 멋있었는데
+  // **게임 화면에서 캐릭터는 90 픽셀**이고, 거기서 8 등신은 머리가 11 픽셀이라
+  // 그냥 막대기가 된다. 스프라이트 액션 RPG 가 전부 5~6 등신인 이유가 그거다 —
+  // 작게 줄여도 머리·어깨·무기가 각각 읽히게 하려면 그 비율이어야 한다.
+  //
+  // 다리를 20% 줄이고 어깨를 넓히고 머리를 키운다. 키(1.6)는 게임 격자에
+  // 맞춰 유지하고 **안에서 비율만 바꾼다** — 충돌·카메라는 그대로여야 한다.
   const rig = skeleton({
-    hipY: 0.98, legX: 0.15, thigh: 0.44, shin: 0.42,
-    spineY: 0.04, chestY: 0.24, neckY: 0.22, headY: 0.1,
-    armX: 0.29, armY: 0.12, upper: 0.32, fore: 0.30,
+    hipY: 0.84, legX: 0.16, thigh: 0.35, shin: 0.33,
+    spineY: 0.05, chestY: 0.29, neckY: 0.13, headY: 0.05,
+    armX: 0.33, armY: 0.13, upper: 0.28, fore: 0.26,
   });
+  // 머리는 통째로 키운다 — 두개골·투구·머리카락·눈이 다 따라온다.
+  // 부위마다 숫자를 고치는 것보다 안 틀리고, 비율만 바꾸는 것이 목적이다
+  rig.head.scale.setScalar(1.42);
 
   // ── 다리 ──
   // 허벅지: 사타구니 쪽이 제일 굵고 무릎에서 2/3 로 준다
   // 종아리: **위에서 1/4 지점이 최대.** 가운데를 최대로 하면 소시지가 된다
   for (const [th, sh, ft] of [[rig.thighL, rig.shinL, rig.footL], [rig.thighR, rig.shinR, rig.footR]]) {
-    new Part(th).add(limb(0.44, [
-      [0.00, 0.235, 0.245], [0.16, 0.240, 0.250], [0.62, 0.190, 0.205], [1.00, 0.160, 0.175],
+    // 짧아진 만큼 **굵어진다.** 길이만 줄이면 난쟁이가 아니라 잘린 사람이 된다
+    new Part(th).add(limb(0.35, [
+      [0.00, 0.275, 0.285], [0.16, 0.280, 0.290], [0.62, 0.225, 0.240], [1.00, 0.195, 0.210],
     ], { round: 2.3 }), dark)
-      .add(loft([{ y: -0.30, w: 0.20, d: 0.115 }, { y: -0.16, w: 0.235, d: 0.13 }, { y: -0.02, w: 0.215, d: 0.12 }],
-        { round: 3.2 }), steel, { z: 0.075 })        // 넓적다리 판
+      .add(loft([{ y: -0.24, w: 0.235, d: 0.135 }, { y: -0.13, w: 0.275, d: 0.150 }, { y: -0.02, w: 0.250, d: 0.140 }],
+        { round: 3.2 }), steel, { z: 0.088 })        // 넓적다리 판
       .finish();
-    new Part(sh).add(limb(0.42, [
-      [0.00, 0.170, 0.185], [0.24, 0.190, 0.205], [0.70, 0.120, 0.135], [1.00, 0.098, 0.115],
+    new Part(sh).add(limb(0.33, [
+      [0.00, 0.205, 0.220], [0.24, 0.225, 0.240], [0.70, 0.150, 0.165], [1.00, 0.125, 0.142],
     ], { round: 2.3 }), dark)
-      .add(loft([{ y: -0.30, w: 0.135, d: 0.10 }, { y: -0.16, w: 0.175, d: 0.12 }, { y: -0.01, w: 0.185, d: 0.125 }],
-        { round: 3.4 }), steel, { z: 0.055 })        // 정강이받이
-      .add(loft([{ y: -0.06, w: 0.145, d: 0.10 }, { y: 0.01, w: 0.185, d: 0.13 }, { y: 0.06, w: 0.155, d: 0.11 }],
-        { round: 3.0 }), steel, { z: 0.03 })         // 무릎덮개
+      .add(loft([{ y: -0.235, w: 0.160, d: 0.115 }, { y: -0.125, w: 0.205, d: 0.140 }, { y: -0.01, w: 0.218, d: 0.148 }],
+        { round: 3.4 }), steel, { z: 0.065 })        // 정강이받이
+      .add(loft([{ y: -0.05, w: 0.175, d: 0.120 }, { y: 0.01, w: 0.220, d: 0.155 }, { y: 0.06, w: 0.185, d: 0.130 }],
+        { round: 3.0 }), steel, { z: 0.035 })        // 무릎덮개
       .finish();
-    // 발 — 앞으로 뻗고 앞코가 좁다. 네모난 발은 실루엣을 뭉갠다
+    // 발 — **크다.** 스프라이트 비율에서 발이 작으면 캐릭터가 넘어질 것처럼 보인다
     new Part(ft).add(snout(0.30, [
-      [0.00, 0.135, 0.115], [0.30, 0.150, 0.135], [0.80, 0.115, 0.095], [1.00, 0.060, 0.055],
-    ], { round: 2.8 }), steel, { y: -0.055, z: -0.06 }).finish();
+      [0.00, 0.175, 0.140], [0.30, 0.195, 0.165], [0.80, 0.150, 0.115], [1.00, 0.080, 0.065],
+    ], { round: 2.8 }), steel, { y: -0.062, z: -0.06 }).finish();
   }
 
   // ── 골반 ── 위는 허리로 좁아지고 아래는 다시 벌어진다
   new Part(rig.hips)
     .add(loft([
-      { y: -0.16, w: 0.29, d: 0.215 }, { y: -0.07, w: 0.345, d: 0.245 },
-      { y: 0.02, w: 0.325, d: 0.225 }, { y: 0.07, w: 0.300, d: 0.205 },
+      { y: -0.15, w: 0.335, d: 0.250 }, { y: -0.07, w: 0.395, d: 0.285 },
+      { y: 0.02, w: 0.375, d: 0.262 }, { y: 0.07, w: 0.345, d: 0.240 },
     ], { round: 2.9 }), dark)
-    .add(arc(0.175, 0.022, Math.PI * 2, 18), gold, { y: 0.035, rx: Math.PI / 2, sz: 0.78 })
-    .add(tatter(0.17, 0.32), cloth, { y: 0.02, z: 0.135 })
+    .add(arc(0.200, 0.024, Math.PI * 2, 18), gold, { y: 0.035, rx: Math.PI / 2, sz: 0.78 })
+    .add(tatter(0.19, 0.30), cloth, { y: 0.02, z: 0.155 })
     .finish();
 
   // ── 허리 ── **여기가 제일 가늘다.** V 자의 아래 꼭짓점
   new Part(rig.spine)
     .add(loft([
-      { y: -0.02, w: 0.310, d: 0.215 }, { y: 0.09, w: 0.295, d: 0.200 },
-      { y: 0.24, w: 0.360, d: 0.230 },
+      { y: -0.02, w: 0.360, d: 0.250 }, { y: 0.08, w: 0.345, d: 0.235 },
+      { y: 0.26, w: 0.420, d: 0.268 },
     ], { round: 2.9 }), steel)
     .finish();
 
@@ -143,58 +159,59 @@ export function buildKnight() {
   // 골격과 맞물리는 치수다.
   const ch = new Part(rig.chest)
     .add(loft([
-      { y: 0.00, w: 0.360, d: 0.230 }, { y: 0.07, w: 0.455, d: 0.265 },
-      { y: 0.135, w: 0.495, d: 0.265 }, { y: 0.185, w: 0.430, d: 0.235 },
-      { y: 0.220, w: 0.290, d: 0.190 },
+      { y: 0.00, w: 0.420, d: 0.268 }, { y: 0.09, w: 0.530, d: 0.305 },
+      { y: 0.170, w: 0.575, d: 0.305 }, { y: 0.235, w: 0.500, d: 0.272 },
+      { y: 0.275, w: 0.340, d: 0.220 },
     ], { round: 3.0 }), steel)
     // 가슴받이 — 몸통보다 살짝 앞에 덧댄 판. 두 겹이라야 「입은 것」이다
     .add(loft([
-      { y: 0.01, w: 0.230, d: 0.09 }, { y: 0.09, w: 0.320, d: 0.10 }, { y: 0.165, w: 0.300, d: 0.09 },
-    ], { round: 3.4 }), steel, { z: 0.10 })
-    .add(slab(0.10, 0.15, 0.03, 0.02), gold, { y: 0.10, z: 0.165 })
-    .add(arc(0.145, 0.015, Math.PI, 14), gold, { y: 0.195, z: 0.055, rx: Math.PI / 2 });
+      { y: 0.01, w: 0.265, d: 0.105 }, { y: 0.11, w: 0.370, d: 0.115 }, { y: 0.205, w: 0.345, d: 0.105 },
+    ], { round: 3.4 }), steel, { z: 0.118 })
+    .add(slab(0.12, 0.17, 0.03, 0.02), gold, { y: 0.12, z: 0.190 })
+    .add(arc(0.168, 0.017, Math.PI, 14), gold, { y: 0.245, z: 0.065, rx: Math.PI / 2 });
   for (let i = 0; i < 3; i++) {                 // 망토 — 세 장이면 충분하다
     const t = i - 1;
-    ch.add(tatter(0.21, 0.60 - Math.abs(t) * 0.10), cloth,
-      { x: t * 0.185, y: 0.10, z: -0.14, rx: 0.12, rz: -t * 0.14 });
+    ch.add(tatter(0.24, 0.56 - Math.abs(t) * 0.09), cloth,
+      { x: t * 0.215, y: 0.13, z: -0.163, rx: 0.12, rz: -t * 0.14 });
   }
   ch.finish();
 
   // ── 팔 ── 삼각근에서 팔꿈치로 좁아지고, 팔뚝은 **팔꿈치 바로 아래**가 굵다
   for (const [g, s] of [[rig.armL, 1], [rig.armR, -1]]) {
     new Part(g)
-      .add(limb(0.32, [
-        [0.00, 0.175, 0.180], [0.18, 0.190, 0.190], [0.70, 0.140, 0.145], [1.00, 0.128, 0.135],
+      .add(limb(0.28, [
+        [0.00, 0.205, 0.210], [0.18, 0.222, 0.222], [0.70, 0.168, 0.172], [1.00, 0.152, 0.160],
       ], { round: 2.3 }), dark)
-      // 어깨 갑주 — 위가 넓고 아래로 접힌 그릇 모양. 실루엣의 핵심
+      // 어깨 갑주 — **여기를 제일 키웠다.** 스프라이트 캐릭터가 작게 줄어도
+      // 「기사」로 읽히는 것은 어깨의 둥근 덩어리 둘 덕분이다
       .add(loft([
-        { y: -0.145, w: 0.245, d: 0.245 }, { y: -0.06, w: 0.310, d: 0.300 },
-        { y: 0.035, w: 0.300, d: 0.290 }, { y: 0.085, w: 0.215, d: 0.210 },
+        { y: -0.150, w: 0.300, d: 0.300 }, { y: -0.055, w: 0.385, d: 0.372 },
+        { y: 0.045, w: 0.372, d: 0.360 }, { y: 0.098, w: 0.265, d: 0.258 },
       ], { round: 2.6, capB: false }), steel, { rz: s * 0.15 })
-      .add(arc(0.155, 0.020, Math.PI * 1.4, 16), gold, { y: -0.055, rx: Math.PI / 2, rz: s * 0.15 })
-      .add(spike(0.034, 0.13, 5), gold, { x: s * 0.15, y: 0.03, rz: s * 0.95 })
+      .add(arc(0.192, 0.023, Math.PI * 1.4, 16), gold, { y: -0.050, rx: Math.PI / 2, rz: s * 0.15 })
+      .add(spike(0.040, 0.15, 5), gold, { x: s * 0.18, y: 0.035, rz: s * 0.95 })
       .finish();
   }
   for (const g of [rig.foreL, rig.foreR]) {
     new Part(g)
-      .add(limb(0.30, [
-        [0.00, 0.135, 0.145], [0.22, 0.152, 0.158], [0.75, 0.090, 0.098], [1.00, 0.078, 0.085],
+      .add(limb(0.26, [
+        [0.00, 0.160, 0.170], [0.22, 0.180, 0.188], [0.75, 0.110, 0.118], [1.00, 0.096, 0.104],
       ], { round: 2.3 }), dark)
-      .add(loft([{ y: -0.26, w: 0.100, d: 0.075 }, { y: -0.15, w: 0.150, d: 0.105 }, { y: -0.03, w: 0.165, d: 0.115 }],
-        { round: 3.2 }), steel, { z: 0.035 })       // 팔뚝받이
+      .add(loft([{ y: -0.225, w: 0.120, d: 0.090 }, { y: -0.13, w: 0.180, d: 0.125 }, { y: -0.03, w: 0.198, d: 0.138 }],
+        { round: 3.2 }), steel, { z: 0.042 })       // 팔뚝받이
       .finish();
   }
   // 손 — 주먹 하나. 손가락은 이 크기에서 안 보인다
   for (const g of [rig.handL, rig.handR]) {
-    new Part(g).add(limb(0.14, [
-      [0.00, 0.105, 0.115], [0.45, 0.125, 0.135], [1.00, 0.100, 0.110],
+    new Part(g).add(limb(0.15, [
+      [0.00, 0.135, 0.148], [0.45, 0.162, 0.175], [1.00, 0.130, 0.142],
     ], { round: 3.0 }), steel).finish();
   }
 
   // ── 목 ── 살이 보여야 머리와 몸이 이어진다. 뒤는 목가리개로 가린다
   new Part(rig.neck)
-    .add(limb(0.12, [[0, 0.115, 0.115], [1, 0.105, 0.105]], { round: 2.2 }), skin)
-    .add(arc(0.108, 0.018, Math.PI * 1.25, 14), steel, { y: -0.045, rx: Math.PI / 2, ry: Math.PI })
+    .add(limb(0.10, [[0, 0.140, 0.140], [1, 0.128, 0.128]], { round: 2.2 }), skin)
+    .add(arc(0.132, 0.022, Math.PI * 1.25, 14), steel, { y: -0.040, rx: Math.PI / 2, ry: Math.PI })
     .finish();
 
   // ── 머리 ── 턱끝 → 턱 → 광대 → 관자 → 정수리. **다섯 단이면 두개골이 된다**
@@ -420,6 +437,7 @@ export function buildSkeleton(opt = {}) {
   // ── 두개골 ── 각기둥 두 개였을 때는 어느 각도에서도 **양동이**였다.
   // 머리통은 위로 좁아지고 뒤통수가 튀어나오고, 눈구멍은 **깊어야** 한다
   new Part(rig.neck).add(limb(0.085, [[0, 0.042, 0.042], [1, 0.036, 0.036]], { round: 2.2, seg: 8 }), bone).finish();
+  rig.head.scale.setScalar(1.34);          // 스프라이트 비율
   const skull = new Part(rig.head)
     .add(loft([
       { y: -0.075, w: 0.120, d: 0.145, cz: 0.014 },
@@ -469,9 +487,12 @@ export function buildSkeleton(opt = {}) {
 //
 // 좌우 비대칭은 남긴다. 오른팔이 굵고 길다 — 값이 싸고 효과가 크다.
 export function buildGhoul() {
-  const skin = M(0x64714b, { roughness: 0.95, metalness: 0 });
-  const belly = M(0x8e9769, { roughness: 0.96, metalness: 0 });
-  const claw = M(0xd4c8a8, { roughness: 0.45, metalness: 0.15 });
+  // ── 색 ── **초록이 아니다.** 참고본의 구울은 창백한 회갈색 시체다.
+  // 초록은 오크의 색이고, 둘 다 초록이면 같은 종류로 보인다 —
+  // 몬스터를 색으로 구분하는 것이 형태로 구분하는 것보다 훨씬 빠르다.
+  const skin = M(0xb8ab92, { roughness: 0.96, metalness: 0 });
+  const belly = M(0xd2c7ae, { roughness: 0.97, metalness: 0 });
+  const claw = M(0x8a6a5c, { roughness: 0.5, metalness: 0.1 });
 
   const rig = skeleton({
     hipY: 0.62, legX: 0.145, thigh: 0.30, shin: 0.27,
@@ -482,6 +503,7 @@ export function buildGhoul() {
   rig.spine.rotation.x = 0.42; rig.chest.rotation.x = 0.18;
   rig.neck.rotation.x = -0.62; rig.chest.rotation.z = 0.06;
   rig.armL.rotation.x = 0.32; rig.armR.rotation.x = 0.26;
+  rig.head.scale.setScalar(1.30);          // 스프라이트 비율 — 머리를 키운다
 
   // 짐승은 허벅지가 아주 굵고 정강이가 가늘다 (도약용)
   for (const [th, sh, ft] of [[rig.thighL, rig.shinL, rig.footL], [rig.thighR, rig.shinR, rig.footR]]) {
@@ -554,7 +576,7 @@ export function buildGhoul() {
   hd.add(spike(0.033, 0.17, 4), claw, { x: 0.092, y: 0.095, z: -0.02, rz: -0.40, rx: -0.25 })   // 귀 — 길이가 다르다
     .add(spike(0.027, 0.11, 4), claw, { x: -0.092, y: 0.088, z: -0.02, rz: 0.55, rx: -0.12 })
     .finish();
-  eyes(rig.head, 0xffd23a, 0.055, 0.040, 0.115, 0.030, 0.024);
+  eyes(rig.head, 0xd83a2a, 0.055, 0.040, 0.115, 0.030, 0.024);
 
   for (const [g, k] of [[rig.armL, 0.82], [rig.armR, 1.18]]) {
     new Part(g).add(limb(0.34, [
@@ -648,6 +670,7 @@ export function buildArcher() {
   chest.finish();
 
   new Part(rig.neck).add(limb(0.09, [[0, 0.100, 0.100], [1, 0.092, 0.092]], { round: 2.2, seg: 10 }), inner).finish();
+  rig.head.scale.setScalar(1.22);          // 스프라이트 비율
   // 두건 — 위가 뾰족하고 **얼굴 자리는 비워 둔다**(검은 재질)
   new Part(rig.head)
     .add(loft([
@@ -716,8 +739,10 @@ export function buildArcher() {
 // 단면이 매끈하면 안 된다. 그리고 균열에서 심장 빛이 샌다 — 어두운 화면에서
 // 형태보다 먼저 읽히고 「속이 비지 않았다」는 인상을 준다.
 export function buildGolem() {
-  const stone = M(0x8a8894, { roughness: 0.98, metalness: 0.02 });
-  const dark = M(0x56555f, { roughness: 0.99, metalness: 0 });
+  // 참고본의 골렘은 **사암색**이다. 푸른 회색으로 두면 던전 벽과 같은 계열이라
+  // 큰 덩치가 배경에 묻힌다 — 제일 큰 적이 제일 안 보이면 안 된다
+  const stone = M(0xc2b49a, { roughness: 0.98, metalness: 0.02 });
+  const dark = M(0x8a7d68, { roughness: 0.99, metalness: 0 });
   const runeMat = new THREE.MeshBasicMaterial({ color: 0xff7a2a });
 
   const rig = skeleton({
@@ -752,6 +777,7 @@ export function buildGolem() {
   }
 
   // 목이 없다 — 머리가 어깨 사이에 파묻힌다. 다만 **아예 안 보이면 안 된다**
+  rig.head.scale.setScalar(1.18);          // 스프라이트 비율
   new Part(rig.head)
     .add(rock(0.23, 0.20, 1, 50), stone, { y: 0.16, sy: 0.82 })
     .add(prism(0.26, 0.12, 0.10, 0.24, 0.10, { hang: false }), dark, { y: 0.08, z: 0.17 })

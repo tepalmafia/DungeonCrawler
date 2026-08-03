@@ -195,6 +195,9 @@ export function attachWeapon(rig, fam, pal, grip = { y: -0.06, z: 0.035 }) {
 
   rig.weapon = mount;
   rig.blade = spec.blade;
+  // 다시 뽑을 때 되돌릴 값 — setSheathed 가 쓴다
+  rig.gripY = grip.y; rig.gripZ = grip.z; rig.weaponTilt = spec.tilt;
+  rig.sheathed = false;
   rig.weaponFam = spec.fam;
   rig.weaponReach = spec.reach;
   rig.twoHand = !!spec.twoHand;
@@ -202,6 +205,41 @@ export function attachWeapon(rig, fam, pal, grip = { y: -0.06, z: 0.035 }) {
   // 왼팔에 매달려 있다. 방패를 없애는 게 아니라 **가리는** 것이라 되돌아온다.
   if (rig.shield) rig.shield.visible = !spec.twoHand;
   return spec;
+}
+
+/**
+ * 검을 **등의 칼집에 넣었다 뺐다** 한다.
+ *
+ * 「누가 검을 들고 걸어 다니냐, 평소엔 등에 매고 있다가 공격할 때 뽑아야지」 —
+ * 맞는 말이고, 이게 캐릭터가 살아 있어 보이게 하는 몇 안 되는 값싼 장치다.
+ * 늘 뽑아 든 캐릭터는 **마네킹**이다.
+ *
+ * 구현은 **부모를 바꾸는 것**뿐이다. 애니메이션으로 손을 등까지 보내려면
+ * IK 가 필요하고 그건 이 규모에 과하다. 손 ↔ 칼집 사이를 옮기고, 옮기는
+ * 순간이 스윙의 예비 동작에 묻히면 눈에는 「뽑았다」로 보인다.
+ *
+ * 칼집에 넣을 때는 **거꾸로** 꽂는다(rotation.x = π). 무기는 원점이 손잡이고
+ * +Y 가 칼끝이라, 그대로 두면 칼끝이 하늘을 보고 칼집 밖으로 솟는다.
+ *
+ * 두 손 무기는 칼집에 안 들어간다 — 대검을 등에 매려면 칼집이 아니라
+ * 띠가 필요하고, 지금 몸에는 그게 없다. 그런 무기는 늘 들고 있는다.
+ */
+export function setSheathed(rig, on) {
+  const w = rig.weapon;
+  if (!w || !rig.scabbard || rig.twoHand || w === rig.handR) return false;
+  const want = !!on;
+  if (rig.sheathed === want) return false;
+  rig.sheathed = want;
+  if (want) {
+    rig.scabbard.add(w);
+    w.position.set(0, 0.21, 0);
+    w.rotation.set(Math.PI, 0, 0);
+  } else {
+    rig.handR.add(w);
+    w.position.set(0, rig.gripY ?? -0.06, rig.gripZ ?? 0.035);
+    w.rotation.set(Math.PI - (rig.weaponTilt ?? 0), 0, 0);
+  }
+  return true;
 }
 
 /** 옛 무기를 버린다. 재질은 몸이 공유하므로 **지오메트리만** 버린다. */
