@@ -108,7 +108,7 @@ const BG = new THREE.Color(0x0a0910);
 // 키가 작은 구울은 광원 안에 통째로 들어가 **몸이 초록으로 칠해졌다.**
 // 색은 「이 몬스터구나」 하는 힌트지 도색이 아니다
 const ROSTER = [
-  { key: 'knight', name: '기사', now: buildKnight, hd: buildKnightHD, weapon: '검', accent: 0x93b0e0 },
+  { key: 'knight', name: '전사', now: buildKnight, hd: buildKnightHD, weapon: '검', accent: 0x93b0e0 },
   { key: 'skeleton', name: '해골 병사', now: () => buildSkeleton({ weapon: '창' }), hd: () => buildSkeletonHD({ weapon: '창' }), weapon: '창', accent: 0xd9866a },
   { key: 'ghoul', name: '구울', now: buildGhoul, hd: buildGhoulHD, accent: 0xa8cf8c },
   { key: 'archer', name: '망령 궁수', now: buildArcher, hd: buildArcherHD, accent: 0x9cc4e8 },
