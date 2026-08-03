@@ -14,24 +14,24 @@ export const ARCHETYPES = {
   skeleton: {
     key: 'skeleton', name: '해골 병사', body: 'skeleton',
     hp: 92, dmg: 8, armor: 4, speed: 3.0, radius: 0.42, range: 1.6,
-    windup: 0.45, recover: 0.85, aggro: 8.5, leash: 20, xp: 16, scale: 1.0, gib: 0xd6cdb4,
+    windup: 0.45, recover: 0.85, aggro: 14, leash: 60, xp: 16, scale: 1.0, gib: 0xd6cdb4,
   },
   ghoul: {
     key: 'ghoul', name: '구울', body: 'ghoul',
     hp: 58, dmg: 8, armor: 1, speed: 5.0, radius: 0.38, range: 1.4,
-    windup: 0.3, recover: 0.6, aggro: 9.5, leash: 22, xp: 14, scale: 1.0, gib: 0x7d8a5a,
+    windup: 0.3, recover: 0.6, aggro: 14, leash: 60, xp: 14, scale: 1.0, gib: 0x7d8a5a,
     leap: true,
   },
   archer: {
     key: 'archer', name: '망령 궁수', body: 'archer',
     hp: 66, dmg: 11, armor: 2, speed: 3.2, radius: 0.4, range: 11,
-    windup: 0.7, recover: 1.05, aggro: 12.5, leash: 24, xp: 20, scale: 1.0, gib: 0x7fb4d6,
+    windup: 0.7, recover: 1.05, aggro: 16, leash: 60, xp: 20, scale: 1.0, gib: 0x7fb4d6,
     ranged: true, keepAway: 6.5, float: true,
   },
   golem: {
     key: 'golem', name: '무덤 골렘', body: 'golem',
     hp: 265, dmg: 21, armor: 13, speed: 2.3, radius: 0.75, range: 2.4,
-    windup: 0.9, recover: 1.25, aggro: 8, leash: 18, xp: 75, scale: 1.15, gib: 0x8a8a92,
+    windup: 0.9, recover: 1.25, aggro: 13, leash: 60, xp: 75, scale: 1.15, gib: 0x8a8a92,
     heavy: true, elite: true, slam: 3.4,
   },
 };
@@ -51,6 +51,20 @@ export const ARCHETYPES = {
 //
 //   그래서 인덱스 이름만 새로 주고 `key` 는 원본을 쓴다.
 //   구분은 `variant`(계측·검사용)와 **규칙 필드**로 한다.
+/**
+ * 한 방에 몇 마리를 놓는가. **밀도가 곧 리듬이다** (docs/GRIND.md §2).
+ * enemies.js 의 spawnFloor 와 tools/sim.js 가 같은 값을 읽는다.
+ */
+export const DENSITY = {
+  areaDiv: 11,          // 방 넓이 ÷ 이 값
+  min: 3, max: 9,
+  bonusFrom: 2,         // 이 층부터
+  bonusChance: 0.6, bonus: 2,
+  gap: 3.2,             // 서로 떨어뜨릴 최소 거리 — 좁아야 광역에 같이 들어온다
+  /** 한 판에 동시에 붙는 수 — 여유를 잴 때 이걸로 나눠야 정직하다 */
+  engaged: 3.5,
+};
+
 const variant = (base, over) => ({ ...ARCHETYPES[base], ...over });
 
 // 해골 창병 — 사거리가 길고 선딜이 길다. **간격 관리**를 가르친다 (2층)
@@ -72,7 +86,7 @@ ARCHETYPES.shieldman = variant('skeleton', {
 // 성문 파수병 — 조 편성으로 나온다. 혼자면 평범하다 (7층)
 ARCHETYPES.gatekeeper = variant('skeleton', {
   variant: 'gatekeeper', name: '성문 파수병', body: 'skeleton', weapon: '둔기',
-  hp: 120, dmg: 11, armor: 7, aggro: 10, xp: 24,
+  hp: 120, dmg: 11, armor: 7, aggro: 15, xp: 24,
 });
 
 // 익사한 순례자 — 죽으면 웅덩이를 남긴다. **죽인 자리가 함정이 된다** (5층)
@@ -92,6 +106,6 @@ ARCHETYPES.chainer = variant('archer', {
 // 왕의 조각상 — 부술 때까지 안 움직인다. **선택할 수 있는 위협**이다 (8층)
 ARCHETYPES.statue = variant('golem', {
   variant: 'statue', name: '왕의 조각상',
-  hp: 300, dmg: 21, armor: 16, aggro: 6, xp: 90,
+  hp: 300, dmg: 21, armor: 16, aggro: 10, xp: 90,
   immobile: true,
 });

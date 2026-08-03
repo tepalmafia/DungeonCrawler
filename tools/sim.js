@@ -27,7 +27,7 @@
 //    **순서와 폭이 맞는지**가 이 표로 아는 전부다.
 // ══════════════════════════════════════════════════════════════════════════
 import { BASES, RARITIES } from '../web/3d/js/game/item-table.js';
-import { ARCHETYPES } from '../web/3d/js/game/enemy-table.js';
+import { ARCHETYPES, DENSITY } from '../web/3d/js/game/enemy-table.js';
 import { GROWTH, perHit, mitigate, levelAtXp, enemyDmgMult, HP_SCALE, itemScale }
   from '../web/3d/js/game/growth-table.js';
 import { FLOORS } from '../web/3d/js/world/floors.js';
@@ -47,7 +47,13 @@ const csv = (...a) => { if (CSV) rows.push(a.join(',')); };
 
 // ── 가정 ────────────────────────────────────────────────────
 // 시뮬이 **정하는** 것은 이 셋뿐이고, 나머지는 전부 표에서 온다.
-const PER_FLOOR = 26;          // 한 층에 잡는 잡몹 수
+// 층당 잡몹 수 — **표에서 계산한다.** 방 개수는 floors.js, 방당 마릿수는
+// enemy-table.js 의 DENSITY 다. 손으로 26 이라 적어 두면 밀도를 올린 순간
+// 시뮬만 옛 값으로 돈다.
+const roomsOf = (F) => (Array.isArray(F.rooms) ? (F.rooms[0] + F.rooms[1]) / 2 : F.rooms);
+const perFloor = (F) => Math.round((roomsOf(F) - 2) *
+  ((DENSITY.min + DENSITY.max) / 2 + (F.no >= DENSITY.bonusFrom ? DENSITY.bonusChance * DENSITY.bonus : 0)));
+const PER_FLOOR = perFloor(FLOORS[0]);
 const ARMOR_SLOTS = 7;         // 무기 뺀 장비 칸
 const RARITY_BY_FLOOR = (f) => (f <= 2 ? 0 : f <= 4 ? 1 : f <= 6 ? 2 : 3);
 
@@ -61,7 +67,7 @@ function levelByFloor() {
   for (const F of FLOORS) {
     // 그 층 로스터의 평균 경험치를 쓴다 — 로스터가 바뀌면 여기도 따라간다
     const avg = F.roster.reduce((s, k) => s + (ARCHETYPES[k]?.xp || 0), 0) / F.roster.length;
-    xp += PER_FLOOR * avg + 90;                 // 잡몹 + 보스
+    xp += perFloor(F) * avg + 90;               // 잡몹 + 보스
     lv.push(levelAtXp(xp));
   }
   return lv;
@@ -105,8 +111,8 @@ function body(f) {
 
 // ── 1. 층별 난이도 곡선 ─────────────────────────────────────
 out('\n── 층별 난이도 ──────────────────────────────────────────────');
-out('여유 = 내가 죽는 시간 ÷ 적을 죽이는 시간. **적 하나 기준**이므로');
-out('둘셋이 붙는 실제 상황은 절반쯤으로 봐야 한다.\n');
+out(`여유 = 내가 죽는 시간 ÷ 적을 죽이는 시간. **동시에 ${DENSITY.engaged}마리가**`);
+out(`때린다고 본다 (밀도 ${DENSITY.min}~${DENSITY.max}/방 · 리쉬 해제). 층당 잡몹 ${PER_FLOOR}마리.\n`);
 // 내 감쇠율도 같이 찍는다. 디아블로3 는 DR = armor/(armor + 50×레벨) 인데
 // 우리는 armor/(armor + 42 + 9×레벨) 이라 상수가 다르다 — 형태는 같으므로
 // **실제로 몇 % 를 막는지**를 봐야 같은 대역인지 알 수 있다.
@@ -124,7 +130,10 @@ for (const F of FLOORS) {
     const myDps = mitigate(atk.avg, armor, lv) * atk.aps;
     const ttk = hp / myDps;
     const eDps = mitigate(d.dmg * enemyDmgMult(F.powerMult), me.armor, lv) / (d.windup + d.recover);
-    const ttd = me.hp / eDps;
+    // **동시에 붙는 수로 나눈다.** 리쉬를 풀고 밀도를 올린 뒤로 「적 하나가
+    // 때린다」는 가정이 거짓이 됐다 — 그대로 두면 여유가 17 로 나와서
+    // 「엄청 쉬워졌다」로 읽힌다. 실제로는 서넛이 동시에 때린다.
+    const ttd = me.hp / (eDps * DENSITY.engaged);
     const myDR = me.armor / (me.armor + 42 + lv * 9);
     out(`${String(f).padEnd(3)}${String(lv).padEnd(3)}${d.name.padEnd(12)}`
       + `${String(hp).padEnd(7)}${armor.toFixed(0).padEnd(6)}${myDps.toFixed(1).padEnd(7)}`
@@ -432,6 +441,70 @@ for (const [id, n] of Object.entries(NODES)) {
     + `   무른 ${(aS * 100).toFixed(1)}% : ${(bS * 100).toFixed(1)}%`
     + `   단단 ${(aH * 100).toFixed(1)}% : ${(bH * 100).toFixed(1)}%`
     + (flip ? '   ✔ 상황에 따라 뒤집힌다' : '   ← 늘 한쪽이 이긴다'));
+}
+
+
+
+// ── 6. 루프 템포 ────────────────────────────────────────────
+//
+// **이 게임의 진짜 지표다** (docs/GRIND.md §9). 값이 아니라 리듬을 본다 —
+// 보상 주기를 길이가 다른 여러 겹으로 겹쳐서 **멈출 자리가 안 생기게** 하는
+// 것이 목적이고, 겹 사이가 벌어지면 거기서 사람이 손을 뗀다.
+//
+// 시뮬이 **가정하는 것 하나**: 무리와 무리 사이를 걷는 시간.
+// 이건 지도 모양과 이동 속도에 달려 있어 표에 없다. 한 마리당 1.4초로 둔다
+// (방마다 서넛이 뭉쳐 있으므로 한 무리를 치우고 다음 방까지 4~5초).
+const WALK_PER_KILL = 1.4;
+
+out('\n── 루프 템포 ───────────────────────────────────────────────');
+out('보상 주기를 겹쳐 놓는다. 겹 사이가 벌어지면 거기서 손을 뗀다.\n');
+out('층  잡몹  처치간격  드랍간격   층 도는 시간   레벨업');
+csv('');
+csv('층,잡몹,처치간격(초),드랍간격(초),층시간(분),레벨업');
+
+let runSec = 0;
+for (const F of FLOORS) {
+  const f = F.no, lv = LV[f - 1], atk = attack(f, '검');
+  // 그 층 로스터의 평균 체력으로 평균 TTK 를 낸다
+  const kinds = [...new Set(F.roster)].map((k) => ARCHETYPES[k]).filter(Boolean);
+  const ttks = kinds.map((d) => {
+    const hp = d.hp * F.powerMult * HP_SCALE;
+    return hp / (mitigate(atk.avg, d.armor * F.powerMult, lv) * atk.aps);
+  });
+  const ttk = ttks.reduce((a, b) => a + b, 0) / ttks.length;
+  const n = perFloor(F);
+  const gap = ttk + WALK_PER_KILL;
+  const floorSec = n * gap;
+  runSec += floorSec;
+  // 드랍 — 잡몹 확률 + 보스 확정. economy-table 에서 온다
+  const drops = n * DROP.normal + DROP.bossCount;
+  const dropGap = floorSec / drops;
+  const ups = f === 1 ? LV[0] - 1 : LV[f - 1] - LV[f - 2];
+  out(`${String(f).padEnd(4)}${String(n).padEnd(6)}${gap.toFixed(1).padEnd(10)}`
+    + `${dropGap.toFixed(0).padEnd(11)}${(floorSec / 60).toFixed(1)}분`.padEnd(15)
+    + `+${ups}`);
+  csv(f, n, gap.toFixed(1), dropGap.toFixed(0), (floorSec / 60).toFixed(1), ups);
+}
+{
+  const mark = (v, lo, hi) => (v >= lo && v <= hi ? '✔' : v < lo ? '✘ 너무 짧다' : '✘ 너무 길다');
+  const F1 = FLOORS[0], lv = LV[0], atk = attack(1, '검');
+  const kinds = [...new Set(F1.roster)].map((k) => ARCHETYPES[k]).filter(Boolean);
+  const ttk1 = kinds.reduce((s, d) =>
+    s + (d.hp * F1.powerMult * HP_SCALE) / (mitigate(atk.avg, d.armor * F1.powerMult, lv) * atk.aps), 0) / kinds.length;
+  const nAll = FLOORS.reduce((s, F) => s + perFloor(F), 0);
+  const dropAll = nAll * DROP.normal + FLOORS.length * DROP.bossCount;
+  out('');
+  out(`  한 마리 잡는 시간   ${ttk1.toFixed(1)}초        목표 1.5 ~ 3     ${mark(ttk1, 1.5, 3)}`);
+  out(`  처치 사이 간격      ${(ttk1 + WALK_PER_KILL).toFixed(1)}초        목표 3 이하      ${mark(ttk1 + WALK_PER_KILL, 0, 3.5)}`);
+  out(`  드랍 사이 간격      ${(runSec / dropAll).toFixed(0)}초         목표 30 ~ 60     ${mark(runSec / dropAll, 30, 60)}`);
+  out(`  층 하나             ${(runSec / FLOORS.length / 60).toFixed(1)}분        목표 3 ~ 5       ${mark(runSec / FLOORS.length / 60, 3, 5)}`);
+  out(`  회차 하나           ${(runSec / 60).toFixed(0)}분         목표 15 ~ 25     ${mark(runSec / 60, 15, 25)}`);
+  csv('');
+  csv('지표,값,목표');
+  csv('한마리(초)', ttk1.toFixed(1), '1.5~3');
+  csv('드랍간격(초)', (runSec / dropAll).toFixed(0), '30~60');
+  csv('층(분)', (runSec / FLOORS.length / 60).toFixed(1), '3~5');
+  csv('회차(분)', (runSec / 60).toFixed(0), '15~25');
 }
 
 if (CSV) console.log(rows.join('\n'));

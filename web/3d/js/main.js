@@ -31,6 +31,8 @@ import { Rest } from './game/rest.js';
 import { spawnBoss, bossNameFor } from './game/boss.js';
 import { SkillTree } from './game/skilltree.js';
 import { DROP, COIN, DEATH, POTION_DROP } from './game/economy-table.js';
+import { saveGame, loadGame, applySave, clearSave, saveInfo } from './game/save.js';
+import { tierUnlock } from './game/economy-table.js';
 import { fieldAt } from './game/skills.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
@@ -42,7 +44,7 @@ import { AI } from './game/ai.js';
 import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 
-export const VERSION = 4;
+export const VERSION = 5;
 // 아홉 층 세 막 (docs/FLOORS.md §2). world/floors.js 의 표가 아홉 칸이므로
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 const MAX_FLOOR = 9;
@@ -317,6 +319,7 @@ function onEnemyKilled(e) {
     // 「막을 넘었다」를 몸으로 알린다 (docs/SKILL-TREE.md §2).
     const bonus = 1 + (G.floorNo % 3 === 0 ? 1 : 0);
     G.tree.grant(bonus);
+    saveGame(G);      // 보스는 판의 마디다. 여기서 끊겨도 안 억울하게
     ui.center(`${bossNameFor(G.floorNo)} 처치`,
       `포탈이 열렸다 · 스킬 포인트 +${bonus}`);
     Audio.Sfx.victory();
@@ -456,6 +459,9 @@ function onPlayerDeath() {
   G.state = 'dead';
   G.stats.deaths++;
   const pen = applyDeathPenalty();
+  // **죽어도 저장한다.** 안 하면 죽는 순간 되돌아가서 페널티를 피할 수 있고,
+  // 그러면 죽음에 값이 없어진다. 저장은 벌이 아니라 **사실의 기록**이다.
+  saveGame(G);
   Audio.Sfx.death();
   Audio.stopAmbient();
   fx.addShake(0.3, 2);
@@ -486,13 +492,17 @@ function restartRun(advanceTier) {
   G.player.potions.hp = Math.max(G.player.potions.hp, 4);
   G.player.potions.mp = Math.max(G.player.potions.mp, 4);
   G.cooldowns = {};
-  // 트리도 판과 함께 사라진다 — 남기면 「판이 끝나면 레벨이 사라진다」와
-  // 어긋나고, 회차를 돌수록 전부 찍혀 빌드가 사라진다 (docs/SKILL-TREE.md §4)
-  G.tree = new SkillTree();
+  // **트리를 안 지운다.** 예전에는 「판이 끝나면 사라진다」가 규칙이었지만,
+  // 저장이 생긴 지금 그건 「노가다한 것이 안 남는다」와 같은 말이다
+  // (docs/GRIND.md §7 — 명시적으로 뒤집는 결정 중 하나).
   G.deathSaveUsed = false;
   G.state = 'play';
   loadFloor(1);
-  if (advanceTier) ui.center(`파밍 ${G.tier + 1}회차`, '적이 더 강해지고 전리품이 좋아진다');
+  if (advanceTier) {
+    const u = tierUnlock(G.tier);
+    ui.center(`${G.tier + 1}회차`, u.note || '적이 더 강해지고 전리품이 좋아진다');
+  }
+  saveGame(G);   // 회차를 넘은 것은 이 게임에서 제일 큰 마디다
 }
 
 function nextFloor() {
@@ -505,6 +515,9 @@ function nextFloor() {
   G.stats.floorsCleared++;
   G.player.hp = Math.min(G.player.maxHp, G.player.hp + G.player.maxHp * 0.35);
   loadFloor(G.floorNo + 1);
+  // **층을 넘을 때 저장한다.** 이 게임에서 「돌아올 수 없는 지점」이 여기다 —
+  // 한 층을 다 돌고 넘어가면 그 층의 성과는 확정된 것으로 친다.
+  saveGame(G);
 }
 
 /**
@@ -529,16 +542,20 @@ function onRunCleared() {
   const t = G.metrics?.t ?? 0;   // metrics.t 가 살아 있는 경과 시간이다
   const mm = String(Math.floor(t / 60)).padStart(2, '0');
   const ss = String(Math.floor(t % 60)).padStart(2, '0');
+  // **끝이 아니라 마디다.** 예전에는 여기가 엔딩이었다 — 「왕관을 부쉈다」로
+  // 판이 닫히고 게임이 끝났다. 목적이 바뀌었으므로(docs/GRIND.md) 여기는
+  // 회차를 넘는 자리이고, 문구도 「끝냈다」가 아니라 「더 깊이」여야 한다.
+  const nx = tierUnlock(G.tier + 1);
   showOverlay(`
-    <h1 style="color:#ffd08a">왕관을 부쉈다</h1>
-    <p class="sub">${MAX_FLOOR}층까지 내려가 심연의 군주를 끝냈다</p>
+    <h1 style="color:#ffd08a">${G.tier + 1}회차 완주</h1>
+    <p class="sub">아홉 층을 다 내려갔다 — 왕관은 다시 자란다</p>
     <ul class="keys">
-      <li>그들은 괴물이 아니라 <b>끝나지 못한 사람들</b>이었다. 이제 끝났다.</li>
       <li>처치 <b>${G.stats.kills}</b> · 획득 아이템 <b>${G.stats.itemsFound}</b>
           · 레벨 <b>${G.player.level}</b> · 사망 <b>${G.stats.deaths}</b></li>
       <li>걸린 시간 <b>${mm}:${ss}</b></li>
-      <li>장비와 레벨은 그대로 들고 <b>파밍 ${G.tier + 2}회차</b>로 넘어간다 —
-          적이 더 강해지고 전리품이 좋아진다.</li>
+      <li><b>${G.tier + 2}회차</b>로 넘어간다 — 장비·레벨·스킬을 그대로 들고 간다.
+          적이 <b>${Math.round((Math.pow(1.55, G.tier + 1) / Math.pow(1.55, G.tier) - 1) * 100)}%</b> 세진다.</li>
+      ${nx.note ? `<li style="color:#ffd08a">새로 열린다 — <b>${nx.note}</b></li>` : ''}
     </ul>
     <button id="startBtn">더 깊이</button>`, () => restartRun(true));
 }
@@ -553,17 +570,54 @@ function showOverlay(html, onStart) {
   G.overlayAction = () => { ov.hidden = true; onStart(); };
 }
 
-function startGame() {
+/**
+ * @param cont  이어하기인가. **저장을 지울지 말지가 여기서 갈린다** —
+ *              「시작」이 저장을 안 지우면 새 캐릭터에 옛 장비가 남는다.
+ */
+function startGame(cont = false) {
   Audio.resume();
   ui.el.overlay.hidden = true;
   ui.show();
   G.overlayAction = null;
   G.state = 'play';
-  loadFloor(params.floor);
+
+  // ── 불러오기는 **두 토막으로 나뉜다** ──────────────────────
+  //
+  // 회차(tier)는 loadFloor **앞**이어야 한다 — 층 생성이 그걸 읽으므로,
+  // 뒤에 넣으면 1회차 던전에 9회차 캐릭터가 서 있게 된다.
+  // 나머지(레벨·장비·트리)는 loadFloor **뒤**여야 한다 — 플레이어 객체를
+  // loadFloor 가 만들기 때문이다. 한 번에 앞에서 다 넣었더니
+  // `applySave` 가 null 에 레벨을 쓰다가 죽었고, **그 앞줄에서 이미
+  // state 를 'play' 로 바꿔 놨던 탓에 화면은 멀쩡해 보였다.**
+  let start = params.floor;
+  const save = cont ? loadGame() : null;
+  if (!cont) clearSave();
+  if (save) {
+    G.tier = save.run?.tier || 0;
+    start = 1;                   // 던전은 저장 안 한다 — 그 회차의 1층부터
+  }
+  loadFloor(start);
+  if (save) {
+    applySave(G, save);
+    ui.toast(`이어하기 — Lv ${G.player.level} · ${G.tier + 1}회차`, '#ffd9a8');
+  }
+  saveGame(G);
   if (params.bot) { G.bot = new Bot(G); ui.toast('봇 모드 ON', '#7fdd7f'); }
 }
 
-document.getElementById('startBtn').onclick = startGame;
+document.getElementById('startBtn').onclick = () => startGame(false);
+{
+  // 저장이 있으면 「이어하기」를 띄우고, 무엇이 남아 있는지 한 줄로 알린다.
+  // 「이어하기」가 뭘 이어받는지 안 보이면 아무도 안 누른다.
+  const info = saveInfo();
+  const cb = document.getElementById('continueBtn');
+  if (info && cb) {
+    cb.hidden = false;
+    cb.onclick = () => startGame(true);
+    const tip = document.getElementById('saveTip');
+    if (tip) tip.textContent = `Lv ${info.level} · ${info.tier + 1}회차 · 최고 ${info.best}층 — 이어서 도는 중`;
+  }
+}
 
 // ───────────────────────── 입력 처리 ─────────────────────────
 const groundV = new THREE.Vector3();
@@ -903,6 +957,7 @@ function updateCamera(k) {
 // ───────────────────────── 루프 ─────────────────────────
 let last = performance.now();
 let simAcc = 0;
+let saveAcc = 0;
 const MAX_DT = 1 / 20;   // 시뮬레이션 한 스텝의 상한 (50ms)
 
 // ── 시뮬레이션 한 스텝 ──────────────────────────────────────
@@ -1142,6 +1197,15 @@ function frame(now) {
   G.perf.logicMs = performance.now() - tLogic;
 
   G.perf.frameMs = dt * 1000 / params.ff;
+
+  // ── 주기 저장 ──────────────────────────────────────────────
+  // 장착·구매·처치마다 saveGame 을 부르면 파일 여섯이 저장을 알게 된다.
+  // 12초마다 한 번이면 최악의 경우 12초를 잃을 뿐이고, 층·보스에서는
+  // 따로 한 번 더 저장하므로 실제로 잃는 건 그 층의 몇 초뿐이다.
+  if (G.state === 'play' && G.player) {
+    saveAcc += dt;
+    if (saveAcc > 12) { saveAcc = 0; saveGame(G); }
+  }
 
   input.endFrame();
   if (post) post.render(); else renderer.render(scene, camera);

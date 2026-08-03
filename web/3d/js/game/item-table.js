@@ -15,6 +15,7 @@
 // **가짓수는 늘리고 드랍 빈도는 줄인다.**
 
 import { itemScale } from './growth-table.js';
+import { tierUnlock } from './economy-table.js';
 import { ELEMENTS, ELEMENT_KEYS, WEAPON_ELEMENT_CHANCE, ARMOR_ELEMENT_CHANCE, defenseMult } from './elements.js';
 
 export const RARITIES = [
@@ -174,7 +175,8 @@ function rollRarity(rnd, floorNo, tier, find = 0) {
   // 되면 1.8 이 되어 전설 가중치가 3 → 17.5 (5.8배), 실효 확률이 3% → 10.6%
   // 로 뛴다. 「드랍이 억제돼 있어 장비가 바뀌는 순간이 드물다」는 이 파일의
   // 설계 전제가 후반에 무너진다 (정찰에서 잡았다).
-  const push = Math.min(2.0, 1 + (floorNo - 1) * 0.10 + tier * 0.22 + find / 100);
+  // 회차 해금 — 전설이 잦아지는 것이 회차의 눈에 보이는 보상이다
+  const push = Math.min(2.6, (1 + (floorNo - 1) * 0.10 + find / 100) * tierUnlock(tier).legendMul);
   const w = RARITY_W.map((base, i) => base * Math.pow(push, i));
   const total = w.reduce((a, b) => a + b, 0);
   let u = rnd() * total;

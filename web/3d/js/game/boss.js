@@ -10,6 +10,7 @@ import { floorDef } from '../world/floors.js';
 import { MOVE_SCALE, ATTACK_SCALE, ATTACK_TIME } from './pace.js';
 import { MOVES, pickForDistance } from './bossmoves.js';
 import { prism, slab, spike, Part, skeleton } from '../core/rig.js';
+import { tierPower } from './growth-table.js';
 
 const V = new THREE.Vector3();
 
@@ -432,6 +433,6 @@ export function spawnBoss(G, dg, floorNo, tier) {
   // 강함의 출처를 **일반 적과 같은 곳**으로 맞춘다. 예전엔 여기서만
   // `1 + (floorNo−1)×0.4` 로 따로 계산해서, 층 표의 powerMult 를 고쳐도
   // 보스만 안 따라오는 상태였다 (정찰에서 잡았다).
-  const boss = new Boss(G, x, z, F.powerMult + tier * 0.42, key);
+  const boss = new Boss(G, x, z, tierPower(F.powerMult, tier), key);
   return boss;
 }

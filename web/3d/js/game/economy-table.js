@@ -55,3 +55,19 @@ export const DEATH = {
 
 /** 물약이 바로 보충될 확률 */
 export const POTION_DROP = 0.09;
+
+// ── 회차마다 새로 열리는 것 ─────────────────────────────────
+//
+// 숫자만 커지면 2회차부터는 **같은 판을 더 오래 하는 것**이다. 회차를
+// 넘을 때마다 눈에 보이는 것이 하나씩 열려야 「더 깊이」가 성립한다.
+// (docs/GRIND.md §5-1 · §10 — 「혼자 도는 게임에 무한 회차가 지루하지
+//  않은가」가 아직 답이 없는 질문이고, 이 표가 그 답을 담는 자리다.)
+export const TIER_UNLOCK = [
+  { legendMul: 1.0, affixMul: 1.00, note: '' },
+  { legendMul: 1.6, affixMul: 1.20, note: '접사가 세지고 전설이 잦아진다' },
+  { legendMul: 2.4, affixMul: 1.45, note: '정예가 무리를 이끈다' },
+  { legendMul: 3.2, affixMul: 1.70, note: '보스가 페이즈를 하나 더 쓴다' },
+];
+
+/** 그 회차의 해금 — 표를 넘어가면 마지막 줄이 계속 적용된다 */
+export const tierUnlock = (tier) => TIER_UNLOCK[Math.min(tier, TIER_UNLOCK.length - 1)];

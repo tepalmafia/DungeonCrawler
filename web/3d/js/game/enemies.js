@@ -72,8 +72,8 @@ function enemyPoser(rig) {
 // 그래서 (1) 어그로가 무리로 번지지 않고, (2) 어그로 반경이 좁고,
 // (3) 개체 HP가 높아 한 판이 길고, (4) 너무 멀어지면 제자리로 돌아간다(리쉬).
 // 궁수만 어그로 반경이 넓다 — 잘못 끌면 곤란해지는 존재가 하나는 있어야 한다.
-import { ARCHETYPES } from './enemy-table.js';
-import { HP_SCALE, enemyDmgMult } from './growth-table.js';
+import { ARCHETYPES, DENSITY } from './enemy-table.js';
+import { HP_SCALE, enemyDmgMult, tierPower } from './growth-table.js';
 
 // 표의 `body` 문자열을 실제 빌더로 바꾼다. **표가 순수하게 남는 대가**이고,
 // 새 몸을 추가할 때 여기 한 줄만 늘리면 된다.
@@ -1093,8 +1093,11 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
   // 층은 「새로운 것」이고 tier 는 「같은 것이 더 세다」라 역할이 다르다
   // (docs/FLOORS.md §1-4).
   const F = floorDef(floorNo);
-  const powerMult = F.powerMult + tier * 0.35;
-  const MIN_GAP = 6.5;          // 월드 유닛 — 어그로 반경(8~9)보다 조금 좁다
+  const powerMult = tierPower(F.powerMult, tier);
+  // 예전엔 6.5 — 어그로 반경보다 좁게 두어 **한 마리씩 끌리게** 하려던 값이다.
+  // 이제는 반대로 **무리로 붙기를 바란다.** 3.2 면 한 방 안에서 서로 겹치지
+  // 않으면서(반지름 0.4~0.75) 광역 하나에 여럿이 들어온다.
+  const MIN_GAP = DENSITY.gap;
   const placed = [];
 
   const roster = F.roster;
@@ -1106,10 +1109,18 @@ export function spawnFloor(G, dg, rnd, floorNo, tier) {
     // 이 방의 위험은 적이 아니라 함정과 값이다.
     if (room.vault) continue;
 
-    // 방 넓이에 비례하되 적게 — 한 판이 길어졌으니 마릿수로 밀지 않는다
+    // ── 밀도가 곧 리듬이다 ────────────────────────────────────
+    //
+    // 예전 주석은 「마릿수로 밀지 않는다」였고 방당 1~4마리였다. 층당
+    // 스물여섯 마리, 한 마리 잡는 데 5~9초 — 그러면 손이 쉬는 시간이 길어져
+    // 「한 마리 더」가 안 생긴다 (docs/GRIND.md §1).
+    //
+    // 목적이 바뀌었다. 방당 3~9마리로 올린다. 개체 체력을 함께 내렸으므로
+    // (HP_SCALE 1.3 → 0.5) **한 마리를 잡는 시간이 아니라 한 방을 치우는
+    // 시간**이 비슷해지고, 그 사이가 촘촘해진다.
     const area = room.w * room.h;
-    let n = Math.max(1, Math.min(4, Math.round(area / 26)));
-    if (floorNo >= 2 && rnd.chance(0.45)) n++;
+    let n = Math.max(DENSITY.min, Math.min(DENSITY.max, Math.round(area / DENSITY.areaDiv)));
+    if (floorNo >= DENSITY.bonusFrom && rnd.chance(DENSITY.bonusChance)) n += DENSITY.bonus;
 
     let roomElite = false;
     const kinds = [];
