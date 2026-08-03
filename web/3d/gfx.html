@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>그래픽 시제품 — 에셋 없이 어디까지</title>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.min.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+<style>
+  html,body { margin:0; background:#0a090f; color:#e8e2d6;
+    font-family:'Galmuri11',system-ui,sans-serif; }
+  #gfx { width:1600px; margin:0 auto; }
+  canvas { display:block; }
+  .row { display:flex; width:1600px; margin:0 auto; }
+  .row div { flex:1; text-align:center; padding:10px 12px 16px; }
+  .row b { display:block; font-size:15px; margin-bottom:4px; }
+  .row span { font-size:12px; color:#9a90a8; line-height:1.5; }
+  h1 { width:1600px; margin:18px auto 4px; font-size:17px; letter-spacing:1px; }
+  p.note { width:1600px; margin:0 auto 12px; font-size:12px; color:#8d8577; }
+</style>
+</head>
+<body>
+<h1>에셋 없이 어디까지 — 같은 장면, 같은 메시, 다른 셰이더</h1>
+<p class="note">텍스처 파일 0개 · 모델 파일 0개. 전부 코드로 만든 것이고, 가운데·오른쪽은 셰이더만 갈아 끼웠습니다.</p>
+<div id="gfx"><canvas id="c"></canvas></div>
+<div class="row">
+  <div><b>A · 현재</b><span>three.js 기본 PBR + 점광원 둘.<br>지금 게임 화면입니다.</span></div>
+  <div><b>B · 셀 셰이딩</b><span>빛을 3단계로 끊고 뒤집힌 껍데기로 외곽선.<br>후처리 없이 인상이 통째로 바뀝니다.</span></div>
+  <div><b>C · 시네마틱</b><span>삼중 투영 절차 텍스처 · 림 라이트 · 빛기둥<br>+ 필름 그레인 · 색수차 · 비네트.</span></div>
+</div>
+<script type="module" src="js/gfx.js"></script>
+</body>
+</html>
