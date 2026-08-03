@@ -45,7 +45,7 @@ import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 7;
+export const VERSION = 8;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -154,6 +154,10 @@ const G = {
 window.G3 = G;
 
 post = new Post(renderer, scene, camera, params.post);
+// `?q=N` — 색을 몇 단계로 끊을지. 0 이면 안 끊는다. 어두운 던전에서 이 값이
+// 낮으면 형태가 통째로 사라지므로 눈으로 맞춰 볼 수 있어야 한다
+const qArg = parseInt(qs.get('q'), 10);
+if (Number.isFinite(qArg)) post.setLevels(qArg);
 G.post = post;
 // CSS 비네트가 셰이더 비네트와 겹치지 않도록 알린다 (css/style.css 참조)
 document.body.dataset.post = params.post;

@@ -151,17 +151,34 @@ export const BLOOM = { strength: 0.26, radius: 0.4, threshold: 1.0, clamp: 2.5 }
  * antialias 는 **꺼야 한다.** 켜 두면 네모의 가장자리를 부드럽게 만들어서
  * 작게 그리는 의미가 사라진다 — 흐릿한 저해상도 화면이 될 뿐이다.
  */
-export const DOT = { scale: 1 / 3, levels: 10 };
+export const DOT = { scale: 1 / 3, levels: 14, gamma: 0.45 };
 
-/** 색을 계단으로 끊는다. 톤 매핑·색보정이 **다 끝난 뒤**여야 한다 */
+/**
+ * 색을 계단으로 끊는다. 톤 매핑·색보정이 **다 끝난 뒤**여야 한다.
+ *
+ * ── 균등하게 끊으면 안 된다 (배포하고 보고로 알았다) ─────────
+ * 10 단계로 균등하게 끊었더니 **던전이 통째로 검게 뭉쳤다.** 이유는
+ * 이 게임의 밝기 분포에 있다 — 횃불 근처만 밝고 나머지는 0.1 아래라,
+ * 화면의 대부분이 맨 아래 한두 칸에 몰린다. 그러면 벽과 바닥과 그림자가
+ * **전부 같은 검정**이 되어 형태가 사라진다. 화면에는 새까만 덩어리들이
+ * 각진 경계로 붙어 있는 꼴로 나온다.
+ *
+ * 어두운 쪽에 칸을 더 준다. 끊기 전에 지수를 씌워 아래쪽을 늘리고,
+ * 끊고 나서 되돌린다 — 같은 칸 수로 **어두운 곳의 단계가 세 배**가 된다.
+ * (0.45 는 눈으로 골랐다. 1.0 이면 예전과 같고, 낮출수록 어두운 쪽이 곱다)
+ */
 const QuantShader = {
-  uniforms: { tDiffuse: { value: null }, uLevels: { value: DOT.levels } },
+  uniforms: {
+    tDiffuse: { value: null }, uLevels: { value: DOT.levels }, uGamma: { value: DOT.gamma },
+  },
   vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse; uniform float uLevels; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float uLevels; uniform float uGamma; varying vec2 vUv;
     void main(){
       vec4 t = texture2D(tDiffuse, vUv);
-      gl_FragColor = vec4(floor(t.rgb * uLevels + 0.5) / uLevels, t.a);
+      vec3 c = pow(max(t.rgb, vec3(0.0)), vec3(uGamma));
+      c = floor(c * uLevels + 0.5) / uLevels;
+      gl_FragColor = vec4(pow(c, vec3(1.0 / uGamma)), t.a);
     }`,
 };
 
@@ -225,7 +242,17 @@ export class Post {
 
     // 색 끊기는 **맨 마지막**이다. 색보정 앞에 두면 보정이 계단 사이를 다시
     // 메워서 단이 흐려진다 — 끊어 놓고 나서 아무것도 안 건드려야 한다
-    if (quality !== 'off') this.composer.addPass(new ShaderPass(QuantShader));
+    if (quality !== 'off') {
+      this.quant = new ShaderPass(QuantShader);
+      this.composer.addPass(this.quant);
+    }
+  }
+
+  /** 색 단계 수 — `?q=N`. 0 이면 안 끊는다(도트 격자만 남는다) */
+  setLevels(n) {
+    if (!this.quant) return;
+    this.quant.enabled = n > 0;
+    this.quant.uniforms.uLevels.value = Math.max(2, n);
   }
 
   /** 광원 코어를 자를 상한. 0 이하면 자르지 않는다 (튜닝 도구가 쓴다) */
