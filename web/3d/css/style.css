@@ -36,8 +36,10 @@ html, body {
      아는 브라우저에서 그쪽이 덮어쓴다. crisp-edges 는 「가장자리 대비를
      유지한다」는 뜻일 뿐 최근접 확대를 보장하지 않아서, 실제 화면은
      **뿌옇게** 나온다. 배포하고 나서 「흐리다」는 보고로 알았다. */
-#view {
-  display: block; width: 100%; height: 100%; cursor: crosshair;
+#view { display: block; width: 100%; height: 100%; cursor: crosshair; }
+/* 도트를 켰을 때만(?dot=N) main.js 가 이 클래스를 붙인다. 항상 걸어 두면
+   해상도대로 그린 화면에까지 최근접 확대가 걸려 계단이 진다 */
+#view.dot {
   image-rendering: crisp-edges;   /* 옛 브라우저용 — 반드시 먼저 */
   image-rendering: pixelated;     /* 최신 브라우저가 이걸 쓴다 */
 }

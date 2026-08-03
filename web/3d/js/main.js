@@ -45,7 +45,7 @@ import { UI } from './ui/hud.js';
 import { Inventory } from './ui/inventory.js';
 import { FLOORS_PER_RUN } from './world/floors.js';
 
-export const VERSION = 7;
+export const VERSION = 9;
 // 한 회차의 층 수 (docs/GRIND.md §9 — 회차 15~25분).
 // 여기까지가 「복사본이 아닌 층」이다 — DEFINED_FLOORS 를 넘기면 뒤는 9층의 복사본이 된다.
 // **표에서 읽는다.** 손으로 9 라 적어 뒀더니 표를 여섯 칸으로 줄여도
@@ -71,12 +71,21 @@ const params = {
 };
 
 // ───────────────────────── 렌더러 ─────────────────────────
+//
+// `?dot=N` — N 분의 1 로 그린다. **기본은 꺼져 있다**(core/post.js 의 DOT 주석).
+// 3 이면 굵은 도트, 2 면 옅다. `?q=N` 과 같이 써야 그림체가 성립한다.
+const dotArg = parseFloat(qs.get('dot'));
+const dotDiv = Number.isFinite(dotArg) && dotArg >= 1 ? Math.min(dotArg, 8) : 1 / DOT.scale;
+const DOT_ON = dotDiv > 1;
 const canvas = document.getElementById('view');
 let renderer;
 try {
-  // antialias 는 **끈다.** 도트 그림체라 네모의 가장자리가 살아 있어야 한다 —
-  // 켜 두면 작게 그리는 의미가 사라지고 흐릿한 저해상도 화면이 될 뿐이다
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  // 안티에일리어싱은 **도트를 켰을 때만** 끈다. 도트일 때는 네모의 가장자리가
+  // 살아 있어야 하고, 아닐 때는 이 게임이 전부 직선이라 AA 가 빠지면
+  // 「더 상자 같아」 보인다 (core/post.js 의 samples 주석과 같은 이유)
+  renderer = new THREE.WebGLRenderer({
+    canvas, antialias: !DOT_ON, powerPreference: 'high-performance',
+  });
 } catch (err) {
   document.getElementById('stage').hidden = true;
   document.getElementById('nowebgl').hidden = false;
@@ -87,12 +96,9 @@ try {
 // 줄어 후처리까지 전부 싸지고, 확대는 CSS 의 image-rendering:pixelated 가 한다.
 // dpr 은 곱하지 않는다. 곱하면 고해상도 기기에서만 도트가 잘아져서 **기기마다
 // 그림체가 달라진다** — 도트 크기는 화면 크기가 아니라 그림체의 일부다.
-//
-// `?dot=N` — N 분의 1 로 그린다. 1 이면 도트 없음(원래 화질), 3 이 기본, 5 면 아주 굵다.
-// 화면 크기와 눈에 따라 적정값이 다르므로 **재배포 없이 맞춰 볼 수 있어야** 한다.
-const dotArg = parseFloat(qs.get('dot'));
-const dotDiv = Number.isFinite(dotArg) && dotArg >= 1 ? Math.min(dotArg, 8) : 1 / DOT.scale;
-renderer.setPixelRatio(1 / dotDiv);
+// 도트가 꺼져 있으면 예전처럼 화면 해상도대로 그린다
+renderer.setPixelRatio(DOT_ON ? 1 / dotDiv : Math.min(devicePixelRatio || 1, 2));
+if (DOT_ON) canvas.classList.add('dot');
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;   // r185에서 PCFSoft 는 폐기 예정
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -154,6 +160,10 @@ const G = {
 window.G3 = G;
 
 post = new Post(renderer, scene, camera, params.post);
+// `?q=N` — 색을 몇 단계로 끊을지. 0 이면 안 끊는다. 어두운 던전에서 이 값이
+// 낮으면 형태가 통째로 사라지므로 눈으로 맞춰 볼 수 있어야 한다
+const qArg = parseInt(qs.get('q'), 10);
+if (Number.isFinite(qArg)) post.setLevels(qArg);
 G.post = post;
 // CSS 비네트가 셰이더 비네트와 겹치지 않도록 알린다 (css/style.css 참조)
 document.body.dataset.post = params.post;
