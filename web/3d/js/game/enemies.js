@@ -80,19 +80,19 @@ export const ARCHETYPES = {
   },
   ghoul: {
     key: 'ghoul', name: '구울', build: buildGhoul,
-    hp: 58, dmg: 6, armor: 1, speed: 5.0, radius: 0.38, range: 1.4,
+    hp: 58, dmg: 8, armor: 1, speed: 5.0, radius: 0.38, range: 1.4,
     windup: 0.3, recover: 0.6, aggro: 9.5, leash: 22, xp: 14, scale: 1.0, gib: 0x7d8a5a,
     leap: true,
   },
   archer: {
     key: 'archer', name: '망령 궁수', build: buildArcher,
-    hp: 66, dmg: 9, armor: 2, speed: 3.2, radius: 0.4, range: 11,
-    windup: 0.7, recover: 1.3, aggro: 12.5, leash: 24, xp: 20, scale: 1.0, gib: 0x7fb4d6,
+    hp: 66, dmg: 11, armor: 2, speed: 3.2, radius: 0.4, range: 11,
+    windup: 0.7, recover: 1.05, aggro: 12.5, leash: 24, xp: 20, scale: 1.0, gib: 0x7fb4d6,
     ranged: true, keepAway: 6.5, float: true,
   },
   golem: {
     key: 'golem', name: '무덤 골렘', build: buildGolem,
-    hp: 330, dmg: 19, armor: 13, speed: 2.3, radius: 0.75, range: 2.4,
+    hp: 265, dmg: 21, armor: 13, speed: 2.3, radius: 0.75, range: 2.4,
     windup: 0.9, recover: 1.25, aggro: 8, leash: 18, xp: 75, scale: 1.15, gib: 0x8a8a92,
     heavy: true, elite: true, slam: 3.4,
   },
@@ -154,7 +154,7 @@ ARCHETYPES.chainer = variant('archer', {
 // 왕의 조각상 — 부술 때까지 안 움직인다. **선택할 수 있는 위협**이다 (8층)
 ARCHETYPES.statue = variant('golem', {
   variant: 'statue', name: '왕의 조각상',
-  hp: 420, dmg: 22, armor: 16, aggro: 6, xp: 90,
+  hp: 300, dmg: 21, armor: 16, aggro: 6, xp: 90,
   immobile: true,
 });
 
@@ -183,7 +183,17 @@ export class Enemy {
 
     this.maxHp = Math.round(d.hp * powerMult * HP_SCALE);
     this.hp = this.maxHp;
-    this.dmg = d.dmg * powerMult;
+    // ── 피해는 체력보다 빨리 오른다 ────────────────────────────
+    //
+    // 셋 다 powerMult 를 그냥 곱했더니, 층이 깊어져도 **긴장이 안 올랐다.**
+    // 내가 죽는 데 걸리는 시간 ÷ 적을 죽이는 데 걸리는 시간(여유)을 재 보면
+    // 1층 8.8 · 9층 7.6 이다 — 아홉 층을 내려가는 동안 거의 그대로다.
+    // 플레이어도 레벨과 장비로 같은 비율로 세지기 때문이다.
+    //
+    // 체력만 올리면 「더 오래 두들기는」 게임이 되고, 피해를 같이 올려야
+    // 「조심하는」 게임이 된다. 지수 1.24 면 1층은 그대로(1^1.28 = 1)이고
+    // 9층만 4.60 → 6.9 로 오른다 — **초반은 안 건드리고 후반만 조인다.**
+    this.dmg = d.dmg * Math.pow(powerMult, 1.24);
     this.armor = d.armor * powerMult;
     this.atkSpeedMul = 1;      // 정예 특성이 올린다
     // 속성 — 기본은 종족값. spawnFloor 가 층 분포로 덮어쓴다 (game/elements.js).
