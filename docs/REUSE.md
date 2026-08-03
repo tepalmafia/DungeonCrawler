@@ -44,7 +44,7 @@
 | `web/3d/js/core/rng.js` | 시드 RNG (mulberry32) | 40줄, 의존성 0. `?seed=ABC123` 규약까지 그대로 쓴다 |
 | `tools/serve.py` | 로컬 정적 서버 + 에셋 목록 자동 생성 | 경로 두 줄만 바꾸면 된다 |
 | `tools/bump-version.js` | `VERSION` ↔ `?v=` 동기화 | v187~v189 사고를 막은 도구. 정적 배포면 어디서나 필요하다 |
-| `tools/assets.js` | 배포용 에셋 목록 생성 | 규격표를 정규식으로 읽는 구조가 그대로 통한다 |
+| `tools/assets.js` | 배포용 에셋 목록 생성 | 규격표를 `import()` 해서 센다 — 표가 진실이고 도구는 세기만 한다 |
 
 `web/3d/js/core/metrics.js` 는 **반쯤** 그대로입니다. 「매 프레임 경로에서
 할당하지 않는다 · 원본 표본을 버리지 않는다 · 표본 수에 상한을 둔다 ·
@@ -99,7 +99,7 @@ docs/ART-REQUEST.md          사람이 읽는 규격
 core/asset-table.js          기계가 읽는 규격  ← 규격은 여기 한 번만 적는다
 core/assets.js               로더 (이름 틀리면 콘솔이 그 자리에서 말한다)
 tools/serve.py               로컬: 요청마다 폴더를 훑어 목록을 만든다
-tools/assets.js --write      배포: 목록을 파일로 굳힌다
+tools/assets.js <게임> --write  배포: 목록을 파일로 굳힌다
 web/3d/assets/               ★ 여기 떨어뜨리면 게임에 나온다
 ```
 

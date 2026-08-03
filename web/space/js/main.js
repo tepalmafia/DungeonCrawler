@@ -26,7 +26,7 @@ import { REGIONS, REGION_BY_KEY, REGION_SECONDS } from './game/regions-table.js'
 import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, powerCount, PHASE } from './game/chase.js';
 
-export const VERSION = 13;
+export const VERSION = 14;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -284,6 +284,25 @@ window.SPACE = {
   unpinRegion() { regionPin = null; },
   /** 그 자리에 설 수 있나 — 충돌 검사용. tools 가 점을 찍어 본다 */
   canStand(x, z) { return inside(x, z, BODY.radius); },
+  /**
+   * 무늬가 실제로 물렸나 — 면마다 어떤 장이 붙었고 색 공간이 뭔지.
+   * 화면만 봐서는 「색만 붙음」과 「굴곡까지 붙음」이 구분이 안 되고,
+   * 색 공간이 어긋난 것은 아예 안 보인다. 그래서 숫자로 내어 본다
+   * (docs/POSTMORTEM.md §1-④ 「값을 찍는다」).
+   */
+  get skin() {
+    const out = {};
+    for (const [k, m] of Object.entries(ship.skins)) {
+      out[k] = {
+        maps: ['map', 'normalMap', 'roughnessMap'].filter((s) => m[s]),
+        space: m.map ? m.map.colorSpace : null,
+        linear: ['normalMap', 'roughnessMap']
+          .every((s) => !m[s] || m[s].colorSpace === THREE.NoColorSpace),
+        repeat: m.map ? [m.map.repeat.x, m.map.repeat.y] : null,
+      };
+    }
+    return out;
+  },
   /**
    * 무게 재기 — 무엇이 몇 개인가.
    * **fps 는 여기서 못 믿는다** (헤드리스는 소프트웨어 렌더라 1fps 다).

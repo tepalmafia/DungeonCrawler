@@ -508,5 +508,9 @@ export function buildShip(scene) {
     o.receiveShadow = true;
   });
 
-  return { cock, outside, valve, wheel, breakers, alarm, lampEngine, lampCore, matEngine, coreGlow };
+  // skins — 무늬가 실제로 물렸나를 밖에서 볼 수 있게 내어 준다.
+  // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
+  // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
+  const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
+  return { cock, outside, valve, wheel, breakers, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

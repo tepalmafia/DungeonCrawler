@@ -40,7 +40,7 @@ web/3d/assets/
 GitHub Pages 는 폴더를 훑어 줄 사람이 없어서 목록 파일이 필요합니다.
 
 ```
-node tools/assets.js --write
+node tools/assets.js 3d --write
 ```
 
 로컬(`python3 tools/serve.py 8137`)에서는 서버가 알아서 훑으므로 안 돌려도 됩니다.

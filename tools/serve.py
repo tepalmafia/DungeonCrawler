@@ -37,7 +37,7 @@ def scan(game):
         if not os.path.isdir(d):
             continue
         for f in sorted(os.listdir(d)):
-            if f.lower().endswith(('.png', '.jpg', '.webp')):
+            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                 out.append(f'{sub}/{f}')
     return out
 
