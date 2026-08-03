@@ -31,10 +31,17 @@ html, body {
   background: rgba(160, 230, 190, .9);
 }
 
+/* ★ pointer-events: none 이 **없어서 게임을 못 켰다.**
+   이 창이 화면 한가운데를 덮고 있는데, 시작하려면 캔버스를 눌러야 한다.
+   사람은 당연히 글이 적힌 가운데를 누르고, 그러면 이 창이 클릭을 먹어서
+   포인터 잠금이 안 걸린다 — 화면은 멀쩡하고 콘솔도 조용한데 아무 일도
+   안 일어난다. 「안내를 띄운다」와 「클릭을 받는다」가 같은 자리라 생긴 일.
+   조준점에는 넣어 놓고 여기는 빠뜨렸다. */
 #hint {
   position: fixed;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%);
+  pointer-events: none;
   width: min(440px, 86vw);
   padding: 20px 22px;
   background: rgba(8, 10, 16, .88);

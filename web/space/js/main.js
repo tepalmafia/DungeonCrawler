@@ -14,10 +14,10 @@
 import * as THREE from 'three';
 import { preload } from './core/assets.js';
 import { Input } from './core/input.js';
-import { buildShip, inside, roomAt } from './world/ship.js';
-import { BODY, HEAT, VALVE } from './game/systems-table.js';
+import { buildShip, inside, roomAt, BLOCKERS } from './world/ship.js';
+import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
 
-export const VERSION = 3;
+export const VERSION = 4;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -66,7 +66,9 @@ const input = new Input(canvas);
 
 // ── 상태 ────────────────────────────────────────────────────
 const me = {
-  x: 0, z: -6.5,          // 조종석에서 시작한다
+  // ★ 처음엔 -6.5 였다. 좌석 바로 뒤라 켜자마자 W 를 누르면 좌석에 막힌다 —
+  //   시작하자마자 「안 움직인다」로 읽힌다. 한 걸음 뒤로 물렸다.
+  x: 0, z: -5.4,          // 조종석에서 시작한다
   vx: 0, vz: 0,
   yaw: 0, pitch: 0,       // yaw 0 = -z 방향 = 창 쪽
 };
@@ -155,6 +157,11 @@ window.SPACE = {
   get room() { return roomAt(me.x, me.z); },
   put(x, z, yaw = 0, pitch = 0) { me.x = x; me.z = z; me.yaw = yaw; me.pitch = pitch; me.vx = me.vz = 0; },
   setHeat(v) { heat = v; },
+  get pos() { return { x: +me.x.toFixed(3), z: +me.z.toFixed(3) }; },
+  get locked() { return input.locked; },
+  get blockers() { return BLOCKERS.length; },
+  /** 그 자리에 설 수 있나 — 충돌 검사용. tools 가 점을 찍어 본다 */
+  canStand(x, z) { return inside(x, z, BODY.radius); },
 };
 
 // ── 루프 ────────────────────────────────────────────────────
@@ -170,10 +177,19 @@ function frame(now) {
 
   walk(dt);
 
-  camera.position.set(me.x, BODY.eye, me.z);
+  // ── 배가 간다 ──────────────────────────────────────────
+  // 창밖을 흘려보내고, 배가 미세하게 떤다. 둘 다 없으면 **정지 화면**이다.
+  ship.outside.update(dt, CRUISE.speed);
+
+  // 진동은 **아주 작게.** 1인칭에서 화면 흔들림은 조금만 넘겨도 멀미가 난다.
+  // 「느껴지는데 뭔지 모르겠는」 정도가 맞다.
+  const sh = CRUISE.shake * Math.sin(clock * CRUISE.shakeHz * Math.PI * 2);
+  const sw = CRUISE.sway * Math.sin(clock * CRUISE.swayHz * Math.PI * 2);
+  camera.position.set(me.x + sw * 0.4, BODY.eye + sh + sw * 0.25, me.z);
   camera.rotation.set(0, 0, 0, 'YXZ');
   camera.rotation.y = me.yaw;
   camera.rotation.x = me.pitch;
+  camera.rotation.z = sw * 0.06;   // 아주 살짝 기운다
 
   const cooling = valveStep(dt);
   heatStep(dt, cooling);
