@@ -445,36 +445,68 @@ export function buildShip(scene) {
   //   방이 일곱이 됐어도 **방마다 하나**를 넘기지 않는다. 나머지 방은
   //   띠조명·생장등 같은 **스스로 빛나는 물건**으로 버틴다 (공짜다).
   //   three r155 부터 조명이 물리 단위라 값이 예전 감각보다 훨씬 크다.
-  scene.add(new THREE.AmbientLight(0x38455c, 1.15));
+  // ★ 그림자를 켠 뒤 화면이 **너무 어두워졌다.** 그림자가 생기면 「빛이
+  //   안 닿는 곳」이 진짜로 까매지므로, 켜기 전과 같은 값이면 안 된다.
+  //   바탕빛을 올리는 게 정답이다 — 스포트라이트만 올리면 등 아래만 하얗게
+  //   타고 구석은 그대로 까맣다.
+  scene.add(new THREE.AmbientLight(0x44536e, 2.1));
 
-  const lampCorridor = new THREE.PointLight(0x93a8c0, 46, 18, 2);
-  lampCorridor.position.set(0, H - 0.3, 3.4);
-  scene.add(lampCorridor);
+  /**
+   * 천장등 하나. **SpotLight 로 만든다.**
+   *
+   * ★ 왜 점광원이 아닌가 — 그림자 때문이다.
+   *   PointLight 의 그림자는 **여섯 면(큐브맵)** 을 그려야 한다. 방마다
+   *   점광원을 두고 전부 그림자를 켜면 한 프레임에 장면을 마흔 번 넘게
+   *   그리는 셈이 된다. SpotLight 는 **한 면**이면 된다.
+   *   그리고 실제로도 천장에 박힌 등은 아래로 쏘는 물건이라 더 맞다.
+   */
+  function ceilingLamp(x, z, color, power, reach, shadow = false) {
+    const l = new THREE.SpotLight(color, power, reach, Math.PI * 0.48, 0.75, 1.7);
+    l.position.set(x, H - 0.22, z);
+    l.target.position.set(x, 0, z);
+    scene.add(l);
+    scene.add(l.target);
+    if (shadow) {
+      l.castShadow = true;
+      l.shadow.mapSize.set(1024, 1024);
+      l.shadow.camera.near = 0.4;
+      l.shadow.camera.far = reach;
+      // 그림자 여드름(shadow acne) 막기. 안 넣으면 벽에 줄무늬가 낀다
+      l.shadow.bias = -0.0012;
+      l.shadow.normalBias = 0.03;
+    }
+    return l;
+  }
 
-  const lampObserv = new THREE.PointLight(ZONE.observ.light, 20, 9, 2);
-  lampObserv.position.set(R.observ.x0 + 2.1, H - 0.4, 0.6);
-  scene.add(lampObserv);
+  // ★ 그림자를 **셋만** 켠다. 사람이 오래 머무는 방 셋이다.
+  //   전부 켜면 예뻐지는 것보다 느려지는 게 크고, 어차피 곁방은 잠깐 들른다.
+  const lampCorridor = ceilingLamp(0, 3.4, 0x93a8c0, 110, 20, true);
+  ceilingLamp(0, 8.4, 0x93a8c0, 70, 16);
+  ceilingLamp(R.observ.x0 + 2.1, 0.6, ZONE.observ.light, 52, 12);
+  ceilingLamp(R.workshop.x1 - 1.7, 0.6, ZONE.workshop.light, 60, 12, true);
+  ceilingLamp(R.garden.x0 + 1.5, (R.garden.z0 + R.garden.z1) / 2, ZONE.garden.light, 52, 12);
+  ceilingLamp((R.airlock.x0 + R.airlock.x1) / 2, (R.airlock.z0 + R.airlock.z1) / 2, ZONE.airlock.light, 38, 10);
 
-  const lampWork = new THREE.PointLight(ZONE.workshop.light, 22, 9, 2);
-  lampWork.position.set(R.workshop.x1 - 1.7, H - 0.4, 0.6);
-  scene.add(lampWork);
+  const lampEngine = ceilingLamp(0, engine.z0 + 1.9, 0xffb072, 74, 18, true);
+  void lampCorridor;
 
-  const lampGarden = new THREE.PointLight(ZONE.garden.light, 20, 9, 2);
-  lampGarden.position.set(R.garden.x0 + 1.5, 2.1, (R.garden.z0 + R.garden.z1) / 2);
-  scene.add(lampGarden);
-
-  const lampAir = new THREE.PointLight(ZONE.airlock.light, 14, 7, 2);
-  lampAir.position.set((R.airlock.x0 + R.airlock.x1) / 2, H - 0.4, (R.airlock.z0 + R.airlock.z1) / 2);
-  scene.add(lampAir);
-
-  const lampEngine = new THREE.PointLight(0xffb072, 44, 17, 2);
-  lampEngine.position.set(0, H - 0.35, engine.z0 + 1.9);
-  scene.add(lampEngine);
-
-  // 반응로가 방을 데운다 — 열이 오르면 main.js 가 세기를 민다
+  // 반응로가 방을 데운다 — 열이 오르면 main.js 가 세기를 민다.
+  // 이건 물체에서 나오는 빛이라 점광원이 맞다 (그림자는 안 켠다)
   const lampCore = new THREE.PointLight(0xff8a3c, 8, 5.5, 2);
   lampCore.position.set(0, 1.35, CORE_Z);
   scene.add(lampCore);
+
+  // ── 그림자를 받고 드리운다 ──────────────────────────────
+  // ★ 이게 없으면 **모든 물건이 붕 떠 보인다.** 지금까지 화면이 심심했던
+  //   제일 큰 이유였다. 코드만으로 되는 것 중 값이 제일 크다.
+  //   스스로 빛나는 것(띠조명·화면)은 그림자를 안 만든다 — 광원 시늉을
+  //   하는 물건이 자기 그림자를 드리우면 이상해진다.
+  ship.traverse((o) => {
+    if (!o.isMesh) return;
+    const basic = o.material?.isMeshBasicMaterial;
+    o.castShadow = !basic;
+    o.receiveShadow = true;
+  });
 
   return { cock, outside, valve, wheel, breakers, alarm, lampEngine, lampCore, matEngine, coreGlow };
 }

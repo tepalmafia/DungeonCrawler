@@ -14,6 +14,10 @@
 //    찍히면서 그 버전의 변경은 적용되지 않는다. 앞 게임에서 세 번 났다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { preload } from './core/assets.js';
 import { Input } from './core/input.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
@@ -22,7 +26,7 @@ import { REGIONS, REGION_BY_KEY, REGION_SECONDS } from './game/regions-table.js'
 import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, powerCount, PHASE } from './game/chase.js';
 
-export const VERSION = 10;
+export const VERSION = 13;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -33,6 +37,12 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x03040a);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+// ★ 그림자. **이게 없어서 모든 물건이 붕 떠 보였다.**
+//   코드만으로 되는 것 중 화면에 값이 제일 크다 — 그림 한 장 없이도
+//   물건이 바닥에 「놓인」 것으로 보이기 시작한다.
+//   PCFSoft 는 가장자리를 부드럽게 한다. 딱딱한 그림자는 종이 오린 것 같다.
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 400);
@@ -65,7 +75,7 @@ function makeEnvironment(renderer) {
   return env;
 }
 scene.environment = makeEnvironment(renderer);
-scene.environmentIntensity = 0.55;
+scene.environmentIntensity = 0.75;
 
 const ship = buildShip(scene);
 const input = new Input(canvas);
@@ -99,10 +109,29 @@ let bannerT = 0;
 const ray = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
 
+// ── 후처리 ──────────────────────────────────────────────────
+// ★ 블룸 — **스스로 빛나는 것들이 실제로 빛나 보이게** 한다.
+//   띠조명·화면·반응로는 지금 그냥 밝은 색 판때기다. 어두운 배 안에서
+//   빛나는 물건이 번지지 않으면 「빛」이 아니라 「스티커」로 읽힌다.
+//
+//   threshold 를 0.72 로 둔다. 낮추면 벽까지 번져서 안개 낀 것처럼 되고,
+//   높이면 화면 글자가 안 빛난다.
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+// ★ 세기를 0.62 → 0.48 로 낮췄다. 반응로처럼 밝은 금속 덩어리 앞에 서면
+//   화면이 통째로 하얗게 탔다 — 「빛난다」가 아니라 「안 보인다」가 된다.
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.45, 0.76);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
 function resize() {
   const w = innerWidth, h = innerHeight;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const dpr = Math.min(devicePixelRatio, 2);
+  renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
+  composer.setPixelRatio(dpr);
+  composer.setSize(w, h);
+  bloom.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -211,7 +240,7 @@ function systemsStep(dt, valveOpen, regionMult) {
   // 기관실이 열에 따라 달아오른다
   const hot = Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn));
   ship.lampEngine.color.setHSL(0.09 - 0.09 * hot, 0.55 + 0.4 * hot, 0.5);
-  ship.lampEngine.intensity = 44 + 60 * hot;
+  ship.lampEngine.intensity = 74 + 90 * hot;
   ship.matEngine.emissive?.setHSL(0.03, 0.9, 0.14 * hot);
   ship.coreGlow.material.color.setHSL(0.09 - 0.09 * hot, 0.85, 0.45 + 0.35 * hot);
   ship.lampCore.color.copy(ship.coreGlow.material.color);
@@ -324,7 +353,7 @@ function frame(now) {
     hud.hidden = false;
   } else hud.hidden = true;
 
-  renderer.render(scene, camera);
+  composer.render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
