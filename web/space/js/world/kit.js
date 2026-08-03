@@ -336,3 +336,63 @@ export function hatch(parent, x, z, half, H, ry, tint) {
   }
   return g;
 }
+
+/**
+ * 차단기 패널 — **전력 배분을 손으로 한다.**
+ *
+ * ★ 왜 메뉴가 아닌가
+ *   화면에 배분 슬라이더를 띄우면 조종석에 서서 다 할 수 있고, 그러면
+ *   방 넷을 오가는 이 게임의 긴장(PLAN §9-1)이 통째로 사라진다.
+ *   **통로까지 걸어와서 레버를 내려야** 「지금 저기까지 갈 시간이 있나」가
+ *   질문이 된다. 손만 나오는 게임이라는 정체성과도 맞는다.
+ *
+ * @param circuits [{key, name}] — 표(game/chase-table.js CIRCUITS)에서 온다
+ * @returns [{key, lever, lamp, hit}] — hit 이 조준 판정을 받는 몸이다
+ */
+export function breakerPanel(parent, x, z, ry, circuits, tint) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = ry;
+  parent.add(g);
+
+  const W = 0.36 * circuits.length + 0.24;
+  box(g, W, 1.28, 0.12, MAT.body, 0, 1.28, -0.04);            // 판
+  box(g, W, 0.08, 0.16, MAT.metal, 0, 1.92, -0.02);           // 윗테
+  box(g, W, 0.08, 0.16, MAT.metal, 0, 0.64, -0.02);           // 아랫테
+  box(g, W - 0.1, 0.05, 0.04, glow(tint), 0, 1.86, 0.05);     // 라벨 띠
+
+  const out = [];
+  circuits.forEach((c, i) => {
+    const cx = -W / 2 + 0.24 + i * 0.36;
+
+    // 홈 — 레버가 움직이는 자리. 있어야 「움직이는 물건」으로 읽힌다
+    box(g, 0.16, 0.62, 0.05, MAT.faceD, cx, 1.32, 0.03);
+
+    // 레버. 아래로 내리면 꺼짐, 위로 올리면 켜짐
+    const lever = new THREE.Group();
+    lever.position.set(cx, 1.32, 0.06);
+    g.add(lever);
+    box(lever, 0.075, 0.34, 0.075, MAT.rail, 0, 0.17, 0);
+    box(lever, 0.13, 0.1, 0.13, new THREE.MeshStandardMaterial({
+      color: 0xc4453a, roughness: 0.45, metalness: 0.3,
+    }), 0, 0.34, 0);
+
+    // 불 — 켜졌나. **레버 각도만으로는 멀리서 안 읽힌다**
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0x2a2f36 });
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.06, 0.04), lampMat);
+    lamp.position.set(cx, 0.86, 0.06);
+    g.add(lamp);
+
+    // 조준 판정용 몸 — 레버는 얇아서 그냥 두면 조준하기가 괴롭다.
+    // 안 보이는 큰 상자를 하나 겹쳐 둔다
+    const hit = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.9, 0.24),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    hit.position.set(cx, 1.36, 0.1);
+    g.add(hit);
+
+    out.push({ key: c.key, name: c.name, lever, lamp, lampMat, hit, tint });
+  });
+  return out;
+}

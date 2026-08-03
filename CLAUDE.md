@@ -152,8 +152,10 @@ node tools/bump-version.js 3d N     던전 캐시버스트 동기화
 node tools/bump-version.js space N  스페이스워 캐시버스트 동기화
 node tools/assets.js             그림 몇 장 들어왔나 (--write 로 목록 갱신)
 node tools/export-starter.js ../새저장소   다음 게임으로 뼈대 뽑기 (docs/REUSE.md)
+node tools/space-sim.js          스페이스워 — 추격이 90~180초인가 (브라우저 없이)
 node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
-                                 (serve.py 를 먼저 띄운다)
+node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
+                                 (walk·chase 는 serve.py 를 먼저 띄운다)
 ```
 
 **그림은 `web/3d/assets/` 에 떨어뜨리면 게임에 나옵니다.** 규격은

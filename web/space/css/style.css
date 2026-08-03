@@ -54,3 +54,21 @@ html, body {
 #hint b { color: #6fd8a0; }
 #hint p { margin-top: 10px; color: #9aa6b6; }
 #hint[hidden] { display: none; }
+
+/* 잠깐 뜨는 글자. **상태는 여기 안 띄운다** — 열·자국·거리는 콘솔 화면이
+   맡는다. UI 를 늘리기 시작하면 「손이 곧 상태창」(PLAN §5-2)이 무너진다. */
+#hud {
+  position: fixed;
+  left: 50%; top: 22%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background: rgba(8, 10, 16, .82);
+  border-left: 3px solid #ff6a4a;
+  color: #ffd8cc;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#hud[hidden] { display: none; }

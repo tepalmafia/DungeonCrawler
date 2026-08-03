@@ -1,10 +1,12 @@
 // ══════════════════════════════════════════════════════════════════════════
 //  스페이스워 — 진입점
 //
-//  ★ 지금 여기 있는 것은 **1단계**다 (docs/space/PLAN.md §13).
-//    「조종석에 선다 → 계기가 오른다 → 통로를 걸어간다 → 기관실 밸브를
-//    돌린다 → 계기가 내려간다.」 이것 하나만 끝까지 돈다.
-//    추격도 채굴도 거점도 없다. **세로로 한 줄을 먼저 끝낸다.**
+//  ★ 지금 여기 있는 것은 **2단계**다 (docs/space/PLAN.md §13).
+//    「접촉 → 자국이 오른다 → 전력을 옮긴다 → 뿌리친다」 하나가 끝까지 돈다.
+//    계통은 전력·열·자국 셋뿐이고 채굴도 거점도 식량도 없다.
+//
+//    **이 단계가 판가름이다.** 여기서 재미없으면 PLAN §7(도망)을 통째로
+//    다시 짠다 — 방을 다 꾸민 뒤에 알면 늦다.
 //
 //  ★ VERSION 과 index.html 의 ?v= 는 항상 같이 올린다
 //      node tools/bump-version.js space 2
@@ -17,12 +19,15 @@ import { Input } from './core/input.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
 import { REGIONS, REGION_BY_KEY, REGION_SECONDS } from './game/regions-table.js';
+import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
+import { makeChase, stepChase, resetChase, heatRate, canTurnOn, powerCount, PHASE } from './game/chase.js';
 
-export const VERSION = 5;
+export const VERSION = 10;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
 const hint = document.getElementById('hint');
+const hud = document.getElementById('hud');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x03040a);
@@ -75,10 +80,21 @@ const me = {
 };
 let heat = HEAT.start;
 let turn = 0;             // 밸브를 얼마나 돌렸나 (0~1)
+let coolFor = 0;          // 밸브가 걸려서 냉각이 열려 있는 남은 초
 let clock = 0;            // 켠 뒤 흐른 초 — 화면이 살아 있어 보이게 하는 데 쓴다
 // 검사용 구역 고정. **게임은 안 쓴다** — 자동 순환이 매 프레임 덮어쓰기
 // 때문에, 밖에서 구역을 정해 놓고 화면을 찍으려면 이게 필요하다.
 let regionPin = null;
+
+// ── 2단계 · 추격 ────────────────────────────────────────────
+// 전력은 하나인데 쓸 곳이 셋이고 **둘만** 켤 수 있다 (PLAN §7-0 축①).
+// 처음엔 추진·냉각을 켜 둔다 — 센서가 꺼져 있어서 「상대가 안 보인다」를
+// 처음부터 몸으로 알게 된다.
+const power = { thrust: true, cool: true, sensor: false };
+const chase = makeChase();
+let flash = 0;            // 경보 깜빡임
+let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
+let bannerT = 0;
 
 const ray = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
@@ -113,40 +129,99 @@ function walk(dt) {
   if (inside(me.x, nz, BODY.radius)) me.z = nz; else me.vz = 0;
 }
 
-// ── 밸브 ────────────────────────────────────────────────────
-// **잡고 돌린다.** 놓으면 되돌아온다 — 뻑뻑함이 이 게임의 손맛이다
-// (docs/space/PLAN.md §8).
-function valveStep(dt) {
+// ── 손이 닿는 것들 ──────────────────────────────────────────
+// **잡고 돌리는 것**(밸브)과 **누르는 것**(차단기)이 다르다.
+// 밸브는 끝까지 돌리는 데 시간이 들고, 차단기는 딸깍 하고 넘어간다.
+// 둘을 같은 방식으로 만들면 손맛이 하나로 뭉개진다 (PLAN §8).
+let aimName = null;
+function interactStep(dt) {
   ray.setFromCamera(CENTER, camera);
-  const hit = ray.intersectObject(ship.valve, true)[0];
+
+  // 조준선에 뭐가 걸리나. 가까운 것 하나만 본다
+  const targets = [ship.valve, ...ship.breakers.map((b) => b.hit)];
+  const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
-  if (near && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
-  else turn = Math.max(0, turn - VALVE.slip * dt);
+  // 어느 것에 걸렸는지 — 부모를 타고 올라가며 찾는다
+  let onValve = false;
+  let breaker = null;
+  if (near) {
+    for (let o = hit.object; o; o = o.parent) {
+      if (o === ship.valve) { onValve = true; break; }
+      const b = ship.breakers.find((x) => x.hit === o);
+      if (b) { breaker = b; break; }
+    }
+  }
 
-  ship.wheel.parent.rotation.z = -turn * Math.PI * 2.2;
-  cross.classList.toggle('on', !!near);
-  return turn >= VALVE.openAt;
+  // 밸브 — 잡고 돌린다. 놓으면 되돌아온다. **끝까지 돌리면 걸린다**
+  if (onValve && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
+  else turn = Math.max(0, turn - VALVE.slip * dt);
+  if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; }
+  coolFor = Math.max(0, coolFor - dt);
+  ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolFor > 0 ? dt * 0.5 : 0);
+
+  // 차단기 — 누르는 순간에만 넘어간다
+  const pressed = input.takePress();
+  if (breaker && pressed) {
+    if (power[breaker.key]) power[breaker.key] = false;
+    else if (canTurnOn(power)) power[breaker.key] = true;
+    else {
+      // ★ 꽉 찼을 때 **조용히 아무 일도 안 일어나면** 고장인 줄 안다.
+      //   무엇이 막았는지 글자로 말해 준다 — 규칙을 알아맞히게 하지 않는다
+      banner = `전력이 모자랍니다 — 셋 중 ${POWER_MAX}개만`;
+      bannerT = 1.6;
+    }
+  }
+
+  // 레버 각도와 불
+  for (const b of ship.breakers) {
+    const on = power[b.key];
+    b.lever.rotation.x += ((on ? -0.5 : 0.5) - b.lever.rotation.x) * Math.min(1, dt * 14);
+    b.lampMat.color.set(on ? b.tint : 0x2a2f36);
+  }
+
+  aimName = onValve ? 'valve' : (breaker ? breaker.key : null);
+  cross.classList.toggle('on', !!(onValve || breaker));
+  return coolFor > 0;
 }
 
-// ── 열 ──────────────────────────────────────────────────────
-function heatStep(dt, cooling) {
-  heat += (cooling ? -HEAT.fall : HEAT.rise) * dt;
+// ── 열 · 자국 · 추격 ────────────────────────────────────────
+function systemsStep(dt, valveOpen, regionMult) {
+  // 열은 이제 **켠 회로**가 정한다. 추진을 켜면 오르고, 냉각을 켜면 내려간다.
+  // 다만 냉각 회로만으로는 절반뿐이라 **기관실 밸브까지 열어야** 제대로 잡힌다
+  heat += heatRate(power, valveOpen) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
-  // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다.
-  // 여섯 장을 매 프레임 다시 그린다 (캔버스라 싸다)
-  ship.cock.update({ heat, cooling, room: roomAt(me.x, me.z), t: clock, region: ship.outside.region });
+  const was = chase.phase;
+  const ev = stepChase(chase, dt, power, heat, regionMult);
+  if (ev === 'contact') { banner = '접촉 — 무언가 따라붙었습니다'; bannerT = 2.6; }
+  if (ev === 'escaped') { banner = '뿌리쳤습니다'; bannerT = 3.2; }
+  if (ev === 'caught') { banner = '잡혔습니다'; bannerT = 3.2; }
+  void was;
 
-  // 기관실 등이 붉어진다 — **계기를 안 봐도 뜨거운 걸 안다**
+  // 경보 — 추격 중에만. 거리가 가까울수록 빨라진다 (PLAN §3-1 글로 안 알려준다)
+  if (chase.phase === PHASE.CHASE) {
+    const urgency = 1 - chase.dist / CH.escapeAt;
+    flash += dt * (2.2 + urgency * 6);
+    ship.alarm.intensity = (0.5 + 0.5 * Math.sin(flash * Math.PI * 2)) * (14 + urgency * 34);
+  } else {
+    ship.alarm.intensity += (0 - ship.alarm.intensity) * Math.min(1, dt * 3);
+  }
+
+  // 기관실이 열에 따라 달아오른다
   const hot = Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn));
   ship.lampEngine.color.setHSL(0.09 - 0.09 * hot, 0.55 + 0.4 * hot, 0.5);
   ship.lampEngine.intensity = 44 + 60 * hot;
   ship.matEngine.emissive?.setHSL(0.03, 0.9, 0.14 * hot);
-  // 반응로가 스스로 달아오른다 — 기관실에 들어서는 순간 눈에 들어와야 한다
   ship.coreGlow.material.color.setHSL(0.09 - 0.09 * hot, 0.85, 0.45 + 0.35 * hot);
   ship.lampCore.color.copy(ship.coreGlow.material.color);
   ship.lampCore.intensity = 8 + 22 * hot;
+
+  // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
+  ship.cock.update({
+    heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
+    region: ship.outside.region, power, chase,
+  });
 }
 
 // 화면 확인용 손잡이. **게임 로직은 이걸 안 쓴다** — 스크린샷을 찍고
@@ -156,6 +231,7 @@ window.SPACE = {
   get version() { return VERSION; },
   get heat() { return heat; },
   get turn() { return turn; },
+  get coolFor() { return +coolFor.toFixed(1); },
   room(x, z) { return roomAt(x ?? me.x, z ?? me.z); },
   get rooms() { return ROOMS.map((r) => ({ key: r.key, name: r.name })); },
   put(x, z, yaw = 0, pitch = 0) { me.x = x; me.z = z; me.yaw = yaw; me.pitch = pitch; me.vx = me.vz = 0; },
@@ -164,6 +240,17 @@ window.SPACE = {
   get locked() { return input.locked; },
   get blockers() { return BLOCKERS.length; },
   get region() { return ship.outside.region; },
+  get power() { return { ...power }; },
+  setPower(k, v) { if (v && !canTurnOn(power) && !power[k]) return false; power[k] = v; return true; },
+  get chase() { return { phase: chase.phase, risk: +chase.risk.toFixed(1), dist: +chase.dist.toFixed(1), sign: +chase.sign.toFixed(1), runs: chase.runs }; },
+  // ★ 100 으로는 안 붙는다. stepChase 가 **더한 뒤에** 견주므로 그 프레임에
+  //   riskFall 이 빠져서 99.9 가 된다. 넉넉히 넘겨 놓는다.
+  forceContact() { chase.risk = 200; },
+  /** 지금 조준선에 뭐가 걸리나 — 검사용 */
+  get aim() { return aimName; },
+  resetChase() { resetChase(chase); },
+  /** 거리를 밀어 놓고 「뿌리침·잡힘」이 실제로 나는지 보려고 낸 구멍 */
+  setDist(v) { chase.dist = v; },
   setRegion(k, instant = true) { regionPin = k; ship.outside.setRegion(k, instant); },
   unpinRegion() { regionPin = null; },
   /** 그 자리에 설 수 있나 — 충돌 검사용. tools 가 점을 찍어 본다 */
@@ -227,8 +314,15 @@ function frame(now) {
   camera.rotation.x = me.pitch;
   camera.rotation.z = sw * 0.06;   // 아주 살짝 기운다
 
-  const cooling = valveStep(dt);
-  heatStep(dt, cooling);
+  const valveOpen = interactStep(dt);
+  systemsStep(dt, valveOpen, want.signMult ?? 1);
+
+  // 화면 한복판 글자 — 잠깐 떴다 사라진다
+  if (bannerT > 0) {
+    bannerT -= dt;
+    hud.textContent = banner;
+    hud.hidden = false;
+  } else hud.hidden = true;
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
