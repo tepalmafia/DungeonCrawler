@@ -30,6 +30,7 @@ import { Dialogue } from './game/dialogue.js';
 import { Rest } from './game/rest.js';
 import { spawnBoss, bossNameFor } from './game/boss.js';
 import { SkillTree } from './game/skilltree.js';
+import { DROP, COIN, DEATH, POTION_DROP } from './game/economy-table.js';
 import { fieldAt } from './game/skills.js';
 import { playerRoll, hitEnemy, hitPlayer, Projectile } from './game/combat.js';
 import { SKILLS, SKILL_BY_HOT, trySkill, updateFields, updateDashHits } from './game/skills.js';
@@ -309,7 +310,7 @@ function onEnemyKilled(e) {
   if (e.isBoss) {
     G.stats.bossKills++;
     // 3 → 2. 보스가 한 번에 세 개를 뱉으면 그 뒤 층의 드랍이 전부 무의미해진다.
-    for (let i = 0; i < 2; i++) dropItem(roll({ minRarity: 2 }), e.pos, i);
+    for (let i = 0; i < DROP.bossCount; i++) dropItem(roll({ minRarity: DROP.bossMinRarity }), e.pos, i);
     G.level.openExit();
     ui.setBoss(null);
     // 층의 끝에 보상이 하나 더 붙는다. 막의 끝(3·6·9층)은 하나 더 —
@@ -323,10 +324,10 @@ function onEnemyKilled(e) {
   } else if (e.elite) {
     // 정예도 확정에서 절반 확률로. 정예는 여전히 제일 나은 표적이지만
     // 「정예만 잡으면 장비가 나온다」가 되면 잡몹을 지나치게 된다.
-    if (rnd.chance(0.5)) dropItem(roll({ minRarity: 1 }), e.pos, 0);
+    if (rnd.chance(DROP.elite)) dropItem(roll({ minRarity: DROP.eliteMinRarity }), e.pos, 0);
   // 9% → 4.5%. 절반으로 내린다. 「필요한 것만 나온다」에서 한 걸음 더 —
   // 장비가 바뀌는 순간이 드물수록 그 순간이 커진다.
-  } else if (rnd.chance(0.045 + G.tier * 0.0075) && !e.summoned) {
+  } else if (rnd.chance(DROP.normal + G.tier * DROP.normalPerTier) && !e.summoned) {
     dropItem(roll(), e.pos, 0);
   }
 
@@ -340,12 +341,12 @@ function onEnemyKilled(e) {
   // 정예·보스는 확정이다. 떨어지는 빈도를 낮춘 만큼 한 번의 양을 키워서
   // 층당 수입은 유지한다 — 줄이려는 게 아니라 **손이 가게** 하려는 것이다.
   if (!e.summoned) {
-    const chance = e.isBoss || e.elite ? 1 : 0.45;
+    const chance = e.isBoss ? COIN.chance.boss : e.elite ? COIN.chance.elite : COIN.chance.normal;
     if (rnd.chance(chance)) {
-      const base = 3 + G.floorNo * 2 + G.tier * 3;
+      const base = COIN.base(G.floorNo, G.tier);
       // 잡몹은 확률이 0.45 라 1/0.45 ≈ 2.2 배를 실어야 기댓값이 같다
-      const mult = e.isBoss ? 25 : e.elite ? 6 : 2.2;
-      const coin = Math.max(1, Math.round(base * mult * rnd.range(0.7, 1.3)));
+      const mult = e.isBoss ? COIN.mult.boss : e.elite ? COIN.mult.elite : COIN.mult.normal;
+      const coin = Math.max(1, Math.round(base * mult * rnd.range(...COIN.jitter)));
       dropCoin(coin, e.pos, e.isBoss || e.elite);
     }
   }
@@ -357,7 +358,7 @@ function onEnemyKilled(e) {
   }
 
   // 물약은 가끔 회복 대신 바로 보충
-  if (rnd.chance(0.09)) {
+  if (rnd.chance(POTION_DROP)) {
     const k = rnd.chance(0.5) ? 'hp' : 'mp';
     G.player.potions[k]++;
     ui.toast(`${k === 'hp' ? '체력' : '마나'} 물약 +1`, '#b8b8b8');
@@ -422,7 +423,6 @@ function dropItem(item, pos, i = 0) {
  * 잃은 물건은 사라지지 않고 **죽은 자리에 떨어진다.** 어두운 길을 연료를 써 가며
  * 되돌아가는 것이 벌이지, 소멸이 벌이 아니다.
  */
-const LOSE_CHANCE = [0.60, 0.45, 0.30, 0.15];
 
 function applyDeathPenalty() {
   const p = G.player;
@@ -435,7 +435,7 @@ function applyDeathPenalty() {
   if (item && !G.deathSaveUsed && G.tree.mods('common').deathSave) {
     G.deathSaveUsed = true;
     ui.toast('죽음의 대가 — 장비를 지켰다', '#7fc47a');
-  } else if (item && rnd.chance(LOSE_CHANCE[item.rarity] ?? 0.4)) {
+  } else if (item && rnd.chance(DEATH.loseChanceByRarity[item.rarity] ?? 0.4)) {
     p.equipped[slot] = null;
     p.recompute();
     dropItem(item, p.pos, 0);
@@ -443,7 +443,7 @@ function applyDeathPenalty() {
   }
 
   // 영혼 조각은 30%. 장비를 안 잃어도 죽음에는 값이 있어야 한다.
-  const coinLost = Math.floor(p.coin * 0.3);
+  const coinLost = Math.floor(p.coin * DEATH.coinPct);
   if (coinLost > 0) p.coin -= coinLost;
 
   return { lost, coinLost, slot };
