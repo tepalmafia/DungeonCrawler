@@ -14,10 +14,11 @@
 import * as THREE from 'three';
 import { preload } from './core/assets.js';
 import { Input } from './core/input.js';
-import { buildShip, inside, roomAt, BLOCKERS } from './world/ship.js';
+import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
+import { REGIONS, REGION_BY_KEY, REGION_SECONDS } from './game/regions-table.js';
 
-export const VERSION = 4;
+export const VERSION = 5;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -75,6 +76,9 @@ const me = {
 let heat = HEAT.start;
 let turn = 0;             // 밸브를 얼마나 돌렸나 (0~1)
 let clock = 0;            // 켠 뒤 흐른 초 — 화면이 살아 있어 보이게 하는 데 쓴다
+// 검사용 구역 고정. **게임은 안 쓴다** — 자동 순환이 매 프레임 덮어쓰기
+// 때문에, 밖에서 구역을 정해 놓고 화면을 찍으려면 이게 필요하다.
+let regionPin = null;
 
 const ray = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
@@ -132,14 +136,12 @@ function heatStep(dt, cooling) {
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다.
   // 여섯 장을 매 프레임 다시 그린다 (캔버스라 싸다)
-  ship.cock.update({ heat, cooling, room: roomAt(me.x, me.z), t: clock });
+  ship.cock.update({ heat, cooling, room: roomAt(me.x, me.z), t: clock, region: ship.outside.region });
 
   // 기관실 등이 붉어진다 — **계기를 안 봐도 뜨거운 걸 안다**
   const hot = Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn));
   ship.lampEngine.color.setHSL(0.09 - 0.09 * hot, 0.55 + 0.4 * hot, 0.5);
-  ship.lampEngine.intensity = 60 + 70 * hot;
-  ship.lampEngine2.color.copy(ship.lampEngine.color);
-  ship.lampEngine2.intensity = 34 + 40 * hot;
+  ship.lampEngine.intensity = 44 + 60 * hot;
   ship.matEngine.emissive?.setHSL(0.03, 0.9, 0.14 * hot);
   // 반응로가 스스로 달아오른다 — 기관실에 들어서는 순간 눈에 들어와야 한다
   ship.coreGlow.material.color.setHSL(0.09 - 0.09 * hot, 0.85, 0.45 + 0.35 * hot);
@@ -154,20 +156,43 @@ window.SPACE = {
   get version() { return VERSION; },
   get heat() { return heat; },
   get turn() { return turn; },
-  get room() { return roomAt(me.x, me.z); },
+  room(x, z) { return roomAt(x ?? me.x, z ?? me.z); },
+  get rooms() { return ROOMS.map((r) => ({ key: r.key, name: r.name })); },
   put(x, z, yaw = 0, pitch = 0) { me.x = x; me.z = z; me.yaw = yaw; me.pitch = pitch; me.vx = me.vz = 0; },
   setHeat(v) { heat = v; },
   get pos() { return { x: +me.x.toFixed(3), z: +me.z.toFixed(3) }; },
   get locked() { return input.locked; },
   get blockers() { return BLOCKERS.length; },
+  get region() { return ship.outside.region; },
+  setRegion(k, instant = true) { regionPin = k; ship.outside.setRegion(k, instant); },
+  unpinRegion() { regionPin = null; },
   /** 그 자리에 설 수 있나 — 충돌 검사용. tools 가 점을 찍어 본다 */
   canStand(x, z) { return inside(x, z, BODY.radius); },
+  /**
+   * 무게 재기 — 무엇이 몇 개인가.
+   * **fps 는 여기서 못 믿는다** (헤드리스는 소프트웨어 렌더라 1fps 다).
+   * 대신 그리기 횟수·삼각형·조명 개수는 기계와 무관하게 같으므로,
+   * 줄이기 전후를 **비교**하는 데는 쓸 수 있다.
+   */
+  get cost() {
+    let lights = 0, meshes = 0;
+    scene.traverse((o) => { if (o.isLight) lights++; if (o.isMesh) meshes++; });
+    const i = renderer.info;
+    return { 그리기: i.render.calls, 삼각형: i.render.triangles, 조명: lights, 물체: meshes, 프로그램: i.programs?.length ?? 0 };
+  },
 };
 
 // ── 루프 ────────────────────────────────────────────────────
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // ★ **아래끝을 0 으로 자른다.** 안 자르면 첫 프레임에서 음수가 나온다 —
+  //   `last` 는 모듈이 끝날 때 performance.now() 로 잡는데,
+  //   requestAnimationFrame 이 주는 `now` 는 **그 프레임이 시작된 시각**이라
+  //   더 이를 수 있다. 실제로 -0.0017 이 나왔고, 그 때문에 clock 이 음수가
+  //   되어 `Math.floor(clock/95) % 4` 가 **-1** 이 됐다. 배열의 -1 은
+  //   undefined 라 첫 프레임에서 게임이 통째로 죽었다.
+  //   화면은 까맣고 콘솔에만 한 줄 뜬다 — 원인을 짐작하기 제일 어려운 모양.
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   clock += dt;
 
@@ -176,6 +201,17 @@ function frame(now) {
   me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
 
   walk(dt);
+
+  // ── 구역이 바뀐다 ──────────────────────────────────────
+  // ★ 지금은 **시간으로만** 넘어간다. 항로를 고르는 것(관측실 해도대)이
+  //   생기면 그쪽이 정한다. 임시라는 것을 여기 적어 둔다.
+  // 나머지 연산은 음수를 만나면 음수를 돌려준다. dt 를 잘라 놨지만
+  // 여기도 막아 둔다 — 배열 첨자는 한 번 음수가 되면 조용히 undefined 다
+  const n = REGIONS.length;
+  const want = regionPin
+    ? REGION_BY_KEY[regionPin]
+    : REGIONS[((Math.floor(clock / REGION_SECONDS) % n) + n) % n];
+  if (want.key !== ship.outside.region) ship.outside.setRegion(want.key);
 
   // ── 배가 간다 ──────────────────────────────────────────
   // 창밖을 흘려보내고, 배가 미세하게 떤다. 둘 다 없으면 **정지 화면**이다.

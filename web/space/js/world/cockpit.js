@@ -23,6 +23,7 @@
 //    애초에 코드가 그려야 한다. 화면의 **테두리·금속 무늬**는 그림이다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
+import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
   color: 0x0a1622, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
@@ -213,6 +214,14 @@ function drawCourse(ctx, w, h, s) {
   ctx.fillStyle = DIM;
   ctx.font = `600 ${Math.round(h * 0.1)}px system-ui, sans-serif`;
   ctx.fillText('다음 거점까지', h * 0.07, h * 0.94);
+  // 지금 어느 구역인가 — 창밖이 왜 저 색인지 여기서 확인된다
+  const rg = REGIONS.find((x) => x.key === s.region);
+  if (rg) {
+    ctx.fillStyle = '#5fe0a8';
+    ctx.textAlign = 'right';
+    ctx.fillText(rg.name, w - h * 0.07, h * 0.94);
+    ctx.textAlign = 'left';
+  }
 }
 
 /** 자국 — 얼마나 눈에 띄나. 판단의 근거라 숫자로 보여준다 (PLAN §6 ★) */
@@ -343,13 +352,12 @@ export function buildCockpit(parent, room, H) {
     slot.add(sc.mesh);
     screens.push(sc);
 
-    // 화면이 콘솔을 비춘다 — 「화면이 주광원」이 여기서 실제로 성립한다.
-    // 세기를 낮췄다. 2.4 에서는 콘솔 앞판에 **동그란 얼룩**으로 맺혔다
-    if (i % 2 === 1) {
-      const gl = new THREE.PointLight(BLUE, 1.6, 1.5, 2);
-      gl.position.set(s.mx, 1.32, s.mz + 0.34);
-      g.add(gl);
-    }
+    // ★ 여기 점광원 둘이 있었는데 **뺐다.**
+    //   점광원은 화면에 보이는 모든 픽셀에서 계산된다 — 이 방 한구석을
+    //   조금 파랗게 하려고 배 전체의 픽셀값을 두 번 더 계산하는 셈이었다.
+    //   화면 자체가 이미 스스로 빛나는(MeshBasicMaterial) 물건이라,
+    //   빼도 「화면이 밝다」는 그대로다. 잃은 것은 콘솔 상판의 옅은 파란
+    //   반사뿐이고, 그건 환경맵(main.js)이 절반쯤 대신한다.
   }
 
   // 콘솔 위 작은 스위치들 — 손이 갈 데가 많아 보여야 한다
@@ -445,7 +453,11 @@ export function buildOutside(scene, z) {
   //   가까운 것은 빠르게, 먼 것은 느리게 지나간다 — 시차는 공짜로 나온다.
   const NEAR = 900;
   const SPREAD = 90;          // 좌우·위아래로 흩어지는 폭
-  const Z_NEAR = z + 6;       // 이보다 뒤로 가면 되돌린다
+  // ★ 되돌리는 지점이 **배 안쪽**이었다 (z + 6 = 조종석 한복판).
+  //   그래서 잔해 덩어리가 조종석 안으로 날아 들어와, 화면 절반을 덮는
+  //   흰 사각형으로 보였다 — 가까운 면 하나가 실내 조명을 받은 것이었다.
+  //   창 바로 앞에서 되돌린다. 어차피 그 뒤는 선체가 가려서 안 보인다.
+  const Z_NEAR = z - 0.5;     // 이보다 뒤로 가면 되돌린다
   const Z_FAR = z - 190;      // 되돌아가는 자리
   const np = new Float32Array(NEAR * 3);
   const nc = new Float32Array(NEAR * 3);
@@ -485,34 +497,131 @@ export function buildOutside(scene, z) {
   air.position.copy(planet.position);
   out.add(air);
 
+  // ── 잔해 ────────────────────────────────────────────────
+  // 잔해밭 구역에서만 보인다. 별과 같은 방식으로 흘려보내되 **덩어리**라
+  // 회전한다 — 점은 흘러도 「지나간다」로만 읽히고, 도는 덩어리라야
+  // 「저기 뭐가 떠 있다」가 된다.
+  const MAXDEB = 70;
+  // 배 밖에는 등이 없어서 덩어리가 **까만 구멍**으로만 보였다. 아주 조금
+  // 스스로 빛나게 해서 「저기 뭐가 떠 있다」로 읽히게 한다. 별빛을 받는
+  // 정도라고 보면 된다
+  const rockMat = new THREE.MeshStandardMaterial({
+    color: 0x4a4740, roughness: 1, metalness: 0.15, emissive: 0x1a1c20,
+  });
+  const rocks = [];
+  for (let i = 0; i < MAXDEB; i++) {
+    const s2 = 0.7 + (i % 7) * 0.62;
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(s2, 0), rockMat);
+    m.position.set(0, 0, Z_FAR);
+    m.visible = false;
+    m.userData.spin = new THREE.Vector3((i % 5 - 2) * 0.1, (i % 3 - 1) * 0.13, (i % 7 - 3) * 0.07);
+    out.add(m);
+    rocks.push(m);
+  }
+  // ★ `spread` 가 없으면 **잔해밭에 들어서도 한참 아무것도 안 보인다.**
+  //   처음엔 전부 제일 먼 자리(Z_FAR)에 놓았는데, 거기서 여기까지 오는 데
+  //   한참 걸린다 — 구역이 바뀐 티가 안 났다. 처음 켤 때는 **구간 전체에**
+  //   흩어 놓고, 지나간 것만 뒤로 되돌린다.
+  const placeRock = (m, spread = false) => {
+    const a = Math.random() * Math.PI * 2;
+    // 반지름을 좁혔다. 넓게 흩으면 **화면 가장자리로만 지나가서** 안 보인다
+    // 선체 반폭(≈5.5)보다 밖에서 지나가야 한다. 안쪽이면 배를 뚫는다
+    const rad = 9 + Math.sqrt(Math.random()) * 22;
+    const zz = spread ? Z_FAR + Math.random() * (Z_NEAR - Z_FAR) : Z_FAR + Math.random() * 40;
+    m.position.set(Math.cos(a) * rad, Math.sin(a) * rad * 0.6, zz);
+  };
+
+  // ── 구역 ────────────────────────────────────────────────
+  // 색·별 밀도·안개를 **부드럽게 갈아탄다.** 툭 바뀌면 순간이동처럼 보인다.
+  const fog = new THREE.Fog(0x05070d, 70, 340);
+  scene.fog = fog;
+  // 하늘 자체의 색. **이게 구역을 알아보게 하는 것의 8할이다**
+  const bg = new THREE.Color(0x03050c);
+  scene.background = bg;
+  const cur = { fog: new THREE.Color(0x05070d), near: 70, far: 340, stars: 1, tint: new THREE.Color(0.86, 0.89, 1) };
+  let want = REGIONS[0];
+  let regionKey = REGIONS[0].key;
+
+  /** @param instant 검사용 — 색 갈아타기를 건너뛴다. 게임은 안 쓴다 */
+  function setRegion(key, instant = false) {
+    const r = REGIONS.find((x) => x.key === key);
+    if (!r) return;
+    want = r;
+    regionKey = key;
+    if (instant) {
+      bg.set(r.bg);
+      cur.fog.set(r.fog); cur.near = r.fogNear; cur.far = r.fogFar;
+      cur.stars = r.stars; cur.tint.setRGB(...r.tint);
+    }
+  }
+
   const nearPos = ng.attributes.position;
+  const nearCol = ng.attributes.color;
 
   /**
    * 한 프레임 흘려보낸다.
    * @param speed 초당 몇 유닛. 표(game/systems-table.js CRUISE)에서 온다
    */
   function update(dt, speed) {
-    const d = speed * dt;
-    const arr = nearPos.array;
+    // 구역 갈아타기 — 색은 천천히, 개수는 바로
+    const k = Math.min(1, dt / REGION_BLEND);
+    bg.lerp(new THREE.Color(want.bg), k);
+    cur.fog.lerp(new THREE.Color(want.fog), k);
+    cur.near += (want.fogNear - cur.near) * k;
+    cur.far += (want.fogFar - cur.far) * k;
+    cur.stars += (want.stars - cur.stars) * k;
+    cur.tint.lerp(new THREE.Color(...want.tint), k);
+    fog.color.copy(cur.fog);
+    fog.near = cur.near;
+    fog.far = cur.far;
+
+    const d = speed * want.speed * dt;
+    const arr = nearPos.array, col = nearCol.array;
+    const shown = Math.round(NEAR * cur.stars);
     for (let i = 0; i < NEAR; i++) {
-      const k = i * 3 + 2;
-      arr[k] += d;
-      // 지나간 것은 앞으로 되돌린다. 자리도 새로 뽑아야 같은 줄이 반복 안 된다
-      if (arr[k] > Z_NEAR) place(i, Z_FAR);
+      const k3 = i * 3;
+      arr[k3 + 2] += d;
+      if (arr[k3 + 2] > Z_NEAR) place(i, Z_FAR);
+      // 밀도는 **색을 죽여서** 흉내 낸다. 개수를 바꾸면 버퍼를 다시 만들어야
+      // 하는데, 그건 구역이 바뀔 때마다 뚝 끊긴다
+      const on = i < shown ? 1 : 0;
+      col[k3] = cur.tint.r * on;
+      col[k3 + 1] = cur.tint.g * on;
+      col[k3 + 2] = cur.tint.b * on;
     }
     nearPos.needsUpdate = true;
+    nearCol.needsUpdate = true;
+
+    // 잔해
+    const nd = want.debris;
+    for (let i = 0; i < MAXDEB; i++) {
+      const m = rocks[i];
+      if (i >= nd) { m.visible = false; continue; }
+      if (!m.visible) { m.visible = true; placeRock(m, true); }
+      m.position.z += d * 1.15;
+      m.rotation.x += m.userData.spin.x * dt;
+      m.rotation.y += m.userData.spin.y * dt;
+      m.rotation.z += m.userData.spin.z * dt;
+      if (m.position.z > Z_NEAR) placeRock(m);
+    }
 
     // 먼 하늘은 아주 천천히 돈다. 배가 미세하게 틀어지고 있다는 뜻이고,
     // 이게 있어야 오래 봐도 「멈춰 있다」는 느낌이 안 든다
     farStars.rotation.y += dt * 0.0016;
-    // 행성도 아주 조금씩 뒤로 흘러간다 — 지나쳐 가는 중이다
-    planet.position.z += d * 0.045;
-    air.position.copy(planet.position);
-    if (planet.position.z > z - 40) {
-      planet.position.set(-62 - Math.random() * 40, 6, z - 190);
+
+    // 행성 — 구역에 따라 있고 없다
+    const showPlanet = want.planet;
+    planet.visible = showPlanet;
+    air.visible = showPlanet;
+    if (showPlanet) {
+      planet.position.z += d * 0.045;
       air.position.copy(planet.position);
+      if (planet.position.z > z - 40) {
+        planet.position.set(-62 - Math.random() * 40, 6, z - 190);
+        air.position.copy(planet.position);
+      }
     }
   }
 
-  return { update };
+  return { update, setRegion, get region() { return regionKey; } };
 }
