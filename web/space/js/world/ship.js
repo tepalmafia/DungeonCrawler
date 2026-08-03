@@ -13,7 +13,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { surface } from '../core/assets.js';
-import { buildCockpit, buildOutside } from './cockpit.js';
+import { buildCockpit, buildOutside, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import { ZONE, MAT, rackRun, handrail, conduit, doorFrame, sign } from './kit.js';
 
 const H = 2.7;          // 천장 높이
@@ -27,12 +27,78 @@ export const ROOMS = [
   { key: 'engine', x0: -4.5, x1: 4.5, z0: 3.5, z1: 10.5, name: '기관실' },
 ];
 
-/** 점 하나가 배 안인가 (반지름만큼 안쪽으로) */
-export function inside(x, z, r = 0) {
-  for (const m of ROOMS) {
-    if (x > m.x0 + r && x < m.x1 - r && z > m.z0 + r && z < m.z1 - r) return true;
+/**
+ * 못 지나가는 것들. **buildShip 이 세우면서 같이 채운다** —
+ * 기하와 충돌을 두 곳에 적으면 반드시 갈라진다 (CLAUDE.md 「숫자는 한 곳에」).
+ *
+ * ★ 처음엔 이게 없어서 **반응로와 랙을 뚫고 지나갔다.** 방 사각형만 봤다.
+ *   기울어진 것(캐노피·콘솔)이 있어서 축에 나란한 상자로는 모자라,
+ *   회전을 가진 상자(obb)와 원 둘만 쓴다.
+ */
+export const BLOCKERS = [];
+
+/** 원기둥 같은 것 — 반응로·기둥 */
+export function blockCircle(x, z, r) { BLOCKERS.push({ t: 'c', x, z, r }); }
+
+/** 회전을 가진 상자 — 랙·콘솔·캐노피·좌석 */
+export function blockBox(cx, cz, hw, hd, rot = 0) { BLOCKERS.push({ t: 'b', cx, cz, hw, hd, rot }); }
+
+function blocked(x, z, r) {
+  for (const b of BLOCKERS) {
+    if (b.t === 'c') {
+      const dx = x - b.x, dz = z - b.z, rr = b.r + r;
+      if (dx * dx + dz * dz < rr * rr) return true;
+    } else {
+      // 상자의 안쪽 좌표로 옮겨 놓고 본다 (three 의 rotation.y 와 같은 방향)
+      const s = Math.sin(b.rot), c = Math.cos(b.rot);
+      const dx = x - b.cx, dz = z - b.cz;
+      const lx = dx * c - dz * s;
+      const lz = dx * s + dz * c;
+      if (Math.abs(lx) < b.hw + r && Math.abs(lz) < b.hd + r) return true;
+    }
   }
   return false;
+}
+
+/** 점이 배 안(방들의 합집합)에 있나. **경계를 포함한다** */
+function inUnion(x, z) {
+  for (const m of ROOMS) {
+    if (x >= m.x0 && x <= m.x1 && z >= m.z0 && z <= m.z1) return true;
+  }
+  return false;
+}
+
+// 몸을 원으로 보고 둘레를 여덟 군데 찍는다
+const PROBE = [];
+for (let i = 0; i < 8; i++) PROBE.push([Math.cos((i * Math.PI) / 4), Math.sin((i * Math.PI) / 4)]);
+
+/**
+ * 점 하나에 설 수 있나.
+ *
+ * ★ 여기서 **게임을 못 하게 만드는 버그**가 났다. 처음엔 「어느 한 방의
+ *   사각형 안에, 반지름만큼 여유를 두고」로 봤다. 방 하나만 보면 맞는 말인데,
+ *   **방과 방이 만나는 문턱에서 아무 방에도 안 속하는 띠**가 생긴다:
+ *
+ *     통로는 z < 3.5 - 0.34 = 3.16 을 요구하고
+ *     기관실은 z > 3.5 + 0.34 = 3.84 를 요구한다
+ *     → z 3.16 ~ 3.84 는 **어디에도 못 선다.** 문이 뚫려 있는데 못 지나간다
+ *
+ *   화면으로는 절대 안 보인다. 나는 순간이동(SPACE.put)으로 방마다 찍어
+ *   보기만 하고 **한 번도 걸어서 가 보지 않았다** — 사장님이 「이동이 안
+ *   된다」고 하셔서 알았다. POSTMORTEM §1-③ 그대로다.
+ *
+ *   그래서 **합집합**을 본다. 한 방이 아니라 배 전체가 기준이고, 여유는
+ *   몸 둘레를 여덟 군데 찍어서 준다. 문턱은 양쪽이 이어져 있으므로 통과되고,
+ *   벽은 바깥이 합집합 밖이라 막힌다.
+ */
+export function inside(x, z, r = 0) {
+  if (!inUnion(x, z)) return false;
+  if (r > 0) {
+    for (const [dx, dz] of PROBE) {
+      if (!inUnion(x + dx * r, z + dz * r)) return false;
+    }
+  }
+  return !blocked(x, z, r);
 }
 
 /** 지금 어느 방에 있나 — 조명·소리를 방마다 다르게 하려고 쓴다 */
@@ -135,7 +201,7 @@ export function buildShip(scene) {
   // ── 조종석 안 ───────────────────────────────────────────
   // 캐노피 · 화면 · 좌석 · 띠조명. 참고 사진을 받고 통째로 다시 지었다
   const cock = buildCockpit(ship, cockpit, H);
-  buildOutside(scene, cockpit.z0);
+  const outside = buildOutside(scene, cockpit.z0);
 
   // ── 통로 ────────────────────────────────────────────────
   // 실제 우주선의 문법대로 짓는다: **규격 랙이 벽을 채우고, 가운데만
@@ -172,8 +238,8 @@ export function buildShip(scene) {
   // ── 기관실 안 ───────────────────────────────────────────
   // 여기가 랙이 진짜로 서는 곳이다. 폭 9 라 양쪽 벽을 채워도 가운데가 남는다
   const EZ = ZONE.engine;
-  rackRun(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.7, engine.z1 - 0.7, 1, EZ.accent, 1);
-  rackRun(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.7, engine.z1 - 0.7, -1, EZ.accent, 3);
+  const rackL = rackRun(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.7, engine.z1 - 0.7, 1, EZ.accent, 1);
+  const rackR = rackRun(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.7, engine.z1 - 0.7, -1, EZ.accent, 3);
   for (const sx of [-1, 1]) {
     handrail(ship, 'z', sx * (engine.x1 - 0.56), engine.z0 + 1.0, engine.z1 - 1.0, 1.42, 0);
     conduit(ship, 'z', sx * (engine.x1 - 0.3), engine.z0 + 0.3, engine.z1 - 0.3, H - 0.32, EZ.light);
@@ -240,6 +306,44 @@ export function buildShip(scene) {
     spoke.rotation.z = (i * Math.PI) / 4;
     valve.add(spoke);
   }
+  // ── 못 지나가는 것 등록 ─────────────────────────────────
+  //
+  // ★ 여기서 등록한다. 기하를 만든 **같은 자리에서** 하지 않고 따로 표를
+  //   두면, 물건을 옮겼을 때 충돌만 옛 자리에 남는다. 그건 「분명히 비었는데
+  //   막힌다」가 되고, 원인을 찾는 데 한나절 걸린다.
+  BLOCKERS.length = 0;
+
+  const segRot = (a, b) => -Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const segLen = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+
+  // 캐노피 — 조종석 앞은 사각형이 아니라 **꺾인 띠**다. 방 사각형만 보면
+  // 유리를 뚫고 우주로 걸어 나간다
+  for (let i = 0; i < CANOPY.length - 1; i++) {
+    const a = CANOPY[i], b = CANOPY[i + 1];
+    blockBox((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, segLen(a, b) / 2, 0.16, segRot(a, b));
+  }
+  // 콘솔
+  for (let i = 0; i < CONSOLE_PTS.length - 1; i++) {
+    const a = CONSOLE_PTS[i], b = CONSOLE_PTS[i + 1];
+    blockBox((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, segLen(a, b) / 2, 0.26, segRot(a, b));
+  }
+  // 좌석
+  for (const [sx, sz] of SEATS) blockBox(sx, sz, 0.34, 0.34, 0);
+
+  // 랙 — 세운 것들의 **실제 자리**에서 뽑는다. 몸통이 뒤로 물러나 있으므로
+  // (rack() 이 -D/2 에 세운다) 그만큼 뒤로 옮긴 자리가 중심이다
+  const D2 = 0.21;
+  for (const g of [...rackL, ...rackR]) {
+    const ry = g.rotation.y;
+    blockBox(g.position.x - D2 * Math.sin(ry), g.position.z - D2 * Math.cos(ry), 0.45, D2, ry);
+  }
+
+  // 반응로 — 방 한가운데 서 있다
+  blockCircle(0, engine.z0 + 3.6, 0.82);
+  // 밸브 — 벽에서 튀어나와 있다. 손이 닿는 거리(2.3)보다 훨씬 가까우니
+  // 막아도 못 돌리는 일은 없다
+  blockCircle(0, engine.z1 - 0.30, 0.30);
+
   // ── 조명 ────────────────────────────────────────────────
   // ★ 숫자가 옛 감각과 다르다 — three r155 부터 조명이 **물리 단위**다.
   //   처음에 예전 감각으로 14 · 5 · 16 을 넣었더니 화면이 거의 검게 나왔다.
@@ -268,6 +372,6 @@ export function buildShip(scene) {
   lampCore.position.set(0, 1.35, engine.z0 + 3.6);
   scene.add(lampCore);
 
-  return { cock, valve, wheel, lampEngine, lampEngine2, lampCore, matEngine, coreGlow };
+  return { cock, outside, valve, wheel, lampEngine, lampEngine2, lampCore, matEngine, coreGlow };
 }
 

@@ -22,9 +22,14 @@ export class Input {
     // 창 밖으로 나가면 눌린 키가 눌린 채로 남는다 — 「저절로 걸어간다」의 원인
     addEventListener('blur', () => { this.keys.clear(); this.hold = false; });
 
-    canvas.addEventListener('mousedown', (e) => {
+    // ★ 캔버스가 아니라 **창 전체**에서 받는다.
+    //   캔버스에만 걸었더니, 위에 덮인 안내 창을 누른 사람은 게임을 못 켰다.
+    //   화면을 어디를 누르든 시작돼야 한다 — 「어디를 눌러야 하는지」를
+    //   사람이 알아맞히게 만들면 안 된다.
+    addEventListener('mousedown', (e) => {
       if (e.button === 0) this.hold = true;
-      if (!this.locked) canvas.requestPointerLock();
+      // 잠금이 막 풀린 직후에 다시 걸면 브라우저가 거절한다. 조용히 넘긴다
+      if (!this.locked) canvas.requestPointerLock?.()?.catch?.(() => {});
     });
     addEventListener('mouseup', (e) => { if (e.button === 0) this.hold = false; });
 

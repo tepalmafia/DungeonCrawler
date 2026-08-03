@@ -42,7 +42,7 @@ const AMBER = 0xff9a3c;
 // ── 캐노피 ─────────────────────────────────────────────────
 // 정면에서 좌우로 꺾여 들어오는 여섯 점. **평면 하나가 아니라 꺾인 띠**다 —
 // 이것 하나로 「감싸는 조종석」이 되는지 아닌지가 갈린다.
-const CANOPY = [
+export const CANOPY = [
   [-3.00, -7.40],
   [-2.55, -8.85],
   [-1.05, -9.46],
@@ -50,6 +50,15 @@ const CANOPY = [
   [2.55, -8.85],
   [3.00, -7.40],
 ];
+/** 콘솔이 그리는 호. **충돌도 이 값을 읽는다** — 두 곳에 적으면 갈라진다 */
+export const CONSOLE_PTS = [
+  [-2.30, -7.95], [-1.30, -8.62], [-0.45, -8.88],
+  [0.45, -8.88], [1.30, -8.62], [2.30, -7.95],
+];
+
+/** 좌석이 서 있는 자리. 충돌이 같이 읽는다 */
+export const SEATS = [[-1.05, -6.95], [1.05, -6.95]];
+
 const SILL = 0.82;      // 창 아래끝
 const HEAD = 2.34;      // 창 위끝
 
@@ -302,10 +311,7 @@ export function buildCockpit(parent, room, H) {
 
   // ── 콘솔 · 화면 ───────────────────────────────────────
   // 참고 사진의 핵심. 화면이 여럿이고 **그게 빛난다**
-  const CONSOLE = [
-    [-2.30, -7.95], [-1.30, -8.62], [-0.45, -8.88],
-    [0.45, -8.88], [1.30, -8.62], [2.30, -7.95],
-  ];
+  const CONSOLE = CONSOLE_PTS;
   for (let i = 0; i < CONSOLE.length - 1; i++) {
     const a = CONSOLE[i], b = CONSOLE[i + 1];
     pane(g, a, b, 0, 0.86, DARK, 0.5);                 // 콘솔 몸통
@@ -359,9 +365,9 @@ export function buildCockpit(parent, room, H) {
   // ★ 처음 만든 좌석은 **너무 컸다.** 등받이가 눈높이까지 올라와 조종석
   //   한가운데를 막았다 — 앉은 사람 것인데 선 사람 눈으로 만들었다.
   //   앉은 어깨높이(바닥에서 1.25)를 넘지 않게 낮췄다.
-  for (const sx of [-1.05, 1.05]) {
+  for (const [sx, sz] of SEATS) {
     const seat = new THREE.Group();
-    seat.position.set(sx, 0, -6.95);
+    seat.position.set(sx, 0, sz);
     g.add(seat);
     box(seat, 0.16, 0.36, 0.16, DARK, 0, 0.18, 0);           // 기둥
     box(seat, 0.54, 0.1, 0.52, PANEL, 0, 0.41, 0);           // 방석
@@ -406,25 +412,62 @@ export function buildOutside(scene, z) {
   const out = new THREE.Group();
   scene.add(out);
 
-  const n = 2600;
-  const pos = new Float32Array(n * 3);
-  const col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    const r = 160 + Math.random() * 120;
+  // ── 먼 하늘 ─────────────────────────────────────────────
+  // 아주 멀어서 **거의 안 움직인다.** 이건 배경이고, 그림(sky/deep)이
+  // 오면 통째로 이걸로 바뀐다.
+  const FAR = 2200;
+  const fp = new Float32Array(FAR * 3);
+  const fc = new Float32Array(FAR * 3);
+  for (let i = 0; i < FAR; i++) {
+    const r = 200 + Math.random() * 90;
     const th = Math.random() * Math.PI * 2;
     const ph = Math.acos(2 * Math.random() - 1);
-    pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
-    pos[i * 3 + 1] = r * Math.cos(ph) * 0.6;
-    pos[i * 3 + 2] = z - Math.abs(r * Math.sin(ph) * Math.sin(th)) * 0.8;
-    const w = 0.7 + Math.random() * 0.3;
-    col[i * 3] = w; col[i * 3 + 1] = w; col[i * 3 + 2] = 1;
+    fp[i * 3] = r * Math.sin(ph) * Math.cos(th);
+    fp[i * 3 + 1] = r * Math.cos(ph) * 0.6;
+    fp[i * 3 + 2] = z - Math.abs(r * Math.sin(ph) * Math.sin(th)) * 0.8;
+    const w = 0.62 + Math.random() * 0.32;
+    fc[i * 3] = w; fc[i * 3 + 1] = w; fc[i * 3 + 2] = 1;
   }
-  const gg = new THREE.BufferGeometry();
-  gg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  gg.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  out.add(new THREE.Points(gg, new THREE.PointsMaterial({ size: 0.9, sizeAttenuation: true, vertexColors: true })));
+  const fg = new THREE.BufferGeometry();
+  fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+  fg.setAttribute('color', new THREE.BufferAttribute(fc, 3));
+  const farStars = new THREE.Points(fg, new THREE.PointsMaterial({ size: 0.85, sizeAttenuation: true, vertexColors: true }));
+  out.add(farStars);
 
-  // 행성 — **자리만 잡아 둔 것.** 그림(sky/planet)이 오면 이 구는 사라진다.
+  // ── 가까이 흐르는 것 ────────────────────────────────────
+  //
+  // ★ 이게 없어서 **배가 서 있었다.** 사장님 지적이 정확했다 —
+  //   「목적지 없이 항해한다」가 전제인데 창밖이 정지 화면이면 그 전제가
+  //   통째로 무너진다. 별을 아무리 많이 뿌려도 **안 움직이면 벽지**다.
+  //
+  //   먼 것만 있으면 시차(parallax)가 안 생겨 움직여도 티가 안 난다.
+  //   그래서 **가까운 층을 따로 둔다.** 깊이를 넓게 흩어 놓으면 원근 때문에
+  //   가까운 것은 빠르게, 먼 것은 느리게 지나간다 — 시차는 공짜로 나온다.
+  const NEAR = 900;
+  const SPREAD = 90;          // 좌우·위아래로 흩어지는 폭
+  const Z_NEAR = z + 6;       // 이보다 뒤로 가면 되돌린다
+  const Z_FAR = z - 190;      // 되돌아가는 자리
+  const np = new Float32Array(NEAR * 3);
+  const nc = new Float32Array(NEAR * 3);
+  const place = (i, zz) => {
+    // 창 정면에만 몰리지 않게 원판으로 흩는다
+    const a = Math.random() * Math.PI * 2;
+    const rad = Math.sqrt(Math.random()) * SPREAD;
+    np[i * 3] = Math.cos(a) * rad;
+    np[i * 3 + 1] = Math.sin(a) * rad * 0.7;
+    np[i * 3 + 2] = zz;
+    const w = 0.75 + Math.random() * 0.25;
+    nc[i * 3] = w; nc[i * 3 + 1] = w * 0.97; nc[i * 3 + 2] = 1;
+  };
+  for (let i = 0; i < NEAR; i++) place(i, Z_FAR + Math.random() * (Z_NEAR - Z_FAR));
+  const ng = new THREE.BufferGeometry();
+  ng.setAttribute('position', new THREE.BufferAttribute(np, 3));
+  ng.setAttribute('color', new THREE.BufferAttribute(nc, 3));
+  const nearStars = new THREE.Points(ng, new THREE.PointsMaterial({ size: 1.15, sizeAttenuation: true, vertexColors: true }));
+  out.add(nearStars);
+
+  // ── 행성 ────────────────────────────────────────────────
+  // **자리만 잡아 둔 것.** 그림(sky/planet)이 오면 이 구는 사라진다.
   //
   // ★ 조명을 안 쓴다 (MeshBasicMaterial). 처음엔 태양을 하나 놓았는데,
   //   DirectionalLight 는 거리가 없어서 **배 안까지 같이 밝혔다** —
@@ -435,7 +478,6 @@ export function buildOutside(scene, z) {
   );
   planet.position.set(-62, 6, z - 108);
   out.add(planet);
-  // 대기 — 살짝 큰 구를 안쪽만 보이게. 테두리가 밝아 보인다
   const air = new THREE.Mesh(
     new THREE.SphereGeometry(48.6, 40, 28),
     new THREE.MeshBasicMaterial({ color: 0x5aa8ff, transparent: true, opacity: 0.22, side: THREE.BackSide }),
@@ -443,5 +485,34 @@ export function buildOutside(scene, z) {
   air.position.copy(planet.position);
   out.add(air);
 
-  return out;
+  const nearPos = ng.attributes.position;
+
+  /**
+   * 한 프레임 흘려보낸다.
+   * @param speed 초당 몇 유닛. 표(game/systems-table.js CRUISE)에서 온다
+   */
+  function update(dt, speed) {
+    const d = speed * dt;
+    const arr = nearPos.array;
+    for (let i = 0; i < NEAR; i++) {
+      const k = i * 3 + 2;
+      arr[k] += d;
+      // 지나간 것은 앞으로 되돌린다. 자리도 새로 뽑아야 같은 줄이 반복 안 된다
+      if (arr[k] > Z_NEAR) place(i, Z_FAR);
+    }
+    nearPos.needsUpdate = true;
+
+    // 먼 하늘은 아주 천천히 돈다. 배가 미세하게 틀어지고 있다는 뜻이고,
+    // 이게 있어야 오래 봐도 「멈춰 있다」는 느낌이 안 든다
+    farStars.rotation.y += dt * 0.0016;
+    // 행성도 아주 조금씩 뒤로 흘러간다 — 지나쳐 가는 중이다
+    planet.position.z += d * 0.045;
+    air.position.copy(planet.position);
+    if (planet.position.z > z - 40) {
+      planet.position.set(-62 - Math.random() * 40, 6, z - 190);
+      air.position.copy(planet.position);
+    }
+  }
+
+  return { update };
 }
