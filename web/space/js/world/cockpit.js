@@ -216,10 +216,13 @@ function drawCourse(ctx, w, h, s) {
   bg(ctx, w, h);
   if (s.chase?.phase === 'chase') {
     label(ctx, w, h, '거리');
-    if (!s.power?.sensor) {
+    // ★ 못 읽는 이유가 둘이다. **둘을 갈라 말한다** — 「센서 꺼짐」과
+    //   「성운이라 안 읽힘」은 대응이 정반대다. 하나로 뭉치면 차단기를
+    //   만지러 통로까지 헛걸음한다
+    if (!s.power?.sensor || s.blind) {
       ctx.fillStyle = 'rgba(255,140,90,.8)';
       ctx.font = `700 ${Math.round(h * 0.16)}px system-ui, sans-serif`;
-      ctx.fillText('센서 꺼짐', h * 0.07, h * 0.62);
+      ctx.fillText(s.blind ? '성운 · 안 읽힘' : '센서 꺼짐', h * 0.07, h * 0.62);
       return;
     }
     const d = Math.max(0, Math.min(1, s.chase.dist / 100));
@@ -242,12 +245,15 @@ function drawCourse(ctx, w, h, s) {
     const x = h * 0.07 + ((w - h * 0.14) * i) / 6;
     ctx.beginPath(); ctx.moveTo(x, h * 0.55); ctx.lineTo(x, h * 0.69); ctx.stroke();
   }
-  const p = (s.t * 0.012) % 1;
-  ctx.fillStyle = '#5fe0a8';
+  // ★ 전에는 `t * 0.012` 로 **그냥 흘렀다** — 어디에도 안 닿는 눈금이었다.
+  //   지금은 진짜 항로 진행이다 (game/route.js). 가짜 계기는 한 번 들키면
+  //   나머지 계기까지 안 믿게 된다
+  const p = Math.max(0, Math.min(1, s.progress ?? 0));
+  ctx.fillStyle = s.atPort ? '#ffffff' : '#5fe0a8';
   ctx.beginPath(); ctx.arc(h * 0.07 + (w - h * 0.14) * p, h * 0.62, h * 0.05, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = DIM;
   ctx.font = `600 ${Math.round(h * 0.1)}px system-ui, sans-serif`;
-  ctx.fillText('다음 거점까지', h * 0.07, h * 0.94);
+  ctx.fillText(s.atPort ? '거점 · 항로를 고르십시오' : `다음 거점까지 · 남은 ${s.legsLeft ?? '?'}`, h * 0.07, h * 0.94);
   // 지금 어느 구역인가 — 창밖이 왜 저 색인지 여기서 확인된다
   const rg = REGIONS.find((x) => x.key === s.region);
   if (rg) {
@@ -279,13 +285,16 @@ function drawSign(ctx, w, h, s) {
     ctx.textAlign = 'left';
     return;
   }
+  // ★ 접촉 기준은 이제 **고정이 아니다.** 항로의 압박이 끌어내린다
+  //   (game/route-table.js). 원이 조여 오는 것이 눈에 보여야 한다
+  const at = s.contactAt ?? SIGN.contactAt;
   const v = Math.min(1, (s.chase?.sign ?? 0) / SIGN.max);
-  const over = (s.chase?.sign ?? 0) > SIGN.contactAt;
+  const over = (s.chase?.sign ?? 0) > at;
   ctx.fillStyle = over ? 'rgba(255,110,80,.55)' : 'rgba(95,224,168,.42)';
   ctx.beginPath(); ctx.arc(cx, cy, r * v, 0, Math.PI * 2); ctx.fill();
   // 접촉 기준선 — 이 안쪽이면 안전하다는 것이 눈에 보여야 한다
   ctx.strokeStyle = 'rgba(255,140,90,.9)';
-  ctx.beginPath(); ctx.arc(cx, cy, r * (SIGN.contactAt / SIGN.max), 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * (at / SIGN.max), 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = over ? '#ffb0a0' : FG;
   ctx.font = `700 ${Math.round(h * 0.16)}px ui-monospace, monospace`;
   ctx.textAlign = 'center';

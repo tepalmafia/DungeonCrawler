@@ -54,6 +54,33 @@ await p.mouse.move(320, 190);
 await p.mouse.click(320, 190);
 await S(() => document.getElementById('hint')?.remove());
 
+// ★ 항로가 생기면서 **거점에서 시작한다.** 갈래를 안 고르면 배가 안 가고,
+//   안 가면 아래 검사들이 「왜 아무 일도 안 나지」가 된다.
+//   그래서 해도대부터 본다 — 실제 플레이의 순서이기도 하다.
+console.log('\n[0] 해도대 — 관측실까지 걸어가 항로를 고른다');
+ok((await S(() => SPACE.route)).phase === 'port', '거점에서 시작한다');
+await S(() => SPACE.put(-2.4, 0.42, Math.PI / 2, -0.30));   // 관측실, 해도대를 내려다본다
+await p.waitForTimeout(2500);
+const aimed = await until(() => String(SPACE.aim || '').startsWith('chart'), 20, '해도대 조준');
+ok(aimed, `조준선이 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
+const before = await S(() => SPACE.route);
+await S(() => { window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })); window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })); });
+await p.waitForTimeout(1500);
+const after = await S(() => SPACE.route);
+ok(after.phase === 'leg' && after.fork, `누르니 배가 출발한다 — ${after.fork}`);
+ok(before.offer.includes(after.fork), `고른 것이 판에 있던 갈래다 (${before.offer.join(' / ')})`);
+if (SP) await p.screenshot({ path: `${SP}/ch-0-해도대.png` });
+
+console.log('\n[0-2] 구간이 끝나면 거점이 온다');
+await S(() => SPACE.skipLeg());
+await until(() => SPACE.route.phase === 'port', 20, '거점 도착');
+const at = await S(() => SPACE.route);
+ok(at.phase === 'port' && at.leg === 1, `구간 하나를 지났다 — 남은 거점 ${at.left}`);
+ok(at.press < 100 && at.press >= 0, `압박이 남아 있다 (${at.press})`);
+ok(at.offer.length === 2 && at.offer[0] !== at.offer[1], `새 갈래 둘이 떴다 (${at.offer.join(' / ')})`);
+// 다시 골라 둔다 — 아래 검사들은 배가 가는 중이어야 뜻이 있다
+await S(() => SPACE.pick(SPACE.route.offer[1]));
+
 console.log('\n[1] 차단기 — 통로에서 손으로 누른다');
 await S(() => SPACE.put(0, 3.3, Math.PI / 2, 0.02));
 await p.waitForTimeout(2500);

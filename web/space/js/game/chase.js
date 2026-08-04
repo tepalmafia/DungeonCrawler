@@ -54,10 +54,18 @@ export function canTurnOn(power) {
 
 /**
  * 한 프레임 굴린다.
+ * @param opt.contactAt  붙기 시작하는 자국 기준. **항로의 압박이 이걸 끌어내린다**
+ *                       (game/route-table.js) — 자국이 같아도 뒤쪽 구간에서는
+ *                       붙는다. 그게 「좁혀 온다」의 실체다.
+ *                       안 넘기면 표의 고정값 그대로라, 추격 하나만 재는
+ *                       `tools/space-sim.js` 는 고칠 것이 없다
+ * @param opt.trackMult  상대가 붙는 속도 배수. 잔해밭 0.75 · 압박 넘침 1.25
  * @returns 방금 일어난 일 — 'contact' | 'escaped' | 'caught' | null
  *          (소리·연출은 밖에서 이 값을 보고 한다)
  */
-export function stepChase(c, dt, power, heat, regionMult) {
+export function stepChase(c, dt, power, heat, regionMult, opt = {}) {
+  const contactAt = opt.contactAt ?? SIGN.contactAt;
+  const trackMult = opt.trackMult ?? 1;
   c.timer += dt;
   c.sign = signatureOf(power, heat, regionMult);
 
@@ -69,7 +77,7 @@ export function stepChase(c, dt, power, heat, regionMult) {
   if (c.phase === PHASE.CALM) {
     // 자국이 기준을 넘긴 채로 오래 있으면 붙는다. **즉시가 아니라 쌓인다** —
     // 그래야 「지금 잠깐 밟아도 된다」는 판단이 생긴다
-    c.risk += (c.sign > SIGN.contactAt ? SIGN.riskRise : -SIGN.riskFall) * dt;
+    c.risk += (c.sign > contactAt ? SIGN.riskRise : -SIGN.riskFall) * dt;
     c.risk = Math.max(0, Math.min(100, c.risk));
     if (c.risk >= 100) {
       c.phase = PHASE.CHASE;
@@ -84,7 +92,7 @@ export function stepChase(c, dt, power, heat, regionMult) {
     // 접촉 직후 잠깐은 안 좁혀진다 — 뭘 해 보기도 전에 급해지면 판단이 안 된다
     const grace = c.timer < CHASE.graceAfterContact;
     const gain = (power.thrust ? CHASE.thrustGain : CHASE.drift) * dt;
-    const track = grace ? 0 : (CHASE.trackBase + c.sign * CHASE.trackPerSign) * dt;
+    const track = grace ? 0 : (CHASE.trackBase + c.sign * CHASE.trackPerSign) * trackMult * dt;
     c.dist += gain - track;
 
     if (c.dist >= CHASE.escapeAt) {
