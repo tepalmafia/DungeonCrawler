@@ -54,6 +54,57 @@ await p.mouse.move(320, 190);
 await p.mouse.click(320, 190);
 await S(() => document.getElementById('hint')?.remove());
 
+// ★ 가르침이 먼저 온다 — 켜자마자 첫 줄이 떠 있어야 한다.
+//   그리고 **빗장** 때문에 이걸 안 떼면 고장·위험 지대가 안 온다. 아래
+//   검사들이 「왜 아무 일도 안 나지」가 되지 않게 여기서 확인하고 건너뛴다.
+console.log('\n[0-0] 가르침 — **하면 사라진다** (TUTORIAL.md §3-A)');
+{
+  const t0 = await S(() => SPACE.tutor);
+  ok(t0.now === 'walk', `켜자마자 첫 줄이 떠 있다 — ${t0.now} 「${t0.text}」`);
+  // **화면에 실제로 있나.** 「창이 화면 밖에 그려지고 있었다」는 코드로 못 찾는다
+  const box = await S(() => {
+    const el = document.getElementById('lesson');
+    if (!el || el.hidden) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height, text: el.textContent, H: innerHeight };
+  });
+  ok(!!box && box.w > 40 && box.y > box.H / 2 && box.y + box.h < box.H,
+    `화면 아래쪽에 보인다 (${box ? `y=${box.y.toFixed(0)}/${box.H} 「${box.text}」` : '안 보인다'})`);
+  // 배너와 **다른 자리**여야 한다. 겹치면 둘 다 안 읽는다
+  const hudBox = await S(() => {
+    const el = document.getElementById('hud');
+    el.hidden = false; el.textContent = '검사';
+    const r = el.getBoundingClientRect();
+    el.hidden = true;
+    return { y: r.y, h: r.height };
+  });
+  ok(box.y > hudBox.y + hudBox.h, `배너와 자리가 안 겹친다 (배너 y=${hudBox.y.toFixed(0)} · 가르침 y=${box.y.toFixed(0)})`);
+
+  // 걷고 둘러본다 — **읽어서가 아니라 해야** 사라진다.
+  // ★ 시간으로 안 기다린다. 헤드리스는 1fps 남짓이고 dt 를 0.05 로 자르므로
+  //   걷는 거리가 실시간의 20분의 1로 쌓인다 — 「열 번 밀고 본다」로 짜면
+  //   기계에 따라 붙었다 안 붙었다 한다
+  await p.keyboard.down('KeyW');
+  let walked = false;
+  for (let i = 0; i < 90 && !walked; i++) {
+    await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 40 })));
+    await p.waitForTimeout(400);
+    walked = await S(() => SPACE.tutor.now !== 'walk');
+  }
+  await p.keyboard.up('KeyW');
+  const t1 = await S(() => SPACE.tutor);
+  ok(walked, `걷고 둘러보니 사라진다 — 걸은 거리 ${t1.walked}m · 둘러본 각 ${t1.turned}`
+    + ` · 뗀 것 ${JSON.stringify(t1.done)}`);
+  ok(t1.holds.hazard, '아직 안 배운 것이 있으면 위험 지대가 안 온다 — 빗장');
+  if (SP) await p.screenshot({ path: `${SP}/ch-0-가르침.png` });
+
+  // 나머지 검사는 가르침 순서에 안 매이게 통째로 건너뛴다
+  await S(() => SPACE.skipTutor());
+  const t2 = await S(() => SPACE.tutor);
+  ok(t2.allDone && !t2.text, '다 떼면 아무것도 안 뜬다 — 잔소리 안 한다');
+  ok(!t2.holds.fault && !t2.holds.hazard, '다 떼면 빗장이 풀린다 — 그때부터 표대로 온다');
+}
+
 // ★ 항로가 생기면서 **거점에서 시작한다.** 갈래를 안 고르면 배가 안 가고,
 //   안 가면 아래 검사들이 「왜 아무 일도 안 나지」가 된다.
 //   그래서 해도대부터 본다 — 실제 플레이의 순서이기도 하다.
@@ -160,7 +211,11 @@ console.log('\n[0-4] 보급 — **멈춰서 캔다.** 「한 통만 더」 (PLAN
   // 에어록 윈치 앞에 선다. 추진이 켜져 있으면 안 걸려야 한다
   await S(() => { SPACE.setPower('thrust', true); SPACE.put(3.4, 5.15, 0, -0.34); });
   await p.waitForTimeout(2200);
-  ok(await S(() => SPACE.aim) === 'winch', `조준선이 윈치를 잡는다 (${await S(() => SPACE.aim)})`);
+  // ★ **한 번 읽고 판정하지 않는다.** 헤드리스는 1fps 남짓이라 자리를 옮기고
+  //   두 프레임 안에 조준이 안 굳을 수 있다 — 실제로 「(winch) 인데 ✘」라는
+  //   앞뒤가 안 맞는 실패가 났다. 게임이 아니라 도구가 성급했던 것이다
+  ok(await until(() => SPACE.aim === 'winch', 25, '윈치 조준'),
+    `조준선이 윈치를 잡는다 (${await S(() => SPACE.aim)})`);
   await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
   await p.waitForTimeout(2500);
   const moving = await S(() => SPACE.supply);
@@ -188,7 +243,8 @@ console.log('\n[0-5] 접수구 — 거점에서만 바꾼다');
 {
   await S(() => { SPACE.setSupply({ ore: 90, food: 30, parts: 0 }); SPACE.put(3.4, 6.35, Math.PI, -0.25); });
   await p.waitForTimeout(2200);
-  ok(await S(() => SPACE.aim) === 'hatch', `조준선이 접수구를 잡는다 (${await S(() => SPACE.aim)})`);
+  ok(await until(() => SPACE.aim === 'hatch', 25, '접수구 조준'),
+    `조준선이 접수구를 잡는다 (${await S(() => SPACE.aim)})`);
   // 항행 중에는 안 된다
   await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
   await p.waitForTimeout(2500);
@@ -256,7 +312,7 @@ console.log('\n[0-6] 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B)
 console.log('\n[1] 차단기 — 통로에서 손으로 누른다');
 await S(() => SPACE.put(0, 3.3, Math.PI / 2, 0.02));
 await p.waitForTimeout(2500);
-ok(await S(() => SPACE.aim) !== null, '조준선이 차단기를 잡는다');
+ok(await until(() => SPACE.aim !== null, 25, '차단기 조준'), '조준선이 차단기를 잡는다');
 const b1 = await S(() => SPACE.power);
 await S(() => { window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })); window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })); });
 await p.waitForTimeout(2000);
