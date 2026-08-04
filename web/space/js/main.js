@@ -34,9 +34,10 @@ import {
 import { FAULT } from './game/mission-table.js';
 import {
   makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
+  wearStep, wearFlip,
 } from './game/fault.js';
 
-export const VERSION = 17;
+export const VERSION = 18;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -307,8 +308,8 @@ function interactStep(dt) {
       audio?.event('latch');
     } else audio?.event('deny');
   } else if (breaker && pressed) {
-    if (power[breaker.key]) { power[breaker.key] = false; audio?.event('click'); }
-    else if (canTurnOn(power)) { power[breaker.key] = true; audio?.event('click'); }
+    if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); audio?.event('click'); }
+    else if (canTurnOn(power)) { power[breaker.key] = true; wearFlip(faults); audio?.event('click'); }
     else {
       // ★ 꽉 찼을 때 **조용히 아무 일도 안 일어나면** 고장인 줄 안다.
       //   무엇이 막았는지 글자로 말해 준다 — 규칙을 알아맞히게 하지 않는다.
@@ -363,6 +364,8 @@ function systemsStep(dt, valveOpen, regionMult) {
     bannerT = 3.6;
     audio?.event('fault');
   }
+  // 쓰는 대로 닳는다 — **어떻게 몰았는지가 다음 고장을 정한다** (systems-table WEAR)
+  wearStep(faults, dt, { power, valveOpen, region: ship.outside.region });
   const bad = effectsOf(faults);
 
   // 열은 **켠 회로**가 정한다. 추진을 켜면 오르고, 냉각을 켜면 내려간다.
@@ -415,6 +418,9 @@ function systemsStep(dt, valveOpen, regionMult) {
   ship.coreGlow.material.color.setHSL(0.09 - 0.09 * hot, 0.85, 0.45 + 0.35 * hot);
   ship.lampCore.color.copy(ship.coreGlow.material.color);
   ship.lampCore.intensity = 8 + 22 * hot;
+
+  // 정비실 진단대 — **다음에 무엇이 터지나.** 조종석·관측실과 겹치지 않는다
+  ship.bench.update({ wear: faults.wear, open: openList(faults), fixed: faults.fixed, log: faults.log });
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
   ship.cock.update({
@@ -481,13 +487,25 @@ window.SPACE = {
   },
   /** 고장 — 지금 몇 개 열려 있고 어디를 만져야 하나 */
   get faults() {
-    return { open: openList(faults), fixed: faults.fixed, next: +faults.next.toFixed(1), hear: +hearNear.toFixed(2) };
+    const w = {};
+    for (const [k, v] of Object.entries(faults.wear)) w[k] = +v.toFixed(3);
+    return {
+      open: openList(faults), fixed: faults.fixed, next: +faults.next.toFixed(1),
+      hear: +hearNear.toFixed(2), wear: w, log: faults.log.map((l) => l.reveal),
+    };
   },
   /** 그 방 점검 패널이 어디 있나 — 검사가 앞에 가서 서려고 묻는다 */
   panelAt(room) {
     const p = ship.panels[room];
     return p ? { x: +p.group.position.x.toFixed(2), z: +p.group.position.z.toFixed(2), ry: p.group.rotation.y } : null;
   },
+  /** 진단대 화면이 어디 있나 — 읽을 자리가 있는지 검사가 묻는다 */
+  get benchAt() {
+    const b = ship.bench?.at;
+    return b ? { x: +b.x.toFixed(2), z: +b.z.toFixed(2), ry: b.ry } : null;
+  },
+  /** 마모를 밖에서 밀어 놓는다 — 진단대 화면을 찍으려고 낸 구멍 */
+  wearTo(w) { Object.assign(faults.wear, w); },
   /** 검사가 기다리지 않고 고장을 띄운다 */
   forceFault() { faults.next = 0; return stepFaults(faults, 0.001, { calm: true, leg: route.leg }); },
   /** 항로 — 어디까지 왔고 압박이 얼마인가 */

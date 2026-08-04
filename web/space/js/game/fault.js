@@ -20,6 +20,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { makeRng } from '../core/rng.js';
 import { FAULT, wired, branchWeights } from './mission-table.js';
+import { WEAR } from './systems-table.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -30,7 +31,27 @@ export function makeFaults(seed = 'FAULT1') {
     next: FAULT.firstAfter,
     t: 0,
     fixed: 0,            // 몇 개나 고쳤나
+    // 계통별 마모. **쓰는 대로 닳고, 닳은 데가 터진다** (systems-table.js WEAR)
+    wear: Object.fromEntries(WEAR.keys.map((k) => [k, 0])),
+    log: [],             // 이번 회차에 무엇을 고쳤나 — 진단대가 읽는다
   };
+}
+
+/**
+ * 쓴 만큼 닳는다. **무작위로 터지면 대비할 방법이 없다** —
+ * 대비할 수 없으면 정비실 진단대는 장식이 된다.
+ */
+export function wearStep(f, dt, { power, valveOpen, region }) {
+  const r = WEAR.rate;
+  const add = (k, v) => { f.wear[k] = Math.min(1, f.wear[k] + v * dt); };
+  add('power', r.base + (power.thrust ? r.base : 0) + (power.sensor ? r.base : 0));
+  add('cool', r.base + (power.cool ? r.coolOn : 0) + (valveOpen ? r.valve : 0));
+  add('hull', r.base + (power.thrust ? r.thrust : 0) + (region === 'debris' ? r.debris : 0));
+}
+
+/** 차단기를 만졌다 — 한 번에 조금씩 닳는다 */
+export function wearFlip(f) {
+  f.wear.power = Math.min(1, f.wear.power + WEAR.perFlip);
 }
 
 /** 무게를 보고 하나 고른다 */
@@ -54,7 +75,13 @@ function spawn(f, leg, first) {
   const openKeys = new Set(f.open.map((o) => o.key));
   const cand = list.filter((m) => !openKeys.has(m.key));
   if (!cand.length) return null;
-  const m = cand[0] === list[0] && first ? cand[0] : cand[Math.floor(f.rnd() * cand.length)];
+  // ★ **닳은 계통이 더 잘 터진다.** 이게 「어떻게 몰았는지가 다음을 정한다」의
+  //   실체이고, 정비실 진단대가 예고할 수 있는 근거다
+  const m = first && cand[0] === list[0]
+    ? cand[0]
+    : pick(f.rnd, cand.map((x) => ({
+      ...x, weight: 1 + (f.wear[x.sys] ?? 0) * (WEAR.bias - 1),
+    })));
 
   const branch = pick(f.rnd, branchWeights(m, leg));
   // 자리 — 갈래가 정하거나(원인 모를 열), 표에 적힌 순서대로(냉매·배전)
@@ -65,7 +92,7 @@ function spawn(f, leg, first) {
   if (!steps.length) return null;
 
   return {
-    key: m.key, name: m.name, lead: m.lead, effect: m.effect || {},
+    key: m.key, name: m.name, lead: m.lead, sys: m.sys, effect: m.effect || {},
     branch: branch.key, reveal: branch.what,
     // 「한 통으로는 모자란다」 — 마지막 걸음을 한 번 더 한다
     again: !!branch.again,
@@ -162,11 +189,16 @@ export function repairStep(fault, dt) {
   return fault.step >= fault.steps.length ? 'fixed' : 'step';
 }
 
-/** 다 고쳤다 — 목록에서 뺀다 */
+/** 다 고쳤다 — 목록에서 빼고, 그 계통의 마모를 던다 */
 export function clear(f, fault) {
   const i = f.open.indexOf(fault);
   if (i >= 0) f.open.splice(i, 1);
   f.fixed++;
+  const sys = fault.sys;
+  if (sys && f.wear[sys] != null) f.wear[sys] = Math.max(0, f.wear[sys] - WEAR.relief);
+  // 기록 — 배너는 사라진다. **다시 볼 데가 있어야** 「무슨 증상이었지」가 안 남는다
+  f.log.unshift({ name: fault.name, reveal: fault.reveal, at: +f.t.toFixed(0) });
+  if (f.log.length > 6) f.log.pop();
 }
 
 /** 잡고 있던 것을 놓았다 — 조금 되돌아간다. 딱 멈추면 손을 뗄 이유가 없다 */
