@@ -72,3 +72,27 @@ html, body {
   white-space: nowrap;
 }
 #hud[hidden] { display: none; }
+
+/* 가르침 — **아직 안 한 일.** 배너(위·주황, *일어난 일*)와 자리도 색도
+   다르다. 같은 모양이면 둘 다 「글자가 떴다」로 뭉개져서 어느 쪽도 안 읽는다.
+
+   ★ 시간으로 안 사라진다. **하면** 사라진다 (game/tutor.js).
+     몇 초 뒤 없어지는 안내는 못 읽고 넘어갈 수 있고, 그러면 지금 지운
+     여덟 문단짜리 안내판과 똑같아진다. */
+#lesson {
+  position: fixed;
+  left: 50%; bottom: 10%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: rgba(8, 12, 16, .7);
+  border-left: 2px solid #6fd8a0;
+  color: #bfe8d4;
+  font-size: 15px;
+  letter-spacing: .02em;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity .8s;
+}
+/* 오래 떠 있으면 흐려진다 — 안 없어지되 잔소리는 안 한다 */
+#lesson.dim { opacity: .45; }
+#lesson[hidden] { display: none; }

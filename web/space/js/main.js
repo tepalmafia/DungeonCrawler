@@ -48,13 +48,16 @@ import {
   makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
   wearStep, wearFlip,
 } from './game/fault.js';
+import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
+import { KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 
-export const VERSION = 20;
+export const VERSION = 21;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
 const hint = document.getElementById('hint');
 const hud = document.getElementById('hud');
+const lesson = document.getElementById('lesson');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x03040a);
@@ -159,6 +162,12 @@ const supply = makeSupply();
 // **조종은 「또 하나의 방」이지 게임의 중심이 아니다** (FLYING.md §1-1).
 // 조종석에 앉아 있는 동안은 정비도 채굴도 항로 선택도 못 한다.
 const hazard = makeHazard(seed);
+// ── 가르침 ──────────────────────────────────────────────────
+// **동사는 가르치고, 답은 안 가르친다** (docs/space/TUTORIAL.md §1-1).
+// 「잡고 돌린다」를 모르면 신비가 아니라 고장 난 게임이고,
+// 「지금 무엇이 덜그럭거리나」는 끝까지 안 말한다.
+const tutor = makeTutor();
+let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
@@ -174,6 +183,23 @@ let bannerT = 0;
 // 뿌리친 시각. **떨림과 소리가 같은 시계를 본다** — 따로 세면 어긋난다
 let escapedAt = -99;
 let shakeMul = SHAKE.calm;
+
+/**
+ * 가르침이 보는 것 — **게임이 지금 어떤가** 한 장.
+ * ★ 가르침 쪽(game/tutor.js)은 three 를 안 쓰므로 게임을 직접 못 본다.
+ *   여기서 한 번만 접어서 넘긴다 — 그래야 tools/space-tutor.js 가 같은
+ *   모양을 브라우저 없이 흉내 낼 수 있다
+ */
+function tutorState() {
+  return {
+    walked: taught.walked, turned: taught.turned,
+    atPort: route.phase === RPHASE.PORT, forkPicked: route.leg + (route.fork ? 1 : 0),
+    heat, flips: taught.flips, coolFor,
+    faultsOpen: faults.open.length, faultsFixed: taught.fixed,
+    hazardSeen: taught.hazardSeen, dodged: hazard.dodged,
+    foodLow: shaky(supply), loads: supply.loads, traded: supply.traded,
+  };
+}
 
 /**
  * 그 방 점검 패널까지 몇 미터인가 — 소리가 이 값으로 커진다.
@@ -238,6 +264,9 @@ function walk(dt) {
   if (inside(nx, me.z, BODY.radius)) me.x = nx; else me.vx = 0;
   const nz = me.z + me.vz * dt;
   if (inside(me.x, nz, BODY.radius)) me.z = nz; else me.vz = 0;
+
+  // 얼마나 걸었나 — 첫 가르침이 이걸 보고 사라진다 (game/tutor-table.js)
+  taught.walked += Math.hypot(me.vx, me.vz) * dt;
 }
 
 // ── 손이 닿는 것들 ──────────────────────────────────────────
@@ -343,6 +372,7 @@ function interactStep(dt) {
       audio?.event('fixed');
       clear(faults, fixHere);
       repairing = null;
+      taught.fixed++;
     }
   } else {
     // 놓으면 조금 되돌아간다. 딱 멈추면 손을 뗄 이유가 없다.
@@ -382,8 +412,8 @@ function interactStep(dt) {
       audio?.event('latch');
     } else audio?.event('deny');
   } else if (breaker && pressed) {
-    if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); audio?.event('click'); }
-    else if (canTurnOn(power)) { power[breaker.key] = true; wearFlip(faults); audio?.event('click'); }
+    if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); taught.flips++; audio?.event('click'); }
+    else if (canTurnOn(power)) { power[breaker.key] = true; wearFlip(faults); taught.flips++; audio?.event('click'); }
     else {
       // ★ 꽉 찼을 때 **조용히 아무 일도 안 일어나면** 고장인 줄 안다.
       //   무엇이 막았는지 글자로 말해 준다 — 규칙을 알아맞히게 하지 않는다.
@@ -434,8 +464,11 @@ function interactStep(dt) {
 function systemsStep(dt, valveOpen, regionMult) {
   // ── 고장 ──────────────────────────────────────────────
   // **추격 중에는 새로 안 뜬다.** 겹치면 다섯이 되고, 다섯이면 포기한다
+  // ★ **빗장** — 아직 항로도 못 골랐는데 고장부터 나면 뭐가 뭔지 모른다
+  //   (TUTORIAL.md §2-2). 시계를 **멈춘다** — 안 그러면 앞의 것을 떼는
+  //   순간 밀린 것이 한꺼번에 터진다
   const calm = chase.phase !== PHASE.CHASE && route.phase === RPHASE.LEG;
-  if (stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
+  if (canFire(tutor, 'fault') && stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
     const o = faults.open[faults.open.length - 1];
     // ★ **증상만 말한다.** 어디인지·무엇인지는 안 말한다 (PLAN §3-1)
     banner = o.lead;
@@ -451,10 +484,16 @@ function systemsStep(dt, valveOpen, regionMult) {
   }
 
   // ── 위험 지대 — 부딪히는 것과 피하는 것 (FLYING.md) ────
-  const hev = stepHazard(hazard, dt, {
-    region: ship.outside.region, atSeat: steering, push: steerPush,
-  });
+  // ★ **빗장** — 고장을 아직 못 고쳤으면 안 온다. 첫 판에 둘이 겹치면
+  //   (55초와 85초 — 30초 차이다) 배우기는커녕 뭐가 뭔지 모른다.
+  //   **떠 있는 것을 끄지는 않는다** — 오는 것만 막는다
+  const hev = hazard.phase !== HPHASE.IDLE || canFire(tutor, 'hazard')
+    ? stepHazard(hazard, dt, {
+      region: ship.outside.region, atSeat: steering, push: steerPush,
+    })
+    : null;
   if (hev === 'warn') {
+    taught.hazardSeen++;
     // ★ **어느 방에 있든** 알아야 한다. 기관실에서 모르고 있다가 맞으면
     //   「정비하러 가는 것 자체가 벌」이 된다 (FLYING.md §1-2)
     banner = `전방에 잔해 — ${warnLeft(hazard).toFixed(0)}초`;
@@ -651,6 +690,33 @@ window.SPACE = {
     };
   },
   /** 검사가 기다리지 않고 위험 지대를 부른다 */
+  /** 가르침이 지금 무엇을 말하고 있나 — 검사용 */
+  get tutor() {
+    const ln = lineOf(tutor, aimName);
+    return {
+      now: nowKey(tutor), text: ln?.text ?? null, dim: !!ln?.dim,
+      done: [...tutor.done], shown: tutor.shown, allDone: allDone(tutor),
+      // ★ 「안 걸린다」와 「느리다」를 갈라 놓으려고 낸 구멍. 헤드리스는
+      //   1fps 남짓이라 걷는 거리가 실시간의 20분의 1로 쌓인다
+      walked: +taught.walked.toFixed(2), turned: +taught.turned.toFixed(2),
+      holds: { fault: !canFire(tutor, 'fault'), hazard: !canFire(tutor, 'hazard') },
+    };
+  },
+  /** 가르침을 통째로 뗀 것으로 친다 — 아래 검사들이 빗장에 막히지 않게 */
+  skipTutor() { while (!allDone(tutor)) { tutor.done.push('(건너뜀)'); tutor.i++; } tutor.open = false; },
+  /**
+   * 그 가르침을 지금 띄운다 — **검사용.** 게임은 안 쓴다.
+   * ★ 헤드리스는 게임 시간이 실시간의 20분의 1이라 가르침 사이 간격
+   *   ({TUTOR.gap}초)만 기다려도 실제로 몇 분이 간다. 일곱 줄이 화면에
+   *   제대로 나오는지 보려면 건너뛸 구멍이 필요하다.
+   * @param age 몇 초째 떠 있는 것으로 칠까 (방 이름이 붙는 단계를 보려면)
+   */
+  teach(key, age = 0) {
+    const i = TUTOR_KEYS.indexOf(key);
+    if (i < 0) return false;
+    tutor.i = i; tutor.open = true; tutor.t = age; tutor.rest = 0;
+    return true;
+  },
   forceHazard() { hazard.next = 0; hazard.inLeg = 0; return stepHazard(hazard, 0.001, { region: ship.outside.region }); },
   /** 예고를 건너뛴다 */
   skipWarn() { if (hazard.phase === 'warn') hazard.t = hazard.need; },
@@ -762,6 +828,8 @@ function frame(now) {
     steerPush = 0;
     me.yaw -= look.dx * 0.0022;
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
+    // 얼마나 둘러봤나 — 조종간을 잡고 있을 때는 안 센다. 그건 배를 민 것이다
+    taught.turned += Math.abs(look.dx) * 0.0022;
   }
 
   walk(dt);
@@ -851,6 +919,19 @@ function frame(now) {
     hud.textContent = banner;
     hud.hidden = false;
   } else hud.hidden = true;
+
+  // ── 가르침 — **하면 사라진다** (docs/space/TUTORIAL.md) ──
+  // ★ 배너와 **다른 자리·다른 색**이다. 배너(위·주황)는 *일어난 일*이고
+  //   가르침(아래·청록)은 *아직 안 한 일*이다. 같이 두면 뭉개진다
+  if (!allDone(tutor)) {
+    if (stepTutor(tutor, dt, tutorState()) === 'show') audio?.event('click');
+    const ln = lineOf(tutor, aimName);
+    if (ln) {
+      lesson.textContent = ln.text;
+      lesson.classList.toggle('dim', ln.dim);
+      lesson.hidden = false;
+    } else lesson.hidden = true;
+  } else lesson.hidden = true;
 
   composer.render();
   requestAnimationFrame(frame);

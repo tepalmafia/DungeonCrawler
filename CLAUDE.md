@@ -160,6 +160,7 @@ node tools/space-fault.js        스페이스워 — 고장이 진단으로 성�
 node tools/space-supply.js       스페이스워 — 보급 고리가 닫히나 (안 캐면 굶나)
 node tools/space-missions.js     스페이스워 — 마주치는 것들이 규칙을 지키나
 node tools/space-fly.js          스페이스워 — 조종이 장르를 안 바꿨나 (조종석에 매인 시간 15% 이하)
+node tools/space-tutor.js        스페이스워 — 일곱을 다 만나나 · 한 번에 하나인가
 node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
 node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
