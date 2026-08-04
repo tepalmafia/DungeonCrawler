@@ -191,20 +191,48 @@ function drawPower(ctx, w, h, s) {
   });
 }
 
-/** 선체 도면 — 방 넷이 여기 보인다. 「내가 배 안에 있다」를 알려 주는 화면 */
+/**
+ * 선체 도면 — **방 일곱이 다 보이고, 내가 있는 칸이 켜진다.**
+ *
+ * ★ 두 가지가 틀려 있었다 (v21 · 「조종석은 어딨고?」를 듣고 찾음)
+ *   ① 방을 **셋만** 그렸다 (조종석·통로·기관실). 관측실·정비실·온실·
+ *      에어록은 도면에 아예 없어서, 정작 찾아가야 하는 방들이 안 보였다
+ *   ② `'corridor'` 와 견주고 있었는데 통로의 열쇠는 `'spine'` 이다
+ *      (`'corridor'` 는 tone 값이다). **통로 칸이 영원히 안 켜졌다** —
+ *      배에서 제일 오래 서 있는 방인데
+ *
+ * ★ 좌표를 **배에서 받아 온다.** 여기 사각형을 손으로 적어 두면 방을
+ *   옮길 때마다 어긋나고, 그건 「도면이 거짓말을 한다」가 된다.
+ *   화면이 가로로 넓으므로 **배를 눕혀** 그린다 — 앞(조종석)이 왼쪽.
+ */
+let PLAN = [];
+export function setPlan(rooms) { PLAN = rooms; }
+
 function drawShip(ctx, w, h, s) {
   bg(ctx, w, h);
   label(ctx, w, h, '선체');
-  const rooms = [[0.30, 0.10, 0.40, 0.26], [0.44, 0.36, 0.12, 0.22], [0.20, 0.58, 0.60, 0.30]];
-  const names = ['cockpit', 'corridor', 'engine'];
-  rooms.forEach((r, i) => {
-    const x = r[0] * w, y = h * 0.24 + r[1] * h * 0.72, rw = r[2] * w, rh = r[3] * h * 0.72;
-    const here = s.room === names[i];
+  if (!PLAN.length) return;
+  const pad = h * 0.1;
+  const top = h * 0.26, bot = h - pad;
+  const z0 = Math.min(...PLAN.map((r) => r.z0)), z1 = Math.max(...PLAN.map((r) => r.z1));
+  const x0 = Math.min(...PLAN.map((r) => r.x0)), x1 = Math.max(...PLAN.map((r) => r.x1));
+  // 배의 z(앞뒤) → 화면 가로, 배의 x(좌우) → 화면 세로
+  const sx = (w - pad * 2) / (z1 - z0), sy = (bot - top) / (x1 - x0);
+  ctx.font = `600 ${Math.round(h * 0.075)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const r of PLAN) {
+    const px = pad + (r.z0 - z0) * sx, pw = (r.z1 - r.z0) * sx;
+    const py = top + (r.x0 - x0) * sy, ph = (r.x1 - r.x0) * sy;
+    const here = s.room === r.key;
     ctx.strokeStyle = here ? '#5fe0a8' : DIM;
     ctx.lineWidth = here ? 3 : 1.5;
-    ctx.strokeRect(x, y, rw, rh);
-    if (here) { ctx.fillStyle = 'rgba(95,224,168,.18)'; ctx.fillRect(x, y, rw, rh); }
-  });
+    ctx.strokeRect(px, py, pw, ph);
+    if (here) { ctx.fillStyle = 'rgba(95,224,168,.18)'; ctx.fillRect(px, py, pw, ph); }
+    // 이름을 적는다. **칸만 그리면 어느 칸이 어느 방인지 모른다**
+    ctx.fillStyle = here ? '#8ff0c4' : 'rgba(150,175,200,.7)';
+    ctx.fillText(r.name, px + pw / 2, py + ph / 2);
+  }
 }
 
 /**

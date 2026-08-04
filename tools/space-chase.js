@@ -80,13 +80,21 @@ console.log('\n[0-0] 가르침 — **하면 사라진다** (TUTORIAL.md §3-A)')
   });
   ok(box.y > hudBox.y + hudBox.h, `배너와 자리가 안 겹친다 (배너 y=${hudBox.y.toFixed(0)} · 가르침 y=${box.y.toFixed(0)})`);
 
+  // ★ **최소 표시 시간을 미리 넘겨 둔다.** v22 부터 가르침은 뜬 지
+  //   minShow(4초)가 지나야 사라진다. 그런데 헤드리스는 게임 시간이
+  //   실시간의 20분의 1이라 4초가 **실제로 80초**다 — 아래 걷기 고리로는
+  //   절대 못 넘는다. 위에서 첫 단계 문구·자리를 다 확인한 **뒤에**
+  //   나이를 밀어 넣는다. 「사라지나」만 보면 되고, 「4초는 떠 있나」는
+  //   tools/space-first5.js 가 브라우저 없이 잰다
+  await S(() => SPACE.teach('walk', 20));
+
   // 걷고 둘러본다 — **읽어서가 아니라 해야** 사라진다.
   // ★ 시간으로 안 기다린다. 헤드리스는 1fps 남짓이고 dt 를 0.05 로 자르므로
   //   걷는 거리가 실시간의 20분의 1로 쌓인다 — 「열 번 밀고 본다」로 짜면
   //   기계에 따라 붙었다 안 붙었다 한다
   await p.keyboard.down('KeyW');
   let walked = false;
-  for (let i = 0; i < 90 && !walked; i++) {
+  for (let i = 0; i < 140 && !walked; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 40 })));
     await p.waitForTimeout(400);
     walked = await S(() => SPACE.tutor.now !== 'walk');
@@ -309,6 +317,44 @@ console.log('\n[0-6] 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B)
   ok(w.phase === 'warn' && w.warn > 5, `기관실에 있어도 예고가 뜬다 (${w.warn.toFixed(0)}초 남음)`);
 }
 
+console.log('\n[0-7] 거점은 안전한가 · 잡히면 나올 수 있나');
+{
+  // ★ 둘 다 v21 에서 **게임을 못 하게 만든 것들**이다. 숫자는
+  //   tools/space-first5.js 가 재고, 여기서는 **실제 게임에서 그렇나**를 본다
+  await S(() => { SPACE.skipLeg(); });
+  await until(() => SPACE.route.phase === 'port', 25, '거점 도착');
+  await S(() => { SPACE.setPower('thrust', true); SPACE.setHeat(100); });
+  const r0 = await S(() => SPACE.chase.risk);
+  await S((v) => { window.__r0 = v; }, r0);
+  await p.waitForTimeout(6000);
+  const r1 = await S(() => SPACE.chase.risk);
+  ok(r1 <= r0, `거점에서는 열이 100 이어도 위험이 안 오른다 (${r0} → ${r1})`);
+
+  // 잡아 놓고 나오는지 본다
+  await S(() => SPACE.pick(SPACE.route.offer[0]));
+  await S(() => { SPACE.forceContact(); });
+  await until(() => SPACE.chase.phase === 'chase', 30, '접촉');
+  // ★ **추진을 끄고** 밀어야 잡힌다. v22 부터 정박 상태로 시작해서 열이
+  //   낮으므로, 추진이 켜져 있으면 벌어지는 속도(2.95)가 붙는 속도를 이겨
+  //   거리를 0.05 로 밀어 놔도 **도로 벌어진다.** 「거리를 0 으로 만들면
+  //   잡힌다」가 아니라 「지고 있어야 잡힌다」가 맞고, 그게 게임의 규칙이다
+  await S(() => SPACE.setPower('thrust', false));
+  // ★ 한 번 밀어 놓고 기다리면 **유예(graceAfterContact 2.5초)** 동안
+  //   안 좁혀지는데, 헤드리스에서 그 2.5초는 실제로 50초다. 그 사이에
+  //   관성(drift)으로 도로 벌어져서 「안 잡힌다」로 보인다 — 게임이 아니라
+  //   도구가 성급한 것이다. **잡힐 때까지 계속 민다**
+  let caught = false;
+  for (let i = 0; i < 90 && !caught; i++) {
+    await S(() => SPACE.setDist(0.05));
+    await p.waitForTimeout(700);
+    caught = await S(() => SPACE.chase.phase === 'caught');
+  }
+  ok(caught, `잡힌다 (${await S(() => SPACE.chase.phase)})`);
+  const out = await until(() => SPACE.chase.phase !== 'caught', 180, '놓여나기');
+  ok(out, `**잡혀도 놓아준다** — ${await S(() => SPACE.chase.phase)} (v21 은 여기서 영영 멈췄다)`);
+  await S(() => { SPACE.resetChase(); SPACE.setHeat(30); });
+}
+
 console.log('\n[1] 차단기 — 통로에서 손으로 누른다');
 await S(() => SPACE.put(0, 3.3, Math.PI / 2, 0.02));
 await p.waitForTimeout(2500);
@@ -357,6 +403,11 @@ await S(() => { SPACE.resetChase(); SPACE.forceContact(); });
 //   그게 지나기를 기다린 뒤에 밀어야 「잡힘」이 난다 — 유예도 검사한 셈이다
 await until(() => SPACE.chase.phase === 'chase', 30, '재접촉');
 await until(() => SPACE.chase.dist < 44, 60, '유예 끝나기');   // 유예도 이걸로 검사된다
+  // ★ **추진을 끄고** 밀어야 잡힌다. v22 부터 정박 상태로 시작해서 열이
+  //   낮으므로, 추진이 켜져 있으면 벌어지는 속도(2.95)가 붙는 속도를 이겨
+  //   거리를 0.05 로 밀어 놔도 **도로 벌어진다.** 「거리를 0 으로 만들면
+  //   잡힌다」가 아니라 「지고 있어야 잡힌다」가 맞고, 그게 게임의 규칙이다
+  await S(() => SPACE.setPower('thrust', false));
 await S(() => SPACE.setDist(0.05));
 await until(() => SPACE.chase.phase === 'caught', 60, '잡힘');
 const c3 = await S(() => SPACE.chase);

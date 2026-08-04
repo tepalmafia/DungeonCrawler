@@ -34,7 +34,7 @@ function makeWorld() {
     t: 0,
     walked: 0, turned: 0,
     atPort: true, forkPicked: 0,
-    heat: 12, flips: 0, coolFor: 0,
+    heat: 12, thrust: false, flips: 0, cooled: 0, steered: 0,
     faultsOpen: 0, faultsFixed: 0, faultNext: FAULT.firstAfter,
     hazardSeen: 0, dodged: 0, hazardNext: HAZARD.firstAfter,
     food: 100, foodLow: false,
@@ -46,10 +46,13 @@ function makeWorld() {
 /** 게임 쪽 — 사건은 표대로 오되 **빗장이 걸린 것은 안 온다** */
 function world(w, tu, dt) {
   w.t += dt;
-  // 추진을 켜고 가면 열이 오른다 (아주 굵게)
-  if (w.forkPicked > 0) {
+  // ★ **추진을 켜야** 열이 오른다. 전에는 「항로를 골랐으면」이었는데,
+  //   지금은 정박 중에 추진이 꺼져 있으므로 게임과 어긋난다
+  if (w.thrust) {
     w.heat = Math.min(100, w.heat + (w.coolFor > 0 ? -3.4 : 1.1) * dt);
     w.coolFor = Math.max(0, w.coolFor - dt);
+  }
+  if (w.forkPicked > 0) {
     w.food = Math.max(0, w.food - (100 / (LEG.seconds * 1.25)) * dt);
     w.foodLow = w.food <= 24;
   }
@@ -74,19 +77,23 @@ function world(w, tu, dt) {
 function play(w, key) {
   if (key === 'walk') { w.walked = TUTOR.walked + 1; w.turned = TUTOR.turned + 0.5; }
   if (key === 'route') { w.forkPicked++; w.atPort = false; }
-  if (key === 'power') w.flips++;
-  if (key === 'valve') w.coolFor = 26;
+  if (key === 'power') { w.flips++; w.thrust = true; }
+  // ★ `coolFor` 가 아니라 **셈**이다. 상태값을 done 으로 쓰면 26초 뒤에
+  //   「안 한 것」이 되어 먼저 돌려 본 사람을 못 알아본다
+  if (key === 'valve') { w.coolFor = 26; w.cooled++; }
   if (key === 'fault') { w.faultsFixed++; w.faultsOpen = 0; }
-  if (key === 'fly') w.dodged++;
+  // ★ `dodged` 가 아니라 **조종간을 잡고 민 시간**이다 — 가만히 있어도
+  //   비켜지는 것이 대부분이라 「비켰다」의 증거가 못 된다
+  if (key === 'fly') { w.dodged++; w.steered = TUTOR.steered + 0.5; }
   if (key === 'supply') w.loads++;
 }
 
 function snap(w) {
   return {
     walked: w.walked, turned: w.turned, atPort: w.atPort, forkPicked: w.forkPicked,
-    heat: w.heat, flips: w.flips, coolFor: w.coolFor,
+    heat: w.heat, thrust: w.thrust, flips: w.flips, cooled: w.cooled,
     faultsOpen: w.faultsOpen, faultsFixed: w.faultsFixed,
-    hazardSeen: w.hazardSeen, dodged: w.dodged,
+    hazardSeen: w.hazardSeen, dodged: w.dodged, steered: w.steered,
     foodLow: w.foodLow, loads: w.loads, traded: w.traded,
   };
 }
