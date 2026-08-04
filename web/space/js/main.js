@@ -25,7 +25,7 @@ import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
 import { REGION_BY_KEY } from './game/regions-table.js';
-import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
+import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH, CAUGHT } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './game/chase.js';
 import { LEG } from './game/route-table.js';
 /** 자국은 열에 비례한다. 윈치의 자국 보탬을 열 단위로 환산하려고 쓴다 */
@@ -51,7 +51,7 @@ import {
 import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
 import { KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 
-export const VERSION = 21;
+export const VERSION = 22;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -140,9 +140,13 @@ let regionPin = null;
 
 // ── 2단계 · 추격 ────────────────────────────────────────────
 // 전력은 하나인데 쓸 곳이 셋이고 **둘만** 켤 수 있다 (PLAN §7-0 축①).
-// 처음엔 추진·냉각을 켜 둔다 — 센서가 꺼져 있어서 「상대가 안 보인다」를
-// 처음부터 몸으로 알게 된다.
-const power = { thrust: true, cool: true, sensor: false };
+// ★ **정박 중에는 추진이 꺼져 있다.** 전에는 켜 놓고 시작했는데, 그러면
+//   열이 초당 3.7 씩 올라 **켜는 순간부터 지고 있었다** — 추격 균형점이
+//   열 32.2 인데 시작 열이 34 다. 부두에 대 놓고 엔진을 밀고 있는 꼴이라
+//   물리적으로도 이상했다. 지금은 열이 내려가고(-0.9/초),
+//   **「추진을 켠다」가 항로를 고른 뒤의 첫 행동**이 된다.
+//   센서는 그대로 꺼 둔다 — 「상대가 안 보인다」를 처음부터 몸으로 알게.
+const power = { thrust: false, cool: true, sensor: false };
 const chase = makeChase();
 // ── 항로 ────────────────────────────────────────────────────
 // ★ **거점에서 시작한다.** 첫 화면이 「항로를 고르십시오」다 —
@@ -167,7 +171,7 @@ const hazard = makeHazard(seed);
 // 「잡고 돌린다」를 모르면 신비가 아니라 고장 난 게임이고,
 // 「지금 무엇이 덜그럭거리나」는 끝까지 안 말한다.
 const tutor = makeTutor();
-let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, hazardSeen: 0 };
+let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
@@ -194,9 +198,12 @@ function tutorState() {
   return {
     walked: taught.walked, turned: taught.turned,
     atPort: route.phase === RPHASE.PORT, forkPicked: route.leg + (route.fork ? 1 : 0),
-    heat, flips: taught.flips, coolFor,
+    heat, thrust: power.thrust, flips: taught.flips, cooled: taught.cooled,
     faultsOpen: faults.open.length, faultsFixed: taught.fixed,
     hazardSeen: taught.hazardSeen, dodged: hazard.dodged,
+    // ★ **조종간을 실제로 잡고 민 시간.** 「비켰나」를 dodged 로 보면
+    //   가만히 가운데 서 있어도 대부분 비킨 것이 된다 (hazard.js 참고)
+    steered: hazard.seat,
     foodLow: shaky(supply), loads: supply.loads, traded: supply.traded,
   };
 }
@@ -398,7 +405,9 @@ function interactStep(dt) {
   // 밸브 — 잡고 돌린다. 놓으면 되돌아온다. **끝까지 돌리면 걸린다**
   if (onValve && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
   else turn = Math.max(0, turn - VALVE.slip * dt);
-  if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; audio?.event('latch'); }
+  // 걸린 **횟수**를 센다 — 가르침이 `coolFor > 0` 을 보면 26초 뒤에 다시
+  // 「안 한 것」이 되어, 먼저 돌려 본 사람을 못 알아본다
+  if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; taught.cooled++; audio?.event('latch'); }
   coolFor = Math.max(0, coolFor - dt);
   ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolFor > 0 ? dt * 0.5 : 0);
 
@@ -487,7 +496,12 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ **빗장** — 고장을 아직 못 고쳤으면 안 온다. 첫 판에 둘이 겹치면
   //   (55초와 85초 — 30초 차이다) 배우기는커녕 뭐가 뭔지 모른다.
   //   **떠 있는 것을 끄지는 않는다** — 오는 것만 막는다
-  const hev = hazard.phase !== HPHASE.IDLE || canFire(tutor, 'hazard')
+  //   ★ **거점에서도 오고 있었다.** 추격만 막고 이건 빠뜨렸다 —
+  //     newLeg() 가 도착할 때 시계를 되돌리므로 거점에 85초 머물면
+  //     정박 중에 「전방에 잔해」가 떴다. 고장은 이미 막혀 있었는데
+  //     (calm 에 route.phase === LEG 가 들어 있다) 이것만 새고 있었다
+  const hev = hazard.phase !== HPHASE.IDLE
+    || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard'))
     ? stepHazard(hazard, dt, {
       region: ship.outside.region, atSeat: steering, push: steerPush,
     })
@@ -524,10 +538,18 @@ function systemsStep(dt, valveOpen, regionMult) {
     + (valveOpen && power.cool ? bad.coolValve : 0)) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
-  // 윈치를 잡고 있으면 자국도 조금 는다 — 계기로도 보여야 한다
+  // ★★ **거점은 안전하다** (PLAN §4-2). 여기 위 158행에 그렇게 적어 놓고
+  //   **정작 추격은 안 막고 있었다.** 그래서 켜자마자 거점에 서 있기만 해도
+  //   34초에 붙고 69초에 잡혔다 — 항로 안내가 뜨기도 전에.
+  //   거점에서는 위험이 **빠진다**: 붙을 일이 없으니 쌓일 이유도 없다.
+  const atPort = route.phase === RPHASE.PORT;
   const riskWas = chase.risk;
-  const ev = stepChase(chase, dt, power, heat + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
-    { contactAt: contactAt(route), trackMult: trackMult(route) });
+  const ev = atPort
+    ? (chase.phase === PHASE.CALM
+      ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
+      : stepChase(chase, dt, power, heat, regionMult, { contactAt: 999, trackMult: 0 }))
+    : stepChase(chase, dt, power, heat + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
+      { contactAt: contactAt(route), trackMult: trackMult(route) });
   // ★ 캐는 동안에는 **위험이 안 빠진다.** 배가 멈춰 있고 윈치가 시끄러우니
   //   상대가 나를 놓칠 리가 없다.
   //   처음엔 그냥 위험을 더하기만 했는데, 자국이 낮으면 stepChase 가 초당
@@ -543,8 +565,27 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   그대로 남는다 (docs/space/GAP.md §1-1)
     relieveEscape(route);
   }
-  if (ev === 'caught') { banner = '잡혔습니다'; bannerT = 3.2; }
-  if (ev) audio?.event(ev);
+  // ★ 잡혀도 **끝나지 않는다. 뺏기고 일이 는다** (chase-table.js CAUGHT).
+  //   v21 까지는 배너 한 줄이 전부였고, 그 뒤로 게임이 위협 없는 빈 상자가
+  //   됐다 — 사장님이 「아무것도 못하고 그냥 끝나는데」라고 하신 게 이것이다
+  if (ev === 'caught') {
+    banner = '잡혔습니다 — 배를 뒤집니다';
+    bannerT = CAUGHT.hold;
+    hitFlash = 1;
+    supply.ore = Math.max(0, supply.ore * (1 - CAUGHT.ore));
+    faults.wear.hull = Math.min(1, faults.wear.hull + CAUGHT.hull);
+    // 벌은 **일**이다. 고장 둘을 두고 간다 — 자리는 여전히 안 알려준다
+    for (let i = 0; i < CAUGHT.faults; i++) {
+      faults.next = 0;
+      stepFaults(faults, 0.001, { calm: true, leg: route.leg });
+    }
+  }
+  if (ev === 'released') {
+    banner = '놓아줬습니다 — 실려 있던 것이 없습니다';
+    bannerT = 3.6;
+    escapedAt = clock;      // 조용해지는 3초는 여기서도 온다. 안도는 안도다
+  }
+  if (ev) audio?.event(ev === 'released' ? 'escaped' : ev);
 
   // 소리는 **상태만** 받는다. 규칙은 여기, 소리는 저기 — 섞으면 둘 다 못 고친다
   const urgency = chase.phase === PHASE.CHASE ? 1 - chase.dist / CH.escapeAt : 0;
@@ -696,6 +737,7 @@ window.SPACE = {
     return {
       now: nowKey(tutor), text: ln?.text ?? null, dim: !!ln?.dim,
       done: [...tutor.done], shown: tutor.shown, allDone: allDone(tutor),
+      age: +tutor.age.toFixed(1), armed: tutor.armed,
       // ★ 「안 걸린다」와 「느리다」를 갈라 놓으려고 낸 구멍. 헤드리스는
       //   1fps 남짓이라 걷는 거리가 실시간의 20분의 1로 쌓인다
       walked: +taught.walked.toFixed(2), turned: +taught.turned.toFixed(2),
@@ -844,6 +886,12 @@ function frame(now) {
     bannerT = 3.0;
     audio?.event('escaped');       // 거점은 뿌리친 것과 같은 안도다
     escapedAt = clock;
+    // ★ **소리가 거짓말을 하고 있었다.** 도착할 때 「뿌리쳤다」 소리를
+    //   내면서 정작 추격은 안 끝냈다. 거점이 안전하다면 쫓아온 것도
+    //   여기서 떨어져 나가야 한다 — 소리에 맞춰 실제로 끝낸다
+    if (chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT) {
+      chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.risk = 0; chase.dist = 0;
+    }
   }
   if (rev === 'overrun') {
     // 그물이 닫혔다 — 자국이 얼마든 붙는다 (route-table.js PRESS 참고)

@@ -198,7 +198,13 @@ export function sign(parent, text, x, y, z, ry, tint = 0x8fd0ff, w = 0.62) {
   c.fillText(text, 128, 50);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 96 / 256), new THREE.MeshBasicMaterial({ map: tex }));
+  // ★ **양면으로 만든다.** 전에는 three 기본값(FrontSide)이라 뒷면이 아예
+  //   안 그려졌고, 곁방 넷의 이름표가 방 안쪽을 향해 있어서 **통로에서는
+  //   읽을 수 없었다** — 「조종석은 어딨고?」라는 말을 듣고서야 찾았다.
+  //   자리는 ship.js 에서 바로잡았지만, 여기서도 양면으로 두면 다음에
+  //   표지를 하나 더 달 때 같은 함정을 안 밟는다.
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 96 / 256),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
   m.position.set(x, y, z);
   m.rotation.y = ry;
   parent.add(m);

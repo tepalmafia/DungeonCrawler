@@ -106,8 +106,14 @@ function runLap(pick, seed) {
       { contactAt: contactAt(rt), trackMult: trackMult(rt) });
     if (ev === 'contact') legChases++;
     if (ev === 'escaped') relieveEscape(rt);
-    // 잡혀도 **그 자리에서 또 안 붙는다.** 뿌리친 뒤와 같은 유예를 준다
-    if (ev === 'caught') { legCaught++; c.phase = PHASE.SHAKEN; c.risk = 0; c.dist = 0; c.timer = 0; }
+    // ★★ 여기에 **게임에 없는 규칙이 적혀 있었다.**
+    //   「잡혀도 그 자리에서 또 안 붙는다」며 이 도구가 직접 SHAKEN 으로
+    //   되돌리고 있었는데, 정작 게임(chase.js)에는 CAUGHT 에서 나가는
+    //   가지가 **아예 없었다.** 그래서 **회차 시뮬은 잘 돌고 게임만 죽어
+    //   있었다** — 잡히면 위협이 영구히 사라진 빈 상자가 됐다.
+    //   도구가 게임보다 앞서 있으면 검사는 영원히 초록이다.
+    //   규칙은 게임(chase-table.js CAUGHT)으로 옮겼다. 여기서는 세기만 한다.
+    if (ev === 'caught') legCaught++;
 
     const rev = stepRoute(rt, DT, p);
     // ★ 그물이 닫혔다 — 자국이 얼마든 붙는다

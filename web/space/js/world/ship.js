@@ -27,7 +27,7 @@
 import * as THREE from 'three';
 import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
-import { buildCockpit, buildOutside, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
+import { buildCockpit, buildOutside, setPlan, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
   ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign, breakerPanel,
   servicePanel,
@@ -266,10 +266,23 @@ export function buildShip(scene) {
   ];
   for (const [to, x, z, ry] of HATCHES) {
     hatch(ship, x, z, DOORW, H, ry, ZONE[R[to].tone].light);
-    sign(ship, R[to].name, x + Math.sin(ry) * 0.26, 2.34, z + Math.cos(ry) * 0.26, ry, ZONE[R[to].tone].light, 0.48);
+    // ★ **이름표를 통로 쪽으로 내민다.** 전에는 `+sin·0.26` 이라 표지가
+    //   **자기가 바라보는 쪽으로**, 즉 들어가는 방 안으로 밀려났다.
+    //   조종석·기관실은 통로가 z축이라 부호가 우연히 맞아떨어져 보였고,
+    //   **곁방 넷(관측실·정비실·온실·에어록)은 방 안쪽을 향해 있어서
+    //   통로에서는 하나도 안 읽혔다.** 「내가 어디인지」는 알려주면서
+    //   「저 문 너머가 어디인지」는 절대 안 알려주는, 정확히 거꾸로였다.
+    //   INTERIOR.md 는 「문 위에 방 이름 일곱」이라고 적어 뒀는데 거짓이었다.
+    //   부호를 뒤집어 **읽는 사람이 서 있는 통로 쪽**에 건다.
+    sign(ship, R[to].name, x - Math.sin(ry) * 0.26, 2.34, z - Math.cos(ry) * 0.26, ry, ZONE[R[to].tone].light, 0.48);
   }
 
   // ── 조종석 ──────────────────────────────────────────────
+  // ★ 조종석 선체 도면이 **방 좌표를 여기서 받아 간다.** 저쪽에 사각형을
+  //   손으로 적어 두면 방을 옮길 때마다 어긋나고, 그건 「도면이 거짓말을
+  //   한다」가 된다 — 실제로 방 셋만 그려져 있었고 통로 칸은 열쇠가 안 맞아
+  //   영원히 안 켜졌다 (cockpit.js drawShip 참고)
+  setPlan(ROOMS);
   const cock = buildCockpit(ship, cockpit, H);
   const outside = buildOutside(scene, cockpit.z0);
 

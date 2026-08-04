@@ -10,7 +10,7 @@
 //  「90초~3분에 끝나나」(PLAN §11)를 잴 수 있다. 화면과 섞어 놓으면 그걸
 //  영영 못 재고, 못 재면 감으로 맞추게 된다.
 // ══════════════════════════════════════════════════════════════════════════
-import { SIGN, CHASE, HEATING, POWER_MAX } from './chase-table.js';
+import { SIGN, CHASE, CAUGHT, HEATING, POWER_MAX } from './chase-table.js';
 
 /** 평온 · 추격 · 뿌리침 직후 · 잡힘 */
 export const PHASE = { CALM: 'calm', CHASE: 'chase', SHAKEN: 'shaken', CAUGHT: 'caught' };
@@ -71,6 +71,21 @@ export function stepChase(c, dt, power, heat, regionMult, opt = {}) {
 
   if (c.phase === PHASE.SHAKEN) {
     if (c.timer >= CHASE.calmAfter) { c.phase = PHASE.CALM; c.timer = 0; c.risk = 0; }
+    return null;
+  }
+
+  // ★ **잡힌 뒤에도 게임은 계속된다** (PLAN §4-4).
+  //   v21 까지 여기에 분기가 **아예 없어서** CAUGHT 가 그대로 통과했고,
+  //   잡히면 게임이 위협 없는 빈 상자가 됐다. 지금은 배를 뒤지는 동안
+  //   (CAUGHT.hold) 붙들려 있다가 **놓아준다** — 뺏기고, 일이 늘고, 계속.
+  if (c.phase === PHASE.CAUGHT) {
+    if (c.timer >= CAUGHT.hold) {
+      c.phase = PHASE.SHAKEN;   // 놓아준 뒤의 유예는 뿌리친 것과 같은 자리를 쓴다
+      c.timer = CHASE.calmAfter - CAUGHT.calm;   // 표가 정한 만큼 안도를 준다
+      c.risk = 0;
+      c.dist = 0;
+      return 'released';
+    }
     return null;
   }
 
