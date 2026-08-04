@@ -19,7 +19,9 @@
 //    소리로 자리를 찾는 것이 실제로 되는지는 **귀로** 확인해야 한다.
 // ══════════════════════════════════════════════════════════════════════════
 import { MISSIONS, FAULT, TIER, wired, branchWeights } from '../web/space/js/game/mission-table.js';
-import { makeFaults, stepFaults, repairStep, clear, siteOf, effectsOf } from '../web/space/js/game/fault.js';
+import { makeFaults, stepFaults, repairStep, clear, siteOf, effectsOf, wearStep, wearFlip }
+  from '../web/space/js/game/fault.js';
+import { WEAR } from '../web/space/js/game/systems-table.js';
 import { HEAT, VALVE } from '../web/space/js/game/systems-table.js';
 import { heatRate, signatureOf } from '../web/space/js/game/chase.js';
 import { SIGN } from '../web/space/js/game/chase-table.js';
@@ -174,6 +176,51 @@ console.log('\n[6] 잡고 있으면 정말 고쳐지나');
   }
   ok(done, `${o.name} — 자리 ${[...new Set(rooms)].join(' → ')} 를 거쳐 고쳐진다`);
   ok(f.open.length === 0 && f.fixed === 1, '고치면 목록에서 빠진다');
+}
+
+// ── 8) 마모가 다음 고장을 정하나 ────────────────────────────
+console.log('\n[7] 마모 — **어떻게 몰았는지가 다음을 정하나** (정비실 진단대의 근거)');
+{
+  // 밟기만 하는 사람 vs 밸브만 붙들고 있는 사람 — 닳는 데가 달라야 한다
+  const runner = makeFaults('W1'), cooler = makeFaults('W2');
+  const MIN20 = 1200;
+  for (let i = 0; i < MIN20; i++) {
+    wearStep(runner, 1, { power: { thrust: true, cool: false, sensor: true }, valveOpen: false, region: 'empty' });
+    wearStep(cooler, 1, { power: { thrust: false, cool: true, sensor: false }, valveOpen: true, region: 'empty' });
+  }
+  const r = runner.wear, c = cooler.wear;
+  console.log(`  20분 밟기만  전력 ${(r.power * 100).toFixed(0)}% · 냉각 ${(r.cool * 100).toFixed(0)}% · 선체 ${(r.hull * 100).toFixed(0)}%`);
+  console.log(`  20분 식히기만 전력 ${(c.power * 100).toFixed(0)}% · 냉각 ${(c.cool * 100).toFixed(0)}% · 선체 ${(c.hull * 100).toFixed(0)}%`);
+  ok(r.hull > c.hull * 2 && c.cool > r.cool * 2, '쓰는 데가 닳는다 — 두 사람의 닳은 곳이 다르다');
+  ok(r.hull >= WEAR.warn && r.hull < 1,
+    `20분이면 경고선(${(WEAR.warn * 100).toFixed(0)}%)에 닿는다 — 늘 빨간 계기는 안 보는 계기다`);
+
+  // 닳은 계통이 정말 더 잘 터지나 — 시드를 여럿 돌려 본다
+  const count = (biasKey) => {
+    let hit = 0, n = 0;
+    for (let i = 0; i < 60; i++) {
+      const f = makeFaults(`BIAS${i}`);
+      f.fixed = 1;                      // 첫 고장 규칙(원인 모를 열)을 비켜 간다
+      f.wear[biasKey] = 1;
+      while (!f.open.length) stepFaults(f, 0.5, { calm: true, leg: 0 });
+      n++;
+      if (f.open[0].sys === biasKey) hit++;
+    }
+    return hit / n;
+  };
+  const pw = count('power'), cl = count('cool');
+  console.log(`  전력만 닳았을 때 전력 고장 ${(pw * 100).toFixed(0)}% · 냉각만 닳았을 때 냉각 고장 ${(cl * 100).toFixed(0)}%`);
+  ok(pw > 0.4 && cl > 0.4, '닳은 계통이 더 잘 터진다 (셋 중 하나면 33% 가 기준)');
+
+  // 고치면 그 계통이 덜어진다 — 안 그러면 한 계통만 계속 터진다
+  const f3 = makeFaults('RELIEF');
+  f3.fixed = 1;
+  for (const k of WEAR.keys) f3.wear[k] = 0.8;    // 전부 닳려 놓고 무엇이 터지든 본다
+  while (!f3.open.length) stepFaults(f3, 0.5, { calm: true, leg: 0 });
+  const o3 = f3.open[0], w0 = f3.wear[o3.sys];
+  clear(f3, o3);
+  ok(f3.wear[o3.sys] < w0, `고치면 그 계통이 덜어진다 (${o3.sys} ${(w0 * 100).toFixed(0)}% → ${(f3.wear[o3.sys] * 100).toFixed(0)}%)`);
+  ok(f3.log.length === 1, '고친 것이 기록에 남는다 — 배너는 사라지지만 진단대는 안 사라진다');
 }
 
 console.log('\n  ※ 방 사이 걷는 시간은 **가정**이다 (PLAN §11 의 6~12초 중간값).');

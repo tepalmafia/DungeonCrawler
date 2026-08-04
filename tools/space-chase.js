@@ -138,6 +138,23 @@ ok(p2 < p1, `놓으면 되돌아간다 (${p1} → ${p2}) — 딱 멈추면 손�
 ok((await S(() => SPACE.faults)).open.length === 1, '안 고쳤으니 목록에 남아 있다');
 if (SP) await p.screenshot({ path: `${SP}/ch-0-고장.png` });
 
+// 진단대 — **읽을 자리가 있나.** 계기는 못 읽으면 없는 것과 같다
+{
+  const bs = await S(() => SPACE.benchAt);
+  const read = await S((b) => {
+    const ux = Math.sin(b.ry), uz = Math.cos(b.ry);
+    for (const d of [1.2, 1.4, 1.6, 1.8]) {
+      const x = b.x + ux * d, z = b.z + uz * d;
+      if (SPACE.canStand(x, z)) return { x, z, d };
+    }
+    return null;
+  }, bs);
+  ok(!!read, `진단대를 읽을 자리가 있다 (${read ? read.d + 'm 앞' : '없다'})`);
+  // 그리고 조종석·관측실과 **다른 것**을 들고 있어야 한다 (GAP.md §3-C)
+  const w = (await S(() => SPACE.faults)).wear;
+  ok(w && Object.keys(w).length === 3, `진단대만 아는 것 — 계통별 마모 ${JSON.stringify(w)}`);
+}
+
 console.log('\n[1] 차단기 — 통로에서 손으로 누른다');
 await S(() => SPACE.put(0, 3.3, Math.PI / 2, 0.02));
 await p.waitForTimeout(2500);

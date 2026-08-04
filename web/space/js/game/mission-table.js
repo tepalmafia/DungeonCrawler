@@ -38,11 +38,14 @@ export const TIER = {
  *                   steps 가 없는 항목은 아직 설계일 뿐이다 (5단계·이야기 대기).
  *                   갈래가 자리를 정하는 경우(원인 모를 열)는 갈래에 `at` 을 둔다
  * @property effect  고쳐지기 전까지 배에 무슨 일이 나나 (game/fault.js 가 읽는다)
+ * @property sys     어느 계통이 닳아서 나는 고장인가 (systems-table.js WEAR).
+ *                   정비실 진단대가 이걸로 **다음에 무엇이 터질지** 예고한다.
+ *                   **자리는 안 알려준다** — 계통과 방은 다른 것이다
  */
 export const MISSIONS = [
   // ── A. 배 자신의 문제 — 지금 만들 수 있다 ──────────────────
   {
-    key: 'phantomHeat', name: '원인 모를 열', tier: TIER.NOW,
+    key: 'phantomHeat', sys: 'hull', name: '원인 모를 열', tier: TIER.NOW,
     where: ['spine', 'engine', 'workshop'],
     lead: '열이 오르는데 냉각 계통은 멀쩡하다',
     // ★ 제일 먼저 만들 것. 이 게임의 정체성 그 자체다 —
@@ -68,7 +71,7 @@ export const MISSIONS = [
     hold: 7,
   },
   {
-    key: 'foulCoolant', name: '오염된 냉매', tier: TIER.NOW,
+    key: 'foulCoolant', sys: 'cool', name: '오염된 냉매', tier: TIER.NOW,
     where: ['engine', 'workshop'],
     lead: '밸브를 열면 오히려 열이 오른다',
     // 「늘 하던 것이 안 통한다」 — 익숙함을 무기로 쓴다.
@@ -87,7 +90,7 @@ export const MISSIONS = [
     ],
   },
   {
-    key: 'micrometeor', name: '미소운석', tier: TIER.NOW,
+    key: 'micrometeor', sys: 'hull', name: '미소운석', tier: TIER.NOW,
     where: ['any'],
     lead: '어딘가에서 공기가 샌다',
     // 소리로 찾는 첫 항목. 쉭 소리와 **먼지가 흐르는 방향**이 단서다
@@ -99,7 +102,7 @@ export const MISSIONS = [
     ],
   },
   {
-    key: 'oldBreaker', name: '배전 노후', tier: TIER.NOW,
+    key: 'oldBreaker', sys: 'power', name: '배전 노후', tier: TIER.NOW,
     // ★ 처음엔 통로만 적었다가 **내 규칙(한 방에서 안 끝난다)에 걸렸다.**
     //   고치려면 정비실에서 접점을 가져와야 한다고 두니 오히려 맞다 —
     //   차단기만 만지작거리는 것보다 「부품이 있나」가 먼저 오는 게 낫다

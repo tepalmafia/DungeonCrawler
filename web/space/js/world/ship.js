@@ -33,6 +33,7 @@ import {
   servicePanel,
 } from './kit.js';
 import { buildChart } from './chart.js';
+import { buildBench } from './bench.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -208,6 +209,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed) {
 // ══════════════════════════════════════════════════════════════════════════
 export function buildShip(scene) {
   let chart = null;
+  let bench = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
@@ -323,15 +325,21 @@ export function buildShip(scene) {
   // ── 정비실 — 손을 쓰는 방 ────────────────────────────────
   {
     const r = R.workshop, Z = ZONE.workshop;
-    const bench = new THREE.Group();
-    bench.position.set(r.x1 - 0.9, 0, (r.z0 + r.z1) / 2);
-    ship.add(bench);
-    box(bench, 1.3, 0.12, 2.2, MAT.body, 0, 0.9, 0);
-    box(bench, 1.2, 0.7, 2.0, MAT.faceD, 0, 0.5, 0);
-    box(bench, 0.24, 0.24, 0.24, MAT.rail, -0.3, 1.08, -0.6);        // 바이스
-    for (let i = 0; i < 8; i++) box(bench, 0.05, 0.34, 0.05, MAT.rail, 0.5, 1.55, -0.9 + i * 0.26);
-    box(bench, 1.1, 0.04, 0.05, new THREE.MeshBasicMaterial({ color: Z.light }), 0, 1.82, 0);
-    blockBox(r.x1 - 0.9, (r.z0 + r.z1) / 2, 0.68, 1.12, 0);
+    const bx = r.x1 - 0.9, bz = (r.z0 + r.z1) / 2;
+    const desk = new THREE.Group();
+    desk.position.set(bx, 0, bz);
+    ship.add(desk);
+    box(desk, 1.3, 0.12, 2.2, MAT.body, 0, 0.9, 0);
+    box(desk, 1.2, 0.7, 2.0, MAT.faceD, 0, 0.5, 0);
+    box(desk, 0.24, 0.24, 0.24, MAT.rail, -0.3, 1.08, -0.6);        // 바이스
+    for (let i = 0; i < 8; i++) box(desk, 0.05, 0.34, 0.05, MAT.rail, 0.5, 1.55, -0.9 + i * 0.26);
+    box(desk, 1.1, 0.04, 0.05, new THREE.MeshBasicMaterial({ color: Z.light }), 0, 1.82, 0);
+    blockBox(bx, bz, 0.68, 1.12, 0);
+    // 진단대 — **계기 셋 중 마지막** (world/bench.js · GAP.md §3-C).
+    // 작업대 안쪽 끝에 세워 사람(-x 쪽)을 보게 한다
+    // ★ **먼 쪽 끝**에 세운다. 가까운 쪽에 두면 사람이 0.4m 앞에 서게 돼
+    //   화면이 시야를 통째로 덮는다. 작업대 너비만큼 물러서야 읽힌다
+    bench = buildBench(ship, { x: bx + 0.5, z: bz, ry: -Math.PI / 2 }, MAT);
     racks(ship, 'x', r.z0 + 0.09, r.x0 + 0.7, r.x1 - 0.6, 1, Z.accent, 4);
   }
 
@@ -537,5 +545,5 @@ export function buildShip(scene) {
   // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
   // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
   const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
-  return { cock, outside, valve, wheel, breakers, chart, panels, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
+  return { cock, outside, valve, wheel, breakers, chart, bench, panels, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }
