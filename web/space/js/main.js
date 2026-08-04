@@ -51,9 +51,11 @@ import {
 import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
 import { KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
+import { WRIST, jobFor } from './game/wrist-table.js';
+import { buildWrist } from './world/wrist.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 24;
+export const VERSION = 25;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -74,6 +76,9 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 400);
+// ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
+//   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
+scene.add(camera);
 
 // 그림 통로를 **게임 로직보다 먼저** 연다 (docs/POSTMORTEM.md §2 0단계).
 // 한 장도 없어도 정상으로 끝나고, 배는 민무늬로 선다.
@@ -116,6 +121,12 @@ const input = new Input(canvas);
 let audio = null;
 try { audio = makeAudio(); } catch (e) { console.warn('[audio] 소리를 못 켭니다 —', e.message); }
 addEventListener('mousedown', () => audio?.resume(), { passive: true });
+// ★ 손목을 들어 올린다 — **누르는 동안**. 다른 손잡이가 전부 「잡고 있는 것」
+//   이라 여기도 같은 규약이다. 놓으면 곁눈 자리로 돌아간다
+addEventListener('keydown', (e) => { if (e.code === 'KeyQ') raised = true; });
+addEventListener('keyup', (e) => { if (e.code === 'KeyQ') raised = false; });
+addEventListener('blur', () => { raised = false; });
+
 addEventListener('keydown', (e) => {
   // M — 음소거. 소리가 있는 게임에 끄는 방법이 없으면 그건 결함이다
   if (e.code !== 'KeyM' || e.metaKey || e.ctrlKey || e.altKey || !audio) return;
@@ -182,6 +193,13 @@ let cranking = null;      // 지금 크랭크를 잡고 있는 문
 // 조종간이 헐거울 때 **어느 쪽으로** 흐르나 — 한 판 내내 같은 쪽이라야
 // 「이 배는 왼쪽으로 흐른다」를 몸이 배운다
 const driftWay = seed.charCodeAt(0) % 2 ? 1 : -1;
+// ── 손목 장치 ────────────────────────────────────────────────
+// **늘 보이는 유일한 계기.** 「지금 할 일」과 「내가 고친 것」만 든다 —
+// 거리·자국·항로·마모는 여전히 방이 갖는다 (world/wrist.js 머리말 참고)
+let raised = false;
+const wrist = buildWrist(camera);
+/** 손목에 지금 뜬 줄 — 검사가 읽는다. 게임은 안 쓴다 */
+let wristJob = null;
 /**
  * 이번 프레임의 고장 효과. **한 프레임에 한 번만 뽑아 여기 둔다.**
  * ★ 처음엔 systemsStep 안의 지역 변수였는데, 해도대(frame 안)와 문(위쪽)이
@@ -864,6 +882,22 @@ window.SPACE = {
   /** 문 여섯이 지금 어떤가 — 검사용 */
   get doors() { return doorSummary(doors); },
   /**
+   * 손목에 지금 뭐가 떠 있나 — 검사용.
+   * ★ `lift` 가 있어야 **Q 로 정말 올라오나**를 잰다. 화면만 보면
+   *   「올라온 것 같다」로 끝나고 그건 검사가 아니다
+   */
+  get wrist() {
+    // ★ `onScreen` 이 이 구멍의 핵심이다. 손목은 **카메라의 자식**이라,
+    //   카메라를 scene 에 안 넣으면 three 가 아예 안 그린다 — 코드는 전부
+    //   도는데 화면에는 없다. 순수 검사로는 절대 안 잡히는 종류다
+    let root = wrist.group;
+    while (root.parent) root = root.parent;
+    return {
+      ...(wristJob ?? {}), lift: wrist.lift, onScreen: root === scene,
+      log: faults.log.map((l) => l.reveal), fixed: faults.fixed,
+    };
+  },
+  /**
    * 문을 전부 열어 둔다 — **검사용.** 게임은 안 쓴다.
    * ★ `space-walk.js` 는 배 안을 격자로 훑어 「걸어서 갈 수 있나」를 본다.
    *   그런데 문은 **가까이 가야** 열리므로, 격자로 훑으면 닫힌 문에 막혀
@@ -1111,6 +1145,31 @@ function frame(now) {
       lesson.hidden = false;
     } else lesson.hidden = true;
   } else lesson.hidden = true;
+
+  // ── 손목 장치 — **가르침이 끝난 뒤에도 뭘 할지 말해 준다** ──
+  // ★ 가르침은 일곱 개로 끝난다 (첫 회차가 튜토리얼이므로). 그 뒤로
+  //   **아무도 뭘 하라고 안 해서** 「아직도 뭘 해야할지 모르겠다」가 났다.
+  //   손목이 그 자리를 이어받는다 — 다만 **어디인지는 여전히 안 말한다**
+  const jd = jammedOne(doors);
+  wrist.update({
+    job: wristJob = jobFor({
+      doorJammed: !!jd,
+      chasing: chase.phase === PHASE.CHASE,
+      heatHigh: heat >= HEAT.warn,
+      hazardSoon: hazard.phase !== HPHASE.IDLE,
+      faultsOpen: faults.open.length,
+      foodLow: shaky(supply),
+      atPort: route.phase === RPHASE.PORT,
+      thrust: power.thrust,
+      ore: supply.ore,
+    }),
+    // 고친 것 — **정비실까지 안 가도 보인다.** 이게 사장님이 말씀하신 것이다.
+    // ★ 갯수는 `log.length` 가 아니라 `fixed` 다 — 기록은 여섯에서 잘리므로
+    //   log 로 세면 일곱 번째부터 「고친 것 6」에 멈춰 선다
+    log: faults.log.map((l) => l.reveal),
+    fixed: faults.fixed,
+    clock, raised,
+  }, dt);
 
   composer.render();
   requestAnimationFrame(frame);

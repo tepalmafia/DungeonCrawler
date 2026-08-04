@@ -406,6 +406,31 @@ console.log('\n[0-6b] 문 — **가까이 가면 열리고, 끼면 손으로 연
   await S(() => { const d = SPACE.doors; });
 }
 
+console.log('\n[0-6c] 손목 — **화면에 있나 · Q 로 올라오나 · 상태를 따라가나**');
+{
+  // ★ 숫자(줄 순서 · 안 새나)는 tools/space-wrist.js 가 브라우저 없이 잰다.
+  //   여기서 볼 것은 **정말 화면에 매달려 있나**다 — 카메라를 scene 에
+  //   안 넣으면 three 가 카메라의 자식을 그리지 않아서, 코드는 다 도는데
+  //   화면에는 아무것도 없다. 그건 순수 검사로는 절대 안 잡힌다
+  ok(await S(() => SPACE.wrist.onScreen), '손목 장치가 실제로 그려지는 나무에 달려 있다');
+
+  const down = await S(() => SPACE.wrist.lift);
+  await p.keyboard.down('KeyQ');
+  const up = await until(() => SPACE.wrist.lift > 0.9, 40, '손목 올라오기');
+  ok(down < 0.1 && up, `Q 를 잡으면 눈앞으로 온다 — ${down} → ${await S(() => SPACE.wrist.lift)}`);
+  await p.keyboard.up('KeyQ');
+  ok(await until(() => SPACE.wrist.lift < 0.1, 40, '손목 내려가기'), '놓으면 곁눈 자리로 돌아간다');
+
+  // 상태를 따라가나 — 문을 끼우면 **그 줄로 바뀌어야** 한다
+  await S(() => SPACE.jamDoor('engine'));
+  await p.waitForTimeout(1200);
+  const jam = await S(() => SPACE.wrist);
+  ok(jam.key === 'jam' && jam.urgent, `문이 끼면 손목이 바뀐다 — 「${jam.text}」`);
+  await S(() => { SPACE.openDoors(); SPACE.openDoors(false); });
+  await p.waitForTimeout(1200);
+  ok(await S(() => SPACE.wrist.key) !== 'jam', '풀면 그 줄이 사라진다 — **안 하면 안 사라지는 잔소리가 아니다**');
+}
+
 console.log('\n[0-7] 거점은 안전한가 · 잡히면 나올 수 있나');
 {
   // ★ 둘 다 v21 에서 **게임을 못 하게 만든 것들**이다. 숫자는
