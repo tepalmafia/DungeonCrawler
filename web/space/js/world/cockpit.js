@@ -214,6 +214,43 @@ function drawShip(ctx, w, h, s) {
  */
 function drawCourse(ctx, w, h, s) {
   bg(ctx, w, h);
+  // ★ 위험 지대가 제일 급하다 — 있으면 이 화면이 그걸 맡는다.
+  //   화면을 하나 더 만들지 않는다. 조종석은 이미 빽빽하고, 급할 때 봐야 할
+  //   것이 흩어져 있으면 못 읽는다 (아래 「하나가 두 일을 한다」와 같은 이유)
+  if (s.hazPhase === 'warn' || s.hazPhase === 'run') {
+    const warning = s.hazPhase === 'warn';
+    label(ctx, w, h, warning ? '전방 잔해' : '잔해 지대');
+    const f = (k) => Math.round(h * k);
+    if (warning) {
+      ctx.fillStyle = '#ffb060';
+      ctx.font = `700 ${f(0.34)}px ui-monospace, monospace`;
+      ctx.fillText(`${Math.ceil(s.hazWarn)}`, h * 0.07, h * 0.78);
+      ctx.font = `600 ${f(0.11)}px system-ui, sans-serif`;
+      ctx.fillStyle = DIM;
+      ctx.fillText('초 뒤 · 조종간을 잡으십시오', h * 0.07 + w * 0.2, h * 0.74);
+      return;
+    }
+    // 지나가는 중 — **배의 자리와 덩어리의 자리**를 나란히 보여준다
+    const cx = w / 2, y = h * 0.55, half = w * 0.4;
+    ctx.strokeStyle = DIM; ctx.lineWidth = Math.max(1, h * 0.012);
+    ctx.beginPath(); ctx.moveTo(cx - half, y); ctx.lineTo(cx + half, y); ctx.stroke();
+    const inc = s.incoming;
+    if (inc) {
+      const safe = (s.clearBy ?? 1) >= 0.46;
+      ctx.fillStyle = safe ? '#5fe0a8' : '#ff6a4a';
+      ctx.beginPath(); ctx.arc(cx + inc.lane * half, y, h * 0.09, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = safe ? '#5fe0a8' : '#ff6a4a';
+      ctx.font = `700 ${f(0.14)}px ui-monospace, monospace`;
+      ctx.fillText(`${inc.in.toFixed(1)}초 · ${inc.left}개 남음`, h * 0.07, h * 0.94);
+    }
+    // 배 — 삼각형
+    ctx.fillStyle = '#ffffff';
+    const px = cx + (s.lane ?? 0) * half;
+    ctx.beginPath();
+    ctx.moveTo(px, y + h * 0.1); ctx.lineTo(px - h * 0.06, y + h * 0.22);
+    ctx.lineTo(px + h * 0.06, y + h * 0.22); ctx.closePath(); ctx.fill();
+    return;
+  }
   if (s.chase?.phase === 'chase') {
     label(ctx, w, h, '거리');
     // ★ 못 읽는 이유가 둘이다. **둘을 갈라 말한다** — 「센서 꺼짐」과
@@ -450,11 +487,26 @@ export function buildCockpit(parent, room, H) {
   }
 
   // ── 조종간 ────────────────────────────────────────────
+  // ★ **형태만 있던 것을 살렸다** (docs/space/FLYING.md). 잡고 좌우로 밀면
+  //   배가 기운다 — 밸브·윈치와 같은 규약이다. 누르는 게 아니라 잡고 미는 것.
+  const yokes = [];
   for (const sx of [-1.05, 1.05]) {
-    box(g, 0.08, 0.34, 0.08, DARK, sx, 0.92, -7.72);
-    box(g, 0.4, 0.07, 0.08, FRAME, sx, 1.09, -7.72);
-    box(g, 0.08, 0.07, 0.18, FRAME, sx, 1.09, -7.79);
+    const y = new THREE.Group();
+    y.position.set(sx, 0.92, -7.72);
+    g.add(y);
+    box(y, 0.08, 0.34, 0.08, DARK, 0, 0, 0);
+    box(y, 0.4, 0.07, 0.08, FRAME, 0, 0.17, 0);
+    box(y, 0.08, 0.07, 0.18, FRAME, 0, 0.17, -0.07);
+    yokes.push(y);
   }
+  // 조준 판정용 — 조종간은 얇다 (차단기·밸브와 같은 처방).
+  // 좌석 사이 한 덩어리로 잡는다: 어느 쪽을 봐도 「조종간을 잡았다」다
+  const yokeHit = new THREE.Mesh(
+    new THREE.BoxGeometry(2.8, 0.8, 0.6),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  yokeHit.position.set(0, 1.02, -7.7);
+  g.add(yokeHit);
 
   // ── 조명 ──────────────────────────────────────────────
   // 참고 사진은 **찬 파랑 + 따뜻한 주황** 두 색이다. 한 색이면 밋밋하다
@@ -468,8 +520,11 @@ export function buildCockpit(parent, room, H) {
   /** 매 프레임 화면을 다시 그린다 — 여섯 장이라 비싸지 않다 */
   function update(state) {
     for (const s of screens) s.redraw(state);
+    // 조종간이 기운 만큼 눕는다 — **먹고 있다는 것이 눈에 보여야** 한다
+    const tilt = (state.lane ?? 0) * 0.5;
+    for (const y of yokes) y.rotation.z = -tilt;
   }
-  return { update };
+  return { update, yokeHit };
 }
 
 /**
@@ -622,11 +677,50 @@ export function buildOutside(scene, z) {
   const nearPos = ng.attributes.position;
   const nearCol = ng.attributes.color;
 
+  // ★ 다가오는 덩어리 — **부딪히는 것.** 창밖의 잔해와 달리 이건 **위치가
+  //   정해져 있고 실제로 부딪힌다** (game/hazard.js). 크게 하나만 만든다:
+  //   여럿 띄우면 어느 것을 피해야 하는지 안 보인다.
+  // ★ **스스로 빛나게 한다.** 배 밖에는 등이 없다 — 잔해 덩어리에서 이미
+  //   한 번 밟은 함정인데(위 rockMat 참고) 여기서 또 밟았다. 처음엔
+  //   emissive 없이 두었더니 까만 하늘에 **까만 덩어리**라 창밖으로는
+  //   아무것도 안 보였고, 조종석 화면(계기)만 보고 피하게 됐다.
+  //   그러면 「창으로 판단한다」(FLYING.md §3-B)가 거짓말이 된다.
+  //   작은 잔해보다 밝게 준다 — 이건 **피해야 하는 것**이라 눈에 띄어야 한다.
+  const bigRock = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(3.4, 1),
+    new THREE.MeshStandardMaterial({
+      color: 0xa89880, roughness: 1, flatShading: true, emissive: 0x6a5a46,
+    }),
+  );
+  bigRock.visible = false;
+  // ★ **`out` 에 안 넣는다.** out 은 배가 기울면 통째로 반대로 밀리는데
+  //   (아래 시차), 그 폭(3.2)과 덩어리의 폭(5.4)이 달라서 **비켰는데도
+  //   덩어리가 안 비켜 보이고, 부딪히는데도 가운데로 안 왔다.**
+  //   덩어리는 「내 자리에 대해 어디 있나」라야 창으로 판단이 된다 —
+  //   그래서 시차 밖에 두고 **상대 자리**로 놓는다.
+  scene.add(bigRock);
+
   /**
    * 한 프레임 흘려보낸다.
    * @param speed 초당 몇 유닛. 표(game/systems-table.js CRUISE)에서 온다
+   * @param lane  배가 좌우 어디에 있나 (-1 ~ 1). 창밖이 **반대로** 흐른다
+   * @param inc   다가오는 덩어리 { in, lane } 또는 null
    */
-  function update(dt, speed) {
+  function update(dt, speed, lane = 0, inc = null) {
+    // 배가 기울면 창밖이 반대로 밀린다 — 그게 「내가 움직였다」로 읽힌다
+    out.position.x += (-lane * 3.2 - out.position.x) * Math.min(1, dt * 3);
+    out.rotation.z += (lane * 0.06 - out.rotation.z) * Math.min(1, dt * 3);
+
+    // 다가오는 덩어리 — 남은 시간이 곧 거리다.
+    // ★ 높이 1.5 는 **눈높이**다 (BODY.eye 1.62). 처음엔 -0.4 에 뒀더니
+    //   콘솔 화면 뒤로 가려서 창밖에서는 안 보였다 — 계기만 보고 피하게 된다
+    if (inc && inc.in > 0 && inc.in < 14) {
+      bigRock.visible = true;
+      bigRock.position.set((inc.lane - lane) * 5.4, 1.5, z - inc.in * 9);
+      bigRock.rotation.x += dt * 0.5;
+      bigRock.rotation.y += dt * 0.35;
+    } else bigRock.visible = false;
+
     // 구역 갈아타기 — 색은 천천히, 개수는 바로
     const k = Math.min(1, dt / REGION_BLEND);
     bg.lerp(new THREE.Color(want.bg), k);
