@@ -81,6 +81,63 @@ ok(at.offer.length === 2 && at.offer[0] !== at.offer[1], `새 갈래 둘이 떴�
 // 다시 골라 둔다 — 아래 검사들은 배가 가는 중이어야 뜻이 있다
 await S(() => SPACE.pick(SPACE.route.offer[1]));
 
+console.log('\n[0-3] 고장 — **소리로 찾고 손으로 고친다**');
+await S(() => SPACE.forceFault());
+const fl = (await S(() => SPACE.faults)).open[0];
+ok(!!fl, `고장이 떴다 — ${fl?.name} (${fl?.lead})`);
+ok(fl?.key === 'phantomHeat', '첫 고장은 「원인 모를 열」이다 (first: true)');
+
+// 다른 방에서는 희미하게만 들린다 — 「이 근처다」까지만 준다
+const other = fl.at === 'spine' ? 'observ' : 'spine';
+await S((r) => SPACE.put(...({ spine: [0, 7], observ: [-2.4, 0.6] }[r])), other);
+await p.waitForTimeout(1200);
+const far = (await S(() => SPACE.faults)).hear;
+
+// 그 방으로 가면 커진다
+const site = await S((r) => SPACE.panelAt(r), fl.at);
+// 패널 앞에 설 수 있는 자리를 찾는다 — 랙·작업대에 겹치면 못 선다.
+// 패널이 바라보는 쪽은 ry 하나로 나온다: 바깥 방향 = (sin ry, cos ry)
+const spot = await S((s) => {
+  const ux = Math.sin(s.ry), uz = Math.cos(s.ry);
+  for (const d of [0.5, 0.7, 0.9, 1.1, 1.4]) {
+    for (const off of [0, 0.4, -0.4, 0.8, -0.8]) {
+      const x = s.x + ux * d - uz * off, z = s.z + uz * d + ux * off;
+      if (SPACE.canStand(x, z)) return { x, z, d };
+    }
+  }
+  return null;
+}, site);
+ok(!!spot, `패널 앞에 설 자리가 있다 (${fl.at})`);
+if (!spot) { console.log('\n✘ 패널 앞이 막혀 있다 — 자리를 옮겨야 한다\n'); await b.close(); process.exit(1); }
+// 패널 쪽을 본다. 사람의 앞은 (-sin yaw, -cos yaw) 이므로 yaw 는 그냥 ry 다
+await S((a) => SPACE.put(a.spot.x, a.spot.z, a.site.ry, -0.42), { spot, site });
+await p.waitForTimeout(2200);
+const near = (await S(() => SPACE.faults)).hear;
+console.log(`   덜그럭거림  다른 방 ${far} → 그 방 ${near}`);
+ok(near > far * 2.5, '고장 난 방에 들어가면 소리가 확 커진다 — 이게 진단이다');
+
+const aimOk = await until(() => String(SPACE.aim || '').startsWith('panel:'), 25, '패널 조준');
+ok(aimOk, `조준선이 점검 패널을 잡는다 (${await S(() => SPACE.aim)})`);
+// 잡고 있으면 고쳐진다. **누르는 게 아니라 잡는 것**이다
+await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+// ★ 잡고 있는 것이 **먹고 있는지** 먼저 본다. 헤드리스는 몇 fps 인지 그때그때
+//   다르고 dt 를 0.05 로 자르므로, 게임 시간 7초가 실제로는 1분이 넘는다 —
+//   「안 고쳐진다」와 「느리다」를 갈라 놓지 않으면 엉뚱한 데를 고치게 된다
+// ★ 여기서 「끝까지 고쳐지나」는 안 본다
+//   헤드리스는 dt 를 0.05 로 자른 채 1fps 남짓이라, 게임 시간 7초가 실제로는
+//   5분이 넘는다. **끝까지 도는지는 tools/space-fault.js 가 브라우저 없이
+//   이미 잰다.** 여기서 볼 것은 「손이 닿고, 잡으면 먹고, 놓으면 되돌아가나」다.
+const moving = await until(() => SPACE.faults.open[0]?.progress > 0.05, 40, '수리 진행');
+const p1 = (await S(() => SPACE.faults)).open[0]?.progress;
+ok(moving, `잡으니 수리가 진행된다 (${p1})`);
+await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+await S((v) => { window.__p1 = v; }, p1);
+await until(() => SPACE.faults.open[0]?.progress < window.__p1, 25, '되돌아가기');
+const p2 = (await S(() => SPACE.faults)).open[0]?.progress;
+ok(p2 < p1, `놓으면 되돌아간다 (${p1} → ${p2}) — 딱 멈추면 손을 뗄 이유가 없다`);
+ok((await S(() => SPACE.faults)).open.length === 1, '안 고쳤으니 목록에 남아 있다');
+if (SP) await p.screenshot({ path: `${SP}/ch-0-고장.png` });
+
 console.log('\n[1] 차단기 — 통로에서 손으로 누른다');
 await S(() => SPACE.put(0, 3.3, Math.PI / 2, 0.02));
 await p.waitForTimeout(2500);

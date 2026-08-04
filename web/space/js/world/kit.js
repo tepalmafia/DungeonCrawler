@@ -396,3 +396,51 @@ export function breakerPanel(parent, x, z, ry, circuits, tint) {
   });
   return out;
 }
+
+/**
+ * 점검 패널 — **고장을 손으로 고치는 자리** (game/fault.js).
+ *
+ * ★ 방마다 같은 물건 하나를 둔다
+ *   고장 종류마다 다른 물건을 만들면 종류가 스물여덟이 될 때 스물여덟 개를
+ *   만들어야 한다. 그건 못 한다. **자리는 하나고, 무엇이 잘못됐는지는
+ *   소리와 계기가 말한다** — 그게 이 게임의 원래 규칙이기도 하다 (PLAN §3-1).
+ *
+ * ★ 손잡이는 **잡고 돌리는 것**이다 (밸브와 같은 규약)
+ *   차단기처럼 딸깍이면 「눌렀더니 고쳐졌다」가 되어 진단이 사라진다.
+ *   시간이 드는 동작이라야 「지금 여기 매여 있다」가 생긴다.
+ */
+export function servicePanel(parent, x, z, ry, tint) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = ry;
+  parent.add(g);
+
+  box(g, 0.62, 0.72, 0.09, MAT.body, 0, 1.18, -0.03);          // 판
+  box(g, 0.66, 0.06, 0.12, MAT.metal, 0, 1.56, -0.02);         // 윗테
+  box(g, 0.66, 0.06, 0.12, MAT.metal, 0, 0.80, -0.02);         // 아랫테
+  box(g, 0.5, 0.02, 0.03, glow(tint), 0, 1.5, 0.04);           // 라벨 띠
+
+  // 돌리는 손잡이 — 돌아가는 것이 보여야 「먹고 있다」를 안다
+  const knob = new THREE.Group();
+  knob.position.set(0, 1.16, 0.06);
+  g.add(knob);
+  knob.add(new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.028, 7, 18), MAT.rail));
+  box(knob, 0.3, 0.035, 0.035, MAT.rail, 0, 0, 0.01);
+  box(knob, 0.035, 0.3, 0.035, MAT.rail, 0, 0, 0.01);
+
+  // 불 — 이 자리가 지금 문제인가. **평소엔 꺼져 있다** (다 켜 두면 안내판이 된다)
+  const lampMat = new THREE.MeshBasicMaterial({ color: 0x2a2f36 });
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.04), lampMat);
+  lamp.position.set(0.22, 0.9, 0.06);
+  g.add(lamp);
+
+  // 조준 판정용 — 손잡이는 얇다 (차단기·해도대와 같은 처방)
+  const hit = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.7, 0.26),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  hit.position.set(0, 1.18, 0.1);
+  g.add(hit);
+
+  return { group: g, knob, hit, lampMat };
+}

@@ -17,9 +17,9 @@
 //    다 비슷하게 나오면 그건 통과가 아니라 **설계가 실패한 것**이다.
 //
 //  ★ 이 시뮬이 못 보는 것
-//    방 사이를 뛰는 시간이 0 이다 (space-sim.js 와 같다). 그리고 고장이
-//    아직 없어서 **평온 구간이 비어 있다** — 실제로는 §11 의 「문제 하나
-//    40초~2분」이 그 자리를 채운다. 그래서 여기 나오는 회차 길이는 **아래끝**이다.
+//    방 사이를 뛰는 시간이 0 이다 (space-sim.js 와 같다). 그리고 **고장을
+//    고치는 시간을 안 센다** — 실제로는 평온 구간을 고장이 채우고, 하나에
+//    40~70초가 든다 (tools/space-fault.js). 여기 나오는 회차 길이는 **아래끝**이다.
 // ══════════════════════════════════════════════════════════════════════════
 import { LEG, PRESS, allForks } from '../web/space/js/game/route-table.js';
 import { makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, relieveEscape, RPHASE }
@@ -194,7 +194,7 @@ console.log(`  ${ok4 ? '✔' : '✘'} 어느 길로도 끝까지 간다     ${la
 console.log(`  ${ok5 ? '✔' : '✘'} 고르는 것이 결과를 가른다   압박 차 ${pressSpread.toFixed(0)} · 시간 차 ${timeSpread.toFixed(0)}분`);
 console.log(`  ${ok6 ? '✔' : '✘'} 숨으면 안전하고 느리다      압박 ${hide.press.toFixed(0)} vs ${fast.press.toFixed(0)} · ${(hide.sec / 60).toFixed(0)}분 vs ${(fast.sec / 60).toFixed(0)}분`);
 
-console.log('\n  ※ 방 사이를 뛰는 시간이 0 이다. 그리고 **고장이 아직 없어서**');
-console.log('     평온 구간이 비어 있다 — 실제 회차는 이보다 길다.');
+console.log('\n  ※ 방 사이를 뛰는 시간이 0 이고, **고장을 고치는 시간도 안 센다**');
+console.log('     평온 구간이 비어 있다 — 실제 회차는 이보다 길다 (고장 하나에 40~70초).');
 console.log('  ※ 「재미있나」는 여기서 안 나온다 — 직접 20분 돌려 봐야 한다.\n');
 process.exit(ok1 && ok2 && ok3 && ok4 && ok5 && ok6 ? 0 : 1);

@@ -33,6 +33,11 @@ export const TIER = {
  * @property branches 갈래. weight 는 상대 확률이고, 구간이 깊어지면
  *                   `worse` 붙은 갈래의 무게가 커진다 — **새 항목을 안
  *                   만들고도 어려워지는 방법** (Hardspace 방식)
+ * @property steps   ★ 실제로 손이 가는 자리. `at` 은 방, `hold` 는 그 자리에서
+ *                   잡고 있어야 하는 초. **여기 있는 것만 게임에 물린다** —
+ *                   steps 가 없는 항목은 아직 설계일 뿐이다 (5단계·이야기 대기).
+ *                   갈래가 자리를 정하는 경우(원인 모를 열)는 갈래에 `at` 을 둔다
+ * @property effect  고쳐지기 전까지 배에 무슨 일이 나나 (game/fault.js 가 읽는다)
  */
 export const MISSIONS = [
   // ── A. 배 자신의 문제 — 지금 만들 수 있다 ──────────────────
@@ -45,12 +50,22 @@ export const MISSIONS = [
     //   그리고 방 셋을 돌게 만들어서 **왕복이 지겨운지 바로 드러난다.**
     first: true,
     costs: { time: [40, 110], sign: 'heat' },
+    // ★ **자리를 안 알려준다.** 갈래가 방을 정하고, 사람은 소리로 찾는다 —
+    //   가까울수록 덜그럭거림이 커진다 (core/audio.js rattle).
+    //   이것이 「글로 안 알려준다」(PLAN §3-1)의 실체다
+    // ★ 3.2 → 1.1 로 낮췄다. 3.2 면 **밸브를 붙들고 있어도 22초 만에** 열이
+    //   꽉 찼다 — 고치는 데 50초쯤 걸리므로 그건 고장이 아니라 사형이다.
+    //   1.1 이면 밸브를 열어 둔 채로 80초쯤 버틴다. 「버틸 수는 있는데
+    //   그동안 기관실에 매여 있다」가 이 고장의 벌이다.
+    effect: { heat: 1.1 },
     branches: [
-      { key: 'duct', what: '통로 배관 이음쇠가 헐거웠다', weight: 3 },
-      { key: 'core', what: '반응로 고정 밴드가 늘어났다', weight: 3 },
-      { key: 'bench', what: '정비실 공구가 배선 위에 놓여 있었다', weight: 2 },
-      { key: 'twin', what: '두 곳이다. 하나만 고치면 다시 오른다', weight: 1, worse: true },
+      { key: 'duct', what: '통로 배관 이음쇠가 헐거웠다', weight: 3, at: 'spine' },
+      { key: 'core', what: '반응로 고정 밴드가 늘어났다', weight: 3, at: 'engine' },
+      { key: 'bench', what: '정비실 공구가 배선 위에 놓여 있었다', weight: 2, at: 'workshop' },
+      // 두 곳이면 **한 번 고쳐도 안 잡힌다.** 「고쳤는데 왜」가 나는 자리다
+      { key: 'twin', what: '두 곳이다. 하나만 고치면 다시 오른다', weight: 1, worse: true, at: ['spine', 'engine'] },
     ],
+    hold: 7,
   },
   {
     key: 'foulCoolant', name: '오염된 냉매', tier: TIER.NOW,
@@ -59,9 +74,16 @@ export const MISSIONS = [
     // 「늘 하던 것이 안 통한다」 — 익숙함을 무기로 쓴다.
     // 1단계부터 몸에 밴 동작이 배신하는 순간이 있어야 한다
     costs: { time: [60, 120], parts: 1 },
+    // ★ **밸브가 배신한다.** 1단계부터 몸에 밴 동작이 반대로 먹는다
+    effect: { coolValve: 2.0 },
+    // 정비실에서 챙겨 기관실에서 갈아 넣는다 — 방 둘을 반드시 거친다
+    steps: [
+      { at: 'workshop', hold: 5, what: '냉매 한 통을 챙긴다' },
+      { at: 'engine', hold: 8, what: '갈아 넣는다' },
+    ],
     branches: [
       { key: 'swap', what: '정비실에서 갈면 끝난다', weight: 3 },
-      { key: 'twice', what: '한 통으로는 모자란다', weight: 2, worse: true },
+      { key: 'twice', what: '한 통으로는 모자란다', weight: 2, worse: true, again: true },
     ],
   },
   {
@@ -86,6 +108,12 @@ export const MISSIONS = [
     // **셋 중 둘**이 갑자기 **둘 중 하나**가 된다. 규칙 자체를 흔드는 것이라
     // 자주 나오면 안 된다 — 한 회차에 한두 번이면 충분하다
     costs: { time: [50, 100], parts: 1 },
+    // 회로 하나가 제멋대로 내려간다 — **셋 중 둘**이 잠깐 **둘 중 하나**가 된다
+    effect: { flaky: true },
+    steps: [
+      { at: 'workshop', hold: 5, what: '접점을 챙긴다' },
+      { at: 'spine', hold: 6, what: '다시 꽂는다' },
+    ],
     branches: [
       { key: 'reseat', what: '다시 꽂으면 버틴다', weight: 3 },
       { key: 'dead', what: '그 회로는 이 구간 내내 못 쓴다', weight: 2, worse: true },
@@ -205,6 +233,33 @@ export const MISSIONS = [
 ];
 
 export const BY_KEY = Object.fromEntries(MISSIONS.map((m) => [m.key, m]));
+
+/**
+ * 고장이 얼마나 자주 · 몇 개나 오나.
+ *
+ * ★ PLAN §11 의 「문제 하나 40초~2분 · 평온 때 동시 1~2개」를 지키는 값이다.
+ *   여기 있는 시간은 **잡고 있는 시간이 아니라 전체**다 — 걸어가는 시간이
+ *   대부분이고, 손이 실제로 가 있는 것은 5~8초다. 잡고 있는 걸 40초로 두면
+ *   그건 진단이 아니라 진행 바를 보는 일이 된다.
+ */
+export const FAULT = {
+  /** 평온할 때 이 간격으로 하나씩 (초). 구간이 깊어지면 촘촘해진다 */
+  every: [95, 165],
+  everyPerLeg: -0.045,      // 구간마다 이만큼 짧아진다 (배수)
+  /** 동시에 열려 있을 수 있는 최대 */
+  maxOpen: 2,
+  /** 첫 고장은 조금 늦게 온다 — 켜자마자 터지면 배울 틈이 없다 */
+  firstAfter: 55,
+  /** 소리로 찾는 반경. 이보다 가까우면 덜그럭거림이 들리기 시작한다 */
+  hearing: 9,
+  /** 손이 닿아야 하는 거리 (BODY.reach 와 별개로 방 안에서 판정) */
+  atSite: 1.9,
+};
+
+/** 지금 실제로 **게임에 물릴 수 있는** 것 — steps 나 갈래의 at 이 있는 것만 */
+export const wired = () => MISSIONS.filter(
+  (m) => m.tier === TIER.NOW && (m.steps || m.branches.some((b) => b.at)),
+);
 
 /** 지금 단계에서 만들 수 있는 것들 */
 export const buildable = () => MISSIONS.filter((m) => m.tier === TIER.NOW);

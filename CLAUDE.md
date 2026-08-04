@@ -156,6 +156,7 @@ node tools/export-starter.js ../새저장소   다음 게임으로 뼈대 뽑기
 node tools/space-sim.js          스페이스워 — 추격이 90~180초인가 (브라우저 없이)
 node tools/space-route.js        스페이스워 — 회차 하나를 통째로 (구간 8~12분인가)
 node tools/space-tune.js         스페이스워 — 항로 숫자를 쓸어 보고 고른다 (검사가 아니라 도구)
+node tools/space-fault.js        스페이스워 — 고장이 진단으로 성립하나 (벌이 오나)
 node tools/space-missions.js     스페이스워 — 마주치는 것들이 규칙을 지키나
 node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
 node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
