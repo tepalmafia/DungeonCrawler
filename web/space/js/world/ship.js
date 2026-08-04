@@ -34,6 +34,7 @@ import {
 } from './kit.js';
 import { buildChart } from './chart.js';
 import { buildBench } from './bench.js';
+import { buildFoodGauge, buildWinch, buildTradeHatch } from './supply-ui.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -210,6 +211,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed) {
 export function buildShip(scene) {
   let chart = null;
   let bench = null;
+  let foodGauge = null, winch = null, tradeHatch = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
@@ -368,6 +370,9 @@ export function buildShip(scene) {
       blockBox(r.x0 + 1.3, z, 0.95, 0.31, 0);
     }
     port(ship, r.x0 + 0.1, r.z1 - 0.85, Math.PI / 2, 0.4);
+    // 식량 계기 — **숫자는 여기에만 있다** (PLAN §5-2 「체력바를 안 만든다」).
+    // 재배대(x -5.05~-3.15)를 피해 문 쪽 벽에 붙인다
+    foodGauge = buildFoodGauge(ship, { x: -2.4, z: r.z0 + 0.06, ry: 0 }, MAT);
   }
 
   // ── 에어록 — 여기 너머는 진공 ────────────────────────────
@@ -392,6 +397,10 @@ export function buildShip(scene) {
       box(ship, 1.3, 0.012, 0.22, new THREE.MeshBasicMaterial({ color: i % 2 ? 0x181818 : 0xd8a13a }),
         (r.x0 + r.x1) / 2 + 0.5, 0.008, r.z0 + 0.5 + i * 0.24);
     }
+    // 윈치 — **멈춰서 끌어온다.** 「한 통만 더」가 여기서 난다 (PLAN §5-3)
+    winch = buildWinch(ship, { x: 3.4, z: r.z0 + 0.06, ry: 0 }, MAT, blockBox);
+    // 접수구 — 거점에서만 연다. 상인은 얼굴이 없다 (PLAN §1)
+    tradeHatch = buildTradeHatch(ship, { x: 3.4, z: r.z1 - 0.06, ry: Math.PI }, MAT, blockBox);
   }
 
   // ── 기관실 ──────────────────────────────────────────────
@@ -545,5 +554,6 @@ export function buildShip(scene) {
   // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
   // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
   const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
-  return { cock, outside, valve, wheel, breakers, chart, bench, panels, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
+  return { cock, outside, valve, wheel, breakers, chart, bench, panels,
+    foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

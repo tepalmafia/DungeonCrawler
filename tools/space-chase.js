@@ -155,6 +155,60 @@ if (SP) await p.screenshot({ path: `${SP}/ch-0-고장.png` });
   ok(w && Object.keys(w).length === 3, `진단대만 아는 것 — 계통별 마모 ${JSON.stringify(w)}`);
 }
 
+console.log('\n[0-4] 보급 — **멈춰서 캔다.** 「한 통만 더」 (PLAN §5-3)');
+{
+  // 에어록 윈치 앞에 선다. 추진이 켜져 있으면 안 걸려야 한다
+  await S(() => { SPACE.setPower('thrust', true); SPACE.put(3.4, 5.15, 0, -0.34); });
+  await p.waitForTimeout(2200);
+  ok(await S(() => SPACE.aim) === 'winch', `조준선이 윈치를 잡는다 (${await S(() => SPACE.aim)})`);
+  await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  await p.waitForTimeout(2500);
+  const moving = await S(() => SPACE.supply);
+  await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+  ok(!moving.winching && moving.ore < 1, '추진이 켜져 있으면 안 걸린다 — 멈춰야 캔다');
+
+  // 추진을 끄고 다시
+  await S(() => SPACE.setPower('thrust', false));
+  await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  // 광석은 초당 1 씩 오르는데 헤드리스 게임 시간은 실시간의 20분의 1 쯤이다.
+  // 문턱을 낮추고 넉넉히 기다린다 — 「되나 안 되나」만 보면 된다
+  const pulling = await until(() => SPACE.supply.ore > 0.3, 45, '윈치가 걸리기');
+  // ★ 위험은 초당 0.52 씩만 오른다. 헤드리스는 1fps 남짓이라 2~3초 기다려서는
+  //   소수점 첫째 자리도 안 움직인다 — **조건이 될 때까지** 기다린다
+  const before = await S(() => SPACE.chase.risk);
+  await S((v) => { window.__r0 = v; }, before);
+  const rising = await until(() => SPACE.chase.risk > window.__r0, 45, '위험이 오르기');
+  const after = await S(() => ({ ore: SPACE.supply.ore, risk: SPACE.chase.risk }));
+  await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+  ok(pulling, `멈추면 끌어온다 (광석 ${after.ore})`);
+  ok(rising, `캐는 동안 위험이 쌓인다 (${before} → ${after.risk}) — 자국이 낮아도 안 빠진다`);
+}
+
+console.log('\n[0-5] 접수구 — 거점에서만 바꾼다');
+{
+  await S(() => { SPACE.setSupply({ ore: 90, food: 30, parts: 0 }); SPACE.put(3.4, 6.35, Math.PI, -0.25); });
+  await p.waitForTimeout(2200);
+  ok(await S(() => SPACE.aim) === 'hatch', `조준선이 접수구를 잡는다 (${await S(() => SPACE.aim)})`);
+  // 항행 중에는 안 된다
+  await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  await p.waitForTimeout(2500);
+  await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+  ok((await S(() => SPACE.supply)).traded === 0, '항행 중에는 안 열린다 — 거점에서만이다');
+  // 거점에 세우고 다시
+  await S(() => SPACE.skipLeg());
+  await until(() => SPACE.route.phase === 'port', 25, '거점 도착');
+  // ★ 여기서도 **끝까지 도는 것은 안 본다.** 헤드리스는 1fps 라 게임 시간
+  //   4초가 실제로 1분이 넘는다. 바뀌는 것 자체는 tools/space-supply.js 가
+  //   브라우저 없이 잰다. 여기서 볼 것은 「거점에서만 손이 먹나」다
+  await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  const turning = await until(() => SPACE.supply.trading > 0.2, 40, '컨베이어가 돌기');
+  const sup = await S(() => SPACE.supply);
+  await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+  ok(turning, `거점에서는 손이 먹는다 (${sup.trading}/${sup.hold}초)`);
+  // 다시 항로를 고르고 아래 검사로 넘긴다
+  await S(() => SPACE.pick(SPACE.route.offer[1]));
+}
+
 console.log('\n[1] 차단기 — 통로에서 손으로 누른다');
 await S(() => SPACE.put(0, 3.3, Math.PI / 2, 0.02));
 await p.waitForTimeout(2500);

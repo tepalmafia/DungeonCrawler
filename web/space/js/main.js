@@ -24,20 +24,28 @@ import { makeAudio } from './core/audio.js';
 import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
-import { CIRCUITS, POWER_MAX, CHASE as CH } from './game/chase-table.js';
+import { REGION_BY_KEY } from './game/regions-table.js';
+import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './game/chase.js';
 import { LEG } from './game/route-table.js';
+/** 자국은 열에 비례한다. 윈치의 자국 보탬을 열 단위로 환산하려고 쓴다 */
+const SIGN_PER_HEAT = SIGN.perHeat;
 import {
   makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, isBlind,
   regionOf, progress, relieveEscape, legsLeft, RPHASE,
 } from './game/route.js';
-import { FAULT } from './game/mission-table.js';
+import { FAULT, BY_KEY } from './game/mission-table.js';
+import { FOOD, WINCH, TRADE } from './game/supply-table.js';
+import {
+  makeSupply, stepSupply, winchStep, canTrade, trade, canRepair, spendParts,
+  shaky, slipMult, legsLeftOnFood,
+} from './game/supply.js';
 import {
   makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
   wearStep, wearFlip,
 } from './game/fault.js';
 
-export const VERSION = 18;
+export const VERSION = 19;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -139,6 +147,13 @@ const route = makeRoute(seed);
 // **어디가 고장났는지 안 알려준다.** 「무언가 잘못됐다」까지만 말하고,
 // 자리는 소리로 찾는다 (game/fault.js · PLAN §3-1).
 const faults = makeFaults(seed);
+// ── 보급 ────────────────────────────────────────────────────
+// 거점은 안전하고 **아무것도 안 난다.** 먹을 것도 고칠 것도 밖에만 있다
+// (PLAN §4-2) — 그게 「다시 나갈 이유」의 전부다.
+const supply = makeSupply();
+let winching = false;     // 지금 윈치를 잡고 있나
+let trading = 0;          // 접수구를 얼마나 잡고 있었나
+let partsWarned = false;  // 부품이 없다고 한 번만 말한다
 let repairing = null;     // 지금 잡고 있는 고장
 let hearNear = 0;         // 소리가 얼마나 가까운가 0~1
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
@@ -226,7 +241,7 @@ function interactStep(dt) {
   const plates = ship.chart.plates;
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
-    ...pans.map((p) => p.hit)];
+    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -235,6 +250,7 @@ function interactStep(dt) {
   let breaker = null;
   let plate = -1;
   let panel = null;
+  let onWinch = false, onHatch = false;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
@@ -244,19 +260,60 @@ function interactStep(dt) {
       if (pi >= 0) { plate = pi; break; }
       const pn = pans.find((x) => x.hit === o);
       if (pn) { panel = pn; break; }
+      if (o === ship.winch.hit) { onWinch = true; break; }
+      if (o === ship.tradeHatch.hit) { onHatch = true; break; }
     }
   }
   // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
   const canPick = route.phase === RPHASE.PORT;
   ship.chart.setAim(canPick ? plate : -1);
 
+  // ── 윈치 — **멈춰서 끌어온다.** 「한 통만 더」 (PLAN §5-3) ──
+  // 추진이 켜져 있으면 안 걸린다. 캐는 동안 구간이 안 나아가고 위험이 쌓인다 —
+  // 시간과 위험을 **동시에** 치르는 것이 이 손잡이의 전부다
+  winching = onWinch && input.hold && !power.thrust;
+  if (winching) {
+    if (winchStep(supply, dt) === 'load') {
+      banner = `광석 한 통 — ${supply.loads}통째`;
+      bannerT = 2.2;
+      audio?.event('latch');
+    }
+    ship.winch.drum.rotation.y -= dt * 2.4;
+  }
+
+  // ── 접수구 — 거점에서만. 상인은 얼굴이 없다 (PLAN §1) ──
+  if (onHatch && input.hold && route.phase === RPHASE.PORT && canTrade(supply)) {
+    trading += dt;
+    if (trading >= TRADE.hold) {
+      trading = 0;
+      trade(supply);
+      banner = `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts}`;
+      bannerT = 2.6;
+      audio?.event('fixed');
+    }
+  } else trading = Math.max(0, trading - dt * 1.5);
+
   // ── 점검 패널 — **잡고 있어야 고쳐진다** ────────────────
   // 딸깍이면 「눌렀더니 고쳐졌다」가 되어 진단이 사라진다. 시간이 드는
   // 동작이라야 「지금 여기 매여 있다」가 생긴다 (밸브와 같은 규약).
   const fixHere = panel ? hereIn(faults, panel.room) : null;
-  if (fixHere && input.hold) {
+  // ★ 고치려면 **부품이 든다.** 이게 없으면 고장이 「시간만 쓰면 되는 것」이라
+  //   캘 이유가 안 생긴다. 마지막 걸음에서만 받는다 — 챙기러 가는 것도 걸음이다
+  const needParts = fixHere ? (BY_KEY[fixHere.key]?.costs?.parts ?? 0) : 0;
+  const lastStep = fixHere && fixHere.step >= fixHere.steps.length - 1;
+  const shortParts = !!fixHere && lastStep && !canRepair(supply, needParts);
+  if (shortParts && input.hold && !partsWarned) {
+    partsWarned = true;
+    banner = `부품이 없습니다 — 거점 접수구에서 바꿉니다`;
+    bannerT = 2.6;
+    audio?.event('deny');
+  }
+  if (!input.hold) partsWarned = false;
+
+  if (fixHere && input.hold && !shortParts) {
     repairing = fixHere;
-    const ev = repairStep(fixHere, dt);
+    // 굶으면 **잡고 있어도 더디다** — 손이 떨려 정밀 작업이 어긋난다
+    const ev = repairStep(fixHere, dt * (shaky(supply) ? FOOD.handMult : 1));
     if (ev === 'step') {
       const nx = fixHere.steps[fixHere.step];
       banner = nx?.what ? `${nx.what} — ${ROOM_NAME[nx.at] ?? nx.at}` : '한 군데 더 있습니다';
@@ -264,6 +321,7 @@ function interactStep(dt) {
       audio?.event('latch');
     }
     if (ev === 'fixed') {
+      spendParts(supply, needParts);
       // ★ **여기서야 원인을 말해 준다.** 고치기 전에 말하면 진단이 사라진다
       banner = fixHere.reveal;
       bannerT = 3.4;
@@ -277,7 +335,8 @@ function interactStep(dt) {
     // ★ 처음엔 놓는 **그 프레임에** repairing 을 비웠다. 그러면 한 프레임만
     //   되돌아가고 그 뒤로는 그대로 멎는다 — 검사가 「0.06 → 0.07」로 잡아 줬다.
     //   0 이 될 때까지 붙들고 있어야 되돌아가는 것이 보인다.
-    slip(repairing, dt);
+    // 굶으면 **잡고 있어도** 더 미끄러진다 — 손이 떨린다 (PLAN §5-2)
+    slip(repairing, dt * slipMult(supply));
     if (repairing && repairing.held <= 0) repairing = null;
   }
 
@@ -347,8 +406,10 @@ function interactStep(dt) {
   }
 
   aimName = onValve ? 'valve' : (breaker ? breaker.key
-    : (plate >= 0 ? `chart${plate}` : (panel ? `panel:${panel.room}` : null)));
-  cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere));
+    : (plate >= 0 ? `chart${plate}`
+      : (panel ? `panel:${panel.room}` : (onWinch ? 'winch' : (onHatch ? 'hatch' : null)))));
+  cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere
+    || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))));
   return coolFor > 0;
 }
 
@@ -364,6 +425,14 @@ function systemsStep(dt, valveOpen, regionMult) {
     bannerT = 3.6;
     audio?.event('fault');
   }
+  // ── 보급 — 먹고, 지나가며 줍는다 ─────────────────────
+  const rg = REGION_BY_KEY[ship.outside.region];
+  if (stepSupply(supply, dt, { debris: rg?.debris ?? 0 }) === 'hungry') {
+    banner = '손이 떨립니다 — 식량이 모자랍니다';
+    bannerT = 3.2;
+    audio?.event('fault');
+  }
+
   // 쓰는 대로 닳는다 — **어떻게 몰았는지가 다음 고장을 정한다** (systems-table WEAR)
   wearStep(faults, dt, { power, valveOpen, region: ship.outside.region });
   const bad = effectsOf(faults);
@@ -375,8 +444,18 @@ function systemsStep(dt, valveOpen, regionMult) {
     + (valveOpen && power.cool ? bad.coolValve : 0)) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
-  const ev = stepChase(chase, dt, power, heat, regionMult,
+  // 윈치를 잡고 있으면 자국도 조금 는다 — 계기로도 보여야 한다
+  const riskWas = chase.risk;
+  const ev = stepChase(chase, dt, power, heat + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
     { contactAt: contactAt(route), trackMult: trackMult(route) });
+  // ★ 캐는 동안에는 **위험이 안 빠진다.** 배가 멈춰 있고 윈치가 시끄러우니
+  //   상대가 나를 놓칠 리가 없다.
+  //   처음엔 그냥 위험을 더하기만 했는데, 자국이 낮으면 stepChase 가 초당
+  //   2.2 씩 빼 가서 **캐는데 위험이 오히려 줄었다.** 브라우저 검사가
+  //   「4.7 → 4.5」로 잡아 줬다 — 시뮬은 빼는 쪽을 안 세고 있어서 못 봤다
+  if (winching && chase.phase === PHASE.CALM) {
+    chase.risk = Math.min(100, riskWas + WINCH.riskRise * dt);
+  }
   if (ev === 'contact') { banner = '접촉 — 무언가 따라붙었습니다'; bannerT = 2.6; }
   if (ev === 'escaped') {
     banner = '뿌리쳤습니다'; bannerT = 3.2; escapedAt = clock;
@@ -421,6 +500,13 @@ function systemsStep(dt, valveOpen, regionMult) {
 
   // 정비실 진단대 — **다음에 무엇이 터지나.** 조종석·관측실과 겹치지 않는다
   ship.bench.update({ wear: faults.wear, open: openList(faults), fixed: faults.fixed, log: faults.log });
+  // 온실 · 에어록 — 계기는 방마다 하나씩, 전부 다른 것을 말한다
+  ship.foodGauge.update({
+    food: supply.food, ore: supply.ore, parts: supply.parts,
+    legsOnFood: legsLeftOnFood(supply, route.fork?.seconds ?? LEG.seconds),
+  });
+  ship.winch.update({ hauled: supply.hauled, ore: supply.ore, loads: supply.loads, moving: power.thrust });
+  ship.tradeHatch.update({ atPort: route.phase === RPHASE.PORT, ore: supply.ore });
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
   ship.cock.update({
@@ -508,6 +594,17 @@ window.SPACE = {
   wearTo(w) { Object.assign(faults.wear, w); },
   /** 검사가 기다리지 않고 고장을 띄운다 */
   forceFault() { faults.next = 0; return stepFaults(faults, 0.001, { calm: true, leg: route.leg }); },
+  /** 보급 — 식량·부품·광석 */
+  get supply() {
+    return {
+      food: +supply.food.toFixed(1), parts: supply.parts, ore: +supply.ore.toFixed(1),
+      loads: supply.loads, traded: supply.traded, shaky: shaky(supply),
+      trading: +trading.toFixed(2), hold: TRADE.hold,
+      legsOnFood: +legsLeftOnFood(supply, route.fork?.seconds ?? LEG.seconds).toFixed(2),
+      winching,
+    };
+  },
+  setSupply(v) { Object.assign(supply, v); },
   /** 항로 — 어디까지 왔고 압박이 얼마인가 */
   get route() {
     return {
@@ -655,6 +752,8 @@ function frame(now) {
     const e = envelope(since);
     wantShake = ESCAPE.shake + (SHAKE.calm - ESCAPE.shake) * e;
   } else wantShake = SHAKE.calm;
+  // 굶으면 손이 떨린다 — 눈에도 보여야 한다 (PLAN §5-2)
+  if (shaky(supply)) wantShake *= FOOD.shakeMult;
   // 보상 구간에서는 표가 정한 모양을 **그대로** 쓴다 (따라가면 뭉개진다).
   // 그 밖에서는 부드럽게 따라간다 — 추격이 붙는 순간 화면이 튀지 않게.
   shakeMul = since < ESCAPE.total ? wantShake
