@@ -20,7 +20,7 @@
 //    박자가 흔들린다. 급한 게 아니라 **고장 난 것으로 들린다.**
 //    그래서 앞질러 예약한다 (lookahead).
 // ══════════════════════════════════════════════════════════════════════════
-import { MIX, BED, CHASE_SND, HAND, ESCAPE } from '../game/audio-table.js';
+import { MIX, BED, CHASE_SND, HAND, ESCAPE, RATTLE } from '../game/audio-table.js';
 
 /** 얼마나 앞질러 예약하나. 프레임이 이보다 늦어도 박자가 안 끊긴다 */
 const LOOKAHEAD = 0.35;
@@ -131,7 +131,7 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
 
   // ── 예약 커서 ───────────────────────────────────────────
   // 「다음 경보를 언제 울릴까」를 소리 쪽이 들고 있는다. 프레임과 무관하다.
-  let nextAlarm = -1, nextPing = -1, nextRatchet = -1;
+  let nextAlarm = -1, nextPing = -1, nextRatchet = -1, nextRattle = -1;
   let muted = false;
   let lastEscape = -99;
 
@@ -178,6 +178,33 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
         nextRatchet += 1 / HAND.ratchet.rate;
       }
     } else nextRatchet = -1;
+
+    // ★ 고장의 덜그럭거림 — **화면을 안 늘리고 진단을 만드는 유일한 통로.**
+    //   가까울수록 촘촘하고 크다. 간격을 흔들어 두는 것이 요점이다 —
+    //   일정하면 기계음으로 들리고, 기계음은 「정상」으로 읽힌다
+    const near = s.rattle || 0;
+    if (near > 0.02) {
+      if (nextRattle < at) nextRattle = at;
+      while (nextRattle < until) {
+        const [g0, g1] = RATTLE.gain;
+        knock(bedBus, nextRattle, 0.07, lerp(g0, g1, near), RATTLE.hz, RATTLE.q);
+        const [k0, k1] = RATTLE.gap;
+        // 흔들림은 예약 시각에서만 쓴다 — 소리 자체는 늘 같아야 「같은 것」으로 들린다
+        nextRattle += lerp(k0, k1, near) * (1 + (jitter() - 0.5) * RATTLE.jitter);
+      }
+    } else nextRattle = -1;
+  }
+
+  /**
+   * 흔들림 — **Math.random 을 안 쓴다.**
+   * OfflineAudioContext 로 파형을 재는 검사(tools/space-audio.js)가 같은
+   * 코드를 태우는데, 거기서 난수가 끼면 잰 값이 매번 달라져 못 쓴다.
+   * 아주 싼 결정적 수열이면 충분하다 — 귀로는 구분이 안 된다.
+   */
+  let jseed = 1;
+  function jitter() {
+    jseed = (jseed * 1103515245 + 12345) & 0x7fffffff;
+    return (jseed % 1000) / 1000;
   }
 
   /**
@@ -231,6 +258,19 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
         return;
       }
       case 'click': return knock(handBus, at, HAND.click.len, HAND.click.gain, HAND.click.hz * 4, 1.1);
+      case 'fault': {
+        // 「무언가 잘못됐다」 — **아래로 처지는 두 음.** 경보와 헷갈리면 안 된다
+        const F = HAND.fault;
+        tone(handBus, F.hz, at, F.len, F.gain, 'triangle', F.hz * 0.62);
+        knock(handBus, at + 0.02, 0.2, 0.22, 320, 1.2);
+        return;
+      }
+      case 'fixed': {
+        // 고쳐졌다 — **위로 올라가는 짧은 음.** 안도(escape)보다 작고 짧다
+        const F = HAND.fixed;
+        tone(handBus, F.hz, at, F.len, F.gain, 'sine', F.hz * 1.5);
+        return;
+      }
       case 'deny': return tone(handBus, HAND.deny.hz, at, HAND.deny.len, HAND.deny.gain, 'square', HAND.deny.hz * 0.7);
       case 'latch': {
         knock(handBus, at, 0.10, HAND.latch.gain, HAND.latch.hz * 3, 1.6);

@@ -31,8 +31,12 @@ import {
   makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, isBlind,
   regionOf, progress, relieveEscape, legsLeft, RPHASE,
 } from './game/route.js';
+import { FAULT } from './game/mission-table.js';
+import {
+  makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
+} from './game/fault.js';
 
-export const VERSION = 16;
+export const VERSION = 17;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -130,12 +134,32 @@ const chase = makeChase();
 //   시드는 주소로 바꿀 수 있다 (?seed=ABC123) — 같은 시드면 같은 항로다.
 const seed = new URLSearchParams(location.search).get('seed') || 'SPACE1';
 const route = makeRoute(seed);
+// ── 고장 ────────────────────────────────────────────────────
+// **어디가 고장났는지 안 알려준다.** 「무언가 잘못됐다」까지만 말하고,
+// 자리는 소리로 찾는다 (game/fault.js · PLAN §3-1).
+const faults = makeFaults(seed);
+let repairing = null;     // 지금 잡고 있는 고장
+let hearNear = 0;         // 소리가 얼마나 가까운가 0~1
+let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
 let flash = 0;            // 경보 깜빡임
 let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
 let bannerT = 0;
 // 뿌리친 시각. **떨림과 소리가 같은 시계를 본다** — 따로 세면 어긋난다
 let escapedAt = -99;
 let shakeMul = SHAKE.calm;
+
+/**
+ * 그 방 점검 패널까지 몇 미터인가 — 소리가 이 값으로 커진다.
+ * 패널 위치는 배가 들고 있으므로 **여기서 다시 안 적는다.**
+ */
+function distToPanel(room) {
+  const p = ship.panels[room];
+  if (!p) return 99;
+  return Math.hypot(me.x - p.group.position.x, me.z - p.group.position.z);
+}
+
+/** 방 열쇠 → 사람이 읽는 이름. 배너에 「workshop」이라 뜨면 안 된다 */
+const ROOM_NAME = Object.fromEntries(ROOMS.map((r) => [r.key, r.name]));
 
 const ray = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
@@ -199,7 +223,9 @@ function interactStep(dt) {
 
   // 조준선에 뭐가 걸리나. 가까운 것 하나만 본다
   const plates = ship.chart.plates;
-  const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit)];
+  const pans = Object.values(ship.panels);
+  const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
+    ...pans.map((p) => p.hit)];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -207,6 +233,7 @@ function interactStep(dt) {
   let onValve = false;
   let breaker = null;
   let plate = -1;
+  let panel = null;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
@@ -214,11 +241,54 @@ function interactStep(dt) {
       if (b) { breaker = b; break; }
       const pi = plates.findIndex((x) => x.hit === o);
       if (pi >= 0) { plate = pi; break; }
+      const pn = pans.find((x) => x.hit === o);
+      if (pn) { panel = pn; break; }
     }
   }
   // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
   const canPick = route.phase === RPHASE.PORT;
   ship.chart.setAim(canPick ? plate : -1);
+
+  // ── 점검 패널 — **잡고 있어야 고쳐진다** ────────────────
+  // 딸깍이면 「눌렀더니 고쳐졌다」가 되어 진단이 사라진다. 시간이 드는
+  // 동작이라야 「지금 여기 매여 있다」가 생긴다 (밸브와 같은 규약).
+  const fixHere = panel ? hereIn(faults, panel.room) : null;
+  if (fixHere && input.hold) {
+    repairing = fixHere;
+    const ev = repairStep(fixHere, dt);
+    if (ev === 'step') {
+      const nx = fixHere.steps[fixHere.step];
+      banner = nx?.what ? `${nx.what} — ${ROOM_NAME[nx.at] ?? nx.at}` : '한 군데 더 있습니다';
+      bannerT = 2.6;
+      audio?.event('latch');
+    }
+    if (ev === 'fixed') {
+      // ★ **여기서야 원인을 말해 준다.** 고치기 전에 말하면 진단이 사라진다
+      banner = fixHere.reveal;
+      bannerT = 3.4;
+      audio?.event('fixed');
+      clear(faults, fixHere);
+      repairing = null;
+    }
+  } else {
+    // 놓으면 조금 되돌아간다. 딱 멈추면 손을 뗄 이유가 없다.
+    //
+    // ★ 처음엔 놓는 **그 프레임에** repairing 을 비웠다. 그러면 한 프레임만
+    //   되돌아가고 그 뒤로는 그대로 멎는다 — 검사가 「0.06 → 0.07」로 잡아 줬다.
+    //   0 이 될 때까지 붙들고 있어야 되돌아가는 것이 보인다.
+    slip(repairing, dt);
+    if (repairing && repairing.held <= 0) repairing = null;
+  }
+
+  // 패널 불 — **그 자리가 문제일 때만** 켜진다. 다 켜 두면 안내판이 된다.
+  //   그리고 켜지는 것은 **그 방에 들어왔을 때**다 — 복도에서 보이면
+  //   소리로 찾을 이유가 없어진다
+  const hereRoom = roomAt(me.x, me.z);
+  for (const pn of pans) {
+    const lit = pn.room === hereRoom && !!hereIn(faults, pn.room);
+    pn.lampMat.color.set(lit ? 0xffb060 : 0x2a2f36);
+    if (fixHere && pn === panel) pn.knob.rotation.z -= dt * 3.2;
+  }
 
   // 밸브 — 잡고 돌린다. 놓으면 되돌아온다. **끝까지 돌리면 걸린다**
   if (onValve && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
@@ -250,6 +320,24 @@ function interactStep(dt) {
     }
   }
 
+  // ★ 배전 노후 — 회로 하나가 **제멋대로 내려간다.**
+  //   셋 중 둘이 잠깐 둘 중 하나가 된다. 규칙 자체를 흔드는 것이라
+  //   자주 나오면 안 된다 (mission-table.js 참고)
+  if (effectsOf(faults).flaky) {
+    flakyT -= dt;
+    if (flakyT <= 0) {
+      flakyT = 18 + Math.random() * 10;
+      const on = CIRCUITS.filter((c) => power[c.key]);
+      if (on.length) {
+        const c = on[Math.floor(Math.random() * on.length)];
+        power[c.key] = false;
+        banner = `${c.name} 차단기가 내려갔습니다`;
+        bannerT = 2.0;
+        audio?.event('deny');
+      }
+    }
+  } else flakyT = 12;
+
   // 레버 각도와 불
   for (const b of ship.breakers) {
     const on = power[b.key];
@@ -257,16 +345,31 @@ function interactStep(dt) {
     b.lampMat.color.set(on ? b.tint : 0x2a2f36);
   }
 
-  aimName = onValve ? 'valve' : (breaker ? breaker.key : (plate >= 0 ? `chart${plate}` : null));
-  cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0)));
+  aimName = onValve ? 'valve' : (breaker ? breaker.key
+    : (plate >= 0 ? `chart${plate}` : (panel ? `panel:${panel.room}` : null)));
+  cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere));
   return coolFor > 0;
 }
 
 // ── 열 · 자국 · 추격 ────────────────────────────────────────
 function systemsStep(dt, valveOpen, regionMult) {
-  // 열은 이제 **켠 회로**가 정한다. 추진을 켜면 오르고, 냉각을 켜면 내려간다.
-  // 다만 냉각 회로만으로는 절반뿐이라 **기관실 밸브까지 열어야** 제대로 잡힌다
-  heat += heatRate(power, valveOpen) * dt;
+  // ── 고장 ──────────────────────────────────────────────
+  // **추격 중에는 새로 안 뜬다.** 겹치면 다섯이 되고, 다섯이면 포기한다
+  const calm = chase.phase !== PHASE.CHASE && route.phase === RPHASE.LEG;
+  if (stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
+    const o = faults.open[faults.open.length - 1];
+    // ★ **증상만 말한다.** 어디인지·무엇인지는 안 말한다 (PLAN §3-1)
+    banner = o.lead;
+    bannerT = 3.6;
+    audio?.event('fault');
+  }
+  const bad = effectsOf(faults);
+
+  // 열은 **켠 회로**가 정한다. 추진을 켜면 오르고, 냉각을 켜면 내려간다.
+  // 다만 냉각 회로만으로는 절반뿐이라 **기관실 밸브까지 열어야** 제대로 잡힌다.
+  // 고장이 있으면 여기에 얹힌다 — 「원인 모를 열」이 그것이다
+  heat += (heatRate(power, valveOpen) + bad.heat
+    + (valveOpen && power.cool ? bad.coolValve : 0)) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
   const ev = stepChase(chase, dt, power, heat, regionMult,
@@ -283,10 +386,17 @@ function systemsStep(dt, valveOpen, regionMult) {
 
   // 소리는 **상태만** 받는다. 규칙은 여기, 소리는 저기 — 섞으면 둘 다 못 고친다
   const urgency = chase.phase === PHASE.CHASE ? 1 - chase.dist / CH.escapeAt : 0;
+  // ★ **덜그럭거림이 진단의 전부다.** 고장 난 자리에 가까울수록 커진다 —
+  //   화면을 하나도 안 늘리고 「어디가 잘못됐나」를 알게 하는 유일한 길이었다
+  const room = roomAt(me.x, me.z);
+  const site = faults.open.map(siteOf).find((a) => a === room);
+  const dist = site ? distToPanel(site) : 0;
+  hearNear = nearness(faults, room, dist);
   audio?.update({
     phase: chase.phase, urgency,
     heat01: Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn)),
     turning: turn,
+    rattle: hearNear,
   });
 
   // 경보 — 추격 중에만. 거리가 가까울수록 빨라진다 (PLAN §3-1 글로 안 알려준다)
@@ -369,6 +479,17 @@ window.SPACE = {
     }
     return out;
   },
+  /** 고장 — 지금 몇 개 열려 있고 어디를 만져야 하나 */
+  get faults() {
+    return { open: openList(faults), fixed: faults.fixed, next: +faults.next.toFixed(1), hear: +hearNear.toFixed(2) };
+  },
+  /** 그 방 점검 패널이 어디 있나 — 검사가 앞에 가서 서려고 묻는다 */
+  panelAt(room) {
+    const p = ship.panels[room];
+    return p ? { x: +p.group.position.x.toFixed(2), z: +p.group.position.z.toFixed(2), ry: p.group.rotation.y } : null;
+  },
+  /** 검사가 기다리지 않고 고장을 띄운다 */
+  forceFault() { faults.next = 0; return stepFaults(faults, 0.001, { calm: true, leg: route.leg }); },
   /** 항로 — 어디까지 왔고 압박이 얼마인가 */
   get route() {
     return {

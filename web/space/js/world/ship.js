@@ -30,6 +30,7 @@ import { CIRCUITS } from '../game/chase-table.js';
 import { buildCockpit, buildOutside, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
   ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign, breakerPanel,
+  servicePanel,
 } from './kit.js';
 import { buildChart } from './chart.js';
 
@@ -285,6 +286,25 @@ export function buildShip(scene) {
   const breakers = breakerPanel(ship, spine.x0 + 0.06, 3.3, Math.PI / 2, CIRCUITS, CZ.accent);
   sign(ship, '배전', spine.x0 + 0.1, 2.28, 3.3, Math.PI / 2, CZ.accent, 0.4);
 
+  // ── 점검 패널 — 고장을 손으로 고치는 자리 (game/fault.js) ──
+  // ★ **방마다 하나씩, 같은 물건이다.** 고장 종류마다 다른 물건을 만들면
+  //   스물여덟 종이 될 때 스물여덟 개를 만들어야 한다. 무엇이 잘못됐는지는
+  //   물건이 아니라 **소리와 계기**가 말한다 (PLAN §3-1).
+  //   지금은 물린 고장이 쓰는 방 셋뿐이다 — 나머지 넷은 그 방을 쓰는 고장이
+  //   생기는 날 같이 넣는다. 미리 깔아 두면 아무 데도 안 닿는 물건이 넷 는다.
+  const panels = {
+    spine: servicePanel(ship, spine.x1 - 0.06, 5.6, -Math.PI / 2, CZ.accent),
+    // ★ 정비실은 **먼 쪽 벽이 아니라 아래쪽 벽**이다. 처음엔 x1 벽에 붙였는데
+    //   그 앞이 통째로 작업대·랙이라 **설 자리가 한 칸도 없었다** — 패널은
+    //   보이는데 못 간다. 배를 격자로 훑어 서 있을 수 있는 칸을 세어 보고 알았다.
+    //   그래서 z0 벽으로 옮겼더니 이번엔 **랙과 겹쳐서 겹쳐 그려졌다** —
+    //   그건 화면을 찍어 보고 알았다. 지금은 아무것도 안 붙은 z1 벽이다.
+    //   빈 벽을 눈으로 찾는 것보다 **두 번 옮기는 편이 빨랐다**
+    workshop: servicePanel(ship, 2.8, R.workshop.z1 - 0.06, Math.PI, ZONE.workshop.accent),
+    engine: servicePanel(ship, engine.x0 + 0.06, 12.6, Math.PI / 2, ZONE.engine.accent),
+  };
+  for (const [key, pnl] of Object.entries(panels)) pnl.room = key;
+
   // 경보등 — 추격이 붙으면 통로가 붉어진다. **어느 방에 있든 보여야** 한다
   const alarm = new THREE.PointLight(0xff3020, 0, 22, 2);
   alarm.position.set(0, H - 0.25, 3.4);
@@ -517,5 +537,5 @@ export function buildShip(scene) {
   // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
   // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
   const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
-  return { cock, outside, valve, wheel, breakers, chart, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
+  return { cock, outside, valve, wheel, breakers, chart, panels, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }
