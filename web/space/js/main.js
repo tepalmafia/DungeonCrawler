@@ -24,11 +24,15 @@ import { makeAudio } from './core/audio.js';
 import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
-import { REGIONS, REGION_BY_KEY, REGION_SECONDS } from './game/regions-table.js';
-import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH } from './game/chase-table.js';
-import { makeChase, stepChase, resetChase, heatRate, canTurnOn, powerCount, PHASE } from './game/chase.js';
+import { CIRCUITS, POWER_MAX, CHASE as CH } from './game/chase-table.js';
+import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './game/chase.js';
+import { LEG } from './game/route-table.js';
+import {
+  makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, isBlind,
+  regionOf, progress, relieveEscape, legsLeft, RPHASE,
+} from './game/route.js';
 
-export const VERSION = 15;
+export const VERSION = 16;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -120,6 +124,12 @@ let regionPin = null;
 // 처음부터 몸으로 알게 된다.
 const power = { thrust: true, cool: true, sensor: false };
 const chase = makeChase();
+// ── 항로 ────────────────────────────────────────────────────
+// ★ **거점에서 시작한다.** 첫 화면이 「항로를 고르십시오」다 —
+//   이 게임이 어디로 가는 게임인지를 첫 문장으로 말한다 (game/route.js).
+//   시드는 주소로 바꿀 수 있다 (?seed=ABC123) — 같은 시드면 같은 항로다.
+const seed = new URLSearchParams(location.search).get('seed') || 'SPACE1';
+const route = makeRoute(seed);
 let flash = 0;            // 경보 깜빡임
 let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
 let bannerT = 0;
@@ -188,20 +198,27 @@ function interactStep(dt) {
   ray.setFromCamera(CENTER, camera);
 
   // 조준선에 뭐가 걸리나. 가까운 것 하나만 본다
-  const targets = [ship.valve, ...ship.breakers.map((b) => b.hit)];
+  const plates = ship.chart.plates;
+  const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit)];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
   // 어느 것에 걸렸는지 — 부모를 타고 올라가며 찾는다
   let onValve = false;
   let breaker = null;
+  let plate = -1;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
       const b = ship.breakers.find((x) => x.hit === o);
       if (b) { breaker = b; break; }
+      const pi = plates.findIndex((x) => x.hit === o);
+      if (pi >= 0) { plate = pi; break; }
     }
   }
+  // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
+  const canPick = route.phase === RPHASE.PORT;
+  ship.chart.setAim(canPick ? plate : -1);
 
   // 밸브 — 잡고 돌린다. 놓으면 되돌아온다. **끝까지 돌리면 걸린다**
   if (onValve && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
@@ -210,9 +227,16 @@ function interactStep(dt) {
   coolFor = Math.max(0, coolFor - dt);
   ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolFor > 0 ? dt * 0.5 : 0);
 
-  // 차단기 — 누르는 순간에만 넘어간다
+  // 차단기 · 해도대 — 누르는 순간에만 넘어간다
   const pressed = input.takePress();
-  if (breaker && pressed) {
+  if (plate >= 0 && pressed) {
+    if (canPick && chooseFork(route, ship.chart.keyAt(plate))) {
+      ship.outside.setRegion(regionOf(route));
+      banner = `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`;
+      bannerT = 2.4;
+      audio?.event('latch');
+    } else audio?.event('deny');
+  } else if (breaker && pressed) {
     if (power[breaker.key]) { power[breaker.key] = false; audio?.event('click'); }
     else if (canTurnOn(power)) { power[breaker.key] = true; audio?.event('click'); }
     else {
@@ -233,8 +257,8 @@ function interactStep(dt) {
     b.lampMat.color.set(on ? b.tint : 0x2a2f36);
   }
 
-  aimName = onValve ? 'valve' : (breaker ? breaker.key : null);
-  cross.classList.toggle('on', !!(onValve || breaker));
+  aimName = onValve ? 'valve' : (breaker ? breaker.key : (plate >= 0 ? `chart${plate}` : null));
+  cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0)));
   return coolFor > 0;
 }
 
@@ -245,9 +269,15 @@ function systemsStep(dt, valveOpen, regionMult) {
   heat += heatRate(power, valveOpen) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
-  const ev = stepChase(chase, dt, power, heat, regionMult);
+  const ev = stepChase(chase, dt, power, heat, regionMult,
+    { contactAt: contactAt(route), trackMult: trackMult(route) });
   if (ev === 'contact') { banner = '접촉 — 무언가 따라붙었습니다'; bannerT = 2.6; }
-  if (ev === 'escaped') { banner = '뿌리쳤습니다'; bannerT = 3.2; escapedAt = clock; }
+  if (ev === 'escaped') {
+    banner = '뿌리쳤습니다'; bannerT = 3.2; escapedAt = clock;
+    // ★ 항로에도 남긴다. 이게 없으면 「뿌리쳐도 아무것도 안 쌓인다」가
+    //   그대로 남는다 (docs/space/GAP.md §1-1)
+    relieveEscape(route);
+  }
   if (ev === 'caught') { banner = '잡혔습니다'; bannerT = 3.2; }
   if (ev) audio?.event(ev);
 
@@ -280,6 +310,12 @@ function systemsStep(dt, valveOpen, regionMult) {
   ship.cock.update({
     heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
     region: ship.outside.region, power, chase,
+    // ★ 성운에서는 센서를 켜도 거리가 안 읽힌다 — 「자국이 묻히지만 나도
+    //   못 본다」의 실체다. 조종석 화면이 그걸 그대로 보여줘야 한다
+    blind: isBlind(route),
+    press: route.press, legsLeft: legsLeft(route),
+    progress: progress(route), atPort: route.phase === RPHASE.PORT,
+    contactAt: contactAt(route),
   });
 }
 
@@ -333,6 +369,20 @@ window.SPACE = {
     }
     return out;
   },
+  /** 항로 — 어디까지 왔고 압박이 얼마인가 */
+  get route() {
+    return {
+      phase: route.phase, leg: route.leg, press: +route.press.toFixed(1),
+      progress: +progress(route).toFixed(3), fork: route.fork?.key ?? null,
+      offer: route.offer.map((o) => o.key), left: legsLeft(route),
+      contactAt: +contactAt(route).toFixed(1), blind: isBlind(route),
+    };
+  },
+  /** 갈래를 고른다 — 검사가 관측실까지 안 걸어가고 부를 수 있게 */
+  pick(key) { const ok = chooseFork(route, key); if (ok) ship.outside.setRegion(regionOf(route)); return ok; },
+  /** 구간을 끝까지 밀어 놓는다 — 거점 도착을 실제로 내 보려고 */
+  skipLeg() { route.t = route.need; },
+  setPress(v) { route.press = v; },
   /** 소리가 켜졌나 · 지금 얼마나 떠나 — 검사와 손보기용 */
   get audio() {
     return {
@@ -411,20 +461,44 @@ function frame(now) {
 
   walk(dt);
 
-  // ── 구역이 바뀐다 ──────────────────────────────────────
-  // ★ 지금은 **시간으로만** 넘어간다. 항로를 고르는 것(관측실 해도대)이
-  //   생기면 그쪽이 정한다. 임시라는 것을 여기 적어 둔다.
-  // 나머지 연산은 음수를 만나면 음수를 돌려준다. dt 를 잘라 놨지만
-  // 여기도 막아 둔다 — 배열 첨자는 한 번 음수가 되면 조용히 undefined 다
-  const n = REGIONS.length;
-  const want = regionPin
-    ? REGION_BY_KEY[regionPin]
-    : REGIONS[((Math.floor(clock / REGION_SECONDS) % n) + n) % n];
-  if (want.key !== ship.outside.region) ship.outside.setRegion(want.key);
+  // ── 항로가 나아간다 ────────────────────────────────────
+  // ★ 전에는 구역이 95초마다 **돌았다.** 지금은 관측실에서 고른 갈래가
+  //   정하고, **추진을 켜야 나아간다** (game/route.js).
+  const rev = stepRoute(route, dt, power);
+  if (rev === 'arrive') {
+    banner = `거점 — 남은 ${legsLeft(route)}`;
+    bannerT = 3.0;
+    audio?.event('escaped');       // 거점은 뿌리친 것과 같은 안도다
+    escapedAt = clock;
+  }
+  if (rev === 'overrun') {
+    // 그물이 닫혔다 — 자국이 얼마든 붙는다 (route-table.js PRESS 참고)
+    banner = '따라잡혔습니다 — 그물이 닫혔습니다';
+    bannerT = 3.0;
+    if (chase.phase === PHASE.CALM) chase.risk = 200;
+  }
+  if (rev === 'end') {
+    banner = '더는 따라오지 못합니다';
+    bannerT = 6.0;
+    audio?.event('escaped');
+    escapedAt = clock;
+  }
+  // 검사용 고정이 걸려 있으면 그것을 따른다 (게임은 안 쓴다)
+  const wantRegion = regionPin || regionOf(route);
+  if (wantRegion !== ship.outside.region) ship.outside.setRegion(wantRegion);
 
   // ── 배가 간다 ──────────────────────────────────────────
   // 창밖을 흘려보내고, 배가 미세하게 떤다. 둘 다 없으면 **정지 화면**이다.
-  ship.outside.update(dt, CRUISE.speed);
+  // ★ 거점에 서 있거나 추진이 꺼져 있으면 **느리게 흐른다** — 창밖이
+  //   항로와 어긋나면 「가는 척하는 화면」이 된다
+  const cruise = route.phase === RPHASE.PORT ? 0.25 : (power.thrust ? 1 : LEG.coast);
+  ship.outside.update(dt, CRUISE.speed * cruise);
+
+  // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
+  ship.chart.update({
+    leg: route.leg, press: route.press, progress: progress(route),
+    atPort: route.phase === RPHASE.PORT, offer: route.offer,
+  });
 
   // ── 떨림 — 뿌리쳤을 때의 **낙차**를 만드는 쪽 ──────────
   // 추격 중엔 배가 더 떤다. 그래야 뿌리친 3초가 「조용해졌다」로 읽힌다.
@@ -458,7 +532,7 @@ function frame(now) {
   camera.rotation.z = sw * 0.06;   // 아주 살짝 기운다
 
   const valveOpen = interactStep(dt);
-  systemsStep(dt, valveOpen, want.signMult ?? 1);
+  systemsStep(dt, valveOpen, signMult(route));
 
   // 화면 한복판 글자 — 잠깐 떴다 사라진다
   if (bannerT > 0) {

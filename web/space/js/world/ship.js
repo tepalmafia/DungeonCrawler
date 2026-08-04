@@ -31,6 +31,7 @@ import { buildCockpit, buildOutside, CANOPY, CONSOLE_PTS, SEATS } from './cockpi
 import {
   ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign, breakerPanel,
 } from './kit.js';
+import { buildChart } from './chart.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -179,7 +180,11 @@ function port(parent, x, z, ry, rad = 0.42) {
     new THREE.CircleGeometry(rad, 20),
     new THREE.MeshBasicMaterial({ color: 0x060b14, side: THREE.DoubleSide }),
   );
-  glass.position.z = -0.02;
+  // ★ **벽 앞으로** 낸다. -0.02 로 뒀더니 유리가 벽 안쪽 면과 정확히 겹쳐서
+  //   z 다툼이 났다 — 창이 「까만 얼룩」으로 보였고, 그림자 여드름인 줄 알고
+  //   엉뚱한 데(그림자 절두체)를 먼저 고쳤다. 화면을 찍어 보고서야 창이라는
+  //   걸 알았다. 겹치는 면은 **눈에 보이는 만큼 띄운다**
+  glass.position.z = 0.03;
   g.add(glass);
   g.add(new THREE.Mesh(new THREE.TorusGeometry(rad + 0.05, 0.07, 8, 24), MAT.metal));
   for (let i = 0; i < 6; i++) {
@@ -201,6 +206,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed) {
 
 // ══════════════════════════════════════════════════════════════════════════
 export function buildShip(scene) {
+  let chart = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
@@ -288,14 +294,9 @@ export function buildShip(scene) {
   {
     const r = R.observ, Z = ZONE.observ;
     for (const z of [r.z0 + 1.0, (r.z0 + r.z1) / 2, r.z1 - 1.0]) port(ship, r.x0 + 0.1, z, Math.PI / 2, 0.46);
-    // 해도대 — 항로를 고르는 자리 (docs/space/PLAN.md §7-2)
-    const t = new THREE.Group();
-    t.position.set(r.x0 + 1.7, 0, (r.z0 + r.z1) / 2);
-    ship.add(t);
-    box(t, 1.5, 0.1, 1.0, MAT.body, 0, 0.92, 0);
-    box(t, 1.3, 0.03, 0.82, new THREE.MeshBasicMaterial({ color: 0x0b2233 }), 0, 0.98, 0);
-    for (const sx of [-0.65, 0.65]) for (const sz of [-0.4, 0.4]) box(t, 0.1, 0.9, 0.1, MAT.metal, sx, 0.45, sz);
-    blockBox(r.x0 + 1.7, (r.z0 + r.z1) / 2, 0.78, 0.53, 0);
+    // 해도대 — **항로를 고르는 자리.** 여기까지 걸어와야 고를 수 있다
+    // (world/chart.js · docs/space/GAP.md §3-A). 전에는 판때기였다
+    chart = buildChart(ship, { x: r.x0 + 1.7, z: (r.z0 + r.z1) / 2 }, blockBox, MAT);
     racks(ship, 'x', r.z1 - 0.09, r.x0 + 0.6, r.x1 - 0.7, -1, Z.accent, 2);
   }
 
@@ -470,7 +471,11 @@ export function buildShip(scene) {
       l.castShadow = true;
       l.shadow.mapSize.set(1024, 1024);
       l.shadow.camera.near = 0.4;
-      l.shadow.camera.far = reach;
+      // ★ 그림자 절두체를 **빛보다 짧게** 자른다. 전에는 빛 도달거리(20)를
+      //   그대로 썼는데, 1024짜리 그림자맵이 배 전체에 펴지면서 해상도가
+      //   모자라 **관측실 링 프레임이 까만 얼룩으로** 나왔다. 조명은 멀리
+      //   가도 되지만 그림자는 그 방 안에서만 있으면 된다
+      l.shadow.camera.far = Math.min(reach, 9);
       // 그림자 여드름(shadow acne) 막기. 안 넣으면 벽에 줄무늬가 낀다
       l.shadow.bias = -0.0012;
       l.shadow.normalBias = 0.03;
@@ -512,5 +517,5 @@ export function buildShip(scene) {
   // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
   // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
   const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
-  return { cock, outside, valve, wheel, breakers, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
+  return { cock, outside, valve, wheel, breakers, chart, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }
