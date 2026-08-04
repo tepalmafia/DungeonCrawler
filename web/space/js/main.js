@@ -50,8 +50,10 @@ import {
 } from './game/fault.js';
 import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
 import { KEYS as TUTOR_KEYS } from './game/tutor-table.js';
+import { DOOR, nearDoor, canPass } from './game/door-table.js';
+import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 22;
+export const VERSION = 23;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -170,6 +172,13 @@ const hazard = makeHazard(seed);
 // **동사는 가르치고, 답은 안 가르친다** (docs/space/TUTORIAL.md §1-1).
 // 「잡고 돌린다」를 모르면 신비가 아니라 고장 난 게임이고,
 // 「지금 무엇이 덜그럭거리나」는 끝까지 안 말한다.
+// ── 문 ──────────────────────────────────────────────────────
+// **배가 살아 있다고 느끼게 하는 것.** 가까이 가면 열리고 지나가면 닫힌다.
+// 가끔 끼는데, **끼어도 언제나 손으로 열린다** — 이 배는 우회로가 없어서
+// 「못 여는 문」은 벌이 아니라 게임 오버가 된다 (game/door-table.js)
+const doors = makeDoors(ship.doors.map((d) => ({ key: d.key, name: d.name, x: d.x, z: d.z, ry: d.ry })), seed);
+const doorView = Object.fromEntries(ship.doors.map((d) => [d.key, d]));
+let cranking = null;      // 지금 크랭크를 잡고 있는 문
 const tutor = makeTutor();
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
@@ -288,7 +297,8 @@ function interactStep(dt) {
   const plates = ship.chart.plates;
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
-    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit];
+    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
+    ...ship.doors.map((d) => d.view.hit)];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -298,6 +308,7 @@ function interactStep(dt) {
   let plate = -1;
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false;
+  let onCrank = null;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
@@ -310,11 +321,19 @@ function interactStep(dt) {
       if (o === ship.winch.hit) { onWinch = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
+      const dv = ship.doors.find((x) => x.view.hit === o);
+      if (dv) { onCrank = dv; break; }
     }
   }
   // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
   const canPick = route.phase === RPHASE.PORT;
   ship.chart.setAim(canPick ? plate : -1);
+
+  // ── 비상 크랭크 — **끼인 문을 손으로 연다** ──────────
+  // ★ 안 낀 문의 크랭크는 **안 잡힌다.** 멀쩡한 문에서 손잡이가 돌아가면
+  //   「이걸 왜 돌리지」가 되고, 진짜로 필요할 때의 무게가 사라진다
+  const crankDoor = onCrank && doors.list.find((d) => d.key === onCrank.key);
+  cranking = crankDoor && crankDoor.jammed && input.hold ? crankDoor : null;
 
   // ── 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B) ─────
   steering = onYoke && input.hold;
@@ -459,13 +478,14 @@ function interactStep(dt) {
     b.lampMat.color.set(on ? b.tint : 0x2a2f36);
   }
 
-  aimName = onValve ? 'valve' : (breaker ? breaker.key
+  aimName = onCrank ? `crank:${onCrank.key}`
+    : onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
       : (panel ? `panel:${panel.room}`
         : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : null))))));
   cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
-    || onYoke));
+    || onYoke || (crankDoor && crankDoor.jammed)));
   return coolFor > 0;
 }
 
@@ -484,6 +504,38 @@ function systemsStep(dt, valveOpen, regionMult) {
     bannerT = 3.6;
     audio?.event('fault');
   }
+  // ── 문 — **가까이 가면 열리고 지나가면 닫힌다** ───────
+  // ★ 끼는 것은 **평온할 때만.** 추격 중에 갇히면 그건 긴장이 아니라
+  //   사고다 — 뿌리칠 유일한 길(기관실 밸브)이 막히기 때문이다.
+  // ★ 그리고 **가르침을 다 떼기 전에도 안 낀다** — 고장·위험 지대에 걸어 둔
+  //   빗장과 같은 규약이다 (TUTORIAL.md §2-2). 배우는 중에 갇히면 그건
+  //   튜토리얼이 아니라 검문이다
+  const nearD = nearDoor(doors.list, me.x, me.z);
+  for (const e of stepDoors(doors, dt, {
+    near: nearD, cranking, calm: chase.phase !== PHASE.CHASE && allDone(tutor),
+  })) {
+    if (e.what === 'open') audio?.event('doorOpen');
+    if (e.what === 'shut') audio?.event('doorShut');
+    if (e.what === 'jam') {
+      // ★ **어느 문인지 안 말한다.** 「무언가 잘못됐다」까지다 (PLAN §3-1) —
+      //   고장과 같은 규약이고, 배가 좁으니 걸어 보면 곧 안다
+      banner = '어딘가 문이 안 열립니다';
+      bannerT = 3.4;
+      audio?.event('fault');
+    }
+    if (e.what === 'freed') {
+      banner = `${e.door.name} 문이 열렸습니다`;
+      bannerT = 2.4;
+      audio?.event('fixed');
+    }
+  }
+  // 문짝을 그리고, **닫힌 문은 길을 막는다**
+  for (const d of doors.list) {
+    const v = doorView[d.key];
+    v.view.update(d.k, d.jammed, d.held);
+    v.bar.off = canPass(d);
+  }
+
   // ── 보급 — 먹고, 지나가며 줍는다 ─────────────────────
   const rg = REGION_BY_KEY[ship.outside.region];
   if (stepSupply(supply, dt, { debris: rg?.debris ?? 0 }) === 'hungry') {
@@ -595,6 +647,17 @@ function systemsStep(dt, valveOpen, regionMult) {
   const site = faults.open.map(siteOf).find((a) => a === room);
   const dist = site ? distToPanel(site) : 0;
   hearNear = nearness(faults, room, dist);
+  // ★ **끼인 문도 덜그럭거린다.** 배너는 「어딘가 문이 안 열립니다」까지만
+  //   말하므로(PLAN §3-1), 찾는 길은 고장과 **같은 규약**이라야 한다 —
+  //   여기서 소리를 따로 만들면 「문은 눈으로 찾고 고장은 귀로 찾는」
+  //   두 문법이 되고, 그러면 둘 다 안 배워진다
+  {
+    const jd = jammedOne(doors);
+    if (jd) {
+      const far = Math.hypot(me.x - jd.x, me.z - jd.z);
+      hearNear = Math.max(hearNear, Math.max(0.12, 1 - Math.min(1, far / FAULT.hearing)));
+    }
+  }
   audio?.update({
     phase: chase.phase, urgency,
     heat01: Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn)),
@@ -668,7 +731,14 @@ window.SPACE = {
   get chase() { return { phase: chase.phase, risk: +chase.risk.toFixed(1), dist: +chase.dist.toFixed(1), sign: +chase.sign.toFixed(1), runs: chase.runs }; },
   // ★ 100 으로는 안 붙는다. stepChase 가 **더한 뒤에** 견주므로 그 프레임에
   //   riskFall 이 빠져서 99.9 가 된다. 넉넉히 넘겨 놓는다.
-  forceContact() { chase.risk = 200; },
+  forceContact() {
+    // ★ v22 부터 **거점에서는 추격이 안 돈다.** 그런데 게임은 거점에서
+    //   시작하므로, 이 구멍을 그대로 두면 도구가 「접촉이 안 난다」로
+    //   멈춘다 (space-audio 가 실제로 그랬다). 「붙여 놓고 재겠다」는 뜻이니
+    //   **항행 중으로 만들어 준다** — 거점에서 붙는 것이 아니라
+    chase.risk = 200;
+    if (route.phase === RPHASE.PORT) { chooseFork(route, route.offer[0].key); ship.outside.setRegion(regionOf(route)); }
+  },
   /** 지금 조준선에 뭐가 걸리나 — 검사용 */
   get aim() { return aimName; },
   resetChase() { resetChase(chase); },
@@ -757,6 +827,23 @@ window.SPACE = {
     const i = TUTOR_KEYS.indexOf(key);
     if (i < 0) return false;
     tutor.i = i; tutor.open = true; tutor.t = age; tutor.rest = 0;
+    return true;
+  },
+  /** 문 여섯이 지금 어떤가 — 검사용 */
+  get doors() { return doorSummary(doors); },
+  /**
+   * 문을 전부 열어 둔다 — **검사용.** 게임은 안 쓴다.
+   * ★ `space-walk.js` 는 배 안을 격자로 훑어 「걸어서 갈 수 있나」를 본다.
+   *   그런데 문은 **가까이 가야** 열리므로, 격자로 훑으면 닫힌 문에 막혀
+   *   곁방이 전부 「못 간다」로 나온다 — 사람은 걸어가면 열리는데.
+   *   훑기 전에 이걸 부른다.
+   */
+  openDoors() { for (const d of doors.list) { d.jammed = false; d.force = 9999; d.k = 1; } },
+  /** 그 문을 지금 끼게 한다 — 검사용. 게임은 안 쓴다 */
+  jamDoor(key) {
+    const d = doors.list.find((x) => x.key === key);
+    if (!d) return false;
+    d.jammed = true; d.k = 0; d.dwell = 0; d.force = 0;
     return true;
   },
   forceHazard() { hazard.next = 0; hazard.inLeg = 0; return stepHazard(hazard, 0.001, { region: ship.outside.region }); },

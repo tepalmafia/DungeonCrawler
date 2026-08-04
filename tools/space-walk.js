@@ -91,6 +91,13 @@ const CASES = [
   [-4.10, 5.15, false, '온실 재배대'],
   [2.80, 5.70, true, '에어록'],
 ];
+// ★ **문을 열어 놓고 잰다.** v23 부터 문은 가까이 가야 열리는데, 격자로
+//   훑는 이 검사는 「가까이 간다」를 못 흉내낸다 — 그대로 두면 곁방이 전부
+//   「못 간다」로 나온다. 사람은 걸어가면 열리므로 그건 거짓 실패다.
+//   문이 실제로 열리고 막는지는 tools/space-door.js 와 space-chase.js 가 잰다
+await p.evaluate(() => SPACE.openDoors());
+await p.waitForTimeout(600);
+
 for (const [x, z, want, name] of CASES) {
   const got = await p.evaluate(([x, z]) => SPACE.canStand(x, z), [x, z]);
   ok(got === want, `${name}  (${x}, ${z}) → ${got ? '설 수 있다' : '막힌다'}`);

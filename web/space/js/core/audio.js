@@ -258,6 +258,21 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
         return;
       }
       case 'click': return knock(handBus, at, HAND.click.len, HAND.click.gain, HAND.click.hz * 4, 1.1);
+      case 'doorOpen': {
+        // 스르륵 — **위로 쓸려 올라가는 바람소리.** 문이 벌어지는 모양이다
+        const D = HAND.doorOpen;
+        knock(handBus, at, D.len, D.gain, D.hz, 0.7);
+        knock(handBus, at + 0.04, D.air, D.gain * 0.6, D.hz * 1.8, 0.5);
+        return;
+      }
+      case 'doorShut': {
+        // 맞물린다 — **아래로 떨어지는 둔탁한 소리.** 여는 것과 반대 모양이라야
+        // 눈을 안 보고도 열렸는지 닫혔는지 안다
+        const D = HAND.doorShut;
+        knock(handBus, at, D.len, D.gain, D.hz, 1.6);
+        tone(handBus, D.hz * 0.35, at + 0.03, D.thud, D.gain * 0.5, 'sine', D.hz * 0.22);
+        return;
+      }
       case 'fault': {
         // 「무언가 잘못됐다」 — **아래로 처지는 두 음.** 경보와 헷갈리면 안 된다
         const F = HAND.fault;

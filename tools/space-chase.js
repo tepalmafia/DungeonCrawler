@@ -317,6 +317,58 @@ console.log('\n[0-6] 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B)
   ok(w.phase === 'warn' && w.warn > 5, `기관실에 있어도 예고가 뜬다 (${w.warn.toFixed(0)}초 남음)`);
 }
 
+console.log('\n[0-6b] 문 — **가까이 가면 열리고, 끼면 손으로 연다**');
+{
+  // ★ 여기서 볼 것은 **손이 닿나 · 길이 막히나**다. 숫자(열리는 속도 ·
+  //   회차당 몇 번 끼나)는 tools/space-door.js 가 브라우저 없이 잰다
+  const shut = await S(() => { SPACE.put(0, 5.0, Math.PI, -0.02); return true; });
+  await until(() => SPACE.doors.find((d) => d.key === 'engine').k === 0, 40, '문 닫히기');
+  ok(!(await S(() => SPACE.canStand(0, 10.0))), '멀리 있으면 문이 닫혀 길을 막는다');
+
+  await S(() => SPACE.put(0, 8.6, Math.PI, -0.02));
+  const opened = await until(() => SPACE.canStand(0, 10.0), 60, '문 열리기');
+  ok(opened, '다가가면 열리고 지나갈 수 있다 — **문 앞에서 안 멈춘다**');
+
+  // 끼우면 다시 막힌다
+  await S(() => SPACE.jamDoor('engine'));
+  await p.waitForTimeout(1500);
+  ok(!(await S(() => SPACE.canStand(0, 10.0))), '끼면 다시 막힌다');
+
+  // ★ **크랭크가 설 수 있는 자리에서 손에 닿나.** 「되는데 안 보이는」 것을
+  //   한 번 겪었다 — 크랭크를 통로 벽 바깥에 두는 바람에 조준은 되는데
+  //   화면에는 없었다. 서 있을 수 있는 자리에서 잡히는지까지 본다
+  let hit = null;
+  for (const [x, z] of [[0.6, 8.6], [0, 8.4], [0.9, 8.9]]) {
+    if (!(await S((a) => SPACE.canStand(a[0], a[1]), [x, z]))) continue;
+    for (let yaw = -3.14; yaw <= -1.6 && !hit; yaw += 0.12) {
+      await S((a) => SPACE.put(a[0], a[1], a[2], -0.35), [x, z, yaw]);
+      await p.waitForTimeout(90);
+      if (String(await S(() => SPACE.aim) || '').startsWith('crank')) hit = { x, z, yaw };
+    }
+    if (hit) break;
+  }
+  ok(!!hit, `설 수 있는 자리에서 크랭크가 잡힌다 (${hit ? `${hit.x},${hit.z}` : '안 잡힌다'})`);
+  if (hit) {
+    await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+    const turning = await until(() => SPACE.doors.find((d) => d.key === 'engine').held > 0.05, 40, '크랭크 돌기');
+    const h = (await S(() => SPACE.doors)).find((d) => d.key === 'engine');
+    ok(turning, `잡으니 크랭크가 돌아간다 (${h.held})`);
+    await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+    if (SP) await p.screenshot({ path: `${SP}/ch-0-크랭크.png` });
+  }
+  // 끼인 문은 **소리로 찾힌다** — 고장과 같은 규약이라야 한다
+  await S(() => SPACE.put(0, -5.0, 0, 0));
+  await p.waitForTimeout(2000);
+  const far = await S(() => SPACE.faults.hear);
+  await S(() => SPACE.put(0, 8.6, Math.PI, 0));
+  await p.waitForTimeout(2000);
+  const near = await S(() => SPACE.faults.hear);
+  ok(near > far * 2.5, `끼인 문이 소리로 찾힌다 — 조종석 ${far} → 문 앞 ${near}`);
+  // 치우고 간다
+  await S(() => { SPACE.jamDoor('engine'); });
+  await S(() => { const d = SPACE.doors; });
+}
+
 console.log('\n[0-7] 거점은 안전한가 · 잡히면 나올 수 있나');
 {
   // ★ 둘 다 v21 에서 **게임을 못 하게 만든 것들**이다. 숫자는

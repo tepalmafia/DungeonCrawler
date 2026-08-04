@@ -35,10 +35,14 @@ import {
 import { buildChart } from './chart.js';
 import { buildBench } from './bench.js';
 import { buildFoodGauge, buildWinch, buildTradeHatch } from './supply-ui.js';
+import { buildDoor } from './door.js';
+import { DOOR } from '../game/door-table.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
-const DOORW = 1.1;      // 문 반폭
+// ★ 문 반폭은 **표가 갖는다.** 여기 따로 적으면 문짝과 문구멍이 갈라지고,
+//   그건 「분명히 문이 있는데 못 지나간다」가 된다
+const DOORW = DOOR.half;
 
 /**
  * 방들. **통로가 척추고 곁방이 좌우에 붙는다.**
@@ -66,6 +70,9 @@ export function blockBox(cx, cz, hw, hd, rot = 0) { BLOCKERS.push({ t: 'b', cx, 
 
 function hitsBlocker(x, z, r) {
   for (const b of BLOCKERS) {
+    // ★ **꺼져 있는 막이는 없는 것이다.** 문이 열리면 여기가 꺼진다 —
+    //   목록에서 넣었다 뺐다 하면 순서가 흔들려 언젠가 엉뚱한 것이 지워진다
+    if (b.off) continue;
     if (b.t === 'c') {
       const dx = x - b.x, dz = z - b.z, rr = b.r + r;
       if (dx * dx + dz * dz < rr * rr) return true;
@@ -264,8 +271,18 @@ export function buildShip(scene) {
     ['garden', spine.x0, 6.0, -Math.PI / 2],
     ['airlock', spine.x1, 5.7, Math.PI / 2],
   ];
+  // ★ **문짝이 여기서 생긴다.** v22 까지 문틀만 있고 구멍은 영구히 뚫려
+  //   있었다 — 배 안에서 움직이는 것이 하나도 없었던 이유의 절반이다
+  const doors = [];
   for (const [to, x, z, ry] of HATCHES) {
     hatch(ship, x, z, DOORW, H, ry, ZONE[R[to].tone].light);
+    const d = buildDoor(ship, x, z, DOORW, H, ry, ZONE[R[to].tone].light);
+    // 닫히면 못 지나간다. **문틀 두께만큼만** 막는다 — 두꺼우면 열려 있어도
+    // 걸리는 느낌이 나고, 얇으면 빠른 걸음에 뚫린다
+    blockBox(x, z, DOORW, 0.13, ry);
+    const bar = BLOCKERS[BLOCKERS.length - 1];
+    bar.off = true;                     // 켤 때는 열려 있다고 본다
+    doors.push({ key: to, name: R[to].name, x, z, ry, view: d, bar });
     // ★ **이름표를 통로 쪽으로 내민다.** 전에는 `+sin·0.26` 이라 표지가
     //   **자기가 바라보는 쪽으로**, 즉 들어가는 방 안으로 밀려났다.
     //   조종석·기관실은 통로가 z축이라 부호가 우연히 맞아떨어져 보였고,
@@ -567,6 +584,6 @@ export function buildShip(scene) {
   // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
   // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
   const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
-  return { cock, outside, valve, wheel, breakers, chart, bench, panels,
+  return { cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }
