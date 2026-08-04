@@ -49,13 +49,15 @@ import {
   wearStep, wearFlip,
 } from './game/fault.js';
 import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
-import { KEYS as TUTOR_KEYS } from './game/tutor-table.js';
+import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
 import { WRIST, jobFor } from './game/wrist-table.js';
 import { buildWrist } from './world/wrist.js';
+import { buildGuide } from './world/guide.js';
+import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 25;
+export const VERSION = 26;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -196,6 +198,29 @@ const driftWay = seed.charCodeAt(0) % 2 ? 1 : -1;
 // ── 손목 장치 ────────────────────────────────────────────────
 // **늘 보이는 유일한 계기.** 「지금 할 일」과 「내가 고친 것」만 든다 —
 // 거리·자국·항로·마모는 여전히 방이 갖는다 (world/wrist.js 머리말 참고)
+const guide = buildGuide(scene);
+/**
+ * 안내선이 지금 어디를 가리키나 — **없으면 선이 안 그려진다.**
+ *
+ * ★ 셋 다 아니면 `null` 이다:
+ *   · 가르침 일곱을 다 뗐다 → 본편이다. 여기서부터는 아무도 길을 안 알려준다
+ *   · `walk` 이다 → 갈 데가 없는 가르침이다 (guide-table.js AIMS 참고)
+ *   · `fault` 인데 아직 안 헤맸다 → 「덜그럭거리는 쪽으로 간다」를 배울
+ *     시간을 준다. 12초(TUTOR.showWhere)를 넘기면 그때 고장 난 방으로 잇는다
+ */
+function guideAim() {
+  if (allDone(tutor)) return null;
+  const k = nowKey(tutor);
+  if (!k) return null;
+  if (k === 'fault') {
+    if (tutor.t < TUTOR.showWhere) return null;
+    const site = faults.open.map(siteOf)[0];
+    const p = site && ship.panels[site];
+    return p ? { x: p.group.position.x, z: p.group.position.z } : null;
+  }
+  return ship.marks[AIMS[k]] ?? null;
+}
+
 let raised = false;
 const wrist = buildWrist(camera);
 /** 손목에 지금 뜬 줄 — 검사가 읽는다. 게임은 안 쓴다 */
@@ -913,6 +938,59 @@ window.SPACE = {
       if (on) { d.jammed = false; d.k = 1; }
     }
   },
+  /**
+   * 문간을 가로지르는 것이 있나 — **검사용.**
+   *
+   * ★ 이게 왜 필요했나 (2026-08-04 · 사장님 「문들이 쇠파이프로 막혀있는데?」)
+   *   통로 난간을 끝에서 끝까지 한 줄로 그어 놓아서 **곁방 문 넷을 그대로
+   *   관통**했다. 난간 높이 1.32 는 문 구멍(2.05)의 한복판이다.
+   *   **v22 까지는 문짝이 없어서(구멍뿐) 덜 띄었고**, 문을 단 v23 부터
+   *   「막대가 문을 막았다」로 읽혔다.
+   *
+   *   숫자로는 아무 데도 안 걸린다 — 걸어는 다녀지고(난간은 충돌이 아니다)
+   *   문은 잘 열린다. **눈에만 보이는 종류**라 이렇게 쏴 봐야 안다.
+   *   문틀 사이를 **벽을 따라** 가로질러 광선을 쏜다. 걸리는 게 있으면
+   *   그건 문간을 지나가는 물건이다.
+   */
+  clearDoorway(key, ys = [0.7, 1.0, 1.32, 1.7]) {
+    const d = doors.list.find((x) => x.key === key);
+    if (!d) return null;
+    // 문의 폭 방향 = 문틀의 로컬 +x 를 ry 만큼 돌린 것 (kit.js hatch 와 같다)
+    const ux = Math.cos(d.ry), uz = -Math.sin(d.ry);
+    // 문이 바라보는 방향 — 벽에서 앞뒤로 떨어뜨려 가며 쏘려고 쓴다
+    const nx = Math.sin(d.ry), nz = Math.cos(d.ry);
+    // 문짝은 열리면 문틀 옆으로 붙으므로 **양끝을 넉넉히 물린다**
+    const reach = DOOR.half - 0.3;
+    // ★ **벽 면 하나만 쏘면 못 잡는다.** 처음엔 벽 위(offset 0)에서만 쐈는데,
+    //   난간·배관은 벽에서 0.1~0.2 **떨어져** 벽과 나란히 지나간다 — 광선과
+    //   평행이라 스쳐 지나가고 하나도 안 걸렸다. 문을 막는 물건은 대개
+    //   그렇게 생겼으므로 **앞뒤로 훑는다.**
+    const OFFS = [0, 0.12, -0.12, 0.24, -0.24];
+    const hits = [];
+    for (const y of ys) for (const o of OFFS) {
+      ray.set(
+        new THREE.Vector3(d.x - ux * reach + nx * o, y, d.z - uz * reach + nz * o),
+        new THREE.Vector3(ux, 0, uz),
+      );
+      ray.far = reach * 2;
+      for (const h of ray.intersectObject(ship.group, true)) {
+        // 조준용 히트 박스는 **안 보이는 물건**이라 문을 막지 않는다
+        if (h.object.material?.visible === false) continue;
+        const n = h.object.name || h.object.parent?.name || '?';
+        if (!hits.includes(n)) hits.push(n);
+      }
+    }
+    return hits;
+  },
+  get THREE() { return THREE; },
+  get shipGroup() { return ship.group; },
+  get doorsRaw() { return doors.list.map((d) => ({ key: d.key, x: d.x, z: d.z, ry: d.ry })); },
+  /** 안내선이 지금 어디를 가리키나 · 화살표가 몇 개 켜졌나 — 검사용 */
+  get guide() {
+    const t = guideAim();
+    return { aim: t ? { x: +t.x.toFixed(2), z: +t.z.toFixed(2) } : null,
+      on: guide.on, marks: guide.group.children.filter((m) => m.visible).length };
+  },
   /** 그 문을 지금 끼게 한다 — 검사용. 게임은 안 쓴다 */
   jamDoor(key) {
     const d = doors.list.find((x) => x.key === key);
@@ -1146,6 +1224,17 @@ function frame(now) {
     } else lesson.hidden = true;
   } else lesson.hidden = true;
 
+  // ── 바닥 안내선 — **가르침이 도는 동안만** ─────────────────
+  // ★ 사장님: 「진행 방향으로 바닥에 선으로 목표 방향을 알려줘」.
+  //   가르침은 동사를 말하고 방은 12초 뒤에야 말한다 (TUTOR.showWhere).
+  //   그 사이에 처음 하는 사람은 13m 통로에서 헤맨다.
+  //
+  //   **일곱을 다 떼면 이 줄이 통째로 꺼지고 다시는 안 켜진다.** 그래야
+  //   「어디인지는 안 말한다」(PLAN §3-1)가 본편에서 그대로 산다
+  const aim = guideAim();
+  guide.setPath(aim ? pathTo({ x: me.x, z: me.z }, aim, ROOMS, doors.list) : null);
+  guide.update(dt);
+
   // ── 손목 장치 — **가르침이 끝난 뒤에도 뭘 할지 말해 준다** ──
   // ★ 가르침은 일곱 개로 끝난다 (첫 회차가 튜토리얼이므로). 그 뒤로
   //   **아무도 뭘 하라고 안 해서** 「아직도 뭘 해야할지 모르겠다」가 났다.
@@ -1160,7 +1249,12 @@ function frame(now) {
       faultsOpen: faults.open.length,
       foodLow: shaky(supply),
       atPort: route.phase === RPHASE.PORT,
+      // ★ 추격 때 **할 일을 고르는 재료**다 (wrist-table.js JOBS.chase).
+      //   숫자로 나가는 게 아니라 「추진을 켭니다」 같은 **동사 한 줄**이
+      //   되어 나온다 — 열 수치 자체는 여전히 조종석이 갖는다
       thrust: power.thrust,
+      cool: power.cool,
+      heat,
       ore: supply.ore,
     }),
     // 고친 것 — **정비실까지 안 가도 보인다.** 이게 사장님이 말씀하신 것이다.

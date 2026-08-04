@@ -138,6 +138,8 @@ export function rackRun(parent, axis, fixed, from, to, facing, tint, seed = 1) {
  */
 export function handrail(parent, axis, fixed, from, to, y, off) {
   const g = new THREE.Group();
+  // 이름을 단다 — 문간을 가로지르면 검사가 **누가 범인인지** 말해야 한다
+  g.name = '난간';
   parent.add(g);
   const len = to - from;
   const mid = (from + to) / 2;
@@ -161,6 +163,8 @@ export function handrail(parent, axis, fixed, from, to, y, off) {
  */
 export function conduit(parent, axis, fixed, from, to, y, tint) {
   const g = new THREE.Group();
+  // 이름을 단다 — 문간을 가로지르면 검사가 **누가 범인인지** 말해야 한다
+  g.name = '배관';
   parent.add(g);
   const len = to - from;
   const mid = (from + to) / 2;
@@ -281,12 +285,23 @@ export function chamfer(parent, r, H, mat, gapsBySide = {}) {
  * 링 프레임 — 압력 껍데기를 두르는 구조재. **일정 간격**이라는 것이 요점이다.
  * 간격이 들쭉날쭉하면 구조재가 아니라 장식으로 보인다.
  */
-export function ringFrames(parent, r, H, along, step, tint) {
+export function ringFrames(parent, r, H, along, step, tint, gaps = {}) {
   const W = r.x1 - r.x0, D = r.z1 - r.z0;
   const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
   const T = 0.13, P = 0.1;                      // 두께 · 안으로 튀어나오는 깊이
   const len = along === 'z' ? D : W;
   const n = Math.max(1, Math.round(len / step) - 1);
+  // ★ **문구멍에는 기둥을 안 세운다** (2026-08-04 · 사장님 「문들이 쇠파이프로
+  //   막혀있는데?」). 링 프레임의 세로 기둥은 벽을 따라 일정 간격으로 서는데,
+  //   그 벽에 문이 나 있으면 **문 한복판에 쇠기둥이 박힌다** — 여섯 문 중
+  //   다섯이 그랬다. 벽은 `wallRun` 이 구멍을 뚫는데 **기둥만 안 뚫었다.**
+  //   구조재는 원래 개구부를 비켜 가고, 그래서 문틀(hatch)이 따로 있는 것이다.
+  //
+  //   ★ 왜 여태 안 보였나: v22 까지는 문짝이 없어서 열린 구멍 옆의 기둥이
+  //     그냥 문틀처럼 보였다. 문을 단 v23 부터 「닫힌 문을 관통한 막대」가
+  //     됐다. **숫자로는 아무 데도 안 걸린다** — 기둥은 충돌이 아니라 걸어는
+  //     다녀지고 문도 잘 열린다. 눈에만 보이는 종류다.
+  const holed = (list, at) => (list ?? []).some(([a, b]) => at > a && at < b);
   for (let i = 1; i <= n; i++) {
     const t = (along === 'z' ? r.z0 : r.x0) + (len * i) / (n + 1);
     const g = new THREE.Group();
@@ -294,12 +309,18 @@ export function ringFrames(parent, r, H, along, step, tint) {
     if (along === 'z') {
       box(g, W, P, T, MAT.metal, cx, H - P / 2, t);                       // 천장
       box(g, W, P, T, MAT.metal, cx, P / 2, t);                          // 바닥
-      for (const sx of [r.x0, r.x1]) box(g, P, H, T, MAT.metal, sx + (sx === r.x0 ? P / 2 : -P / 2), H / 2, t);
+      for (const sx of [r.x0, r.x1]) {
+        if (holed(sx === r.x0 ? gaps.x0 : gaps.x1, t)) continue;
+        box(g, P, H, T, MAT.metal, sx + (sx === r.x0 ? P / 2 : -P / 2), H / 2, t);
+      }
       box(g, W * 0.86, 0.03, 0.045, new THREE.MeshBasicMaterial({ color: tint }), cx, H - 0.16, t - T / 2 - 0.02);
     } else {
       box(g, T, P, D, MAT.metal, t, H - P / 2, cz);
       box(g, T, P, D, MAT.metal, t, P / 2, cz);
-      for (const sz of [r.z0, r.z1]) box(g, T, H, P, MAT.metal, t, H / 2, sz + (sz === r.z0 ? P / 2 : -P / 2));
+      for (const sz of [r.z0, r.z1]) {
+        if (holed(sz === r.z0 ? gaps.z0 : gaps.z1, t)) continue;
+        box(g, T, H, P, MAT.metal, t, H / 2, sz + (sz === r.z0 ? P / 2 : -P / 2));
+      }
       box(g, 0.045, 0.03, D * 0.86, new THREE.MeshBasicMaterial({ color: tint }), t - T / 2 - 0.02, H - 0.16, cz);
     }
   }

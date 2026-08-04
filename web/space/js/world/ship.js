@@ -258,7 +258,7 @@ export function buildShip(scene) {
 
     // ★ 「배 같다」를 고치는 둘
     chamfer(ship, r, H, w, gaps);
-    ringFrames(ship, r, H, (r.z1 - r.z0) >= (r.x1 - r.x0) ? 'z' : 'x', 3.2, tone.light);
+    ringFrames(ship, r, H, (r.z1 - r.z0) >= (r.x1 - r.x0) ? 'z' : 'x', 3.2, tone.light, gaps);
   }
 
   // ── 해치 ────────────────────────────────────────────────
@@ -307,9 +307,31 @@ export function buildShip(scene) {
   // 좁으니 **얇은 것만** 붙인다. 억지로 채우면 못 지나가고, 그러면 왕복
   // 노동이 더 나빠진다.
   const CZ = ZONE.corridor;
+  // ★ 난간은 **문 앞에서 끊는다** (2026-08-04 · 사장님 「문들이 쇠파이프로
+  //   막혀있는데?」).
+  //   통로 끝에서 끝까지 한 줄로 그어 놓았더니 **곁방 문 넷을 그대로
+  //   관통했다** — 난간 높이 1.32 는 문 구멍(2.05)의 한가운데라, 닫힌 문
+  //   한복판에 쇠파이프가 가로로 박혀 있는 꼴이었다.
+  //   **v22 까지는 문짝이 없어서(구멍뿐)** 덜 띄었고, 문을 단 v23 부터
+  //   「막대가 문을 막았다」로 읽혔다 — 문을 달자 옛 실수가 드러난 것이다.
+  //   실제 배도 난간은 문틀에서 끊고 반대편에서 다시 시작한다.
+  const RAIL_CLEAR = 0.14;   // 문틀 바깥면(half+0.085)에서 이만큼 더 떨어진다
+  const RAIL_MIN = 0.4;      // 이보다 짧은 토막은 안 만든다 — 기둥 둘뿐이라 쓰레기다
+  const railEnd = spine.z1 - 0.4;
   for (const sx of [-1, 1]) {
     conduit(ship, 'z', sx * (spine.x1 - 0.2), spine.z0 + 0.3, spine.z1 - 0.3, H - 0.36, CZ.accent);
-    handrail(ship, 'z', sx * spine.x1, spine.z0 + 0.4, spine.z1 - 0.4, 1.32, -sx * 0.13);
+    // ★ 구멍 목록을 **HATCHES 에서 받아 온다.** 여기 z 를 손으로 적어 두면
+    //   문을 옮길 때 난간만 제자리에 남아 도로 관통한다
+    const holes = HATCHES
+      .filter(([, hx]) => Math.abs(hx - sx * spine.x1) < 0.01)
+      .map(([, , hz]) => [hz - DOORW - RAIL_CLEAR, hz + DOORW + RAIL_CLEAR])
+      .sort((a, b) => a[0] - b[0]);
+    let z = spine.z0 + 0.4;
+    for (const [h0, h1] of [...holes, [railEnd, Infinity]]) {
+      const to = Math.min(h0, railEnd);
+      if (to - z >= RAIL_MIN) handrail(ship, 'z', sx * spine.x1, z, to, 1.32, -sx * 0.13);
+      z = Math.max(z, h1);
+    }
   }
   conduit(ship, 'z', 0.34, spine.z0, spine.z1, H - 0.16, CZ.light);
 
@@ -327,7 +349,11 @@ export function buildShip(scene) {
   //   지금은 물린 고장이 쓰는 방 셋뿐이다 — 나머지 넷은 그 방을 쓰는 고장이
   //   생기는 날 같이 넣는다. 미리 깔아 두면 아무 데도 안 닿는 물건이 넷 는다.
   const panels = {
-    spine: servicePanel(ship, spine.x1 - 0.06, 5.6, -Math.PI / 2, CZ.accent),
+    // ★ 5.6 에 있었는데 **에어록 문(z 5.7 · 폭 ±1.1)의 한복판**이었다.
+    //   문짝이 없던 v22 까지는 「구멍 옆에 붙은 판」으로 보였고, 문을 단 뒤로
+    //   닫힌 문 속에 패널이 박혔다. 문 없는 구간(z 1.7~4.6)으로 옮긴다 —
+    //   차단기(왼쪽 벽 3.3)와 마주 보는 자리라 통로 가운데가 일할 곳이 된다
+    spine: servicePanel(ship, spine.x1 - 0.06, 3.0, -Math.PI / 2, CZ.accent),
     // ★ 정비실은 **먼 쪽 벽이 아니라 아래쪽 벽**이다. 처음엔 x1 벽에 붙였는데
     //   그 앞이 통째로 작업대·랙이라 **설 자리가 한 칸도 없었다** — 패널은
     //   보이는데 못 간다. 배를 격자로 훑어 서 있을 수 있는 칸을 세어 보고 알았다.
@@ -598,6 +624,20 @@ export function buildShip(scene) {
   // 「그림을 넣었는데 아무 일도 안 일어난다」를 화면만 보고는 못 가린다.
   // 색만 붙었는지 굴곡까지 붙었는지도 눈으로는 구분이 안 된다.
   const skins = { wall: matWall, engine: matEngine, floor: matFloor, ceil: matCeil };
-  return { cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
+  // ── 안내선이 목표로 삼는 자리 ─────────────────────────
+  // ★ **좌표를 두 번 적지 않는다.** 물건을 세운 그 자리에서 그대로 받아
+  //   간다 — 저쪽에 손으로 옮겨 적으면 물건을 옮길 때 안내선만 옛 자리를
+  //   가리키고, 그건 「계기가 거짓말을 한다」가 된다
+  const marks = {
+    chart: { x: R.observ.x0 + 1.7, z: (R.observ.z0 + R.observ.z1) / 2 },
+    breaker: { x: spine.x0 + 0.5, z: 3.3 },
+    valve: { x: 0, z: engine.z1 - 0.9 },
+    winch: { x: 3.0, z: R.airlock.z0 + 0.7 },
+    yoke: { x: 0, z: -7.0 },
+  };
+
+  // ★ `group` — tools 가 배 안에만 광선을 쏘려고 쓴다 (창밖·성운은 뺀다)
+  return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
+    marks,
     foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

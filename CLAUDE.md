@@ -163,6 +163,7 @@ node tools/space-fly.js          스페이스워 — 조종이 장르를 안 바
 node tools/space-tutor.js        스페이스워 — 일곱을 다 만나나 · 한 번에 하나인가
 node tools/space-first5.js       스페이스워 — ★ 아무것도 모르는 사람의 첫 5분 (못하는 사람 다섯)
 node tools/space-wrist.js        스페이스워 — 손목이 할 일을 말하나 · ★ 배의 상태가 안 새나
+node tools/space-guide.js        스페이스워 — 바닥 안내선 · ★ 튜토리얼에서만 켜지나
 node tools/space-door.js         스페이스워 — 문이 걸음을 막나 · 끼면 손으로 열리나
 node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
 node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)

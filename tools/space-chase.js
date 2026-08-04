@@ -106,6 +106,36 @@ console.log('\n[0-0] 가르침 — **하면 사라진다** (TUTORIAL.md §3-A)')
   ok(t1.holds.hazard, '아직 안 배운 것이 있으면 위험 지대가 안 온다 — 빗장');
   if (SP) await p.screenshot({ path: `${SP}/ch-0-가르침.png` });
 
+}
+
+console.log('\n[0-0b] 바닥 안내선 — **가르침 도는 동안만 · 목표 쪽으로**');
+{
+  // ★ 숫자(길이 배 안인가 · 되짚지 않나)는 tools/space-guide.js 가 잰다.
+  //   여기서 볼 것은 **정말 켜지고 꺼지나**다 — 가르침을 다 뗀 뒤에도
+  //   남아 있으면 본편이 심부름 게임이 된다 (PLAN §3-1)
+  const off0 = await S(() => SPACE.guide);
+  ok(!off0.on, `첫 가르침(걸어서 둘러봅니다)에는 선이 없다 — 화살표 ${off0.marks}개`);
+
+  await S(() => SPACE.teach('route', 0));
+  await p.waitForTimeout(1200);
+  const on = await S(() => SPACE.guide);
+  ok(on.on && on.marks > 0, `항로 가르침에 선이 켜진다 — 화살표 ${on.marks}개 → (${on.aim?.x},${on.aim?.z})`);
+  ok(await S(() => SPACE.room(SPACE.guide.aim.x, SPACE.guide.aim.z)) === 'observ',
+    '관측실을 가리킨다 — 글이 말하는 방과 같다');
+
+  await S(() => SPACE.teach('valve', 0));
+  await p.waitForTimeout(1200);
+  ok(await S(() => SPACE.room(SPACE.guide.aim.x, SPACE.guide.aim.z)) === 'engine',
+    '밸브 가르침으로 넘어가면 기관실을 가리킨다');
+
+  await S(() => SPACE.skipTutor());
+  await p.waitForTimeout(1200);
+  const off = await S(() => SPACE.guide);
+  ok(!off.on && off.marks === 0,
+    '★ **일곱을 다 떼면 꺼진다** — 본편에서는 아무도 길을 안 알려준다');
+}
+
+{
   // 나머지 검사는 가르침 순서에 안 매이게 통째로 건너뛴다
   await S(() => SPACE.skipTutor());
   const t2 = await S(() => SPACE.tutor);
@@ -404,6 +434,24 @@ console.log('\n[0-6b] 문 — **가까이 가면 열리고, 끼면 손으로 연
   // 치우고 간다
   await S(() => { SPACE.jamDoor('engine'); });
   await S(() => { const d = SPACE.doors; });
+}
+
+console.log('\n[0-6d] 문간 — **가로지르는 것이 없나**');
+{
+  // ★ 사장님이 「문들이 쇠파이프로 막혀있는데?」라고 하셨다. 통로 난간을
+  //   끝에서 끝까지 한 줄로 그어 놓아서 **곁방 문 넷을 그대로 관통**했다 —
+  //   난간 높이 1.32 는 문 구멍(2.05)의 한복판이다.
+  //   **숫자로는 아무 데도 안 걸린다.** 난간은 충돌이 아니라 걸어는 다니고,
+  //   문은 잘 열리고, space-door.js 는 전부 ✔ 였다. **눈에만 보이는 종류**다.
+  //   그래서 문틀 사이를 벽 따라 가로질러 광선을 쏜다 — 걸리면 범인이다.
+  await S(() => SPACE.openDoors());
+  const bad = [];
+  for (const d of await S(() => SPACE.doors.map((x) => x.key))) {
+    const hits = await S((k) => SPACE.clearDoorway(k), d);
+    if (hits.length) bad.push(`${d} ← ${hits.join('·')}`);
+  }
+  ok(bad.length === 0, `문 여섯 전부 문간이 비어 있다 — 막힌 문 ${bad.join(' / ') || '없다'}`);
+  await S(() => SPACE.openDoors(false));
 }
 
 console.log('\n[0-6c] 손목 — **화면에 있나 · Q 로 올라오나 · 상태를 따라가나**');
