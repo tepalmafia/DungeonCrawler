@@ -317,12 +317,49 @@ console.log('\n[0-6] 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B)
   ok(w.phase === 'warn' && w.warn > 5, `기관실에 있어도 예고가 뜬다 (${w.warn.toFixed(0)}초 남음)`);
 }
 
+console.log('\n[0-3b] 점검 패널 — **방 일곱 전부 손이 닿나**');
+{
+  // ★ **서는 칸을 세는 것만으로는 못 잡는다.** 에어록 패널이 방호복 걸이
+  //   바로 앞이라 설 자리는 19칸인데 **어디서도 조준선이 안 잡혔다.**
+  //   정비실에서 두 번 옮긴 것과 같은 함정이고, 그때는 화면을 찍어 알았다.
+  //   이제는 **조준까지** 재므로 다음에 방을 옮겨도 도구가 먼저 잡는다
+  await S(() => SPACE.openDoors());
+  const ROOMS = ['spine', 'workshop', 'engine', 'observ', 'garden', 'airlock', 'cockpit'];
+  const miss = [];
+  for (const room of ROOMS) {
+    const spots = await S((room) => {
+      const st = SPACE.panelAt(room);
+      if (!st) return [];
+      const ux = Math.sin(st.ry), uz = Math.cos(st.ry), out = [];
+      // **똑바로 앞을 먼저** 본다 — 비껴 선 자리는 조준이 안 잡힌다
+      for (const off of [0, 0.3, -0.3, 0.6, -0.6]) for (const d of [0.6, 0.8, 1.0, 1.3, 1.6]) {
+        const x = st.x + ux * d - uz * off, z = st.z + uz * d + ux * off;
+        if (SPACE.canStand(x, z)) out.push([+x.toFixed(2), +z.toFixed(2), st.ry]);
+      }
+      return out;
+    }, room);
+    let hit = null;
+    for (const [x, z, ry] of spots.slice(0, 8)) {
+      await S((a) => SPACE.put(a[0], a[1], a[2], -0.42), [x, z, ry]);
+      await p.waitForTimeout(900);
+      if (await S(() => SPACE.aim) === `panel:${room}`) { hit = [x, z]; break; }
+    }
+    if (!hit) miss.push(room);
+  }
+  ok(miss.length === 0, `방 일곱 전부 점검 패널에 손이 닿는다 — 못 닿는 방 ${miss.join(', ') || '없다'}`);
+  // ★ **되돌린다.** 안 그러면 아래 문 검사가 문을 못 닫는다 (실제로 그랬다)
+  await S(() => SPACE.openDoors(false));
+}
+
 console.log('\n[0-6b] 문 — **가까이 가면 열리고, 끼면 손으로 연다**');
 {
   // ★ 여기서 볼 것은 **손이 닿나 · 길이 막히나**다. 숫자(열리는 속도 ·
   //   회차당 몇 번 끼나)는 tools/space-door.js 가 브라우저 없이 잰다
   const shut = await S(() => { SPACE.put(0, 5.0, Math.PI, -0.02); return true; });
-  await until(() => SPACE.doors.find((d) => d.key === 'engine').k === 0, 40, '문 닫히기');
+  // ★ 닫히는 데 dwell 1.4 + closeTime 0.9 = 게임 시간 2.3초인데, 헤드리스는
+  //   실시간의 20분의 1이라 **실제로는 46초**다. 40초로 뒀다가 아슬아슬하게
+  //   못 넘겨 「문이 길을 안 막는다」로 실패했다 — 게임이 아니라 도구가 성급했다
+  await until(() => SPACE.doors.find((d) => d.key === 'engine').k === 0, 100, '문 닫히기');
   ok(!(await S(() => SPACE.canStand(0, 10.0))), '멀리 있으면 문이 닫혀 길을 막는다');
 
   await S(() => SPACE.put(0, 8.6, Math.PI, -0.02));
