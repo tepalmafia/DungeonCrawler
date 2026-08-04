@@ -36,6 +36,10 @@ import {
 } from './game/route.js';
 import { FAULT, BY_KEY } from './game/mission-table.js';
 import { FOOD, WINCH, TRADE } from './game/supply-table.js';
+import { HAZARD } from './game/hazard-table.js';
+import {
+  makeHazard, stepHazard, newLeg, incoming, warnLeft, clearOf, HPHASE,
+} from './game/hazard.js';
 import {
   makeSupply, stepSupply, winchStep, canTrade, trade, canRepair, spendParts,
   shaky, slipMult, legsLeftOnFood,
@@ -45,7 +49,7 @@ import {
   wearStep, wearFlip,
 } from './game/fault.js';
 
-export const VERSION = 19;
+export const VERSION = 20;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -151,6 +155,13 @@ const faults = makeFaults(seed);
 // 거점은 안전하고 **아무것도 안 난다.** 먹을 것도 고칠 것도 밖에만 있다
 // (PLAN §4-2) — 그게 「다시 나갈 이유」의 전부다.
 const supply = makeSupply();
+// ── 조종 ────────────────────────────────────────────────────
+// **조종은 「또 하나의 방」이지 게임의 중심이 아니다** (FLYING.md §1-1).
+// 조종석에 앉아 있는 동안은 정비도 채굴도 항로 선택도 못 한다.
+const hazard = makeHazard(seed);
+let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
+let steerPush = 0;
+let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let winching = false;     // 지금 윈치를 잡고 있나
 let trading = 0;          // 접수구를 얼마나 잡고 있었나
 let partsWarned = false;  // 부품이 없다고 한 번만 말한다
@@ -241,7 +252,7 @@ function interactStep(dt) {
   const plates = ship.chart.plates;
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
-    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit];
+    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -250,7 +261,7 @@ function interactStep(dt) {
   let breaker = null;
   let plate = -1;
   let panel = null;
-  let onWinch = false, onHatch = false;
+  let onWinch = false, onHatch = false, onYoke = false;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
@@ -262,11 +273,15 @@ function interactStep(dt) {
       if (pn) { panel = pn; break; }
       if (o === ship.winch.hit) { onWinch = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
+      if (o === ship.cock.yokeHit) { onYoke = true; break; }
     }
   }
   // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
   const canPick = route.phase === RPHASE.PORT;
   ship.chart.setAim(canPick ? plate : -1);
+
+  // ── 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B) ─────
+  steering = onYoke && input.hold;
 
   // ── 윈치 — **멈춰서 끌어온다.** 「한 통만 더」 (PLAN §5-3) ──
   // 추진이 켜져 있으면 안 걸린다. 캐는 동안 구간이 안 나아가고 위험이 쌓인다 —
@@ -407,9 +422,11 @@ function interactStep(dt) {
 
   aimName = onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
-      : (panel ? `panel:${panel.room}` : (onWinch ? 'winch' : (onHatch ? 'hatch' : null)))));
+      : (panel ? `panel:${panel.room}`
+        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : null))))));
   cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere
-    || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))));
+    || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
+    || onYoke));
   return coolFor > 0;
 }
 
@@ -432,6 +449,30 @@ function systemsStep(dt, valveOpen, regionMult) {
     bannerT = 3.2;
     audio?.event('fault');
   }
+
+  // ── 위험 지대 — 부딪히는 것과 피하는 것 (FLYING.md) ────
+  const hev = stepHazard(hazard, dt, {
+    region: ship.outside.region, atSeat: steering, push: steerPush,
+  });
+  if (hev === 'warn') {
+    // ★ **어느 방에 있든** 알아야 한다. 기관실에서 모르고 있다가 맞으면
+    //   「정비하러 가는 것 자체가 벌」이 된다 (FLYING.md §1-2)
+    banner = `전방에 잔해 — ${warnLeft(hazard).toFixed(0)}초`;
+    bannerT = 4.0;
+    audio?.event('fault');
+  }
+  if (hev === 'enter') { banner = '들어갑니다 — 조종석'; bannerT = 2.6; }
+  if (hev === 'hit') {
+    // 죽지 않는다. **대신 일이 는다** (PLAN §4-4)
+    faults.wear.hull = Math.min(1, faults.wear.hull + HAZARD.hit.hull);
+    heat = Math.min(HEAT.max, heat + HAZARD.hit.heat);
+    if (HAZARD.hit.fault) { faults.next = 0; stepFaults(faults, 0.001, { calm: true, leg: route.leg }); }
+    banner = '부딪혔습니다';
+    bannerT = 2.8;
+    hitFlash = 1;
+    audio?.event('caught');
+  }
+  if (hev === 'pass') audio?.event('fixed');
 
   // 쓰는 대로 닳는다 — **어떻게 몰았는지가 다음 고장을 정한다** (systems-table WEAR)
   wearStep(faults, dt, { power, valveOpen, region: ship.outside.region });
@@ -518,6 +559,9 @@ function systemsStep(dt, valveOpen, regionMult) {
     press: route.press, legsLeft: legsLeft(route),
     progress: progress(route), atPort: route.phase === RPHASE.PORT,
     contactAt: contactAt(route),
+    // 조종 — 남은 시간과 다가오는 것 (world/cockpit.js drawCourse 가 읽는다)
+    lane: hazard.lane, hazPhase: hazard.phase,
+    hazWarn: warnLeft(hazard), incoming: incoming(hazard), clearBy: clearOf(hazard),
   });
 }
 
@@ -534,6 +578,8 @@ window.SPACE = {
   put(x, z, yaw = 0, pitch = 0) { me.x = x; me.z = z; me.yaw = yaw; me.pitch = pitch; me.vx = me.vz = 0; },
   setHeat(v) { heat = v; },
   get pos() { return { x: +me.x.toFixed(3), z: +me.z.toFixed(3) }; },
+  /** 어디를 보고 있나 — 조종간을 밀 때 **시야가 안 돌아야** 한다 (FLYING.md §3-B) */
+  get look() { return { yaw: +me.yaw.toFixed(4), pitch: +me.pitch.toFixed(4) }; },
   get locked() { return input.locked; },
   get blockers() { return BLOCKERS.length; },
   get region() { return ship.outside.region; },
@@ -594,6 +640,20 @@ window.SPACE = {
   wearTo(w) { Object.assign(faults.wear, w); },
   /** 검사가 기다리지 않고 고장을 띄운다 */
   forceFault() { faults.next = 0; return stepFaults(faults, 0.001, { calm: true, leg: route.leg }); },
+  /** 조종 — 위험 지대와 배의 좌우 자리 */
+  get fly() {
+    const n = incoming(hazard);
+    return {
+      phase: hazard.phase, lane: +hazard.lane.toFixed(3), steering,
+      push: +steerPush.toFixed(2), warn: +warnLeft(hazard).toFixed(1),
+      incoming: n ? { in: +n.in.toFixed(1), lane: +n.lane.toFixed(2), left: n.left } : null,
+      hits: hazard.hits, dodged: hazard.dodged, seat: +hazard.seat.toFixed(1),
+    };
+  },
+  /** 검사가 기다리지 않고 위험 지대를 부른다 */
+  forceHazard() { hazard.next = 0; hazard.inLeg = 0; return stepHazard(hazard, 0.001, { region: ship.outside.region }); },
+  /** 예고를 건너뛴다 */
+  skipWarn() { if (hazard.phase === 'warn') hazard.t = hazard.need; },
   /** 보급 — 식량·부품·광석 */
   get supply() {
     return {
@@ -692,8 +752,17 @@ function frame(now) {
   clock += dt;
 
   const look = input.takeLook();
-  me.yaw -= look.dx * 0.0022;
-  me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
+  // ★ 조종간을 잡고 있으면 마우스가 **시선이 아니라 배**를 움직인다.
+  //   `steering` 은 지난 프레임의 판정이라 한 프레임 늦는다 — 조준은
+  //   interactStep 에서 나오고 그건 이 아래에서 돈다. 16ms 라 안 느껴진다.
+  if (steering) {
+    steerPush = Math.max(-1, Math.min(1, look.dx * 0.03));
+    me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
+  } else {
+    steerPush = 0;
+    me.yaw -= look.dx * 0.0022;
+    me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
+  }
 
   walk(dt);
 
@@ -701,6 +770,7 @@ function frame(now) {
   // ★ 전에는 구역이 95초마다 **돌았다.** 지금은 관측실에서 고른 갈래가
   //   정하고, **추진을 켜야 나아간다** (game/route.js).
   const rev = stepRoute(route, dt, power);
+  if (rev === 'arrive' || rev === 'end') newLeg(hazard);
   if (rev === 'arrive') {
     banner = `거점 — 남은 ${legsLeft(route)}`;
     bannerT = 3.0;
@@ -728,7 +798,7 @@ function frame(now) {
   // ★ 거점에 서 있거나 추진이 꺼져 있으면 **느리게 흐른다** — 창밖이
   //   항로와 어긋나면 「가는 척하는 화면」이 된다
   const cruise = route.phase === RPHASE.PORT ? 0.25 : (power.thrust ? 1 : LEG.coast);
-  ship.outside.update(dt, CRUISE.speed * cruise);
+  ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard));
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
   ship.chart.update({
@@ -754,6 +824,9 @@ function frame(now) {
   } else wantShake = SHAKE.calm;
   // 굶으면 손이 떨린다 — 눈에도 보여야 한다 (PLAN §5-2)
   if (shaky(supply)) wantShake *= FOOD.shakeMult;
+  // 부딪힌 순간은 크게 한 번 — 「맞았다」가 몸에 남아야 다음엔 앉는다
+  hitFlash = Math.max(0, hitFlash - dt * 0.7);
+  wantShake += hitFlash * 7;
   // 보상 구간에서는 표가 정한 모양을 **그대로** 쓴다 (따라가면 뭉개진다).
   // 그 밖에서는 부드럽게 따라간다 — 추격이 붙는 순간 화면이 튀지 않게.
   shakeMul = since < ESCAPE.total ? wantShake
