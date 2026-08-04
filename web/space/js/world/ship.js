@@ -336,6 +336,20 @@ export function buildShip(scene) {
     //   빈 벽을 눈으로 찾는 것보다 **두 번 옮기는 편이 빨랐다**
     workshop: servicePanel(ship, 2.8, R.workshop.z1 - 0.06, Math.PI, ZONE.workshop.accent),
     engine: servicePanel(ship, engine.x0 + 0.06, 12.6, Math.PI / 2, ZONE.engine.accent),
+    // ★ **방 일곱에 다 깔았다 (v24).** 위 주석은 「고장이 쓰는 방 셋뿐」이라
+    //   나머지를 미뤄 뒀는데, 그게 거꾸로였다 — **패널이 없어서 고장을 못
+    //   만들고 있었다.** 미소운석은 설계 의도가 「방을 다 훑게 만든다」인데
+    //   훑을 자리가 없어서 여섯 달 동안 한 번도 안 나왔다.
+    //   빈 벽을 골랐다. 관측실은 해도대 반대편, 온실은 재배대를 피한 z1 벽,
+    //   에어록은 윈치·접수구가 없는 z0 벽, 조종석은 콘솔 뒤 오른쪽 벽이다
+    observ: servicePanel(ship, -3.0, R.observ.z1 - 0.06, Math.PI, ZONE.observ.accent),
+    garden: servicePanel(ship, -2.6, R.garden.z1 - 0.06, Math.PI, ZONE.garden.accent),
+    // ★ 에어록은 **두 번째 자리**다. 처음엔 z0 벽(2.2, 4.26)에 붙였는데
+    //   방호복 걸이(x 1.55~2.15)가 바로 앞이라 **설 자리는 있는데 조준선이
+    //   안 잡혔다** — 서는 칸을 세는 것만으로는 못 잡는 종류다. 정비실에서
+    //   두 번 옮긴 것과 같은 함정이고, 이번엔 **조준까지 재는 검사**로 찾았다
+    airlock: servicePanel(ship, 2.6, R.airlock.z1 - 0.06, Math.PI, ZONE.airlock.accent),
+    cockpit: servicePanel(ship, R.cockpit.x1 - 0.06, -4.2, -Math.PI / 2, ZONE.cockpit.accent),
   };
   for (const [key, pnl] of Object.entries(panels)) pnl.room = key;
 

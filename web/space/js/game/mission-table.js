@@ -91,14 +91,119 @@ export const MISSIONS = [
   },
   {
     key: 'micrometeor', sys: 'hull', name: '미소운석', tier: TIER.NOW,
+    // ★ **이 항목만 방을 안 정한다.** 갈래가 방을 뽑고, 사람은 소리로 찾는다.
+    //   설계 의도가 「방을 다 훑게 만든다」였는데, v23 까지 방 셋에만 점검
+    //   패널이 있어서 성립할 자리가 없었다 — 그래서 `steps` 를 못 적었고
+    //   `wired()` 가 걸러 **한 번도 안 나왔다.** 방 일곱에 패널이 깔린
+    //   지금에야 원래 모양대로 선다
     where: ['any'],
     lead: '어딘가에서 공기가 샌다',
-    // 소리로 찾는 첫 항목. 쉭 소리와 **먼지가 흐르는 방향**이 단서다
+    // 소리로 찾는 첫 항목. 쉭 소리가 단서다
     costs: { time: [30, 90], air: true },
+    // ★ **새는 공기가 눈에 띈다.** 공기는 아직 계통이 아니므로(5단계),
+    //   벌을 「숨을 못 쉰다」가 아니라 **자국**으로 낸다 — 얼어붙은 김이
+    //   배 뒤로 길게 끌리는 것이라 오히려 이 게임답다
+    effect: { sign: 7 },
+    // ★ 처음엔 방마다 갈래를 하나씩 여섯 개 뒀다가 **내 규칙에 걸렸다** —
+    //   이 파일 머리에 「갈래는 2~4개」라고 적어 뒀고 space-missions.js 가
+    //   그걸 잰다. 규칙이 있는 이유는 **여러 번 하면 배워지게** 하려는 것이라,
+    //   여섯이면 아무것도 안 배워진다. 넷으로 줄이되 마지막 갈래가 두 방을
+    //   맡게 해서 **덜 쓰이던 방 넷(관측실·온실·에어록·조종석)은 그대로 덮는다**
     branches: [
-      { key: 'one', what: '구멍 하나. 막으면 끝', weight: 3 },
-      { key: 'spray', what: '흩뿌려 맞았다. 서너 군데', weight: 2, worse: true },
-      { key: 'through', what: '지나가 버렸다. 반대쪽 벽에도 구멍이 있다', weight: 1, worse: true },
+      { key: 'observ', what: '관측실 벽이었다', weight: 3, at: 'observ' },
+      { key: 'garden', what: '온실 벽이었다', weight: 3, at: 'garden' },
+      { key: 'airlock', what: '에어록 벽이었다', weight: 3, at: 'airlock' },
+      // 흩뿌려 맞으면 **두 방**이다. 「막았는데 왜 아직 새지」가 나는 자리
+      { key: 'spray', what: '흩뿌려 맞았다. 두 군데다', weight: 1, worse: true, at: ['cockpit', 'spine'] },
+    ],
+    hold: 6,
+  },
+  {
+    key: 'chartDrift', sys: 'power', name: '해도대 어긋남', tier: TIER.NOW,
+    where: ['observ', 'workshop'],
+    lead: '해도대 눈금이 조금씩 밀린다',
+    // ★ **계기가 거짓말을 한다.** 이 게임은 계기가 전부라 이게 제일 불쾌한
+    //   고장이어야 맞다 — 「압박이 얼마인지 모르는 채로 간다」가 벌이다.
+    //   다만 **거짓말인 줄은 알게** 해 준다 (눈금이 떤다). 모르고 속으면
+    //   그건 고장이 아니라 사기다
+    costs: { time: [50, 110], parts: 1 },
+    effect: { chartLie: 1 },
+    steps: [
+      { at: 'workshop', hold: 5, what: '기준기를 챙긴다' },
+      { at: 'observ', hold: 7, what: '눈금을 다시 맞춘다' },
+    ],
+    branches: [
+      { key: 'recal', what: '다시 맞추면 된다', weight: 3 },
+      { key: 'drifts', what: '금방 또 밀린다', weight: 2, worse: true, again: true },
+    ],
+  },
+  {
+    key: 'coldGarden', sys: 'cool', name: '온실 냉해', tier: TIER.NOW,
+    where: ['garden', 'engine'],
+    lead: '온실이 차다',
+    // 식량이 빨리 준다 — **굶으면 손이 떨려 다른 것도 못 고친다** (PLAN §5-2).
+    // 계통이 서로 물리는 것을 보여 주는 항목이다
+    costs: { time: [60, 120] },
+    effect: { food: 1.9 },
+    steps: [
+      { at: 'engine', hold: 6, what: '온수 회로를 튼다' },
+      { at: 'garden', hold: 7, what: '언 배관을 녹인다' },
+    ],
+    branches: [
+      { key: 'thaw', what: '녹이면 산다', weight: 3 },
+      { key: 'lost', what: '한 판은 못 쓴다', weight: 2, worse: true },
+    ],
+  },
+  {
+    key: 'airlockSeal', sys: 'hull', name: '에어록 밀폐 불량', tier: TIER.NOW,
+    where: ['airlock', 'workshop'],
+    lead: '에어록 표시등이 안 꺼진다',
+    // **윈치를 못 쓴다** = 밖에서 아무것도 못 얻는다. 「한 통만 더」가 막히는
+    // 것이라, 굶는 중에 이게 겹치면 진짜로 급해진다
+    costs: { time: [50, 100], parts: 1 },
+    effect: { noWinch: true },
+    steps: [
+      { at: 'workshop', hold: 5, what: '밀폐재를 챙긴다' },
+      { at: 'airlock', hold: 8, what: '문틀을 다시 메운다' },
+    ],
+    branches: [
+      { key: 'reseal', what: '메우면 된다', weight: 3 },
+      { key: 'warped', what: '틀이 휘었다. 오래 걸린다', weight: 2, worse: true, again: true },
+    ],
+  },
+  {
+    key: 'looseYoke', sys: 'hull', name: '조종간 헐거움', tier: TIER.NOW,
+    where: ['cockpit', 'workshop'],
+    lead: '배가 저절로 한쪽으로 흐른다',
+    // ★ **조종(v20)을 배신한다.** 잡고 있지 않아도 배가 흐르므로, 위험 지대가
+    //   오면 가만히 있는 것이 정답이 아니게 된다 — 조종석에 매이는 시간이
+    //   늘지만 그건 이 고장의 벌이지 설계가 바뀐 것이 아니다
+    costs: { time: [40, 90], parts: 1 },
+    effect: { drift: 0.12 },
+    steps: [
+      { at: 'workshop', hold: 5, what: '고정핀을 챙긴다' },
+      { at: 'cockpit', hold: 7, what: '조종간 밑을 조인다' },
+    ],
+    branches: [
+      { key: 'tighten', what: '조이면 잡힌다', weight: 3 },
+      { key: 'worn', what: '축이 닳았다. 계속 흐른다', weight: 2, worse: true },
+    ],
+  },
+  {
+    key: 'doorServo', sys: 'power', name: '문 구동부 이상', tier: TIER.NOW,
+    where: ['workshop', 'spine'],
+    lead: '문이 제멋대로 여닫힌다',
+    // ★ v23 의 문을 배신한다. 문이 혼자 여닫히면 **그 소리가 자국이 된다** —
+    //   숨죽이고 가는 중에 제일 나쁘다
+    costs: { time: [50, 110], parts: 1 },
+    effect: { doorWild: true, sign: 4 },
+    steps: [
+      { at: 'workshop', hold: 5, what: '구동부 계전기를 챙긴다' },
+      { at: 'spine', hold: 7, what: '배전반에서 갈아 끼운다' },
+    ],
+    branches: [
+      { key: 'relay', what: '계전기를 갈면 된다', weight: 3 },
+      { key: 'again', what: '한 번으로는 안 잡힌다', weight: 2, worse: true, again: true },
     ],
   },
   {

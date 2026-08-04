@@ -137,11 +137,24 @@ export function nearness(f, room, dist) {
 
 /** 고쳐지기 전까지 배에 무슨 일이 나나 */
 export function effectsOf(f) {
-  const out = { heat: 0, coolValve: 0, flaky: false };
+  // ★ **고장 하나가 계통 하나를 배신한다.** 방마다 다른 것을 망가뜨리는 것이
+  //   이 표의 규칙이다 — 기관실은 열, 통로는 차단기, 관측실은 해도대,
+  //   온실은 식량, 에어록은 윈치, 조종석은 조종간.
+  //   그래야 「그 방에 왜 가는가」가 방마다 다르다 (GAP.md §3-C).
+  const out = {
+    heat: 0, coolValve: 0, sign: 0, food: 0, drift: 0,
+    flaky: false, chartLie: false, noWinch: false, doorWild: false,
+  };
   for (const o of f.open) {
     if (o.effect.heat) out.heat += o.effect.heat;
     if (o.effect.coolValve) out.coolValve += o.effect.coolValve;
+    if (o.effect.sign) out.sign += o.effect.sign;       // 자국이 는다 (새는 공기·문 소리)
+    if (o.effect.food) out.food += o.effect.food;       // 식량이 빨리 준다
+    if (o.effect.drift) out.drift += o.effect.drift;    // 배가 저절로 흐른다
     if (o.effect.flaky) out.flaky = true;
+    if (o.effect.chartLie) out.chartLie = true;         // 해도대가 거짓말한다
+    if (o.effect.noWinch) out.noWinch = true;           // 윈치를 못 쓴다
+    if (o.effect.doorWild) out.doorWild = true;         // 문이 제멋대로 여닫힌다
   }
   return out;
 }

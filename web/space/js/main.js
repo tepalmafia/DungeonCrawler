@@ -53,7 +53,7 @@ import { KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 23;
+export const VERSION = 24;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -179,6 +179,16 @@ const hazard = makeHazard(seed);
 const doors = makeDoors(ship.doors.map((d) => ({ key: d.key, name: d.name, x: d.x, z: d.z, ry: d.ry })), seed);
 const doorView = Object.fromEntries(ship.doors.map((d) => [d.key, d]));
 let cranking = null;      // 지금 크랭크를 잡고 있는 문
+// 조종간이 헐거울 때 **어느 쪽으로** 흐르나 — 한 판 내내 같은 쪽이라야
+// 「이 배는 왼쪽으로 흐른다」를 몸이 배운다
+const driftWay = seed.charCodeAt(0) % 2 ? 1 : -1;
+/**
+ * 이번 프레임의 고장 효과. **한 프레임에 한 번만 뽑아 여기 둔다.**
+ * ★ 처음엔 systemsStep 안의 지역 변수였는데, 해도대(frame 안)와 문(위쪽)이
+ *   같이 읽어야 해서 **「선언 전에 썼다」로 게임이 통째로 안 떴다.**
+ *   여러 곳이 읽는 값은 읽는 곳들보다 위에 있어야 한다.
+ */
+let bad = effectsOf(makeFaults('boot'));
 const tutor = makeTutor();
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
@@ -341,7 +351,9 @@ function interactStep(dt) {
   // ── 윈치 — **멈춰서 끌어온다.** 「한 통만 더」 (PLAN §5-3) ──
   // 추진이 켜져 있으면 안 걸린다. 캐는 동안 구간이 안 나아가고 위험이 쌓인다 —
   // 시간과 위험을 **동시에** 치르는 것이 이 손잡이의 전부다
-  winching = onWinch && input.hold && !power.thrust;
+  // ★ **에어록이 안 닫히면 윈치를 못 쓴다** (airlockSeal). 「한 통만 더」가
+  //   막히는 것이라, 굶는 중에 이게 겹치면 진짜로 급해진다
+  winching = onWinch && input.hold && !power.thrust && !bad.noWinch;
   if (winching) {
     if (winchStep(supply, dt) === 'load') {
       banner = `광석 한 통 — ${supply.loads}통째`;
@@ -491,6 +503,10 @@ function interactStep(dt) {
 
 // ── 열 · 자국 · 추격 ────────────────────────────────────────
 function systemsStep(dt, valveOpen, regionMult) {
+  // ★ **맨 처음에 한 번만 뽑는다.** 아래 여기저기서 effectsOf 를 다시 부르면
+  //   같은 프레임 안에서 값이 갈린다
+  bad = effectsOf(faults);
+
   // ── 고장 ──────────────────────────────────────────────
   // **추격 중에는 새로 안 뜬다.** 겹치면 다섯이 되고, 다섯이면 포기한다
   // ★ **빗장** — 아직 항로도 못 골랐는데 고장부터 나면 뭐가 뭔지 모른다
@@ -510,7 +526,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ 그리고 **가르침을 다 떼기 전에도 안 낀다** — 고장·위험 지대에 걸어 둔
   //   빗장과 같은 규약이다 (TUTORIAL.md §2-2). 배우는 중에 갇히면 그건
   //   튜토리얼이 아니라 검문이다
-  const nearD = nearDoor(doors.list, me.x, me.z);
+  // ★ **문 구동부가 나가면 제멋대로 여닫힌다** (doorServo). 가까이 안 가도
+  //   열리고, 그 소리가 자국이 된다 (effect.sign) — 숨죽이고 가는 중에 제일 나쁘다
+  const nearD = bad.doorWild
+    ? doors.list[Math.floor(clock * 0.7) % doors.list.length]
+    : nearDoor(doors.list, me.x, me.z);
   for (const e of stepDoors(doors, dt, {
     near: nearD, cranking, calm: chase.phase !== PHASE.CHASE && allDone(tutor),
   })) {
@@ -538,7 +558,9 @@ function systemsStep(dt, valveOpen, regionMult) {
 
   // ── 보급 — 먹고, 지나가며 줍는다 ─────────────────────
   const rg = REGION_BY_KEY[ship.outside.region];
-  if (stepSupply(supply, dt, { debris: rg?.debris ?? 0 }) === 'hungry') {
+  // ★ **온실이 얼면 식량이 빨리 준다.** dt 를 늘려 흉내낸다 — 표(FOOD.perSec)를
+  //   안 건드리는 쪽이다. 표를 고치면 시뮬이 읽는 값과 게임이 갈라진다
+  if (stepSupply(supply, dt * (1 + bad.food), { debris: rg?.debris ?? 0 }) === 'hungry') {
     banner = '손이 떨립니다 — 식량이 모자랍니다';
     bannerT = 3.2;
     audio?.event('fault');
@@ -552,6 +574,12 @@ function systemsStep(dt, valveOpen, regionMult) {
   //     newLeg() 가 도착할 때 시계를 되돌리므로 거점에 85초 머물면
   //     정박 중에 「전방에 잔해」가 떴다. 고장은 이미 막혀 있었는데
   //     (calm 에 route.phase === LEG 가 들어 있다) 이것만 새고 있었다
+  // ★ **조종간이 헐거우면 배가 저절로 흐른다** (looseYoke). 잡고 있지 않으면
+  //   한쪽으로 밀리므로, 위험 지대에서 가만히 있는 것이 정답이 아니게 된다
+  if (bad.drift && !steering) {
+    hazard.lane = Math.max(-HAZARD.laneMax, Math.min(HAZARD.laneMax,
+      hazard.lane + bad.drift * dt * (driftWay || 1)));
+  }
   const hev = hazard.phase !== HPHASE.IDLE
     || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard'))
     ? stepHazard(hazard, dt, {
@@ -581,7 +609,6 @@ function systemsStep(dt, valveOpen, regionMult) {
 
   // 쓰는 대로 닳는다 — **어떻게 몰았는지가 다음 고장을 정한다** (systems-table WEAR)
   wearStep(faults, dt, { power, valveOpen, region: ship.outside.region });
-  const bad = effectsOf(faults);
 
   // 열은 **켠 회로**가 정한다. 추진을 켜면 오르고, 냉각을 켜면 내려간다.
   // 다만 냉각 회로만으로는 절반뿐이라 **기관실 밸브까지 열어야** 제대로 잡힌다.
@@ -596,11 +623,16 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   거점에서는 위험이 **빠진다**: 붙을 일이 없으니 쌓일 이유도 없다.
   const atPort = route.phase === RPHASE.PORT;
   const riskWas = chase.risk;
+  // ★ **고장이 자국을 민다.** 새는 공기(미소운석)·제멋대로 여닫히는 문
+  //   (문 구동부)이 눈에 띈다. 자국은 열에서 나오므로 열 단위로 환산해 얹는다 —
+  //   따로 더하면 조종석 계기가 말하는 자국과 실제가 갈라진다
+  const badSign = bad.sign / SIGN_PER_HEAT;
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
-      : stepChase(chase, dt, power, heat, regionMult, { contactAt: 999, trackMult: 0 }))
-    : stepChase(chase, dt, power, heat + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
+      : stepChase(chase, dt, power, heat + badSign, regionMult, { contactAt: 999, trackMult: 0 }))
+    : stepChase(chase, dt, power,
+      heat + badSign + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
       { contactAt: contactAt(route), trackMult: trackMult(route) });
   // ★ 캐는 동안에는 **위험이 안 빠진다.** 배가 멈춰 있고 윈치가 시끄러우니
   //   상대가 나를 놓칠 리가 없다.
@@ -838,7 +870,15 @@ window.SPACE = {
    *   곁방이 전부 「못 간다」로 나온다 — 사람은 걸어가면 열리는데.
    *   훑기 전에 이걸 부른다.
    */
-  openDoors() { for (const d of doors.list) { d.jammed = false; d.force = 9999; d.k = 1; } },
+  openDoors(on = true) {
+    // ★ `on: false` 로 되돌릴 수 있어야 한다. 처음엔 켜기만 되게 뒀더니
+    //   **뒤에 오는 문 검사가 문을 못 닫아서** 「멀리 있으면 막힌다」가
+    //   실패했다 — 검사용 구멍도 되돌리는 길이 있어야 한다
+    for (const d of doors.list) {
+      d.force = on ? 9999 : 0;
+      if (on) { d.jammed = false; d.k = 1; }
+    }
+  },
   /** 그 문을 지금 끼게 한다 — 검사용. 게임은 안 쓴다 */
   jamDoor(key) {
     const d = doors.list.find((x) => x.key === key);
@@ -1004,8 +1044,12 @@ function frame(now) {
   ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard));
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
+  // ★ **해도대가 어긋나면 눈금이 밀린다** (chartDrift). 다만 **거짓말인 줄은
+  //   알게** 한다 — 값이 떨리므로 「지금 이 숫자를 못 믿는다」가 보인다.
+  //   모르고 속으면 그건 고장이 아니라 사기다
+  const lie = bad.chartLie ? Math.sin(clock * 2.3) * 14 : 0;
   ship.chart.update({
-    leg: route.leg, press: route.press, progress: progress(route),
+    leg: route.leg, press: Math.max(0, Math.min(100, route.press + lie)),
     atPort: route.phase === RPHASE.PORT, offer: route.offer,
   });
 
