@@ -11,7 +11,7 @@
 //    앞의 것을 다 떼기 전에는 다음 것의 `arm` 을 아예 안 본다. 그래서
 //    「둘이 동시에 뜬다」가 코드로 불가능하다 — 검사로 막는 게 아니다.
 // ══════════════════════════════════════════════════════════════════════════
-import { TUTOR, LESSONS, aimKind } from './tutor-table.js';
+import { TUTOR, LESSONS, aimKind, GRIPS, GRIP_SHOW, ARMS_FULL } from './tutor-table.js';
 
 export function makeTutor() {
   return {
@@ -24,6 +24,8 @@ export function makeTutor() {
     age: 0,        // 켠 뒤 흐른 초 — 빗장의 나이
     done: [],      // 뗀 것들의 열쇠
     shown: 0,      // 몇 개를 보여 줬나 — 「다시 안 뜨나」를 재려고
+    // 손잡이별로 손 쓰는 법을 몇 번 봤나. **일곱과 따로 산다** (gripLine)
+    grips: {},
   };
 }
 
@@ -142,6 +144,44 @@ export function lineOf(t, aim = null) {
   if (L.at && L.hands && aimKind(aim) === L.at) return { text: L.hands, dim: false };
   const text = t.t >= TUTOR.showWhere ? L.where : L.line;
   return { text, dim: t.t >= TUTOR.fade };
+}
+
+/**
+ * **손 쓰는 법** — 가르침과 따로 산다 (tutor-table.js GRIPS).
+ *
+ * ★ 일곱 가르침은 끝이 있지만 **동사는 계속 는다.** 「떼었다 붙인다」와
+ *   「수리 네 동작」이 v31~v32 에 들어왔는데 아무도 안 가르쳤다.
+ *   여덟째 가르침을 만들면 또 설명서가 되므로, **겨누고 있는 그 순간에만**
+ *   뜨는 한 줄로 따로 뺐다.
+ *
+ * ★ 순서도 빗장도 없다. 다만 **몇 번 보고 나면 그친다** — 늘 뜨면 안내판이다.
+ *
+ * @param st { armsFull } 두 손으로 뭘 안고 있나
+ * @returns null | { text, dim }
+ */
+export function gripLine(t, aim, st = {}) {
+  if (!aim) return null;
+  // ★ **두 손이 찼을 때가 제일 급하다.** 조용히 안 잡히면 「고장났다」로
+  //   읽히므로, 이 줄만은 셈을 안 보고 늘 띄운다
+  if (st.armsFull && !String(aim).startsWith('spot:')) return { text: ARMS_FULL, dim: false };
+  const k = aimKind(aim);
+  const line = GRIPS[k];
+  if (!line) return null;
+  const seen = t.grips?.[k] ?? 0;
+  if (seen >= GRIP_SHOW) return null;
+  return { text: line, dim: false };
+}
+
+/**
+ * 그 손잡이의 손 쓰는 법을 **한 번 봤다**고 센다.
+ * ★ 뜬 프레임마다 세면 1초에 예순 번이라 즉시 그친다. **잡은 순간에만**
+ *   센다 — main.js 가 그때 부른다
+ */
+export function markGrip(t, aim) {
+  const k = aimKind(aim);
+  if (!k || !GRIPS[k]) return;
+  t.grips = t.grips ?? {};
+  t.grips[k] = (t.grips[k] ?? 0) + 1;
 }
 
 /** 지금 가르치는 것의 열쇠 — 검사·표시용 */

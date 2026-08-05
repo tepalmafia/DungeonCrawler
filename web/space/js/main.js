@@ -48,7 +48,7 @@ import {
   makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
   wearStep, wearFlip,
 } from './game/fault.js';
-import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
+import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire, gripLine, markGrip } from './game/tutor.js';
 import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
 import { WRIST, jobFor, actShows } from './game/wrist-table.js';
@@ -64,7 +64,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 34;
+export const VERSION = 35;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -284,6 +284,10 @@ let partsWarned = false;
 // 손에 물건이 없어 못 고친다고 **한 번만** 말한다. 매 프레임 외치면 소음이다
 let handWarned = false;
 /** 지금 수리 손 모양 — 수리 중이 아니면 null (world/hands.js 가 읽는다) */
+/** 지금 두 손이 찼나 — **가르침 줄이 읽는다.** 조용히 안 잡히면 「고장났다」로 읽힌다 */
+let armsFullNow = false;
+/** 지난 프레임에 잡고 있었나 — 「눌린 순간」을 잡으려고 */
+let heldWas = false;
 let repairPose = null;
 /** 지금 몇 번째 동작인가 — 넘어갈 때 소리와 말을 내려고 들고 있는다 */
 let repairAct = null;
@@ -454,13 +458,22 @@ function interactStep(dt) {
   //   어딘가 붙여 놓고 크랭크를 돌려야 한다.
   // ★ **조용히 막지 않는다.** 조용한 손잡이는 「어렵다」가 아니라
   //   「고장났다」로 읽힌다 — 윈치·접수구·해도대에서 이미 겪었다
-  const armsFull = carry.held && CARRY_KINDS[carry.held]?.both;
+  armsFullNow = !!(carry.held && CARRY_KINDS[carry.held]?.both);
+  const armsFull = armsFullNow;
   if (armsFull && !onSpot
     && (onValve || breaker || plate >= 0 || panel || onWinch || onHatch || onYoke || onCrank)) {
     nag(`${CARRY_KINDS[carry.held].name}을 안고 있습니다 — 어딘가 붙여 놓으세요`);
     onValve = false; breaker = null; plate = -1; panel = null;
     onWinch = false; onHatch = false; onYoke = false; onCrank = null;
   }
+
+  // ★ **잡은 순간에만** 손 쓰는 법을 한 번 봤다고 센다. 뜬 프레임마다
+  //   세면 1초에 예순 번이라 즉시 그친다.
+  // ★ `input.press` 를 안 쓴다 — 그건 `takePress()` 로 **소비해야** 꺼지는
+  //   깃발이라, 여기서 그냥 읽으면 아무도 안 가져간 프레임 내내 참이다.
+  //   눌린 **순간**은 잡음이 거짓→참으로 바뀐 그때다
+  if (input.hold && !heldWas && aimName) markGrip(tutor, aimName);
+  heldWas = input.hold;
 
   // ── 떼기 · 붙이기 ───────────────────────────────────────
   const carried = carryStep(carry, onSpot, input.hold, dt);
@@ -1511,12 +1524,17 @@ function frame(now) {
   //   가르침(아래·청록)은 *아직 안 한 일*이다. 같이 두면 뭉개진다
   if (!allDone(tutor)) {
     if (stepTutor(tutor, dt, tutorState()) === 'show') audio?.event('click');
-    const ln = lineOf(tutor, aimName);
-    if (ln) {
-      lesson.textContent = ln.text;
-      lesson.classList.toggle('dim', ln.dim);
-      lesson.hidden = false;
-    } else lesson.hidden = true;
+  }
+  // ★ **손 쓰는 법은 일곱이 끝나도 산다** (game/tutor.js gripLine).
+  //   동사는 계속 느는데 가르침은 일곱으로 못박혀 있다. 여덟째를 만들면
+  //   또 설명서가 되므로, 겨누고 있는 그 순간에만 뜨는 한 줄로 뺐다.
+  //   가르침이 있으면 그쪽이 먼저다 — 두 줄이 겹치면 둘 다 안 읽는다
+  const ln = (allDone(tutor) ? null : lineOf(tutor, aimName))
+    ?? gripLine(tutor, aimName, { armsFull: armsFullNow });
+  if (ln) {
+    lesson.textContent = ln.text;
+    lesson.classList.toggle('dim', ln.dim);
+    lesson.hidden = false;
   } else lesson.hidden = true;
 
   // ── 바닥 안내선 — **가르침이 도는 동안만** ─────────────────
