@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;   // 1 → 2: 장면(scenes) 칸이 늘었다 (2판)
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -49,6 +49,12 @@ export const FIELDS = {
   move: ['breath', 'spent'],
   carry: ['held', 'items'],
   tutor: ['i', 'done', 'shown', 'age', 'grips'],
+  /**
+   * ★ 장면 — **이걸 빠뜨리면 이어했을 때 구간 7 인데 장면은 구간 1 이다.**
+   *   `keys` 는 배치표에서 다시 뽑을 수 있지만 `phase`·`t` 는 아니다.
+   *   「여운 중이었는데 이어하니 예고부터」가 되면 그건 이어한 게 아니다
+   */
+  scenes: ['leg', 'keys', 'phase', 't', 'need', 'at', 'inLeg', 'done', 'hard', 'permanent'],
   /** 배 자체 — main.js 가 들고 있는 것들 */
   ship: ['heat', 'power', 'clock', 'seed'],
   /** 사람이 서 있던 자리 */

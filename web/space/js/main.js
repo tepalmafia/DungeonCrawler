@@ -62,6 +62,11 @@ import { bothHands } from './game/hand-table.js';
 import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
+import { SCENES } from './game/scene-table.js';
+import {
+  makeScenes, newLeg as sceneLeg, stepScene, running as sceneOn, warning as sceneWarn,
+  allowChore, leadOf, summary as sceneSummary,
+} from './game/scene.js';
 import { pack, apply, where } from './game/save.js';
 import { SAVE } from './game/save-table.js';
 import { saveRaw, loadRaw, clearRaw, canSave, hasSave } from './core/store.js';
@@ -70,7 +75,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 37;
+export const VERSION = 38;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -284,12 +289,18 @@ let wristJob = null;
 let bad = effectsOf(makeFaults('boot'));
 const tutor = makeTutor();
 
+// ══ 장면 — **구간이 사건을 부른다** (PLAN2H §1·§5) ══════════════
+// ★ 지금까지 사건은 저마다 제 타이머로 왔다. 그래서 **아무 때나 겹쳤고,
+//   아무 때도 안 겹쳤다.** 겹치는 것이 우연이면 절정이 없다.
+const scenes = makeScenes(seed);
+sceneLeg(scenes, 1);
+
 // ══ 저장 · 일시정지 ═══════════════════════════════════════════
 // ★ **2시간짜리에는 협상 불가다** (PLAN2H §11-1). 저장이 없으면
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes,
   ship: { heat, power, clock, seed },
   me,
 });
@@ -834,7 +845,12 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ **빗장** — 아직 항로도 못 골랐는데 고장부터 나면 뭐가 뭔지 모른다
   //   (TUTORIAL.md §2-2). 시계를 **멈춘다** — 안 그러면 앞의 것을 떼는
   //   순간 밀린 것이 한꺼번에 터진다
-  const calm = chase.phase !== PHASE.CHASE && route.phase === RPHASE.LEG;
+  // ★ **장면의 「대응」 박자에는 새 고장이 안 뜬다** (PLAN2H §7).
+  //   그때 뜨면 그건 긴장이 아니라 **방해**다 — 앞 판에서 내가 틀린 게
+  //   정확히 이것이라 규칙(`allowChore`)으로 못박았다.
+  //   예고와 여운에는 낸다. 예고 때 고장이 하나 있어야 「마치고 갈까」가 생긴다
+  const calm = chase.phase !== PHASE.CHASE && route.phase === RPHASE.LEG
+    && allowChore(scenes);
   if (canFire(tutor, 'fault') && stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
     const o = faults.open[faults.open.length - 1];
     // ★ **증상만 말한다.** 어디인지·무엇인지는 안 말한다 (PLAN §3-1)
@@ -909,8 +925,19 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   전에는 좌우 조작이 `stepHazard` 안에 있어서 **거점에서는 조종간이
   //   죽은 물건**이었다. 잡으면 마우스까지 뺏기니 얼어붙은 것처럼 보였다
   steerShip(hazard, dt, { atSeat: steering, push: steerPush });
+  // ★ **잔해밭은 이제 아무 구간에나 안 온다.** 배치표가 D 를 놓은 구간
+  //   (지금은 5) 에서만 열린다 — 「구간마다 이름이 있는 장면 하나」의 실체다.
+  //   ★ 이미 지대 안에 들어와 있으면 계속 돈다. 장면이 끝났다고 바위를
+  //     공중에서 지우면 그건 장면이 아니라 **끊긴 화면**이다
+  // ★ **가르침이 도는 동안은 예외다.** 여섯째 가르침(「조종석에서 비킵니다」)이
+  //   잔해를 봐야 열리는데, 배치표는 D 를 구간 5 에 뒀다. 그대로 두면
+  //   **구간 1 에서 가르침이 영영 안 끝난다** — 일곱 중 여섯째에서 멈추고
+  //   일곱째(보급)는 아예 안 열린다. 화면에는 안 사라지는 한 줄만 남는다.
+  //   구간 1 은 배치표가 「배를 익히는 자리」라고 적어 둔 곳이니(PLAN2H §5)
+  //   여기서 오는 잔해는 **장면이 아니라 배우는 것**이다
+  const learning = !allDone(tutor);
   const hev = hazard.phase !== HPHASE.IDLE
-    || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard'))
+    || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard') && (sceneOn(scenes, 'D') || learning))
     ? stepHazard(hazard, dt, { region: ship.outside.region })
     : null;
   if (hev === 'warn') {
@@ -960,7 +987,15 @@ function systemsStep(dt, valveOpen, regionMult) {
       : stepChase(chase, dt, power, heat + badSign, regionMult, { contactAt: 999, trackMult: 0 }))
     : stepChase(chase, dt, power,
       heat + badSign + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
-      { contactAt: contactAt(route), trackMult: trackMult(route) });
+      {
+        // ★ **자국은 늘 쌓인다. 붙는 것만 장면이 정한다.**
+        //   자국을 같이 껐더니 A 가 없는 구간에서는 열을 올려도 아무 일이
+        //   없어서 **기관실에 갈 이유가 사라졌다.** 그건 장면을 만든 게
+        //   아니라 게임의 절반을 끈 것이다. 위험은 계속 오르되,
+        //   실제로 따라붙는 것은 배치가 정한다 (PLAN2H §5)
+        contactAt: sceneOn(scenes, 'A') ? contactAt(route) : 999,
+        trackMult: trackMult(route),
+      });
   // ★ 캐는 동안에는 **위험이 안 빠진다.** 배가 멈춰 있고 윈치가 시끄러우니
   //   상대가 나를 놓칠 리가 없다.
   //   처음엔 그냥 위험을 더하기만 했는데, 자국이 낮으면 stepChase 가 초당
@@ -1421,6 +1456,13 @@ window.SPACE = {
     return true;
   },
   forceHazard() { hazard.next = 0; hazard.inLeg = 0; return stepHazard(hazard, 0.001, { region: ship.outside.region }); },
+  /**
+   * 잔해를 **장전만** 한다 — 밟는 것은 게임이 밟는다.
+   * ★ `forceHazard` 는 stepHazard 를 직접 불러서 **장면 빗장을 건너뛴다.**
+   *   그걸로 「배치가 없으면 안 온다」를 재면 검사가 저 혼자 통과한다 —
+   *   장전만 하고 문이 열리나는 frame 이 답하게 둔다
+   */
+  armHazard() { hazard.next = 0; hazard.inLeg = 0; hazard.phase = HPHASE.IDLE; return true; },
   /** 예고를 건너뛴다 */
   skipWarn() { if (hazard.phase === 'warn') hazard.t = hazard.need; },
   /** 보급 — 식량·부품·광석 */
@@ -1457,6 +1499,19 @@ window.SPACE = {
       note: pauseBox.querySelector('.note').textContent,
     };
   },
+  /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
+  get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /** 구간을 갈아 끼운다 — 검사가 12구간을 다 걸어가지 않아도 되게 */
+  setLeg(n) { route.leg = n - 1; sceneLeg(scenes, n); return sceneSummary(scenes); },
+  /**
+   * 장면 시계를 앞으로 민다 — **밟는 것은 게임이 밟는다.**
+   * ★ 여기서 stepScene 을 직접 돌리면 배너도 소리도 안 난다 (그건 frame 에
+   *   있다). 그러면 「검사는 통과하는데 화면은 아무 일도 없는」 상태가 된다 —
+   *   이 저장소가 제일 자주 밟은 함정이라 **시계만 밀고 밟기는 안 한다**
+   */
+  seekScene(sec = 600) { scenes.inLeg += sec; return sceneSummary(scenes); },
+  /** 지금 박자를 끝낸 것으로 친다 — 다음 프레임에 게임이 다음 박자로 넘긴다 */
+  skipBeat() { scenes.t = scenes.need; return sceneSummary(scenes); },
   saveNow() { return saveNow(); },
   clearSave() { clearRaw(); },
   pause(v) { showPause(v ?? !paused); return paused; },
@@ -1581,8 +1636,24 @@ function frame(now) {
   // ── 항로가 나아간다 ────────────────────────────────────
   // ★ 전에는 구역이 95초마다 **돌았다.** 지금은 관측실에서 고른 갈래가
   //   정하고, **추진을 켜야 나아간다** (game/route.js).
+  // ── 장면 — **네 박자** (PLAN2H §2) ────────────────────
+  // ★ 항로보다 **먼저** 돈다. 구간이 끝나는 프레임에 stepRoute 가 leg 를
+  //   올리는데, 그 뒤에 장면을 밟으면 **새 구간의 장면을 옛 구간 길이로**
+  //   재게 된다. 한 프레임짜리지만 「예고가 0초」 같은 모양으로 나온다
+  const sev = stepScene(scenes, dt, route.need || 600);
+  if (sev === 'warn') {
+    // ★ **무엇이 오는지만 말한다. 어디가 잘못됐나는 안 가르친다** (PLAN §3-1)
+    const lead = leadOf(scenes);
+    if (lead) { banner = lead; bannerT = 4.0; audio?.event('fault'); }
+  }
+
   const rev = stepRoute(route, dt, power);
-  if (rev === 'arrive' || rev === 'end') newLeg(hazard);
+  if (rev === 'arrive' || rev === 'end') {
+    newLeg(hazard);
+    // ★ 구간이 바뀌면 **다음 장면을 예약한다.** route.leg 는 0 부터 세고
+    //   배치표는 1 부터 센다 — 여기서 한 번만 맞춘다
+    sceneLeg(scenes, route.leg + 1);
+  }
   if (rev === 'arrive') {
     // ★ **여기서 저장한다.** 거점은 원래 숨 쉬는 자리이고, 12구간이면
     //   12번이다. 초마다 저장하면 「죽기 직전으로 되돌리기」가 된다

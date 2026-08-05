@@ -20,6 +20,7 @@ import { makeHazard } from '../web/space/js/game/hazard.js';
 import { makeMove } from '../web/space/js/game/move.js';
 import { makeCarry } from '../web/space/js/game/carry.js';
 import { makeTutor } from '../web/space/js/game/tutor.js';
+import { makeScenes, newLeg as sceneLeg } from '../web/space/js/game/scene.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -34,6 +35,7 @@ const fresh = () => ({
   move: makeMove(),
   carry: makeCarry(),
   tutor: makeTutor(),
+  scenes: (() => { const sc = makeScenes('SPACE1'); sceneLeg(sc, 1); return sc; })(),
   ship: { heat: 0, power: { thrust: true, cool: true, sensor: false }, clock: 0, seed: 'SPACE1' },
   me: { x: 0, z: 0, yaw: 0, pitch: 0 },
 });
@@ -64,6 +66,7 @@ console.log('\n[2] ★ **저장했다 불러오면 같은가** — 반쯤 저장
   a.move.breath = 0.4; a.move.spent = true;
   a.carry.held = 'coolant';
   a.tutor.i = 7; a.tutor.done = ['walk', 'route']; a.tutor.grips = { spot: 2 };
+  a.scenes.leg = 9; a.scenes.keys = ['A', 'F']; a.scenes.phase = 'act'; a.scenes.done = ['A', 'B'];
   a.ship.heat = 58; a.ship.clock = 2400; a.ship.power = { thrust: false, cool: true, sensor: true };
   a.me.x = 3.2; a.me.z = 12.4; a.me.yaw = 1.1;
 

@@ -5,8 +5,9 @@
 //    node tools/space-route.js --csv
 //
 //  ★ 왜 필요한가
-//    「구간 8~12분 · 회차 60~90분 · 구간당 추격 1~2회」는 PLAN §11 과
-//    GAP.md §4 에 적어 둔 목표다. 이건 손으로 20분 돌려 봐야 아는 종류가
+//    「구간 8~12분 · 회차 100~140분 · 구간당 추격 1~2회」는 PLAN2H §5·§10 에
+//    적어 둔 목표다 (회차 목표는 60~90 에서 옮겼다 — 20분 회차를 반복하던
+//    전제가 「2시간 한 번의 여정」으로 바뀌었다). 이건 손으로 20분 돌려 봐야 아는 종류가
 //    아니라 **계산으로 바로 나오는** 종류다. 감으로 맞추면 반드시
 //    「한 시간짜리가 세 시간이 되거나, 추격이 아예 안 붙거나」가 된다.
 //    추격 하나를 잰 것이 space-sim.js 였고, 이건 **그 위층**이다.
@@ -177,7 +178,12 @@ const lapMins = laps.map(([, r]) => r.sec / 60);
 const chasePerLeg = allLegs.map((l) => l.chases);
 
 const ok1 = legMins.every((m) => m >= 8 && m <= 12);
-const ok2 = lapMins.every((m) => m >= 60 && m <= 90);
+// ★ **회차 목표가 바뀌었다** — 20분 회차를 반복하던 전제가 「2시간 한 번의
+//   여정」으로 바뀌었고(PLAN2H.md · 2026-08-05), 구간이 8 → 12 가 됐다.
+//   여기 60~90 을 그대로 두면 **옛 기획서를 지키는 검사**가 되어, 맞게 고친
+//   쪽이 빨개진다. 숫자를 안 고치고 놔두면 도구가 게임을 뒤로 끈다.
+//   PLAN2H §5 의 배치표가 0~132분이므로 100~140 으로 잡는다.
+const ok2 = lapMins.every((m) => m >= 100 && m <= 140);
 // 구간당 추격 1~2회. **평균**으로 본다 — 구간마다 0회가 섞이는 것은 정상이다
 // (조심해서 간 구간은 안 붙는 게 맞다). 0회만 있거나 3회 넘으면 실패다
 const avgChase = chasePerLeg.reduce((s, x) => s + x, 0) / chasePerLeg.length;
@@ -194,7 +200,7 @@ const ok6 = hide.press < fast.press && hide.sec > fast.sec;
 
 console.log('\n  목표 (docs/space/PLAN.md §11 · GAP.md §4)');
 console.log(`  ${ok1 ? '✔' : '✘'} 구간 하나가 8~12분          ${Math.min(...legMins).toFixed(1)} ~ ${Math.max(...legMins).toFixed(1)}분`);
-console.log(`  ${ok2 ? '✔' : '✘'} 회차 하나가 60~90분         ${lapMins.map((m) => m.toFixed(0) + '분').join(' · ')}`);
+console.log(`  ${ok2 ? '✔' : '✘'} 회차 하나가 100~140분       ${lapMins.map((m) => m.toFixed(0) + '분').join(' · ')}`);
 console.log(`  ${ok3 ? '✔' : '✘'} 구간당 추격 평균 1~2회      ${avgChase.toFixed(2)}회 (최대 ${Math.max(...chasePerLeg)})`);
 console.log(`  ${ok4 ? '✔' : '✘'} 어느 길로도 끝까지 간다     ${laps.filter(([, r]) => r.done).length}/${laps.length}`);
 console.log(`  ${ok5 ? '✔' : '✘'} 고르는 것이 결과를 가른다   압박 차 ${pressSpread.toFixed(0)} · 시간 차 ${timeSpread.toFixed(0)}분`);
