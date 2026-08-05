@@ -365,7 +365,7 @@ console.log('\n[0-6b] 문 — **가까이 가면 열리고, 끼면 손으로 연
   // ★ 닫히는 데 dwell 1.4 + closeTime 0.9 = 게임 시간 2.3초인데, 헤드리스는
   //   실시간의 20분의 1이라 **실제로는 46초**다. 40초로 뒀다가 아슬아슬하게
   //   못 넘겨 「문이 길을 안 막는다」로 실패했다 — 게임이 아니라 도구가 성급했다
-  await until(() => SPACE.doors.find((d) => d.key === 'engine').k === 0, 100, '문 닫히기');
+  await until(() => SPACE.doors.find((d) => d.key === 'engine').k === 0, 150, '문 닫히기');
   ok(!(await S(() => SPACE.canStand(0, 10.0))), '멀리 있으면 문이 닫혀 길을 막는다');
 
   await S(() => SPACE.put(0, 8.6, Math.PI, -0.02));
@@ -393,7 +393,12 @@ console.log('\n[0-6b] 문 — **가까이 가면 열리고, 끼면 손으로 연
   ok(!!hit, `설 수 있는 자리에서 크랭크가 잡힌다 (${hit ? `${hit.x},${hit.z}` : '안 잡힌다'})`);
   if (hit) {
     await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
-    const turning = await until(() => SPACE.doors.find((d) => d.key === 'engine').held > 0.05, 40, '크랭크 돌기');
+    // ★ **다 돌 때까지 안 기다린다.** 크랭크는 9초를 돌려야 풀리는데
+    //   헤드리스는 게임 시간이 1/20 이라 3분이 넘는다. 여기서 묻는 것은
+    //   「손이 닿나」지 「몇 초 걸리나」가 아니다 — 그건 space-door.js 가
+    //   브라우저 없이 잰다. 0.05 로 뒀다가 0.04 에서 지쳐 빨갛게 나왔고,
+    //   그때 게임은 멀쩡히 돌고 있었다 (space-guard.js 에서도 같은 것을 겪었다)
+    const turning = await until(() => SPACE.doors.find((d) => d.key === 'engine').held > 0.01, 40, '크랭크 돌기');
     const h = (await S(() => SPACE.doors)).find((d) => d.key === 'engine');
     ok(turning, `잡으니 크랭크가 돌아간다 (${h.held})`);
     await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
