@@ -615,9 +615,14 @@ export function buildOutside(scene, z) {
     const r = 200 + Math.random() * 90;
     const th = Math.random() * Math.PI * 2;
     const ph = Math.acos(2 * Math.random() - 1);
+    // ★ **배를 통째로 감싼다.** 전에는 `z - abs(...)` 라 별이 조종석
+    //   **앞쪽으로만** 뿌려졌다. 조종석에서는 멀쩡해 보였지만, 곁방 창은
+    //   옆으로 나 있어서 구멍을 뚫어도 **볼 것이 하나도 없었다.**
+    //   관측실이 「밖을 본다」가 목적인데 밖이 없었던 이유의 절반이다
+    //   (docs/space/REF.md).
     fp[i * 3] = r * Math.sin(ph) * Math.cos(th);
     fp[i * 3 + 1] = r * Math.cos(ph) * 0.6;
-    fp[i * 3 + 2] = z - Math.abs(r * Math.sin(ph) * Math.sin(th)) * 0.8;
+    fp[i * 3 + 2] = z + r * Math.sin(ph) * Math.sin(th);
     const w = 0.62 + Math.random() * 0.32;
     fc[i * 3] = w; fc[i * 3 + 1] = w; fc[i * 3 + 2] = 1;
   }
