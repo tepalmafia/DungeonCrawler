@@ -303,42 +303,18 @@ console.log('\n[0-5] 접수구 — 거점에서만 바꾼다');
   await S(() => SPACE.pick(SPACE.route.offer[1]));
 }
 
-console.log('\n[0-6] 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B)');
+// ★ **조종간은 여기서 안 잰다.** `tools/space-yoke.js` 가 통째로 맡는다.
+//
+//   여기 있던 검사는 「좌석 앞 (0, -6.2) 에 서서 고개를 -0.22 숙이면
+//   조종간이 잡힌다」였는데, 그건 **판정 상자가 폭 2.8m 짜리 통짜**여서
+//   콘솔 아무 데나 겨눠도 맞던 시절의 자리다. 조종간을 제자리로 옮기고
+//   상자를 보이는 크기로 줄이자 이 검사가 빨갛게 됐다 — 게임이 나빠진
+//   것이 아니라 **검사가 낡은 것**이었다.
+//
+//   그래서 옮기면서 자리를 다시 적는 대신 **없앴다.** 같은 것을 두 도구가
+//   재면 언젠가 둘이 갈리고, 그때 어느 쪽이 맞는지 알 길이 없다.
+//   조종간이 보이나·잡히나·먹나는 `space-yoke.js` 셋으로 나뉘어 있다.
 {
-  // ★ 여기서 볼 것은 「손이 닿나」다. **피할 수 있나·15% 안에 드나는**
-  //   tools/space-fly.js 가 브라우저 없이 이미 잰다. 헤드리스는 게임 시간이
-  //   실시간의 20분의 1이라 예고 30초짜리를 여기서 끝까지 볼 수 없다.
-  await S(() => SPACE.put(0, -6.2, 0, -0.22));   // 좌석 앞, 조종간을 내려다본다
-  await p.waitForTimeout(2200);
-  const gotYoke = await until(() => SPACE.aim === 'yoke', 20, '조종간 조준');
-  ok(gotYoke, `조준선이 조종간을 잡는다 (${await S(() => SPACE.aim)})`);
-
-  // 잡는다 — 밸브·윈치와 같은 규약이다
-  await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
-  await until(() => SPACE.fly.steering, 20, '조종간 잡기');
-  ok(await S(() => SPACE.fly.steering), '잡으면 조종간이 손에 걸린다');
-
-  // ★ 잡은 채로 마우스를 옆으로 — **시야가 아니라 배가 움직인다.**
-  //   그래서 yaw 가 그대로인지도 같이 본다. 여기가 갈리면 조준을 놓친다
-  const yaw0 = await S(() => SPACE.look.yaw);
-  for (let i = 0; i < 14; i++) {
-    await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 40 })));
-    await p.waitForTimeout(160);
-  }
-  const f1 = await S(() => SPACE.fly);
-  const yaw1 = await S(() => SPACE.look.yaw);
-  ok(f1.lane > 0.1, `밀면 배가 기운다 (lane ${f1.lane})`);
-  ok(Math.abs(yaw1 - yaw0) < 0.01, `미는 동안 시야는 안 돈다 (yaw ${yaw0.toFixed(3)} → ${yaw1.toFixed(3)})`);
-
-  // 놓으면 가운데로 돌아온다 — **잡고 있어야 한다**는 뜻이다
-  await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
-  await S((v) => { window.__lane0 = v; }, f1.lane);
-  const back = await until(() => SPACE.fly.lane < window.__lane0 - 0.01, 30, '가운데로 돌아오기');
-  const f2 = await S(() => SPACE.fly);
-  ok(!f2.steering, '놓으면 손이 떨어진다');
-  ok(back, `놓으면 가운데로 돌아온다 (${f1.lane} → ${f2.lane})`);
-  if (SP) await p.screenshot({ path: `${SP}/ch-5-조종간.png` });
-
   // 예고는 **어느 방에 있든** 온다 — 기관실에서 모르고 있다가 맞으면
   // 「정비하러 가는 것 자체가 벌」이 된다 (FLYING.md §1-2)
   await S(() => { SPACE.put(0, 14.5, Math.PI, -0.2); SPACE.forceHazard(); });

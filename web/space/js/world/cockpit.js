@@ -64,6 +64,13 @@ export const SEATS = [[-1.05, -6.95], [1.05, -6.95]];
 const SILL = 0.82;      // 창 아래끝
 // 조종간이 서는 z. 좌석(-6.95)보다 앞, 콘솔(-7.95~)보다 뒤 — **둘 사이**
 const YOKE_Z = -7.42;
+// 조종간 가로대 높이.
+// ★ 1.06 에서 올렸다. 그 높이에서는 **서서 자연스럽게 내려다보는 각도**
+//   (고개 -0.2 쯤)에 안 걸리고, -0.30 까지 숙여야 겨우 한가운데 왔다.
+//   콘솔 상판이 0.86 이므로 1.18 이면 여전히 「상판에서 올라온 기둥 위」로
+//   읽히면서 눈에는 먼저 들어온다. 판정 상자도 같이 키웠다 —
+//   **작은 것을 정확히 겨누게 하는 건 어려움이 아니라 짜증이다**
+const YOKE_Y = 1.18;
 const HEAD = 2.34;      // 창 위끝
 
 function seg(a, b) {
@@ -537,12 +544,12 @@ export function buildCockpit(parent, room, H) {
   //   「뭔가 맞긴 했다」밖에 못 말하고, 그건 이번에 난 사고(보이는 것과
   //   잡히는 것이 다르다)를 그대로 통과시킨다
   yoke.name = '조종간';
-  yoke.position.set(0, 1.06, YOKE_Z);
+  yoke.position.set(0, YOKE_Y, YOKE_Z);
   g.add(yoke);
   yokes.push(yoke);
 
   // 기둥 — 콘솔 상판(0.86)에서 올라온다. 어디서 나온 물건인지 보여야 한다
-  box(g, 0.13, 0.26, 0.13, FRAME, 0, 0.93, YOKE_Z).name = '조종간기둥';
+  box(g, 0.13, YOKE_Y - 0.80, 0.13, FRAME, 0, (0.80 + YOKE_Y) / 2, YOKE_Z).name = '조종간기둥';
   // 밑동 덮개 — 셔틀 문법. 급한 조작기는 **움푹한 자리에 앉는다**
   const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.06, 12), DARK);
   collar.name = '조종간밑동';
@@ -561,10 +568,10 @@ export function buildCockpit(parent, room, H) {
   //   통짜라 콘솔 절반이 「조종간」이었다. 손잡이보다 조금 넉넉한 정도로
   //   (작은 것을 정확히 겨누게 하면 그건 어려움이 아니라 짜증이다)
   const yokeHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.86, 0.46, 0.40),
+    new THREE.BoxGeometry(0.86, 0.56, 0.42),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
-  yokeHit.position.set(0, 1.06, YOKE_Z);
+  yokeHit.position.set(0, YOKE_Y, YOKE_Z);
   g.add(yokeHit);
 
   // ── 조명 ──────────────────────────────────────────────

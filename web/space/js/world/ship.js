@@ -226,6 +226,11 @@ function solid(g) {
  * 1번은 점검 패널 몫이라 랙은 2번부터다 (game/bay-table.js).
  */
 const bayNext = {};
+/**
+ * 베이 번호 → 그 번호를 단 물건. **벨크로 자리가 이걸 읽는다**
+ * (world/carry.js — 「기관 4」에 붙인다는 말이 좌표를 안 적고도 성립한다).
+ */
+const byBay = {};
 function nextBayOf(room) {
   return () => {
     bayNext[room] = (bayNext[room] ?? FIRST_RACK - 1) + 1;
@@ -258,6 +263,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, a
   const out = rackRun(parent, axis, fixed, from, to, facing, tint, seed,
     room ? nextBayOf(room) : null, taken(avoid, axis, fixed));
   for (const g of out) {
+    if (g.userData.bay) byBay[g.userData.bay] = g;
     const ry = g.rotation.y;
     blockBox(g.position.x - 0.21 * Math.sin(ry), g.position.z - 0.21 * Math.cos(ry), 0.45, 0.21, ry);
   }
@@ -265,13 +271,15 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, a
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-export function buildShip(scene) {
+export function buildShip(scene, camera = null) {
   let chart = null;
   let bench = null;
   let foodGauge = null, winch = null, tradeHatch = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
+  for (const k of Object.keys(bayNext)) delete bayNext[k];
+  for (const k of Object.keys(byBay)) delete byBay[k];
 
   const matWall = surface('surf/hull_wall', { color: 0x4a4f57, roughness: 0.85, metalness: 0.18, repeat: [2, 1] });
   const matEngine = surface('surf/engine_wall', { color: 0x4b423c, roughness: 0.95, metalness: 0.22, repeat: [3, 1] });
@@ -720,6 +728,6 @@ export function buildShip(scene) {
 
   // ★ `group` — tools 가 배 안에만 광선을 쏘려고 쓴다 (창밖·성운은 뺀다)
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    marks,
+    marks, byBay,
     foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

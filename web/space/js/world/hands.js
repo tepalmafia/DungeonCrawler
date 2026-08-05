@@ -142,6 +142,16 @@ function oneHand(side) {
       for (const f of fs) f.bend(t);
       th.bend(t * 0.8);
     },
+    /**
+     * **손가락을 따로 접는다** — 수리 네 동작이 여기를 쓴다
+     * (game/repair-table.js). 「누르고 뽑고 당기고」가 같은 주먹이면
+     * 그건 네 번 기다리는 것이지 손맛이 아니다.
+     * @param p { fingers:[4], thumb }
+     */
+    pose(p) {
+      for (let i = 0; i < fs.length; i++) fs[i].bend(p.fingers[i] ?? 0);
+      th.bend(p.thumb ?? 0);
+    },
   };
 }
 
@@ -174,6 +184,12 @@ function drawnHand(side, art) {
   return {
     group: g,
     grip(t) { open.material.opacity = 1 - t; grip.material.opacity = t; },
+    // 그림 손은 마디가 없으므로 **손가락 평균만큼 쥔다.** 그림이 두
+    // 장뿐이라 할 수 있는 것이 이것뿐이고, 그림이 늘면 여기가 늘어난다
+    pose(p) {
+      const t = (p.fingers.reduce((a, v) => a + v, 0) / 4) * 0.75 + (p.thumb ?? 0) * 0.25;
+      open.material.opacity = 1 - t; grip.material.opacity = t;
+    },
   };
 }
 
@@ -185,6 +201,7 @@ function drawnHand(side, art) {
  *   s.grip   0~1  잡고 있나
  *   s.shaky  굶어서 떨리나 (PLAN §5-2)
  *   s.both   양손을 쓰나 (조종간·밸브) — 아니면 오른손만 나간다
+ *   s.pose   수리 네 동작의 손 모양 (game/repair-table.js poseAt). 없으면 보통 쥠
  */
 export function buildHands(camera) {
   const g = new THREE.Group();
@@ -201,12 +218,17 @@ export function buildHands(camera) {
   g.add(L.group, R.group);
 
   let reach = 0, grip = 0, both = 0, sway = 0;
+  // 수리 동작의 손목 돌림·밀기는 **이어서 따라간다.** 딱딱 끊기면
+  // 손이 순간이동한다
+  let roll = 0, push = 0;
 
   function update(s, dt = 0.016) {
     const k = (a, b, sp) => a + (b - a) * Math.min(1, dt * sp);
     reach = k(reach, s.reach ?? 0, HAND.reachSpeed);
     grip = k(grip, s.grip ?? 0, HAND.gripSpeed);
     both = k(both, s.both ? 1 : 0, 6);
+    roll = k(roll, s.pose?.roll ?? 0, 10);
+    push = k(push, s.pose?.push ?? 0, 10);
     sway += dt;
 
     // ★ 굶으면 **떨린다** — 「손이 곧 상태창」 (PLAN §5-2). 체력바를 안 만드는
@@ -230,7 +252,16 @@ export function buildHands(camera) {
         side * (rest.ry + (aim.ry - rest.ry) * reach * out),
         side * (rest.rz + (aim.rz - rest.rz) * reach * out),
       );
-      h.grip(grip * out);
+      // ★ 수리 중이면 **손 모양이 동작을 따라간다.** 아니면 보통 쥠
+      if (s.pose && out > 0.5) h.pose({
+        fingers: s.pose.fingers.map((v) => v * grip),
+        thumb: s.pose.thumb * grip,
+      });
+      else h.grip(grip * out);
+      // 손목을 돌리고 앞뒤로 민다 — 「돌리는 중」·「미는 중」이 눈에 보여야
+      // 네 동작이 넷으로 읽힌다
+      h.group.rotation.z += side * roll * out;
+      h.group.position.z += push * out;
     }
   }
   update({}, 1);
@@ -238,6 +269,7 @@ export function buildHands(camera) {
   return {
     group: g,
     update,
-    get at() { return { reach: +reach.toFixed(2), grip: +grip.toFixed(2), both: +both.toFixed(2) }; },
+    get at() { return { reach: +reach.toFixed(2), grip: +grip.toFixed(2), both: +both.toFixed(2),
+      roll: +roll.toFixed(2), push: +push.toFixed(3) }; },
   };
 }

@@ -52,14 +52,19 @@ import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/t
 import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
 import { WRIST, jobFor, actShows } from './game/wrist-table.js';
+import { poseAt, actAt } from './game/repair-table.js';
 import { buildHolo } from './world/holo.js';
 import { buildHands } from './world/hands.js';
 import { bothHands } from './game/hand-table.js';
 import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
+import { buildCarry } from './world/carry.js';
+import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-table.js';
+import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
+  summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 30;
+export const VERSION = 31;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -115,6 +120,11 @@ scene.environment = makeEnvironment(renderer);
 scene.environmentIntensity = 0.75;
 
 const ship = buildShip(scene);
+// ── 옮길 수 있는 물건 ────────────────────────────────────────
+// ★ 벨크로 자리는 **베이 번호**로 찾는다 (game/carry-table.js SPOTS).
+//   좌표를 여기 또 적으면 랙을 옮길 때마다 자리가 허공에 남는다
+const carryView = buildCarry(ship.group, camera, ship.byBay);
+const carry = makeCarry();
 const input = new Input(canvas);
 
 // ── 소리 ────────────────────────────────────────────────────
@@ -270,7 +280,13 @@ let steerPush = 0;
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let winching = false;     // 지금 윈치를 잡고 있나
 let trading = 0;          // 접수구를 얼마나 잡고 있었나
-let partsWarned = false;  // 부품이 없다고 한 번만 말한다
+let partsWarned = false;
+// 손에 물건이 없어 못 고친다고 **한 번만** 말한다. 매 프레임 외치면 소음이다
+let handWarned = false;
+/** 지금 수리 손 모양 — 수리 중이 아니면 null (world/hands.js 가 읽는다) */
+let repairPose = null;
+/** 지금 몇 번째 동작인가 — 넘어갈 때 소리와 말을 내려고 들고 있는다 */
+let repairAct = null;
 let repairing = null;     // 지금 잡고 있는 고장
 let hearNear = 0;         // 소리가 얼마나 가까운가 0~1
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
@@ -401,7 +417,7 @@ function interactStep(dt) {
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
-    ...ship.doors.map((d) => d.view.hit)];
+    ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -412,6 +428,7 @@ function interactStep(dt) {
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false;
   let onCrank = null;
+  let onSpot = null;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
@@ -426,7 +443,33 @@ function interactStep(dt) {
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
       if (dv) { onCrank = dv; break; }
+      const sp = carryView.spotOf(o);
+      if (sp) { onSpot = sp; break; }
     }
+  }
+
+  // ── 두 손으로 안고 있으면 **아무 손잡이도 못 잡는다** ──────
+  // ★ 이게 「옮길 수 있는 물건」이 게임이 되는 지점 전부다
+  //   (game/carry-table.js). 냉매통을 안고 가는 길에 문이 끼면 통을
+  //   어딘가 붙여 놓고 크랭크를 돌려야 한다.
+  // ★ **조용히 막지 않는다.** 조용한 손잡이는 「어렵다」가 아니라
+  //   「고장났다」로 읽힌다 — 윈치·접수구·해도대에서 이미 겪었다
+  const armsFull = carry.held && CARRY_KINDS[carry.held]?.both;
+  if (armsFull && !onSpot
+    && (onValve || breaker || plate >= 0 || panel || onWinch || onHatch || onYoke || onCrank)) {
+    nag(`${CARRY_KINDS[carry.held].name}을 안고 있습니다 — 어딘가 붙여 놓으세요`);
+    onValve = false; breaker = null; plate = -1; panel = null;
+    onWinch = false; onHatch = false; onYoke = false; onCrank = null;
+  }
+
+  // ── 떼기 · 붙이기 ───────────────────────────────────────
+  const carried = carryStep(carry, onSpot, input.hold, dt);
+  if (carried === 'pulled') {
+    banner = `${CARRY_KINDS[carry.held].name}을 떼어 냈습니다`; bannerT = 2.0;
+    audio?.event('fixed');
+  } else if (carried === 'stuck') {
+    banner = '붙였습니다'; bannerT = 1.6;
+    audio?.event('fixed');
   }
   // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
   const canPick = route.phase === RPHASE.PORT;
@@ -494,17 +537,51 @@ function interactStep(dt) {
   }
   if (!input.hold) partsWarned = false;
 
-  if (fixHere && input.hold && !shortParts) {
+  // ── 「챙긴다 → 쓴다」가 **말뿐이 아니게** ────────────────
+  // ★ 두 걸음짜리 고장은 벌써 「정비실에서 냉매 한 통을 챙긴다 →
+  //   기관실에서 갈아 넣는다」라고 말하고 있었는데, **실제로 들리는
+  //   것이 없었다.** 패널을 5초 잡고 8초 잡으면 끝이었다.
+  //   말과 손이 어긋나 있었고, 그건 계기가 거짓말하는 것과 같다.
+  const plan = fixHere ? carryPlan(fixHere.steps) : null;
+  // 쓰는 걸음인데 손에 그게 없으면 **시작도 안 된다**
+  const wantHand = plan && fixHere.step === plan.takeAt && carry.held !== plan.kind;
+  if (wantHand && input.hold && !handWarned) {
+    handWarned = true;
+    nag(`${CARRY_KINDS[plan.kind].name}이 손에 없습니다 — 정비실에서 챙겨 옵니다`);
+  }
+  if (!input.hold) handWarned = false;
+
+  if (fixHere && input.hold && !shortParts && !wantHand) {
     repairing = fixHere;
     // 굶으면 **잡고 있어도 더디다** — 손이 떨려 정밀 작업이 어긋난다
     const ev = repairStep(fixHere, dt * (shaky(supply) ? FOOD.handMult : 1));
+    // ── 네 동작 ─────────────────────────────────────────
+    // ★ 총 시간은 **안 바뀐다.** 원래 있던 `hold` 초를 넷이 나눠 가진다 —
+    //   늘리면 층·회차 길이가 통째로 밀린다 (repair-table.js)
+    const need = fixHere.steps[fixHere.step]?.hold ?? 0;
+    repairPose = poseAt(fixHere.held, need);
+    const now = actAt(fixHere.held, need).act.key;
+    if (now !== repairAct) {
+      repairAct = now;
+      // **말로도 나온다.** 손만 바뀌면 뭘 하는 중인지 모른다
+      banner = repairPose.what; bannerT = 1.4;
+      audio?.event('latch');
+    }
     if (ev === 'step') {
+      // 「챙긴다」를 마쳤으면 **손에 들려 준다.** 이미 뭘 들고 있으면
+      // 못 받는다 — 손은 하나라는 규칙이 여기서도 같다
+      if (plan && fixHere.step === plan.takeAt && !giveCarry(carry, plan.kind)) {
+        nag('손이 비어야 챙깁니다 — 들고 있는 것을 붙여 놓으세요');
+      }
       const nx = fixHere.steps[fixHere.step];
       banner = nx?.what ? `${nx.what} — ${ROOM_NAME[nx.at] ?? nx.at}` : '한 군데 더 있습니다';
       bannerT = 2.6;
       audio?.event('latch');
     }
     if (ev === 'fixed') {
+      repairPose = null; repairAct = null;
+      // 쓴 물건은 손에서 없어지고 정비실 제자리로 돌아간다
+      if (plan) takeCarry(carry, plan.kind);
       spendParts(supply, needParts);
       // ★ **여기서야 원인을 말해 준다.** 고치기 전에 말하면 진단이 사라진다
       banner = fixHere.reveal;
@@ -522,7 +599,11 @@ function interactStep(dt) {
     //   0 이 될 때까지 붙들고 있어야 되돌아가는 것이 보인다.
     // 굶으면 **잡고 있어도** 더 미끄러진다 — 손이 떨린다 (PLAN §5-2)
     slip(repairing, dt * slipMult(supply));
-    if (repairing && repairing.held <= 0) repairing = null;
+    // 놓으면 **손 모양도 되돌아간다.** 손이 앞서 가면 계기가 거짓말하는 것과 같다
+    repairPose = repairing
+      ? poseAt(repairing.held, repairing.steps[repairing.step]?.hold ?? 0) : null;
+    repairAct = repairPose?.key ?? null;
+    if (repairing && repairing.held <= 0) { repairing = null; repairPose = null; repairAct = null; }
   }
 
   // 패널 불 — **그 자리가 문제일 때만** 켜진다. 다 켜 두면 안내판이 된다.
@@ -604,14 +685,16 @@ function interactStep(dt) {
     b.lampMat.color.set(on ? b.tint : 0x2a2f36);
   }
 
-  aimName = onCrank ? `crank:${onCrank.key}`
+  aimName = onSpot ? `spot:${onSpot}`
+    : onCrank ? `crank:${onCrank.key}`
     : onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
       : (panel ? `panel:${panel.room}`
         : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : null))))));
   cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
-    || onYoke || (crankDoor && crankDoor.jammed)));
+    || onYoke || (crankDoor && crankDoor.jammed)
+    || (onSpot && (carry.held ? !atSpot(carry, onSpot) : !!atSpot(carry, onSpot)))));
   return coolFor > 0;
 }
 
@@ -663,6 +746,9 @@ function systemsStep(dt, valveOpen, regionMult) {
       audio?.event('fixed');
     }
   }
+  // 옮길 수 있는 물건을 제자리에 놓는다 — 손에 든 것은 카메라에 붙는다
+  carryView.place(carry.held, Object.fromEntries(carry.items.map((it) => [it.kind, it.spot])));
+
   // 문짝을 그리고, **닫힌 문은 길을 막는다**
   for (const d of doors.list) {
     const v = doorView[d.key];
@@ -985,6 +1071,23 @@ window.SPACE = {
   },
   /** 문 여섯이 지금 어떤가 — 검사용 */
   get doors() { return doorSummary(doors); },
+  /** 옮길 수 있는 물건이 지금 어떤가 — 검사용 */
+  get carry() {
+    const g = carryView.items[carry.held];
+    let root = g ?? null;
+    while (root?.parent) root = root.parent;
+    return {
+      ...carrySummary(carry),
+      // ★ **화면에 정말 있나.** 손에 든 것은 카메라의 자식이라, 카메라가
+      //   장면에 없으면 코드는 다 도는데 그림만 없다 — 손목에서 겪었다
+      onScreen: !!g && root === scene,
+      spots: Object.keys(carryView.spots),
+    };
+  },
+  /** 손에 든 것의 그림 — 검사가 화면에서 몇 자리를 먹나 재려고 묻는다 */
+  get heldMesh() { return carry.held ? carryView.items[carry.held] : null; },
+  /** 물건을 손에 쥐여 준다 — 검사용. 걸어가서 1초 잡는 것을 건너뛴다 */
+  giveItem(kind) { return giveCarry(carry, kind); },
   /**
    * 문 하나를 끼운 것으로 친다 — **검사용.** 게임은 마모로 낀다.
    * 65분에 네 번 끼는 것을 기다릴 수는 없으니 구멍을 낸다.
@@ -1031,6 +1134,36 @@ window.SPACE = {
       ...(wristJob ?? {}), lift: wrist.lift, onScreen: root === scene,
       log: faults.log.map((l) => l.reveal), fixed: faults.fixed,
     };
+  },
+  /**
+   * 수리가 지금 어느 동작인가 — 검사용.
+   * ★ **손이 실제로 그 모양인지**까지 낸다 (`hand`). 표만 보면
+   *   「네 동작이 있다」로 끝나고, 그건 화면에 아무것도 안 나와도 통과한다
+   */
+  get repair() {
+    return {
+      act: repairAct, what: repairPose?.what ?? null,
+      pose: repairPose ? {
+        fingers: repairPose.fingers.map((v) => +v.toFixed(2)),
+        thumb: +repairPose.thumb.toFixed(2),
+        roll: +repairPose.roll.toFixed(2), push: +repairPose.push.toFixed(3),
+      } : null,
+      hand: hands.at,
+      need: repairing?.steps?.[repairing.step]?.hold ?? null,
+      held: repairing ? +repairing.held.toFixed(2) : null,
+    };
+  },
+  /**
+   * 수리를 그만큼 잡고 있던 것으로 친다 — **검사용.**
+   * ★ 헤드리스는 게임 시간이 실시간의 20분의 1이라, 8초짜리 걸음을 실제로
+   *   잡으면 3분이 걸린다. 네 동작을 다 보려면 12분이다. 그래서 구멍을
+   *   낸다 — 재는 것은 「시간이 맞나」가 아니라 **「손이 따라오나」**다
+   */
+  seekRepair(sec) {
+    const f = faults.open[0];
+    if (!f) return false;
+    f.held = sec;
+    return true;
   },
   /** 손이 지금 어떤가 — 검사용 */
   get hands() {
@@ -1438,6 +1571,10 @@ function frame(now) {
     grip: aimName && input.hold ? 1 : 0,
     both: bothHands(aimName),
     shaky: shaky(supply),
+    // ★ 수리 중이면 **손이 네 동작을 따라간다** — 풀고·뽑고·꽂고·조인다
+    //   (game/repair-table.js). 전에는 5초든 8초든 같은 주먹이었고,
+    //   그래서 정비가 「기다리기」로 읽혔다
+    pose: repairPose,
   }, dt);
 
   composer.render();
