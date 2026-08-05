@@ -65,6 +65,12 @@ import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
 import { HELM, offWord } from './game/helm-table.js';
+import { GUN, WHY as GUN_WHY } from './game/gun-table.js';
+import {
+  makeGun, climb as climbGun, stepGun, fire as fireShot,
+  flashSign, busy as gunBusy, summary as gunSummary,
+} from './game/gun.js';
+import { TURRET_RISE } from './world/turret.js';
 import {
   makeHelm, stepHelm, tryDock, legOf as helmLeg, signOf as helmSign,
   radians as helmRad, summary as helmSummary,
@@ -87,7 +93,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 43;
+export const VERSION = 44;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -323,12 +329,37 @@ const drift = makeDrift();
 //   그대로 두고** 조종간이 늘 먹게 한다: 잡으면 **항로를 벗어난다.**
 const helm = makeHelm();
 
+// ══ 주포 — **조종석 위로 올라간다** (사장님 요청) ══════════════
+// ★ `CHASE2.md §5` 에 「미사일·함포는 안 한다」고 적어 뒀던 것이다.
+//   사장님이 원하시니 만들되 **이 배의 문법으로** — 탄약이 곧 수리
+//   재료라 「쏘면 못 고친다」가 되고, 쏘면 밝아져서 「쏘고 도망」이
+//   늘 옳지 않게 된다 (game/gun-table.js).
+const gun = makeGun();
+
+/** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
+function fireGun() {
+  const r = fireShot(gun, {
+    supply,
+    chasing: chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT,
+    // 겨눔 — 포탑은 사람이 보는 쪽을 따라간다. 앞(-z)에 가까울수록 1
+    aim: Math.max(0, Math.cos(me.yaw)),
+  });
+  if (!r.ok) { banner = GUN_WHY[r.why]; bannerT = 2.4; return; }
+  ship.turret.fired();
+  audio?.event('caught');
+  heat = Math.min(HEAT.max, heat + GUN.heatPerShot);
+  chase.dist = Math.min(100, chase.dist + r.dist);
+  banner = r.hit ? `맞혔습니다 — ${r.kind === 'ore' ? '광석' : '부품'} ${r.kind === 'ore' ? GUN.costOre : GUN.costParts}`
+    : '빗나갔습니다';
+  bannerT = 2.0;
+}
+
 // ══ 저장 · 일시정지 ═══════════════════════════════════════════
 // ★ **2시간짜리에는 협상 불가다** (PLAN2H §11-1). 저장이 없으면
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun,
   ship: { heat, power, clock, seed, coolOpen },
   me,
 });
@@ -404,6 +435,8 @@ let handWarned = false;
 let armsFullNow = false;
 /** 지난 프레임에 잡고 있었나 — 「눌린 순간」을 잡으려고 */
 let heldWas = false;
+/** 주포 쪽의 「눌린 순간」 — 가르침 쪽 `heldWas` 와 **따로** 센다 */
+let gunHeldWas = false;
 let repairPose = null;
 /** 지금 몇 번째 동작인가 — 넘어갈 때 소리와 말을 내려고 들고 있는다 */
 let repairAct = null;
@@ -505,6 +538,9 @@ resize();
 // x 와 z 를 **따로** 밀어 본다. 같이 밀면 벽에 비스듬히 닿았을 때
 // 통째로 막혀서 「벽에 붙으면 못 움직인다」가 된다.
 function walk(dt) {
+  // ★ **포탑에 있으면 못 걷는다.** 사다리 중간도 마찬가지다 —
+  //   올라가는 중에 걸어 나가면 몸이 허공에 뜬 채로 통로를 지나간다
+  if (gunBusy(gun)) return;
   const { f, r } = input.move();
   const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
 
@@ -570,7 +606,8 @@ function interactStep(dt) {
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
-    ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets];
+    ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
+    ship.turret.ladderHit, ship.turret.gunHit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -580,6 +617,7 @@ function interactStep(dt) {
   let plate = -1;
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false;
+  let onLadder = false, onGun = false;
   let onCrank = null;
   let onSpot = null;
   if (near) {
@@ -594,6 +632,8 @@ function interactStep(dt) {
       if (o === ship.winch.hit) { onWinch = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
+      if (o === ship.turret.ladderHit) { onLadder = true; break; }
+      if (o === ship.turret.gunHit) { onGun = true; break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
       if (dv) { onCrank = dv; break; }
       const sp = carryView.spotOf(o);
@@ -868,7 +908,32 @@ function interactStep(dt) {
     b.lampMat.color.set(on ? b.tint : 0x2a2f36);
   }
 
-  aimName = onSpot ? `spot:${onSpot}`
+  // ── ★ 주포 — 사다리를 잡으면 오르내리고, 위에서는 쏜다 ──
+  // ★ **올라가 있으면 아래 것들은 안 잡힌다.** 포탑에 있는데 밸브가
+  //   잡히면 「동시에 두 곳에 못 있는다」가 무너진다 (gun-table.js ③)
+  if (gun.up || gun.moving > 0) {
+    onValve = false; breaker = null; plate = -1; panel = null;
+    onWinch = false; onHatch = false; onYoke = false; onCrank = null; onSpot = null;
+  }
+  // 사다리는 **누르는 순간** 탄다 (잡고 있는 것이 아니다 — 오르는 데 시간이 든다)
+  // ★ `heldWas` 는 위(가르침)에서 **이미 갱신됐다.** 여기서 그걸 쓰면
+  //   「눌린 순간」이 영영 안 잡힌다 — 잡음이 늘 같은 값이라서다.
+  //   눌린 순간을 두 곳에서 보려면 **셈도 두 개** 있어야 한다
+  const gunPressed = input.hold && !gunHeldWas;
+  if ((onLadder || (gun.up && onGun)) && gunPressed && gun.moving <= 0) {
+    if (climbGun(gun)) {
+      banner = gun.goingUp ? '올라갑니다' : '내려갑니다';
+      bannerT = 1.6;
+      audio?.event('click');
+    }
+  }
+  // 포탑에서 쏜다 — **누르는 순간** 한 발
+  if (gun.up && onGun && gunPressed) fireGun();
+  gunHeldWas = input.hold;
+
+  aimName = gun.up ? (onGun ? 'gun' : null)
+    : onLadder ? 'ladder'
+    : onSpot ? `spot:${onSpot}`
     : onCrank ? `crank:${onCrank.key}`
     : onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
@@ -1030,7 +1095,10 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ **고장이 자국을 민다.** 새는 공기(미소운석)·제멋대로 여닫히는 문
   //   (문 구동부)이 눈에 띈다. 자국은 열에서 나오므로 열 단위로 환산해 얹는다 —
   //   따로 더하면 조종석 계기가 말하는 자국과 실제가 갈라진다
-  const badSign = bad.sign / SIGN_PER_HEAT;
+  // ★ **쏘면 밝아진다** — 총구 섬광은 숨을 수 없다 (gun-table.js ②).
+  //   열 단위로 환산해 얹는다. 따로 더하면 조종석 계기가 말하는 자국과
+  //   실제가 갈라진다 — 고장이 자국을 미는 것과 같은 규약
+  const badSign = (bad.sign + flashSign(gun)) / SIGN_PER_HEAT;
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
@@ -1239,6 +1307,12 @@ window.SPACE = {
     return p ? { x: +p.group.position.x.toFixed(2), z: +p.group.position.z.toFixed(2), ry: p.group.rotation.y } : null;
   },
   /** 냉각 밸브가 어디 있나 — 검사가 앞에 가서 서려고 묻는다 */
+  /** 눈높이 — 포탑에 올라갔는지 검사가 본다 */
+  get camY() { return +camera.position.y.toFixed(3); },
+  /** 지금 잡고 있나 — 검사가 「눌린 것이 게임에 닿았나」를 가릴 때 쓴다 */
+  get holdNow() { return input.hold; },
+  /** 검사가 광석을 실어 준다 */
+  giveOre(n) { supply.ore = Math.min(240, supply.ore + n); return supply.ore; },
   get valveAt() {
     const v = ship.valve;
     if (!v) return null;
@@ -1571,6 +1645,12 @@ window.SPACE = {
   },
   /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /** ★ 주포 — 올라갔나 · 쏘면 뭐가 주나 */
+  get gun() { return { ...gunSummary(gun), flashSign: flashSign(gun) }; },
+  /** 검사가 사다리를 안 타고 올라간다 */
+  putGun(up) { gun.up = !!up; gun.moving = 0; return gunSummary(gun); },
+  /** 검사가 쏜다 — **게임과 같은 길로** (fireGun 이 배너·열·거리를 다 한다) */
+  fireGun() { fireGun(); return gunSummary(gun); },
   /** ★ 조종 — 조종간이 늘 먹나 · 벗어나면 느려지고 안 보이나 */
   get helm() { return { ...helmSummary(helm), word: offWord(helm.off) }; },
   /** 검사가 조종간을 안 잡고 항로를 벗어나 본다 */
@@ -1896,7 +1976,12 @@ function frame(now) {
   // 「느껴지는데 뭔지 모르겠는」 정도가 맞다.
   const sh = CRUISE.shake * shakeMul * Math.sin(clock * CRUISE.shakeHz * Math.PI * 2);
   const sw = CRUISE.sway * shakeMul * Math.sin(clock * CRUISE.swayHz * Math.PI * 2);
-  camera.position.set(me.x + sw * 0.4, BODY.eye + sh + sw * 0.25, me.z);
+  // ★ 포탑에 올라가 있으면 **눈이 배 위로 나온다.** 사다리를 타는 중에는
+  //   그 사이를 부드럽게 — 툭 순간이동하면 「올라갔다」가 안 읽힌다
+  const climbK = gun.up
+    ? 1 - (gun.moving > 0 && !gun.goingUp ? gun.moving / GUN.climb : 0)
+    : (gun.moving > 0 && gun.goingUp ? 1 - gun.moving / GUN.climb : 0);
+  camera.position.set(me.x + sw * 0.4, BODY.eye + sh + sw * 0.25 + TURRET_RISE * climbK, me.z);
   camera.rotation.set(0, 0, 0, 'YXZ');
   camera.rotation.y = me.yaw;
   camera.rotation.x = me.pitch;
@@ -1916,6 +2001,12 @@ function frame(now) {
   // ★ 잔해 지대 안에서는 같은 조종간이 **바위를 피하는 데** 쓰인다.
   //   두 가지를 동시에 하면 어느 쪽도 안 된다 (helm-table.js notInField)
   stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN);
+
+  // ── 주포 ─────────────────────────────────────────────
+  const gev = stepGun(gun, dt);
+  if (gev === 'up') { banner = '포탑 — 겨누고 누릅니다'; bannerT = 2.6; }
+  ship.turret.aimAt(me.yaw);
+  ship.turret.update(dt);
 
   const dev = stepDrift(drift, dt, steering);
   // 잡고 있는 것에 값이 붙는다 — 냉각 밸브가 기관실이라 손이 못 간다

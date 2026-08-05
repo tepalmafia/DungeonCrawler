@@ -38,6 +38,7 @@ import { buildBench } from './bench.js';
 import { buildFoodGauge, buildWinch, buildTradeHatch } from './supply-ui.js';
 import { buildDoor } from './door.js';
 import { DOOR } from '../game/door-table.js';
+import { buildTurret, LADDER } from './turret.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -856,7 +857,13 @@ export function buildShip(scene, camera = null) {
   };
 
   // ★ `group` — tools 가 배 안에만 광선을 쏘려고 쓴다 (창밖·성운은 뺀다)
+  // ── 주포 — **조종석 위로 올라간다** (사장님 요청 · world/turret.js) ──
+  // ★ 사다리 밑동에 **막이를 안 세운다.** 세우면 사다리 앞에 못 서고,
+  //   그러면 「보이는데 못 잡는」 물건이 하나 더 는다. 사다리는 벽에
+  //   붙어 있어서 걸어다니는 데 방해가 안 된다
+  const turret = buildTurret(ship, H, ZONE.cockpit.accent);
+
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    marks, byBay,
+    turret, marks, byBay,
     foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

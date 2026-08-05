@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 7;   // 6 → 7: 조종(helm) 칸이 늘었다
+export const SAVE_VERSION = 8;   // 7 → 8: 주포(gun) 칸이 늘었다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -80,6 +80,8 @@ export const FIELDS = {
   drift: ['dead', 'permanent', 'spin', 'angle', 'hits', 'held', 't', 'way', 'needsFix'],
   /** 조종 — 벗어난 채로 저장했는데 이어하니 항로 위면 그건 이어한 게 아니다 */
   helm: ['off', 'way', 't', 'missed'],
+  /** 주포 — 포탑에 올라간 채 저장했는데 이어하니 아래면 그건 이어한 게 아니다 */
+  gun: ['up', 'moving', 'goingUp', 'cool', 'shots', 'hits', 'flash', 't'],
   /** 배 자체 — main.js 가 들고 있는 것들 */
   // ★ `coolOpen` — 밸브가 열린 채 저장했는데 이어하니 잠겨 있으면
   //   그건 이어한 게 아니다. 잠금식이 된 순간부터 이건 **상태**다
