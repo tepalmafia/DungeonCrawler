@@ -13,6 +13,10 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.hold = false;        // 마우스 왼쪽을 잡고 있나
+    // ★ **Shift 로 뛴다** (game/move-table.js). 누르고 있는 동안만이라
+    //   `keys` 와 달리 코드가 아니라 상태로 둔다 — 창을 나갔다 오면
+    //   `blur` 가 꺼 준다
+    this.run = false;
     this.press = false;       // 이번 프레임에 **눌린 순간**인가 (한 번만 먹는다)
     this.dx = 0;              // 이번 프레임의 시선 이동
     this.dy = 0;
@@ -22,10 +26,14 @@ export class Input {
       // 브라우저 단축키를 뺏지 않는다 — 새로고침이 막히면 개발이 지옥이 된다
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       this.keys.add(e.code);
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.run = true;
     });
-    addEventListener('keyup', (e) => this.keys.delete(e.code));
+    addEventListener('keyup', (e) => {
+      this.keys.delete(e.code);
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.run = false;
+    });
     // 창 밖으로 나가면 눌린 키가 눌린 채로 남는다 — 「저절로 걸어간다」의 원인
-    addEventListener('blur', () => { this.keys.clear(); this.hold = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.hold = false; this.run = false; });
 
     // ★ 캔버스가 아니라 **창 전체**에서 받는다.
     //   캔버스에만 걸었더니, 위에 덮인 안내 창을 누른 사람은 게임을 못 켰다.
