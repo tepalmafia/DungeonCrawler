@@ -52,12 +52,14 @@ import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/t
 import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
 import { WRIST, jobFor } from './game/wrist-table.js';
-import { buildWrist } from './world/wrist.js';
+import { buildHolo } from './world/holo.js';
+import { buildHands } from './world/hands.js';
+import { bothHands } from './game/hand-table.js';
 import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 27;
+export const VERSION = 28;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -222,7 +224,8 @@ function guideAim() {
 }
 
 let raised = false;
-const wrist = buildWrist(camera);
+const wrist = buildHolo(camera);
+const hands = buildHands(camera);
 /** 손목에 지금 뜬 줄 — 검사가 읽는다. 게임은 안 쓴다 */
 let wristJob = null;
 /**
@@ -961,6 +964,12 @@ window.SPACE = {
       log: faults.log.map((l) => l.reveal), fixed: faults.fixed,
     };
   },
+  /** 손이 지금 어떤가 — 검사용 */
+  get hands() {
+    let root = hands.group;
+    while (root.parent) root = root.parent;
+    return { ...hands.at, onScreen: root === scene };
+  },
   /**
    * 문을 전부 열어 둔다 — **검사용.** 게임은 안 쓴다.
    * ★ `space-walk.js` 는 배 안을 격자로 훑어 「걸어서 갈 수 있나」를 본다.
@@ -1302,6 +1311,18 @@ function frame(now) {
     log: faults.log.map((l) => l.reveal),
     fixed: faults.fixed,
     clock, raised,
+  }, dt);
+
+  // ── 손 — **조준선이 손잡이를 잡으면 뻗고, 누르면 쥔다** ──
+  // ★ 이게 「직관적으로 조정하거나 수리」의 알맹이다 (사장님). 전에는
+  //   밸브가 저 혼자 돌아갔다 — 무엇이 그걸 돌리는지 화면에 없었다.
+  //   그리고 **굶으면 떨린다** — 체력바를 안 만드는 대신 손이 말한다
+  //   (PLAN §5-2). 그 설계가 처음으로 화면에 나온 자리다
+  hands.update({
+    reach: aimName ? 1 : 0,
+    grip: aimName && input.hold ? 1 : 0,
+    both: bothHands(aimName),
+    shaky: shaky(supply),
   }, dt);
 
   composer.render();
