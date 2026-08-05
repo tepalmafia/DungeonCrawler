@@ -25,6 +25,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { ASSETS, COMPANION } from '../web/space/js/core/asset-table.js';
+
+/** 규격표의 **본체** 장수. 곁그림(`_n`·`_r`)은 빼고 센다 — assets.js 와 같은 셈 */
+const ASSET_COUNT = Object.keys(ASSETS).filter((k) => !COMPANION.has(k)).length;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = path.join(ROOT, 'web/space/assets/surf');
@@ -121,7 +125,13 @@ try {
     '크기가 다른 것을 말한다');
   const line = logs.filter((l) => /^\[assets\] \d+\//.test(l)).pop();
   console.log('   ' + line);
-  ok(/2\/10장 \(\+곁그림 2장\)/.test(line || ''), '곁그림을 따로 센다');
+  // ★ **총 장수를 여기 안 적는다.** 「2/10장」이라고 박아 뒀더니 v28 에서
+  //   손 그림 둘이 규격표에 늘면서 12장이 됐고, 검사만 빨개졌다 — 게임은
+  //   멀쩡했다. 세는 것이 목적이 아니라 **곁그림을 본체와 섞어 안 세는가**가
+  //   목적이므로, 총 장수는 규격표에서 읽는다
+  const total = ASSET_COUNT;
+  ok(new RegExp(`2/${total}장 \\(\\+곁그림 2장\\)`).test(line || ''),
+    `곁그림을 따로 센다 — 본체 ${total}장과 안 섞는다`);
 
   ok(errs.length === 0, '오류 없음' + (errs.length ? ' — ' + errs.join(' / ') : ''));
   await b.close();

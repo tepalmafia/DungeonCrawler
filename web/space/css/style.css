@@ -58,6 +58,35 @@ html, body {
 #hint p.key { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(140, 160, 190, .18); }
 #hint[hidden] { display: none; }
 
+/* 멈춤 화면. 안내창(#hint)과 **같은 모양을 일부러 쓴다** — 둘 다 「게임이
+   안 돌고 있다」는 같은 뜻이라, 다른 모양을 주면 새 문법을 하나 더 만든다.
+
+   ★ `pointer-events: none` — 위 #hint 에서 **게임을 못 켰던** 바로 그 실수를
+     여기서 되풀이하지 않는다. 멈춤 화면은 화면 한가운데를 덮는데 계속하려면
+     캔버스를 눌러야 하고, 사람은 당연히 글이 적힌 가운데를 누른다.
+     이 한 줄이 없으면 **멈추면 다시 못 돌아온다.** */
+#pause {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  width: min(400px, 84vw);
+  padding: 20px 22px;
+  background: rgba(8, 10, 16, .9);
+  border: 1px solid rgba(140, 160, 190, .25);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.7;
+  text-align: center;
+}
+#pause b { color: #6fd8a0; }
+/* 어디까지 왔나 — 2시간짜리에서 **이 한 줄이 제일 중요하다.**
+   배너 색(주황)을 쓰지 않는다. 이건 일어난 일이 아니라 **내 자리**다 */
+#pause p.where { margin-top: 10px; color: #cfe6f4; font-size: 16px; font-weight: 600; }
+#pause p.note { margin-top: 6px; color: #8c98a8; font-size: 13px; }
+#pause p.key { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(140, 160, 190, .18); color: #9aa6b6; }
+#pause[hidden] { display: none; }
+
 /* 잠깐 뜨는 글자. **상태는 여기 안 띄운다** — 열·자국·거리는 콘솔 화면이
    맡는다. UI 를 늘리기 시작하면 「손이 곧 상태창」(PLAN §5-2)이 무너진다. */
 #hud {

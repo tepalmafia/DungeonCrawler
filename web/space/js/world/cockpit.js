@@ -852,5 +852,19 @@ export function buildOutside(scene, z) {
     }
   }
 
-  return { update, setRegion, get region() { return regionKey; } };
+  /**
+   * ★ **배가 돈다** (PLAN2H §4-4 · game/drift.js).
+   *
+   *   자세 제어가 죽으면 창밖이 기운다. 밖을 통째로 굴리는 것이라
+   *   **어느 방에 있든 보인다** — 곁방 창에서도, 관측실에서도.
+   *   고장 하나를 배 전체로 말하는 유일한 수단이고, 지금까지 고장은
+   *   배너 한 줄과 덜그럭 소리뿐이었다.
+   *
+   *   ★ 배를 굴리지 않고 **밖을 굴린다.** 배(선체·방·물건)를 굴리면
+   *     걸어다니는 사람과 충돌이 통째로 어긋난다 — 정비공이 벽을 뚫는다.
+   *     보이는 것만 굴리면 「배가 돈다」는 읽히고 손은 멀쩡하다.
+   */
+  const roll = (rad) => { out.rotation.z = rad; };
+
+  return { update, setRegion, roll, get region() { return regionKey; } };
 }

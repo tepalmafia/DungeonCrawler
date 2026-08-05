@@ -19,7 +19,7 @@
 //    잡고 있는 걸 40초로 두면 그건 진단이 아니라 진행 바를 보는 일이 된다.
 // ══════════════════════════════════════════════════════════════════════════
 import { makeRng } from '../core/rng.js';
-import { FAULT, wired, branchWeights } from './mission-table.js';
+import { FAULT, wired, branchWeights, BY_KEY } from './mission-table.js';
 import { WEAR } from './systems-table.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -101,6 +101,35 @@ function spawn(f, leg, first) {
     stuck: branch.key === 'dead',
     age: 0,
   };
+}
+
+/**
+ * ★ **장면이 고장 하나를 직접 연다** (game/scene.js · PLAN2H §4).
+ *
+ *   `stepFaults` 는 시계와 마모를 보고 뽑는다. 장면은 그러면 안 된다 —
+ *   구간 6 에서 자세 제어가 죽어야 하는데 「운이 좋으면 안 죽는」 것은
+ *   장면이 아니라 잔일이다. 그래서 열쇠로 곧장 연다.
+ *
+ *   `wired()` 는 `sceneOnly` 가 붙은 것을 거르므로, 여기로 안 열면
+ *   이 고장은 **영영 안 나온다.** 그게 맞는 설계다.
+ *
+ * @returns 연 고장 · 이미 열려 있으면 그것 · 표에 없으면 null
+ */
+export function open(f, key, { branch = null } = {}) {
+  const had = f.open.find((o) => o.key === key);
+  if (had) return had;
+  const m = BY_KEY[key];
+  if (!m) return null;
+  const b = branch ? m.branches.find((x) => x.key === branch) : m.branches[0];
+  const steps = (m.steps || []).map((s) => ({ ...s }));
+  if (!steps.length) return null;
+  const made = {
+    key: m.key, name: m.name, lead: m.lead, sys: m.sys, effect: m.effect || {},
+    branch: b?.key ?? null, reveal: b?.what ?? null,
+    again: !!b?.again, steps, step: 0, held: 0, stuck: false, age: 0,
+  };
+  f.open.push(made);
+  return made;
 }
 
 /** 지금 손이 가야 하는 자리 (방 이름). 다 고쳤으면 null */
