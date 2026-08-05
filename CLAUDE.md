@@ -192,6 +192,7 @@ node tools/space-save.js         스페이스워 — ★ 닫았다 켜면 이어
 node tools/space-2h.js           스페이스워 — ★ 긴장이 모양을 갖췄나 · 12구간 배치 (--see 8391)
 node tools/space-drift.js        스페이스워 — ★C 자동 조종 사망 · 셋 다 손해인가 (--see 8391)
 node tools/space-helm.js         스페이스워 — ★ 조종간이 늘 먹나 · 늘 틀어 놓는 게 답 아닌가 (--see 8391)
+node tools/space-gun.js          스페이스워 — ★ 주포 · 쏘는 게 공짜가 아닌가 (탄약=수리 재료) (--see 8391)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
                                  (walk·chase·skin·audio·yoke·bay·guard 는 serve.py 를 먼저 띄운다)
