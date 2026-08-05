@@ -73,6 +73,44 @@ console.log('\n[2] **급한 것이 위로 온다** — 문에 갇힌 채로 「�
   ok(jobFor(calm()).key === 'calm', '아무 일 없으면 마지막 줄로 떨어진다');
 }
 
+console.log('\n[2b] ★★ **전부 동사인가** — 「열이 높습니다」는 할 일이 아니다');
+{
+  // ★ 사장님이 화면을 보시고 「뭘 하라는거야?」라고 하셨다. 그때 손목이
+  //   「열이 높습니다」였다 — **상태**다. 이 장치의 존재 이유가 「지금 뭘
+  //   하나」인데 아홉 줄 중 **다섯이 명사**였다 (jam·hot·fault·hungry·thrust).
+  //   추격만 고치고 나머지를 안 고친 것이다.
+  //
+  //   말투로 가른다: 손이 할 수 있는 동작으로 끝나야 한다. 새 줄을 보탤 때
+  //   여기 없는 어미를 쓰면 ✘ 가 뜨고, 그때 **동사인지 다시 생각하게 된다.**
+  const ACTS = [
+    '켭니다', '끕니다', '내립니다', '올립니다', '고릅니다', '엽니다', '닫습니다',
+    '찾습니다', '끌어옵니다', '버팁니다', '비킵니다', '갑니다', '둡니다',
+    '돌립니다', '캡니다', '바꿉니다',
+  ];
+  const S = {
+    doorJammed: true, chasing: true, heatHigh: true, hazardSoon: true,
+    faultsOpen: 2, foodLow: true, atPort: true, thrust: false, cool: false,
+    heat: 70, ore: 0,
+  };
+  const bad = [];
+  for (const j of JOBS) {
+    const t = typeof j.say === 'function' ? j.say(S) : j.say;
+    const okAct = ACTS.some((a) => t.endsWith(a));
+    console.log(`  ${okAct ? '·' : '✘'} ${j.key.padEnd(7)}「${t}」`);
+    if (!okAct) bad.push(j.key);
+  }
+  ok(bad.length === 0, `아홉 줄이 전부 **손이 할 동작**으로 끝난다 — 명사로 끝난 것 ${bad.join(', ') || '없다'}`);
+
+  // 갈래가 있는 줄(추격)도 전부 검사한다 — 하나만 명사여도 그 순간 못 읽는다
+  const chase = JOBS.find((j) => j.key === 'chase');
+  const each = [
+    { ...S, thrust: false }, { ...S, thrust: true, cool: false },
+    { ...S, thrust: true, cool: true, heat: 90 }, { ...S, thrust: true, cool: true, heat: 5 },
+  ].map((x) => chase.say(x));
+  ok(each.every((t) => ACTS.some((a) => t.endsWith(a))),
+    `추격 갈래 넷도 전부 동사다 — ${each.map((t) => t.split(' · ')[1]).join(' / ')}`);
+}
+
 console.log('\n[3] **급한 것에만 빨간 불** — 전부 급하면 아무것도 안 급하다');
 {
   const urgent = JOBS.filter((j) => j.urgent).map((j) => j.key);
@@ -94,7 +132,7 @@ console.log('\n[4] ★★ **배의 상태가 안 샌다** — 여기가 이 도�
   const said = [];
   for (const j of JOBS) said.push(typeof j.say === 'function' ? j.say(s) : j.say);
   // 「고장 3군데」의 3 은 **몇 개인지**라 허용한다 — 그건 방이 가진 값이 아니다
-  const leak = said.filter((t) => /\d/.test(t) && !/^고장 \d+군데$/.test(t));
+  const leak = said.filter((t) => /\d/.test(t) && !/^고장 \d+군데( ·.*)?$/.test(t));
   console.log(said.map((t) => `  · ${t}`).join('\n'));
   ok(leak.length === 0, `숫자가 안 샌다 — 샌 줄 ${leak.join(' / ') || '없다'}`);
   ok(!said.some((t) => /m\b|미터|㎞|거리|자국|마모|℃|도씨/.test(t)),

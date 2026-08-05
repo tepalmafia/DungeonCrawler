@@ -113,9 +113,18 @@ export function buildWrist(camera) {
     }
 
     // ── 고친 것 ────────────────────────────────────────
+    // ★ **가른 줄이 있어야 한다** (2026-08-04 · 사장님 「배선 위에 공구가
+    //   어딨어?」). 「고친 것」의 첫 줄이 「정비실 공구가 배선 위에 놓여
+    //   있었다」였는데, 큰 줄 바로 밑에 붙어 있으니 **지금 하라는 말로
+    //   읽혔다.** 과거형(「있었다」)만으로는 안 갈린다 — 급할 때 어미까지
+    //   안 읽는다. 가로줄로 화면을 위아래 둘로 자르고, 지난 것에는 ✓ 를 단다.
+    ctx.strokeStyle = 'rgba(143,232,196,.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(16, 66); ctx.lineTo(w - 16, 66); ctx.stroke();
+
     ctx.fillStyle = DIM;
     ctx.font = '600 16px system-ui, sans-serif';
-    ctx.fillText(s.fixed ? `고친 것 ${s.fixed}` : '고친 것 없음', 16, 70);
+    ctx.fillText(s.fixed ? `고친 것 ${s.fixed}` : '고친 것 없음', 16, 72);
 
     // ★ **최신이 앞이다.** fault.js 는 `log.unshift` 로 쌓는다 (진단대가 그
     //   순서로 읽는다). `slice(-n).reverse()` 로 짰다가 **여섯 개가 찬 뒤부터
@@ -126,11 +135,12 @@ export function buildWrist(camera) {
       // 최근 것일수록 밝다 — 방금 한 것이 제일 위에 온다
       ctx.fillStyle = `rgba(143,232,196,${0.85 - i * 0.18})`;
       const t = line.length > WRIST.maxLen ? `${line.slice(0, WRIST.maxLen - 1)}…` : line;
-      ctx.fillText(`· ${t}`, 16, 94 + i * 19);
+      // ✓ — **이미 한 일**이라는 표시. 「·」는 목록이라 할 일로도 읽힌다
+      ctx.fillText(`✓ ${t}`, 16, 96 + i * 19);
     });
     if (!rows.length) {
       ctx.fillStyle = 'rgba(143,232,196,.28)';
-      ctx.fillText('· 아직 아무것도', 16, 94);
+      ctx.fillText('아직 아무것도', 16, 96);
     }
     tex.needsUpdate = true;
   }
