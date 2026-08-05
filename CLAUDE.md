@@ -190,6 +190,7 @@ node tools/space-repair.js       스페이스워 — 수리 네 동작 · ★ �
 node tools/space-run.js          스페이스워 — 달리기 · ★ 늘 뛰는 게 답이 아닌가 (--see 8391)
 node tools/space-save.js         스페이스워 — ★ 닫았다 켜면 이어지나 · 멈추면 돌아오나 (--see 8391)
 node tools/space-2h.js           스페이스워 — ★ 긴장이 모양을 갖췄나 · 12구간 배치 (--see 8391)
+node tools/space-drift.js        스페이스워 — ★C 자동 조종 사망 · 셋 다 손해인가 (--see 8391)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
                                  (walk·chase·skin·audio·yoke·bay·guard 는 serve.py 를 먼저 띄운다)

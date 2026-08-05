@@ -280,6 +280,43 @@ if (see >= 0) {
     ok(rot !== null, `방을 옮겨도 밖이 돌아가 있다 (${rot?.toFixed(3) ?? '못 찾음'} rad)`);
   }
 
+  console.log('\n[10b] ★★ **화면이 정말 달라지나** — 눈으로는 못 판정한다');
+  {
+    // ★ 왜 이걸 따로 재나.
+    //   `roll` 값이 0.166 rad 로 오르는 것은 확인했다. 그런데 **화면을 찍어
+    //   보니 별밭이 그대로였다** — 고른 점이 흩뿌려진 하늘은 9도 돌아도
+    //   눈으로 구별이 안 간다. 「값은 바뀌는데 화면은 그대로」가 정확히
+    //   POSTMORTEM §1 이 적어 둔 함정이고, 이 저장소가 하루를 태운 그것이다.
+    //   그래서 **눈 대신 픽셀을 센다.**
+    const shot = async () => (await p.screenshot({ clip: { x: 60, y: 40, width: 520, height: 210 } })).toString('base64');
+    // 멀쩡한 배 — 기준
+    await S(() => { SPACE.setLeg(1); });
+    await p.reload({ waitUntil: 'networkidle' });
+    await p.waitForTimeout(2200);
+    await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); SPACE.clearSave(); });
+    await S(() => { const o = SPACE.route.offer; if (o.length) SPACE.pick(o[0]); });
+    await S(() => SPACE.put(0, -6.2, 0, -0.1));
+    await p.waitForTimeout(1200);
+    const flat = await shot();
+
+    await S(() => SPACE.killDrift(false));
+    let ang = 0;
+    for (let i = 0; i < 60; i++) {
+      await p.waitForTimeout(400);
+      ang = Math.abs((await S(() => SPACE.drift)).angle);
+      if (ang > 18) break;
+    }
+    const tilted = await shot();
+    ok(ang > 8, `${ang.toFixed(1)}도까지 기울였다`);
+    // 같은 자리에서 찍은 두 장이 **다른 그림**인가
+    ok(flat !== tilted,
+      `기울기 전과 후의 창이 **다른 그림이다** (${flat.length} vs ${tilted.length} 바이트)`);
+    if (flat === tilted) {
+      console.log('   ※ 값은 도는데 화면은 그대로다 — 코드가 안 도는 것이거나');
+      console.log('      **밖에 방향을 가진 것이 없어서** 돌아도 티가 안 나는 것이다');
+    }
+  }
+
   console.log('\n[11] ★ **고칠 것이 조종석 밖에 있나** — 이 장면의 전부다');
   {
     const f = await S(() => SPACE.faults.open.find((o) => o.key === 'attitude') ?? null);

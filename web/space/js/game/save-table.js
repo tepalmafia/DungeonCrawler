@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 3;   // 2 → 3: 자세 제어(drift) 칸이 늘었다 (4판)
+export const SAVE_VERSION = 4;   // 3 → 4: 열려 있던 고장(faults.open·log)을 빠뜨리고 있었다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -44,7 +44,22 @@ export const FIELDS = {
   route: ['phase', 'leg', 'press', 't', 'need', 'fork', 'overrun'],
   chase: ['phase', 'risk', 'dist', 'sign', 'runs', 't'],
   supply: ['food', 'parts', 'ore'],
-  faults: ['t', 'next', 'fixed', 'wear'],
+  /**
+   * ★ **`open` 과 `log` 를 빠뜨리고 있었다.**
+   *   열려 있던 고장이 저장이 안 돼서, 이어하면 **고칠 것이 통째로
+   *   사라졌다.** 「두 개 열어 놓고 껐다 켰더니 배가 멀쩡하다」 —
+   *   그건 이어한 게 아니라 봐준 것이고, 2시간짜리에서는 그게 곧
+   *   **저장으로 고장을 지우는 요령**이 된다.
+   *
+   *   자세 제어(장면 C)가 이걸 드러냈다. `open` 이 안 남으니 다시 열었을 때
+   *   「고칠 것이 없다 = 다 고쳤다」로 읽혀 **배가 저절로 똑바로 섰다.**
+   *   고장 하나가 안 이어지는 것보다, 그것 때문에 **다른 계통이 조용히
+   *   나아 버리는** 쪽이 훨씬 나빴다.
+   *
+   *   `log` 는 정비실 진단대가 읽는다 — 이어했는데 「이번 회차에 뭘
+   *   고쳤지」가 비면 그 화면이 거짓말을 한다.
+   */
+  faults: ['t', 'next', 'fixed', 'wear', 'open', 'log'],
   hazard: ['phase', 'lane', 'inLeg', 'hits', 'dodged', 'seat'],
   move: ['breath', 'spent'],
   carry: ['held', 'items'],
