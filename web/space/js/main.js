@@ -62,18 +62,22 @@ import { bothHands } from './game/hand-table.js';
 import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
+import { pack, apply, where } from './game/save.js';
+import { SAVE } from './game/save-table.js';
+import { saveRaw, loadRaw, clearRaw, canSave, hasSave } from './core/store.js';
 import { buildCarry } from './world/carry.js';
 import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-table.js';
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 36;
+export const VERSION = 37;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
 const hint = document.getElementById('hint');
 const hud = document.getElementById('hud');
 const lesson = document.getElementById('lesson');
+const pauseBox = document.getElementById('pause');
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x03040a);
@@ -279,6 +283,64 @@ let wristJob = null;
  */
 let bad = effectsOf(makeFaults('boot'));
 const tutor = makeTutor();
+
+// ══ 저장 · 일시정지 ═══════════════════════════════════════════
+// ★ **2시간짜리에는 협상 불가다** (PLAN2H §11-1). 저장이 없으면
+//   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
+/** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
+const world = () => ({
+  route, chase, supply, faults, hazard, move, carry, tutor,
+  ship: { heat, power, clock, seed },
+  me,
+});
+/** 구간이 끝날 때 저장한다. **초마다 저장하면 되돌리기가 된다** */
+function saveNow() {
+  const box = world();
+  const raw = pack(box);
+  // heat·clock 은 `let` 이라 world() 가 뜬 값을 담는다 — pack 뒤에 손대지 않는다
+  return saveRaw(raw);
+}
+/** 켤 때 한 번. 이어했으면 true */
+function loadOnce() {
+  const raw = loadRaw();
+  if (!raw) return null;
+  const box = world();
+  if (!apply(box, raw)) { clearRaw(); return null; }
+  // ★ `let` 로 들고 있는 것들은 손으로 되돌린다 — 객체가 아니라 값이라
+  //   `apply` 가 못 건드린다. 여기를 빠뜨리면 「열만 0 으로 시작」이 된다
+  heat = box.ship.heat ?? heat;
+  clock = box.ship.clock ?? clock;
+  Object.assign(power, box.ship.power ?? {});
+  return where(raw);
+}
+/** 일시정지 — 2시간을 한 번에 앉아 있을 수 없다 */
+let paused = false;
+/**
+ * 멈춤 화면을 켜고 끈다 — **어디까지 왔는지를 여기서 말한다.**
+ *
+ * ★ 「남은 구간」을 노는 동안에는 화면에 안 띄운다. 그건 여전히 방이
+ *   갖는다 (관측실 해도대). 하지만 **멈춘 화면에서까지 숨기면** 2시간짜리를
+ *   며칠에 나눠 하는 사람은 자기가 어디쯤인지 영영 모른다 —
+ *   그건 규칙을 지킨 게 아니라 규칙을 잘못 적용한 것이다.
+ */
+function showPause(on) {
+  paused = on;
+  pauseBox.hidden = !on;
+  // ★ 멈춤 화면이 떠 있는 동안에는 **배너와 가르침을 접는다.**
+  //   셋이 같이 뜨면 「거점 — 남은 7」과 「남은 거점 7」이 위아래로 겹쳐
+  //   같은 말을 두 번 한다. 멈춘 화면에서 읽을 것은 하나여야 한다
+  if (on) { hud.hidden = true; lesson.hidden = true; }
+  if (!on) return;
+  const left = legsLeft(route);
+  const min = Math.round(clock / 60);
+  pauseBox.querySelector('.where').textContent =
+    `구간 ${Math.min(route.leg + 1, LEG.count)}/${LEG.count} · ${min}분째 · 남은 거점 ${left}`;
+  // ★ 저장이 **됐는지**를 말한다. 사생활 보호 모드에서는 안 되는데,
+  //   조용히 안 되면 사람은 「저장됐겠지」 하고 닫는다
+  pauseBox.querySelector('.note').textContent = canSave()
+    ? '여기까지 저장했습니다 — 창을 닫아도 이어집니다'
+    : '이 브라우저에서는 저장이 안 됩니다 — 창을 닫으면 사라집니다';
+}
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
@@ -1372,6 +1434,23 @@ window.SPACE = {
       contactAt: +contactAt(route).toFixed(1), blind: isBlind(route),
     };
   },
+  /**
+   * 저장 · 멈춤 — **검사가 실제 게임의 것을 만진다.**
+   * ★ 검사용으로 따로 짜면 검사는 통과하는데 게임은 안 되는 상태가 생긴다.
+   *   이 저장소가 제일 자주 밟은 함정이라 손잡이만 내 준다.
+   */
+  get save() {
+    return {
+      can: canSave(), paused, boxShown: !pauseBox.hidden,
+      clock: +clock.toFixed(2),
+      stored: hasSave(),
+      where: pauseBox.querySelector('.where').textContent,
+      note: pauseBox.querySelector('.note').textContent,
+    };
+  },
+  saveNow() { return saveNow(); },
+  clearSave() { clearRaw(); },
+  pause(v) { showPause(v ?? !paused); return paused; },
   /** 갈래를 고른다 — 검사가 관측실까지 안 걸어가고 부를 수 있게 */
   pick(key) { const ok = chooseFork(route, key); if (ok) ship.outside.setRegion(regionOf(route)); return ok; },
   /** 구간을 끝까지 밀어 놓는다 — 거점 도착을 실제로 내 보려고 */
@@ -1435,6 +1514,24 @@ window.SPACE = {
   },
 };
 
+// ── 이어하기 ────────────────────────────────────────────────
+// ★ **켜자마자 한 번.** 물어보지 않고 그냥 잇는다 — 칸이 하나뿐이라
+//   (`SAVE.slots === 1`) 고를 것이 없고, 「새로 시작할까요」를 물으면
+//   사람은 매번 그 물음을 지나야 한다. 대신 **이었다고 말해 준다.**
+{
+  const back = loadOnce();
+  if (back) {
+    banner = `이어합니다 — ${back.text}`;
+    bannerT = 4.0;
+    console.log(`[저장] 이어합니다 — ${back.text}`);
+    // ★ 시작 안내가 「눌러 **시작**합니다」라고 말하고 있으면 거짓말이다.
+    //   이미 62분을 온 사람에게 시작이라고 하면 「저장이 안 됐나」로 읽힌다
+    const first = hint.querySelector('p');
+    if (first) first.innerHTML =
+      `화면을 눌러 <b>이어갑니다</b> — ${back.text}. 소리가 납니다 — <b>M</b> 으로 끕니다.`;
+  }
+}
+
 // ── 루프 ────────────────────────────────────────────────────
 let last = performance.now();
 function frame(now) {
@@ -1445,11 +1542,17 @@ function frame(now) {
   //   되어 `Math.floor(clock/95) % 4` 가 **-1** 이 됐다. 배열의 -1 은
   //   undefined 라 첫 프레임에서 게임이 통째로 죽었다.
   //   화면은 까맣고 콘솔에만 한 줄 뜬다 — 원인을 짐작하기 제일 어려운 모양.
-  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+  const dt0 = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
+  // ★ **멈추면 시간도 멈춘다.** dt 를 0 으로 두면 아래 전부가 그대로
+  //   얼어붙는다 — 계통마다 「멈췄나」를 묻게 하면 반드시 하나를 빠뜨린다
+  const dt = paused ? 0 : dt0;
   clock += dt;
 
-  const look = input.takeLook();
+  // ★ 멈췄으면 **쌓인 마우스도 버린다.** `takeLook()` 은 지난 움직임을
+  //   모아 뒀다 돌려주므로, 그냥 두면 계속하는 순간 그동안 움직인 만큼
+  //   시선이 홱 돌아간다. dt 를 0 으로 만드는 것만으로는 안 막힌다
+  const look = paused ? (input.takeLook(), { dx: 0, dy: 0 }) : input.takeLook();
   // ★ 조종간을 잡고 있으면 마우스가 **시선이 아니라 배**를 움직인다.
   //   `steering` 은 지난 프레임의 판정이라 한 프레임 늦는다 — 조준은
   //   interactStep 에서 나오고 그건 이 아래에서 돈다. 16ms 라 안 느껴진다.
@@ -1472,6 +1575,9 @@ function frame(now) {
   const rev = stepRoute(route, dt, power);
   if (rev === 'arrive' || rev === 'end') newLeg(hazard);
   if (rev === 'arrive') {
+    // ★ **여기서 저장한다.** 거점은 원래 숨 쉬는 자리이고, 12구간이면
+    //   12번이다. 초마다 저장하면 「죽기 직전으로 되돌리기」가 된다
+    if (SAVE.onLeg) saveNow();
     banner = `거점 — 남은 ${legsLeft(route)}`;
     bannerT = 3.0;
     audio?.event('escaped');       // 거점은 뿌리친 것과 같은 안도다
@@ -1494,6 +1600,11 @@ function frame(now) {
     bannerT = 6.0;
     audio?.event('escaped');
     escapedAt = clock;
+    // ★ **끝났으면 저장을 지운다.** 안 지우면 다음에 켤 때 「끝난 배」로
+    //   이어져서, 이미 도착한 자리에 다시 서 있게 된다. 끝 화면은 8판
+    //   몫이지만 **지우는 것만은 지금 해 둔다** — 안 그러면 한 번 끝낸
+    //   사람이 다시 못 시작한다
+    clearRaw();
   }
   // 검사용 고정이 걸려 있으면 그것을 따른다 (게임은 안 쓴다)
   const wantRegion = regionPin || regionOf(route);
@@ -1556,7 +1667,10 @@ function frame(now) {
   systemsStep(dt, valveOpen, signMult(route));
 
   // 화면 한복판 글자 — 잠깐 떴다 사라진다
-  if (bannerT > 0) {
+  // ★ 멈춤 화면이 떠 있으면 안 띄운다 — 안 그러면 매 프레임 다시 켜져서
+  //   showPause() 가 접어 놓은 것이 되살아난다. 「접는 곳」과 「켜는 곳」이
+  //   다르면 켜는 쪽이 이긴다
+  if (bannerT > 0 && !paused) {
     bannerT -= dt;
     hud.textContent = banner;
     hud.hidden = false;
@@ -1574,7 +1688,7 @@ function frame(now) {
   //   가르침이 있으면 그쪽이 먼저다 — 두 줄이 겹치면 둘 다 안 읽는다
   const ln = (allDone(tutor) ? null : lineOf(tutor, aimName))
     ?? gripLine(tutor, aimName, { armsFull: armsFullNow });
-  if (ln) {
+  if (ln && !paused) {
     lesson.textContent = ln.text;
     lesson.classList.toggle('dim', ln.dim);
     lesson.hidden = false;
@@ -1643,7 +1757,38 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
-// 잠금 안내는 처음 한 번만. 잠기면 사라진다
-setInterval(() => { hint.hidden = input.locked; }, 200);
+// ── 일시정지 (Esc) ─────────────────────────────────────────
+// ★ 2시간짜리인데 멈출 수가 없으면 사람은 **브라우저를 닫는다.**
+//   그리고 포인터 잠금이 풀리는 것과 게임이 멈추는 것은 **다른 일**이다 —
+//   전에는 Esc 로 잠금만 풀리고 배는 계속 돌았다
+addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape') return;
+  if (!paused) saveNow();         // 멈출 때 저장해 둔다. 닫고 가도 남는다
+  showPause(!paused);
+});
+// 창을 벗어나면 **저절로 멈춘다.** 다른 창을 보다 돌아왔더니 잡혀 있으면
+// 그건 게임이 아니라 사고다
+addEventListener('blur', () => {
+  if (paused) return;
+  saveNow();
+  showPause(true);
+});
+// ★ **누르면 돌아온다.** Esc 를 누르면 브라우저가 포인터 잠금을 저절로
+//   푸는데, 다시 잠그려면 어차피 화면을 눌러야 한다. 그러니 「잠겼다」를
+//   그대로 「계속한다」로 읽는다 — 계속하는 법을 두 개 만들지 않는다.
+//   (멈춤 화면에 `pointer-events: none` 이 붙어 있어야 이 클릭이 통과한다.
+//    #hint 에서 그걸 빠뜨려 **게임을 아예 못 켰던** 적이 있다)
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement && paused) showPause(false);
+});
+// ★ 그리고 **누른 것만으로도** 푼다. 잠금이 이미 걸린 채로 멈춘 경우
+//   (창을 안 벗어나고 검사가 멈춘 경우 등) 위의 것은 안 불린다 —
+//   그러면 눌러도 아무 일이 안 나고, 그게 「멈추면 못 돌아온다」다.
+//   계속하는 길은 **막히지 않게** 두 갈래로 둔다
+addEventListener('mousedown', () => { if (paused) showPause(false); });
+
+// 잠금 안내는 처음 한 번만. 잠기면 사라진다.
+// ★ 멈춰 있을 때는 안 띄운다 — 안내창과 멈춤 화면이 **같은 자리**라 겹친다
+setInterval(() => { hint.hidden = input.locked || paused; }, 200);
 
 console.log(`스페이스워 v${VERSION} — ${roomAt(me.x, me.z)} 에서 시작`);
