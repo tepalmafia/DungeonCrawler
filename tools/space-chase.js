@@ -216,9 +216,13 @@ await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
 //   헤드리스는 dt 를 0.05 로 자른 채 1fps 남짓이라, 게임 시간 7초가 실제로는
 //   5분이 넘는다. **끝까지 도는지는 tools/space-fault.js 가 브라우저 없이
 //   이미 잰다.** 여기서 볼 것은 「손이 닿고, 잡으면 먹고, 놓으면 되돌아가나」다.
-const moving = await until(() => SPACE.faults.open[0]?.progress > 0.05, 40, '수리 진행');
+await until(() => SPACE.faults.open[0]?.progress > 0.05, 40, '수리 진행');
 const p1 = (await S(() => SPACE.faults)).open[0]?.progress;
-ok(moving, `잡으니 수리가 진행된다 (${p1})`);
+// ★ **기다림의 결과가 아니라 값을 본다.** 전에는 `until` 이 돌려준 참·거짓으로
+//   판정했는데, 0.06 까지 올라가 놓고도 「지침」으로 빨개졌다 — 마지막으로
+//   들여다본 뒤에 넘어선 것이다. 헤드리스는 프레임이 1초에 한 번쯤이라
+//   이 경계가 늘 아슬아슬하다. **기다림은 기다림일 뿐이고 판정은 값이 한다**
+ok(p1 > 0.05, `잡으니 수리가 진행된다 (${p1})`);
 await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
 await S((v) => { window.__p1 = v; }, p1);
 await until(() => SPACE.faults.open[0]?.progress < window.__p1, 25, '되돌아가기');
