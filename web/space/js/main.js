@@ -1577,6 +1577,13 @@ window.SPACE = {
   seekScene(sec = 600) { scenes.inLeg += sec; return sceneSummary(scenes); },
   /** 지금 박자를 끝낸 것으로 친다 — 다음 프레임에 게임이 다음 박자로 넘긴다 */
   skipBeat() { scenes.t = scenes.need; return sceneSummary(scenes); },
+  /**
+   * 여운의 일을 **지금 오게** 한다 — 시계만 민다.
+   * ★ 헤드리스는 게임 시간이 실제의 1/20 이라 3.8초를 기다리면 76초다.
+   *   그렇다고 검사가 `stepFaults` 를 직접 부르면 배너도 소리도 안 나서
+   *   「검사는 통과하는데 화면은 조용한」 상태가 된다 — 시계만 민다
+   */
+  seekEmber() { if (scenes.ember > 0) scenes.ember = 0.0001; return sceneSummary(scenes); },
   saveNow() { return saveNow(); },
   clearSave() { clearRaw(); },
   pause(v) { showPause(v ?? !paused); return paused; },
@@ -1741,7 +1748,13 @@ function frame(now) {
   // ── 여운 — ★ **여기가 「시간 가는 줄 모른다」의 자리다** ──
   if (sev === 'after') {
     // 해소 직후 0초에 안 낸다. 「뿌리친 3초」 위에 일을 얹으면 보상이 사라진다
-    scenes.ember = emberWorth(faults.wear) ? emberAt(scenes) : 0;
+    // ★ **이미 손이 차 있으면 안 낸다.** 열린 고장이 상한(2)에 닿아 있으면
+    //   `stepFaults` 가 조용히 아무것도 안 만든다 — 그러면 「여운에 일이
+    //   온다」는 약속이 **약속만 하고 안 지켜진 채로** 넘어간다.
+    //   여운이 빈 게 아니라 **이미 할 일이 있는 것**이니 안 내는 게 맞고,
+    //   다만 **예약도 안 한다** — 안 그러면 「예약됐는데 안 왔다」가 된다
+    const room = faults.open.length < FAULT.maxOpen;
+    scenes.ember = (room && emberWorth(faults.wear)) ? emberAt(scenes) : 0;
   }
   if (scenes.ember > 0) {
     scenes.ember -= dt;

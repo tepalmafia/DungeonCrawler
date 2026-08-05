@@ -386,7 +386,10 @@ if (see >= 0) {
 
   console.log('\n[11d] ★ **여운에 일이 하나 오나** — 손이 노는 유일한 자리');
   {
-    // 닳아 있어야 일이 된다 — 장면 동안 부딪힌 셈 치고
+    // 닳아 있어야 일이 된다 — 장면 동안 부딪힌 셈 치고.
+    // ★ 그리고 **손을 비워 둔다** — 열린 고장이 상한(2)에 닿아 있으면
+    //   여운은 일부러 안 낸다 (여운이 빈 게 아니라 이미 할 일이 있는 것)
+    await S(() => { while (SPACE.fixOne()) { /* 열린 것을 다 치운다 */ } });
     await S(() => SPACE.wearTo({ hull: 0.4, power: 0.3 }));
     let sc = await S(() => SPACE.scene);
     for (let i = 0; i < 30 && sc.phase !== 'after'; i++) {
@@ -397,11 +400,12 @@ if (see >= 0) {
     ok(sc.ember > 0, `일이 ${sc.ember}초 뒤에 오기로 예약됐다 (0 이면 여운이 빈다)`);
     ok(sc.ember >= 3, '해소 직후 0초에는 안 낸다 — 「뿌리친 3초」 위에 일을 얹지 않는다');
     const before = await S(() => SPACE.faults.open.length);
-    for (let i = 0; i < 40; i++) {
+    await S(() => SPACE.seekEmber());
+    for (let i = 0; i < 25; i++) {
       await p.waitForTimeout(400);
       if ((await S(() => SPACE.scene)).ember === 0) break;
     }
-    await p.waitForTimeout(800);
+    await p.waitForTimeout(1200);
     const after = await S(() => SPACE.faults.open.length);
     ok(after > before, `여운에 일이 하나 왔다 (${before} → ${after})`);
   }
