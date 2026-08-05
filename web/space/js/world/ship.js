@@ -259,11 +259,17 @@ function taken(objs, axis, fixed, half = 0.8) {
 }
 
 /** 랙 한 줄을 세우고 **충돌까지 같이 등록한다** — 따로 하면 언젠가 빠뜨린다 */
-function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, avoid = []) {
+function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, avoid = [],
+  lift = 0, skipRanges = []) {
   const out = rackRun(parent, axis, fixed, from, to, facing, tint, seed,
-    room ? nextBayOf(room) : null, taken(avoid, axis, fixed));
+    room ? nextBayOf(room) : null, [...taken(avoid, axis, fixed), ...skipRanges], lift);
   for (const g of out) {
     if (g.userData.bay) byBay[g.userData.bay] = g;
+    // ★ **띄운 랙은 충돌을 안 건다.** 통로는 이미 아래 스탠드오프가
+    //   ±0.62 를 먹어 폭이 1.36m 다 — 실제 모듈의 1.2m 에 거의 닿았고
+    //   (REALSHIP.md §2), 여기 또 막으면 사람이 못 지나간다.
+    //   좁히는 일은 ① 이 이미 했고, ③ 이 할 일은 **맨 벽을 없애는 것**이다
+    if (lift > 0) continue;
     const ry = g.rotation.y;
     blockBox(g.position.x - 0.21 * Math.sin(ry), g.position.z - 0.21 * Math.cos(ry), 0.45, 0.21, ry);
   }
@@ -430,7 +436,25 @@ export function buildShip(scene, camera = null) {
   };
   for (const [key, pnl] of Object.entries(panels)) pnl.room = key;
   /** 벽에 이미 붙은 것들 — 랙을 세울 때 이 자리를 비운다 */
-  const onWall = Object.values(panels);
+  const onWall = [...Object.values(panels), { position: breakers[0].hit.parent.position }];
+
+  // ── 통로 벽 — **맨 벽을 없앤다** (REALSHIP.md §8-③) ──────
+  // ★ 실제 모듈은 **네 면이 전부 랙**이고 가운데 통로가 1.2m 다. 우리
+  //   통로는 13m 짜리 복도인데 벽에 아무것도 없었다 — 배에서 제일 오래
+  //   서 있는 방이 제일 휑했다.
+  //
+  // ★ **좁히는 일은 ① 이 이미 했다.** 아래 스탠드오프가 좌우 0.62m 씩
+  //   먹어 실제 폭이 1.36m 다. 그래서 여기 랙은 **띄워 붙이고 충돌을 안
+  //   건다** — 아래는 배관, 위는 물건. 실제 모듈도 바닥 난간 위에 랙이
+  //   붙는다. 여기서 또 막으면 사람이 못 지나간다.
+  //
+  // ★ 문간은 비운다. 랙 반폭(0.45)만큼 더 벌린다 — 문 옆에 딱 붙으면
+  //   지나갈 때마다 어깨가 스치는 것으로 보인다
+  const doorSkip = (side) => doorGaps(spine, side).map(([a, b]) => [a - 0.5, b + 0.5]);
+  racks(ship, 'z', spine.x0 + 0.09, spine.z0 + 0.7, spine.z1 - 0.7, 1, CZ.accent, 5,
+    'spine', onWall, 0.78, doorSkip('x0'));
+  racks(ship, 'z', spine.x1 - 0.09, spine.z0 + 0.7, spine.z1 - 0.7, -1, CZ.accent, 7,
+    'spine', onWall, 0.78, doorSkip('x1'));
 
   // 경보등 — 추격이 붙으면 통로가 붉어진다. **어느 방에 있든 보여야** 한다
   const alarm = new THREE.PointLight(0xff3020, 0, 22, 2);

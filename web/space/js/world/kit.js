@@ -109,13 +109,17 @@ function box(parent, w, h, d, mat, x, y, z) {
  * @param kind 얼굴에 뭐가 붙나 — 'panel' 계기 | 'lockers' 서랍 | 'grill' 환기
  *             | 'pipes' 배관 | 'blank' 민판(가끔 있어야 리듬이 산다)
  */
-export function rack(parent, x, z, ry, kind, tint, bayText = null) {
+export function rack(parent, x, z, ry, kind, tint, bayText = null, lift = 0) {
   const g = new THREE.Group();
-  g.position.set(x, 0, z);
+  // ★ `lift` 는 **바닥에서 띄운 랙**이다 (통로용).
+  //   통로는 바닥 모서리에 스탠드오프(배관 덮개)가 지나가므로 바닥까지
+  //   내려오는 랙은 그것을 뚫는다. 실제 모듈도 바닥 난간 위쪽에 보관
+  //   랙이 붙는다 — 아래는 배관, 위는 물건. 그대로 가져왔다
+  g.position.set(x, lift, z);
   g.rotation.y = ry;
   parent.add(g);
 
-  const W = 0.9, H = 1.9, D = 0.42;
+  const W = 0.9, H = lift > 0 ? 1.9 - lift - 0.12 : 1.9, D = 0.42;
   box(g, W, H, D, MAT.body, 0, H / 2, -D / 2);                 // 몸통
   box(g, W, 0.06, D + 0.03, MAT.metal, 0, H, -D / 2);          // 윗테
   box(g, W, 0.08, D + 0.03, MAT.metal, 0, 0.04, -D / 2);       // 아랫테
@@ -157,10 +161,13 @@ export function rack(parent, x, z, ry, kind, tint, bayText = null) {
   // 어느 랙이든 번호판 한 장. ★ 전에는 **아무것도 안 적힌 빛나는 띠**라
   //   랙 여덟이 다 똑같았다 — 「3번 베이」라고 부를 수가 없었다
   if (bayText) {
-    bayPlate(g, bayText, 0, 1.79, 0.022, tint);
+    // ★ 번호판은 **랙 꼭대기 기준**이다. 1.79 라고 박아 뒀더니 띄운 랙
+    //   (통로용 `lift`)에서 판이 랙 위 허공에 떴다 — 높이가 달라진 물건에
+    //   절대 좌표를 쓰면 이렇게 된다
+    bayPlate(g, bayText, 0, H - 0.11, 0.022, tint);
     g.userData.bay = bayText;
   } else {
-    box(g, 0.34, 0.045, 0.03, glow(tint), -W / 2 + 0.26, 1.83, 0.02);
+    box(g, 0.34, 0.045, 0.03, glow(tint), -W / 2 + 0.26, H - 0.07, 0.02);
   }
   return g;
 }
@@ -169,7 +176,7 @@ export function rack(parent, x, z, ry, kind, tint, bayText = null) {
  * 벽 한 면을 랙으로 채운다.
  * **가끔 빈칸을 둔다** — 전부 채우면 무늬가 되고, 무늬는 배로 안 읽힌다.
  */
-export function rackRun(parent, axis, fixed, from, to, facing, tint, seed = 1, nextBay = null, skip = []) {
+export function rackRun(parent, axis, fixed, from, to, facing, tint, seed = 1, nextBay = null, skip = [], lift = 0) {
   const KINDS = ['panel', 'lockers', 'grill', 'pipes', 'lockers', 'panel', 'blank', 'grill'];
   const step = 0.95;
   const n = Math.floor((to - from) / step);
@@ -186,8 +193,8 @@ export function rackRun(parent, axis, fixed, from, to, facing, tint, seed = 1, n
     // ★ 번호는 **부르는 쪽(ship.js)이 매긴다.** 여기서 매기면 벽 한 줄마다
     //   1 부터 다시 시작해서 한 방에 같은 번호가 두 개 생긴다
     const bayText = nextBay ? nextBay() : null;
-    if (axis === 'x') out.push(rack(parent, t, fixed, facing > 0 ? 0 : Math.PI, kind, tint, bayText));
-    else out.push(rack(parent, fixed, t, facing > 0 ? Math.PI / 2 : -Math.PI / 2, kind, tint, bayText));
+    if (axis === 'x') out.push(rack(parent, t, fixed, facing > 0 ? 0 : Math.PI, kind, tint, bayText, lift));
+    else out.push(rack(parent, fixed, t, facing > 0 ? Math.PI / 2 : -Math.PI / 2, kind, tint, bayText, lift));
   }
   return out;
 }
