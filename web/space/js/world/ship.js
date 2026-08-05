@@ -46,6 +46,28 @@ const T = 0.16;         // 벽 두께
 const DOORW = DOOR.half;
 
 /**
+ * 창 — **방의 주인공이다** (docs/space/REF.md).
+ * 참고 여섯 장 전부 벽 한 면이 통째로 창이고, 밖이 방을 밝힌다.
+ * 우리 것은 지름 0.42m 짜리 동그라미 셋이었다.
+ */
+/**
+ * 어느 방의 어느 벽에 창을 내나 — **바깥으로 난 벽**이다.
+ * 조종석은 캐노피가 이미 창이고, 통로는 양쪽이 다 방이라 창이 없다.
+ */
+const WINDOWS = {
+  observ: 'x0',     // 관측실 — 「밖을 본다」가 목적인 방
+  garden: 'x0',     // 온실 — 빛이 들어와야 자란다
+  workshop: 'z1',   // 정비실 — 아래쪽 벽이 바깥
+  airlock: 'z1',
+};
+
+const WIN = {
+  sill: 0.95,     // 아래턱 — 사람 허리께. 이보다 낮으면 바닥이 보인다
+  head: 2.10,     // 위턱 — 천장(2.7) 아래 리브가 지나갈 자리를 남긴다
+  half: 1.15,     // 창 하나의 반폭
+};
+
+/**
  * 방들. **통로가 척추고 곁방이 좌우에 붙는다.**
  * 여기 숫자를 고치면 벽·문구멍·모따기·충돌이 전부 따라온다.
  */
@@ -164,12 +186,33 @@ function segments(from, to, gaps = []) {
   return out;
 }
 
-function wallRun(parent, mat, axis, fixed, from, to, gaps = []) {
+/**
+ * 벽 한 줄. `gaps` 는 **위아래로 통째로 뚫린** 구멍(문)이고,
+ * `wins` 는 **창구멍** — 가운데 띠만 뚫리고 위아래는 벽이 남는다.
+ *
+ * ★ 창구멍이 왜 필요했나 (2026-08-05 · 사장님이 참고 사진 여섯 장)
+ *   곁방 창은 **창이 아니었다.** 벽에는 구멍이 없고, `port()` 가 만든
+ *   검은 원반이 솔리드 벽 **앞에 붙어** 있었다. 「창을 만들었다」가
+ *   코드에는 있는데 화면에는 없었고, 화면을 찍어 보고서야 알았다.
+ *   관측실은 「밖을 본다」가 목적인 방인데 새까만 원반 셋이 전부였다.
+ */
+function wallRun(parent, mat, axis, fixed, from, to, gaps = [], wins = []) {
+  const put = (a, b, y0, y1) => {
+    if (b - a <= 0.01 || y1 - y0 <= 0.01) return;
+    const mid = (a + b) / 2, h = y1 - y0, cy = (y0 + y1) / 2;
+    if (axis === 'x') box(parent, b - a, h, T, mat, mid, cy, fixed);
+    else box(parent, T, h, b - a, mat, fixed, cy, mid);
+  };
   for (const [a, b] of segments(from, to, gaps)) {
     if (b - a <= 0.01) continue;
-    const mid = (a + b) / 2;
-    if (axis === 'x') box(parent, b - a, H, T, mat, mid, H / 2, fixed);
-    else box(parent, T, H, b - a, mat, fixed, H / 2, mid);
+    // 이 구간 안에 든 창구멍만 본다
+    const here = wins.filter(([wa, wb]) => wb > a && wa < b)
+      .map(([wa, wb]) => [Math.max(a, wa), Math.min(b, wb)]);
+    if (!here.length) { put(a, b, 0, H); continue; }
+    // 창 아래턱 · 위턱은 벽이 남고, 가운데 띠만 창구멍으로 비운다
+    put(a, b, 0, WIN.sill);
+    put(a, b, WIN.head, H);
+    for (const [ca, cb] of segments(a, b, here)) put(ca, cb, WIN.sill, WIN.head);
   }
 }
 
@@ -181,7 +224,42 @@ function slab(parent, mat, r, y, flip) {
   return m;
 }
 
-/** 둥근 현창 — 곁방에서 밖을 보는 창. 조종석 말고도 밖이 보여야 한다 */
+/**
+ * **큰 팔각 창** — 방 하나에 하나. 참고 여섯 장이 전부 이렇다 (REF.md).
+ *
+ * ★ 여기가 「창을 만들었다」와 「창이 있다」의 차이다.
+ *   전에는 `port()` 가 **벽 앞에 붙인 검은 원반**이었다. 벽에는 구멍이
+ *   없었고 유리는 투명이 아니라 **검정을 칠한 것**이었다. 코드에는 창이
+ *   있는데 화면에는 없었다 — 화면을 찍어 보고서야 알았다.
+ *   지금은 `wallRun` 이 구멍을 뚫고, 여기는 **틀만** 두른다.
+ */
+function bigWindow(parent, x, z, ry, half = WIN.half) {
+  const g = new THREE.Group();
+  g.position.set(x, (WIN.sill + WIN.head) / 2, z);
+  g.rotation.y = ry;
+  g.name = '창';
+  parent.add(g);
+  const h = (WIN.head - WIN.sill) / 2;
+  // 팔각 — 네 귀퉁이를 45도로 잘라 낸다. 사각 구멍은 건물이고
+  // 모서리를 깎으면 압력 용기가 된다 (kit.js chamfer 와 같은 이유)
+  const c = Math.min(half, h) * 0.42;
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(c * 1.9, 0.14, 0.3), MAT.metal);
+    m.position.set(sx * (half - c * 0.5), sy * (h - c * 0.5), 0);
+    m.rotation.z = -sx * sy * Math.PI / 4;
+    g.add(m);
+  }
+  // 틀 네 변
+  box(g, half * 2 + 0.2, 0.16, 0.3, MAT.metal, 0, h, 0);
+  box(g, half * 2 + 0.2, 0.16, 0.3, MAT.metal, 0, -h, 0);
+  box(g, 0.16, h * 2, 0.3, MAT.metal, -half, 0, 0);
+  box(g, 0.16, h * 2, 0.3, MAT.metal, half, 0, 0);
+  // 가운데 세로 살 — 참고 사진의 창은 전부 살로 나뉘어 있다
+  box(g, 0.09, h * 2, 0.22, MAT.metal, 0, 0, 0);
+  return g;
+}
+
+/** 둥근 현창 — 작은 보조 창. 큰 창이 없는 벽에 쓴다 */
 function port(parent, x, z, ry, rad = 0.42) {
   const g = new THREE.Group();
   g.position.set(x, 1.5, z);
@@ -314,11 +392,22 @@ export function buildShip(scene, camera = null) {
     }
 
     const w = wallOf(r);
+    // ★ **창은 바깥으로 난 벽에만.** 곁방은 통로 반대쪽 벽이 바깥이다.
+    //   창밖이 방을 밝히므로 이게 조명 설계이기도 하다 (REF.md)
+    const winsX0 = WINDOWS[r.key] === 'x0'
+      ? [[(r.z0 + r.z1) / 2 - WIN.half, (r.z0 + r.z1) / 2 + WIN.half]] : [];
+    const winsZ1 = WINDOWS[r.key] === 'z1'
+      ? [[(r.x0 + r.x1) / 2 - WIN.half, (r.x0 + r.x1) / 2 + WIN.half]] : [];
     // 조종석 앞은 벽이 아니라 캐노피다. 옆벽도 캐노피가 시작하는 데서 끝난다
     if (r.key !== 'cockpit') wallRun(ship, w, 'x', r.z0, r.x0, r.x1, gaps.z0);
-    wallRun(ship, w, 'x', r.z1, r.x0, r.x1, gaps.z1);
-    wallRun(ship, w, 'z', r.x0, r.key === 'cockpit' ? -7.2 : r.z0, r.z1, gaps.x0);
+    wallRun(ship, w, 'x', r.z1, r.x0, r.x1, gaps.z1, winsZ1);
+    wallRun(ship, w, 'z', r.x0, r.key === 'cockpit' ? -7.2 : r.z0, r.z1, gaps.x0, winsX0);
     wallRun(ship, w, 'z', r.x1, r.key === 'cockpit' ? -7.2 : r.z0, r.z1, gaps.x1);
+
+    // 창틀 — **구멍과 같은 자리에서 세운다.** 두 곳에 적으면 갈라지고,
+    // 그건 「틀은 있는데 구멍이 없다」(또는 그 반대)가 된다
+    if (winsX0.length) bigWindow(ship, r.x0 + 0.02, (r.z0 + r.z1) / 2, Math.PI / 2);
+    if (winsZ1.length) bigWindow(ship, (r.x0 + r.x1) / 2, r.z1 - 0.02, 0);
 
     // ★ 「배 같다」를 고치는 둘
     chamfer(ship, r, H, w, gaps);
@@ -464,7 +553,6 @@ export function buildShip(scene, camera = null) {
   // ── 관측실 — 밖을 보는 방 ────────────────────────────────
   {
     const r = R.observ, Z = ZONE.observ;
-    for (const z of [r.z0 + 1.0, (r.z0 + r.z1) / 2, r.z1 - 1.0]) port(ship, r.x0 + 0.1, z, Math.PI / 2, 0.46);
     // 해도대 — **항로를 고르는 자리.** 여기까지 걸어와야 고를 수 있다
     // (world/chart.js · docs/space/GAP.md §3-A). 전에는 판때기였다
     chart = buildChart(ship, { x: r.x0 + 1.7, z: (r.z0 + r.z1) / 2 }, blockBox, MAT);
@@ -512,11 +600,14 @@ export function buildShip(scene, camera = null) {
         leaf.rotation.y = k;
         tray.add(leaf);
       }
-      // 생장등 — 이 방의 성격이 여기서 나온다
-      box(tray, 1.8, 0.06, 0.14, new THREE.MeshBasicMaterial({ color: Z.accent }), 0, 1.74, 0);
+      // 생장등 — 이 방의 성격이 여기서 나온다.
+      // ★ `Z.accent`(0xd8ff7a) 를 그대로 썼더니 **온실이 통째로 연두색
+      //   안개**가 됐다. MeshBasic 은 조명 계산을 안 받아 늘 최대 밝기인데
+      //   거기에 블룸이 얹혀 번졌다 — 화면을 찍어 보고 알았다.
+      //   빛나 보이되 안 타는 값으로 내린다 (REF.md: 참고는 밝되 **고르다**)
+      box(tray, 1.8, 0.06, 0.14, new THREE.MeshBasicMaterial({ color: 0x86b552 }), 0, 1.74, 0);
       blockBox(r.x0 + 1.3, z, 0.95, 0.31, 0);
     }
-    port(ship, r.x0 + 0.1, r.z1 - 0.85, Math.PI / 2, 0.4);
     // 식량 계기 — **숫자는 여기에만 있다** (PLAN §5-2 「체력바를 안 만든다」).
     // 재배대(x -5.05~-3.15)를 피해 문 쪽 벽에 붙인다
     foodGauge = buildFoodGauge(ship, { x: -2.4, z: r.z0 + 0.06, ry: 0 }, MAT);
@@ -710,7 +801,10 @@ export function buildShip(scene, camera = null) {
   ceilingLamp(0, 8.4, 0x93a8c0, 70, 16);
   ceilingLamp(R.observ.x0 + 2.1, 0.6, ZONE.observ.light, 52, 12);
   ceilingLamp(R.workshop.x1 - 1.7, 0.6, ZONE.workshop.light, 60, 12, true);
-  ceilingLamp(R.garden.x0 + 1.5, (R.garden.z0 + R.garden.z1) / 2, ZONE.garden.light, 52, 12);
+  // ★ 온실 천장등은 **색을 뺐다.** 초록 등 + 초록 생장등 + 블룸이 겹쳐
+  //   방이 연두색 안개가 됐다. 방 색은 물건이 내고 등은 하얗게 비춘다 —
+  //   참고 사진 여섯 장이 전부 그렇다 (REF.md)
+  ceilingLamp(R.garden.x0 + 1.5, (R.garden.z0 + R.garden.z1) / 2, 0xd8f0d4, 34, 12);
   ceilingLamp((R.airlock.x0 + R.airlock.x1) / 2, (R.airlock.z0 + R.airlock.z1) / 2, ZONE.airlock.light, 38, 10);
 
   const lampEngine = ceilingLamp(0, engine.z0 + 1.9, 0xffb072, 74, 18, true);
