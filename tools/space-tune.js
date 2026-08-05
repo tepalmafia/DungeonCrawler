@@ -24,7 +24,7 @@ import { makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, relie
   from '../web/space/js/game/route.js';
 import { makeChase, stepChase, heatRate, PHASE } from '../web/space/js/game/chase.js';
 import { CHASE } from '../web/space/js/game/chase-table.js';
-import { HEAT, VALVE } from '../web/space/js/game/systems-table.js';
+import { HEAT, VALVE, wantValve } from '../web/space/js/game/systems-table.js';
 
 const DT = 0.5;                       // 쓸어보기라 굵게. 목표는 분 단위다
 const ALL = process.argv.includes('--all');
@@ -84,11 +84,11 @@ function runLap(pick, seed) {
       continue;
     }
     const p = pilot(Object.assign(st, { heat, risk: c.risk, chasing: c.phase === PHASE.CHASE, dt: DT }));
-    if (coolFor <= 0 && heat > LO) coolFor = VALVE.holds;
-    coolFor = Math.max(0, coolFor - DT);
+    coolFor = wantValve(heat, p.thrust) ? 1 : 0;
     heat = Math.max(0, Math.min(HEAT.max, heat + heatRate(p, coolFor > 0) * DT));
 
-    const ev = stepChase(c, DT, p, heat, signMult(rt), { contactAt: contactAt(rt), trackMult: trackMult(rt) });
+    const ev = stepChase(c, DT, p, heat, signMult(rt),
+      { contactAt: contactAt(rt), trackMult: trackMult(rt), valveOpen: coolFor > 0 });
     if (ev === 'contact') legChases++;
     if (ev === 'escaped') relieveEscape(rt);
     // 잡혀도 **그 자리에서 또 안 붙는다.** 뿌리친 뒤와 같은 유예를 준다 —

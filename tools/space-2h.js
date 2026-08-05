@@ -17,8 +17,8 @@
 //    「12구간이 다 찼다」로 읽히고, 그건 도구가 게임보다 앞서 있는 것이다 —
 //    이 저장소가 제일 자주 밟은 함정이라 **줄인 만큼 찍는다.**
 // ══════════════════════════════════════════════════════════════════════════
-import { SCENES, PLACEMENT, GOALS, BEAT, audit } from '../web/space/js/game/scene-table.js';
-import { makeScenes, newLeg, stepScene, running, allowChore, playable, BPHASE, summary }
+import { SCENES, PLACEMENT, GOALS, BEAT, EMBER, audit } from '../web/space/js/game/scene-table.js';
+import { makeScenes, newLeg, stepScene, running, opens, resolve, allowChore, playable, BPHASE }
   from '../web/space/js/game/scene.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 
@@ -68,7 +68,13 @@ console.log('\n[3] 네 박자가 **정말 그 길이로 도나**');
   const seen = {}; let last = null, t = 0;
   while (t < legSec * 1.6) {
     const ev = stepScene(s, DT, legSec);
-    if (ev) { if (last) seen[last] = t - (seen[`${last}@`] ?? 0); seen[`${ev}@`] = t; last = ev; }
+    // ★ **계통 노릇을 대신 해 준다.** 5판부터 대응은 저 혼자 안 끝난다 —
+    //   「끝내라」는 말을 듣고 계통이 끝내야 해소로 간다. 게임에서는
+    //   추격이 뿌리쳐지는 자리이고, 여기서는 그걸 흉내 낸다.
+    //   이걸 안 하면 대응이 영영 안 끝나서 「대응 -174초」 같은 값이 나온다
+    if (ev === 'act-end') { for (const k of s.keys) resolve(s, k); }
+    else if (ev) { if (last) seen[last] = t - (seen[`${last}@`] ?? 0); seen[`${ev}@`] = t; last = ev; }
+    if (ev === 'act-end') { seen['clear@'] = t; last = 'clear'; }
     t += DT;
     if (s.phase === BPHASE.DONE && last === 'done') break;
   }
@@ -157,6 +163,75 @@ console.log('\n[6] 구간이 부르지 않으면 **그 사건은 안 온다**');
   while (t < legSec) { stepScene(s, DT, legSec); if (running(s, 'D')) dOn++; if (running(s, 'A')) aOn++; t += DT; }
   ok(dOn > 0, `구간 5 에서는 D(잔해밭)가 돈다 (${(dOn * DT).toFixed(0)}초)`);
   ok(aOn === 0, '같은 구간에 A(적)는 안 온다 — 겹침은 9·11 뿐이다');
+}
+
+console.log('\n[6b] ★ 네 박자가 **A·D 에 실제로 입혀졌나** (5판)');
+{
+  const legSec = LEG.seconds / 0.85;
+  const s = makeScenes('B6');
+
+  // ① 예고에는 **아직 안 온다.** 「온다」와 「왔다」는 다른 박자다
+  newLeg(s, 2);                          // A
+  let inWarn = 0, openInWarn = 0, t = 0;
+  while (t < legSec && s.phase !== BPHASE.DONE) {
+    stepScene(s, DT, legSec);
+    if (s.phase === BPHASE.WARN) { inWarn += DT; if (opens(s, 'A')) openInWarn += DT; }
+    t += DT;
+  }
+  ok(inWarn > 10, `예고 박자가 ${inWarn.toFixed(0)}초 돌았다`);
+  ok(openInWarn === 0,
+    `A 는 예고 중에 **안 붙는다** (${openInWarn.toFixed(0)}초) — 준비할 시간이 있어야 선택이 된다`);
+
+  // ② D 는 **예고부터** 연다 — 잔해는 제 예고(30초)가 곧 장면의 예고다
+  const s2 = makeScenes('B7');
+  newLeg(s2, 5);
+  let dWarn = 0, tt = 0;
+  while (tt < legSec && s2.phase !== BPHASE.DONE) {
+    stepScene(s2, DT, legSec);
+    if (s2.phase === BPHASE.WARN && opens(s2, 'D')) dWarn += DT;
+    tt += DT;
+  }
+  ok(dWarn > 5, `D 는 예고부터 연다 (${dWarn.toFixed(0)}초) — 장면마다 여는 박자가 다르다`);
+}
+
+console.log('\n[6c] ★★ **해소는 시계가 아니라 사건이 정한다**');
+{
+  const legSec = LEG.seconds / 0.85;
+  const s = makeScenes('B8');
+  newLeg(s, 2);
+  while (s.phase !== BPHASE.ACT) stepScene(s, DT, legSec);
+  // 대응 한복판에서 뿌리쳤다 — 장면도 같이 끝나야 한다
+  let ran = 0;
+  while (ran < 30) { stepScene(s, DT, legSec); ran += DT; }
+  ok(s.phase === BPHASE.ACT, '아직 대응 중이다');
+  const ev = resolve(s, 'A');
+  ok(ev === 'clear' && s.phase === BPHASE.CLEAR,
+    `뿌리치면 **그 자리에서** 해소로 간다 (${s.phase})`);
+
+  // 반대로 시계가 먼저 끝나면 **계통에게 끝내라고 말한다** — 조용히 넘어가지 않는다
+  const s2 = makeScenes('B9');
+  newLeg(s2, 2);
+  while (s2.phase !== BPHASE.ACT) stepScene(s2, DT, legSec);
+  let said = null, t2 = 0;
+  while (t2 < BEAT.act[1] + 10 && s2.phase === BPHASE.ACT) {
+    const ev = stepScene(s2, DT, legSec);
+    if (ev && !said) said = ev;
+    t2 += DT;
+  }
+  ok(said === 'act-end',
+    `시계가 다 되면 **끝내라고 말한다** (${said}) — 조용히 넘어가면 장면은 끝났는데 적은 붙어 있다`);
+  ok(s2.overdue && s2.phase === BPHASE.ACT,
+    '끝날 때까지 **대응에 머문다** — 깃발로 남아서 매 프레임 읽힌다');
+  // 계통이 끝내면 그때 해소로
+  ok(resolve(s2, 'A') === 'clear' && !s2.overdue, '계통이 끝내면 그제서야 해소다');
+}
+
+console.log('\n[6d] ★ **여운이 비어 있지 않나** — 여기가 「시간 가는 줄 모른다」의 자리다');
+{
+  ok(EMBER.chore, '여운에 일이 하나 온다 — 안 그러면 40~90초 동안 손이 논다');
+  ok(EMBER.fromWear, '온 것은 **쌓인 마모**에서 나온다 — 벌은 미뤄지지 없어지지 않는다');
+  ok(EMBER.within <= 20,
+    `여운이 시작되고 ${EMBER.within}초 안에 온다 — 「손이 쉬는 시간 12초 이하」(§10)`);
 }
 
 console.log('\n[7] 아직 못 만든 것을 **소리 내어 센다**');
@@ -267,6 +342,72 @@ if (see >= 0) {
     await p.waitForTimeout(1500);
     const b2 = await S(() => SPACE.faults.next);
     ok(b2 >= a - 0.05, `대응 중에는 고장 시계가 안 간다 (${a} → ${b2})`);
+  }
+
+  console.log('\n[11b] ★ **예고 중에는 아직 안 온다** — 실제 배에서');
+  {
+    await S(() => { SPACE.setLeg(2); SPACE.resetChase(); SPACE.setHeat(90); SPACE.seekScene(900); });
+    // 예고 박자로 들어갈 때까지
+    let sc = await S(() => SPACE.scene);
+    for (let i = 0; i < 20 && sc.phase !== 'warn'; i++) {
+      await p.waitForTimeout(300); sc = await S(() => SPACE.scene);
+    }
+    ok(sc.phase === 'warn', `예고 박자다 (${sc.phase})`);
+    // 열을 90 까지 올려 놨는데도 **예고 중에는 안 붙는다**
+    await p.waitForTimeout(2500);
+    const c = await S(() => SPACE.chase);
+    ok(c.phase === 'calm',
+      `열이 90 인데도 예고 중에는 안 붙는다 (${c.phase} · 위험 ${c.risk})`);
+  }
+
+  console.log('\n[11c] ★★ **해소가 사건과 같은 순간인가**');
+  {
+    await S(() => SPACE.skipBeat());     // 대응으로
+    let sc = await S(() => SPACE.scene);
+    for (let i = 0; i < 20 && sc.phase !== 'act'; i++) {
+      await p.waitForTimeout(300); sc = await S(() => SPACE.scene);
+    }
+    ok(sc.phase === 'act', `대응 박자다 (${sc.phase})`);
+    await S(() => SPACE.forceContact());
+    await p.waitForTimeout(900);
+    ok((await S(() => SPACE.chase)).phase === 'chase', '붙었다');
+    // 뿌리친다 — **그 순간** 장면도 해소로 가야 한다
+    await S(() => SPACE.setDist(99.9));
+    let after = null;
+    for (let i = 0; i < 30; i++) {
+      await p.waitForTimeout(300);
+      after = await S(() => ({ ...SPACE.scene, chase: SPACE.chase.phase }));
+      if (after.chase !== 'chase') break;
+    }
+    ok(after.chase === 'shaken', `뿌리쳤다 (${after.chase})`);
+    ok(after.phase === 'clear' || after.phase === 'after',
+      `뿌리친 그 순간 장면도 넘어갔다 (${after.phase}) — 시계가 아니라 사건이 정한다`);
+  }
+
+  console.log('\n[11d] ★ **여운에 일이 하나 오나** — 손이 노는 유일한 자리');
+  {
+    // 닳아 있어야 일이 된다 — 장면 동안 부딪힌 셈 치고.
+    // ★ 그리고 **손을 비워 둔다** — 열린 고장이 상한(2)에 닿아 있으면
+    //   여운은 일부러 안 낸다 (여운이 빈 게 아니라 이미 할 일이 있는 것)
+    await S(() => { while (SPACE.fixOne()) { /* 열린 것을 다 치운다 */ } });
+    await S(() => SPACE.wearTo({ hull: 0.4, power: 0.3 }));
+    let sc = await S(() => SPACE.scene);
+    for (let i = 0; i < 30 && sc.phase !== 'after'; i++) {
+      await S(() => SPACE.skipBeat());
+      await p.waitForTimeout(300); sc = await S(() => SPACE.scene);
+    }
+    ok(sc.phase === 'after', `여운 박자다 (${sc.phase})`);
+    ok(sc.ember > 0, `일이 ${sc.ember}초 뒤에 오기로 예약됐다 (0 이면 여운이 빈다)`);
+    ok(sc.ember >= 3, '해소 직후 0초에는 안 낸다 — 「뿌리친 3초」 위에 일을 얹지 않는다');
+    const before = await S(() => SPACE.faults.open.length);
+    await S(() => SPACE.seekEmber());
+    for (let i = 0; i < 25; i++) {
+      await p.waitForTimeout(400);
+      if ((await S(() => SPACE.scene)).ember === 0) break;
+    }
+    await p.waitForTimeout(1200);
+    const after = await S(() => SPACE.faults.open.length);
+    ok(after > before, `여운에 일이 하나 왔다 (${before} → ${after})`);
   }
 
   console.log('\n[12] 이어하면 **박자 한복판에서 이어지나**');

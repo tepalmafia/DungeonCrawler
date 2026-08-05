@@ -21,7 +21,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { SIGN, CHASE, POWER_MAX } from '../web/space/js/game/chase-table.js';
 import { makeChase, stepChase, heatRate, signatureOf, PHASE } from '../web/space/js/game/chase.js';
-import { HEAT, VALVE } from '../web/space/js/game/systems-table.js';
+import { HEAT, VALVE, wantValve } from '../web/space/js/game/systems-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 
 const DT = 1 / 60;
@@ -46,8 +46,9 @@ function run(plan, { regionKey = 'empty', force = false } = {}) {
   while (t < CAP) {
     const p = plan({ t, heat, coolFor, chase: c, sign: c.sign });
     // 밸브를 열러 갔다면 걸린다 (실제로는 기관실까지 뛰어야 한다 — 위 주의)
-    if (p.turnValve && coolFor <= 0) { coolFor = VALVE.holds; trip.valve++; }
-    coolFor = Math.max(0, coolFor - DT);
+    // ★ **잠금식이다.** 26초 걸림이 아니라 「열면 잠글 때까지」 —
+    //   `coolFor` 는 이제 「열려 있나」다 (0 또는 1)
+    if (p.turnValve !== (coolFor > 0)) { coolFor = p.turnValve ? 1 : 0; if (p.turnValve) trip.valve++; }
 
     const power = { thrust: p.thrust, cool: p.cool, sensor: p.sensor };
     const key = `${p.thrust}${p.cool}${p.sensor}`;
@@ -75,24 +76,24 @@ function run(plan, { regionKey = 'empty', force = false } = {}) {
 const HI = 70, LO = 40;
 const PLANS = {
   '밀어붙이기 (추진+냉각, 밸브 계속)': (s) => ({
-    thrust: true, cool: true, sensor: false, turnValve: s.coolFor <= 0,
+    thrust: true, cool: true, sensor: false, turnValve: wantValve(s.heat, true),
   }),
   '눈 뜨고 달리기 (추진+센서)': () => ({
     thrust: true, cool: false, sensor: true, turnValve: false,
   }),
   '숨죽이기 (냉각+센서, 안 민다)': (s) => ({
-    thrust: false, cool: true, sensor: true, turnValve: s.coolFor <= 0,
+    thrust: false, cool: true, sensor: true, turnValve: wantValve(s.heat, false),
   }),
   '번갈아 (뜨거우면 식히고 식으면 민다)': (s) => {
     if (s.heat > HI) s.mode = 'cool';
     else if (s.heat < LO) s.mode = 'push';
     const push = s.mode !== 'cool';
-    return { thrust: push, cool: true, sensor: false, turnValve: s.coolFor <= 0 };
+    return { thrust: push, cool: true, sensor: false, turnValve: wantValve(s.heat, push) };
   },
   '번갈아 + 눈 (거리를 보며)': (s) => {
     if (s.heat > HI) s.mode = 'cool';
     else if (s.heat < LO) s.mode = 'push';
-    if (s.mode === 'cool') return { thrust: false, cool: true, sensor: true, turnValve: s.coolFor <= 0 };
+    if (s.mode === 'cool') return { thrust: false, cool: true, sensor: true, turnValve: wantValve(s.heat, false) };
     return { thrust: true, cool: false, sensor: true, turnValve: false };
   },
 };
@@ -141,10 +142,31 @@ console.log(`  ${ok2 ? '✔' : '✘'} 아무거나 해서는 안 된다         
 console.log(`  ${ok3 ? '✔' : '✘'} 추격 하나가 ${TARGET.lo}~${TARGET.hi}초          `
   + (won.length ? won.map(([, r]) => `${r.chaseSec.toFixed(0)}초`).join(' · ') : '없음'));
 console.log(`  ${ok4 ? '✔' : '✘'} 조심하면 안 붙을 수 있다        ${safe.length}/${calm.length}개가 안 붙음`);
-// 추격 중에 방을 몇 번 오가나 (PLAN §11: 3~6회). 밸브는 기관실, 차단기는 통로다
-const moves = won.map(([, r]) => r.trip.valve + Math.min(r.trip.breaker, 8));
-const ok5 = moves.length > 0 && moves.every((m) => m >= 3 && m <= 8);
-console.log(`  ${ok5 ? '✔' : '✘'} 추격 중 방 이동 3~8회           ` + (moves.join(' · ') || '없음'));
+// ★ **「방 이동 3~8회」를 은퇴시키고 질문을 바꿨다** (2026-08-05 · 사장님).
+//
+//   전에는 `밸브 + 차단기` 를 셌다. 그런데 밸브가 26초마다 풀렸으므로
+//   그 숫자의 **대부분이 「밸브를 다시 돌리러 간 횟수」**였다 — 즉 이 검사는
+//   손이 바쁜 것을 잰 게 아니라 **쳇바퀴를 세고 있었다.** 그리고 초록이었다.
+//
+//   「하루종일 열만 내리나? 왜 의미없는 짓을 마우스를 계속 누르고 있어야하지?」
+//
+//   밸브를 잠금식으로 바꾸자 그 횟수가 1로 떨어졌다. 그래서 「차단기를 몇 번
+//   바꾸나」로 바꿔 봤는데 **그것도 0 이었고, 그건 맞는 값이었다** —
+//   추격 중에는 추진을 켜야만 거리가 벌어지므로(`CHASE.thrustGain`)
+//   차단기를 만질 이유가 없다. 차단기의 자리는 **평온할 때**다.
+//
+//   그러니 추격에서 물어야 할 것은 횟수가 아니라 이것이다:
+//   **「밸브가 답에 쓰이나」** — 같은 길을 밸브만 잠근 채 가면 잡혀야 한다.
+//   안 그러면 밸브는 있으나 마나 한 물건이다.
+const shut = run((s) => ({ thrust: true, cool: true, sensor: false, turnValve: false }),
+  { force: true });
+const openWin = won.find(([n]) => n.startsWith('밀어붙이기'))?.[1];
+const ok5 = !!openWin?.ok && !shut.ok;
+console.log(`  ${ok5 ? '✔' : '✘'} ★ 밸브가 답에 쓰인다            `
+  + `열면 ${openWin?.ok ? '뿌리친다' : '못 뿌리친다'} · 잠그면 ${shut.ok ? '뿌리친다' : '잡힌다'}`);
+console.log('     (추격 중 차단기는 안 센다 — 추진을 켜야 거리가 벌어지므로 만질 이유가 없다.');
+console.log('      차단기의 자리는 평온할 때 「열을 미리 낮춰 둘 것인가」이다)');
+
 
 console.log('\n  ※ 방 사이를 뛰는 시간이 0 으로 계산된다. 실제 플레이는 이보다 길다.');
 console.log('  ※ 「재미있나」는 여기서 안 나온다 — 직접 돌려 봐야 안다.\n');

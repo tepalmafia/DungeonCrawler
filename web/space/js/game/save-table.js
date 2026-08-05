@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 4;   // 3 → 4: 열려 있던 고장(faults.open·log)을 빠뜨리고 있었다
+export const SAVE_VERSION = 6;   // 5 → 6: 장면 네 박자 + 밸브가 잠금식이 됐다 (coolOpen)
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -69,7 +69,9 @@ export const FIELDS = {
    *   `keys` 는 배치표에서 다시 뽑을 수 있지만 `phase`·`t` 는 아니다.
    *   「여운 중이었는데 이어하니 예고부터」가 되면 그건 이어한 게 아니다
    */
-  scenes: ['leg', 'keys', 'phase', 't', 'need', 'at', 'inLeg', 'done', 'hard', 'permanent'],
+  scenes: ['leg', 'keys', 'phase', 't', 'need', 'at', 'inLeg', 'done', 'hard', 'permanent',
+    // 5판에서 는 것들. `ended` 를 빼면 겹친 구간에서 **한쪽이 두 번 끝난다**
+    'ended', 'ember', 'overdue'],
   /**
    * ★ 자세 제어. **`angle` 을 빼면 이어했을 때 배가 똑바로 서 있다** —
    *   90도 기운 채 저장했는데 이어하니 멀쩡하면 그건 이어한 게 아니라
@@ -77,7 +79,9 @@ export const FIELDS = {
    */
   drift: ['dead', 'permanent', 'spin', 'angle', 'hits', 'held', 't', 'way', 'needsFix'],
   /** 배 자체 — main.js 가 들고 있는 것들 */
-  ship: ['heat', 'power', 'clock', 'seed'],
+  // ★ `coolOpen` — 밸브가 열린 채 저장했는데 이어하니 잠겨 있으면
+  //   그건 이어한 게 아니다. 잠금식이 된 순간부터 이건 **상태**다
+  ship: ['heat', 'power', 'clock', 'seed', 'coolOpen'],
   /** 사람이 서 있던 자리 */
   me: ['x', 'z', 'yaw', 'pitch'],
 };
