@@ -62,7 +62,7 @@ import { bothHands } from './game/hand-table.js';
 import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
-import { SCENES } from './game/scene-table.js';
+import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
 import {
   makeDrift, kill as killDrift, fixed as driftFixed, stepDrift,
@@ -71,6 +71,7 @@ import {
 } from './game/drift.js';
 import {
   makeScenes, newLeg as sceneLeg, stepScene, running as sceneOn, warning as sceneWarn,
+  opens as sceneOpen, resolve as sceneDone, emberAt, emberWorth,
   allowChore, leadOf, summary as sceneSummary,
 } from './game/scene.js';
 import { pack, apply, where } from './game/save.js';
@@ -81,7 +82,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 40;
+export const VERSION = 42;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -179,7 +180,10 @@ const me = {
 };
 let heat = HEAT.start;
 let turn = 0;             // 밸브를 얼마나 돌렸나 (0~1)
-let coolFor = 0;          // 밸브가 걸려서 냉각이 열려 있는 남은 초
+/** ★ 냉각 밸브가 **열려 있나.** 잠글 때까지 열린 채다 (VALVE.latching) */
+let coolOpen = false;
+/** 조준이 잠깐 벗어나도 봐주는 남은 시간 */
+let valveGrace = 0;
 let clock = 0;            // 켠 뒤 흐른 초 — 화면이 살아 있어 보이게 하는 데 쓴다
 // 검사용 구역 고정. **게임은 안 쓴다** — 자동 순환이 매 프레임 덮어쓰기
 // 때문에, 밖에서 구역을 정해 놓고 화면을 찍으려면 이게 필요하다.
@@ -312,7 +316,7 @@ const drift = makeDrift();
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
   route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift,
-  ship: { heat, power, clock, seed },
+  ship: { heat, power, clock, seed, coolOpen },
   me,
 });
 /** 구간이 끝날 때 저장한다. **초마다 저장하면 되돌리기가 된다** */
@@ -342,6 +346,7 @@ function loadOnce() {
   heat = box.ship.heat ?? heat;
   clock = box.ship.clock ?? clock;
   Object.assign(power, box.ship.power ?? {});
+  coolOpen = box.ship.coolOpen ?? false;
   return where(raw);
 }
 /** 일시정지 — 2시간을 한 번에 앉아 있을 수 없다 */
@@ -763,13 +768,31 @@ function interactStep(dt) {
     if (fixHere && pn === panel) pn.knob.rotation.z -= dt * 3.2;
   }
 
-  // 밸브 — 잡고 돌린다. 놓으면 되돌아온다. **끝까지 돌리면 걸린다**
-  if (onValve && input.hold) turn = Math.min(1, turn + dt / VALVE.turnTime);
-  else turn = Math.max(0, turn - VALVE.slip * dt);
-  // 걸린 **횟수**를 센다 — 가르침이 `coolFor > 0` 을 보면 26초 뒤에 다시
-  // 「안 한 것」이 되어, 먼저 돌려 본 사람을 못 알아본다
-  if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; taught.cooled++; audio?.event('latch'); }
-  coolFor = Math.max(0, coolFor - dt);
+  // ── 밸브 — 잡고 돌린다. **열면 잠글 때까지 열려 있다** ──
+  // ★ 26초마다 다시 다녀오는 것이 이 게임에서 제일 지겨운 짓이었다
+  //   (사장님 「열 내리다가 게임 접겠다」). 이제 한 번 열면 열린 채고,
+  //   대신 **열어 두면 자국이 커진다** (SIGN.valveOpen).
+  if (onValve && input.hold) {
+    turn = Math.min(1, turn + dt / VALVE.turnTime);
+    valveGrace = VALVE.grace;
+  } else if (valveGrace > 0) {
+    // ★ **조준이 잠깐 벗어난 것은 봐준다.** 손이 미끄러진 것과 손을 뗀 것은
+    //   다르다 — 추격 중엔 화면이 흔들리고 굶으면 손도 떨리는데, 흔들리게
+    //   만들어 놓고 흔들리면 벌을 주는 것은 앞뒤가 안 맞는다
+    valveGrace -= dt;
+  } else {
+    turn = Math.max(0, turn - VALVE.slip * dt);
+  }
+  if (turn >= VALVE.openAt) {
+    turn = 0;
+    valveGrace = 0;
+    // 열려 있으면 잠그고, 잠겨 있으면 연다 — **같은 손짓**이다
+    coolOpen = !coolOpen;
+    if (coolOpen) taught.cooled++;
+    audio?.event('latch');
+    banner = coolOpen ? '냉각 밸브 — 열림' : '냉각 밸브 — 잠금';
+    bannerT = 2.0;
+  }
 
   // ★ 열을 **0.6초마다 한 점씩** 40초치 담아 둔다. 매 프레임 담으면 그래프가
   //   3초짜리라 「내려가는지」가 안 보이고, 너무 성기면 밸브를 돌리는 26초
@@ -779,7 +802,7 @@ function interactStep(dt) {
     trend.push(+heat.toFixed(1));
     if (trend.length > 66) trend.shift();
   }
-  ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolFor > 0 ? dt * 0.5 : 0);
+  ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolOpen ? dt * 0.5 : 0);
 
   // 차단기 · 해도대 — 누르는 순간에만 넘어간다
   const pressed = input.takePress();
@@ -842,7 +865,7 @@ function interactStep(dt) {
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
     || onYoke || (crankDoor && crankDoor.jammed)
     || (onSpot && (carry.held ? !atSpot(carry, onSpot) : !!atSpot(carry, onSpot)))));
-  return coolFor > 0;
+  return coolOpen;
 }
 
 // ── 열 · 자국 · 추격 ────────────────────────────────────────
@@ -948,7 +971,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   여기서 오는 잔해는 **장면이 아니라 배우는 것**이다
   const learning = !allDone(tutor);
   const hev = hazard.phase !== HPHASE.IDLE
-    || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard') && (sceneOn(scenes, 'D') || learning))
+    || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard')
+        && (sceneOpen(scenes, 'D') || sceneOpen(scenes, 'C') || learning))
     ? stepHazard(hazard, dt, { region: ship.outside.region })
     : null;
   if (hev === 'warn') {
@@ -971,6 +995,8 @@ function systemsStep(dt, valveOpen, regionMult) {
     audio?.event('caught');
   }
   if (hev === 'pass') audio?.event('fixed');
+  // ★ 지대를 다 지났다 — 「창밖이 갑자기 트인다」(§4-2 해소)
+  if (hev === 'clear') sceneDone(scenes, 'D');
 
   // 쓰는 대로 닳는다 — **어떻게 몰았는지가 다음 고장을 정한다** (systems-table WEAR)
   wearStep(faults, dt, { power, valveOpen, region: ship.outside.region });
@@ -995,7 +1021,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
-      : stepChase(chase, dt, power, heat + badSign, regionMult, { contactAt: 999, trackMult: 0 }))
+      : stepChase(chase, dt, power, heat + badSign, regionMult,
+        { contactAt: 999, trackMult: 0, valveOpen }))
     : stepChase(chase, dt, power,
       heat + badSign + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
       {
@@ -1004,8 +1031,13 @@ function systemsStep(dt, valveOpen, regionMult) {
         //   없어서 **기관실에 갈 이유가 사라졌다.** 그건 장면을 만든 게
         //   아니라 게임의 절반을 끈 것이다. 위험은 계속 오르되,
         //   실제로 따라붙는 것은 배치가 정한다 (PLAN2H §5)
-        contactAt: sceneOn(scenes, 'A') ? contactAt(route) : 999,
+        // ★ `running` 이 아니라 `opens` 다. 전에는 **예고 중에 이미 붙었고**,
+        //   그러면 「자국이 굵어집니다」와 「접촉」이 같은 순간에 뜬다 —
+        //   그건 예고가 아니라 사고다 (PLAN2H §2)
+        contactAt: sceneOpen(scenes, 'A') ? contactAt(route) : 999,
         trackMult: trackMult(route),
+        // ★ 열어 둔 밸브는 자국이 된다 — 「열어 놓고 잊기」가 공짜가 아니게
+        valveOpen,
       });
   // ★ 캐는 동안에는 **위험이 안 빠진다.** 배가 멈춰 있고 윈치가 시끄러우니
   //   상대가 나를 놓칠 리가 없다.
@@ -1021,6 +1053,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★ 항로에도 남긴다. 이게 없으면 「뿌리쳐도 아무것도 안 쌓인다」가
     //   그대로 남는다 (docs/space/GAP.md §1-1)
     relieveEscape(route);
+    // ★ **해소는 여기가 정한다.** 장면의 시계가 아니라 **실제로 뿌리친
+    //   이 순간**이 「됐다」다. 시계로만 넘기면 「뿌리친 3초」가 엉뚱한
+    //   자리에서 난다 — 이 게임 최고의 자산을 헛 데 쓰는 셈이다
+    sceneDone(scenes, 'A');
   }
   // ★ 잡혀도 **끝나지 않는다. 뺏기고 일이 는다** (chase-table.js CAUGHT).
   //   v21 까지는 배너 한 줄이 전부였고, 그 뒤로 게임이 위협 없는 빈 상자가
@@ -1041,6 +1077,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     banner = '놓아줬습니다 — 실려 있던 것이 없습니다';
     bannerT = 3.6;
     escapedAt = clock;      // 조용해지는 3초는 여기서도 온다. 안도는 안도다
+    sceneDone(scenes, 'A');  // 놓아준 것도 끝난 것이다
   }
   if (ev) audio?.event(ev === 'released' ? 'escaped' : ev);
 
@@ -1120,7 +1157,9 @@ window.SPACE = {
   get version() { return VERSION; },
   get heat() { return heat; },
   get turn() { return turn; },
-  get coolFor() { return +coolFor.toFixed(1); },
+  get coolFor() { return coolOpen ? 999 : 0; },
+  /** 냉각 밸브가 열려 있나 — 검사와 가르침이 읽는다 */
+  get coolOpen() { return coolOpen; },
   room(x, z) { return roomAt(x ?? me.x, z ?? me.z); },
   get rooms() { return ROOMS.map((r) => ({ key: r.key, name: r.name })); },
   put(x, z, yaw = 0, pitch = 0) { me.x = x; me.z = z; me.yaw = yaw; me.pitch = pitch; me.vx = me.vz = 0; },
@@ -1185,6 +1224,13 @@ window.SPACE = {
   panelAt(room) {
     const p = ship.panels[room];
     return p ? { x: +p.group.position.x.toFixed(2), z: +p.group.position.z.toFixed(2), ry: p.group.rotation.y } : null;
+  },
+  /** 냉각 밸브가 어디 있나 — 검사가 앞에 가서 서려고 묻는다 */
+  get valveAt() {
+    const v = ship.valve;
+    if (!v) return null;
+    const w = new THREE.Vector3(); v.getWorldPosition(w);
+    return { x: +w.x.toFixed(2), z: +w.z.toFixed(2) };
   },
   /** 진단대 화면이 어디 있나 — 읽을 자리가 있는지 검사가 묻는다 */
   get benchAt() {
@@ -1663,7 +1709,7 @@ function frame(now) {
   // ── ★ C — 자세 제어가 죽는다 ──────────────────────────
   // 「대응」 박자가 시작될 때 죽는다. **예고 때는 아직 멀쩡하다** —
   // 예고가 예고이려면 준비할 시간이 있어야 한다 (PLAN2H §2)
-  if (sev === 'act' && sceneOn(scenes, 'C') && !drift.dead) {
+  if (sev === 'act' && sceneOpen(scenes, 'C') && !drift.dead) {
     const forever = route.leg + 1 >= DRIFT.permanentAtLeg;
     killDrift(drift, { permanent: forever, way: driftWay });
     // ★ **고칠 것을 같이 연다.** 배만 돌고 고칠 데가 없으면 그건 장면이
@@ -1676,6 +1722,43 @@ function frame(now) {
     bannerT = 4.0;
     audio?.event('caught');
   }
+  // ── 대응 시계가 다 됐다 — **계통에게 끝내라고 말한다** ──
+  // ★ 조용히 해소로 넘기면 「장면은 끝났는데 적은 아직 붙어 있는」 상태가
+  //   된다. 대응이 2~4분을 넘었다면 그건 지대를 다 지났다는 뜻이니
+  //   **실제로 끝내 준다** — 그리고 그 끝냄이 `sceneDone` 으로 돌아온다
+  if (sev === 'act-end') {
+    if (scenes.keys.includes('A') && (chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT)) {
+      chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.risk = 0; chase.dist = 0;
+      banner = '더는 안 보입니다'; bannerT = 3.0;
+      audio?.event('escaped'); escapedAt = clock;
+      relieveEscape(route);
+    }
+    // ★ 자세 제어는 **안 고쳐 준다.** 안 고치고 지대를 나온 것이라
+    //   기울어진 채로 여운에 들어간다 — 「안 고치면 안 고친 대로 남는다」
+    for (const k of scenes.keys) sceneDone(scenes, k);
+  }
+
+  // ── 여운 — ★ **여기가 「시간 가는 줄 모른다」의 자리다** ──
+  if (sev === 'after') {
+    // 해소 직후 0초에 안 낸다. 「뿌리친 3초」 위에 일을 얹으면 보상이 사라진다
+    scenes.ember = emberWorth(faults.wear) ? emberAt(scenes) : 0;
+  }
+  if (scenes.ember > 0) {
+    scenes.ember -= dt;
+    if (scenes.ember <= 0) {
+      scenes.ember = 0;
+      // ★ **쌓인 마모가 일로 돌아온다.** 장면 동안 부딪히고 무리한 만큼이다.
+      //   `drift-table.js` 가 적어 둔 「벌은 미뤄지지 없어지지 않는다」가
+      //   실제로 지켜지는 자리가 여기다 — 안 그러면 그 문장은 주석일 뿐이다
+      faults.next = 0;
+      if (stepFaults(faults, 0.001, { calm: true, leg: route.leg }) === 'spawn') {
+        const o = faults.open[faults.open.length - 1];
+        banner = o.lead; bannerT = 3.6;
+        audio?.event('fault');
+      }
+    }
+  }
+
   if (sev === 'warn') {
     // ★ **무엇이 오는지만 말한다. 어디가 잘못됐나는 안 가르친다** (PLAN §3-1)
     const lead = leadOf(scenes);
@@ -1802,7 +1885,10 @@ function frame(now) {
   // 자세 제어를 다 고쳤으면 살아난다
   if (drift.dead && drift.needsFix && !faults.open.some((o) => o.key === 'attitude')) {
     drift.needsFix = false;
-    if (driftFixed(drift)) { banner = '자세가 잡혔습니다'; bannerT = 2.6; audio?.event('fixed'); }
+    if (driftFixed(drift)) {
+      banner = '자세가 잡혔습니다'; bannerT = 2.6; audio?.event('fixed');
+      sceneDone(scenes, 'C');
+    }
   }
 
   // 화면 한복판 글자 — 잠깐 떴다 사라진다
@@ -1863,6 +1949,9 @@ function frame(now) {
       //   되어 나온다 — 열 수치 자체는 여전히 조종석이 갖는다
       thrust: power.thrust,
       cool: power.cool,
+      // ★ 밸브가 **이미 열려 있나.** 열어 놨는데도 「열을 내립니다」가
+      //   계속 떠 있으면 사람은 「더 돌리라는 건가」로 읽고 계속 누른다
+      coolOpen,
       heat,
       ore: supply.ore,
     }),

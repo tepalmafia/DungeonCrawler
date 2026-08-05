@@ -27,7 +27,7 @@ import { makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, relie
   from '../web/space/js/game/route.js';
 import { makeChase, stepChase, heatRate, PHASE } from '../web/space/js/game/chase.js';
 import { CHASE } from '../web/space/js/game/chase-table.js';
-import { HEAT, VALVE } from '../web/space/js/game/systems-table.js';
+import { HEAT, VALVE, wantValve } from '../web/space/js/game/systems-table.js';
 
 const DT = 0.25;                 // 항로는 분 단위 이야기라 굵게 굴려도 된다
 const CSV = process.argv.includes('--csv');
@@ -99,12 +99,14 @@ function runLap(pick, seed) {
 
     const p = pilot(Object.assign(st, { heat, risk: c.risk, chasing: c.phase === PHASE.CHASE, dt: DT }));
     // 밸브 — 뜨거우면 열러 간다 (space-sim.js 와 같은 규칙)
-    if (coolFor <= 0 && heat > LO) coolFor = VALVE.holds;
-    coolFor = Math.max(0, coolFor - DT);
+    // ★ **잠금식이다** — 열면 잠글 때까지. `coolFor` 는 「열려 있나」다
+    coolFor = wantValve(heat, p.thrust) ? 1 : 0;
     heat = Math.max(0, Math.min(HEAT.max, heat + heatRate(p, coolFor > 0) * DT));
 
+    // ★ 열어 둔 밸브는 **그 자체가 자국**이다 (SIGN.valveOpen) — 안 넘기면
+    //   「열어 놓고 잊기」가 공짜인 배를 재게 되고, 추격이 아예 안 붙는다
     const ev = stepChase(c, DT, p, heat, signMult(rt),
-      { contactAt: contactAt(rt), trackMult: trackMult(rt) });
+      { contactAt: contactAt(rt), trackMult: trackMult(rt), valveOpen: coolFor > 0 });
     if (ev === 'contact') legChases++;
     if (ev === 'escaped') relieveEscape(rt);
     // ★★ 여기에 **게임에 없는 규칙이 적혀 있었다.**

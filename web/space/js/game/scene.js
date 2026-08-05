@@ -21,7 +21,7 @@
 //
 //  ★ three.js 를 안 쓴다 — tools/space-2h.js 가 브라우저 없이 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
-import { SCENES, PLACEMENT, BEAT } from './scene-table.js';
+import { SCENES, PLACEMENT, BEAT, EMBER } from './scene-table.js';
 
 /** 네 박자 */
 export const BPHASE = {
@@ -70,6 +70,12 @@ export function makeScenes(seed = 'SC1') {
     inLeg: 0,
     /** 지나온 장면들 — 끝 화면이 읽는다 (「이렇게 왔다」 · PLAN2H §9) */
     done: [],
+    /** 이번 구간에서 **이미 끝난** 장면들 — 겹친 구간에서 둘 다 끝나야 해소다 */
+    ended: [],
+    /** 여운에 낼 일을 몇 초 뒤에 낼 것인가. 0 이면 이미 냈다 */
+    ember: 0,
+    /** 대응 시계가 다 됐는데 계통이 아직 안 끝냈나 — main.js 가 매 프레임 읽는다 */
+    overdue: false,
   };
 }
 
@@ -85,6 +91,9 @@ export function newLeg(s, leg) {
   s.t = 0;
   const row = playable()[leg - 1];
   s.keys = row?.scenes ?? [];
+  s.ended = [];
+  s.ember = 0;
+  s.overdue = false;
   s.hard = !!row?.hard;
   s.permanent = !!row?.permanent;
   if (!s.keys.length) { s.phase = BPHASE.DONE; s.need = 0; s.at = 0; return; }
@@ -111,14 +120,23 @@ export function stepScene(s, dt, legSeconds = 600) {
   s.t += dt;
   if (s.t < s.need) return null;
 
+  if (s.phase === BPHASE.ACT) {
+    // ★ **조용히 넘어가지 않는다.** 여기서 그냥 CLEAR 로 가면 「장면은
+    //   끝났는데 적은 아직 붙어 있는」 상태가 된다 — 해소가 「됐다」인데
+    //   아무것도 안 됐다. 계통에게 **끝내라고 말하고**, 계통이 끝내면
+    //   `resolve()` 로 돌아온다. 그때까지 대응 박자에 머문다.
+    //
+    // ★ 한 번만 외치고 **깃발로 남긴다.** `s.t` 를 되돌려 다시 외치게 하면
+    //   「끝내라」가 `need` 초마다 반복되고, 그 사이 계통은 못 끝낸 채로
+    //   있는데 아무도 안 재촉하는 구멍이 생긴다. 깃발이면 매 프레임 읽힌다
+    if (!s.overdue) { s.overdue = true; return 'act-end'; }
+    return null;
+  }
+
   s.t = 0;
   if (s.phase === BPHASE.WARN) {
-    s.phase = BPHASE.ACT; s.need = pick(s.rnd, BEAT.act);
+    s.phase = BPHASE.ACT; s.need = pick(s.rnd, BEAT.act); s.overdue = false;
     return 'act';
-  }
-  if (s.phase === BPHASE.ACT) {
-    s.phase = BPHASE.CLEAR; s.need = pick(s.rnd, BEAT.clear);
-    return 'clear';
   }
   if (s.phase === BPHASE.CLEAR) {
     s.phase = BPHASE.AFTER; s.need = pick(s.rnd, BEAT.after);
@@ -130,11 +148,61 @@ export function stepScene(s, dt, legSeconds = 600) {
   return 'done';
 }
 
-/** 지금 이 장면이 도는가 — 계통들이 이걸 보고 문을 연다 */
+/** 지금 이 장면이 도는가 — 「이 구간의 장면인가」에 가깝다 */
 export function running(s, key) {
   return s.keys.includes(key)
     && (s.phase === BPHASE.WARN || s.phase === BPHASE.ACT || s.phase === BPHASE.CLEAR);
 }
+
+/**
+ * ★ **계통의 문이 열렸나** — `running` 과 다르다.
+ *
+ *   `running` 은 「이 구간의 장면인가」이고, 이것은 **「지금 와도 되나」**다.
+ *   전에는 둘을 같은 함수로 썼고, 그래서 **예고 중에 이미 적이 붙었다.**
+ *   「온다」와 「왔다」가 같은 순간이면 그건 예고가 아니라 사고다 (§2).
+ *
+ *   여는 박자는 장면마다 다르다 (`SCENES[key].opensAt`) —
+ *   잔해(D)는 제 예고를 이미 갖고 있어서 예고부터 연다.
+ */
+export function opens(s, key) {
+  if (!s.keys.includes(key)) return false;
+  const at = SCENES[key]?.opensAt ?? 'act';
+  if (s.phase === BPHASE.ACT || s.phase === BPHASE.CLEAR) return true;
+  return at === 'warn' && s.phase === BPHASE.WARN;
+}
+
+/**
+ * ★ **해소는 시계가 아니라 사건이 정한다.**
+ *
+ *   뿌리쳤다 · 지대를 나왔다 · 고쳤다 — 계통이 실제로 끝난 그 순간에
+ *   장면도 해소로 간다. 시계로만 넘기면 「뿌리쳤는데 장면은 아직 대응」
+ *   이거나 그 반대가 되고, 그러면 **해소에 붙여 놓은 「뿌리친 3초」가
+ *   엉뚱한 데서 난다.** 이 게임 최고의 자산을 헛 자리에 쓰는 셈이다.
+ *
+ * @returns 'clear' 면 해소로 갔다. null 이면 지금 받을 상태가 아니다
+ */
+export function resolve(s, key) {
+  if (!s.keys.includes(key)) return null;
+  if (s.phase !== BPHASE.ACT) return null;
+  // 겹친 구간(9·11)에서는 **둘 다 끝나야** 해소다. 하나만 끝난 것은 해소가 아니다
+  s.ended = [...new Set([...(s.ended ?? []), key])];
+  const live = s.keys.filter((k) => SCENES[k]?.built);
+  if (live.some((k) => !s.ended.includes(k))) return null;
+  s.phase = BPHASE.CLEAR; s.t = 0; s.overdue = false;
+  s.need = pick(s.rnd, BEAT.clear);
+  return 'clear';
+}
+
+/**
+ * 여운에 **일이 하나 온다** — 언제 낼 것인가 (초).
+ * ★ 해소 직후 0초에 내지 않는다. 「뿌리친 3초」 위에 일을 얹으면
+ *   보상이 사라진다 (`EMBER.within` 참고)
+ */
+export const emberAt = (s) => 3 + s.rnd() * Math.max(0, EMBER.within - 3);
+
+/** 여운에 낼 만큼 닳았나 */
+export const emberWorth = (wear) =>
+  EMBER.chore && Object.values(wear ?? {}).some((v) => v >= EMBER.needWear);
 
 /** 예고 박자인가 — 「온다」를 화면에 띄우는 자리 */
 export const warning = (s, key) => s.keys.includes(key) && s.phase === BPHASE.WARN;
@@ -157,7 +225,8 @@ export function leadOf(s) {
 /** 이 구간 요약 — 검사가 읽는다 */
 export function summary(s) {
   return {
-    leg: s.leg, keys: [...s.keys], phase: s.phase,
+    leg: s.leg, keys: [...s.keys], phase: s.phase, ended: [...(s.ended ?? [])],
+    ember: +(s.ember ?? 0).toFixed(1), overdue: !!s.overdue,
     inLeg: +s.inLeg.toFixed(1), left: +Math.max(0, s.need - s.t).toFixed(1),
     done: [...s.done], hard: !!s.hard, permanent: !!s.permanent,
   };

@@ -28,11 +28,17 @@ export function makeChase() {
 }
 
 /** 지금 자국이 얼마인가. **켠 회로와 열과 구역에서 나온다** */
-export function signatureOf(power, heat, regionMult = 1) {
+/**
+ * 자국 — **밸브를 열어 두면 커진다.** 방열은 곧 적외선 신호다.
+ * @param valveOpen 냉각 밸브가 열려 있나
+ */
+export function signatureOf(power, heat, regionMult = 1, valveOpen = false) {
   let s = SIGN.base + heat * SIGN.perHeat;
   if (power.thrust) s += SIGN.thrust;
   if (power.cool) s += SIGN.cool;
   if (power.sensor) s += SIGN.sensor;
+  // ★ 열어 둔 밸브는 **뜨거운 것을 밖으로 뿜는 것**이다 — 그게 자국이다
+  if (valveOpen) s += SIGN.valveOpen;
   return Math.max(0, Math.min(SIGN.max, s * regionMult));
 }
 
@@ -67,7 +73,7 @@ export function stepChase(c, dt, power, heat, regionMult, opt = {}) {
   const contactAt = opt.contactAt ?? SIGN.contactAt;
   const trackMult = opt.trackMult ?? 1;
   c.timer += dt;
-  c.sign = signatureOf(power, heat, regionMult);
+  c.sign = signatureOf(power, heat, regionMult, opt.valveOpen ?? false);
 
   if (c.phase === PHASE.SHAKEN) {
     if (c.timer >= CHASE.calmAfter) { c.phase = PHASE.CALM; c.timer = 0; c.risk = 0; }
