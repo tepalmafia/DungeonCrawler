@@ -256,6 +256,15 @@ function bigWindow(parent, x, z, ry, half = WIN.half) {
   box(g, 0.16, h * 2, 0.3, MAT.metal, half, 0, 0);
   // 가운데 세로 살 — 참고 사진의 창은 전부 살로 나뉘어 있다
   box(g, 0.09, h * 2, 0.22, MAT.metal, 0, 0, 0);
+
+  // ★ **창이 방을 밝힌다** — 등을 켜서 밝히는 것이 아니다 (REF.md).
+  //   우리 배는 어두운 채로 둔다(「낡은 미래」). 그러면 빛이 어디서
+  //   오는지가 컨셉이 되고, 답은 **밖과 계기**다. 창 안쪽에 차고 약한
+  //   빛을 하나 두면 창가가 밝고 방 안쪽이 어두워져 **대비가 산다** —
+  //   전에는 방 전체가 고르게 까매서 아무것도 안 읽혔다.
+  const glow = new THREE.PointLight(0xa8c8ff, 9, 5.5, 2);
+  glow.position.set(0, 0, 0.7);
+  g.add(glow);
   return g;
 }
 
@@ -799,7 +808,9 @@ export function buildShip(scene, camera = null) {
   //   전부 켜면 예뻐지는 것보다 느려지는 게 크고, 어차피 곁방은 잠깐 들른다.
   const lampCorridor = ceilingLamp(0, 3.4, 0x93a8c0, 110, 20, true);
   ceilingLamp(0, 8.4, 0x93a8c0, 70, 16);
-  ceilingLamp(R.observ.x0 + 2.1, 0.6, ZONE.observ.light, 52, 12);
+  // ★ 관측실 천장등을 **낮춘다.** 창이 주광이라야 「밖을 보는 방」이 된다.
+  //   52 로 두면 등이 창을 이겨서 창이 벽에 난 무늬가 된다 (REF.md)
+  ceilingLamp(R.observ.x0 + 2.1, 0.6, ZONE.observ.light, 26, 12);
   ceilingLamp(R.workshop.x1 - 1.7, 0.6, ZONE.workshop.light, 60, 12, true);
   // ★ 온실 천장등은 **색을 뺐다.** 초록 등 + 초록 생장등 + 블룸이 겹쳐
   //   방이 연두색 안개가 됐다. 방 색은 물건이 내고 등은 하얗게 비춘다 —
