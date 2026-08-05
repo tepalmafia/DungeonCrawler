@@ -167,9 +167,12 @@ node tools/space-guide.js        스페이스워 — 바닥 안내선 · ★ 튜
 node tools/space-door.js         스페이스워 — 문이 걸음을 막나 · 끼면 손으로 열리나
 node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
 node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
+node tools/space-yoke.js         스페이스워 — 조종간이 ★보이고·잡히고·먹나 (셋을 따로 묻는다)
+node tools/space-bay.js          스페이스워 — 베이 번호가 붙었고·안 겹치고·★읽히나
+node tools/space-guard.js        스페이스워 — 덮개가 끼면 젖혀지나 · 가드가 손을 안 막나
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
-                                 (walk·chase·skin·audio 는 serve.py 를 먼저 띄운다)
+                                 (walk·chase·skin·audio·yoke·bay·guard 는 serve.py 를 먼저 띄운다)
 ```
 
 **그림은 `web/3d/assets/` 에 떨어뜨리면 게임에 나옵니다.** 규격은

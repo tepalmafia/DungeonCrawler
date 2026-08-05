@@ -85,6 +85,31 @@ export function buildDoor(parent, x, z, half, H, ry, tint) {
   lamp.position.set(0, 0.14, 0.08);
   crank.add(lamp);
 
+  // ── 덮개 — **쓸 일이 없어야 하는 것은 덮여 있다** ───────
+  // ★ 크루 드래건은 물리 버튼 서른 개 중 상당수가 **투명 덮개 아래**
+  //   있다. 「자주 쓰는 것」과 「진짜 급할 때만 쓰는 것」을 생김새로
+  //   가르는 문법이다 (docs/space/REALSHIP.md §3).
+  //
+  //   비상 크랭크가 정확히 그런 물건이다. 그리고 여기서 덮개는 장식이
+  //   아니라 **계기**다 — 닫혀 있으면 「이 문은 멀쩡하다」, 젖혀져
+  //   있으면 「여기가 끼었다」. 불 하나보다 멀리서 읽힌다.
+  const cover = new THREE.Group();
+  cover.position.set(0, 0.19, 0.10);          // 위 경첩 — 위로 젖혀진다
+  crank.add(cover);
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(0.28, 0.34, 0.015),
+    new THREE.MeshStandardMaterial({
+      color: 0xa8c4d8, roughness: 0.18, metalness: 0.1,
+      transparent: true, opacity: 0.26,
+    }),
+  );
+  glass.position.set(0, -0.17, 0);
+  cover.add(glass);
+  // 테 — 유리만 있으면 안 보인다. 「덮개가 있다」는 테가 말한다
+  box(cover, 0.30, 0.03, 0.03, MAT.rail, 0, -0.34, 0);        // 아래
+  box(cover, 0.03, 0.34, 0.03, MAT.rail, -0.135, -0.17, 0);   // 왼쪽
+  box(cover, 0.03, 0.34, 0.03, MAT.rail, 0.135, -0.17, 0);    // 오른쪽
+
   // 조준용 — **보이는 것보다 크게.** 작은 것을 정확히 겨누게 하면
   // 그건 어려움이 아니라 짜증이다 (밸브·윈치와 같은 이유)
   const hit = new THREE.Mesh(
@@ -98,15 +123,23 @@ export function buildDoor(parent, x, z, half, H, ry, tint) {
    * @param k      얼마나 열렸나 0~1
    * @param jammed 끼었나 — 크랭크 불이 켜진다
    * @param held   크랭크를 얼마나 돌렸나 0~1
+   * @param dt     ★ 덮개가 젖혀지는 속도를 프레임 수에 매달지 않으려고 받는다.
+   *               헤드리스는 1fps 남짓이라 프레임당 고정 비율로 움직이면
+   *               검사에서만 굼뜨게 열린다 — 그러면 검사가 게임을 탓한다
    */
-  function update(k, jammed, held) {
+  function update(k, jammed, held, dt = 0.016) {
     for (const { leaf, sx } of leaves) leaf.position.x = sx * k * (half - 0.02);
     wheel.rotation.z = -held * Math.PI * 3;
     // ★ **끼었을 때만 켜진다.** 늘 켜 두면 안내판이 되고, 그러면
     //   「어느 문이 끼었나」를 소리로 찾을 이유가 사라진다
     lampMat.color.set(jammed ? (held > 0 ? 0xffd27a : 0xff6a4a) : 0x2a2f36);
+    // 덮개는 **끼었을 때만 젖혀진다.** 불과 같은 규칙이지만 멀리서 읽힌다.
+    // 스르륵 젖혀야 눈에 띈다 — 딱 붙었다 떨어지면 없는 것과 같다
+    const want = jammed ? -1.9 : 0;
+    const rate = Math.min(1, dt * 7);
+    cover.rotation.x += (want - cover.rotation.x) * rate;
   }
   update(0, false, 0);
 
-  return { group: g, leaves, crank, hit, update };
+  return { group: g, leaves, crank, cover, hit, update };
 }

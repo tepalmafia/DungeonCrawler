@@ -59,7 +59,7 @@ import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 29;
+export const VERSION = 30;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -666,7 +666,7 @@ function systemsStep(dt, valveOpen, regionMult) {
   // 문짝을 그리고, **닫힌 문은 길을 막는다**
   for (const d of doors.list) {
     const v = doorView[d.key];
-    v.view.update(d.k, d.jammed, d.held);
+    v.view.update(d.k, d.jammed, d.held, dt);
     v.bar.off = canPass(d);
   }
 
@@ -985,6 +985,37 @@ window.SPACE = {
   },
   /** 문 여섯이 지금 어떤가 — 검사용 */
   get doors() { return doorSummary(doors); },
+  /**
+   * 문 하나를 끼운 것으로 친다 — **검사용.** 게임은 마모로 낀다.
+   * 65분에 네 번 끼는 것을 기다릴 수는 없으니 구멍을 낸다.
+   */
+  jam(key) {
+    const d = doors.list.find((x) => x.key === key);
+    if (!d) return false;
+    d.jammed = true; d.k = 0; d.held = 0;
+    return true;
+  },
+  /**
+   * 비상 크랭크 덮개가 얼마나 젖혀졌나 — 검사용.
+   * ★ **각도를 내어 준다.** 「덮개를 만들었다」는 코드로 세면 되지만
+   *   이 덮개가 하는 일은 **끼었다는 것을 멀리서 말하는 것**이라,
+   *   정말 젖혀지는지를 봐야 한다. 안 젖혀지면 그냥 유리판이다
+   */
+  /** 비상 크랭크가 **세상 어디에** 있나 — 검사가 그 앞에 가서 서려고 묻는다 */
+  crankAt(key) {
+    const v = doorView[key];
+    if (!v) return null;
+    const w = v.view.crank.getWorldPosition(new THREE.Vector3());
+    return { x: +w.x.toFixed(2), y: +w.y.toFixed(2), z: +w.z.toFixed(2) };
+  },
+  get covers() {
+    const out = {};
+    for (const d of doors.list) {
+      const v = doorView[d.key];
+      out[d.key] = { jammed: d.jammed, open: +(-v.view.cover.rotation.x).toFixed(2) };
+    }
+    return out;
+  },
   /**
    * 손목에 지금 뭐가 떠 있나 — 검사용.
    * ★ `lift` 가 있어야 **Q 로 정말 올라오나**를 잰다. 화면만 보면
