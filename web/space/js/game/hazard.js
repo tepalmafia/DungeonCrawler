@@ -80,8 +80,20 @@ function spawn(h, region) {
  *          밀고 있는 세기(-1 ~ 1)
  * @returns 'warn' | 'enter' | 'hit' | 'pass' | 'clear' | null
  */
-export function stepHazard(h, dt, { region = 'empty', atSeat = false, push = 0 } = {}) {
-  // ── 배의 좌우 자리 ──────────────────────────────────────
+/**
+ * 배를 좌우로 민다 — **조종간을 잡고 있는 동안.**
+ *
+ * ★ 이게 `stepHazard` 안에 들어 있었다. 그런데 `stepHazard` 는 **잔해가 뜬
+ *   동안에만** 불렸다 (main.js) — 거점이거나 아직 잔해가 없으면 조종간을
+ *   밀어도 `lane` 이 안 움직였다. 게다가 조종간을 잡으면 마우스가 시선에서
+ *   배 쪽으로 넘어가므로, **밀리지도 않고 둘러보지도 못하는** 상태가 됐다.
+ *   게임은 거점에서 시작하니 **첫 몇 분 동안 조종간은 무조건 고장난 물건**
+ *   이었다 (2026-08-04 · 사장님 「운전석 조정이 안되잖아」).
+ *
+ *   조종간은 **늘 먹어야 한다.** 막을 것은 잔해가 오는 시점이지 조종이
+ *   아니다. 잡고 밀면 창밖이 흐르고 조종간이 눕는다 — 그게 「먹고 있다」다.
+ */
+export function steerShip(h, dt, { atSeat = false, push = 0 } = {}) {
   if (atSeat && push !== 0) {
     h.lane = clamp(h.lane + push * HAZARD.tiltRate * dt, -HAZARD.laneMax, HAZARD.laneMax);
     h.seat += dt;
@@ -90,7 +102,9 @@ export function stepHazard(h, dt, { region = 'empty', atSeat = false, push = 0 }
     const back = HAZARD.recenter * dt;
     h.lane = Math.abs(h.lane) <= back ? 0 : h.lane - Math.sign(h.lane) * back;
   }
+}
 
+export function stepHazard(h, dt, { region = 'empty' } = {}) {
   h.t += dt;
 
   if (h.phase === HPHASE.IDLE) {

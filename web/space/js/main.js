@@ -38,7 +38,7 @@ import { FAULT, BY_KEY } from './game/mission-table.js';
 import { FOOD, WINCH, TRADE } from './game/supply-table.js';
 import { HAZARD } from './game/hazard-table.js';
 import {
-  makeHazard, stepHazard, newLeg, incoming, warnLeft, clearOf, HPHASE,
+  makeHazard, stepHazard, steerShip, newLeg, incoming, warnLeft, clearOf, HPHASE,
 } from './game/hazard.js';
 import {
   makeSupply, stepSupply, winchStep, canTrade, trade, canRepair, spendParts,
@@ -57,7 +57,7 @@ import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 26;
+export const VERSION = 27;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -245,6 +245,25 @@ let hearNear = 0;         // 소리가 얼마나 가까운가 0~1
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
 let flash = 0;            // 경보 깜빡임
 let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
+/**
+ * **잡았는데 안 먹을 때 왜인지 말한다** — 되풀이하지 않고.
+ *
+ * ★ 이 게임이 반복해서 걸린 병이다 (2026-08-04 · 사장님 「운전석 조정이
+ *   안되잖아」). 손잡이를 잡았는데 아무 일도 안 일어나고 **왜인지도 안
+ *   알려주면**, 그건 어려운 게 아니라 **고장난 것으로 읽힌다.**
+ *   차단기 하나만 「전력이 모자랍니다」를 말하고 있었고, 윈치·접수구·해도대는
+ *   조용했다.
+ *
+ *   매 프레임 띄우면 글자가 안 사라져서 배너가 벽지가 된다. 같은 말은
+ *   한 번 하고 4초 쉰다.
+ */
+let nagAt = -99, nagWas = '';
+function nag(text) {
+  if (text === nagWas && clock - nagAt < 4) return;
+  nagWas = text; nagAt = clock;
+  banner = text; bannerT = 2.2;
+  audio?.event('deny');
+}
 let bannerT = 0;
 // 뿌리친 시각. **떨림과 소리가 같은 시계를 본다** — 따로 세면 어긋난다
 let escapedAt = -99;
@@ -397,6 +416,10 @@ function interactStep(dt) {
   // ★ **에어록이 안 닫히면 윈치를 못 쓴다** (airlockSeal). 「한 통만 더」가
   //   막히는 것이라, 굶는 중에 이게 겹치면 진짜로 급해진다
   winching = onWinch && input.hold && !power.thrust && !bad.noWinch;
+  // ★ 잡았는데 안 걸리면 **왜인지 말한다.** 조용하면 윈치가 고장난 줄 안다
+  if (onWinch && input.hold && !winching) {
+    nag(bad.noWinch ? '에어록이 안 닫혀 못 씁니다' : '추진을 끄고 잡습니다');
+  }
   if (winching) {
     if (winchStep(supply, dt) === 'load') {
       banner = `광석 한 통 — ${supply.loads}통째`;
@@ -407,6 +430,11 @@ function interactStep(dt) {
   }
 
   // ── 접수구 — 거점에서만. 상인은 얼굴이 없다 (PLAN §1) ──
+  // ★ 여기도 조용했다 — 거점이 아니거나 광석이 모자라면 잡고 있어도
+  //   아무 일이 없었고, 왜인지도 안 말했다
+  if (onHatch && input.hold && !(route.phase === RPHASE.PORT && canTrade(supply))) {
+    nag(route.phase === RPHASE.PORT ? '광석이 모자랍니다' : '거점에서만 바꿉니다');
+  }
   if (onHatch && input.hold && route.phase === RPHASE.PORT && canTrade(supply)) {
     trading += dt;
     if (trading >= TRADE.hold) {
@@ -493,7 +521,10 @@ function interactStep(dt) {
       banner = `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`;
       bannerT = 2.4;
       audio?.event('latch');
-    } else audio?.event('deny');
+    } else {
+      // ★ 거절음만 났다. 소리는 「안 된다」까지고 **왜**를 못 말한다
+      nag(canPick ? '지금은 못 고릅니다' : '거점에서 항로를 고릅니다');
+    }
   } else if (breaker && pressed) {
     if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); taught.flips++; audio?.event('click'); }
     else if (canTurnOn(power)) { power[breaker.key] = true; wearFlip(faults); taught.flips++; audio?.event('click'); }
@@ -623,11 +654,13 @@ function systemsStep(dt, valveOpen, regionMult) {
     hazard.lane = Math.max(-HAZARD.laneMax, Math.min(HAZARD.laneMax,
       hazard.lane + bad.drift * dt * (driftWay || 1)));
   }
+  // ★ **조종간은 늘 먹는다.** 잔해가 오는 시점만 빗장이 막고, 조종은 안 막는다 —
+  //   전에는 좌우 조작이 `stepHazard` 안에 있어서 **거점에서는 조종간이
+  //   죽은 물건**이었다. 잡으면 마우스까지 뺏기니 얼어붙은 것처럼 보였다
+  steerShip(hazard, dt, { atSeat: steering, push: steerPush });
   const hev = hazard.phase !== HPHASE.IDLE
     || (route.phase === RPHASE.LEG && canFire(tutor, 'hazard'))
-    ? stepHazard(hazard, dt, {
-      region: ship.outside.region, atSeat: steering, push: steerPush,
-    })
+    ? stepHazard(hazard, dt, { region: ship.outside.region })
     : null;
   if (hev === 'warn') {
     taught.hazardSeen++;
@@ -863,6 +896,12 @@ window.SPACE = {
   },
   /** 마모를 밖에서 밀어 놓는다 — 진단대 화면을 찍으려고 낸 구멍 */
   wearTo(w) { Object.assign(faults.wear, w); },
+  /**
+   * 열린 고장 하나를 고친 것으로 친다 — **검사용.**
+   * 가짜로 적어 넣지 않고 **실제 `clear` 를 부른다** — 기록이 실제 경로로
+   * 쌓여야 「손목에 뭐가 어떻게 보이나」를 볼 수 있다
+   */
+  fixOne() { const f = faults.open[0]; if (!f) return false; clear(faults, f); return true; },
   /** 검사가 기다리지 않고 고장을 띄운다 */
   forceFault() { faults.next = 0; return stepFaults(faults, 0.001, { calm: true, leg: route.leg }); },
   /** 조종 — 위험 지대와 배의 좌우 자리 */

@@ -77,7 +77,7 @@ export const JOBS = [
   {
     key: 'jam', urgent: true,
     when: (s) => s.doorJammed,
-    say: '문이 안 열립니다',
+    say: '끼인 문을 손으로 엽니다',
   },
   {
     key: 'chase', urgent: true,
@@ -112,23 +112,29 @@ export const JOBS = [
     key: 'hot', urgent: true,
     // 열이 경고선을 넘었다 — 밸브를 열든 회로를 옮기든 해야 한다
     when: (s) => s.heatHigh,
-    say: '열이 높습니다',
+    say: '열을 내립니다',
   },
   {
     key: 'hazard', urgent: true,
     when: (s) => s.hazardSoon,
-    say: '전방에 잔해 — 조종석으로',
+    // ★ 여기만 방을 말한다. 30초 안에 조종간을 잡아야 하고, 조종간은 조종석에
+    //   하나뿐이라 「찾는 재미」가 없다 — 못 찾으면 그냥 맞는다
+    say: '조종석에서 잔해를 비킵니다',
   },
   {
     key: 'fault',
     when: (s) => s.faultsOpen > 0,
-    // ★ **어디인지 안 말한다.** 몇 개인지까지가 손목이 아는 전부다
-    say: (s) => (s.faultsOpen > 1 ? `고장 ${s.faultsOpen}군데` : '고장 한 군데'),
+    // ★ **어디인지 안 말한다.** 몇 개인지까지가 손목이 아는 전부다.
+    //   다만 **찾는 법**은 말한다 — 그게 동사고, 그게 이 게임의 진단이다
+    say: (s) => (s.faultsOpen > 1
+      ? `고장 ${s.faultsOpen}군데 · 소리로 찾습니다`
+      : '고장 한 군데 · 소리로 찾습니다'),
   },
   {
     key: 'hungry',
     when: (s) => s.foodLow,
-    say: '식량이 모자랍니다',
+    // 윈치는 **추진을 꺼야** 걸린다 — 「멈춰서」가 그 말이다
+    say: '멈춰서 물자를 끌어옵니다',
   },
   {
     key: 'route',
@@ -138,14 +144,14 @@ export const JOBS = [
   {
     key: 'thrust',
     when: (s) => !s.thrust,
-    say: '추진이 꺼져 있습니다',
+    say: '추진을 켭니다',
   },
   {
     // 아무 일도 없을 때. **「할 일 없음」이 아니라 「지금은 벌 시간」**이라고
     // 말한다 — 이 게임에서 평온은 다음 추격의 준비 시간이다 (PLAN §3)
     key: 'calm',
     when: () => true,
-    say: (s) => (s.ore > 0 ? '광석을 싣고 갑니다' : '지금은 조용합니다'),
+    say: (s) => (s.ore > 0 ? '광석을 싣고 갑니다' : '조용할 때 고쳐 둡니다'),
   },
 ];
 

@@ -18,7 +18,7 @@
 //    그건 직접 해 봐야 안다 (FLYING.md §6).
 // ══════════════════════════════════════════════════════════════════════════
 import { HAZARD, warnFor, everyFor } from '../web/space/js/game/hazard-table.js';
-import { makeHazard, stepHazard, newLeg, incoming, warnLeft, HPHASE, seatShare }
+import { makeHazard, stepHazard, steerShip, newLeg, incoming, warnLeft, HPHASE, seatShare }
   from '../web/space/js/game/hazard.js';
 import { LEG, allForks } from '../web/space/js/game/route-table.js';
 
@@ -59,7 +59,10 @@ function runLeg(seed, forkKey, seconds, region) {
   while (t < seconds) {
     const before = s.flips;
     const p = pilot(h, s);
-    const ev = stepHazard(h, DT, { region, atSeat: p.atSeat, push: p.push });
+    // ★ 조종(steerShip)과 잔해(stepHazard)는 **따로 돈다.** 게임도 그렇다 —
+    //   조종간은 늘 먹고, 빗장은 잔해가 오는 시점만 막는다
+    steerShip(h, DT, { atSeat: p.atSeat, push: p.push });
+    const ev = stepHazard(h, DT, { region });
     if (s.flips > before) pushCount++;      // 방향을 바꿔 민 횟수
 
     if (ev === 'warn') { warns++; s.walking = WALK; warnTimes.push(h.need); }
@@ -133,6 +136,35 @@ ok(Math.max(...seats) <= 0.15,
   `**조종석에 매인 시간이 구간의 15% 이하** — 최대 ${(Math.max(...seats) * 100).toFixed(0)}%`);
 
 // ── 3) 손을 놓으면 부딪히나 ─────────────────────────────────
+console.log('\n[2b] ★★ **잔해가 없어도 조종간이 먹나** — 거점에서도, 평온할 때도');
+{
+  // ★ 사장님: 「운전석 조정이 안되잖아」. 맞았다 — 좌우 조작이 `stepHazard`
+  //   안에 있었는데 그 함수는 **잔해가 뜬 동안에만** 불렸다. 거점이거나
+  //   평온하면 조종간을 밀어도 `lane` 이 안 움직였고, 그런데 잡으면 마우스가
+  //   시선에서 배 쪽으로 넘어가므로 **밀리지도 둘러보지도 못했다.**
+  //   게임은 거점에서 시작하니 **첫 몇 분 동안 조종간은 죽은 물건**이었다.
+  //
+  //   이제 `steerShip` 이 따로 있고 **늘 돈다.** 빗장은 잔해가 오는 시점만 막는다
+  const h = makeHazard(7);
+  newLeg(h);
+  // 잔해를 한 번도 안 띄운다 — `stepHazard` 를 아예 안 부른다 (거점이 그렇다)
+  let t = 0;
+  while (t < 1.5) { steerShip(h, DT, { atSeat: true, push: 1 }); t += DT; }
+  console.log(`  1.5초 밀었을 때 lane ${h.lane.toFixed(2)} · 잔해 단계 ${h.phase}`);
+  ok(h.lane > 0.2, `잔해가 하나도 없어도 밀면 배가 기운다 (lane ${h.lane.toFixed(2)})`);
+  ok(h.phase === HPHASE.IDLE, '그런데 잔해는 안 뜬다 — 조종과 잔해는 다른 것이다');
+
+  // 놓으면 가운데로 — 이것도 잔해와 무관해야 한다
+  let back = 0;
+  while (back < 6 && h.lane > 0.01) { steerShip(h, DT, { atSeat: false, push: 0 }); back += DT; }
+  ok(h.lane <= 0.01, `놓으면 가운데로 돌아온다 (${back.toFixed(1)}초)`);
+
+  // 반대쪽으로도
+  let t2 = 0;
+  while (t2 < 1.5) { steerShip(h, DT, { atSeat: true, push: -1 }); t2 += DT; }
+  ok(h.lane < -0.2, `반대로도 기운다 (lane ${h.lane.toFixed(2)})`);
+}
+
 console.log('\n[3] 안 앉아 있으면 부딪히나 — **벌이 없으면 조종은 장식이다**');
 {
   const idle = runLeg('FLY1', 'empty', 700, 'empty');
