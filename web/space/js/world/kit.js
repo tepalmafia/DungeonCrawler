@@ -158,8 +158,99 @@ export function handrail(parent, axis, fixed, from, to, y, off) {
 }
 
 /**
+ * ★ **스탠드오프** — 배관·배선·난간이 지나가는 **모서리 통로.**
+ *
+ *   ISS 데스티니 실험동은 랙과 랙이 만나는 **모서리에 통로 넷**을 두고
+ *   배관·배선·공조 덕트·냉각수관을 **전부 그 안으로만** 보낸다
+ *   (docs/space/REALSHIP.md §1). 벽면은 랙·패널·문이 쓴다.
+ *
+ *   **우리는 정반대였고 같은 병을 세 번 앓았다:**
+ *     v26 링 프레임 기둥이 문 다섯을 관통
+ *     v26 통로 난간이 문 넷을 관통
+ *     v29 기관실 난간이 랙 면 0.5m 앞을 가로지름
+ *   세 번 다 증상만 고쳤다. **지나갈 곳을 안 정해 놔서** 계속 났다.
+ *
+ *   그래서 자리를 규칙으로 만든다: **긴 것은 모서리에만 산다.**
+ *   `STANDOFF.band` 안에 없으면 tools 가 ✘ 를 찍는다.
+ *
+ * @param corner ['x0'|'x1', 'y0'|'y1'] 어느 모서리인가 (좌우 · 위아래)
+ * @param rail   난간도 같이 달까 (아래 모서리에만 단다 — 손이 닿는 높이)
+ */
+export function standoff(parent, room, H, axis, corner, tint, rail = false) {
+  const g = new THREE.Group();
+  g.name = '스탠드오프';
+  parent.add(g);
+
+  const [cx, cy] = corner;
+  // 모서리에서 안쪽으로 파고든 자리. 벽면을 안 침범한다
+  const IN = 0.30;
+  const wx = cx === 'x0' ? room.x0 + IN : room.x1 - IN;
+  const wz = cx === 'x0' ? room.z0 + IN : room.z1 - IN;
+  const y = cy === 'y1' ? H - IN : IN + 0.22;
+
+  const from = axis === 'z' ? room.z0 + 0.25 : room.x0 + 0.25;
+  const to = axis === 'z' ? room.z1 - 0.25 : room.x1 - 0.25;
+  const fixed = axis === 'z' ? wx : wz;
+  const len = to - from, mid = (from + to) / 2;
+
+  // 모서리를 덮는 **비스듬한 덮개판** — 이게 「통로」로 읽히게 하는 것이다.
+  // 없으면 그냥 파이프가 공중에 떠 있다
+  const sx = cx === 'x0' ? 1 : -1, sy = cy === 'y1' ? -1 : 1;
+  const cover = new THREE.Mesh(new THREE.BoxGeometry(
+    axis === 'z' ? 0.42 : len, 0.03, axis === 'z' ? len : 0.42,
+  ), MAT.faceD);
+  cover.position.set(
+    axis === 'z' ? fixed + sx * 0.10 : mid,
+    y + sy * 0.16,
+    axis === 'z' ? mid : fixed + sx * 0.10,
+  );
+  cover.rotation[axis === 'z' ? 'z' : 'x'] = sx * sy * 0.72;
+  g.add(cover);
+
+  // 다발 — 굵기와 색을 섞는다. **정리하지 않는 것**이 요점이다
+  const specs = [[0.075, MAT.pipe, -0.10], [0.05, MAT.pipeCold, 0], [0.032, MAT.cable, 0.08], [0.026, MAT.cable, 0.13]];
+  for (const [r, mat, off] of specs) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), mat);
+    if (axis === 'x') { c.rotation.z = Math.PI / 2; c.position.set(mid, y + off * 0.6, fixed + sx * off); }
+    else { c.rotation.x = Math.PI / 2; c.position.set(fixed + sx * off, y + off * 0.6, mid); }
+    g.add(c);
+  }
+  // 고정 밴드
+  const n = Math.max(2, Math.round(len / 1.4));
+  for (let i = 0; i <= n; i++) {
+    const t = from + (len * i) / n;
+    if (axis === 'x') box(g, 0.06, 0.1, 0.34, MAT.metal, t, y, fixed + sx * 0.02);
+    else box(g, 0.34, 0.1, 0.06, MAT.metal, fixed + sx * 0.02, y, t);
+  }
+  // 띠조명 — 실제 배도 조명을 구조에 박아 넣는다. **바닥 기준면**을 만든다
+  if (axis === 'x') box(g, len, 0.03, 0.05, glow(tint), mid, y + sy * 0.10, fixed + sx * 0.16);
+  else box(g, 0.05, 0.03, len, glow(tint), fixed + sx * 0.16, y + sy * 0.10, mid);
+
+  // 난간 — **아래 모서리에만.** 손이 닿는 높이이고, 벽면이 아니라 모서리다
+  if (rail) {
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, len, 8), MAT.rail);
+    const rg = new THREE.Group();
+    rg.name = '난간';
+    g.add(rg);
+    if (axis === 'x') { bar.rotation.z = Math.PI / 2; bar.position.set(mid, y + 0.26, fixed + sx * 0.20); }
+    else { bar.rotation.x = Math.PI / 2; bar.position.set(fixed + sx * 0.20, y + 0.26, mid); }
+    rg.add(bar);
+  }
+  // ★ **아래 모서리는 몸이 부딪힌다.** 안 막으면 배관을 뚫고 걸어간다 —
+  //   그리고 막으면 통로가 저절로 좁아져 실제 모듈(1.2m)에 가까워진다.
+  //   위 모서리는 머리 위라 안 막는다
+  g.userData.solid = cy === 'y0'
+    ? { axis, fixed: fixed + sx * 0.12, half: 0.20, from, to }
+    : null;
+  return g;
+}
+
+/**
  * 배선·배관 다발 — 천장 모서리를 따라 지나간다.
  * **정리하지 않는 것**이 요점이다. 굵기와 색을 섞는다.
+ *
+ * ★ 새로 쓰지 않는다. `standoff()` 를 쓴다 — 이건 벽면을 따라 긋는 옛 방식이라
+ *   문·랙 앞을 가로지르는 사고를 세 번 냈다 (REALSHIP.md §1).
  */
 export function conduit(parent, axis, fixed, from, to, y, tint) {
   const g = new THREE.Group();

@@ -29,7 +29,7 @@ import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
 import { buildCockpit, buildOutside, setPlan, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
-  ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign, breakerPanel,
+  ZONE, MAT, rackRun, standoff, chamfer, ringFrames, hatch, sign, breakerPanel,
   servicePanel,
 } from './kit.js';
 import { buildChart } from './chart.js';
@@ -204,6 +204,21 @@ function port(parent, x, z, ry, rad = 0.42) {
   return g;
 }
 
+/**
+ * 아래 모서리 통로에 **몸이 부딪히게** 한다.
+ * ★ 안 막으면 배관을 뚫고 걸어간다. 그리고 막으면 통로가 저절로 좁아져
+ *   실제 모듈(가운데 통로 1.2m · REALSHIP.md §2)에 가까워진다 — 좁으면
+ *   짧고, 짧으면 덜 뛴다 (USER-VIEW §3-1 왕복 노동)
+ */
+function solid(g) {
+  const s = g.userData.solid;
+  if (!s) return g;
+  const mid = (s.from + s.to) / 2, len = (s.to - s.from) / 2;
+  if (s.axis === 'z') blockBox(s.fixed, mid, s.half, len);
+  else blockBox(mid, s.fixed, len, s.half);
+  return g;
+}
+
 /** 랙 한 줄을 세우고 **충돌까지 같이 등록한다** — 따로 하면 언젠가 빠뜨린다 */
 function racks(parent, axis, fixed, from, to, facing, tint, seed) {
   const out = rackRun(parent, axis, fixed, from, to, facing, tint, seed);
@@ -307,33 +322,25 @@ export function buildShip(scene) {
   // 좁으니 **얇은 것만** 붙인다. 억지로 채우면 못 지나가고, 그러면 왕복
   // 노동이 더 나빠진다.
   const CZ = ZONE.corridor;
-  // ★ 난간은 **문 앞에서 끊는다** (2026-08-04 · 사장님 「문들이 쇠파이프로
-  //   막혀있는데?」).
-  //   통로 끝에서 끝까지 한 줄로 그어 놓았더니 **곁방 문 넷을 그대로
-  //   관통했다** — 난간 높이 1.32 는 문 구멍(2.05)의 한가운데라, 닫힌 문
-  //   한복판에 쇠파이프가 가로로 박혀 있는 꼴이었다.
-  //   **v22 까지는 문짝이 없어서(구멍뿐)** 덜 띄었고, 문을 단 v23 부터
-  //   「막대가 문을 막았다」로 읽혔다 — 문을 달자 옛 실수가 드러난 것이다.
-  //   실제 배도 난간은 문틀에서 끊고 반대편에서 다시 시작한다.
-  const RAIL_CLEAR = 0.14;   // 문틀 바깥면(half+0.085)에서 이만큼 더 떨어진다
-  const RAIL_MIN = 0.4;      // 이보다 짧은 토막은 안 만든다 — 기둥 둘뿐이라 쓰레기다
-  const railEnd = spine.z1 - 0.4;
-  for (const sx of [-1, 1]) {
-    conduit(ship, 'z', sx * (spine.x1 - 0.2), spine.z0 + 0.3, spine.z1 - 0.3, H - 0.36, CZ.accent);
-    // ★ 구멍 목록을 **HATCHES 에서 받아 온다.** 여기 z 를 손으로 적어 두면
-    //   문을 옮길 때 난간만 제자리에 남아 도로 관통한다
-    const holes = HATCHES
-      .filter(([, hx]) => Math.abs(hx - sx * spine.x1) < 0.01)
-      .map(([, , hz]) => [hz - DOORW - RAIL_CLEAR, hz + DOORW + RAIL_CLEAR])
-      .sort((a, b) => a[0] - b[0]);
-    let z = spine.z0 + 0.4;
-    for (const [h0, h1] of [...holes, [railEnd, Infinity]]) {
-      const to = Math.min(h0, railEnd);
-      if (to - z >= RAIL_MIN) handrail(ship, 'z', sx * spine.x1, z, to, 1.32, -sx * 0.13);
-      z = Math.max(z, h1);
+  // ★ **모서리 통로(스탠드오프) 넷.** 배관·배선·난간이 여기로만 지나간다 —
+  //   벽면은 랙·패널·문이 쓴다 (REALSHIP.md §1 · ISS 데스티니와 같은 규칙).
+  //
+  //   전에는 벽면을 따라 죽 그었다. 그래서 **문 넷을 관통**했고, 끊어 붙이는
+  //   땜질을 했다. 지나갈 곳을 정해 놓으면 끊을 일 자체가 없다 —
+  //   문은 벽 가운데에 있고 통로는 모서리에 있다.
+  for (const cx of ['x0', 'x1']) {
+    // 위 모서리는 문 구멍(2.05) 위라 안 끊어도 된다
+    standoff(ship, spine, H, 'z', [cx, 'y1'], CZ.accent);
+    // ★ **아래 모서리는 문 앞에서 끊는다.** 안 끊었더니 곁방 넷이 통째로
+    //   못 가게 됐다 — `space-walk.js` 가 「닿는 칸 0」으로 잡았다.
+    //   실제 모듈은 해치가 **끝단(엔드콘)** 에 있어서 이 문제가 없다.
+    //   우리 곁방은 긴 벽에 붙어 있어서 생기는 것이고, 그건 ⑦에서 다시 본다
+    for (const [a, b] of segments(spine.z0 + 0.25, spine.z1 - 0.25,
+      doorGaps(spine, cx).map(([p0, p1]) => [p0 - 0.25, p1 + 0.25]))) {
+      if (b - a < 0.6) continue;
+      solid(standoff(ship, { ...spine, z0: a - 0.25, z1: b + 0.25 }, H, 'z', [cx, 'y0'], CZ.light, true));
     }
   }
-  conduit(ship, 'z', 0.34, spine.z0, spine.z1, H - 0.16, CZ.light);
 
   // ★ 차단기 — **전력 배분을 여기까지 걸어와서 손으로 한다** (PLAN §7-0 축①).
   //   조종석 화면에 슬라이더를 띄우면 앉아서 다 되고, 그러면 방을 오가는
@@ -477,16 +484,12 @@ export function buildShip(scene) {
   const EZ = ZONE.engine;
   racks(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.8, engine.z1 - 0.8, 1, EZ.accent, 1);
   racks(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.8, engine.z1 - 0.8, -1, EZ.accent, 3);
-  for (const sx of [-1, 1]) {
-    // ★ 여기 난간이 있었다. **랙 면 0.5m 앞을 가로질러** 지나갔다 —
-    //   랙은 x ±4.51, 난간은 ±4.02, 높이 1.42 라 정확히 읽는 높이였다
-    //   (2026-08-04 · 사장님 「여기도 가로 쇠파이프가 있네 제거해주고」).
-    //
-    //   통로 난간을 문에서 끊은 것과 **같은 병**이다: 가로로 긴 것을 벽을
-    //   따라 죽 긋고, **그 벽에 뭐가 붙어 있는지 안 봤다.** 통로는 문,
-    //   기관실은 랙이었다. 기관실은 랙이 벽 전체를 덮으므로 끊을 자리가
-    //   없다 — 아예 뺀다. 잡을 것은 반응로 둘레와 배관으로 충분하다
-    conduit(ship, 'z', sx * (engine.x1 - 0.32), engine.z0 + 0.4, engine.z1 - 0.4, H - 0.36, EZ.light);
+  // ★ 기관실도 **모서리 통로**로 (REALSHIP.md §1). 여기 난간이 랙 면
+  //   0.5m 앞을 가로지르고 있었다 — 벽면을 따라 그었기 때문이다.
+  //   모서리로 옮기면 랙 앞이 비고, 잡을 것도 그대로 남는다
+  for (const cx of ['x0', 'x1']) {
+    standoff(ship, engine, H, 'z', [cx, 'y1'], EZ.light);
+    solid(standoff(ship, engine, H, 'z', [cx, 'y0'], EZ.accent, true));
   }
 
   // 반응로 — 방 한가운데 서 있는 덩어리. 「여기가 심장」이라고 말해 준다
