@@ -22,6 +22,7 @@ import { makeCarry } from '../web/space/js/game/carry.js';
 import { makeTutor } from '../web/space/js/game/tutor.js';
 import { makeScenes, newLeg as sceneLeg } from '../web/space/js/game/scene.js';
 import { makeDrift } from '../web/space/js/game/drift.js';
+import { makeHelm } from '../web/space/js/game/helm.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -38,6 +39,7 @@ const fresh = () => ({
   tutor: makeTutor(),
   scenes: (() => { const sc = makeScenes('SPACE1'); sceneLeg(sc, 1); return sc; })(),
   drift: makeDrift(),
+  helm: makeHelm(),
   ship: { heat: 0, power: { thrust: true, cool: true, sensor: false }, clock: 0, seed: 'SPACE1', coolOpen: false },
   me: { x: 0, z: 0, yaw: 0, pitch: 0 },
 });
@@ -74,6 +76,7 @@ console.log('\n[2] ★ **저장했다 불러오면 같은가** — 반쯤 저장
   a.tutor.i = 7; a.tutor.done = ['walk', 'route']; a.tutor.grips = { spot: 2 };
   a.scenes.leg = 9; a.scenes.keys = ['A', 'F']; a.scenes.phase = 'act'; a.scenes.done = ['A', 'B'];
   a.scenes.ended = ['F']; a.scenes.ember = 6.2; a.scenes.overdue = true;
+  a.helm.off = 0.72; a.helm.way = -1; a.helm.missed = 1;
   a.drift.dead = true; a.drift.angle = -19.4; a.drift.spin = 4.2; a.drift.hits = 2; a.drift.needsFix = true;
   a.ship.heat = 58; a.ship.clock = 2400; a.ship.coolOpen = true; a.ship.power = { thrust: false, cool: true, sensor: true };
   a.me.x = 3.2; a.me.z = 12.4; a.me.yaw = 1.1;

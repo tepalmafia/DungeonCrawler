@@ -107,6 +107,26 @@ export function stepRoute(rt, dt, power = {}) {
   return null;
 }
 
+/**
+ * ★ **거점을 지나쳤다** — 항로를 벗어난 채로 닿았을 때 (helm-table.js).
+ *
+ *   `stepRoute` 는 이미 `leg` 를 올리고 거점(PORT)으로 넘겨 놨으므로
+ *   **그것을 되돌린다.** 밖에서 `route.t` 만 만지면 leg 가 하나 앞선 채로
+ *   남아서, 「구간 7/12」인데 실제로는 6번째를 가고 있는 배가 된다 —
+ *   그런 어긋남은 화면에도 저장에도 그대로 새어 나간다.
+ *
+ *   압박은 **안 되돌린다.** 지나친 것은 시간을 버린 것이고, 그동안
+ *   쫓는 쪽은 계속 다가온다.
+ */
+export function missPort(rt) {
+  rt.leg = Math.max(0, rt.leg - 1);
+  rt.phase = RPHASE.LEG;
+  // 조금 되돌아간다 — 다시 닿으려면 항로로 돌아와서 그만큼 더 가야 한다
+  rt.t = rt.need * 0.82;
+  rt.offer = [];
+  return rt.leg;
+}
+
 /** 남은 거점 수 — 「얼마나 더 가야 하나」 */
 export function legsLeft(rt) { return Math.max(0, LEG.count - rt.leg); }
 

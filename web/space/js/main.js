@@ -32,7 +32,7 @@ import { LEG } from './game/route-table.js';
 const SIGN_PER_HEAT = SIGN.perHeat;
 import {
   makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, isBlind,
-  regionOf, progress, relieveEscape, legsLeft, RPHASE,
+  regionOf, progress, relieveEscape, legsLeft, missPort, RPHASE,
 } from './game/route.js';
 import { FAULT, BY_KEY } from './game/mission-table.js';
 import { FOOD, WINCH, TRADE } from './game/supply-table.js';
@@ -64,6 +64,11 @@ import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
+import { HELM, offWord } from './game/helm-table.js';
+import {
+  makeHelm, stepHelm, tryDock, legOf as helmLeg, signOf as helmSign,
+  radians as helmRad, summary as helmSummary,
+} from './game/helm.js';
 import {
   makeDrift, kill as killDrift, fixed as driftFixed, stepDrift,
   holdHeat as driftHeat, radians as driftRad, danger as driftDanger,
@@ -82,7 +87,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 42;
+export const VERSION = 43;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -310,12 +315,20 @@ sceneLeg(scenes, 1);
 //   정비공 게임의 축(「동시에 두 곳에 못 있는다」)이 처음으로 켜지는 자리다
 const drift = makeDrift();
 
+// ══ 조종 — **조종간이 늘 먹는다** (사장님 「조종석을 움직일 수 없잖아」) ══
+// ★ 잰 값: 조종간이 뭔가를 하는 때가 **잔해 지대 안뿐**이었고 그건 회차의
+//   10% 다. 나머지 90% 동안 잡아도 아무 일이 없었다 — 배에 조종석이
+//   있는데 배를 못 몰았다.
+//   그렇다고 조종을 늘리면 장르가 바뀌므로(CHASE2 §5), **매인 시간은
+//   그대로 두고** 조종간이 늘 먹게 한다: 잡으면 **항로를 벗어난다.**
+const helm = makeHelm();
+
 // ══ 저장 · 일시정지 ═══════════════════════════════════════════
 // ★ **2시간짜리에는 협상 불가다** (PLAN2H §11-1). 저장이 없으면
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm,
   ship: { heat, power, clock, seed, coolOpen },
   me,
 });
@@ -1558,6 +1571,10 @@ window.SPACE = {
   },
   /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /** ★ 조종 — 조종간이 늘 먹나 · 벗어나면 느려지고 안 보이나 */
+  get helm() { return { ...helmSummary(helm), word: offWord(helm.off) }; },
+  /** 검사가 조종간을 안 잡고 항로를 벗어나 본다 */
+  setOff(v) { helm.off = Math.max(0, Math.min(1, v)); if (helm.way === 0) helm.way = 1; return helmSummary(helm); },
   /** ★ 자세 제어 — 배가 도나 · 잡으면 멎나 · 고치면 살아나나 */
   get drift() { return { ...driftSummary(drift), roll: +driftRad(drift).toFixed(3) }; },
   /** 검사가 장면을 기다리지 않고 배를 돌려 본다 */
@@ -1778,14 +1795,25 @@ function frame(now) {
     if (lead) { banner = lead; bannerT = 4.0; audio?.event('fault'); }
   }
 
-  const rev = stepRoute(route, dt, power);
-  if (rev === 'arrive' || rev === 'end') {
+  // ★ 벗어난 만큼 **느리게** 나아간다 (helm-table.js legMult)
+  const rev = stepRoute(route, dt * helmLeg(helm), power);
+  // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
+  //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
+  const missed = rev === 'arrive' && !tryDock(helm);
+  if (missed) {
+    // ★ 규칙은 route.js 가 갖는다 — 밖에서 `t` 만 만지면 leg 가 하나
+    //   앞선 채로 남아서 「구간 7/12 인데 실제로는 6번째」가 된다
+    missPort(route);
+    banner = '거점을 지나쳤습니다 — 항로로 돌아옵니다';
+    bannerT = 3.4;
+    audio?.event('caught');
+  } else if (rev === 'arrive' || rev === 'end') {
     newLeg(hazard);
     // ★ 구간이 바뀌면 **다음 장면을 예약한다.** route.leg 는 0 부터 세고
     //   배치표는 1 부터 센다 — 여기서 한 번만 맞춘다
     sceneLeg(scenes, route.leg + 1);
   }
-  if (rev === 'arrive') {
+  if (rev === 'arrive' && !missed) {
     // ★ **여기서 저장한다.** 거점은 원래 숨 쉬는 자리이고, 12구간이면
     //   12번이다. 초마다 저장하면 「죽기 직전으로 되돌리기」가 된다
     if (SAVE.onLeg) saveNow();
@@ -1875,12 +1903,20 @@ function frame(now) {
   camera.rotation.z = sw * 0.06;   // 아주 살짝 기운다
 
   const valveOpen = interactStep(dt);
-  systemsStep(dt, valveOpen, signMult(route));
+  // ★ 벗어나 있으면 **자국이 준다** — 쫓는 쪽이 내 항로를 예측하고
+  //   따라오는데, 예측을 벗어나면 다시 찾는 데 시간이 걸린다
+  //   (CHASE2 §2-2 「실제로는 총질이 아니라 궤도다」)
+  systemsStep(dt, valveOpen, signMult(route) * helmSign(helm));
 
   // ── ★ 배가 돈다 ──────────────────────────────────────
   // ★ **조종간을 잡고 있으면 멎는다.** 놓으면 점점 빨라진다.
   //   `steering` 은 이미 잔해 피하기가 쓰는 것과 같은 값이다 — 조종간을
   //   둘로 만들지 않는다. 같은 손잡이가 상황에 따라 다른 일을 한다
+  // ── 조종 — **잡으면 항로를 벗어난다** ────────────────
+  // ★ 잔해 지대 안에서는 같은 조종간이 **바위를 피하는 데** 쓰인다.
+  //   두 가지를 동시에 하면 어느 쪽도 안 된다 (helm-table.js notInField)
+  stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN);
+
   const dev = stepDrift(drift, dt, steering);
   // 잡고 있는 것에 값이 붙는다 — 냉각 밸브가 기관실이라 손이 못 간다
   heat = Math.min(HEAT.max, heat + driftHeat(drift, steering) * dt);
@@ -1894,7 +1930,9 @@ function frame(now) {
     audio?.event('caught');
   }
   // ★ **밖을 굴린다.** 어느 방에 있든 보인다 — 고장 하나를 배 전체로 말한다
-  ship.outside.roll(driftRad(drift));
+  // ★ 자세 제어(고장)와 조종(내가 튼 것)이 **같은 자리에 더해진다.**
+  //   둘을 따로 굴리면 창밖이 두 겹으로 돌아서 어느 쪽이 내 탓인지 모른다
+  ship.outside.roll(driftRad(drift) + helmRad(helm));
   // 자세 제어를 다 고쳤으면 살아난다
   if (drift.dead && drift.needsFix && !faults.open.some((o) => o.key === 'attitude')) {
     drift.needsFix = false;
