@@ -1,7 +1,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 //  튜토리얼 — **일곱을 다 만나나. 하나씩 만나나.** 브라우저 없이.
 //
-//    node tools/space-tutor.js
+//    node tools/space-tutor.js            숫자만
+//    node tools/space-tutor.js --see 8391  + 일곱 줄이 화면에 정말 뜨나
 //
 //  ★ 여기서 제일 중요한 줄 둘
 //    **① 한 번에 하나만 뜬다.** 둘이 뜨면 둘 다 안 읽는다
@@ -12,8 +13,8 @@
 //    tools/space-chase.js 가 실제 브라우저에서 「뜨고, 하면 사라지나」를 보고,
 //    「읽고 싶어지나」는 직접 해 봐야 안다 (TUTORIAL.md §6).
 // ══════════════════════════════════════════════════════════════════════════
-import { TUTOR, LESSONS, KEYS } from '../web/space/js/game/tutor-table.js';
-import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from '../web/space/js/game/tutor.js';
+import { TUTOR, LESSONS, KEYS, GRIPS, GRIP_SHOW, ARMS_FULL } from '../web/space/js/game/tutor-table.js';
+import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire, gripLine, markGrip } from '../web/space/js/game/tutor.js';
 import { FAULT } from '../web/space/js/game/mission-table.js';
 import { HAZARD } from '../web/space/js/game/hazard-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
@@ -263,7 +264,143 @@ console.log('\n[5] 세 단계로 세진다 — 헤매면 도와주되 **먼저 �
   ok(c?.text !== b?.text, '물건에 조준선이 닿으면 **손 쓰는 법**이 나온다 — 읽을 이유가 여기 생긴다');
 }
 
-console.log('\n  ※ **읽히나는 여기서 안 나온다.** 화면 아래 한 줄이 눈에 들어오는지는');
-console.log('     tools/space-chase.js 가 실제 브라우저에서 보고, 「읽고 싶어지나」는');
-console.log('     직접 해 봐야 안다 (TUTORIAL.md §6).\n');
+console.log('\n[6] ★ **새 동사도 가르치나** — 가르침은 일곱인데 동사는 늘었다');
+{
+  // v31~v32 에 「떼었다 붙인다」와 「수리 네 동작」이 들어왔다.
+  // 여덟째 가르침을 만들면 또 설명서가 되므로 **손 쓰는 법만 따로** 뺐다
+  const need = ['spot', 'panel'];
+  const miss = need.filter((k) => !GRIPS[k]);
+  ok(miss.length === 0,
+    `새 동사에 손 쓰는 법이 있다 — ${miss.length ? `빠짐: ${miss.join(' · ')}` : Object.keys(GRIPS).join(' · ')}`);
+  ok(Object.values(GRIPS).every((v) => v.length <= TUTOR.maxLen),
+    `${TUTOR.maxLen}자를 안 넘는다 — ${Object.values(GRIPS).map((v) => `${v}(${v.length})`).join(' · ')}`);
+
+  // ★ **일곱을 다 뗀 뒤에도** 나와야 한다. 여기가 이번 판의 핵심이다 —
+  //   전에는 `lineOf` 가 일곱이 끝나면 영영 null 이라 새 동사를 가르칠
+  //   자리가 아예 없었다
+  const t = makeTutor();
+  while (!allDone(t)) { t.done.push('(건너뜀)'); t.i++; }
+  ok(!lineOf(t, 'spot:shop-a'), '일곱이 끝나면 가르침은 안 뜬다 — 그건 그대로다');
+  ok(!!gripLine(t, 'spot:shop-a'), '★ 그런데 **손 쓰는 법은 나온다** — 「떼었다 붙인다」');
+  ok(!!gripLine(t, 'panel:workshop'), '★ 수리 네 동작도 나온다');
+  ok(!gripLine(t, 'yoke'), '일곱이 이미 가르친 것은 두 번 안 말한다 — 조종간');
+
+  // **그치나.** 늘 뜨면 그게 안내판이다
+  for (let i = 0; i < GRIP_SHOW; i++) markGrip(t, 'spot:shop-a');
+  ok(!gripLine(t, 'spot:shop-a'), `${GRIP_SHOW}번 잡고 나면 그친다 — 늘 뜨면 안내판이다`);
+  ok(!!gripLine(t, 'panel:workshop'), '그친 것은 그것 하나뿐 — 손잡이마다 따로 센다');
+}
+
+console.log('\n[7] ★ **두 손이 찼을 때 왜 안 잡히는지 말하나**');
+{
+  // 조용히 안 잡히면 사람은 「어렵다」가 아니라 **「고장났다」**로 읽고,
+  // 한 번 그렇게 읽으면 그 뒤로 안 잡아 본다
+  const t = makeTutor();
+  while (!allDone(t)) { t.done.push('(건너뜀)'); t.i++; }
+  const ln = gripLine(t, 'valve', { armsFull: true });
+  ok(ln?.text === ARMS_FULL, `밸브를 겨누면 이유를 말한다 — 「${ln?.text ?? '아무 말 없음'}」`);
+  ok(ARMS_FULL.length <= TUTOR.maxLen, `${TUTOR.maxLen}자를 안 넘는다 — ${ARMS_FULL.length}자`);
+  // **붙이는 자리는 예외다** — 아니면 「붙여 놓으세요」라고 해 놓고
+  // 정작 붙이는 자리에서도 같은 말을 한다
+  const at = gripLine(t, 'spot:shop-a', { armsFull: true });
+  ok(at?.text !== ARMS_FULL, `붙이는 자리에서는 딴말 안 한다 — 「${at?.text ?? '없음'}」`);
+  // 셈을 다 채웠어도 이 줄만은 뜬다 — 제일 급한 것이라서
+  for (let i = 0; i < GRIP_SHOW + 2; i++) markGrip(t, 'valve');
+  ok(gripLine(t, 'valve', { armsFull: true })?.text === ARMS_FULL,
+    '여러 번 겪어도 이 줄만은 계속 말한다 — 조용하면 고장으로 읽힌다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  여기부터는 **화면**이다 — `--see` 를 줬을 때만 돈다.
+//
+//  ★ 위의 검사들은 「가르침이 제 차례에 뜬다」까지만 본다. 그런데 이
+//    저장소가 반복해서 밟은 함정은 **「코드에는 있는데 화면에는 없다」**
+//    이고(창이 창이 아니었던 일 · 크랭크가 벽에 파묻힌 일), 안내 문구는
+//    특히 그렇다 — 화면 밖에 그려지거나 배너에 겹쳐도 순수 검사는 초록이다.
+//
+//    그래서 일곱 줄을 **두 단계씩 열넷** 다 띄워 보고 자리를 잰다.
+// ══════════════════════════════════════════════════════════════════════════
+const see = process.argv.indexOf('--see');
+if (see >= 0) {
+  const PORT = process.argv[see + 1] || '8391';
+  const SP = process.env.SHOTS || null;
+  let chromium = null;
+  for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs']) {
+    try { ({ chromium } = await import(m)); break; } catch { /* 다음 것 */ }
+  }
+  if (!chromium) { console.error('playwright 가 없습니다.'); process.exit(2); }
+  const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+  const p = await b.newPage({ viewport: { width: 960, height: 560 } });
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(2500);
+  await p.mouse.move(480, 280); await p.mouse.click(480, 280);
+  await p.evaluate(() => document.getElementById('hint')?.remove());
+
+  console.log('\n[8] ★ 일곱 줄이 **화면에 정말 뜨나** — 두 단계씩 열넷');
+  {
+    const rows = [];
+    for (const k of KEYS) {
+      for (const [age, tag] of [[0, '처음'], [13, '12초뒤']]) {
+        await p.evaluate(([kk, aa]) => SPACE.teach(kk, aa), [k, age]);
+        await p.waitForTimeout(1200);
+        rows.push({ k, tag, ...await p.evaluate(() => {
+          const el = document.getElementById('lesson');
+          if (!el || el.hidden) return { miss: true };
+          const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+          return { text: el.textContent, x: Math.round(r.x), y: Math.round(r.y),
+            w: Math.round(r.width), h: Math.round(r.height),
+            W: innerWidth, H: innerHeight, op: +(+cs.opacity).toFixed(2) };
+        }) });
+      }
+    }
+    const miss = rows.filter((r) => r.miss);
+    ok(miss.length === 0, `열넷이 다 뜬다 — ${miss.length ? `안 뜬 것: ${miss.map((r) => `${r.k}/${r.tag}`).join(' · ')}` : '빠짐 없음'}`);
+
+    const live = rows.filter((r) => !r.miss);
+    // **화면 안에 있나.** 「창이 화면 밖에 그려지고 있었다」는 코드로 못 찾는다
+    const out = live.filter((r) => r.x < 0 || r.y < 0 || r.x + r.w > r.W || r.y + r.h > r.H);
+    ok(out.length === 0, `다 화면 안에 있다 — ${out.length ? out.map((r) => `${r.k}(${r.x},${r.y})`).join(' · ') : '넘치는 것 없음'}`);
+
+    // **아래쪽**에 있나. 배너(위·주황)와 자리가 갈려야 둘 다 읽힌다
+    const high = live.filter((r) => r.y < r.H * 0.6);
+    ok(high.length === 0, `다 화면 아래쪽이다 — ${high.length ? high.map((r) => `${r.k}(y=${r.y})`).join(' · ') : `y ${Math.min(...live.map((r) => r.y))}~${Math.max(...live.map((r) => r.y))} / ${live[0].H}`}`);
+
+    // **안 흐리다.** 갓 뜬 줄이 흐리면 그건 안내가 아니라 잔상이다
+    const dim = live.filter((r) => r.tag === '처음' && r.op < 0.9);
+    ok(dim.length === 0, `갓 뜬 줄은 또렷하다 — ${dim.length ? dim.map((r) => `${r.k}(${r.op})`).join(' · ') : '전부 1.0'}`);
+
+    // **가로로 안 넘친다.** nowrap 이라 긴 줄은 잘리는 게 아니라 밀려난다
+    const wide = live.filter((r) => r.w > r.W * 0.7);
+    ok(wide.length === 0, `제일 긴 줄이 화면 폭의 ${Math.round(Math.max(...live.map((r) => r.w)) / live[0].W * 100)}% — 70% 이하`);
+
+    for (const r of live) console.log(`     ${r.k.padEnd(7)} ${r.tag.padEnd(6)} 「${r.text}」`);
+  }
+
+  console.log('\n[9] 배너와 **겹치지 않나** — 겹치면 둘 다 안 읽는다');
+  {
+    await p.evaluate(() => SPACE.teach('walk', 0));
+    await p.waitForTimeout(1000);
+    const two = await p.evaluate(() => {
+      const el = document.getElementById('lesson');
+      const hud = document.getElementById('hud');
+      hud.hidden = false; hud.textContent = '검사용 배너';
+      const a = el.getBoundingClientRect(), c = hud.getBoundingClientRect();
+      hud.hidden = true;
+      return { les: { y: Math.round(a.y), h: Math.round(a.height) },
+        hud: { y: Math.round(c.y), h: Math.round(c.height) } };
+    });
+    const gap = two.les.y - (two.hud.y + two.hud.h);
+    ok(gap > 60, `배너와 ${gap}px 떨어져 있다 (배너 y=${two.hud.y} · 가르침 y=${two.les.y})`);
+    if (SP) await p.screenshot({ path: `${SP}/가르침.png`, timeout: 90000 });
+  }
+
+  if (errs.length) { console.log('콘솔 오류:'); for (const e of errs.slice(0, 5)) console.log('  ' + e); fail += errs.length; }
+  await b.close();
+  if (SP) console.log(`\n  (${SP}/가르침.png 저장)`);
+}
+
+console.log('\n  ※ **자리는 재도 「읽고 싶어지나」는 여기서 안 나온다.**');
+console.log('     --see 로 열넷이 화면 어디에 뜨는지까지는 봤다. 그런데 그 줄을');
+console.log('     정말 읽게 되는지는 직접 5분 돌려 봐야 안다 (TUTORIAL.md §6).\n');
 process.exit(fail ? 1 : 0);
