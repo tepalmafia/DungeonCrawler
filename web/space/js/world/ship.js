@@ -29,9 +29,10 @@ import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
 import { buildCockpit, buildOutside, setPlan, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
-  ZONE, MAT, rackRun, handrail, conduit, chamfer, ringFrames, hatch, sign, breakerPanel,
+  ZONE, MAT, rackRun, standoff, chamfer, ringFrames, hatch, sign, breakerPanel,
   servicePanel,
 } from './kit.js';
+import { bay, PANEL_BAY, FIRST_RACK } from '../game/bay-table.js';
 import { buildChart } from './chart.js';
 import { buildBench } from './bench.js';
 import { buildFoodGauge, buildWinch, buildTradeHatch } from './supply-ui.js';
@@ -204,10 +205,71 @@ function port(parent, x, z, ry, rad = 0.42) {
   return g;
 }
 
+/**
+ * 아래 모서리 통로에 **몸이 부딪히게** 한다.
+ * ★ 안 막으면 배관을 뚫고 걸어간다. 그리고 막으면 통로가 저절로 좁아져
+ *   실제 모듈(가운데 통로 1.2m · REALSHIP.md §2)에 가까워진다 — 좁으면
+ *   짧고, 짧으면 덜 뛴다 (USER-VIEW §3-1 왕복 노동)
+ */
+function solid(g) {
+  const s = g.userData.solid;
+  if (!s) return g;
+  const mid = (s.from + s.to) / 2, len = (s.to - s.from) / 2;
+  if (s.axis === 'z') blockBox(s.fixed, mid, s.half, len);
+  else blockBox(mid, s.fixed, len, s.half);
+  return g;
+}
+
+/**
+ * 방마다 다음 베이 번호가 몇 번인가. **방 하나에 같은 번호가 두 개 나오면
+ * 번호가 아니다** — 벽이 두 줄이면 두 줄이 이어서 매겨져야 한다.
+ * 1번은 점검 패널 몫이라 랙은 2번부터다 (game/bay-table.js).
+ */
+const bayNext = {};
+/**
+ * 베이 번호 → 그 번호를 단 물건. **벨크로 자리가 이걸 읽는다**
+ * (world/carry.js — 「기관 4」에 붙인다는 말이 좌표를 안 적고도 성립한다).
+ */
+const byBay = {};
+function nextBayOf(room) {
+  return () => {
+    bayNext[room] = (bayNext[room] ?? FIRST_RACK - 1) + 1;
+    return bay(room, bayNext[room]);
+  };
+}
+
+/**
+ * 그 벽에 **이미 붙어 있는 것들**의 자리를 뽑는다 — 랙이 그 위에 겹쳐
+ * 서지 않게. 손으로 「여기는 비워라」라고 적지 않는다: 패널을 옮길 때마다
+ * 같이 고쳐야 하고, 그러면 언젠가 어긋난다 (문구멍을 자동으로 뽑는 것과
+ * 같은 이유).
+ *
+ * `half` 는 랙 반폭(0.45) + 패널 반폭(0.33) 이다. 이만큼 안 떨어지면 겹친다.
+ */
+function taken(objs, axis, fixed, half = 0.8) {
+  const out = [];
+  for (const o of objs) {
+    const g = o.group ?? o;
+    const on = axis === 'z' ? g.position.x : g.position.z;
+    const at = axis === 'z' ? g.position.z : g.position.x;
+    if (Math.abs(on - fixed) > 0.4) continue;      // 다른 벽이면 상관없다
+    out.push([at - half, at + half]);
+  }
+  return out;
+}
+
 /** 랙 한 줄을 세우고 **충돌까지 같이 등록한다** — 따로 하면 언젠가 빠뜨린다 */
-function racks(parent, axis, fixed, from, to, facing, tint, seed) {
-  const out = rackRun(parent, axis, fixed, from, to, facing, tint, seed);
+function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, avoid = [],
+  lift = 0, skipRanges = []) {
+  const out = rackRun(parent, axis, fixed, from, to, facing, tint, seed,
+    room ? nextBayOf(room) : null, [...taken(avoid, axis, fixed), ...skipRanges], lift);
   for (const g of out) {
+    if (g.userData.bay) byBay[g.userData.bay] = g;
+    // ★ **띄운 랙은 충돌을 안 건다.** 통로는 이미 아래 스탠드오프가
+    //   ±0.62 를 먹어 폭이 1.36m 다 — 실제 모듈의 1.2m 에 거의 닿았고
+    //   (REALSHIP.md §2), 여기 또 막으면 사람이 못 지나간다.
+    //   좁히는 일은 ① 이 이미 했고, ③ 이 할 일은 **맨 벽을 없애는 것**이다
+    if (lift > 0) continue;
     const ry = g.rotation.y;
     blockBox(g.position.x - 0.21 * Math.sin(ry), g.position.z - 0.21 * Math.cos(ry), 0.45, 0.21, ry);
   }
@@ -215,13 +277,15 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-export function buildShip(scene) {
+export function buildShip(scene, camera = null) {
   let chart = null;
   let bench = null;
   let foodGauge = null, winch = null, tradeHatch = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
+  for (const k of Object.keys(bayNext)) delete bayNext[k];
+  for (const k of Object.keys(byBay)) delete byBay[k];
 
   const matWall = surface('surf/hull_wall', { color: 0x4a4f57, roughness: 0.85, metalness: 0.18, repeat: [2, 1] });
   const matEngine = surface('surf/engine_wall', { color: 0x4b423c, roughness: 0.95, metalness: 0.22, repeat: [3, 1] });
@@ -307,39 +371,32 @@ export function buildShip(scene) {
   // 좁으니 **얇은 것만** 붙인다. 억지로 채우면 못 지나가고, 그러면 왕복
   // 노동이 더 나빠진다.
   const CZ = ZONE.corridor;
-  // ★ 난간은 **문 앞에서 끊는다** (2026-08-04 · 사장님 「문들이 쇠파이프로
-  //   막혀있는데?」).
-  //   통로 끝에서 끝까지 한 줄로 그어 놓았더니 **곁방 문 넷을 그대로
-  //   관통했다** — 난간 높이 1.32 는 문 구멍(2.05)의 한가운데라, 닫힌 문
-  //   한복판에 쇠파이프가 가로로 박혀 있는 꼴이었다.
-  //   **v22 까지는 문짝이 없어서(구멍뿐)** 덜 띄었고, 문을 단 v23 부터
-  //   「막대가 문을 막았다」로 읽혔다 — 문을 달자 옛 실수가 드러난 것이다.
-  //   실제 배도 난간은 문틀에서 끊고 반대편에서 다시 시작한다.
-  const RAIL_CLEAR = 0.14;   // 문틀 바깥면(half+0.085)에서 이만큼 더 떨어진다
-  const RAIL_MIN = 0.4;      // 이보다 짧은 토막은 안 만든다 — 기둥 둘뿐이라 쓰레기다
-  const railEnd = spine.z1 - 0.4;
-  for (const sx of [-1, 1]) {
-    conduit(ship, 'z', sx * (spine.x1 - 0.2), spine.z0 + 0.3, spine.z1 - 0.3, H - 0.36, CZ.accent);
-    // ★ 구멍 목록을 **HATCHES 에서 받아 온다.** 여기 z 를 손으로 적어 두면
-    //   문을 옮길 때 난간만 제자리에 남아 도로 관통한다
-    const holes = HATCHES
-      .filter(([, hx]) => Math.abs(hx - sx * spine.x1) < 0.01)
-      .map(([, , hz]) => [hz - DOORW - RAIL_CLEAR, hz + DOORW + RAIL_CLEAR])
-      .sort((a, b) => a[0] - b[0]);
-    let z = spine.z0 + 0.4;
-    for (const [h0, h1] of [...holes, [railEnd, Infinity]]) {
-      const to = Math.min(h0, railEnd);
-      if (to - z >= RAIL_MIN) handrail(ship, 'z', sx * spine.x1, z, to, 1.32, -sx * 0.13);
-      z = Math.max(z, h1);
+  // ★ **모서리 통로(스탠드오프) 넷.** 배관·배선·난간이 여기로만 지나간다 —
+  //   벽면은 랙·패널·문이 쓴다 (REALSHIP.md §1 · ISS 데스티니와 같은 규칙).
+  //
+  //   전에는 벽면을 따라 죽 그었다. 그래서 **문 넷을 관통**했고, 끊어 붙이는
+  //   땜질을 했다. 지나갈 곳을 정해 놓으면 끊을 일 자체가 없다 —
+  //   문은 벽 가운데에 있고 통로는 모서리에 있다.
+  for (const cx of ['x0', 'x1']) {
+    // 위 모서리는 문 구멍(2.05) 위라 안 끊어도 된다
+    standoff(ship, spine, H, 'z', [cx, 'y1'], CZ.accent);
+    // ★ **아래 모서리는 문 앞에서 끊는다.** 안 끊었더니 곁방 넷이 통째로
+    //   못 가게 됐다 — `space-walk.js` 가 「닿는 칸 0」으로 잡았다.
+    //   실제 모듈은 해치가 **끝단(엔드콘)** 에 있어서 이 문제가 없다.
+    //   우리 곁방은 긴 벽에 붙어 있어서 생기는 것이고, 그건 ⑦에서 다시 본다
+    for (const [a, b] of segments(spine.z0 + 0.25, spine.z1 - 0.25,
+      doorGaps(spine, cx).map(([p0, p1]) => [p0 - 0.25, p1 + 0.25]))) {
+      if (b - a < 0.6) continue;
+      solid(standoff(ship, { ...spine, z0: a - 0.25, z1: b + 0.25 }, H, 'z', [cx, 'y0'], CZ.light, true));
     }
   }
-  conduit(ship, 'z', 0.34, spine.z0, spine.z1, H - 0.16, CZ.light);
 
   // ★ 차단기 — **전력 배분을 여기까지 걸어와서 손으로 한다** (PLAN §7-0 축①).
   //   조종석 화면에 슬라이더를 띄우면 앉아서 다 되고, 그러면 방을 오가는
   //   긴장이 통째로 사라진다. 곁방이 없는 벽(z 2.4~4.2)에 붙였다 —
   //   조종석에서도 기관실에서도 한참 걸어야 하는 자리다.
-  const breakers = breakerPanel(ship, spine.x0 + 0.06, 3.3, Math.PI / 2, CIRCUITS, CZ.accent);
+  const breakers = breakerPanel(ship, spine.x0 + 0.06, 3.3, Math.PI / 2, CIRCUITS, CZ.accent,
+    nextBayOf('spine')());
   sign(ship, '배전', spine.x0 + 0.1, 2.28, 3.3, Math.PI / 2, CZ.accent, 0.4);
 
   // ── 점검 패널 — 고장을 손으로 고치는 자리 (game/fault.js) ──
@@ -353,31 +410,51 @@ export function buildShip(scene) {
     //   문짝이 없던 v22 까지는 「구멍 옆에 붙은 판」으로 보였고, 문을 단 뒤로
     //   닫힌 문 속에 패널이 박혔다. 문 없는 구간(z 1.7~4.6)으로 옮긴다 —
     //   차단기(왼쪽 벽 3.3)와 마주 보는 자리라 통로 가운데가 일할 곳이 된다
-    spine: servicePanel(ship, spine.x1 - 0.06, 3.0, -Math.PI / 2, CZ.accent),
+    spine: servicePanel(ship, spine.x1 - 0.06, 3.0, -Math.PI / 2, CZ.accent, bay('spine', PANEL_BAY)),
     // ★ 정비실은 **먼 쪽 벽이 아니라 아래쪽 벽**이다. 처음엔 x1 벽에 붙였는데
     //   그 앞이 통째로 작업대·랙이라 **설 자리가 한 칸도 없었다** — 패널은
     //   보이는데 못 간다. 배를 격자로 훑어 서 있을 수 있는 칸을 세어 보고 알았다.
     //   그래서 z0 벽으로 옮겼더니 이번엔 **랙과 겹쳐서 겹쳐 그려졌다** —
     //   그건 화면을 찍어 보고 알았다. 지금은 아무것도 안 붙은 z1 벽이다.
     //   빈 벽을 눈으로 찾는 것보다 **두 번 옮기는 편이 빨랐다**
-    workshop: servicePanel(ship, 2.8, R.workshop.z1 - 0.06, Math.PI, ZONE.workshop.accent),
-    engine: servicePanel(ship, engine.x0 + 0.06, 12.6, Math.PI / 2, ZONE.engine.accent),
+    workshop: servicePanel(ship, 2.8, R.workshop.z1 - 0.06, Math.PI, ZONE.workshop.accent, bay('workshop', PANEL_BAY)),
+    engine: servicePanel(ship, engine.x0 + 0.06, 12.6, Math.PI / 2, ZONE.engine.accent, bay('engine', PANEL_BAY)),
     // ★ **방 일곱에 다 깔았다 (v24).** 위 주석은 「고장이 쓰는 방 셋뿐」이라
     //   나머지를 미뤄 뒀는데, 그게 거꾸로였다 — **패널이 없어서 고장을 못
     //   만들고 있었다.** 미소운석은 설계 의도가 「방을 다 훑게 만든다」인데
     //   훑을 자리가 없어서 여섯 달 동안 한 번도 안 나왔다.
     //   빈 벽을 골랐다. 관측실은 해도대 반대편, 온실은 재배대를 피한 z1 벽,
     //   에어록은 윈치·접수구가 없는 z0 벽, 조종석은 콘솔 뒤 오른쪽 벽이다
-    observ: servicePanel(ship, -3.0, R.observ.z1 - 0.06, Math.PI, ZONE.observ.accent),
-    garden: servicePanel(ship, -2.6, R.garden.z1 - 0.06, Math.PI, ZONE.garden.accent),
+    observ: servicePanel(ship, -3.0, R.observ.z1 - 0.06, Math.PI, ZONE.observ.accent, bay('observ', PANEL_BAY)),
+    garden: servicePanel(ship, -2.6, R.garden.z1 - 0.06, Math.PI, ZONE.garden.accent, bay('garden', PANEL_BAY)),
     // ★ 에어록은 **두 번째 자리**다. 처음엔 z0 벽(2.2, 4.26)에 붙였는데
     //   방호복 걸이(x 1.55~2.15)가 바로 앞이라 **설 자리는 있는데 조준선이
     //   안 잡혔다** — 서는 칸을 세는 것만으로는 못 잡는 종류다. 정비실에서
     //   두 번 옮긴 것과 같은 함정이고, 이번엔 **조준까지 재는 검사**로 찾았다
-    airlock: servicePanel(ship, 2.6, R.airlock.z1 - 0.06, Math.PI, ZONE.airlock.accent),
-    cockpit: servicePanel(ship, R.cockpit.x1 - 0.06, -4.2, -Math.PI / 2, ZONE.cockpit.accent),
+    airlock: servicePanel(ship, 2.6, R.airlock.z1 - 0.06, Math.PI, ZONE.airlock.accent, bay('airlock', PANEL_BAY)),
+    cockpit: servicePanel(ship, R.cockpit.x1 - 0.06, -4.2, -Math.PI / 2, ZONE.cockpit.accent, bay('cockpit', PANEL_BAY)),
   };
   for (const [key, pnl] of Object.entries(panels)) pnl.room = key;
+  /** 벽에 이미 붙은 것들 — 랙을 세울 때 이 자리를 비운다 */
+  const onWall = [...Object.values(panels), { position: breakers[0].hit.parent.position }];
+
+  // ── 통로 벽 — **맨 벽을 없앤다** (REALSHIP.md §8-③) ──────
+  // ★ 실제 모듈은 **네 면이 전부 랙**이고 가운데 통로가 1.2m 다. 우리
+  //   통로는 13m 짜리 복도인데 벽에 아무것도 없었다 — 배에서 제일 오래
+  //   서 있는 방이 제일 휑했다.
+  //
+  // ★ **좁히는 일은 ① 이 이미 했다.** 아래 스탠드오프가 좌우 0.62m 씩
+  //   먹어 실제 폭이 1.36m 다. 그래서 여기 랙은 **띄워 붙이고 충돌을 안
+  //   건다** — 아래는 배관, 위는 물건. 실제 모듈도 바닥 난간 위에 랙이
+  //   붙는다. 여기서 또 막으면 사람이 못 지나간다.
+  //
+  // ★ 문간은 비운다. 랙 반폭(0.45)만큼 더 벌린다 — 문 옆에 딱 붙으면
+  //   지나갈 때마다 어깨가 스치는 것으로 보인다
+  const doorSkip = (side) => doorGaps(spine, side).map(([a, b]) => [a - 0.5, b + 0.5]);
+  racks(ship, 'z', spine.x0 + 0.09, spine.z0 + 0.7, spine.z1 - 0.7, 1, CZ.accent, 5,
+    'spine', onWall, 0.78, doorSkip('x0'));
+  racks(ship, 'z', spine.x1 - 0.09, spine.z0 + 0.7, spine.z1 - 0.7, -1, CZ.accent, 7,
+    'spine', onWall, 0.78, doorSkip('x1'));
 
   // 경보등 — 추격이 붙으면 통로가 붉어진다. **어느 방에 있든 보여야** 한다
   const alarm = new THREE.PointLight(0xff3020, 0, 22, 2);
@@ -391,7 +468,7 @@ export function buildShip(scene) {
     // 해도대 — **항로를 고르는 자리.** 여기까지 걸어와야 고를 수 있다
     // (world/chart.js · docs/space/GAP.md §3-A). 전에는 판때기였다
     chart = buildChart(ship, { x: r.x0 + 1.7, z: (r.z0 + r.z1) / 2 }, blockBox, MAT);
-    racks(ship, 'x', r.z1 - 0.09, r.x0 + 0.6, r.x1 - 0.7, -1, Z.accent, 2);
+    racks(ship, 'x', r.z1 - 0.09, r.x0 + 0.6, r.x1 - 0.7, -1, Z.accent, 2, 'observ', onWall);
   }
 
   // ── 정비실 — 손을 쓰는 방 ────────────────────────────────
@@ -412,7 +489,7 @@ export function buildShip(scene) {
     // ★ **먼 쪽 끝**에 세운다. 가까운 쪽에 두면 사람이 0.4m 앞에 서게 돼
     //   화면이 시야를 통째로 덮는다. 작업대 너비만큼 물러서야 읽힌다
     bench = buildBench(ship, { x: bx + 0.5, z: bz, ry: -Math.PI / 2 }, MAT);
-    racks(ship, 'x', r.z0 + 0.09, r.x0 + 0.7, r.x1 - 0.6, 1, Z.accent, 4);
+    racks(ship, 'x', r.z0 + 0.09, r.x0 + 0.7, r.x1 - 0.6, 1, Z.accent, 4, 'workshop', onWall);
   }
 
   // ── 온실 — 배에서 유일하게 살아 있는 방 ──────────────────
@@ -475,11 +552,14 @@ export function buildShip(scene) {
 
   // ── 기관실 ──────────────────────────────────────────────
   const EZ = ZONE.engine;
-  racks(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.8, engine.z1 - 0.8, 1, EZ.accent, 1);
-  racks(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.8, engine.z1 - 0.8, -1, EZ.accent, 3);
-  for (const sx of [-1, 1]) {
-    handrail(ship, 'z', sx * (engine.x1 - 0.58), engine.z0 + 1.0, engine.z1 - 1.0, 1.42, 0);
-    conduit(ship, 'z', sx * (engine.x1 - 0.32), engine.z0 + 0.4, engine.z1 - 0.4, H - 0.36, EZ.light);
+  racks(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.8, engine.z1 - 0.8, 1, EZ.accent, 1, 'engine', onWall);
+  racks(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.8, engine.z1 - 0.8, -1, EZ.accent, 3, 'engine', onWall);
+  // ★ 기관실도 **모서리 통로**로 (REALSHIP.md §1). 여기 난간이 랙 면
+  //   0.5m 앞을 가로지르고 있었다 — 벽면을 따라 그었기 때문이다.
+  //   모서리로 옮기면 랙 앞이 비고, 잡을 것도 그대로 남는다
+  for (const cx of ['x0', 'x1']) {
+    standoff(ship, engine, H, 'z', [cx, 'y1'], EZ.light);
+    solid(standoff(ship, engine, H, 'z', [cx, 'y0'], EZ.accent, true));
   }
 
   // 반응로 — 방 한가운데 서 있는 덩어리. 「여기가 심장」이라고 말해 준다
@@ -518,6 +598,40 @@ export function buildShip(scene) {
   const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, H, 12), MAT.pipe);
   pipe.position.set(0, H / 2, engine.z1 - 0.15);
   ship.add(pipe);
+  // ★ **조준 판정용 원판.** 밸브만 이게 없어서 **실제 바퀴 모양으로
+  //   판정**했다 — 살 사이가 뻥 뚫려 있고, 잡으면 바퀴가 **돌기 시작하니까**
+  //   구멍이 조준선 밑으로 지나가는 순간 손이 놓쳤다. 한 프레임 잡히고
+  //   다음 프레임에 놓치기를 되풀이해서 「안 잡힌다」로 보였다
+  //   (2026-08-04 · 사장님 「조정간이 안잡히잔아」를 쫓다가 밸브에서 나왔다).
+  //   원기둥은 제 축으로 돌아도 모양이 안 변하므로 같이 돌아도 된다.
+  const valveHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.46, 0.46, 0.22, 14),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  valveHit.rotation.x = Math.PI / 2;
+  valve.add(valveHit);
+
+  // ── 움푹한 자리 — **급한 조작기는 테 안에 앉는다** ────────
+  // ★ 셔틀은 조작기를 패널에 **움푹 들어가게** 박았다. 밟아도 안 꺾이게
+  //   한 것이고, 덤으로 「이건 아무 데나 붙은 손잡이가 아니라 **자리가
+  //   정해진 물건**」으로 읽힌다 (docs/space/REALSHIP.md §3).
+  //   밸브는 이 배에서 제일 급할 때 잡는 것인데 여태 벽에 붕 떠 있었다.
+  const bezel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.52, 0.58, 0.16, 16, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: 0x2b3138, roughness: 0.7, metalness: 0.6, side: THREE.DoubleSide,
+    }),
+  );
+  bezel.rotation.x = Math.PI / 2;
+  bezel.position.z = 0.06;
+  valve.add(bezel);
+  const backPlate = new THREE.Mesh(
+    new THREE.CircleGeometry(0.58, 16),
+    new THREE.MeshStandardMaterial({ color: 0x1b1f25, roughness: 0.8, metalness: 0.4 }),
+  );
+  backPlate.position.z = -0.02;
+  valve.add(backPlate);
+
   const wheel = new THREE.Mesh(
     new THREE.TorusGeometry(0.34, 0.055, 10, 28),
     new THREE.MeshStandardMaterial({ color: 0x9a4a34, roughness: 0.5, metalness: 0.7 }),
@@ -638,6 +752,6 @@ export function buildShip(scene) {
 
   // ★ `group` — tools 가 배 안에만 광선을 쏘려고 쓴다 (창밖·성운은 뺀다)
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    marks,
+    marks, byBay,
     foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

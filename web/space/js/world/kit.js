@@ -21,6 +21,7 @@
 //    막대다. 무늬는 그림이라 사장님 몫이고, 오면 이 부품들이 그걸 입는다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
+import { PLATE } from '../game/bay-table.js';
 
 // ── 재질 ────────────────────────────────────────────────────
 // 구역마다 색을 나눈다. 게임 레벨 디자인의 오래된 문법이고, 「내가 어느
@@ -47,6 +48,51 @@ export const MAT = {
 
 const glow = (hex) => new THREE.MeshBasicMaterial({ color: hex });
 
+/**
+ * 베이 번호판 — **랙과 패널에 「기관 3」이라고 적는다.**
+ *
+ * ★ 여기 있던 것은 **아무것도 안 적힌 빛나는 띠**였다. 「누가 만든
+ *   물건」으로 보이라고 넣었는데, 여덟 개가 다 똑같아서 기관실 벽 앞에
+ *   서면 어느 랙인지 말할 방법이 없었다 (REALSHIP.md §8-⑦).
+ *
+ * ★ 글자 크기를 눈대중으로 안 잡는다. `game/bay-table.js PLATE` 가
+ *   「3.2m 앞에서 읽힌다」를 숫자로 들고 있고, 검사가 그 숫자를 읽는다.
+ *   판에 글자를 꽉 채우면 오히려 안 읽히므로 여백을 남긴다.
+ *
+ * ★ 판 자체는 **안 빛난다** (MeshBasic 이지만 어두운 바탕). 다 빛나면
+ *   배가 크리스마스가 되고, 정말 봐야 할 불(고장 램프)이 안 보인다.
+ */
+export function bayPlate(parent, text, x, y, z, tint = 0x8fd0ff, ry = 0) {
+  const PX = 64;                       // 글자 높이(화소). 판 세로를 나눈다
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = Math.round(256 * PLATE.h / PLATE.w);
+  const c = cv.getContext('2d');
+  const hex = `#${tint.toString(16).padStart(6, '0')}`;
+  c.fillStyle = '#0a0d11'; c.fillRect(0, 0, cv.width, cv.height);
+  // 왼쪽에 색 띠 — 어느 구역 물건인지 글자를 안 읽어도 안다
+  c.fillStyle = hex; c.fillRect(0, 0, 10, cv.height);
+  c.strokeStyle = '#4a545e'; c.lineWidth = 2;
+  c.strokeRect(1, 1, cv.width - 2, cv.height - 2);
+  c.fillStyle = '#dbe6f2';
+  c.font = `700 ${PX}px system-ui, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text, cv.width / 2 + 5, cv.height / 2 + 2);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;                  // 비스듬히 봐도 안 뭉갠다
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(PLATE.w, PLATE.h),
+    new THREE.MeshBasicMaterial({ map: tex }),
+  );
+  m.name = `베이 ${text}`;
+  m.position.set(x, y, z);
+  m.rotation.y = ry;
+  parent.add(m);
+  // 검사가 「이 판의 글자가 몇 m 앞에서 읽히나」를 물을 수 있게 남긴다
+  m.userData.bay = { text, glyph: PLATE.h * PX / cv.height };
+  return m;
+}
+
 function box(parent, w, h, d, mat, x, y, z) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
@@ -63,13 +109,17 @@ function box(parent, w, h, d, mat, x, y, z) {
  * @param kind 얼굴에 뭐가 붙나 — 'panel' 계기 | 'lockers' 서랍 | 'grill' 환기
  *             | 'pipes' 배관 | 'blank' 민판(가끔 있어야 리듬이 산다)
  */
-export function rack(parent, x, z, ry, kind, tint) {
+export function rack(parent, x, z, ry, kind, tint, bayText = null, lift = 0) {
   const g = new THREE.Group();
-  g.position.set(x, 0, z);
+  // ★ `lift` 는 **바닥에서 띄운 랙**이다 (통로용).
+  //   통로는 바닥 모서리에 스탠드오프(배관 덮개)가 지나가므로 바닥까지
+  //   내려오는 랙은 그것을 뚫는다. 실제 모듈도 바닥 난간 위쪽에 보관
+  //   랙이 붙는다 — 아래는 배관, 위는 물건. 그대로 가져왔다
+  g.position.set(x, lift, z);
   g.rotation.y = ry;
   parent.add(g);
 
-  const W = 0.9, H = 1.9, D = 0.42;
+  const W = 0.9, H = lift > 0 ? 1.9 - lift - 0.12 : 1.9, D = 0.42;
   box(g, W, H, D, MAT.body, 0, H / 2, -D / 2);                 // 몸통
   box(g, W, 0.06, D + 0.03, MAT.metal, 0, H, -D / 2);          // 윗테
   box(g, W, 0.08, D + 0.03, MAT.metal, 0, 0.04, -D / 2);       // 아랫테
@@ -108,8 +158,17 @@ export function rack(parent, x, z, ry, kind, tint) {
     }
   }
 
-  // 어느 랙이든 라벨 한 줄. 「누가 만든 물건」으로 보이게 하는 것
-  box(g, 0.34, 0.045, 0.03, glow(tint), -W / 2 + 0.26, 1.83, 0.02);
+  // 어느 랙이든 번호판 한 장. ★ 전에는 **아무것도 안 적힌 빛나는 띠**라
+  //   랙 여덟이 다 똑같았다 — 「3번 베이」라고 부를 수가 없었다
+  if (bayText) {
+    // ★ 번호판은 **랙 꼭대기 기준**이다. 1.79 라고 박아 뒀더니 띄운 랙
+    //   (통로용 `lift`)에서 판이 랙 위 허공에 떴다 — 높이가 달라진 물건에
+    //   절대 좌표를 쓰면 이렇게 된다
+    bayPlate(g, bayText, 0, H - 0.11, 0.022, tint);
+    g.userData.bay = bayText;
+  } else {
+    box(g, 0.34, 0.045, 0.03, glow(tint), -W / 2 + 0.26, H - 0.07, 0.02);
+  }
   return g;
 }
 
@@ -117,16 +176,25 @@ export function rack(parent, x, z, ry, kind, tint) {
  * 벽 한 면을 랙으로 채운다.
  * **가끔 빈칸을 둔다** — 전부 채우면 무늬가 되고, 무늬는 배로 안 읽힌다.
  */
-export function rackRun(parent, axis, fixed, from, to, facing, tint, seed = 1) {
+export function rackRun(parent, axis, fixed, from, to, facing, tint, seed = 1, nextBay = null, skip = [], lift = 0) {
   const KINDS = ['panel', 'lockers', 'grill', 'pipes', 'lockers', 'panel', 'blank', 'grill'];
   const step = 0.95;
   const n = Math.floor((to - from) / step);
   const out = [];
   for (let i = 0; i < n; i++) {
     const t = from + step * (i + 0.5);
+    // ★ **그 벽에 이미 붙어 있는 것 위에 서지 않는다.** 정비실에서 한 번,
+    //   기관실·관측실에서 또 한 번 랙이 점검 패널을 뚫고 겹쳐 그려졌다.
+    //   그때마다 패널을 빈 벽으로 **옮겨서** 넘어갔는데, 그건 그 자리만
+    //   고치는 것이라 벽을 하나 늘릴 때마다 다시 난다.
+    //   번호를 붙이고 나서야 눈에 띄었다 — 「기관 1」 이 랙 속에 박혀 있었다
+    if (skip.some(([a, c]) => t > a && t < c)) continue;
     const kind = KINDS[(i * 3 + seed * 5) % KINDS.length];
-    if (axis === 'x') out.push(rack(parent, t, fixed, facing > 0 ? 0 : Math.PI, kind, tint));
-    else out.push(rack(parent, fixed, t, facing > 0 ? Math.PI / 2 : -Math.PI / 2, kind, tint));
+    // ★ 번호는 **부르는 쪽(ship.js)이 매긴다.** 여기서 매기면 벽 한 줄마다
+    //   1 부터 다시 시작해서 한 방에 같은 번호가 두 개 생긴다
+    const bayText = nextBay ? nextBay() : null;
+    if (axis === 'x') out.push(rack(parent, t, fixed, facing > 0 ? 0 : Math.PI, kind, tint, bayText, lift));
+    else out.push(rack(parent, fixed, t, facing > 0 ? Math.PI / 2 : -Math.PI / 2, kind, tint, bayText, lift));
   }
   return out;
 }
@@ -158,8 +226,99 @@ export function handrail(parent, axis, fixed, from, to, y, off) {
 }
 
 /**
+ * ★ **스탠드오프** — 배관·배선·난간이 지나가는 **모서리 통로.**
+ *
+ *   ISS 데스티니 실험동은 랙과 랙이 만나는 **모서리에 통로 넷**을 두고
+ *   배관·배선·공조 덕트·냉각수관을 **전부 그 안으로만** 보낸다
+ *   (docs/space/REALSHIP.md §1). 벽면은 랙·패널·문이 쓴다.
+ *
+ *   **우리는 정반대였고 같은 병을 세 번 앓았다:**
+ *     v26 링 프레임 기둥이 문 다섯을 관통
+ *     v26 통로 난간이 문 넷을 관통
+ *     v29 기관실 난간이 랙 면 0.5m 앞을 가로지름
+ *   세 번 다 증상만 고쳤다. **지나갈 곳을 안 정해 놔서** 계속 났다.
+ *
+ *   그래서 자리를 규칙으로 만든다: **긴 것은 모서리에만 산다.**
+ *   `STANDOFF.band` 안에 없으면 tools 가 ✘ 를 찍는다.
+ *
+ * @param corner ['x0'|'x1', 'y0'|'y1'] 어느 모서리인가 (좌우 · 위아래)
+ * @param rail   난간도 같이 달까 (아래 모서리에만 단다 — 손이 닿는 높이)
+ */
+export function standoff(parent, room, H, axis, corner, tint, rail = false) {
+  const g = new THREE.Group();
+  g.name = '스탠드오프';
+  parent.add(g);
+
+  const [cx, cy] = corner;
+  // 모서리에서 안쪽으로 파고든 자리. 벽면을 안 침범한다
+  const IN = 0.30;
+  const wx = cx === 'x0' ? room.x0 + IN : room.x1 - IN;
+  const wz = cx === 'x0' ? room.z0 + IN : room.z1 - IN;
+  const y = cy === 'y1' ? H - IN : IN + 0.22;
+
+  const from = axis === 'z' ? room.z0 + 0.25 : room.x0 + 0.25;
+  const to = axis === 'z' ? room.z1 - 0.25 : room.x1 - 0.25;
+  const fixed = axis === 'z' ? wx : wz;
+  const len = to - from, mid = (from + to) / 2;
+
+  // 모서리를 덮는 **비스듬한 덮개판** — 이게 「통로」로 읽히게 하는 것이다.
+  // 없으면 그냥 파이프가 공중에 떠 있다
+  const sx = cx === 'x0' ? 1 : -1, sy = cy === 'y1' ? -1 : 1;
+  const cover = new THREE.Mesh(new THREE.BoxGeometry(
+    axis === 'z' ? 0.42 : len, 0.03, axis === 'z' ? len : 0.42,
+  ), MAT.faceD);
+  cover.position.set(
+    axis === 'z' ? fixed + sx * 0.10 : mid,
+    y + sy * 0.16,
+    axis === 'z' ? mid : fixed + sx * 0.10,
+  );
+  cover.rotation[axis === 'z' ? 'z' : 'x'] = sx * sy * 0.72;
+  g.add(cover);
+
+  // 다발 — 굵기와 색을 섞는다. **정리하지 않는 것**이 요점이다
+  const specs = [[0.075, MAT.pipe, -0.10], [0.05, MAT.pipeCold, 0], [0.032, MAT.cable, 0.08], [0.026, MAT.cable, 0.13]];
+  for (const [r, mat, off] of specs) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), mat);
+    if (axis === 'x') { c.rotation.z = Math.PI / 2; c.position.set(mid, y + off * 0.6, fixed + sx * off); }
+    else { c.rotation.x = Math.PI / 2; c.position.set(fixed + sx * off, y + off * 0.6, mid); }
+    g.add(c);
+  }
+  // 고정 밴드
+  const n = Math.max(2, Math.round(len / 1.4));
+  for (let i = 0; i <= n; i++) {
+    const t = from + (len * i) / n;
+    if (axis === 'x') box(g, 0.06, 0.1, 0.34, MAT.metal, t, y, fixed + sx * 0.02);
+    else box(g, 0.34, 0.1, 0.06, MAT.metal, fixed + sx * 0.02, y, t);
+  }
+  // 띠조명 — 실제 배도 조명을 구조에 박아 넣는다. **바닥 기준면**을 만든다
+  if (axis === 'x') box(g, len, 0.03, 0.05, glow(tint), mid, y + sy * 0.10, fixed + sx * 0.16);
+  else box(g, 0.05, 0.03, len, glow(tint), fixed + sx * 0.16, y + sy * 0.10, mid);
+
+  // 난간 — **아래 모서리에만.** 손이 닿는 높이이고, 벽면이 아니라 모서리다
+  if (rail) {
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, len, 8), MAT.rail);
+    const rg = new THREE.Group();
+    rg.name = '난간';
+    g.add(rg);
+    if (axis === 'x') { bar.rotation.z = Math.PI / 2; bar.position.set(mid, y + 0.26, fixed + sx * 0.20); }
+    else { bar.rotation.x = Math.PI / 2; bar.position.set(fixed + sx * 0.20, y + 0.26, mid); }
+    rg.add(bar);
+  }
+  // ★ **아래 모서리는 몸이 부딪힌다.** 안 막으면 배관을 뚫고 걸어간다 —
+  //   그리고 막으면 통로가 저절로 좁아져 실제 모듈(1.2m)에 가까워진다.
+  //   위 모서리는 머리 위라 안 막는다
+  g.userData.solid = cy === 'y0'
+    ? { axis, fixed: fixed + sx * 0.12, half: 0.20, from, to }
+    : null;
+  return g;
+}
+
+/**
  * 배선·배관 다발 — 천장 모서리를 따라 지나간다.
  * **정리하지 않는 것**이 요점이다. 굵기와 색을 섞는다.
+ *
+ * ★ 새로 쓰지 않는다. `standoff()` 를 쓴다 — 이건 벽면을 따라 긋는 옛 방식이라
+ *   문·랙 앞을 가로지르는 사고를 세 번 냈다 (REALSHIP.md §1).
  */
 export function conduit(parent, axis, fixed, from, to, y, tint) {
   const g = new THREE.Group();
@@ -376,7 +535,7 @@ export function hatch(parent, x, z, half, H, ry, tint) {
  * @param circuits [{key, name}] — 표(game/chase-table.js CIRCUITS)에서 온다
  * @returns [{key, lever, lamp, hit}] — hit 이 조준 판정을 받는 몸이다
  */
-export function breakerPanel(parent, x, z, ry, circuits, tint) {
+export function breakerPanel(parent, x, z, ry, circuits, tint, bayText = null) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   g.rotation.y = ry;
@@ -386,7 +545,8 @@ export function breakerPanel(parent, x, z, ry, circuits, tint) {
   box(g, W, 1.28, 0.12, MAT.body, 0, 1.28, -0.04);            // 판
   box(g, W, 0.08, 0.16, MAT.metal, 0, 1.92, -0.02);           // 윗테
   box(g, W, 0.08, 0.16, MAT.metal, 0, 0.64, -0.02);           // 아랫테
-  box(g, W - 0.1, 0.05, 0.04, glow(tint), 0, 1.86, 0.05);     // 라벨 띠
+  if (bayText) bayPlate(g, bayText, 0, 1.84, 0.06, tint);
+  else box(g, W - 0.1, 0.05, 0.04, glow(tint), 0, 1.86, 0.05);
 
   const out = [];
   circuits.forEach((c, i) => {
@@ -421,6 +581,31 @@ export function breakerPanel(parent, x, z, ry, circuits, tint) {
 
     out.push({ key: c.key, name: c.name, lever, lamp, lampMat, hit, tint });
   });
+
+  // ── 철사 가드 — **잘못 건드려도 안 꺾이게** ──────────────
+  // ★ 스페이스 셔틀은 토글 스위치를 **움푹 들어가게** 박고 스위치 사이에
+  //   철사 가드를 넣었다. 패널을 밟거나 손이 스쳐도 안 꺾이게 한 것이고,
+  //   가드는 티타늄이었다 — 불꽃이 튀면 안 되니까
+  //   (docs/space/REALSHIP.md §3).
+  //
+  //   이 배의 차단기가 정확히 그런 물건이다: 셋 중 둘만 켤 수 있고,
+  //   추격 중에 잘못 내리면 그 자리에서 붙잡힌다. **잘못 건드리면 큰일
+  //   나는 것**은 생김새로 그렇게 말해야 한다.
+  //
+  //   조준은 안 막는다 — 조준선은 정해진 판정 상자만 쏘므로(main.js
+  //   interactStep) 이 철사는 **눈에만** 있는다. 실제 가드와 같다.
+  for (let i = 0; i <= circuits.length; i++) {
+    const gx = -W / 2 + 0.06 + i * 0.36;
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 6), MAT.rail);
+    bar.position.set(gx, 1.42, 0.15);
+    g.add(bar);
+    for (const y of [1.17, 1.67]) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6), MAT.rail);
+      arm.rotation.x = Math.PI / 2;
+      arm.position.set(gx, y, 0.08);
+      g.add(arm);
+    }
+  }
   return out;
 }
 
@@ -436,7 +621,7 @@ export function breakerPanel(parent, x, z, ry, circuits, tint) {
  *   차단기처럼 딸깍이면 「눌렀더니 고쳐졌다」가 되어 진단이 사라진다.
  *   시간이 드는 동작이라야 「지금 여기 매여 있다」가 생긴다.
  */
-export function servicePanel(parent, x, z, ry, tint) {
+export function servicePanel(parent, x, z, ry, tint, bayText = null) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   g.rotation.y = ry;
@@ -445,7 +630,11 @@ export function servicePanel(parent, x, z, ry, tint) {
   box(g, 0.62, 0.72, 0.09, MAT.body, 0, 1.18, -0.03);          // 판
   box(g, 0.66, 0.06, 0.12, MAT.metal, 0, 1.56, -0.02);         // 윗테
   box(g, 0.66, 0.06, 0.12, MAT.metal, 0, 0.80, -0.02);         // 아랫테
-  box(g, 0.5, 0.02, 0.03, glow(tint), 0, 1.5, 0.04);           // 라벨 띠
+  // ★ **일곱 방 전부 1번이 점검 패널이다** (bay-table.js PANEL_BAY).
+  //   처음 들어간 방에서도 「1번을 찾으면 고치는 자리」를 안다 —
+  //   사실성보다 **배울 수 있는 규칙** 하나가 값이 크다
+  if (bayText) { bayPlate(g, bayText, 0, 1.62, 0.05, tint); g.userData.bay = bayText; }
+  else box(g, 0.5, 0.02, 0.03, glow(tint), 0, 1.5, 0.04);
 
   // 돌리는 손잡이 — 돌아가는 것이 보여야 「먹고 있다」를 안다
   const knob = new THREE.Group();
@@ -469,5 +658,5 @@ export function servicePanel(parent, x, z, ry, tint) {
   hit.position.set(0, 1.18, 0.1);
   g.add(hit);
 
-  return { group: g, knob, hit, lampMat };
+  return { group: g, knob, hit, lampMat, bay: bayText };
 }
