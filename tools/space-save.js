@@ -64,6 +64,10 @@ console.log('\n[2] ★ **저장했다 불러오면 같은가** — 반쯤 저장
   a.chase.risk = 62; a.chase.dist = 33.5; a.chase.runs = 4;
   a.supply.food = 2; a.supply.parts = 5; a.supply.ore = 18;
   a.faults.fixed = 9; a.faults.wear = { power: 0.4, cool: 0.7, hull: 0.2 };
+  // ★ **열려 있던 고장**도 이어져야 한다. 안 그러면 껐다 켜는 것이
+  //   고장을 지우는 요령이 된다
+  a.faults.open = [{ key: 'attitude', name: '자세 제어', steps: [{ at: 'workshop', hold: 5 }], step: 0, held: 2.1 }];
+  a.faults.log = [{ name: '오염된 냉매', reveal: '갈면 끝난다', at: 320 }];
   a.hazard.hits = 3; a.hazard.dodged = 6;
   a.move.breath = 0.4; a.move.spent = true;
   a.carry.held = 'coolant';
@@ -252,6 +256,20 @@ if (see >= 0) {
       return el && !el.hidden ? el.textContent : null;
     });
     ok(/이어합니다/.test(said ?? ''), `이었다고 말한다 — 「${said ?? '아무 말 없음'}」`);
+  }
+
+  console.log('\n[11b] ★ **열려 있던 고장이 이어지나** — 안 이어지면 껐다 켜는 게 요령이 된다');
+  {
+    await S(() => SPACE.forceFault());
+    await p.waitForTimeout(600);
+    const before = await S(() => ({ n: SPACE.faults.open.length, keys: SPACE.faults.open.map((o) => o.key) }));
+    ok(before.n > 0, `고장을 ${before.n}개 열어 뒀다 (${before.keys.join('·')})`);
+    await S(() => SPACE.saveNow());
+    await p.reload({ waitUntil: 'networkidle' });
+    await p.waitForTimeout(2200);
+    const after = await S(() => ({ n: SPACE.faults.open.length, keys: SPACE.faults.open.map((o) => o.key) }));
+    ok(after.n === before.n && after.keys.join() === before.keys.join(),
+      `다시 열었더니 그대로 열려 있다 (${before.n} → ${after.n})`);
   }
 
   console.log('\n[12] 판본이 바뀌면 **깨끗이 버리고 새로 시작하나**');
