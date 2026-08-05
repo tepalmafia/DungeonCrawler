@@ -478,7 +478,14 @@ export function buildShip(scene) {
   racks(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.8, engine.z1 - 0.8, 1, EZ.accent, 1);
   racks(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.8, engine.z1 - 0.8, -1, EZ.accent, 3);
   for (const sx of [-1, 1]) {
-    handrail(ship, 'z', sx * (engine.x1 - 0.58), engine.z0 + 1.0, engine.z1 - 1.0, 1.42, 0);
+    // ★ 여기 난간이 있었다. **랙 면 0.5m 앞을 가로질러** 지나갔다 —
+    //   랙은 x ±4.51, 난간은 ±4.02, 높이 1.42 라 정확히 읽는 높이였다
+    //   (2026-08-04 · 사장님 「여기도 가로 쇠파이프가 있네 제거해주고」).
+    //
+    //   통로 난간을 문에서 끊은 것과 **같은 병**이다: 가로로 긴 것을 벽을
+    //   따라 죽 긋고, **그 벽에 뭐가 붙어 있는지 안 봤다.** 통로는 문,
+    //   기관실은 랙이었다. 기관실은 랙이 벽 전체를 덮으므로 끊을 자리가
+    //   없다 — 아예 뺀다. 잡을 것은 반응로 둘레와 배관으로 충분하다
     conduit(ship, 'z', sx * (engine.x1 - 0.32), engine.z0 + 0.4, engine.z1 - 0.4, H - 0.36, EZ.light);
   }
 
@@ -518,6 +525,19 @@ export function buildShip(scene) {
   const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, H, 12), MAT.pipe);
   pipe.position.set(0, H / 2, engine.z1 - 0.15);
   ship.add(pipe);
+  // ★ **조준 판정용 원판.** 밸브만 이게 없어서 **실제 바퀴 모양으로
+  //   판정**했다 — 살 사이가 뻥 뚫려 있고, 잡으면 바퀴가 **돌기 시작하니까**
+  //   구멍이 조준선 밑으로 지나가는 순간 손이 놓쳤다. 한 프레임 잡히고
+  //   다음 프레임에 놓치기를 되풀이해서 「안 잡힌다」로 보였다
+  //   (2026-08-04 · 사장님 「조정간이 안잡히잔아」를 쫓다가 밸브에서 나왔다).
+  //   원기둥은 제 축으로 돌아도 모양이 안 변하므로 같이 돌아도 된다.
+  const valveHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.46, 0.46, 0.22, 14),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  valveHit.rotation.x = Math.PI / 2;
+  valve.add(valveHit);
+
   const wheel = new THREE.Mesh(
     new THREE.TorusGeometry(0.34, 0.055, 10, 28),
     new THREE.MeshStandardMaterial({ color: 0x9a4a34, roughness: 0.5, metalness: 0.7 }),

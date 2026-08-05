@@ -82,7 +82,8 @@ export function buildHolo(camera) {
 
   let sig = null, flick = 0;
   function draw(s) {
-    const now = `${s.job?.text}|${s.job?.urgent}|${s.fixed}|${(s.log ?? []).join()}|${s.raised}`;
+    const now = `${s.job?.text}|${s.job?.urgent}|${s.fixed}|${(s.log ?? []).join()}|${s.raised}`
+      + `|${s.act ? `${s.act.label}${s.act.t?.toFixed(2)}${s.act.heat}` : ''}|${s.trend?.length ?? 0}`;
     // 급할 때는 깜빡이므로 매 프레임, 아니면 바뀔 때만 (텍스처 올리기가 비싸다)
     if (now === sig && !s.job?.urgent) return;
     sig = now;
@@ -118,6 +119,52 @@ export function buildHolo(camera) {
     ctx.fillStyle = DIM;
     ctx.font = '600 21px system-ui, sans-serif';
     ctx.fillText(s.fixed ? `고친 것 ${s.fixed}` : '고친 것 없음', 18, 100);
+
+    // ── 지금 하고 있는 일 ──────────────────────────────
+    // ★ **잡고 있는 동안에만** 뜬다 (game/wrist-table.js actShows).
+    //   사장님: 「여기서 열을 내리는게 맞아? 진행 상황도 표시해줘.
+    //   그래프로 열이 떨어지는지」 — 밸브를 돌리는 동안 열 계기는 조종석에
+    //   있으니 **먹고 있는지 알 수가 없었다.**
+    if (s.act) {
+      const y = 128;
+      ctx.fillStyle = 'rgba(143,232,196,.55)';
+      ctx.font = '600 20px system-ui, sans-serif';
+      ctx.fillText(s.act.label ?? '', 18, y - 24);
+
+      // 진행 막대 — 「얼마나 됐나」
+      const bw = w - 36, bh = 14;
+      ctx.strokeStyle = 'rgba(143,232,196,.35)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(18, y, bw, bh);
+      ctx.fillStyle = 'rgba(120,240,190,.85)';
+      ctx.fillRect(18, y, bw * Math.max(0, Math.min(1, s.act.t ?? 0)), bh);
+
+      // 열 그래프 — **열을 만지는 손잡이일 때만**
+      if (s.act.heat && (s.trend?.length ?? 0) > 1) {
+        const gh = 52, gy = y + 30, t = s.trend;
+        const lo = Math.min(...t), hi = Math.max(...t), span = Math.max(6, hi - lo);
+        ctx.strokeStyle = 'rgba(143,232,196,.22)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(18, gy, bw, gh);
+        // ★ **내려가면 청록, 올라가면 주황.** 숫자를 안 적어도 「먹고 있나」가
+        //   한눈에 나온다 — 이게 이 그래프의 전부다
+        const down = t[t.length - 1] < t[0];
+        ctx.strokeStyle = down ? 'rgba(120,240,190,.95)' : 'rgba(255,150,100,.95)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        t.forEach((v, i) => {
+          const x = 18 + (bw * i) / (t.length - 1);
+          const yy = gy + gh - ((v - lo) / span) * gh;
+          if (i) ctx.lineTo(x, yy); else ctx.moveTo(x, yy);
+        });
+        ctx.stroke();
+        ctx.fillStyle = down ? 'rgba(120,240,190,.9)' : 'rgba(255,150,100,.9)';
+        ctx.font = '700 19px system-ui, sans-serif';
+        ctx.fillText(down ? '열이 내려갑니다' : '아직 오릅니다', 24, gy + 6);
+      }
+      tex.needsUpdate = true;
+      return;    // 잡고 있는 동안에는 지난 기록을 안 편다 — 한 번에 하나
+    }
 
     // ★ 지난 기록은 **들어 올렸을 때만** 편다. 늘 펴 두면 홀로그램이
     //   커지고, 커지면 「방해가 안 되는 곳」이 아니게 된다

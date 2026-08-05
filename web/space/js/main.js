@@ -51,7 +51,7 @@ import {
 import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from './game/tutor.js';
 import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
-import { WRIST, jobFor } from './game/wrist-table.js';
+import { WRIST, jobFor, actShows } from './game/wrist-table.js';
 import { buildHolo } from './world/holo.js';
 import { buildHands } from './world/hands.js';
 import { bothHands } from './game/hand-table.js';
@@ -59,7 +59,7 @@ import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 
-export const VERSION = 28;
+export const VERSION = 29;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -221,6 +221,34 @@ function guideAim() {
     return p ? { x: p.group.position.x, z: p.group.position.z } : null;
   }
   return ship.marks[AIMS[k]] ?? null;
+}
+
+/**
+ * 열이 어떻게 움직였나 — **그래프 한 줄.**
+ * ★ 밸브를 잡고 있는 동안에만 홀로그램에 뜬다. 아무 데서나 보이면 그건
+ *   조종석 계기를 손목에 옮긴 것이고, 그러면 방을 도는 이유가 사라진다
+ */
+const trend = [];
+let trendAt = 0;
+
+/** 지금 잡고 있는 것의 진행 — 손잡이마다 세는 것이 다르다 */
+function actNow() {
+  const show = actShows(aimName, input.hold);
+  if (!show) return null;
+  const head = String(aimName).split(':')[0];
+  const t = head === 'valve' ? turn
+    : head === 'crank' ? (cranking ? cranking.held / DOOR.crank : 0)
+      : head === 'panel' ? (repairing?.held ?? 0) / (repairing?.steps[repairing.step]?.hold ?? 1)
+        : head === 'hatch' ? trading / TRADE.hold
+          : head === 'winch' ? supply.hauled / WINCH.load   // 다음 한 통까지
+            : 1;
+  const label = head === 'valve' ? '밸브를 돌립니다'
+    : head === 'crank' ? '크랭크를 돌립니다'
+      : head === 'panel' ? '고치는 중입니다'
+        : head === 'hatch' ? '바꾸는 중입니다'
+          : head === 'winch' ? '끌어옵니다'
+            : '잡고 있습니다';
+  return { label, t: Math.max(0, Math.min(1, t)), heat: show.heat };
 }
 
 let raised = false;
@@ -514,6 +542,15 @@ function interactStep(dt) {
   // 「안 한 것」이 되어, 먼저 돌려 본 사람을 못 알아본다
   if (turn >= VALVE.openAt) { coolFor = VALVE.holds; turn = 0; taught.cooled++; audio?.event('latch'); }
   coolFor = Math.max(0, coolFor - dt);
+
+  // ★ 열을 **0.6초마다 한 점씩** 40초치 담아 둔다. 매 프레임 담으면 그래프가
+  //   3초짜리라 「내려가는지」가 안 보이고, 너무 성기면 밸브를 돌리는 26초
+  //   안에 점이 몇 개 안 찍힌다
+  if (clock - trendAt > 0.6) {
+    trendAt = clock;
+    trend.push(+heat.toFixed(1));
+    if (trend.length > 66) trend.shift();
+  }
   ship.wheel.parent.rotation.z -= (turn > 0 ? dt * 2.6 : 0) + (coolFor > 0 ? dt * 0.5 : 0);
 
   // 차단기 · 해도대 — 누르는 순간에만 넘어간다
@@ -1032,12 +1069,58 @@ window.SPACE = {
   },
   get THREE() { return THREE; },
   get shipGroup() { return ship.group; },
+  get hold() { return input.hold; },
+  /** 열 이력을 억지로 채운다 — 헤드리스는 게임 시간이 1/20 이라 그래프가 안 쌓인다 */
+  fakeTrend(list) { trend.length = 0; for (const v of list) trend.push(v); },
+  get act() { return actNow(); },
+  get trendLen() { return trend.length; },
+  get camera() { return camera; },
+  get reach() { return BODY.reach; },
+  get aimTargets() {
+    const pans = Object.values(ship.panels);
+    return [ship.valve, ...ship.breakers.map((x) => x.hit), ...ship.chart.plates.map((x) => x.hit),
+      ...pans.map((x) => x.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
+      ...ship.doors.map((d) => d.view.hit)];
+  },
   get doorsRaw() { return doors.list.map((d) => ({ key: d.key, x: d.x, z: d.z, ry: d.ry })); },
   /** 안내선이 지금 어디를 가리키나 · 화살표가 몇 개 켜졌나 — 검사용 */
   get guide() {
     const t = guideAim();
     return { aim: t ? { x: +t.x.toFixed(2), z: +t.z.toFixed(2) } : null,
       on: guide.on, marks: guide.group.children.filter((m) => m.visible).length };
+  },
+  /**
+   * **읽어야 할 면 앞을 가로지르는 것이 있나** — 검사용.
+   *
+   * ★ 같은 병을 세 번 만났다 (2026-08-04):
+   *   ① 링 프레임 기둥이 문 다섯을 관통 ② 통로 난간이 문 넷을 관통
+   *   ③ **기관실 난간이 랙 면 0.5m 앞을 가로지름** ← 사장님이 또 잡으셨다
+   *
+   *   전부 「가로로 긴 것을 벽 따라 죽 긋고 **그 벽에 뭐가 붙어 있는지
+   *   안 본」 것이다. `clearDoorway` 는 문만 봤다. 벽에 붙은 것은 문 말고도
+   *   랙·패널·차단기·해도대가 있고, 그 앞이 막히면 **읽을 수가 없다.**
+   *
+   * @param at {x,z,ry} 면의 자리와 바라보는 방향
+   */
+  clearFace(at, span = 1.6, ys = [1.0, 1.3, 1.6]) {
+    // 면을 따라(가로) 쏜다. 앞뒤로 훑는 것은 문과 같은 이유다
+    const ux = Math.cos(at.ry), uz = -Math.sin(at.ry);
+    const nx = Math.sin(at.ry), nz = Math.cos(at.ry);
+    const hits = [];
+    for (const y of ys) for (const o of [0.14, 0.28, 0.45]) {
+      ray.set(
+        new THREE.Vector3(at.x - ux * span + nx * o, y, at.z - uz * span + nz * o),
+        new THREE.Vector3(ux, 0, uz),
+      );
+      ray.far = span * 2;
+      for (const h of ray.intersectObject(ship.group, true)) {
+        if (h.object.material?.visible === false) continue;
+        const n = h.object.name || h.object.parent?.name || '';
+        // **긴 것만** 본다 — 랙 자체나 벽은 잡히는 게 당연하다
+        if ((n === '난간' || n === '배관') && !hits.includes(n)) hits.push(n);
+      }
+    }
+    return hits;
   },
   /** 그 문을 지금 끼게 한다 — 검사용. 게임은 안 쓴다 */
   jamDoor(key) {
@@ -1310,6 +1393,7 @@ function frame(now) {
     //   log 로 세면 일곱 번째부터 「고친 것 6」에 멈춰 선다
     log: faults.log.map((l) => l.reveal),
     fixed: faults.fixed,
+    act: actNow(), trend,
     clock, raised,
   }, dt);
 
