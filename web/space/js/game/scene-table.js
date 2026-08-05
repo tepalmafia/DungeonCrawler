@@ -77,7 +77,7 @@ export const SCENES = {
     lead: '밀집 구역 — 자세 제어를 확인하십시오',
     room: 'cockpit', hands: '조종간을 잡고 있는다 — 놓으면 배가 돈다',
     uses: ['hazard', 'yoke', 'fault'],
-    built: false,
+    built: true,          // game/drift.js — v39 부터 돈다
     /**
      * ★ **이 게임의 정체를 한 장면에 담는다.** 정비공 게임의 축이
      *   「동시에 두 곳에 못 있는다」인데 지금까지 한 번도 안 켜졌다.

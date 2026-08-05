@@ -46,7 +46,7 @@ import {
 } from './game/supply.js';
 import {
   makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
-  wearStep, wearFlip,
+  wearStep, wearFlip, open as openFault,
 } from './game/fault.js';
 import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire, gripLine, markGrip } from './game/tutor.js';
 import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
@@ -63,6 +63,12 @@ import { buildGuide } from './world/guide.js';
 import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES } from './game/scene-table.js';
+import { DRIFT } from './game/drift-table.js';
+import {
+  makeDrift, kill as killDrift, fixed as driftFixed, stepDrift,
+  holdHeat as driftHeat, radians as driftRad, danger as driftDanger,
+  summary as driftSummary,
+} from './game/drift.js';
 import {
   makeScenes, newLeg as sceneLeg, stepScene, running as sceneOn, warning as sceneWarn,
   allowChore, leadOf, summary as sceneSummary,
@@ -75,7 +81,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 38;
+export const VERSION = 39;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -295,12 +301,17 @@ const tutor = makeTutor();
 const scenes = makeScenes(seed);
 sceneLeg(scenes, 1);
 
+// ══ ★ C — 자세 제어가 죽는다 (PLAN2H §4) ══════════════════════
+// ★ **조종석에 사람이 있어야 하는데, 고칠 것은 조종석 밖에 있다.**
+//   정비공 게임의 축(「동시에 두 곳에 못 있는다」)이 처음으로 켜지는 자리다
+const drift = makeDrift();
+
 // ══ 저장 · 일시정지 ═══════════════════════════════════════════
 // ★ **2시간짜리에는 협상 불가다** (PLAN2H §11-1). 저장이 없으면
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift,
   ship: { heat, power, clock, seed },
   me,
 });
@@ -1501,6 +1512,14 @@ window.SPACE = {
   },
   /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /** ★ 자세 제어 — 배가 도나 · 잡으면 멎나 · 고치면 살아나나 */
+  get drift() { return { ...driftSummary(drift), roll: +driftRad(drift).toFixed(3) }; },
+  /** 검사가 장면을 기다리지 않고 배를 돌려 본다 */
+  killDrift(forever = false) {
+    killDrift(drift, { permanent: forever, way: driftWay });
+    drift.needsFix = forever ? false : !!openFault(faults, 'attitude');
+    return driftSummary(drift);
+  },
   /** 구간을 갈아 끼운다 — 검사가 12구간을 다 걸어가지 않아도 되게 */
   setLeg(n) { route.leg = n - 1; sceneLeg(scenes, n); return sceneSummary(scenes); },
   /**
@@ -1641,6 +1660,22 @@ function frame(now) {
   //   올리는데, 그 뒤에 장면을 밟으면 **새 구간의 장면을 옛 구간 길이로**
   //   재게 된다. 한 프레임짜리지만 「예고가 0초」 같은 모양으로 나온다
   const sev = stepScene(scenes, dt, route.need || 600);
+  // ── ★ C — 자세 제어가 죽는다 ──────────────────────────
+  // 「대응」 박자가 시작될 때 죽는다. **예고 때는 아직 멀쩡하다** —
+  // 예고가 예고이려면 준비할 시간이 있어야 한다 (PLAN2H §2)
+  if (sev === 'act' && sceneOn(scenes, 'C') && !drift.dead) {
+    const forever = route.leg + 1 >= DRIFT.permanentAtLeg;
+    killDrift(drift, { permanent: forever, way: driftWay });
+    // ★ **고칠 것을 같이 연다.** 배만 돌고 고칠 데가 없으면 그건 장면이
+    //   아니라 화면 효과다. 3막에서는 안 연다 — 못 고치는 판이니까
+    // ★ **연 것을 기억해 둔다.** 안 그러면 아래의 「다 고쳤나」가
+    //   「애초에 안 열렸다」와 구별이 안 돼서, 못 연 판에서 **혼자
+    //   저절로 낫는다.** 조용히 낫는 고장은 고장이 아니다
+    drift.needsFix = !!openFault(faults, 'attitude');
+    banner = forever ? '자세 제어가 나갔습니다 — 예비가 없습니다' : '자세 제어가 나갔습니다';
+    bannerT = 4.0;
+    audio?.event('caught');
+  }
   if (sev === 'warn') {
     // ★ **무엇이 오는지만 말한다. 어디가 잘못됐나는 안 가르친다** (PLAN §3-1)
     const lead = leadOf(scenes);
@@ -1745,6 +1780,30 @@ function frame(now) {
 
   const valveOpen = interactStep(dt);
   systemsStep(dt, valveOpen, signMult(route));
+
+  // ── ★ 배가 돈다 ──────────────────────────────────────
+  // ★ **조종간을 잡고 있으면 멎는다.** 놓으면 점점 빨라진다.
+  //   `steering` 은 이미 잔해 피하기가 쓰는 것과 같은 값이다 — 조종간을
+  //   둘로 만들지 않는다. 같은 손잡이가 상황에 따라 다른 일을 한다
+  const dev = stepDrift(drift, dt, steering);
+  // 잡고 있는 것에 값이 붙는다 — 냉각 밸브가 기관실이라 손이 못 간다
+  heat = Math.min(HEAT.max, heat + driftHeat(drift, steering) * dt);
+  if (dev === 'hit') {
+    // 죽지 않는다. **대신 일이 는다** — 잔해에 부딪힌 것과 같은 규약
+    faults.wear.hull = Math.min(1, faults.wear.hull + DRIFT.hit.hull);
+    heat = Math.min(HEAT.max, heat + DRIFT.hit.heat);
+    banner = '무언가에 스쳤습니다';
+    bannerT = 2.4;
+    hitFlash = 1;
+    audio?.event('caught');
+  }
+  // ★ **밖을 굴린다.** 어느 방에 있든 보인다 — 고장 하나를 배 전체로 말한다
+  ship.outside.roll(driftRad(drift));
+  // 자세 제어를 다 고쳤으면 살아난다
+  if (drift.dead && drift.needsFix && !faults.open.some((o) => o.key === 'attitude')) {
+    drift.needsFix = false;
+    if (driftFixed(drift)) { banner = '자세가 잡혔습니다'; bannerT = 2.6; audio?.event('fixed'); }
+  }
 
   // 화면 한복판 글자 — 잠깐 떴다 사라진다
   // ★ 멈춤 화면이 떠 있으면 안 띄운다 — 안 그러면 매 프레임 다시 켜져서

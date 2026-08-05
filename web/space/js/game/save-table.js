@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 2;   // 1 → 2: 장면(scenes) 칸이 늘었다 (2판)
+export const SAVE_VERSION = 3;   // 2 → 3: 자세 제어(drift) 칸이 늘었다 (4판)
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -55,6 +55,12 @@ export const FIELDS = {
    *   「여운 중이었는데 이어하니 예고부터」가 되면 그건 이어한 게 아니다
    */
   scenes: ['leg', 'keys', 'phase', 't', 'need', 'at', 'inLeg', 'done', 'hard', 'permanent'],
+  /**
+   * ★ 자세 제어. **`angle` 을 빼면 이어했을 때 배가 똑바로 서 있다** —
+   *   90도 기운 채 저장했는데 이어하니 멀쩡하면 그건 이어한 게 아니라
+   *   봐준 것이다. `needsFix` 를 빼면 고칠 것 없이 영영 도는 배가 된다
+   */
+  drift: ['dead', 'permanent', 'spin', 'angle', 'hits', 'held', 't', 'way', 'needsFix'],
   /** 배 자체 — main.js 가 들고 있는 것들 */
   ship: ['heat', 'power', 'clock', 'seed'],
   /** 사람이 서 있던 자리 */

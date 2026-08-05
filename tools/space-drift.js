@@ -230,6 +230,99 @@ console.log('\n[9] 왕복 — **기획서가 아니라 배에서 온 값인가**
   console.log('      **기획서가 맞고 내 첫 구현(정비실 한 곳)이 틀렸다.** 재기 전엔 몰랐다');
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  여기부터는 **실제 배**다 — `--see 8391` 을 줬을 때만 돈다.
+//
+//  ★ 위 아홉은 숫자만 본다. 이 장면의 절반은 **화면**이다 —
+//    「창밖이 흐른다」가 어느 방에서든 보이지 않으면 이건 배너 한 줄짜리
+//    고장으로 되돌아간다 (PLAN2H §4-4 가 만들려던 것이 정확히 그 반대다).
+// ══════════════════════════════════════════════════════════════════════════
+const see = process.argv.indexOf('--see');
+if (see >= 0) {
+  const PORT = process.argv[see + 1] || '8391';
+  let chromium = null;
+  for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs']) {
+    try { ({ chromium } = await import(m)); break; } catch { /* 다음 것 */ }
+  }
+  if (!chromium) { console.error('playwright 가 없습니다.'); process.exit(2); }
+  const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+  const p = await b.newPage({ viewport: { width: 640, height: 380 } });
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(2000);
+  const S = (fn, a) => p.evaluate(fn, a);
+  await S(() => SPACE.clearSave());
+  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
+  await S(() => { const o = SPACE.route.offer; if (o.length) SPACE.pick(o[0]); });
+
+  console.log('\n[10] ★ **배가 정말 도나** — 그리고 어느 방에서든 보이나');
+  {
+    const d0 = await S(() => SPACE.killDrift(false));
+    ok(d0.dead, '자세 제어가 나갔다');
+    // 조종석에서 창밖이 기울어 가나
+    let a = await S(() => SPACE.drift.roll);
+    await p.waitForTimeout(2500);
+    let b2 = await S(() => SPACE.drift.roll);
+    ok(Math.abs(b2) > Math.abs(a), `창밖이 기운다 (${a} → ${b2} rad)`);
+
+    // ★ **기관실에서도 보이나.** 밖을 통째로 굴린 것이라 곁방 창에서도 보여야 한다
+    await S(() => SPACE.put(0, 12.0, 0, 0));
+    await p.waitForTimeout(600);
+    const rot = await S(() => {
+      // 밖(별·잔해)이 실제로 돌아가 있나 — 씬 그래프를 직접 본다
+      let found = null;
+      SPACE.shipGroup.parent.traverse((o) => {
+        if (found === null && o.type === 'Group' && Math.abs(o.rotation.z) > 0.01) found = o.rotation.z;
+      });
+      return found;
+    });
+    ok(rot !== null, `방을 옮겨도 밖이 돌아가 있다 (${rot?.toFixed(3) ?? '못 찾음'} rad)`);
+  }
+
+  console.log('\n[11] ★ **고칠 것이 조종석 밖에 있나** — 이 장면의 전부다');
+  {
+    const f = await S(() => SPACE.faults.open.find((o) => o.key === 'attitude') ?? null);
+    ok(!!f, `자세 제어 고장이 같이 열렸다 (${f?.name ?? '안 열림'})`);
+    ok(f?.at && f.at !== 'cockpit',
+      `첫 손이 갈 자리가 조종석이 **아니다** — ${f?.at} (조종석이면 이 장면이 성립 안 한다)`);
+  }
+
+  console.log('\n[12] ★ **잡으면 멎나** — 조종간 하나가 상황에 따라 다른 일을 한다');
+  {
+    // 조종간 앞에 서서 잡는다
+    const y = await S(() => SPACE.yokeAt ?? null);
+    await S(() => SPACE.put(0, -6.4, 0, -0.2));
+    await p.waitForTimeout(900);
+    const before = await S(() => SPACE.drift.spin);
+    await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+    let after = before;
+    for (let i = 0; i < 30; i++) {
+      await p.waitForTimeout(300);
+      after = await S(() => SPACE.drift.spin);
+      if (after < before - 0.2) break;
+    }
+    await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+    const aim = await S(() => SPACE.aim);
+    ok(after < before, `잡으니 회전이 죽는다 (${before} → ${after} 도/초 · 조준 ${aim})`);
+    void y;
+  }
+
+  console.log('\n[13] 이어하면 **기운 채로 이어지나**');
+  {
+    const before = await S(() => { SPACE.saveNow(); return SPACE.drift; });
+    await p.reload({ waitUntil: 'networkidle' });
+    await p.waitForTimeout(2200);
+    const after = await S(() => SPACE.drift);
+    ok(after.dead === before.dead, `죽어 있던 것이 그대로다 (${before.dead})`);
+    ok(Math.abs(after.angle - before.angle) < 3,
+      `기운 각도가 그대로다 (${before.angle}° → ${after.angle}°) — 똑바로 서 있으면 봐준 것이다`);
+  }
+
+  ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}: ${errs[0]}` : '콘솔 오류 없음');
+  await b.close();
+}
+
 console.log('');
 console.log(fail ? `✘ ${fail} 군데` : '✔ 전부 통과');
 console.log('\n  ※ **「고르는 것이 괴로운가」는 여기서 안 나온다.** 여기서 나오는 것은');

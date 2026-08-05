@@ -338,6 +338,36 @@ export const MISSIONS = [
       { key: 'waits', what: '기다린다. 이쪽이 먼저 못 버틴다', weight: 2, worse: true },
     ],
   },
+  {
+    // ══════════════════════════════════════════════════════════════════
+    //  ★ **자세 제어** — 장면 C 전용이다 (docs/space/PLAN2H.md §4)
+    //
+    //  ★ 이것만 **저절로 안 뜬다.** `sceneOnly` 가 붙어 있어서 `wired()` 가
+    //    거른다 — 무작위로 나오면 「자동 조종이 죽는다」가 그냥 고장 하나가
+    //    되고, 그러면 장면이 아니라 잔일이다. **장면이 부를 때만** 열린다.
+    //
+    //  ★ 자리가 둘인 이유가 이 장면의 전부다.
+    //    한 곳(정비실)으로 두니 왕복+수리가 14초라, 「놓고 고친다」가
+    //    나머지 갈래보다 67% 싸졌다 — **배가 이 장면을 담기에 좁았다.**
+    //    정비실에서 꺼내 기관실에서 갈아 넣게 하니 25~34초가 되어
+    //    기획서가 적어 둔 값과 맞았다 (tools/space-drift.js [9]).
+    //
+    //  ★ 그리고 자이로를 **안고 가는 구간은 못 뛴다** (carry-table.js).
+    //    이미 있는 규칙이 여기서 값을 한다.
+    // ══════════════════════════════════════════════════════════════════
+    key: 'attitude', sys: 'power', name: '자세 제어', tier: TIER.NOW,
+    sceneOnly: 'C',
+    where: ['workshop', 'engine'],
+    lead: '자세가 잡히지 않습니다',
+    costs: { time: [120, 240], parts: 1 },
+    steps: [
+      { at: 'workshop', hold: 5, what: '예비 자이로를 꺼낸다' },
+      { at: 'engine', hold: 8, what: '갈아 넣는다' },
+    ],
+    branches: [
+      { key: 'swap', what: '자이로를 갈면 잡힌다', weight: 1 },
+    ],
+  },
 ];
 
 export const BY_KEY = Object.fromEntries(MISSIONS.map((m) => [m.key, m]));
@@ -365,8 +395,13 @@ export const FAULT = {
 };
 
 /** 지금 실제로 **게임에 물릴 수 있는** 것 — steps 나 갈래의 at 이 있는 것만 */
+/**
+ * 저절로 뜰 수 있는 고장들.
+ * ★ `sceneOnly` 가 붙은 것은 **뺀다** — 장면이 부를 때만 열린다.
+ *   안 빼면 「자동 조종이 죽는다」가 아무 구간에서나 나와서 장면이 잔일이 된다
+ */
 export const wired = () => MISSIONS.filter(
-  (m) => m.tier === TIER.NOW && (m.steps || m.branches.some((b) => b.at)),
+  (m) => m.tier === TIER.NOW && !m.sceneOnly && (m.steps || m.branches.some((b) => b.at)),
 );
 
 /** 지금 단계에서 만들 수 있는 것들 */
