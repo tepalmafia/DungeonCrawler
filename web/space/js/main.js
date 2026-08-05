@@ -53,6 +53,9 @@ import { TUTOR, KEYS as TUTOR_KEYS } from './game/tutor-table.js';
 import { DOOR, nearDoor, canPass } from './game/door-table.js';
 import { WRIST, jobFor, actShows } from './game/wrist-table.js';
 import { poseAt, actAt } from './game/repair-table.js';
+import { RUN, WHY as RUN_WHY } from './game/move-table.js';
+import { makeMove, moveStep, bump as moveBump, handMult as breathMult,
+  summary as moveSummary } from './game/move.js';
 import { buildHolo } from './world/holo.js';
 import { buildHands } from './world/hands.js';
 import { bothHands } from './game/hand-table.js';
@@ -64,7 +67,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 35;
+export const VERSION = 36;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -125,6 +128,8 @@ const ship = buildShip(scene);
 //   좌표를 여기 또 적으면 랙을 옮길 때마다 자리가 허공에 남는다
 const carryView = buildCarry(ship.group, camera, ship.byBay);
 const carry = makeCarry();
+// 달리기와 숨 (game/move.js · PLAN2H §7-2)
+const move = makeMove();
 const input = new Input(canvas);
 
 // ── 소리 ────────────────────────────────────────────────────
@@ -391,21 +396,54 @@ resize();
 function walk(dt) {
   const { f, r } = input.move();
   const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
+
+  // ── 달리기 (game/move.js · PLAN2H §7-2) ─────────────────
+  // ★ **제자리에서 Shift 만 눌러도 숨이 빠지면** 그건 벌이 아니라
+  //   함정이다. 실제로 움직이는 중일 때만 뛴 것으로 친다
+  const moving = f !== 0 || r !== 0;
+  const armsFull = !!(carry.held && CARRY_KINDS[carry.held]?.both);
+  const mult = moveStep(move, dt, input.run, moving, {
+    bothHands: armsFull,
+    // 정전은 아직 없다 (PLAN2H E 장면). 자리를 비워 둔다
+    dark: false,
+  });
+  // ★ **조용히 안 막는다.** 못 뛰면 왜인지 말한다 — 윈치·해도대·조종간에서
+  //   이미 세 번 겪은 것이고, 조용한 것은 「어렵다」가 아니라 「고장」으로 읽힌다
+  if (move.blocked) nag(RUN_WHY[move.blocked]);
+
   // yaw 0 일 때 앞은 -z
-  const wantX = (-sin * f + cos * r) * BODY.speed;
-  const wantZ = (-cos * f - sin * r) * BODY.speed;
+  const wantX = (-sin * f + cos * r) * BODY.speed * mult;
+  const wantZ = (-cos * f - sin * r) * BODY.speed * mult;
 
   const k = Math.min(1, BODY.accel * dt);
   me.vx += (wantX - me.vx) * k;
   me.vz += (wantZ - me.vz) * k;
 
+  const fast = Math.hypot(me.vx, me.vz) > BODY.speed * 1.15;
   const nx = me.x + me.vx * dt;
-  if (inside(nx, me.z, BODY.radius)) me.x = nx; else me.vx = 0;
+  if (inside(nx, me.z, BODY.radius)) me.x = nx; else { me.vx = 0; if (fast) stumble(); }
   const nz = me.z + me.vz * dt;
-  if (inside(me.x, nz, BODY.radius)) me.z = nz; else me.vz = 0;
+  if (inside(me.x, nz, BODY.radius)) me.z = nz; else { me.vz = 0; if (fast) stumble(); }
 
   // 얼마나 걸었나 — 첫 가르침이 이걸 보고 사라진다 (game/tutor-table.js)
   taught.walked += Math.hypot(me.vx, me.vz) * dt;
+}
+
+/**
+ * 뛰다 벽·랙에 스쳤다 — **비틀거리고 손에 든 것을 놓친다.**
+ * ★ 벌이 숫자가 아니라 **일**이다. 놓친 것은 다시 주우러 가야 한다.
+ *   그리고 「좁은 배」가 여기서 처음으로 몸에 닿는다 (통로 폭 1.36m)
+ */
+function stumble() {
+  if (!moveBump(move)) return;
+  banner = '부딪혔습니다'; bannerT = 1.4;
+  audio?.event('deny');
+  // 두 손으로 안고 있던 것을 놓친다 — 제자리(정비실)로 돌아간다
+  if (carry.held) {
+    const it = carry.items.find((x) => x.kind === carry.held);
+    if (it) it.spot = 'shop-a';
+    carry.held = null;
+  }
 }
 
 // ── 손이 닿는 것들 ──────────────────────────────────────────
@@ -567,7 +605,10 @@ function interactStep(dt) {
   if (fixHere && input.hold && !shortParts && !wantHand) {
     repairing = fixHere;
     // 굶으면 **잡고 있어도 더디다** — 손이 떨려 정밀 작업이 어긋난다
-    const ev = repairStep(fixHere, dt * (shaky(supply) ? FOOD.handMult : 1));
+    // ★ **굶음과 숨참이 같은 규약이다** — 둘 다 「손이 안 듣는다」.
+    //   곱해서 쓴다: 굶은 채로 뛰어 왔으면 둘 다 치른다 (PLAN2H §7-2)
+    const ev = repairStep(fixHere,
+      dt * (shaky(supply) ? FOOD.handMult : 1) * breathMult(move));
     // ── 네 동작 ─────────────────────────────────────────
     // ★ 총 시간은 **안 바뀐다.** 원래 있던 `hold` 초를 넷이 나눠 가진다 —
     //   늘리면 층·회차 길이가 통째로 밀린다 (repair-table.js)
@@ -1085,6 +1126,8 @@ window.SPACE = {
   /** 문 여섯이 지금 어떤가 — 검사용 */
   get doors() { return doorSummary(doors); },
   /** 옮길 수 있는 물건이 지금 어떤가 — 검사용 */
+  /** 달리기와 숨이 지금 어떤가 — 검사용 */
+  get move() { return { ...moveSummary(move), speed: BODY.speed }; },
   get carry() {
     const g = carryView.items[carry.held];
     let root = g ?? null;
@@ -1588,7 +1631,7 @@ function frame(now) {
     reach: aimName ? 1 : 0,
     grip: aimName && input.hold ? 1 : 0,
     both: bothHands(aimName),
-    shaky: shaky(supply),
+    shaky: shaky(supply) || moveSummary(move).winded,
     // ★ 수리 중이면 **손이 네 동작을 따라간다** — 풀고·뽑고·꽂고·조인다
     //   (game/repair-table.js). 전에는 5초든 8초든 같은 주먹이었고,
     //   그래서 정비가 「기다리기」로 읽혔다
