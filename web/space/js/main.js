@@ -304,6 +304,15 @@ function saveNow() {
 function loadOnce() {
   const raw = loadRaw();
   if (!raw) return null;
+  // ★ **다른 항로의 저장은 안 잇는다.** 시드가 항로·고장·문·잔해를 전부
+  //   정하므로, `?seed=ABC` 로 열어 놓고 옛 저장을 덮으면 「구간 7」이
+  //   전혀 다른 항로의 7이 된다 — 배는 멀쩡해 보이는데 다니는 길이 다르다.
+  //   **지우지는 않는다.** 시드를 붙여 잠깐 들여다본 것 때문에 원래 회차가
+  //   사라지면 그건 저장이 아니라 함정이다
+  if (raw.ship?.seed && raw.ship.seed !== seed) {
+    console.warn(`[저장] 다른 항로(${raw.ship.seed})의 저장이라 안 잇습니다 — 그대로 둡니다`);
+    return null;
+  }
   const box = world();
   if (!apply(box, raw)) { clearRaw(); return null; }
   // ★ `let` 로 들고 있는 것들은 손으로 되돌린다 — 객체가 아니라 값이라

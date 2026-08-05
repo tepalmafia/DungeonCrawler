@@ -108,6 +108,11 @@ console.log('\n[4] 판본이 다르면 **깨끗이 버린다**');
   const b = fresh();
   ok(apply(b, { v: 99 }) === false, '못 읽으면 false 를 돌려준다 — 새로 시작하라는 뜻');
   ok(b.ship.heat === 0, '못 읽었으면 아무것도 안 건드린다');
+  // ★ **시드도 같이 담는다.** 시드가 항로·고장·문·잔해를 전부 정하므로,
+  //   `?seed=ABC` 로 열고 옛 저장을 덮으면 「구간 7」이 전혀 다른 항로의
+  //   7 이 된다. main.js loadOnce() 가 이 칸을 보고 안 잇는다
+  ok(FIELDS.ship.includes('seed'), '어느 항로였는지도 저장한다 — 그래야 다른 항로에 안 덮는다');
+  ok(pack(fresh()).ship.seed === 'SPACE1', '시드가 실제로 담긴다');
 }
 
 console.log('\n[5] 얼마나 자주 저장하나 — **되돌리기가 되면 긴장이 사라진다**');
@@ -260,6 +265,30 @@ if (see >= 0) {
     const r = await S(() => SPACE.route);
     ok(r.leg === 0, `못 읽는 저장은 버리고 처음부터 (구간 ${r.leg})`);
     ok(!(await S(() => SPACE.save)).stored, '망가진 저장은 지워졌다 — 그대로 두면 켤 때마다 터진다');
+  }
+
+  console.log('\n[13] ★ **다른 항로의 저장은 안 잇는다** — 그리고 안 지운다');
+  {
+    // 한 항로에서 저장해 둔다
+    await S(() => { const o = SPACE.route.offer; if (o.length) SPACE.pick(o[0]); SPACE.skipLeg(); });
+    for (let i = 0; i < 30; i++) {
+      await p.waitForTimeout(300);
+      if ((await S(() => SPACE.route)).leg > 0) break;
+    }
+    const kept = (await S(() => SPACE.route)).leg;
+    ok(kept > 0, `기본 항로에서 구간 ${kept} 까지 저장해 뒀다`);
+
+    // 다른 시드로 연다 — 이으면 「구간 N」이 **전혀 다른 항로의 N** 이 된다
+    await p.goto(`http://127.0.0.1:${PORT}/space/?seed=DIFFERENT`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(2200);
+    ok((await S(() => SPACE.route)).leg === 0, '다른 시드로 열면 처음부터 — 안 잇는다');
+
+    // ★ 그래도 **원래 저장은 살아 있어야** 한다. 잠깐 들여다본 것 때문에
+    //   원래 회차가 사라지면 그건 저장이 아니라 함정이다
+    await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(2200);
+    ok((await S(() => SPACE.route)).leg === kept,
+      `원래 항로로 돌아오면 그대로 이어진다 (구간 ${kept})`);
   }
 
   ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}: ${errs[0]}` : '콘솔 오류 없음');
