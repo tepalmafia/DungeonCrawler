@@ -158,6 +158,39 @@ export function rack(parent, x, z, ry, kind, tint, bayText = null, lift = 0) {
     }
   }
 
+  // ── 표면의 잡동사니 — **정비공의 배는 이렇게 생겼다** ────
+  // ★ 참고 1번(ISS 실내)이 그 자체다: 랙 면마다 케이블 다발이 늘어지고,
+  //   커넥터·라벨·작은 상자가 붙어 있다. 매끈한 상자는 **고칠 것이 없어
+  //   보인다** — 그게 우리 컨셉과 정면으로 어긋난다 (docs/space/REF.md).
+  //
+  // ★ 랙마다 **다르게** 붙인다. 같으면 무늬가 되고, 무늬는 배로 안 읽힌다.
+  //   자리를 난수로 안 뽑는다 — 다시 지을 때마다 달라지면 화면을 찍어
+  //   견줄 수가 없다. 랙의 자리(x·z)에서 뽑는다
+  const seed = Math.abs(Math.round((x * 31 + z * 17) * 7)) % 8;
+  if (kind !== 'blank') {
+    // 케이블 다발 — 위에서 아래로 늘어진다. 두 가닥이면 다발로 읽힌다
+    for (let i = 0; i < 2; i++) {
+      const len = 0.5 + ((seed + i * 3) % 4) * 0.16;
+      const cx = (-0.3 + ((seed + i * 5) % 5) * 0.15) * W;
+      const cy = H - 0.22 - len / 2;
+      const cable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.018, len, 5), MAT.cable,
+      );
+      cable.position.set(cx, cy, 0.035);
+      cable.rotation.z = ((seed + i) % 3 - 1) * 0.12;
+      g.add(cable);
+      // 커넥터 — 끝에 뭐가 있어야 「꽂혀 있다」로 읽힌다
+      box(g, 0.07, 0.06, 0.05, MAT.metal, cx, cy - len / 2, 0.04);
+    }
+    // 작은 라벨 조각 둘 — 글씨는 없다. 멀리서 「뭔가 적혀 있다」면 된다
+    for (let i = 0; i < 2; i++) {
+      box(g, 0.12, 0.055, 0.012,
+        i % 2 ? MAT.rail : MAT.faceD,
+        (-0.26 + ((seed + i * 2) % 4) * 0.17) * W,
+        0.34 + ((seed + i) % 5) * 0.26, 0.031);
+    }
+  }
+
   // 어느 랙이든 번호판 한 장. ★ 전에는 **아무것도 안 적힌 빛나는 띠**라
   //   랙 여덟이 다 똑같았다 — 「3번 베이」라고 부를 수가 없었다
   if (bayText) {
