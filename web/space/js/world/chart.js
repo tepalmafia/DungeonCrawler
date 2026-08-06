@@ -113,6 +113,29 @@ function drawMap(ctx, w, h, s) {
 /** 갈래 판 하나 */
 function drawFork(ctx, w, h, s) {
   bg(ctx, w, h);
+  // ★ **내릴 자리** — 항행 중에 장면 B 가 켜면 같은 판 둘이 다른 것을 묻는다.
+  //   판을 새로 만들지 않는다. 「고르는 자리는 해도대」라는 규약이 이미 있고,
+  //   새 판을 달면 사람은 **또 어디를 봐야 하나**를 배워야 한다
+  if (s.land) {
+    const f = (k) => Math.round(h * k);
+    ctx.fillStyle = s.lit ? '#ffffff' : (s.land.go ? '#ffd08a' : FG);
+    ctx.font = `700 ${f(0.19)}px system-ui, sans-serif`;
+    ctx.fillText(s.land.go ? '내린다' : '지나친다', w * 0.06, h * 0.3);
+    ctx.fillStyle = DIM;
+    ctx.font = `600 ${f(0.12)}px system-ui, sans-serif`;
+    ctx.fillText(s.land.go ? '광석 · 부품 · 식량' : '항로를 그대로', w * 0.06, h * 0.56);
+    ctx.fillStyle = 'rgba(255,170,110,.6)';
+    ctx.font = `600 ${f(0.105)}px system-ui, sans-serif`;
+    ctx.fillText(s.land.go
+      ? (s.land.hard ? '대기가 거칠다 · 땅에서는 못 도망간다' : '땅에서는 못 도망간다')
+      : '지금은 위험을 안 진다', w * 0.06, h * 0.79);
+    if (s.lit) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(2, h * 0.014);
+      ctx.strokeRect(2, 2, w - 4, h - 4);
+    }
+    return;
+  }
   if (!s.fork) {
     ctx.fillStyle = DIM;
     ctx.font = `600 ${Math.round(h * 0.13)}px system-ui, sans-serif`;
@@ -215,11 +238,17 @@ export function buildChart(parent, at, block, MAT) {
     setAim(i) { aimed = i; },
     /** 이 판이 지금 무슨 갈래인가 (밖에서 누를 때 쓴다) */
     keyAt(i) { return plates[i]?.fork?.key ?? null; },
+    /** ★ 이 판이 지금 「내린다/지나친다」인가 — 밖에서 누를 때 쓴다 */
+    landAt(i) { return plates[i]?.land ?? null; },
     update(s) {
       map.redraw(s);
+      // ★ 착륙 제안은 **항행 중에만** 뜬다. 거점에서는 갈래가 우선이다 —
+      //   한 판이 두 가지를 동시에 물으면 뭘 누르는지 모른다
+      const land = !s.atPort && s.land?.offered ? s.land : null;
       plates.forEach((p, i) => {
-        p.fork = s.atPort ? s.offer[i] : null;
-        p.sc.redraw({ fork: p.fork, lit: aimed === i && !!p.fork });
+        p.fork = !land && s.atPort ? s.offer[i] : null;
+        p.land = land ? { go: i === 0, hard: !!land.hard } : null;
+        p.sc.redraw({ fork: p.fork, land: p.land, lit: aimed === i && !!(p.fork || p.land) });
       });
     },
   };

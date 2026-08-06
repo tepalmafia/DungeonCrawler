@@ -48,9 +48,12 @@ export function cycle(l, { thrust = false } = {}) {
 
 /**
  * 한 걸음.
+ * @param opt.outsideAir ★ **밖에 대기가 있다** (행성에 내려앉아 있을 때).
+ *   그러면 문을 열어 놔도 공기가 안 준다 — 같은 문이 상황에 따라 다른
+ *   물건이 되는 것이고, 그게 「내려오면 숨통이 트인다」를 규칙 하나로 말한다
  * @returns 'open' | 'shut' | 'blown' | null
  */
-export function stepLock(l, dt) {
+export function stepLock(l, dt, { outsideAir = false } = {}) {
   if (l.lockout > 0) l.lockout = Math.max(0, l.lockout - dt);
 
   let ev = null;
@@ -61,7 +64,7 @@ export function stepLock(l, dt) {
 
   if (l.open) {
     l.t += dt;
-    l.air = Math.max(0, l.air - LOCK.airDrain * dt);
+    if (!outsideAir) l.air = Math.max(0, l.air - LOCK.airDrain * dt);
     if (l.air <= LOCK.airFloor) {
       // ★ **강제로 닫힌다.** 벌은 숫자가 아니라 **기다림**이다
       l.open = false; l.opening = false; l.cycling = 0;
