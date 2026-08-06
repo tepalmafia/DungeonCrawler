@@ -212,11 +212,33 @@ console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은
   ok(Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) > 0.3,
     `③ ★★ **W 를 누르니 걸어진다** (${w0.map((v) => v.toFixed(1))} → ${w1.map((v) => v.toFixed(1))})`);
 
+  // ★★ **어떤 이유로 앉아 있든 갇히지 않나.** 저장을 고쳤는데도 사장님이
+  //   「계속 그 자리에서 움직이질 못해」라고 하셨다. 앉으면 걸음이 막히는
+  //   것은 맞다 — 틀린 것은 **막힌 채로 아무 말도 안 한 것**이다
+  await p.evaluate(() => window.SPACE.putGun(true));
+  ok(await p.evaluate(() => window.SPACE.gun.up), '⑤ 일부러 다시 앉혔다');
+  const s0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
+  await p.keyboard.down('KeyW');
+  await p.waitForFunction((s) => {
+    const q = window.SPACE.pos;
+    return !window.SPACE.gun.up && Math.hypot(q.x - s[0], q.z - s[1]) > 0.3;
+  }, s0, { timeout: 90000 }).catch(() => {});
+  await p.keyboard.up('KeyW');
+  const s1 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
+  ok(!(await p.evaluate(() => window.SPACE.gun.up)),
+    '⑥ ★★ **W 를 누르고 있으니 저절로 일어난다** — 일어나는 법을 몰라도 안 갇힌다');
+  ok(Math.hypot(s1[0] - s0[0], s1[1] - s0[1]) > 0.3,
+    `⑦ 그러고 **걸어진다** (${s0.map((v) => v.toFixed(1))} → ${s1.map((v) => v.toFixed(1))})`);
+
+  // ★ 판본이 화면에 뜨나 — 「무엇이 떠 있는지」를 추측하지 않으려고
+  const ver = await p.$eval('#ver', (e) => e.textContent);
+  ok(/^v\d+$/.test(ver), `⑧ 시작 화면에 판본이 뜬다 (${ver}) — 옛 파일인지 화면만 보고 안다`);
+
   // ★ 배 밖에 몸이 저장돼 있어도 갇히지 않나 — 옛 판본은 주포가 배 위였다
   await p.evaluate(() => { window.SPACE.put(2.35, -1.0); window.SPACE.saveNow(); });
   await boot();
   const back = await p.evaluate(() => window.SPACE.canStand(window.SPACE.pos.x, window.SPACE.pos.z));
-  ok(back, '④ 설 수 없는 자리에 저장돼 있으면 **되돌려 준다** — 갇히지 않는다');
+  ok(back, '⑨ 설 수 없는 자리에 저장돼 있으면 **되돌려 준다** — 갇히지 않는다');
 }
 
 console.log('');
