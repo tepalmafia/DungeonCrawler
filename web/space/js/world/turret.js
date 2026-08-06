@@ -106,19 +106,41 @@ export function buildTurret(parent, H, tint = 0x8fd0ff) {
   // 베이 번호 — 이 배의 물건은 다 번호를 단다 (bay-table.js 규약)
   bayPlate(g, 'G-1', x, 1.62, z + 0.2, tint);
 
-  /** 조준선이 잡을 것 — 사다리 (히트 박스는 넉넉하게, 그리는 것은 얇게) */
+  /** 조준선이 잡을 것 — 사다리. **천장 아래까지만**이다 (올라가면 안 잡힌다) */
   const ladderHit = box(g, 0.8, H - 0.3, 0.5, new THREE.MeshBasicMaterial({ visible: false }),
     x, (H - 0.3) / 2 + 0.15, z);
   ladderHit.name = '사다리';
 
-  /** 포탑에 올라갔을 때 잡을 것 — 손잡이 */
-  const gunHit = box(turret, 0.7, 0.5, 0.7, new THREE.MeshBasicMaterial({ visible: false }), 0, 0.3, 0);
+  /**
+   * ★★ **내려가는 해치** — 포탑에 올라가 있을 때 **발밑**에 있다.
+   *
+   *   처음에는 이게 없었다. 그래서 「주포를 겨누고 누르면 내려간다」로
+   *   때웠는데, 그건 **같은 프레임에 쏘기도 하는** 버그였고 —
+   *   사장님이 「주포도 조작이 안되고」라고 하신 것이 정확히 이것이다.
+   *   눌러도 총은 안 나가고 몸만 내려왔다.
+   *
+   *   올라가고 내려가는 것은 **여기**가, 쏘는 것은 **주포**가 한다.
+   *   그리고 자리가 발밑이라 **아래를 봐야** 잡힌다 — 앞을 보고 있으면
+   *   절대 안 걸리므로 「쏘려는데 내려간다」가 다시 안 난다
+   */
+  const hatchHit = box(g, 0.95, 0.3, 0.95, new THREE.MeshBasicMaterial({ visible: false }),
+    x, H + 0.06, z);
+  hatchHit.name = '해치';
+
+  /**
+   * 포탑에 올라갔을 때 잡을 것 — 손잡이.
+   * ★ 다만 **main.js 는 「올라가 있으면 기본이 주포」로 본다.** 올라간
+   *   사람이 어디를 봐야 총이 나가는지를 알아맞히게 하면 안 된다 —
+   *   포탑에 서 있는 것 자체가 「주포를 잡은 것」이다
+   */
+  const gunHit = box(turret, 1.1, 0.7, 1.1, new THREE.MeshBasicMaterial({ visible: false }), 0, 0.34, -0.5);
   gunHit.name = '주포';
 
   let flash = 0;
   return {
     group: g,
     ladderHit,
+    hatchHit,
     gunHit,
     /** 포탑이 어디를 겨누고 있나 — 사람이 보는 쪽을 따라간다 */
     aimAt(yaw) { yawRig.rotation.y = yaw; },

@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 10;  // 9 → 10: 행성 착륙(land) 칸이 늘었다
+export const SAVE_VERSION = 11;  // 10 → 11: 수동 조종(auto·near·wrecked) 칸이 늘었다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -79,7 +79,13 @@ export const FIELDS = {
    */
   drift: ['dead', 'permanent', 'spin', 'angle', 'hits', 'held', 't', 'way', 'needsFix'],
   /** 조종 — 벗어난 채로 저장했는데 이어하니 항로 위면 그건 이어한 게 아니다 */
-  helm: ['off', 'way', 't', 'missed'],
+  /**
+   * 조종 — 벗어난 채로 저장했는데 이어하니 항로 위면 그건 이어한 게 아니다.
+   * ★ `auto` 를 빼면 **수동으로 몰던 배가 이어하니 자동**이 된다 — 그건
+   *   봐준 것이고, 사장님이 「수동으로 운전할때는 자동항법 꺼지는 걸로」라고
+   *   하신 것이 저장 한 번에 원상복구되는 셈이다
+   */
+  helm: ['off', 'way', 't', 'missed', 'auto', 'homing', 'near', 'wrecked', 'manualT'],
   /** 주포 — 포탑에 올라간 채 저장했는데 이어하니 아래면 그건 이어한 게 아니다 */
   gun: ['up', 'moving', 'goingUp', 'cool', 'shots', 'hits', 'flash', 't'],
   /** 에어록 — 문을 열어 둔 채 저장했는데 이어하니 닫혀 있으면 봐준 것이다 */

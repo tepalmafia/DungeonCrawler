@@ -90,7 +90,17 @@ export const WHY = {
 };
 
 export function whyNotFire(s = {}) {
-  if (!s.chasing) return 'calm';
+  // ★★ **`if (!s.chasing) return 'calm'` 이 있었다 — 그게 주포를 못 쓰게 했다.**
+  //   사장님: 「주포도 조작이 안되고, 적이 있던 없던 가능하도록해」
+  //
+  //   맞는 지적이다. 쫓길 때만 쏠 수 있으면 **연습을 못 한다** — 처음
+  //   쏘는 순간이 하필 제일 급한 순간이고, 그때 「겨눠야 합니다」를 처음
+  //   배운다. 그건 가르침이 아니라 시험이다.
+  //
+  //   막지 않아도 되는 이유는 **쏘는 것이 이미 공짜가 아니어서**다:
+  //   탄약이 곧 수리 재료고(`costOre`·`costParts`), 쏘면 밝아지고
+  //   (`flashFor`), 재는 데 시간이 든다. 허공에 쏘면 그 값을 그냥 버린다 —
+  //   막을 것이 아니라 **치르는 것**이다 (이 게임의 벌은 늘 그랬다)
   if (!ammoFor(s.supply)) return 'ammo';
   if ((s.cool ?? 0) > 0) return 'reload';
   if ((s.aim ?? 0) < GUN.aimNeed) return 'aim';

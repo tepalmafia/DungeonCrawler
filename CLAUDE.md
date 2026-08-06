@@ -195,9 +195,19 @@ node tools/space-helm.js         스페이스워 — ★ 조종간이 늘 먹나
 node tools/space-gun.js          스페이스워 — ★ 주포 · 쏘는 게 공짜가 아닌가 (탄약=수리 재료) (--see 8391)
 node tools/space-airlock.js      스페이스워 — ★ 에어록 바깥문 · 열면 갇히나 · 잊을 수 없나 (--see 8391)
 node tools/space-land.js         스페이스워 — ★ 행성 착륙 · 과정이 있나 · ★화면이 바뀌나 (--see 8391)
+node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
-                                 (walk·chase·skin·audio·yoke·bay·guard 는 serve.py 를 먼저 띄운다)
+                                 (walk·chase·skin·audio·yoke·bay·guard·endtoend 는 serve.py 를 먼저 띄운다)
+
+★ **계통을 하나 만들면 `space-endtoend.js` 에 한 절을 보탠다.** 계통마다
+  제 검사는 다 ✔ 인데 **사람은 거기까지 못 가는** 상태를 2026-08-06 에
+  네 개나 쌓아 두고 사장님께 들켰다 (주포는 쫓겨야 쏘였고, 올라가면 조준이
+  사다리에 붙어 한 발도 못 쐈다). 계통 검사는 **제가 만든 상태에서** 시작하고,
+  이 검사만 **켠 다음부터 손으로만** 한다. 둘 다 있어야 한다.
+
+★ 그리고 게임 안에 **점검 모드(F2)** 가 있다. `SPACE.*` 구멍을 버튼으로 낸 것뿐이라
+  새 길을 만들지 않는다 — 사장님이 콘솔 없이 아무 상황이나 바로 만들어 보신다.
 ```
 
 **그림은 `web/3d/assets/` 에 떨어뜨리면 게임에 나옵니다.** 규격은
