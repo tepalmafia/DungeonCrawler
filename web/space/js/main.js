@@ -122,7 +122,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 49;
+export const VERSION = 50;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -2052,6 +2052,21 @@ window.SPACE = {
   seekEmber() { if (scenes.ember > 0) scenes.ember = 0.0001; return sceneSummary(scenes); },
   saveNow() { return saveNow(); },
   clearSave() { clearRaw(); },
+  /**
+   * ★★ **처음부터 다시** (2026-08-06 · 사장님 「계속 이어하기로 나오는데?
+   * 새 게임은 어떻게 하는거야?」)
+   *
+   * 저장 칸이 하나뿐이라 켤 때마다 **말없이 이어졌고**, 처음부터 시작하는
+   * 길이 아무 데도 없었다. 「저장 지우기」는 있었지만 그건 지우기지
+   * 시작하기가 아니다 — 지운 다음 새로고침을 해야 한다는 것을 알아야만
+   * 쓸 수 있었고, 그건 아는 사람만 쓰는 길이다.
+   *
+   * ★ **되살리지 않고 새로고침한다.** 회차 하나가 배·항로·고장·문·흉터·
+   *   장면까지 수십 군데에 퍼져 있어서, 하나씩 되돌리면 반드시 하나를
+   *   빠뜨린다 (열만 0 이 되고 흉터는 남는 식으로). 새로고침은 빠뜨릴
+   *   것이 없다.
+   */
+  newGame() { clearRaw(); location.reload(); },
   pause(v) { showPause(v ?? !paused); return paused; },
   /** 갈래를 고른다 — 검사가 관측실까지 안 걸어가고 부를 수 있게 */
   pick(key) { const ok = chooseFork(route, key); if (ok) ship.outside.setRegion(regionOf(route)); return ok; },
@@ -2624,10 +2639,36 @@ document.addEventListener('pointerlockchange', () => {
 //   (창을 안 벗어나고 검사가 멈춘 경우 등) 위의 것은 안 불린다 —
 //   그러면 눌러도 아무 일이 안 나고, 그게 「멈추면 못 돌아온다」다.
 //   계속하는 길은 **막히지 않게** 두 갈래로 둔다
-addEventListener('mousedown', () => { if (paused && !wrecked && !check.open) showPause(false); });
+// ★ `data-ui` 를 뺀 이유는 input.js 와 같다 — 멈춤 화면의 「처음부터 다시」를
+//   누른 것이 「계속한다」로도 읽히면, 물음이 뜨기 전에 게임이 먼저 돌아간다
+addEventListener('mousedown', (e) => {
+  if (e.target?.closest?.('[data-ui]')) return;
+  if (paused && !wrecked && !check.open) showPause(false);
+});
 
 // 잠금 안내는 처음 한 번만. 잠기면 사라진다.
 // ★ 멈춰 있을 때는 안 띄운다 — 안내창과 멈춤 화면이 **같은 자리**라 겹친다
 setInterval(() => { hint.hidden = input.locked || paused; }, 200);
+
+// ── 단추 넷 ─────────────────────────────────────────────────
+// ★ 시작 화면과 멈춤 화면에 **같은 두 개**를 놓는다 (2026-08-06).
+//   지금까지 둘 다 **키만** 있었고, 그래서 둘 다 못 쓰는 사람이 생겼다:
+//     · F2 는 노트북에서 Fn 을 같이 눌러야 하는 하드웨어 키인 경우가 많다
+//     · 「처음부터」는 아예 길이 없어서 켤 때마다 말없이 이어졌다
+//   Esc 는 어느 자판에서나 먹으므로, **멈춤 화면 쪽이 막히지 않는 길**이다.
+{
+  const ask = () =>
+    !canSave() || !hasSave()
+      // 이어할 것이 없으면 물을 것도 없다 — 물음이 습관이 되면 안 읽는다
+      ? true
+      : confirm('지금까지 온 것이 지워집니다. 처음부터 다시 시작할까요?');
+  const wire = (id, run) => document.getElementById(id)?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    run();
+  });
+  for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
+  // 멈춤 화면에서 열면 **멈춘 채로** 연다 — 점검하다 배가 저 혼자 가면 곤란하다
+  for (const id of ['btn-check', 'btn-check2']) wire(id, () => check.toggle(true));
+}
 
 console.log(`스페이스워 v${VERSION} — ${roomAt(me.x, me.z)} 에서 시작`);
