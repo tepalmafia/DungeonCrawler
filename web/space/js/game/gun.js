@@ -78,6 +78,11 @@ export function fire(g, { supply, chasing, aim = 1 } = {}) {
   // ★ 쏘면 **밝아진다.** 총구 섬광은 숨을 수 없다
   g.flash = GUN.flashFor;
 
+  // ★ **쫓기지 않을 때도 쏜다** (사장님 「적이 있던 없던 가능하도록해」).
+  //   다만 **맞을 것이 없다** — 탄약과 섬광만 버린다. 그게 값이고,
+  //   그래서 막지 않아도 「늘 쏘는 것」이 답이 안 된다
+  if (!chasing) return { ok: true, kind, hit: false, dist: 0, atNothing: true };
+
   // 겨눈 만큼 맞는다 — 아슬아슬하게 겨누면 빗나가기도 한다
   const hit = aim >= GUN.aimNeed + (1 - GUN.aimNeed) * 0.35;
   if (hit) g.hits++;

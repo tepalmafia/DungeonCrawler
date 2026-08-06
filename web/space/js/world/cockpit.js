@@ -575,6 +575,38 @@ export function buildCockpit(parent, room, H) {
   yokeHit.position.set(0, YOKE_Y, YOKE_Z);
   g.add(yokeHit);
 
+  // ── ★★ 자동 항법 스위치 (2026-08-06 · 사장님) ──────────────
+  // 「수동으로 운전할때는 자동항법 꺼지는 걸로」
+  //
+  // ★ **끄는 것은 조종간이 하고, 켜는 것은 이 스위치가 한다.** 둘을 같은
+  //   손잡이에 얹으면 「잡았더니 켜졌다 껐다」가 되어 지금 어느 쪽인지를
+  //   모른다. 그리고 **불로 말한다** — 초록이면 자동, 주황이면 수동.
+  //   계기를 하나 더 다는 대신 스위치 자체가 계기다 (「손이 곧 상태창」)
+  // ★ **자리를 두 번 옮겼다.** 처음엔 콘솔 상판(y 0.92)에 눕혀 놨는데,
+  //   서 있는 사람 눈(1.62)에서 0.7m 아래라 **거의 수직으로 내려다봐야**
+  //   잡혔다 — 검사가 「autopilot 조준을 못 봤다」로 잡아 줬다.
+  //   조종간(1.18) 바로 옆, **같은 높이**로 올린다. 손이 가는 자리는
+  //   손잡이 옆이지 상판 위가 아니다
+  const AUTO_X = -0.58, AUTO_Y = YOKE_Y - 0.06, AUTO_Z = YOKE_Z + 0.02;
+  const autoLamp = new THREE.MeshBasicMaterial({ color: 0x6fd8a0 });
+  // 기둥 — 상판에서 올라온다. 어디서 나온 물건인지 보여야 한다
+  box(g, 0.09, AUTO_Y - 0.84, 0.09, FRAME, AUTO_X, (0.84 + AUTO_Y) / 2, AUTO_Z);
+  const autoBox = box(g, 0.26, 0.16, 0.16, DARK, AUTO_X, AUTO_Y, AUTO_Z);
+  autoBox.name = '자동항법';
+  const autoLight = box(g, 0.17, 0.055, 0.10, autoLamp, AUTO_X, AUTO_Y + 0.085, AUTO_Z + 0.02);
+  autoLight.name = '자동항법등';
+  // ★ 히트 박스를 **넉넉하게.** 작은 것을 정확히 겨누게 하면 그건 어려움이
+  //   아니라 짜증이다 (조종간에서 이미 적어 둔 선). 실제로 검사가 조준각을
+  //   0.16 라디안만 얕게 잡았더니 안 걸렸다 — 사람은 그보다 더 대충 본다
+  const autoHit = new THREE.Mesh(
+    new THREE.BoxGeometry(0.56, 0.62, 0.5),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  autoHit.position.set(AUTO_X, AUTO_Y, AUTO_Z);
+  autoHit.name = '자동 항법 스위치';
+  g.add(autoHit);
+  const setAuto = (on) => { autoLamp.color.set(on ? 0x6fd8a0 : 0xff9a3c); };
+
   // ── 조명 ──────────────────────────────────────────────
   // 참고 사진은 **찬 파랑 + 따뜻한 주황** 두 색이다. 한 색이면 밋밋하다
   const key = new THREE.PointLight(0x9fc8f0, 26, 11, 2);
@@ -590,8 +622,11 @@ export function buildCockpit(parent, room, H) {
     // 조종간이 기운 만큼 눕는다 — **먹고 있다는 것이 눈에 보여야** 한다
     const tilt = (state.lane ?? 0) * 0.5;
     for (const y of yokes) y.rotation.z = -tilt;
+    // ★ 자동 항법 등 — **초록이면 자동, 주황이면 수동.** 지금 어느 쪽인지를
+    //   조종석에 들어서는 순간 알아야 한다
+    setAuto(state.auto !== false);
   }
-  return { update, yokeHit };
+  return { update, yokeHit, autoHit };
 }
 
 /**

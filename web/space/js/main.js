@@ -64,7 +64,7 @@ import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
-import { HELM, offWord } from './game/helm-table.js';
+import { HELM, offWord, hitWord } from './game/helm-table.js';
 import { GUN, WHY as GUN_WHY } from './game/gun-table.js';
 import {
   makeGun, climb as climbGun, stepGun, fire as fireShot,
@@ -86,7 +86,7 @@ import {
 } from './game/land.js';
 import {
   makeHelm, stepHelm, tryDock, legOf as helmLeg, signOf as helmSign,
-  radians as helmRad, summary as helmSummary,
+  radians as helmRad, summary as helmSummary, takeHelm, engageAuto,
 } from './game/helm.js';
 import {
   makeDrift, kill as killDrift, fixed as driftFixed, stepDrift,
@@ -99,6 +99,9 @@ import {
   allowChore, leadOf, summary as sceneSummary,
 } from './game/scene.js';
 import { makeRng } from './core/rng.js';
+// ★ 점검 모드 (F2) — 사장님 「테스트를 할 수가 없잔아」. 게임을 안 고치고
+//   이미 있는 SPACE.* 구멍을 **버튼으로** 낸다 (core/check.js)
+import { buildCheck } from './core/check.js';
 import { pack, apply, where } from './game/save.js';
 import { SAVE } from './game/save-table.js';
 import { saveRaw, loadRaw, clearRaw, canSave, hasSave } from './core/store.js';
@@ -107,7 +110,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 46;
+export const VERSION = 47;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -115,6 +118,9 @@ const hint = document.getElementById('hint');
 const hud = document.getElementById('hud');
 const lesson = document.getElementById('lesson');
 const pauseBox = document.getElementById('pause');
+// ★ 게임 오버 — 이 게임의 유일한 끝 (행성 충돌 · 수동 조작 중에만)
+const overBox = document.getElementById('over');
+const check = buildCheck();
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x03040a);
@@ -380,9 +386,13 @@ function fireGun() {
   audio?.event('caught');
   heat = Math.min(HEAT.max, heat + GUN.heatPerShot);
   chase.dist = Math.min(100, chase.dist + r.dist);
-  banner = r.hit ? `맞혔습니다 — ${r.kind === 'ore' ? '광석' : '부품'} ${r.kind === 'ore' ? GUN.costOre : GUN.costParts}`
-    : '빗나갔습니다';
-  bannerT = 2.0;
+  // ★ **허공에 쏜 것도 말해 준다.** 「쐈는데 아무 말이 없다」가 제일 나쁘다 —
+  //   총이 안 나간 것인지 맞을 것이 없었던 것인지 구별이 안 된다
+  banner = r.atNothing
+    ? `허공에 쐈습니다 — ${r.kind === 'ore' ? '광석' : '부품'} ${r.kind === 'ore' ? GUN.costOre : GUN.costParts} 를 버렸습니다`
+    : (r.hit ? `맞혔습니다 — ${r.kind === 'ore' ? '광석' : '부품'} ${r.kind === 'ore' ? GUN.costOre : GUN.costParts}`
+      : '빗나갔습니다');
+  bannerT = r.atNothing ? 2.8 : 2.0;
 }
 
 // ══ 저장 · 일시정지 ═══════════════════════════════════════════
@@ -452,6 +462,37 @@ function showPause(on) {
     ? '여기까지 저장했습니다 — 창을 닫아도 이어집니다'
     : '이 브라우저에서는 저장이 안 됩니다 — 창을 닫으면 사라집니다';
 }
+/**
+ * ★★ **행성을 박았다 — 이 게임의 유일한 끝** (2026-08-06 · 사장님
+ * 「행성을 박으면 게임 오버로 수동조작시」)
+ *
+ * ★ 지금까지 이 게임에는 **끝이 없었다.** 잡혀도 놓아주고(`CAUGHT`),
+ *   굶어도 손만 떨렸다. 그건 「벌은 숫자가 아니라 일」이라는 규약 때문이고
+ *   대체로 옳았는데, **그래서 조종간에 무게가 하나도 없었다.**
+ *   틀어 놓고 잊어도 거점을 한 번 지나칠 뿐이었다.
+ *
+ * ★ 그리고 이 끝은 **자동 항법을 끈 사람에게만** 온다. 켜 두면 절대 안
+ *   박는다 — 자동 항법이 하는 일이 그것이다. 즉 죽음은 **고른 사람에게만**
+ *   오고, 그래서 억울하지 않다.
+ *
+ * ★ 저장을 지운다. 안 지우면 다음에 켤 때 「부서진 배」로 이어져서
+ *   끝난 자리에 다시 서 있게 된다 (도착했을 때와 같은 처리)
+ */
+function wreck() {
+  if (wrecked) return;
+  wrecked = true;
+  clearRaw();
+  audio?.event('caught');
+  hitFlash = 1;
+  const min = Math.round(clock / 60);
+  overBox.querySelector('.where').textContent =
+    `구간 ${Math.min(route.leg + 1, LEG.count)}/${LEG.count} · ${min}분째`;
+  overBox.querySelector('.note').textContent =
+    `수동으로 몬 시간 ${Math.round(helm.manualT)}초 · 고친 것 ${faults.fixed}개`
+    + (land.trips ? ` · 행성에 ${land.trips}번 내렸다` : '');
+  overBox.hidden = false;
+  showPause(true);
+}
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
@@ -459,6 +500,8 @@ let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let winching = false;     // 지금 윈치를 잡고 있나
 let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다른 일
 let liftHeldWas = false;  // 이륙은 제 셈을 갖는다 (눌린 순간을 두 곳에서 본다)
+let autoHeldWas = false;  // 자동 항법 스위치도 제 셈을 갖는다
+let wrecked = false;      // ★ 행성을 박았다 — 이 게임의 유일한 끝
 let trading = 0;          // 접수구를 얼마나 잡고 있었나
 let partsWarned = false;
 // 손에 물건이 없어 못 고친다고 **한 번만** 말한다. 매 프레임 외치면 소음이다
@@ -640,7 +683,8 @@ function interactStep(dt) {
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
-    ship.turret.ladderHit, ship.turret.gunHit, ship.outerDoor.hit];
+    ship.turret.ladderHit, ship.turret.hatchHit, ship.turret.gunHit,
+    ship.outerDoor.hit, ship.cock.autoHit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -650,7 +694,7 @@ function interactStep(dt) {
   let plate = -1;
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false;
-  let onLadder = false, onGun = false, onOuter = false;
+  let onLadder = false, onGun = false, onOuter = false, onAuto = false, onHatchDown = false;
   let onCrank = null;
   let onSpot = null;
   if (near) {
@@ -665,7 +709,9 @@ function interactStep(dt) {
       if (o === ship.winch.hit) { onWinch = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
+      if (o === ship.cock.autoHit) { onAuto = true; break; }
       if (o === ship.turret.ladderHit) { onLadder = true; break; }
+      if (o === ship.turret.hatchHit) { onHatchDown = true; break; }
       if (o === ship.turret.gunHit) { onGun = true; break; }
       if (o === ship.outerDoor.hit) { onOuter = true; break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
@@ -721,6 +767,25 @@ function interactStep(dt) {
 
   // ── 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B) ─────
   steering = onYoke && input.hold;
+  // ★★ **잡는 순간 자동 항법이 꺼진다** (사장님 「수동으로 운전할때는
+  //   자동항법 꺼지는 걸로」). 이게 있어야 「내가 몬다」가 성립한다 —
+  //   전에는 놓으면 배가 저절로 항로로 돌아와서 **한 일이 아무 자국도
+  //   안 남았다.** 그게 「조정석을 잡아도 운전이 안 되잔아」의 실체다
+  if (steering && takeHelm(helm)) {
+    banner = '수동 조종 — 자동 항법이 꺼졌습니다';
+    bannerT = 3.0;
+    audio?.event('latch');
+  }
+  // ★ 다시 켜는 것은 **조종간이 아니라 옆의 스위치**다. 같은 손잡이가
+  //   껐다 켰다 하면 지금 어느 쪽인지를 모른다
+  if (onAuto && input.hold && !autoHeldWas) {
+    if (engageAuto(helm)) {
+      banner = '자동 항법 — 항로로 돌아갑니다';
+      bannerT = 3.0;
+      audio?.event('fixed');
+    } else nag('이미 자동 항법입니다');
+  }
+  autoHeldWas = input.hold;
 
   // ★★ **땅에서는 조종간이 「뜬다」다.** 새 손잡이를 안 만든다 —
   //   내릴 때 잡았던 그 조종간을 다시 잡으면 올라간다. 그리고 뜨려면
@@ -1005,8 +1070,21 @@ function interactStep(dt) {
   // ★ `heldWas` 는 위(가르침)에서 **이미 갱신됐다.** 여기서 그걸 쓰면
   //   「눌린 순간」이 영영 안 잡힌다 — 잡음이 늘 같은 값이라서다.
   //   눌린 순간을 두 곳에서 보려면 **셈도 두 개** 있어야 한다
+  // ★★ **여기가 「주포가 조작이 안 된다」의 진짜 원인이었다.**
+  //   조건이 `(onLadder || (gun.up && onGun))` 이라, 포탑에 올라가 주포를
+  //   겨누고 누르면 **같은 프레임에 내려가고 또 쏘았다.** 눌러도 총은 안
+  //   나가고 몸만 내려오니 「안 된다」로 보인다.
+  //   올라가고 내려가는 것은 **사다리**가, 쏘는 것은 **주포**가 한다 —
+  //   한 손잡이가 두 일을 하면 반드시 이렇게 부딪힌다
   const gunPressed = input.hold && !gunHeldWas;
-  if ((onLadder || (gun.up && onGun)) && gunPressed && gun.moving <= 0) {
+  // ★★ **올라가 있으면 기본이 주포다.** 포탑에 서 있는 것 자체가 「주포를
+  //   잡은 것」이고, 어디를 봐야 총이 나가는지를 알아맞히게 하면 안 된다.
+  //   실제로 검사가 「올라갔는데 조준이 계속 사다리다 → 한 발도 못 쐈다」를
+  //   잡아 줬다 (사장님 「주포도 조작이 안되고」)
+  const atGun = gun.up && !onHatchDown;
+  // 오르내리는 것은 **사다리(아래)와 해치(위)**가 한다 — 주포는 안 건드린다
+  const atLadder = gun.up ? onHatchDown : onLadder;
+  if (atLadder && gunPressed && gun.moving <= 0) {
     if (climbGun(gun)) {
       banner = gun.goingUp ? '올라갑니다' : '내려갑니다';
       bannerT = 1.6;
@@ -1014,7 +1092,7 @@ function interactStep(dt) {
     }
   }
   // 포탑에서 쏜다 — **누르는 순간** 한 발
-  if (gun.up && onGun && gunPressed) fireGun();
+  if (atGun && gunPressed) fireGun();
 
   // ── ★ 바깥문 — 누르는 순간 돌기 시작한다 ──────────────
   if (onOuter && gunPressed && !gun.up) {
@@ -1030,7 +1108,9 @@ function interactStep(dt) {
   }
   gunHeldWas = input.hold;
 
-  aimName = gun.up ? (onGun ? 'gun' : null)
+  // ★ 포탑에 올라가 있으면 잡히는 것이 **둘**이다 — 주포(쏜다)와
+  //   사다리(내려간다). 전에는 주포 하나뿐이라 **내려올 길이 없었다**
+  aimName = gun.up ? (onHatchDown ? 'hatch-down' : 'gun')
     : onOuter ? 'outer'
     : onLadder ? 'ladder'
     : onSpot ? `spot:${onSpot}`
@@ -1038,8 +1118,11 @@ function interactStep(dt) {
     : onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
       : (panel ? `panel:${panel.room}`
-        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : null))))));
-  cross.classList.toggle('on', !!(onValve || breaker || (canPick && plate >= 0) || fixHere
+        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : null)))))));
+  // ★ 조준점이 **주포와 사다리에서는 안 켜졌다.** 「손이 닿는다」를 알려
+  //   주는 유일한 표시인데 빠져 있으면 「눌러도 되는지」를 알 길이 없다
+  cross.classList.toggle('on', !!(gun.up || onLadder || onOuter || onAuto
+    || onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
     || onYoke || (crankDoor && crankDoor.jammed)
     || (onSpot && (carry.held ? !atSpot(carry, onSpot) : !!atSpot(carry, onSpot)))));
@@ -1330,6 +1413,9 @@ function systemsStep(dt, valveOpen, regionMult) {
   ship.cock.update({
     heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
     region: ship.outside.region, power, chase,
+    // ★ 자동 항법 등 — 초록이면 자동, 주황이면 수동. 조종석에 들어서는
+    //   순간 지금 어느 쪽인지가 보여야 한다
+    auto: helm.auto,
     // ★ 성운에서는 센서를 켜도 거리가 안 읽힌다 — 「자국이 묻히지만 나도
     //   못 본다」의 실체다. 조종석 화면이 그걸 그대로 보여줘야 한다
     blind: isBlind(route),
@@ -1802,6 +1888,15 @@ window.SPACE = {
   get helm() { return { ...helmSummary(helm), word: offWord(helm.off) }; },
   /** 검사가 조종간을 안 잡고 항로를 벗어나 본다 */
   setOff(v) { helm.off = Math.max(0, Math.min(1, v)); if (helm.way === 0) helm.way = 1; return helmSummary(helm); },
+  /** ★ 검사가 조종간을 안 잡고 **수동으로 바꿔** 본다 */
+  setManual() { takeHelm(helm); return helmSummary(helm); },
+  /**
+   * ★ 검사가 **행성에 얼마나 다가갔는지**를 밀어 놓는다.
+   *   끌려가는 속도(0.055/초 · 18초)는 위에서 재고, 여기서는 **마지막
+   *   한 걸음이 정말 끝으로 이어지나**만 본다 — 헤드리스는 게임 시간이
+   *   실시간의 20분의 1 이라 18초를 다 기다리면 6분이 넘는다
+   */
+  setNear(v) { helm.near = Math.max(0, Math.min(0.995, v)); return helmSummary(helm); },
   /** ★ 자세 제어 — 배가 도나 · 잡으면 멎나 · 고치면 살아나나 */
   get drift() { return { ...driftSummary(drift), roll: +driftRad(drift).toFixed(3) }; },
   /** 검사가 장면을 기다리지 않고 배를 돌려 본다 */
@@ -2170,7 +2265,21 @@ function frame(now) {
   // ── 조종 — **잡으면 항로를 벗어난다** ────────────────
   // ★ 잔해 지대 안에서는 같은 조종간이 **바위를 피하는 데** 쓰인다.
   //   두 가지를 동시에 하면 어느 쪽도 안 된다 (helm-table.js notInField)
-  stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN);
+  // ★★ 수동일 때만 **행성에 끌려간다.** 자동 항법이 켜져 있으면 절대
+  //   안 박는다 — 자동 항법이 하는 일이 바로 그것이다
+  const mev = stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN, {
+    region: ship.outside.region, thrust: power.thrust,
+  });
+  if (mev === 'home') { banner = '항로로 돌아왔습니다'; bannerT = 2.4; }
+  if (mev === 'warn') {
+    banner = hitWord(helm.near) ?? '중력원에 끌려갑니다';
+    bannerT = 4.0;
+    audio?.event('fault');
+  }
+  if (mev === 'wreck') wreck();
+  // ★ 끌려가는 동안은 **화면이 붉게 떤다.** 배너 한 줄로만 알리면
+  //   조종석 밖에 있는 사람은 못 본다 — 죽는 것은 예고 없이 오면 안 된다
+  if (helm.near > HELM.warnAt) hitFlash = Math.max(hitFlash, helm.near * 0.7);
 
   // ── 에어록 바깥문 ────────────────────────────────────
   // ★ 땅에 내려앉아 있으면 **문을 열어 놔도 공기가 안 준다** (대기가 있다).
@@ -2354,13 +2463,15 @@ requestAnimationFrame(frame);
 //   전에는 Esc 로 잠금만 풀리고 배는 계속 돌았다
 addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
+  // ★ **끝난 배는 안 풀린다.** 게임 오버에서 Esc 로 빠져나가지면 그건 끝이 아니다
+  if (wrecked) return;
   if (!paused) saveNow();         // 멈출 때 저장해 둔다. 닫고 가도 남는다
   showPause(!paused);
 });
 // 창을 벗어나면 **저절로 멈춘다.** 다른 창을 보다 돌아왔더니 잡혀 있으면
 // 그건 게임이 아니라 사고다
 addEventListener('blur', () => {
-  if (paused) return;
+  if (paused || wrecked) return;
   saveNow();
   showPause(true);
 });
@@ -2370,13 +2481,14 @@ addEventListener('blur', () => {
 //   (멈춤 화면에 `pointer-events: none` 이 붙어 있어야 이 클릭이 통과한다.
 //    #hint 에서 그걸 빠뜨려 **게임을 아예 못 켰던** 적이 있다)
 document.addEventListener('pointerlockchange', () => {
+  if (wrecked) return;
   if (document.pointerLockElement && paused) showPause(false);
 });
 // ★ 그리고 **누른 것만으로도** 푼다. 잠금이 이미 걸린 채로 멈춘 경우
 //   (창을 안 벗어나고 검사가 멈춘 경우 등) 위의 것은 안 불린다 —
 //   그러면 눌러도 아무 일이 안 나고, 그게 「멈추면 못 돌아온다」다.
 //   계속하는 길은 **막히지 않게** 두 갈래로 둔다
-addEventListener('mousedown', () => { if (paused) showPause(false); });
+addEventListener('mousedown', () => { if (paused && !wrecked && !check.open) showPause(false); });
 
 // 잠금 안내는 처음 한 번만. 잠기면 사라진다.
 // ★ 멈춰 있을 때는 안 띄운다 — 안내창과 멈춤 화면이 **같은 자리**라 겹친다

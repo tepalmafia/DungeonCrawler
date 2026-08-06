@@ -128,10 +128,20 @@ console.log('\n[6] 겨눠야 맞는다 — **올라가면 맞는 것**이 아니
   ok(good.hit && good.dist === GUN.hitDist, `제대로 겨누면 +${good.dist}`);
 }
 
-console.log('\n[7] 쫓기지 않을 때는 **쏠 상대가 없다**');
+console.log('\n[7] ★★ 쫓기지 않아도 **쏜다** — 대신 허공에 버린다');
 {
-  const r = fire(makeGun(), { supply: rich(), chasing: false, aim: 1 });
-  ok(!r.ok && r.why === 'calm', `「${WHY.calm}」 — 허공에 쏘게 두지 않는다`);
+  // ★★ **여기가 「허공에 쏘게 두지 않는다」였다 — 그게 주포를 못 쓰게 했다.**
+  //   사장님: 「주포도 조작이 안되고, 적이 있던 없던 가능하도록해」
+  //
+  //   맞는 지적이었고, **도구가 나쁜 설계를 지키고 있었다.** 쫓길 때만
+  //   쏠 수 있으면 처음 쏘는 순간이 하필 제일 급한 순간이라 연습을 못 한다.
+  //   막지 않아도 되는 이유는 **쏘는 것이 이미 공짜가 아니어서**다
+  const s0 = rich();
+  const before = s0.ore;
+  const r = fire(makeGun(), { supply: s0, chasing: false, aim: 1 });
+  ok(r.ok, '평온할 때도 총이 나간다 — **적이 있건 없건**');
+  ok(r.atNothing && !r.hit && r.dist === 0, '다만 맞을 것이 없다 — 거리가 안 벌어진다');
+  ok(s0.ore < before, `그래도 재료는 준다 (${before} → ${s0.ore}) — **버리는 것이 값이다**`);
 }
 
 console.log('\n[8] ★ **장르가 안 바뀌었나** — 포탑에 매인 시간');
