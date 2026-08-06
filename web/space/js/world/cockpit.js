@@ -25,6 +25,7 @@
 import * as THREE from 'three';
 import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 import { CIRCUITS, SIGN } from '../game/chase-table.js';
+import { STEP, LAND } from '../game/land-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
   color: 0x0a1622, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
@@ -745,6 +746,101 @@ export function buildOutside(scene, z) {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  ★ 착륙 — **화면이 바뀐다** (2026-08-06 · 사장님 「화면이 바뀌는 것」)
+  //
+  //  ★ 여기가 이 판에서 제일 중요한 자리다. 표와 규칙은 브라우저 없이도
+  //    검사할 수 있지만, **「내려가고 있다」는 오직 화면이 말한다.**
+  //    v45 의 바깥문에서 「검사는 다 ✔ 인데 열린 문과 닫힌 문이 똑같았다」를
+  //    밟았으므로, 여기서는 **바뀌는 것을 먼저 정하고** 만든다:
+  //
+  //      ① 별이 **느려지다 멎는다** (고도가 0 이면 흐를 것이 없다)
+  //      ② 하늘색이 **우주 → 지표**로 갈아탄다 (구역 갈아타기와 같은 길)
+  //      ③ 대기 진입에 **주황 발광**이 창을 덮는다 (제일 뜨거운 순간이 한가운데)
+  //      ④ **땅이 올라온다** — 지면과 능선. 이게 없으면 「내렸다」가 안 읽힌다
+  //
+  //  ★ 지면을 `out` 에 넣는다. 배가 기울면 창밖이 반대로 밀리는데(시차),
+  //    지면만 안 밀리면 **땅이 배와 따로 논다**
+  // ══════════════════════════════════════════════════════════════════════
+  const SURFACE = {
+    bg: new THREE.Color(0x7a4a2e),
+    fog: new THREE.Color(0xa46b42),
+    near: 30, far: 460,
+  };
+  const groundG = new THREE.Group();
+  groundG.visible = false;
+  out.add(groundG);
+  {
+    const dirt = new THREE.MeshStandardMaterial({
+      color: 0x7d6046, roughness: 1, metalness: 0.02, emissive: 0x2a1e14,
+    });
+    const floorM = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), dirt);
+    floorM.rotation.x = -Math.PI / 2;
+    floorM.position.set(0, 0, z - 200);
+    groundG.add(floorM);
+    // ★ **능선이 있어야 지평선이 생긴다.** 평면만 깔면 「갈색 바닥」이지
+    //   행성이 아니다 — 멀리 뭔가 서 있어야 거리가 읽힌다
+    const rock = new THREE.MeshStandardMaterial({
+      color: 0x5f4a38, roughness: 1, flatShading: true, emissive: 0x1d1610,
+    });
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2 + 0.3;
+      const rad = 190 + ((i * 37) % 90);
+      const h = 16 + ((i * 53) % 46);
+      const m = new THREE.Mesh(new THREE.ConeGeometry(h * (0.7 + (i % 3) * 0.25), h, 5), rock);
+      m.position.set(Math.cos(a) * rad, h / 2 - 4, z - 200 + Math.sin(a) * rad);
+      m.rotation.y = i;
+      groundG.add(m);
+    }
+    // 가까운 바위 몇 — 「내려앉은 자리」가 있어야 착지가 읽힌다
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 1.1;
+      const rad = 16 + (i % 4) * 7;
+      const s2 = 1.1 + (i % 3) * 0.9;
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(s2, 0), rock);
+      m.position.set(Math.cos(a) * rad, s2 * 0.4, z - 26 + Math.sin(a) * rad);
+      groundG.add(m);
+    }
+  }
+
+  // 대기 진입 발광 — **배와 무관하다.** out 에 넣으면 기울 때 같이 기운다
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0xff7a2a, transparent: true, opacity: 0, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(190, 120), glowMat);
+  glow.position.set(0, 1.6, z - 22);
+  glow.visible = false;
+  scene.add(glow);
+
+  let land = { step: STEP.NONE, t: 0 };
+  /** main.js 가 매 프레임 준다 — 착륙이 어디까지 왔나 */
+  function setLand(s) { land = s && s.step ? s : { step: STEP.NONE, t: 0 }; }
+
+  /**
+   * 고도 — **1 이 우주, 0 이 땅.** 이 한 숫자가 화면 넷을 다 몬다.
+   * ★ 마디마다 따로 그리지 않는다. 따로 그리면 마디가 바뀌는 순간
+   *   화면이 툭 끊기고, 그건 「순간이동」으로 읽힌다 (구역 갈아타기와 같은 병)
+   */
+  function altOf() {
+    const { step, t } = land;
+    const f = (a, b) => Math.max(0, Math.min(1, a / b));
+    if (step === STEP.APPROACH) return 1 - 0.35 * f(t, LAND.approach);
+    if (step === STEP.ENTRY) return 0.65 - 0.4 * f(t, LAND.entry);
+    if (step === STEP.DOWN) return 0.25 * (1 - f(t, LAND.down));
+    if (step === STEP.LANDED) return 0;
+    if (step === STEP.UP) return t < LAND.burn ? 0 : f(t - LAND.burn, LAND.rise);
+    return 1;
+  }
+
+  /** 대기 발광 — 진입 한복판이 제일 뜨겁다 */
+  function glowOf() {
+    const { step, t } = land;
+    if (step === STEP.ENTRY) return Math.sin(Math.min(1, t / LAND.entry) * Math.PI) * 0.85;
+    if (step === STEP.UP && t < LAND.burn) return 0.3;
+    return 0;
+  }
+
   const nearPos = ng.attributes.position;
   const nearCol = ng.attributes.color;
 
@@ -804,7 +900,47 @@ export function buildOutside(scene, z) {
     fog.near = cur.near;
     fog.far = cur.far;
 
-    const d = speed * want.speed * dt;
+    // ── ★ 착륙 — 고도 하나가 화면 넷을 몬다 ─────────────────
+    const alt = altOf();
+    const down = 1 - alt;                  // 0 = 우주, 1 = 땅
+    if (down > 0.001) {
+      // ② 하늘색이 지표 쪽으로 — **구역 위에 덧칠한다.** 구역 갈아타기를
+      //    건드리면 착륙을 끝내고 돌아왔을 때 원래 구역 색을 잃는다.
+      //    ★ 처음엔 `down * 1.35` 라 **다가가는 중에 이미 하늘이 갈색**이었다.
+      //      아직 우주에 있는데 지표 색이면 그건 「내려간다」가 아니라
+      //      「색이 이상하다」다. 고도 0.62 아래로 들어와야 물들기 시작한다
+      const mix = Math.max(0, Math.min(1, (0.62 - alt) / 0.62));
+      bg.lerp(SURFACE.bg, mix);
+      fog.color.copy(cur.fog).lerp(SURFACE.fog, mix);
+      fog.near = cur.near + (SURFACE.near - cur.near) * mix;
+      fog.far = cur.far + (SURFACE.far - cur.far) * mix;
+      // ④ 땅이 올라온다. 고도가 0.45 아래로 내려가야 보인다
+      const rise = Math.max(0, (0.45 - alt) / 0.45);
+      groundG.visible = rise > 0.002;
+      groundG.position.y = -2.0 - (1 - rise) * 240;
+    } else groundG.visible = false;
+
+    // ③ 대기 발광
+    const gl = glowOf();
+    glow.visible = gl > 0.004;
+    glowMat.opacity = gl;
+
+    // ① 별은 **고도만큼만 흐른다** — 땅에서는 멎는다
+    const d = speed * want.speed * dt * (0.12 + 0.88 * alt);
+    // ★★ **별이 땅에서도 그대로 떠 있었다.** 지면과 능선을 다 만들어 놓고
+    //   화면을 찍어 보니 「갈색 벽 앞에 우주」였다 — 대기가 있는 행성에
+    //   내려앉았는데 별이 총총하면 그건 착륙이 아니다. 고도가 낮아지면
+    //   **대기가 별을 지운다**
+    const starFade = Math.max(0, Math.min(1, (alt - 0.06) / 0.44));
+    farStars.visible = starFade > 0.03;
+    farStars.material.opacity = starFade;
+    farStars.material.transparent = true;
+    // ★ 가까운 별은 **색을 죽이는 것만으로는 안 사라진다** — 검게 칠한
+    //   점이 갈색 하늘 위에 **까만 점**으로 남는다. 실제로 그렇게 찍혔다.
+    //   밀도는 색으로, 있고 없고는 **투명도와 visible** 로 한다
+    nearStars.visible = starFade > 0.03;
+    nearStars.material.opacity = starFade;
+    nearStars.material.transparent = true;
     const arr = nearPos.array, col = nearCol.array;
     const shown = Math.round(NEAR * cur.stars);
     for (let i = 0; i < NEAR; i++) {
@@ -813,7 +949,7 @@ export function buildOutside(scene, z) {
       if (arr[k3 + 2] > Z_NEAR) place(i, Z_FAR);
       // 밀도는 **색을 죽여서** 흉내 낸다. 개수를 바꾸면 버퍼를 다시 만들어야
       // 하는데, 그건 구역이 바뀔 때마다 뚝 끊긴다
-      const on = i < shown ? 1 : 0;
+      const on = (i < shown ? 1 : 0) * starFade;
       col[k3] = cur.tint.r * on;
       col[k3 + 1] = cur.tint.g * on;
       col[k3 + 2] = cur.tint.b * on;
@@ -837,6 +973,43 @@ export function buildOutside(scene, z) {
     // 먼 하늘은 아주 천천히 돈다. 배가 미세하게 틀어지고 있다는 뜻이고,
     // 이게 있어야 오래 봐도 「멈춰 있다」는 느낌이 안 든다
     farStars.rotation.y += dt * 0.0016;
+
+    // ★ 착륙 중에는 행성이 **정면에서 커진다** — 「저기로 내려간다」
+    //   ★ 여기를 안 건드렸을 때 화면이 심심했다. 구역용 행성은 화면 왼쪽
+    //     구석에 작게 떠 있어서, 내려가는 동안 **아무것도 안 커졌다**
+    if (down > 0.001 && land.step !== STEP.LANDED) {
+      // ★ **구역용 행성 색(0x22406b)으로는 아무것도 안 보였다.** 어두운
+      //   하늘에 어두운 파란 공이라 화면에서 사라진다 — 잔해 덩어리에서
+      //   두 번 밟은 함정을 세 번째로 밟았다. 내려갈 행성은 **밝고 따뜻하게**
+      //   그리고 안개를 안 먹인다 (거리감보다 「저기 있다」가 먼저다)
+      planet.material.color.setHex(0xb98457);
+      planet.material.fog = false;
+      air.material.color.setHex(0xffc188);
+      air.material.opacity = 0.3;
+      air.material.fog = false;
+      // ★ **처음엔 다가가기 시작하자마자 행성이 창을 다 덮었다.**
+      //   커지는 것만 만들고 **멀리서 시작하는 것**을 안 만들었기 때문이다 —
+      //   「다가간다」는 작던 것이 커지는 것이지 처음부터 큰 것이 아니다.
+      //   멀리서 작게 떠 있다가 가까워지며 아래로 커진다
+      const g = 1 + down * 2.6;
+      const dist = 520 - down * 360;
+      planet.visible = alt > 0.08;
+      air.visible = planet.visible;
+      planet.scale.setScalar(g);
+      air.scale.setScalar(g * 1.03);
+      planet.position.set(0, 14 - 46 * g * 0.85 * down, z - dist);
+      air.position.copy(planet.position);
+      return;
+    }
+    planet.scale.setScalar(1);
+    air.scale.setScalar(1);
+    // 착륙이 끝나면 **구역용 색으로 되돌린다** — 안 되돌리면 그 뒤로 모든
+    // 구역에서 행성이 갈색으로 뜬다 (한 번 바꿔 놓고 안 되돌리는 종류의 사고)
+    planet.material.color.setHex(0x22406b);
+    planet.material.fog = true;
+    air.material.color.setHex(0x5aa8ff);
+    air.material.opacity = 0.22;
+    air.material.fog = true;
 
     // 행성 — 구역에 따라 있고 없다
     const showPlanet = want.planet;
@@ -866,5 +1039,16 @@ export function buildOutside(scene, z) {
    */
   const roll = (rad) => { out.rotation.z = rad; };
 
-  return { update, setRegion, roll, get region() { return regionKey; } };
+  return {
+    update, setRegion, roll, setLand,
+    get region() { return regionKey; },
+    /** 검사가 「화면이 정말 바뀌었나」를 묻는다 — 고도·발광·땅 */
+    get view() {
+      return {
+        alt: +altOf().toFixed(3), glow: +glowOf().toFixed(3),
+        ground: groundG.visible, groundY: +groundG.position.y.toFixed(1),
+        sky: `#${bg.getHexString()}`, planetScale: +planet.scale.x.toFixed(2),
+      };
+    },
+  };
 }

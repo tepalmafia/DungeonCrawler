@@ -35,7 +35,7 @@ import {
   regionOf, progress, relieveEscape, legsLeft, missPort, RPHASE,
 } from './game/route.js';
 import { FAULT, BY_KEY } from './game/mission-table.js';
-import { FOOD, WINCH, TRADE } from './game/supply-table.js';
+import { FOOD, WINCH, TRADE, ORE, PARTS } from './game/supply-table.js';
 import { HAZARD } from './game/hazard-table.js';
 import {
   makeHazard, stepHazard, steerShip, newLeg, incoming, warnLeft, clearOf, HPHASE,
@@ -76,6 +76,14 @@ import {
   makeLock, cycle as cycleLock, stepLock, canHaul, haulWhy,
   innerLocked, signOf as lockSign, heatOut as lockHeatOut, summary as lockSummary,
 } from './game/airlock.js';
+import { STEP as LSTEP, LAND, WHY as LAND_WHY, STEP_WORD, tiltWord, bandFor }
+  from './game/land-table.js';
+import {
+  makeLand, offerPlanet, passPlanet, beginLand, liftOff, stepLand, loadStep,
+  canLoad as canLoadLand, loadWhy, onGround as landDown, burning as landBurn,
+  moving as landMoving, busy as landBusy, signOf as landSign, heatOf as landHeat,
+  noCool as landNoCool, summary as landSummary,
+} from './game/land.js';
 import {
   makeHelm, stepHelm, tryDock, legOf as helmLeg, signOf as helmSign,
   radians as helmRad, summary as helmSummary,
@@ -90,6 +98,7 @@ import {
   opens as sceneOpen, resolve as sceneDone, emberAt, emberWorth,
   allowChore, leadOf, summary as sceneSummary,
 } from './game/scene.js';
+import { makeRng } from './core/rng.js';
 import { pack, apply, where } from './game/save.js';
 import { SAVE } from './game/save-table.js';
 import { saveRaw, loadRaw, clearRaw, canSave, hasSave } from './core/store.js';
@@ -98,7 +107,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 45;
+export const VERSION = 46;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -347,6 +356,17 @@ const gun = makeGun();
 //   바깥문이 열려 있으면 안쪽 문이 잠긴다 (game/airlock-table.js).
 const lock = makeLock();
 
+// ══ 행성 착륙 — **내려서 가지고 온다** (사장님 요청 · 장면 B) ═══
+// ★ 「착륙을 하는 일련의 과정도 있어야지 — 발견 · 조작 · 화면이 바뀌는 것」
+//   그래서 셋을 다 건다: 해도대에 뜨고(관측실), 조종간으로 진입각을 잡고
+//   (조종석), 바깥문을 열고 싣는다(에어록). **여덟 장면 중 이것만
+//   방 셋을 거친다** (game/land-table.js).
+const land = makeLand();
+// ★ **항로의 난수를 빌려 쓰지 않는다.** 같이 쓰면 착륙을 한 번 할 때마다
+//   항로가 뽑는 갈래가 밀려서, 같은 시드인데 매번 다른 항로가 된다 —
+//   `rng.js` 가 「시드가 같으면 항로도 같아야」라고 적어 둔 그 자리다
+const landRnd = makeRng(`${seed}-LAND`);
+
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
 function fireGun() {
   const r = fireShot(gun, {
@@ -370,7 +390,7 @@ function fireGun() {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, lock,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, lock, land,
   ship: { heat, power, clock, seed, coolOpen },
   me,
 });
@@ -437,6 +457,8 @@ let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 �
 let steerPush = 0;
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let winching = false;     // 지금 윈치를 잡고 있나
+let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다른 일
+let liftHeldWas = false;  // 이륙은 제 셈을 갖는다 (눌린 순간을 두 곳에서 본다)
 let trading = 0;          // 접수구를 얼마나 잡고 있었나
 let partsWarned = false;
 // 손에 물건이 없어 못 고친다고 **한 번만** 말한다. 매 프레임 외치면 소음이다
@@ -685,8 +707,10 @@ function interactStep(dt) {
     banner = '붙였습니다'; bannerT = 1.6;
     audio?.event('fixed');
   }
-  // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다
-  const canPick = route.phase === RPHASE.PORT;
+  // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다.
+  // ★ 다만 **내릴 자리가 떠 있으면 항행 중에도 눌린다** (장면 B).
+  //   판을 새로 안 만든다 — 「고르는 자리는 해도대」라는 규약을 그대로 쓴다
+  const canPick = route.phase === RPHASE.PORT || land.offered;
   ship.chart.setAim(canPick ? plate : -1);
 
   // ── 비상 크랭크 — **끼인 문을 손으로 연다** ──────────
@@ -698,6 +722,20 @@ function interactStep(dt) {
   // ── 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B) ─────
   steering = onYoke && input.hold;
 
+  // ★★ **땅에서는 조종간이 「뜬다」다.** 새 손잡이를 안 만든다 —
+  //   내릴 때 잡았던 그 조종간을 다시 잡으면 올라간다. 그리고 뜨려면
+  //   **에어록으로 돌아가 바깥문을 닫고** 와야 한다 (「동시에 두 곳에
+  //   못 있는다」가 마지막으로 한 번 더 돈다)
+  // ★ `input.takePress()` 를 여기서 쓰면 안 된다 — 그건 **소비하는** 깃발이라
+  //   아래 해도대·차단기가 같은 프레임에 못 읽는다. 눌린 순간을 두 곳에서
+  //   보려면 **셈도 두 개**다 (주포 사다리에서 이미 겪었다)
+  if (landDown(land) && onYoke && input.hold && !liftHeldWas) {
+    if (!liftOff(land, { doorOpen: lock.open || lock.cycling > 0 })) {
+      nag(LAND_WHY[land.blocked] ?? '지금은 못 뜹니다');
+    } else audio?.event('latch');
+  }
+  liftHeldWas = input.hold;
+
   // ── 윈치 — **멈춰서 끌어온다.** 「한 통만 더」 (PLAN §5-3) ──
   // 추진이 켜져 있으면 안 걸린다. 캐는 동안 구간이 안 나아가고 위험이 쌓인다 —
   // 시간과 위험을 **동시에** 치르는 것이 이 손잡이의 전부다
@@ -705,13 +743,19 @@ function interactStep(dt) {
   //   막히는 것이라, 굶는 중에 이게 겹치면 진짜로 급해진다
   // ★ **바깥문이 열려 있어야 낚는다** (사장님 「문을 열어서 우주에서 낚거나」).
   //   윈치는 원래 있었고, 없던 것은 **밖으로 난 구멍**이었다
-  winching = onWinch && input.hold && !power.thrust && !bad.noWinch && canHaul(lock);
+  // ★★ **땅에서는 같은 윈치가 적재기가 된다** (사장님 「행성에 착륙해서
+  //   가지고 올 수 있도록」). 우주 낚시는 광석만 나는데 땅은 **부품과
+  //   식량이 같이 난다** — 그게 「왜 내리나」의 답이다. 손잡이는 하나다
+  const onDirt = landDown(land);
+  loading = onDirt && onWinch && input.hold && canLoadLand(land, { doorOpen: lock.open });
+  winching = !onDirt
+    && onWinch && input.hold && !power.thrust && !bad.noWinch && canHaul(lock);
   // ★ 잡았는데 안 걸리면 **왜인지 말한다.** 조용하면 윈치가 고장난 줄 안다
-  if (onWinch && input.hold && !winching) {
-    const w = haulWhy(lock);
+  if (onWinch && input.hold && !winching && !loading) {
+    const w = onDirt ? loadWhy(land, { doorOpen: lock.open }) : haulWhy(lock);
     nag(bad.noWinch ? '에어록이 안 닫혀 못 씁니다'
-      : power.thrust ? '추진을 끄고 잡습니다'
-        : (w ? LOCK_WHY[w] : '지금은 안 걸립니다'));
+      : (!onDirt && power.thrust) ? '추진을 끄고 잡습니다'
+        : (w ? (onDirt ? LAND_WHY[w] : LOCK_WHY[w]) : '지금은 안 걸립니다'));
   }
   if (winching) {
     if (winchStep(supply, dt) === 'load') {
@@ -720,6 +764,17 @@ function interactStep(dt) {
       audio?.event('latch');
     }
     ship.winch.drum.rotation.y -= dt * 2.4;
+  }
+  if (loading) {
+    const g = loadStep(land, dt);
+    supply.ore = Math.min(ORE.max, supply.ore + g.ore);
+    supply.food = Math.min(FOOD.max, supply.food + g.food);
+    if (g.parts) {
+      supply.parts = Math.min(PARTS.max, supply.parts + g.parts);
+      banner = `부품 ${g.parts}개를 실었습니다`; bannerT = 2.0;
+      audio?.event('latch');
+    }
+    ship.winch.drum.rotation.y -= dt * 3.4;
   }
 
   // ── 접수구 — 거점에서만. 상인은 얼굴이 없다 (PLAN §1) ──
@@ -876,7 +931,20 @@ function interactStep(dt) {
 
   // 차단기 · 해도대 — 누르는 순간에만 넘어간다
   const pressed = input.takePress();
-  if (plate >= 0 && pressed) {
+  if (plate >= 0 && pressed && land.offered) {
+    // ★★ **발견 → 결심.** 판 0 이 「내린다」, 판 1 이 「지나친다」다
+    if (plate === 0) {
+      if (beginLand(land, { chase: chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT })) {
+        banner = STEP_WORD[LSTEP.APPROACH]; bannerT = 3.0;
+        audio?.event('latch');
+      } else nag(LAND_WHY[land.blocked] ?? '지금은 못 내립니다');
+    } else {
+      passPlanet(land);
+      sceneDone(scenes, 'B');
+      banner = '지나칩니다'; bannerT = 2.0;
+      audio?.event('click');
+    }
+  } else if (plate >= 0 && pressed) {
     if (canPick && chooseFork(route, ship.chart.keyAt(plate))) {
       ship.outside.setRegion(regionOf(route));
       banner = `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`;
@@ -1119,8 +1187,12 @@ function systemsStep(dt, valveOpen, regionMult) {
   // 열은 **켠 회로**가 정한다. 추진을 켜면 오르고, 냉각을 켜면 내려간다.
   // 다만 냉각 회로만으로는 절반뿐이라 **기관실 밸브까지 열어야** 제대로 잡힌다.
   // 고장이 있으면 여기에 얹힌다 — 「원인 모를 열」이 그것이다
-  heat += (heatRate(power, valveOpen) + bad.heat
-    + (valveOpen && power.cool ? bad.coolValve : 0)) * dt;
+  // ★★ **이륙 분사 중에는 냉각이 안 먹는다** — 분사를 하려면 방열판을
+  //   접어야 한다. 이게 없으면 밸브가 잠금식(v43)이라 오른 열이 저절로
+  //   빠지고, 그러면 이륙에 값이 하나도 안 붙는다
+  const cooled = landNoCool(land) ? { ...power, cool: false } : power;
+  heat += (heatRate(cooled, valveOpen) + bad.heat
+    + (valveOpen && cooled.cool ? bad.coolValve : 0)) * dt;
   heat = Math.max(0, Math.min(HEAT.max, heat));
 
   // ★★ **거점은 안전하다** (PLAN §4-2). 여기 위 158행에 그렇게 적어 놓고
@@ -1136,7 +1208,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   열 단위로 환산해 얹는다. 따로 더하면 조종석 계기가 말하는 자국과
   //   실제가 갈라진다 — 고장이 자국을 미는 것과 같은 규약
   // ★ 열린 바깥문도 자국이다 — 구멍 뚫린 배는 눈에 띈다
-  const badSign = (bad.sign + flashSign(gun) + lockSign(lock)) / SIGN_PER_HEAT;
+  // ★ 이륙 분사도 자국이다 — 행성에서 솟는 불기둥은 숨을 수가 없다
+  const badSign = (bad.sign + flashSign(gun) + lockSign(lock) + landSign(land)) / SIGN_PER_HEAT;
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
@@ -1696,6 +1769,26 @@ window.SPACE = {
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
   /** ★ 에어록 바깥문 — 열면 갇히나 · 공기가 주나 */
   get lock() { return { ...lockSummary(lock), word: airWord(lock.air) }; },
+  /** 착륙이 어디까지 왔나 — **화면과 같은 값**을 준다 */
+  get land() {
+    return {
+      ...landSummary(land),
+      word: STEP_WORD[land.step] ?? null,
+      tiltWord: tiltWord(land.tilt, bandFor(land.hard)),
+      band: bandFor(land.hard),
+      loading,
+      /** ★ 화면이 정말 바뀌었나 — 고도 · 발광 · 땅 · 하늘색 */
+      view: ship.outside.view,
+    };
+  },
+  /** 검사가 내릴 자리를 띄운다 */
+  offerLand(hard = false) { offerPlanet(land, hard); return landSummary(land); },
+  /**
+   * 검사가 마디를 밀어 놓는다 — **화면을 찍으려고 낸 구멍.**
+   * ★ `stepLand` 를 직접 부르지 않는다. 여기서 상태만 바꾸고 **게임이
+   *   굴리게** 둔다 — 안 그러면 「검사는 통과하는데 화면은 조용한」 상태가 된다
+   */
+  putLand(step, t = 0) { land.step = step; land.t = t; land.offered = step !== 'none'; return landSummary(land); },
   /** 검사가 문을 바로 열고 닫는다 */
   putLock(open) { lock.open = !!open; lock.cycling = 0; return lockSummary(lock); },
   setAir(v) { lock.air = Math.max(0, Math.min(1, v)); return lockSummary(lock); },
@@ -1864,6 +1957,20 @@ function frame(now) {
   //   올리는데, 그 뒤에 장면을 밟으면 **새 구간의 장면을 옛 구간 길이로**
   //   재게 된다. 한 프레임짜리지만 「예고가 0초」 같은 모양으로 나온다
   const sev = stepScene(scenes, dt, route.need || 600);
+  // ── ★★ B — **행성을 발견한다** ────────────────────────
+  // 「대응」 박자가 시작될 때 해도대에 내릴 자리가 뜬다. 예고 때는 아직
+  // 「전방에 중력원」뿐이다 — 예고가 예고이려면 준비할 시간이 있어야 한다
+  if (sev === 'act' && sceneOpen(scenes, 'B') && !land.offered && !landBusy(land)) {
+    offerPlanet(land, !!scenes.hard);
+    audio?.event('fault');
+  }
+  // ★ **대응 시계가 다 됐는데 아직 안 내렸으면 지나친 것이다.** 안 그러면
+  //   해도대를 한 번도 안 본 사람에게 장면 B 가 영영 안 끝난다 —
+  //   그건 긴장이 아니라 멈춘 게임이다
+  if (scenes.overdue && scenes.keys.includes('B') && !landBusy(land)) {
+    passPlanet(land);
+    sceneDone(scenes, 'B');
+  }
   // ── ★ C — 자세 제어가 죽는다 ──────────────────────────
   // 「대응」 박자가 시작될 때 죽는다. **예고 때는 아직 멀쩡하다** —
   // 예고가 예고이려면 준비할 시간이 있어야 한다 (PLAN2H §2)
@@ -1930,7 +2037,10 @@ function frame(now) {
   }
 
   // ★ 벗어난 만큼 **느리게** 나아간다 (helm-table.js legMult)
-  const rev = stepRoute(route, dt * helmLeg(helm), power);
+  // ★★ **내려가 있는 동안은 구간이 안 나아간다.** 땅에 붙은 배는 항로를
+  //   가지 않는다 — 그런데 **압박은 계속 쌓인다** (stepRoute 가 시간으로
+  //   센다). 「숨는 것」과 「안 쫓기는 것」은 다르다는 규약 그대로다
+  const rev = stepRoute(route, dt * helmLeg(helm), power, { hold: landBusy(land) });
   // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
   //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
   const missed = rev === 'arrive' && !tryDock(helm);
@@ -1988,6 +2098,10 @@ function frame(now) {
   // ★ 거점에 서 있거나 추진이 꺼져 있으면 **느리게 흐른다** — 창밖이
   //   항로와 어긋나면 「가는 척하는 화면」이 된다
   const cruise = route.phase === RPHASE.PORT ? 0.25 : (power.thrust ? 1 : LEG.coast);
+  // ★★ **착륙이 화면을 몬다** — 고도 하나가 별 흐름·하늘색·발광·지면을 다 정한다.
+  //   `update` 보다 **먼저** 넣는다. 나중에 넣으면 이번 프레임은 옛 고도로
+  //   그려지고, 그 한 프레임이 마디가 바뀌는 순간마다 툭 끊겨 보인다
+  ship.outside.setLand({ step: land.step, t: land.t });
   ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard));
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
@@ -1998,6 +2112,8 @@ function frame(now) {
   ship.chart.update({
     leg: route.leg, press: Math.max(0, Math.min(100, route.press + lie)),
     atPort: route.phase === RPHASE.PORT, offer: route.offer,
+    // ★ 내릴 자리가 떠 있으면 같은 판 둘이 「내린다 / 지나친다」를 묻는다
+    land: { offered: land.offered, hard: land.hard },
   });
 
   // ── 떨림 — 뿌리쳤을 때의 **낙차**를 만드는 쪽 ──────────
@@ -2057,7 +2173,10 @@ function frame(now) {
   stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN);
 
   // ── 에어록 바깥문 ────────────────────────────────────
-  const lev = stepLock(lock, dt);
+  // ★ 땅에 내려앉아 있으면 **문을 열어 놔도 공기가 안 준다** (대기가 있다).
+  //   v45 에서 「열어 놓고 잊을 수 없다」를 만들어 놨는데, 그 벌이 여기서만
+  //   풀린다 — 그게 「내려오면 숨통이 트인다」다
+  const lev = stepLock(lock, dt, { outsideAir: LAND.airHolds && landDown(land) });
   if (lev === 'open') { banner = '바깥문이 열렸습니다'; bannerT = 2.4; }
   if (lev === 'shut') { banner = '바깥문이 닫혔습니다'; bannerT = 2.0; }
   if (lev === 'blown') {
@@ -2070,6 +2189,39 @@ function frame(now) {
   ship.outerDoor.setOpen(lock.open ? 1 : (lock.cycling > 0 && lock.opening ? 1 - lock.cycling / LOCK.cycle : 0));
   // 열려 있으면 열이 빠진다 — 문을 여는 데 좋은 점이 하나는 있어야 한다
   heat = Math.max(0, heat - lockHeatOut(lock) * dt);
+
+  // ── ★★ 행성 착륙 — **여섯 마디와 진입각 하나** ──────────
+  // ★ 진입각은 **같은 조종간**이 잡는다 (`steerPush`). 항로 이탈 · 바위
+  //   피하기 · 자세 붙들기에 이어 네 번째 일이다 — 손잡이를 넷으로 만들면
+  //   사람은 넷을 배워야 하고, 그건 이 배의 규약이 아니다
+  const lastStep = land.step;
+  const lev2 = stepLand(land, dt, {
+    hand: steering ? steerPush : 0,
+    rnd: landRnd,
+  });
+  if (lastStep !== land.step && STEP_WORD[land.step]) {
+    banner = STEP_WORD[land.step];
+    bannerT = land.step === LSTEP.ENTRY ? 4.0 : 3.0;
+    audio?.event(land.step === LSTEP.LANDED ? 'fixed' : 'latch');
+  }
+  if (lev2 === 'touch') {
+    // 내려앉는 것도 공짜가 아니다 — 착지 충격이 선체에 남는다
+    faults.wear.hull = Math.min(1, faults.wear.hull + LAND.touchWear);
+    hitFlash = 0.5;
+  }
+  if (lev2 === 'sky') {
+    // ★ **뜬 그 순간이 해소다.** 시계가 아니라 사건이 정한다 (scene.js)
+    sceneDone(scenes, 'B');
+    banner = `실어 온 것 — 광석 ${Math.round(land.got.ore)} · 부품 ${land.got.parts}`;
+    bannerT = 4.0;
+  }
+  // 진입 중에 띠를 벗어나 있으면 **선체가 탄다** — 벌이 숫자가 아니라 일이다
+  if (land.step === LSTEP.ENTRY && Math.abs(land.tilt) > bandFor(land.hard)) {
+    faults.wear.hull = Math.min(1, faults.wear.hull + LAND.burnWear * dt);
+    hitFlash = Math.max(hitFlash, 0.35);
+  }
+  // 이륙 분사 — 열이 오르고 **냉각이 안 먹는다** (방열판을 접었다)
+  if (landBurn(land)) heat = Math.min(HEAT.max, heat + landHeat(land) * dt);
 
   // ── 주포 ─────────────────────────────────────────────
   const gev = stepGun(gun, dt);

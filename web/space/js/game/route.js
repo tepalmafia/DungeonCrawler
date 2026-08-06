@@ -81,12 +81,17 @@ export function chooseFork(rt, key) {
  *   둘을 같은 시계로 굴리면 이 저울이 사라진다.
  *
  * @param power 지금 켜 둔 회로. 추진이 켜져 있으면 구간이 빨리 지난다
+ * @param opt.hold ★ **땅에 내려앉아 있다** — 구간은 안 나아가고 압박만 쌓인다
  * @returns 'arrive' | 'overrun' | 'end' | null
  */
-export function stepRoute(rt, dt, power = {}) {
+export function stepRoute(rt, dt, power = {}, opt = {}) {
   if (rt.phase !== RPHASE.LEG) return null;
 
-  rt.t += dt * (power.thrust ? 1 : LEG.coast);
+  // ★★ **멈춘 것과 안 쫓기는 것은 다르다** (v46 · 행성 착륙).
+  //   밖에서 `dt` 를 0 으로 줄여 세우려다 압박까지 같이 멎을 뻔했다 —
+  //   그러면 「내려앉아 있으면 시간이 안 간다」가 되어, 내리는 것이
+  //   공짜가 된다. 규칙은 **이 파일이 갖는다**: 구간만 세우고 압박은 굴린다
+  rt.t += opt.hold ? 0 : dt * (power.thrust ? 1 : LEG.coast);
   rt.press = Math.min(PRESS.max, rt.press + rt.fork.pressRate * dt);
 
   // 넘침 — **한 번만 알린다.** 매 프레임 알리면 경보가 소음이 된다
