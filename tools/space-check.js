@@ -186,6 +186,39 @@ console.log('\n[4] ★★ **새 게임** — 처음부터 시작하는 길이 �
   ok(!txt.includes('이어'), '⑥ 안내가 「이어갑니다」라고 안 한다 — 거짓말을 안 한다');
 }
 
+console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은 채 저장해 본다');
+{
+  // 사장님: 「왜 자꾸 주포에서 시작하고 **움직여지지가 않아**?」
+  // 앉은 채 저장하면 `gunBusy` 가 걸음을 막아 **켤 때마다 그 자리**였다
+  await boot();
+  await p.evaluate(() => { window.SPACE.putGun(true); window.SPACE.saveNow(); });
+  ok(await p.evaluate(() => window.SPACE.gun.up), '① 조준석에 앉은 채로 저장했다');
+
+  await boot();
+  ok(!(await p.evaluate(() => window.SPACE.gun.up)),
+    '② ★ 이어하면 **일어나 있다** — 자세는 안 잇는다');
+
+  // 그리고 정말 걸어지나 — 이게 사장님이 겪은 것이다
+  await p.mouse.click(640, 400);
+  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
+  const w0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
+  await p.keyboard.down('KeyW');
+  await p.waitForFunction((s) => {
+    const q = window.SPACE.pos;
+    return Math.hypot(q.x - s[0], q.z - s[1]) > 0.3;
+  }, w0, { timeout: 15000 }).catch(() => {});
+  await p.keyboard.up('KeyW');
+  const w1 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
+  ok(Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) > 0.3,
+    `③ ★★ **W 를 누르니 걸어진다** (${w0.map((v) => v.toFixed(1))} → ${w1.map((v) => v.toFixed(1))})`);
+
+  // ★ 배 밖에 몸이 저장돼 있어도 갇히지 않나 — 옛 판본은 주포가 배 위였다
+  await p.evaluate(() => { window.SPACE.put(2.35, -1.0); window.SPACE.saveNow(); });
+  await boot();
+  const back = await p.evaluate(() => window.SPACE.canStand(window.SPACE.pos.x, window.SPACE.pos.z));
+  ok(back, '④ 설 수 없는 자리에 저장돼 있으면 **되돌려 준다** — 갇히지 않는다');
+}
+
 console.log('');
 ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}개: ${errs[0]}` : '콘솔 오류 없음');
 console.log(fail ? `\n✘ ${fail} 군데` : '\n✔ 전부 통과 — 손이 닿는다');

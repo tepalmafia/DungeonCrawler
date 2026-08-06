@@ -197,7 +197,7 @@ node tools/space-airlock.js      스페이스워 — ★ 에어록 바깥문 · 
 node tools/space-land.js         스페이스워 — ★ 행성 착륙 · 과정이 있나 · ★화면이 바뀌나 (--see 8391)
 node tools/space-scar.js         스페이스워 — ★ 영구 손상 · 혹사하면 남고 조심하면 안 남나 · 우회로가 있나
 node tools/space-target.js       스페이스워 — ★ 떠도는 것들(쓰레기·위성) · 겨누는 것이 일인가
-node tools/space-check.js        스페이스워 — ★ 점검 모드(F2·`)와 새 게임이 **손에 닿나** (진짜 마우스로)
+node tools/space-check.js        스페이스워 — ★ 점검 모드(F2·`)·새 게임·★이어했을 때 **걸어지나** (진짜 마우스로)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)

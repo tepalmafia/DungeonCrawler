@@ -122,7 +122,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 50;
+export const VERSION = 51;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -489,6 +489,19 @@ function loadOnce() {
   clock = box.ship.clock ?? clock;
   Object.assign(power, box.ship.power ?? {});
   coolOpen = box.ship.coolOpen ?? false;
+  // ★★ **손을 놓은 채 시작한다** (2026-08-06 · 사장님 「왜 자꾸 주포에서
+  //   시작하고 움직여지지가 않아?」). 앉아 있으면 `gunBusy` 가 걸음을 막으므로
+  //   앉은 채 이어하면 **못 걷는 자리에서 시작한다.** 표에서 `up` 을 뺐지만
+  //   여기서도 못박아 둔다 — 옛 저장이 남아 있거나 표를 다시 늘렸을 때
+  //   조용히 되살아나면 그게 제일 찾기 어렵다
+  gun.up = false; gun.moving = 0;
+  // ★ 그리고 **설 수 없는 자리면 되돌린다.** 옛 판본은 주포가 배 **위**였고
+  //   그 자리가 저장돼 있으면 사방이 벽이라 영영 못 움직인다. 이런 몸은
+  //   「이어한 것」이 아니라 **갇힌 것**이다
+  if (!inside(me.x, me.z, BODY.radius)) {
+    console.warn(`[저장] 설 수 없는 자리(${me.x.toFixed(1)}, ${me.z.toFixed(1)})라 조종석으로 되돌립니다`);
+    me.x = 0; me.z = -5.4; me.vx = me.vz = 0;
+  }
   return where(raw);
 }
 /** 일시정지 — 2시간을 한 번에 앉아 있을 수 없다 */
