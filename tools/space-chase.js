@@ -251,7 +251,10 @@ if (SP) await p.screenshot({ path: `${SP}/ch-0-고장.png` });
 console.log('\n[0-4] 보급 — **멈춰서 캔다.** 「한 통만 더」 (PLAN §5-3)');
 {
   // 에어록 윈치 앞에 선다. 추진이 켜져 있으면 안 걸려야 한다
-  await S(() => { SPACE.setPower('thrust', true); SPACE.put(3.4, 5.15, 0, -0.34); });
+  // ★ v45 에서 **바깥문이 생겼다** — 문이 닫혀 있으면 윈치가 아예 안 걸린다.
+  //   여기서 묻는 것은 「문이 있나」가 아니라 「추진 중에는 안 캐지나」이므로
+  //   문은 열어 놓고 시작한다. 문 자체는 tools/space-airlock.js 가 본다
+  await S(() => { SPACE.putLock(true); SPACE.setPower('thrust', true); SPACE.put(3.4, 5.15, 0, -0.34); });
   await p.waitForTimeout(2200);
   // ★ **한 번 읽고 판정하지 않는다.** 헤드리스는 1fps 남짓이라 자리를 옮기고
   //   두 프레임 안에 조준이 안 굳을 수 있다 — 실제로 「(winch) 인데 ✘」라는
@@ -279,6 +282,10 @@ console.log('\n[0-4] 보급 — **멈춰서 캔다.** 「한 통만 더」 (PLAN
   await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
   ok(pulling, `멈추면 끌어온다 (광석 ${after.ore})`);
   ok(rising, `캐는 동안 위험이 쌓인다 (${before} → ${after.risk}) — 자국이 낮아도 안 빠진다`);
+  // ★ **열어 둔 것을 다시 닫는다.** 안 닫으면 이 절이 남긴 문이 뒤의 절들에
+  //   자국 +14 와 열 -1.6/초 를 계속 얹는다 — 「검사 하나가 다음 검사를
+  //   바꿔 놓는」 상태가 되고, 그러면 빨개진 곳을 봐도 원인을 못 짚는다
+  await S(() => SPACE.putLock(false));
 }
 
 console.log('\n[0-5] 접수구 — 거점에서만 바꾼다');

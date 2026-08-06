@@ -218,3 +218,107 @@ export function buildTradeHatch(parent, at, MAT, block) {
 }
 
 export { FOOD, PARTS, ORE };
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★ 에어록 **바깥문** — 「문을 열어서 우주에서 낚는다」 (사장님 요청)
+//
+//  ★ `MISSIONS.md` 가 「아직 안 열린다」고 적어 둔 그 문이다.
+//    윈치는 이미 있었고, 없던 것은 **밖으로 난 구멍**이었다.
+//
+//  ★ **바깥벽(x1)에 단다.** 윈치가 z0 벽에 있으므로 마주 보지 않는다 —
+//    한 벽에 둘을 붙이면 조준선이 늘 엉뚱한 것을 잡는다 (정비실 패널에서
+//    두 번 옮긴 것과 같은 함정).
+// ══════════════════════════════════════════════════════════════════════════
+export function buildOuterDoor(parent, at, MAT, tint = 0x8fd0ff) {
+  const g = new THREE.Group();
+  g.position.set(at.x, 0, at.z);
+  g.rotation.y = at.ry;
+  parent.add(g);
+
+  const bx = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  const FRAME = new THREE.MeshStandardMaterial({ color: 0x6a727d, roughness: 0.6, metalness: 0.55 });
+  const HULL = new THREE.MeshStandardMaterial({ color: 0x3a4048, roughness: 0.75, metalness: 0.4 });
+
+  // 문틀 — 두껍다. 밖으로 나는 구멍이라 안쪽 문보다 육중해야 한다
+  bx(0.14, 2.0, 0.16, FRAME, -0.86, 1.0, 0);
+  bx(0.14, 2.0, 0.16, FRAME, 0.86, 1.0, 0);
+  bx(1.86, 0.16, 0.16, FRAME, 0, 2.0, 0);
+  bx(1.86, 0.12, 0.16, FRAME, 0, 0.06, 0);
+
+  // ★★ **문 너머는 우주다** — 문짝 뒤에 깔아 둔다.
+  //   첫 판에는 이게 없었다. 문짝만 옆으로 밀었더니 **열린 화면과 닫힌
+  //   화면이 거의 똑같았다** — 뒤에 여전히 벽이 있었으니까. 「되는데 안
+  //   보이는」 것을 또 밟은 것이고, 표만 봐서는 절대 안 나온다.
+  //   그래서 **열리면 검은 것이 드러나야** 한다
+  //   ★ 그리고 **벽 두께(T=0.16)를 안 재고 붙였다가 한 번 더 헛돌았다.**
+  //     문틀을 벽 안쪽 면에 딱 붙여 놓으니 그 뒤에 깐 우주가 **벽 속**에
+  //     들어가 안 보였다. 문틀을 방 쪽으로 조금 내밀어 세운다 (ship.js)
+  const VOID = new THREE.MeshBasicMaterial({ color: 0x02040a });
+  bx(1.72, 1.9, 0.02, VOID, 0, 1.0, -0.06);
+  // 별 몇 점 — 검기만 하면 「벽이 검은 것」과 구분이 안 된다
+  const STAR = new THREE.MeshBasicMaterial({ color: 0xdfe8ff });
+  for (const [sx, sy, r] of [[-0.55, 1.62, 0.022], [0.38, 1.44, 0.016], [-0.2, 0.62, 0.019],
+    [0.61, 0.9, 0.013], [0.08, 1.78, 0.014], [-0.68, 0.42, 0.012]]) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(r, 6, 5), STAR);
+    s.position.set(sx, sy, -0.03);
+    g.add(s);
+  }
+
+  // ── 문짝 한 벌 — **줄무늬·손잡이가 같이 미끄러진다** ──
+  // ★ 처음엔 줄무늬와 손잡이를 문틀에 달아 놨다. 그러니 문짝만 빠져나가고
+  //   **무늬는 제자리에 남아** 열린 티가 안 났다. 문에 붙은 것은 문의 자식이다
+  const leafG = new THREE.Group();
+  g.add(leafG);
+  const lbx = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    leafG.add(m);
+    return m;
+  };
+
+  // 문짝 — **옆으로 미끄러진다.** 두 짝이 아니라 한 짝이다 (밖은 두껍다)
+  const leaf = lbx(1.66, 1.86, 0.11, HULL, 0, 1.0, 0.02);
+  leaf.name = '바깥문';
+
+  // 위험 줄무늬 — 바깥문이라는 표시
+  for (let i = -2; i <= 2; i++) {
+    lbx(0.16, 1.7, 0.012, new THREE.MeshStandardMaterial({
+      color: i % 2 ? 0x1c1f24 : 0xd8a038, roughness: 0.8,
+    }), i * 0.3, 1.0, 0.08);
+  }
+
+  // 손잡이 — 돌린다 (밸브와 같은 손짓)
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 8, 18), FRAME);
+  wheel.position.set(0, 1.0, 0.14);
+  leafG.add(wheel);
+
+  // 불 — 열려 있으면 빨갛다 (기밀 상실)
+  const lampMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2f36, emissive: 0x2a2f36, emissiveIntensity: 1.4, roughness: 0.4,
+  });
+  // ★ 문짝 얼굴(y 1.78)에 붙어 있었다 — 문이 미끄러져도 불만 제자리라
+  //   「문에 달린 것인지 벽에 달린 것인지」가 안 읽혔다. 상인방으로 올린다
+  bx(0.34, 0.1, 0.06, lampMat, 0, 2.02, 0.12);
+
+  const hit = bx(1.9, 2.0, 0.6, new THREE.MeshBasicMaterial({ visible: false }), 0, 1.0, 0.24);
+  hit.name = '바깥문 손잡이';
+
+  return {
+    group: g, hit, wheel,
+    /** 열린 만큼 옆으로 미끄러진다 (0~1) */
+    setOpen(k) {
+      leafG.position.x = 1.72 * k;
+      wheel.rotation.z = -k * Math.PI * 1.6;
+      const on = k > 0.02;
+      lampMat.color.set(on ? 0xff5a3c : 0x2a2f36);
+      lampMat.emissive.set(on ? 0xff5a3c : 0x2a2f36);
+      lampMat.emissiveIntensity = on ? 3.2 : 1.4;
+    },
+  };
+}
