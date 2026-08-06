@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=49">
+<link rel="stylesheet" href="css/style.css?v=50">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -49,7 +49,16 @@
        만든 것들이 저마다 조건 뒤에 숨어 있어(쫓겨야 쏘고, 구간 3 이라야
        행성이 뜨고) 켜서 만져 볼 수가 없었습니다. F2 로 아무 상황이나 바로
        만들어 볼 수 있습니다 — 게임을 고치는 것이 아니라 이미 있는 구멍입니다 -->
-  <p class="key"><b>F2</b> — 점검 모드. 아무 상황이나 바로 만들어 봅니다.</p>
+  <p class="key"><b>F2</b> 또는 <b>`</b> — 점검 모드. 아무 상황이나 바로 만들어 봅니다.</p>
+  <!-- ★ 단추 둘 (2026-08-06). 여기까지 **키만** 있었던 것이 문제였습니다:
+       F2 는 노트북에서 Fn 을 같이 눌러야 하는 경우가 많고, 「처음부터」는
+       아예 길이 없어서 켤 때마다 말없이 이어졌습니다. `#hint` 는
+       `pointer-events: none` 이라 단추에만 되살립니다 — 그래야 나머지
+       가운데를 눌러 게임을 켜는 길이 그대로 남습니다. -->
+  <div class="btns" data-ui>
+    <button id="btn-new" type="button">처음부터 다시</button>
+    <button id="btn-check" type="button">점검 모드</button>
+  </div>
 </div>
 
 <!-- ★ 멈춤 화면 (Esc). **2시간짜리인데 멈출 수가 없으면 사람은 브라우저를
@@ -63,6 +72,12 @@
   <p class="where"></p>
   <p class="note"></p>
   <p class="key">화면을 누르면 계속합니다 &middot; <b>Esc</b></p>
+  <!-- 멈춤 화면에도 같은 단추 둘. 노는 중에 F2 가 안 먹는 자판이면
+       **Esc 는 반드시 먹으므로** 이것이 막히지 않는 길이 됩니다 -->
+  <div class="btns" data-ui>
+    <button id="btn-new2" type="button">처음부터 다시</button>
+    <button id="btn-check2" type="button">점검 모드</button>
+  </div>
 </div>
 
 <!-- ★ 게임 오버. **이 게임의 유일한 끝**입니다 — 수동 조작 중 행성 충돌.
@@ -75,6 +90,6 @@
   <p class="key">자동 항법을 켜 두면 행성에 안 끌려갑니다 &middot; <b>새로고침</b>으로 다시 시작합니다</p>
 </div>
 
-<script type="module" src="js/main.js?v=49"></script>
+<script type="module" src="js/main.js?v=50"></script>
 </body>
 </html>

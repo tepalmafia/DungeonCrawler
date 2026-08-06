@@ -56,6 +56,26 @@ html, body {
 /* 손목 한 줄만 살짝 떼어 놓는다 — 소리 끄는 법과 **다른 무게**다.
    여기가 다시 여덟 문단이 되면 그건 가르침이 제 일을 못 하고 있다는 뜻이다 */
 #hint p.key { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(140, 160, 190, .18); }
+
+/* ★ 안내창·멈춤 화면의 단추 둘.
+   부모가 `pointer-events: none` 이라 **여기서만 되살린다** — 나머지 가운데를
+   눌러 게임을 켜는 길은 그대로 둔다. `data-ui` 표는 CSS 가 아니라
+   `core/input.js` 가 읽는다: 이 위에서 누른 것은 게임의 클릭이 아니다 */
+#hint .btns, #pause .btns {
+  margin-top: 14px; display: flex; gap: 8px; justify-content: center;
+  pointer-events: auto;
+}
+#hint .btns button, #pause .btns button {
+  padding: 7px 14px; border-radius: 6px; cursor: pointer;
+  background: rgba(30, 46, 66, .95); color: #d6e6f4;
+  border: 1px solid rgba(120, 200, 255, .26);
+  font: 13px/1.4 system-ui, -apple-system, sans-serif;
+}
+#hint .btns button:hover, #pause .btns button:hover {
+  background: rgba(46, 74, 106, .95); border-color: rgba(150, 220, 255, .5);
+}
+/* 「처음부터 다시」는 **되돌릴 수 없다.** 색으로 무게를 달리 준다 */
+#hint #btn-new, #pause #btn-new2 { border-color: rgba(255, 140, 110, .32); color: #f0cabf; }
 #hint[hidden] { display: none; }
 
 /* 멈춤 화면. 안내창(#hint)과 **같은 모양을 일부러 쓴다** — 둘 다 「게임이

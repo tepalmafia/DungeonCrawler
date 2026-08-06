@@ -12,6 +12,10 @@
 //
 //  ★ 규칙 셋
 //    ① **F2 를 눌러야 뜬다.** 기본은 꺼져 있고, 놀 때는 아무것도 안 보인다
+//       (★ F2 하나뿐이었던 것이 잘못이었다 — 노트북에서 F2 는 Fn 을 같이
+//        눌러야 하는 하드웨어 키라 브라우저까지 안 온다. **` 도 받고**,
+//        시작 화면·멈춤 화면에는 **단추로도** 낸다. 들어가는 길이 하나면
+//        그 하나가 막힌 사람에게는 없는 것과 같다)
 //    ② **게임을 안 고친다.** 여기서 하는 것은 전부 `SPACE.*` 호출이고,
 //       그건 검사 도구가 쓰는 것과 **같은 구멍**이다 — 점검 모드에서만
 //       되는 길을 새로 만들면 그 길은 아무도 안 검사한다
@@ -50,7 +54,15 @@ const GROUPS = [
     ['고장 하나', (S) => { S.forceFault(); return '고장이 떴습니다 — 소리로 찾습니다'; }],
     ['열 90', (S) => { S.setHeat(90); return '열 90 — 기관실 밸브로 내립니다'; }],
     ['보급 가득', (S) => { S.setSupply({ food: 100, parts: 8, ore: 200 }); return '식량·부품·광석을 채웠습니다'; }],
-    ['저장 지우기', (S) => { S.clearSave(); return '저장을 지웠습니다 — 새로고침하면 처음부터'; }],
+  ]],
+  // ★ **새 게임** (2026-08-06 · 사장님 「계속 이어하기로 나오는데?
+  //   새 게임은 어떻게 하는거야?」). 저장 칸이 하나뿐이라 켤 때마다 말없이
+  //   이어졌고, **처음부터 시작하는 길이 아무 데도 없었다.** 「저장 지우기」는
+  //   있었지만 그건 지우기지 시작하기가 아니다 — 지운 다음 새로고침을
+  //   해야 한다는 걸 알아야 쓸 수 있었다. 한 번에 되는 것으로 바꾼다.
+  ['게임', [
+    ['처음부터 다시', (S) => { S.newGame(); return '새 배로 다시 시작합니다'; }],
+    ['지금 저장', (S) => { S.saveNow(); return '여기까지 저장했습니다'; }],
   ]],
 ];
 
@@ -58,8 +70,13 @@ export function buildCheck() {
   const box = document.createElement('div');
   box.id = 'check';
   box.hidden = true;
+  // ★★ **이 한 줄이 없어서 단추가 안 먹었다.** `core/input.js` 가 창 전체에서
+  //   mousedown 을 받아 포인터 잠금을 다시 거는데, 여기를 눌러도 그게 돌아서
+  //   **커서가 사라졌다.** 그러면 두 번째 단추부터는 어디를 눌러도 안 먹는다.
+  //   `data-ui` 는 「이건 게임 화면이 아니라 손으로 만지는 것」이라는 표다
+  box.dataset.ui = '1';
   const head = document.createElement('b');
-  head.textContent = '점검 모드 — F2 로 닫습니다';
+  head.textContent = '점검 모드 — F2 (또는 `) 로 닫습니다';
   box.appendChild(head);
   const say = document.createElement('p');
   say.className = 'say';
@@ -93,12 +110,21 @@ export function buildCheck() {
   }
   document.body.appendChild(box);
 
-  addEventListener('keydown', (e) => {
-    if (e.code !== 'F2') return;
-    e.preventDefault();
-    box.hidden = !box.hidden;
+  /** 열고 닫는다 — 키로도, 단추로도 같은 이 함수를 부른다 */
+  const toggle = (on) => {
+    box.hidden = on === undefined ? !box.hidden : !on;
     // 열려 있는 동안은 마우스를 써야 하므로 포인터 잠금을 푼다
     if (!box.hidden && document.pointerLockElement) document.exitPointerLock();
+  };
+
+  // ★ **F2 하나로는 못 연다.** 노트북에서 F2 는 Fn 을 같이 눌러야 하는
+  //   하드웨어 키인 경우가 많아 브라우저까지 아예 안 온다. `(Backquote) 는
+  //   어느 자판에서나 그냥 눌리고, 게임이 안 쓰는 키다
+  addEventListener('keydown', (e) => {
+    if (e.code !== 'F2' && e.code !== 'Backquote') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;   // 브라우저 단축키는 안 뺏는다
+    e.preventDefault();
+    toggle();
   });
-  return { box, get open() { return !box.hidden; } };
+  return { box, toggle, get open() { return !box.hidden; } };
 }
