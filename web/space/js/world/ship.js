@@ -35,7 +35,7 @@ import {
 import { bay, PANEL_BAY, FIRST_RACK } from '../game/bay-table.js';
 import { buildChart } from './chart.js';
 import { buildBench } from './bench.js';
-import { buildFoodGauge, buildWinch, buildTradeHatch } from './supply-ui.js';
+import { buildFoodGauge, buildWinch, buildTradeHatch, buildOuterDoor } from './supply-ui.js';
 import { buildDoor } from './door.js';
 import { DOOR } from '../game/door-table.js';
 import { buildTurret, LADDER } from './turret.js';
@@ -857,6 +857,18 @@ export function buildShip(scene, camera = null) {
   };
 
   // ★ `group` — tools 가 배 안에만 광선을 쏘려고 쓴다 (창밖·성운은 뺀다)
+  // ── 에어록 바깥문 — **열고 우주에서 낚는다** (사장님 요청) ──
+  // ★ **바깥벽(x1)에 단다.** 윈치가 z0 벽에 있으므로 마주 보지 않는다 —
+  //   한 벽에 둘을 붙이면 조준선이 늘 엉뚱한 것을 잡는다
+  // ★ **벽 안쪽 면(x1 - T/2 = x1 - 0.08)에 딱 붙여 놨었다.** 그러니 문짝
+  //   뒤에 깔아 둔 「우주」가 벽 두께 안에 파묻혀 **열어도 벽만 보였다** —
+  //   열린 화면과 닫힌 화면이 거의 똑같았다. 방 쪽으로 0.26 내밀어 세운다
+  const outerDoor = buildOuterDoor(ship,
+    { x: R.airlock.x1 - 0.26, z: (R.airlock.z0 + R.airlock.z1) / 2, ry: -Math.PI / 2 }, MAT,
+    ZONE.airlock.accent);
+  // 내밀어 세웠으니 **몸으로 뚫고 들어가지 못하게** 막이를 둔다
+  blockBox(R.airlock.x1 - 0.14, (R.airlock.z0 + R.airlock.z1) / 2, 0.2, 0.95);
+
   // ── 주포 — **조종석 위로 올라간다** (사장님 요청 · world/turret.js) ──
   // ★ 사다리 밑동에 **막이를 안 세운다.** 세우면 사다리 앞에 못 서고,
   //   그러면 「보이는데 못 잡는」 물건이 하나 더 는다. 사다리는 벽에
@@ -864,6 +876,6 @@ export function buildShip(scene, camera = null) {
   const turret = buildTurret(ship, H, ZONE.cockpit.accent);
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    turret, marks, byBay,
+    turret, outerDoor, marks, byBay,
     foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

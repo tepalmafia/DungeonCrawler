@@ -71,6 +71,11 @@ import {
   flashSign, busy as gunBusy, summary as gunSummary,
 } from './game/gun.js';
 import { TURRET_RISE } from './world/turret.js';
+import { LOCK, WHY as LOCK_WHY, airWord } from './game/airlock-table.js';
+import {
+  makeLock, cycle as cycleLock, stepLock, canHaul, haulWhy,
+  innerLocked, signOf as lockSign, heatOut as lockHeatOut, summary as lockSummary,
+} from './game/airlock.js';
 import {
   makeHelm, stepHelm, tryDock, legOf as helmLeg, signOf as helmSign,
   radians as helmRad, summary as helmSummary,
@@ -93,7 +98,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 44;
+export const VERSION = 45;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -336,6 +341,12 @@ const helm = makeHelm();
 //   늘 옳지 않게 된다 (game/gun-table.js).
 const gun = makeGun();
 
+// ══ 에어록 바깥문 — **열고 우주에서 낚는다** (사장님 요청) ══════
+// ★ 윈치는 이미 있었다. 없던 것은 **밖으로 난 구멍**이고, 그게 생기면
+//   채굴이 「잡고 있기」에서 **「갇혀서 잡고 있기」**가 된다 —
+//   바깥문이 열려 있으면 안쪽 문이 잠긴다 (game/airlock-table.js).
+const lock = makeLock();
+
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
 function fireGun() {
   const r = fireShot(gun, {
@@ -359,7 +370,7 @@ function fireGun() {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, lock,
   ship: { heat, power, clock, seed, coolOpen },
   me,
 });
@@ -607,7 +618,7 @@ function interactStep(dt) {
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
-    ship.turret.ladderHit, ship.turret.gunHit];
+    ship.turret.ladderHit, ship.turret.gunHit, ship.outerDoor.hit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -617,7 +628,7 @@ function interactStep(dt) {
   let plate = -1;
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false;
-  let onLadder = false, onGun = false;
+  let onLadder = false, onGun = false, onOuter = false;
   let onCrank = null;
   let onSpot = null;
   if (near) {
@@ -634,6 +645,7 @@ function interactStep(dt) {
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
       if (o === ship.turret.ladderHit) { onLadder = true; break; }
       if (o === ship.turret.gunHit) { onGun = true; break; }
+      if (o === ship.outerDoor.hit) { onOuter = true; break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
       if (dv) { onCrank = dv; break; }
       const sp = carryView.spotOf(o);
@@ -691,10 +703,15 @@ function interactStep(dt) {
   // 시간과 위험을 **동시에** 치르는 것이 이 손잡이의 전부다
   // ★ **에어록이 안 닫히면 윈치를 못 쓴다** (airlockSeal). 「한 통만 더」가
   //   막히는 것이라, 굶는 중에 이게 겹치면 진짜로 급해진다
-  winching = onWinch && input.hold && !power.thrust && !bad.noWinch;
+  // ★ **바깥문이 열려 있어야 낚는다** (사장님 「문을 열어서 우주에서 낚거나」).
+  //   윈치는 원래 있었고, 없던 것은 **밖으로 난 구멍**이었다
+  winching = onWinch && input.hold && !power.thrust && !bad.noWinch && canHaul(lock);
   // ★ 잡았는데 안 걸리면 **왜인지 말한다.** 조용하면 윈치가 고장난 줄 안다
   if (onWinch && input.hold && !winching) {
-    nag(bad.noWinch ? '에어록이 안 닫혀 못 씁니다' : '추진을 끄고 잡습니다');
+    const w = haulWhy(lock);
+    nag(bad.noWinch ? '에어록이 안 닫혀 못 씁니다'
+      : power.thrust ? '추진을 끄고 잡습니다'
+        : (w ? LOCK_WHY[w] : '지금은 안 걸립니다'));
   }
   if (winching) {
     if (winchStep(supply, dt) === 'load') {
@@ -914,6 +931,7 @@ function interactStep(dt) {
   if (gun.up || gun.moving > 0) {
     onValve = false; breaker = null; plate = -1; panel = null;
     onWinch = false; onHatch = false; onYoke = false; onCrank = null; onSpot = null;
+    onOuter = false;
   }
   // 사다리는 **누르는 순간** 탄다 (잡고 있는 것이 아니다 — 오르는 데 시간이 든다)
   // ★ `heldWas` 는 위(가르침)에서 **이미 갱신됐다.** 여기서 그걸 쓰면
@@ -929,9 +947,23 @@ function interactStep(dt) {
   }
   // 포탑에서 쏜다 — **누르는 순간** 한 발
   if (gun.up && onGun && gunPressed) fireGun();
+
+  // ── ★ 바깥문 — 누르는 순간 돌기 시작한다 ──────────────
+  if (onOuter && gunPressed && !gun.up) {
+    if (cycleLock(lock, { thrust: power.thrust })) {
+      banner = lock.opening ? '바깥문을 엽니다' : '바깥문을 닫습니다';
+      bannerT = 2.0;
+      audio?.event('latch');
+    } else {
+      // ★ **조용히 안 열리면 「고장」으로 읽힌다** — 이 저장소가 네 번 겪었다
+      banner = LOCK_WHY[lock.blocked] ?? '지금은 안 열립니다';
+      bannerT = 2.6;
+    }
+  }
   gunHeldWas = input.hold;
 
   aimName = gun.up ? (onGun ? 'gun' : null)
+    : onOuter ? 'outer'
     : onLadder ? 'ladder'
     : onSpot ? `spot:${onSpot}`
     : onCrank ? `crank:${onCrank.key}`
@@ -978,9 +1010,14 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   튜토리얼이 아니라 검문이다
   // ★ **문 구동부가 나가면 제멋대로 여닫힌다** (doorServo). 가까이 안 가도
   //   열리고, 그 소리가 자국이 된다 (effect.sign) — 숨죽이고 가는 중에 제일 나쁘다
-  const nearD = bad.doorWild
+  let nearD = bad.doorWild
     ? doors.list[Math.floor(clock * 0.7) % doors.list.length]
     : nearDoor(doors.list, me.x, me.z);
+  // ★★ **바깥문이 열려 있으면 안쪽 문이 안 열린다** — 에어록에 갇힌다.
+  //   두 문이 동시에 열리면 배가 통째로 진공이다. 실제 에어록의 연동을
+  //   그대로 쓰는데, 게임에서는 그게 **「낚는 동안 배를 못 고친다」**가
+  //   된다 — 「동시에 두 곳에 못 있는다」(PLAN §1)가 여기서 또 돈다
+  if (innerLocked(lock) && nearD?.key === 'airlock') nearD = null;
   for (const e of stepDoors(doors, dt, {
     near: nearD, cranking, calm: chase.phase !== PHASE.CHASE && allDone(tutor),
   })) {
@@ -1098,7 +1135,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ **쏘면 밝아진다** — 총구 섬광은 숨을 수 없다 (gun-table.js ②).
   //   열 단위로 환산해 얹는다. 따로 더하면 조종석 계기가 말하는 자국과
   //   실제가 갈라진다 — 고장이 자국을 미는 것과 같은 규약
-  const badSign = (bad.sign + flashSign(gun)) / SIGN_PER_HEAT;
+  // ★ 열린 바깥문도 자국이다 — 구멍 뚫린 배는 눈에 띈다
+  const badSign = (bad.sign + flashSign(gun) + lockSign(lock)) / SIGN_PER_HEAT;
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
@@ -1317,6 +1355,17 @@ window.SPACE = {
     const v = ship.valve;
     if (!v) return null;
     const w = new THREE.Vector3(); v.getWorldPosition(w);
+    return { x: +w.x.toFixed(2), z: +w.z.toFixed(2) };
+  },
+  /**
+   * 에어록 바깥문이 어디 있나 — **손잡이의 실제 자리**를 그대로 준다.
+   * ★ 좌표를 검사에 손으로 옮겨 적으면, 문을 옮겼을 때 검사만 옛 자리를
+   *   두드리며 「안 잡힌다」고 빨개진다. 세운 자리에서 받아 간다
+   */
+  get outerAt() {
+    const h = ship.outerDoor?.hit;
+    if (!h) return null;
+    const w = new THREE.Vector3(); h.getWorldPosition(w);
     return { x: +w.x.toFixed(2), z: +w.z.toFixed(2) };
   },
   /** 진단대 화면이 어디 있나 — 읽을 자리가 있는지 검사가 묻는다 */
@@ -1645,6 +1694,11 @@ window.SPACE = {
   },
   /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /** ★ 에어록 바깥문 — 열면 갇히나 · 공기가 주나 */
+  get lock() { return { ...lockSummary(lock), word: airWord(lock.air) }; },
+  /** 검사가 문을 바로 열고 닫는다 */
+  putLock(open) { lock.open = !!open; lock.cycling = 0; return lockSummary(lock); },
+  setAir(v) { lock.air = Math.max(0, Math.min(1, v)); return lockSummary(lock); },
   /** ★ 주포 — 올라갔나 · 쏘면 뭐가 주나 */
   get gun() { return { ...gunSummary(gun), flashSign: flashSign(gun) }; },
   /** 검사가 사다리를 안 타고 올라간다 */
@@ -2001,6 +2055,21 @@ function frame(now) {
   // ★ 잔해 지대 안에서는 같은 조종간이 **바위를 피하는 데** 쓰인다.
   //   두 가지를 동시에 하면 어느 쪽도 안 된다 (helm-table.js notInField)
   stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN);
+
+  // ── 에어록 바깥문 ────────────────────────────────────
+  const lev = stepLock(lock, dt);
+  if (lev === 'open') { banner = '바깥문이 열렸습니다'; bannerT = 2.4; }
+  if (lev === 'shut') { banner = '바깥문이 닫혔습니다'; bannerT = 2.0; }
+  if (lev === 'blown') {
+    // ★ **벌이 숫자가 아니라 기다림이다.** 45초 동안 못 연다
+    banner = `기밀 상실 — 바깥문이 닫혔습니다`;
+    bannerT = 3.6;
+    hitFlash = 1;
+    audio?.event('caught');
+  }
+  ship.outerDoor.setOpen(lock.open ? 1 : (lock.cycling > 0 && lock.opening ? 1 - lock.cycling / LOCK.cycle : 0));
+  // 열려 있으면 열이 빠진다 — 문을 여는 데 좋은 점이 하나는 있어야 한다
+  heat = Math.max(0, heat - lockHeatOut(lock) * dt);
 
   // ── 주포 ─────────────────────────────────────────────
   const gev = stepGun(gun, dt);
