@@ -102,6 +102,12 @@ import { makeRng } from './core/rng.js';
 // ★ 점검 모드 (F2) — 사장님 「테스트를 할 수가 없잔아」. 게임을 안 고치고
 //   이미 있는 SPACE.* 구멍을 **버튼으로** 낸다 (core/check.js)
 import { buildCheck } from './core/check.js';
+// ★ 영구 손상 — **배가 망가져 간다** (PLAN2H §8 · 6판). 못 고치고 우회한다
+import { SCARS, scarWord } from './game/scar-table.js';
+import {
+  makeScars, noteFix, noteScene, has as hasScar, valveMult as scarValve,
+  signOf as scarSign, list as scarList, summary as scarSummary,
+} from './game/scar.js';
 import { pack, apply, where } from './game/save.js';
 import { SAVE } from './game/save-table.js';
 import { saveRaw, loadRaw, clearRaw, canSave, hasSave } from './core/store.js';
@@ -110,7 +116,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 47;
+export const VERSION = 48;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -373,6 +379,20 @@ const land = makeLand();
 //   `rng.js` 가 「시드가 같으면 항로도 같아야」라고 적어 둔 그 자리다
 const landRnd = makeRng(`${seed}-LAND`);
 
+// ══ 영구 손상 — **2시간을 하나로 묶는 것** ════════════════════
+// ★ 장면은 끝나면 사라지고 고장은 고치면 없어진다. 그래서 지금까지
+//   구간 11 의 배와 구간 2 의 배가 똑같았다. 흉터는 **안 없어진다** —
+//   못 고치고 **우회**한다 (game/scar-table.js).
+const scars = makeScars();
+/** 흉터가 하나 생겼다 — **무엇이 달라지는지까지** 말한다 (고장과 다르다) */
+function sayScar(key) {
+  if (!key) return;
+  banner = SCARS[key].lead;
+  bannerT = 5.0;
+  audio?.event('caught');
+  hitFlash = 0.6;
+}
+
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
 function fireGun() {
   const r = fireShot(gun, {
@@ -400,7 +420,7 @@ function fireGun() {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, lock, land,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, lock, land, scars,
   ship: { heat, power, clock, seed, coolOpen },
   me,
 });
@@ -929,6 +949,9 @@ function interactStep(dt) {
       banner = fixHere.reveal;
       bannerT = 3.4;
       audio?.event('fixed');
+      // ★★ **마모를 덜기 전에** 센다 — clear() 가 WEAR.relief 를 빼므로
+      //   뒤에 세면 방금 혹사한 것이 멀쩡한 것으로 읽힌다
+      sayScar(noteFix(scars, fixHere.sys, faults.wear, clock / 60));
       clear(faults, fixHere);
       repairing = null;
       taught.fixed++;
@@ -963,7 +986,9 @@ function interactStep(dt) {
   //   (사장님 「열 내리다가 게임 접겠다」). 이제 한 번 열면 열린 채고,
   //   대신 **열어 두면 자국이 커진다** (SIGN.valveOpen).
   if (onValve && input.hold) {
-    turn = Math.min(1, turn + dt / VALVE.turnTime);
+    // ★ 냉각 흉터가 있으면 **두 번 돌린다** (SCARS.cool.valveMult).
+    //   「걸리지 않게」로 만들지 않는다 — 그건 v43 에서 고친 병의 부활이다
+    turn = Math.min(1, turn + dt / (VALVE.turnTime * scarValve(scars)));
     valveGrace = VALVE.grace;
   } else if (valveGrace > 0) {
     // ★ **조준이 잠깐 벗어난 것은 봐준다.** 손이 미끄러진 것과 손을 뗀 것은
@@ -1292,7 +1317,9 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   실제가 갈라진다 — 고장이 자국을 미는 것과 같은 규약
   // ★ 열린 바깥문도 자국이다 — 구멍 뚫린 배는 눈에 띈다
   // ★ 이륙 분사도 자국이다 — 행성에서 솟는 불기둥은 숨을 수가 없다
-  const badSign = (bad.sign + flashSign(gun) + lockSign(lock) + landSign(land)) / SIGN_PER_HEAT;
+  // ★ 선체 흉터는 **늘 조금 더 굵다** — 안 닫히는 구멍이다
+  const badSign = (bad.sign + flashSign(gun) + lockSign(lock) + landSign(land)
+    + scarSign(scars)) / SIGN_PER_HEAT;
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
@@ -1400,7 +1427,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   ship.lampCore.intensity = 8 + 22 * hot;
 
   // 정비실 진단대 — **다음에 무엇이 터지나.** 조종석·관측실과 겹치지 않는다
-  ship.bench.update({ wear: faults.wear, open: openList(faults), fixed: faults.fixed, log: faults.log });
+  // ★ 흉터도 여기 뜬다 — **일이 아니라 배의 상태**라 손목이 아니라 진단대다
+  ship.bench.update({
+    wear: faults.wear, open: openList(faults), fixed: faults.fixed, log: faults.log,
+    scars: scarList(scars),
+  });
   // 온실 · 에어록 — 계기는 방마다 하나씩, 전부 다른 것을 말한다
   ship.foodGauge.update({
     food: supply.food, ore: supply.ore, parts: supply.parts,
@@ -1539,7 +1570,7 @@ window.SPACE = {
    * 가짜로 적어 넣지 않고 **실제 `clear` 를 부른다** — 기록이 실제 경로로
    * 쌓여야 「손목에 뭐가 어떻게 보이나」를 볼 수 있다
    */
-  fixOne() { const f = faults.open[0]; if (!f) return false; clear(faults, f); return true; },
+  fixOne() { const f = faults.open[0]; if (!f) return false; noteFix(scars, f.sys, faults.wear, clock / 60); clear(faults, f); return true; },
   /** 검사가 기다리지 않고 고장을 띄운다 */
   forceFault() { faults.next = 0; return stepFaults(faults, 0.001, { calm: true, leg: route.leg }); },
   /** 조종 — 위험 지대와 배의 좌우 자리 */
@@ -1855,6 +1886,13 @@ window.SPACE = {
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
   /** ★ 에어록 바깥문 — 열면 갇히나 · 공기가 주나 */
   get lock() { return { ...lockSummary(lock), word: airWord(lock.air) }; },
+  /** ★ 영구 손상 — 무엇이 남았나 · 무엇이 달라졌나 */
+  get scars() { return { ...scarSummary(scars), list: scarList(scars), word: scarWord(scars.got) }; },
+  /** 검사가 흉터를 하나 얹어 본다 */
+  giveScar(sys) {
+    for (let i = 0; i < 3; i++) noteFix(scars, sys, { [sys]: 1 }, clock / 60);
+    return scarSummary(scars);
+  },
   /** 착륙이 어디까지 왔나 — **화면과 같은 값**을 준다 */
   get land() {
     return {
@@ -1902,6 +1940,8 @@ window.SPACE = {
   /** 검사가 장면을 기다리지 않고 배를 돌려 본다 */
   killDrift(forever = false) {
     killDrift(drift, { permanent: forever, way: driftWay });
+    // ★ 영구로 죽으면 **흉터 목록에 든다** — 끝 화면이 셋을 한 줄로 읽는다
+    if (forever) noteScene(scars, 'drift', clock / 60);
     drift.needsFix = forever ? false : !!openFault(faults, 'attitude');
     return driftSummary(drift);
   },

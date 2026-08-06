@@ -117,6 +117,29 @@ function draw(ctx, w, h, s) {
     ctx.font = `600 ${f(0.058)}px system-ui, sans-serif`;
     ctx.fillText(`· ${l.reveal}`, x0 + w * 0.16, ly + h * (0.035 + i * 0.065));
   });
+
+  // ── ★★ 영구 손상 — **안 없어지는 것** (PLAN2H §8) ────────
+  // ★ 여기 말고 둘 데가 없다. 배너는 사라지고 손목은 「지금 할 일」만
+  //   말하는데, 흉터는 **일이 아니라 배의 상태**다. 그리고 진단대가
+  //   원래 「무엇이 닳았나」를 말하는 화면이므로 자리가 맞는다.
+  //   **우회로까지 적는다** — 못 고치는 것에 길이 안 보이면 그건 벽이다
+  const sc = s.scars ?? [];
+  if (sc.length) {
+    ctx.fillStyle = BAD;
+    ctx.font = `700 ${f(0.058)}px system-ui, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText('영구 손상 · 못 고침', w - x0, ly + h * 0.035);
+    ctx.textAlign = 'left';
+    sc.slice(0, 2).forEach((c, i) => {
+      const y = ly + h * (0.1 + i * 0.062);
+      ctx.fillStyle = BAD;
+      ctx.font = `700 ${f(0.056)}px system-ui, sans-serif`;
+      ctx.fillText(`✕ ${c.name}`, x0 + w * 0.02, y);
+      ctx.fillStyle = 'rgba(255,201,138,.55)';
+      ctx.font = `600 ${f(0.05)}px system-ui, sans-serif`;
+      ctx.fillText(`→ ${c.around}`, x0 + w * 0.30, y);
+    });
+  }
 }
 
 /**

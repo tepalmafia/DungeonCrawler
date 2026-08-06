@@ -267,6 +267,33 @@ console.log('\n[5] 고장 하나를 **찾아서 고칠 수 있나** — 이 게�
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6] ★★ **영구 손상** — 남고 · 보이고 · 우회할 수 있나');
+{
+  // 흉터는 **혹사한 결과**라 손으로 두 시간을 몰 수는 없다. 계통을 닳게 해
+  // 놓고 고치는 그 길만 게임이 걷게 둔다 (SPACE.giveScar 는 그것을 세 번 한다)
+  ok((await S(() => SPACE.scars)).got.length === 0, '① 처음에는 흉터가 없다');
+  await S(() => SPACE.giveScar('cool'));
+  const sc = await S(() => SPACE.scars);
+  ok(sc.got.includes('cool'), `② 냉각을 혹사해 고치니 흉터가 남는다 — 「${sc.word}」`);
+  ok(sc.valveMult === 2, `③ **밸브가 두 배로 뻑뻑하다** (×${sc.valveMult}) — 못 고치고 우회한다`);
+  ok(sc.list[0].around, `④ 우회로를 말한다 — 「${sc.list[0].around}」`);
+
+  // ★ 선체 흉터는 **자국이 늘 굵다**
+  await S(() => SPACE.giveScar('hull'));
+  ok((await S(() => SPACE.scars)).sign > 0,
+    `⑤ 선체 흉터는 자국을 얹는다 (+${(await S(() => SPACE.scars)).sign})`);
+
+  // ★★ **안 없어진다** — 저장하고 켜도 그대로
+  await S(() => SPACE.saveNow());
+  await p.reload({ waitUntil: 'networkidle' });
+  await p.waitForTimeout(2200);
+  const after = await S(() => SPACE.scars);
+  ok(after.got.length === 2,
+    `⑥ **껐다 켜도 안 낫는다** (${after.word}) — 영구가 저장 한 번에 없어지면 영구가 아니다`);
+  ok(after.valveMult === 2, '⑦ 이어해도 밸브가 그대로 뻑뻑하다');
+}
+
 console.log('');
 ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}: ${errs[0]}` : '콘솔 오류 없음');
 await b.close();
