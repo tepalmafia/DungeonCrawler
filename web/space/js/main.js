@@ -122,7 +122,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 51;
+export const VERSION = 52;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -566,6 +566,8 @@ function wreck() {
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
+/** 걸으려 하는데 못 걸은 시간 — `GUN.freeAfter` 를 넘으면 저절로 일어난다 */
+let stuckT = 0;
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let winching = false;     // 지금 윈치를 잡고 있나
 let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다른 일
@@ -715,7 +717,27 @@ function walk(dt) {
   //   앉아 있으면 `gunBusy` 가 참이라 walk() 가 맨 앞에서 되돌아갔고,
   //   D 를 아무리 눌러도 포탑이 안 돌았다. 검사가 「0 → 0도」로 잡아 줬다.
   //   **빗장은 걷는 것에만 건다** — 겨누는 것은 걷는 것이 아니다
-  if (gunBusy(gun)) return;
+  if (gunBusy(gun)) {
+    // ★★ **갇히지 않는다** (2026-08-06 · 사장님 「계속 그 자리에서
+    //   움직이질 못해」). 앉으면 걸음이 막히는 것은 맞다 — 앉은 채로
+    //   걸어다니면 조준석이 아니다. 틀린 것은 **막힌 채로 아무 말도 안
+    //   한 것**이다. 일어나는 법(아래를 보고 누른다)을 모르면 거기서
+    //   회차가 끝난다.
+    //
+    //   그래서 **걸으려는 뜻이 분명하면 일어나 준다.** 손잡이를 잡고
+    //   있으면 그건 겨누는 것이므로 위에서 이미 되돌아갔다 — 여기 오는
+    //   WASD 는 「걷고 싶다」밖에 뜻이 없다.
+    if (gun.up && (f !== 0 || r !== 0)) {
+      stuckT += dt;
+      if (stuckT >= GUN.freeAfter) {
+        stuckT = 0;
+        gun.up = false; gun.moving = 0; gun.goingUp = false;
+        banner = '조준석에서 일어납니다'; bannerT = 2.6;
+      }
+    } else stuckT = 0;
+    return;
+  }
+  stuckT = 0;
   const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
 
   // ── 달리기 (game/move.js · PLAN2H §7-2) ─────────────────
@@ -2658,6 +2680,11 @@ addEventListener('mousedown', (e) => {
   if (e.target?.closest?.('[data-ui]')) return;
   if (paused && !wrecked && !check.open) showPause(false);
 });
+
+// ★ **지금 무엇이 떠 있나.** 「고쳤다는데 그대로다」가 났을 때, 브라우저가
+//   옛 파일을 들고 있는 것인지 코드가 틀린 것인지 **화면만 보고 가릅니다.**
+//   한 글자면 끝나는 일을 추측으로 파느라 세 번을 태웠습니다
+document.getElementById('ver').textContent = `v${VERSION}`;
 
 // 잠금 안내는 처음 한 번만. 잠기면 사라진다.
 // ★ 멈춰 있을 때는 안 띄운다 — 안내창과 멈춤 화면이 **같은 자리**라 겹친다

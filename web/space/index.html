@@ -3,9 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ★ **이 파일만은 캐시하지 않습니다.** `?v=` 는 css·js 를 갈아 주지만
+     그 번호가 적혀 있는 곳이 여기입니다 — 이 파일이 캐시되면 브라우저는
+     영영 옛 번호를 읽고, **고쳐도 안 바뀝니다.** 캐시버스트를 스무 번
+     올리는 동안 이 구멍이 열려 있었습니다. -->
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=51">
+<link rel="stylesheet" href="css/style.css?v=52">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -37,7 +42,11 @@
      (docs/space/TUTORIAL.md). 여기 다시 문단을 붙이고 싶어지면
      그건 가르침이 제 일을 못 하고 있다는 뜻이지 안내가 모자란 게 아니다. -->
 <div id="hint">
-  <b>스페이스워</b> — 따라오지 못하는 곳까지
+  <!-- ★ 판본을 띄웁니다 (2026-08-06). 「고쳤다는데 그대로다」가 세 번
+       났는데, 그때 **화면에 무엇이 떠 있는지 알 길이 없었습니다** —
+       브라우저가 옛 파일을 들고 있는 것과 코드가 틀린 것을 구별 못 합니다.
+       한 글자면 끝나는 일을 세 번이나 추측으로 팠습니다. -->
+  <b>스페이스워</b> — 따라오지 못하는 곳까지 <span id="ver"></span>
   <p>화면을 눌러 시작합니다. 소리가 납니다 — <b>M</b> 으로 끕니다.</p>
   <!-- ★ 여기 한 줄을 더 붙인 이유. 손목은 **왼쪽 아래에 늘 켜져 있어서**
        설명 없이도 눈에 들어오지만, 「들어 올릴 수 있다」는 아무 데도 안
@@ -90,6 +99,6 @@
   <p class="key">자동 항법을 켜 두면 행성에 안 끌려갑니다 &middot; <b>새로고침</b>으로 다시 시작합니다</p>
 </div>
 
-<script type="module" src="js/main.js?v=51"></script>
+<script type="module" src="js/main.js?v=52"></script>
 </body>
 </html>

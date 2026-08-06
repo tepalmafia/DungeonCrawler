@@ -52,6 +52,8 @@ html, body {
   text-align: center;
 }
 #hint b { color: #6fd8a0; }
+/* 판본 — 작고 흐리게. 읽으려는 사람만 읽으면 된다 */
+#hint #ver { color: #5d6b7d; font-size: 12px; letter-spacing: .04em; }
 #hint p { margin-top: 10px; color: #9aa6b6; }
 /* 손목 한 줄만 살짝 떼어 놓는다 — 소리 끄는 법과 **다른 무게**다.
    여기가 다시 여덟 문단이 되면 그건 가르침이 제 일을 못 하고 있다는 뜻이다 */
