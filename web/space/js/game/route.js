@@ -13,6 +13,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { makeRng } from '../core/rng.js';
 import { LEG, PRESS, forkOf, offerFor, contactAtFor } from './route-table.js';
+import { VOID, isVoid } from './void-table.js';
 
 /** 거점에 서 있나 · 구간을 가는 중인가 · 끝에 닿았나 */
 export const RPHASE = { PORT: 'port', LEG: 'leg', END: 'end' };
@@ -105,6 +106,19 @@ export function stepRoute(rt, dt, power = {}, opt = {}) {
     rt.press = Math.max(0, rt.press * PRESS.portKeep);
     rt.overrun = false;
     if (rt.leg >= LEG.count) { rt.phase = RPHASE.END; return 'end'; }
+    // ★★ **마지막 구간에는 거점이 없다** (PLAN2H §9 · `void-table.js`).
+    //   고를 갈래도, 살 것도 없다 — 그대로 성간 공백으로 들어선다.
+    //   여기서 거점을 하나 더 주면 「남은 것으로 간다」가 통째로 사라진다:
+    //   식량을 채우고 부품을 사서 들어가면 그건 열두 번째 구간일 뿐이다
+    if (isVoid(rt.leg)) {
+      rt.fork = forkOf(VOID.region);
+      rt.need = rt.fork.seconds;
+      rt.t = 0;
+      rt.overrun = false;
+      rt.offer = [];
+      rt.phase = RPHASE.LEG;
+      return 'void';
+    }
     rt.phase = RPHASE.PORT;
     rt.offer = offerFor(rt.rnd);
     return 'arrive';

@@ -28,6 +28,7 @@ import { makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, relie
 import { makeChase, stepChase, heatRate, PHASE } from '../web/space/js/game/chase.js';
 import { CHASE } from '../web/space/js/game/chase-table.js';
 import { HEAT, VALVE, wantValve } from '../web/space/js/game/systems-table.js';
+import { VOID } from '../web/space/js/game/void-table.js';
 
 const DT = 0.25;                 // 항로는 분 단위 이야기라 굵게 굴려도 된다
 const CSV = process.argv.includes('--csv');
@@ -124,11 +125,21 @@ function runLap(pick, seed) {
       overruns++;
       if (c.phase === PHASE.CALM) { c.phase = PHASE.CHASE; c.dist = CHASE.startDist; c.timer = 0; legChases++; }
     }
-    if (rev === 'arrive' || rev === 'end') {
+    // ★ `'void'` 를 빠뜨리면 **구간 11 과 12 가 한 덩어리로 기록된다** —
+    //   마지막 구간은 거점을 안 거치므로 (PLAN2H §9 · void-table.js)
+    //   `'arrive'` 가 안 오고, 그러면 `legStart` 가 안 갱신되어 8.2분짜리
+    //   둘이 19.9분짜리 하나로 찍힌다. 「구간 하나가 8~12분」이 빨개진 것이
+    //   게임이 아니라 **여기가 새 규칙을 모르는 것**이었다
+    if (rev === 'arrive' || rev === 'end' || rev === 'void') {
       legs.push({
         key: curKey, sec: t - legStart, chases: legChases,
         caught: legCaught, press: rt.press,
       });
+    }
+    // 성간 공백 — 고를 것이 없으니 여기서 새 구간을 연다
+    if (rev === 'void') {
+      curKey = VOID.region;
+      legStart = t; legChases = 0; legCaught = 0;
     }
     t += DT;
   }
@@ -192,7 +203,16 @@ const avgChase = chasePerLeg.reduce((s, x) => s + x, 0) / chasePerLeg.length;
 const ok3 = avgChase >= 1 && avgChase <= 2 && chasePerLeg.every((x) => x <= 3);
 const ok4 = laps.every(([, r]) => r.done);
 // ★ 제일 중요한 것 — 정책에 따라 결과가 갈리나
-const pressSpread = Math.max(...laps.map(([, r]) => r.press)) - Math.min(...laps.map(([, r]) => r.press));
+//
+// ★★ **끝 압박이 아니라 「성간 공백에 들어설 때의 압박」으로 잰다** (v53).
+//   마지막 구간은 자국이 안 쌓이고(`signMult` 0) 아무도 안 쫓아오므로,
+//   끝에서 재면 **정책이 다 같은 값으로 씻겨 나간다** — 실제로 27 이던
+//   차이가 16 으로 줄어 빨개졌다. 그런데 그건 고르기가 무의미해진 것이
+//   아니라 **고르기가 끝난 뒤에 잰 것**이다. 고른 것이 값을 치르는 자리는
+//   11구간이 끝나는 지점이다.
+const beforeVoid = (r) => (r.legs[r.legs.length - 2] ?? r.legs[r.legs.length - 1]).press;
+const pressSpread = Math.max(...laps.map(([, r]) => beforeVoid(r)))
+  - Math.min(...laps.map(([, r]) => beforeVoid(r)));
 const timeSpread = Math.max(...lapMins) - Math.min(...lapMins);
 const ok5 = pressSpread >= 20 && timeSpread >= 6;
 // 늘 숨는 쪽이 압박은 제일 낮고 시간은 제일 길어야 한다 — 거래가 성립하나

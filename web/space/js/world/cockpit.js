@@ -1083,6 +1083,10 @@ export function buildOutside(scene, z) {
         alt: +altOf().toFixed(3), glow: +glowOf().toFixed(3),
         ground: groundG.visible, groundY: +groundG.position.y.toFixed(1),
         sky: `#${bg.getHexString()}`, planetScale: +planet.scale.x.toFixed(2),
+        // ★ **별 밀도** (8판 · 성간 공백). 「비어 보이나」를 눈으로 판정하면
+        //   덜 갈아탄 화면을 「안 바뀌었다」로 읽는다 — 색 갈아타기는 6초라
+        //   헤드리스에서는 실제로 2분이 걸린다. 숫자로 묻는다
+        stars: +cur.stars.toFixed(3), wantStars: want.stars,
       };
     },
   };

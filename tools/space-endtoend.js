@@ -318,6 +318,55 @@ console.log('\n[6] ★★ **영구 손상** — 남고 · 보이고 · 우회할
   ok(after.valveMult === 2, '⑦ 이어해도 밸브가 그대로 뻑뻑하다');
 }
 
+console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
+{
+  // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은
+  // 게임이 스스로 하게 둔다 — `setLeg` 로 구간만 옮기면 성간 공백을
+  // 건너뛰므로, 여기서는 11구간 **끝**에 세우고 들어서는 것을 본다
+  await S(() => { SPACE.setPower('thrust', true); SPACE.seekVoid(); });
+  ok(await until(() => SPACE.inVoid, 30, '성간 공백 진입'),
+    '① **성간 공백에 들어선다** — 거점을 안 거치고 바로');
+  const said1 = await said();
+  ok(said1.includes('따라오지'), `② 들어설 때 말해 준다 — 「${said1.trim()}」`);
+  ok((await S(() => SPACE.region)) === 'void', '③ 창밖이 성간 공백으로 바뀐다');
+  ok((await S(() => SPACE.sky.list.length)) === 0,
+    '④ **떠도는 것이 없다** — 여기서는 못 번다');
+  // ★ 별이 정말 줄어드나. 갈아타기는 프레임마다라 헤드리스에서는 느리다 —
+  //   **바라는 값**이 바뀐 것을 보고, 지금 값이 그쪽으로 가고 있는지만 본다
+  const v0 = await S(() => SPACE.land.view);
+  ok(v0.wantStars <= 0.2, `⑤ 별을 ${v0.wantStars} 로 줄이러 간다 — 「다 보이는데 볼 것이 없다」`);
+
+  // ★★ 그리고 **도착한다**
+  await S(() => SPACE.seekEnd());
+  ok(await until(() => SPACE.end.shown, 30, '끝 화면'),
+    '⑥ ★★ **끝 화면이 뜬다** — 2시간이 닫힌다');
+  const list = await S(() => SPACE.end.list);
+  console.log('   ' + list.map((g) => `${g.name}(${g.rows.length})`).join(' · '));
+  ok(list.length === 3, '⑦ 목록이 세 묶음이다 — 이렇게 왔다 · 못 고친 것 · 남은 것');
+  const txt = await S(() => document.getElementById('end').textContent);
+  ok(txt.includes('도착했습니다'), '⑧ **화면에 정말 글자가 있다**');
+  ok(!/점수|등급|총점/.test(txt), '⑨ 점수도 등급도 안 띄운다 — 목록이지 성적표가 아니다');
+  ok(txt.includes('영구 손상'), '⑩ 못 고친 것을 이름으로 부른다');
+
+  // ★ 그리고 **새 배로 다시 시작할 수 있다** — 여기서 막히면 끝이 덫이다
+  await S(() => { window.__old = 1; });
+  // ★ **먼저 굴려서 눈에 넣는다.** 이 검사는 창이 720×420 이라 목록이
+  //   길면 단추가 화면 아래로 밀린다 — 사람도 그때는 굴려서 누르므로
+  //   그대로 흉내낸다. 안 굴리고 좌표만 재면 화면 밖을 누르게 되고,
+  //   그건 「단추가 안 먹는다」가 아니라 **검사가 안 굴린 것**이다
+  const at = await S(() => {
+    const e = document.getElementById('btn-new3');
+    e.scrollIntoView({ block: 'center' });
+    const r = e.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: window.innerHeight };
+  });
+  if (at.y < 0 || at.y > at.h) console.log(`   … 단추가 화면 밖이다 (y ${at.y.toFixed(0)} / ${at.h})`);
+  await p.mouse.click(at.x, at.y);
+  await p.waitForFunction(() => !window.__old && window.SPACE, null, { timeout: 60000 }).catch(() => {});
+  ok(await S(() => !window.__old && SPACE.route.leg === 0),
+    '⑪ **새 배로 시작한다** — 왕복이 닫힌다');
+}
+
 console.log('');
 ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}: ${errs[0]}` : '콘솔 오류 없음');
 await b.close();

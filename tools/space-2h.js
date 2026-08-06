@@ -240,9 +240,16 @@ console.log('\n[7] 아직 못 만든 것을 **소리 내어 센다**');
   const built = Object.values(SCENES).filter((s) => s.built).map((s) => s.key);
   console.log(`   만든 것 ${built.join('·')} (${built.length}/${Object.keys(SCENES).length})`);
   console.log(`   못 만든 것 ${a.missing.join('·')}`);
+  // ★★ **이 두 줄이 낡아 있었다** (v53 에서 발견). 「아직 여섯이 비었다」와
+  //   「C 가 다음 판이다」는 2판 때 쓴 말인데, C 는 4판에 지었고 지금
+  //   비어 있는 것은 셋(G·E·F)이다. **숫자를 손으로 적으면 반드시 이렇게
+  //   된다** — 세는 것은 `audit()` 이 하게 두고, 여기서는 「아직 남았나」만
+  //   묻는다. 0 이 되면 그때는 이 절이 「다 지었다」로 바뀌어야 한다
+  console.log(`   빈 자리가 들어가는 구간 — ${a.missing.length}종`);
   ok(a.missing.length > 0,
-    '아직 여섯이 비었다 — 이걸 0 이라고 찍으면 도구가 게임보다 앞선 것이다');
-  ok(SCENES.C.star === true, '★ C(자동 조종 사망)가 다음 판이다 — PLAN2H §11-4');
+    `아직 ${a.missing.length}개가 비었다 (${a.missing.join('·')}) — 0 이라고 찍으면 도구가 게임보다 앞선 것이다`);
+  ok(SCENES.H.built === true,
+    '★ H(성간 공백)가 지어졌다 — 8판 · PLAN2H §9. 끝이 있어야 2시간을 한 번 통과해 본다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
