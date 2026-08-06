@@ -29,7 +29,7 @@
  * 저장 판본. **표나 저장 칸을 고치면 올린다.**
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
-export const SAVE_VERSION = 12;  // 11 → 12: 영구 손상(scars) 칸이 늘었다
+export const SAVE_VERSION = 13;  // 12 → 13: 조준석이 실내로 · 겨눔(aim) 칸이 늘었다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
