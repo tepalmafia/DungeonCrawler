@@ -1,32 +1,51 @@
 // ══════════════════════════════════════════════════════════════════════════
-//  주포 — **조종석 위로 올라가는 자리** (사장님 요청 · game/gun-table.js)
+//  ★★ 주포 — **원격 포탑 + 실내 조준석** (2026-08-06 · 사장님)
 //
-//  ★ 왜 조종석 위인가
-//    사장님이 「조종석 위로 올라가는」이라고 하셨고, 그게 배의 모양과도
-//    맞는다 — 조종석은 배의 **앞머리**라 시야가 트인 유일한 곳이다.
-//    기관실 위에 달면 엔진 뒤로 아무것도 안 보인다.
+//    「주포는 왜 우주에 덩그러니 있어? 실내에 조준석에서 조준해야지.
+//      손으로 손잡이를 잡고 wasd로 조준하는 것으로. 조종석, 주포 둘 다.
+//      어떻게 디자인할지 인터넷에서 참조해서 만들어」
 //
-//  ★ **사다리는 보여야 한다**
-//    이 저장소가 세 번 밟은 함정이 「되는데 안 보이는」 것이다
-//    (크랭크가 벽에 파묻힘 · 조종간이 좌석 뒤에 숨음 · 패널이 랙에 겹침).
-//    그래서 사다리는 **통로에서 조종석에 들어서면 바로 보이는 자리**에
-//    두고, 가로대에 불을 넣어 어두운 데서도 선이 읽히게 한다.
+//  ★ v44~v48 이 틀렸던 것
+//    사다리를 타고 **배 위로 몸이 나가** 포탑에 섰다. 진공에 맨몸으로
+//    서 있는 셈이었고, 무엇보다 「정비공이 배 안에서 일한다」는 전제와
+//    어긋났다. 사장님 말씀이 맞다.
 //
-//  ★ **포탑은 방이 아니다**
-//    올라가면 몸이 위로 갈 뿐 새 방이 생기는 것이 아니다. 벽도 문도
-//    안 만든다 — 방을 하나 더 만들면 걸어다닐 곳이 늘고, 그러면
-//    「배가 좁다」가 무너진다.
+//  ★ 찾아본 것 둘 (사장님 「인터넷에서 참조해서」)
+//
+//    ① **B-29 중앙 사격 통제** (Sperry, 1943)
+//       포탑은 기체 **밖**에 있고 사수는 **여압된 안쪽에 앉아** 관측창의
+//       조준경으로 겨눈다. 포탑은 **원격**으로 돈다. 사수가 밖에 나가지
+//       않는 이 구조가 사장님이 말씀하신 그림 그대로다.
+//
+//    ② **밀레니엄 팰컨 건너석**
+//       좌석에 **손잡이 둘**이 붙어 있고 사수는 좌석째 돈다.
+//       「손으로 손잡이를 잡고」가 여기서 왔다.
+//
+//  ★ 그래서 이 배는 이렇게 생겼다
+//
+//      [조종석 뒤 오른편]
+//        · **좌석** — 등받이 · 방석 · 발판
+//        · **손잡이 둘** — 잡으면 WASD 가 포탑을 돌린다
+//        · **조준경** — 눈앞의 화면. 떠도는 것들과 십자선이 여기 뜬다
+//        · **구동축** — 천장으로 올라가는 통. 「저 위 포탑과 이어져 있다」
+//      [배 위]
+//        · **원격 포탑** — 작다. 사람이 그 위에 안 선다
+//
+//  ★ **좌석은 발밑에서 잡힌다** — 앉은 채로 아래를 보면 「일어난다」.
+//    v47 에서 만든 해치와 같은 규약이다. 앞을 보면 손잡이(=조준),
+//    아래를 보면 좌석(=일어남). 한 손잡이가 두 일을 하면 반드시 부딪힌다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { bayPlate } from './kit.js';
 
-/** 사다리 밑동이 서는 자리 — 조종석 뒤쪽 오른편, 들어서면 바로 보인다 */
+/** 조준석이 서는 자리 — 조종석 뒤쪽 오른편, 들어서면 바로 보인다 */
 export const LADDER = { x: 2.35, z: -3.9 };
-/** 포탑에 섰을 때 눈높이가 이만큼 올라간다 (m) */
-export const TURRET_RISE = 1.95;
+/** 앉으면 눈높이가 이만큼 **내려간다** (m). 올라가는 것이 아니다 */
+export const TURRET_RISE = -0.42;
 
 const FRAME = new THREE.MeshStandardMaterial({ color: 0x6a727d, roughness: 0.62, metalness: 0.5 });
 const DARK = new THREE.MeshStandardMaterial({ color: 0x2b3038, roughness: 0.8, metalness: 0.3 });
+const SEAT = new THREE.MeshStandardMaterial({ color: 0x3b4450, roughness: 0.9, metalness: 0.1 });
 const lit = (c, i = 2.2) => new THREE.MeshStandardMaterial({
   color: c, emissive: c, emissiveIntensity: i, roughness: 0.4,
 });
@@ -39,111 +58,137 @@ function box(parent, w, h, d, mat, x, y, z, ry = 0) {
 }
 
 /**
- * 사다리 + 해치 + 포탑을 세운다.
+ * 조준석 + 원격 포탑을 세운다.
  *
- * @param H 천장 높이 — 해치가 뚫리는 자리
- * @returns { group, ladderHit, gunHit, aimAt(yaw), setUp(up) }
+ * @param H 천장 높이
+ * @param sight 조준경 화면 한 장 (world/gunsight.js 가 만든다)
+ * @returns { group, seatHit, gripHit, gunHit, aimAt(az, el), fired(), update(dt) }
  */
-export function buildTurret(parent, H, tint = 0x8fd0ff) {
+export function buildTurret(parent, H, tint = 0x8fd0ff, sight = null) {
   const g = new THREE.Group();
-  g.name = '주포';
+  g.name = '조준석';
   parent.add(g);
 
   const { x, z } = LADDER;
+  // 사람이 앉아 바라보는 쪽 — 배의 앞(-z)
+  const st = new THREE.Group();
+  st.position.set(x, 0, z);
+  g.add(st);
 
-  // ── 사다리 ──────────────────────────────────────────────
-  // 세로대 둘 + 가로대. 벽에서 조금 띄운다 — 붙이면 손이 안 들어간다
-  for (const sx of [-0.24, 0.24]) {
-    box(g, 0.055, H, 0.055, FRAME, x + sx, H / 2, z);
+  // ── 좌석 (팰컨 건너석 참조 — 등받이가 높고 손잡이가 붙는다) ──
+  box(st, 0.62, 0.10, 0.56, SEAT, 0, 0.52, 0);            // 방석
+  box(st, 0.62, 0.74, 0.11, SEAT, 0, 0.90, 0.30);         // 등받이
+  box(st, 0.14, 0.46, 0.14, DARK, 0, 0.26, 0.10);         // 기둥
+  box(st, 0.54, 0.06, 0.44, DARK, 0, 0.04, 0.02);         // 밑동
+  box(st, 0.52, 0.05, 0.30, DARK, 0, 0.12, -0.42);        // 발판
+  for (const sx of [-1, 1]) {
+    box(st, 0.09, 0.09, 0.44, FRAME, sx * 0.34, 0.66, 0.02); // 팔걸이
   }
-  // 가로대 — **불이 들어온다.** 어두운 데서 선이 읽혀야 「올라갈 수 있다」가 보인다
-  const rungMat = lit(tint, 1.5);
-  for (let y = 0.34; y < H - 0.1; y += 0.31) {
-    box(g, 0.52, 0.045, 0.045, rungMat, x, y, z);
+
+  // ── 손잡이 둘 — **잡으면 WASD 가 포탑을 돌린다** ──────────
+  // ★ 팰컨 건너석이 정확히 이 모양이다. 손잡이가 **둘**이라야 「몸이 아니라
+  //   기계를 돌린다」로 읽힌다 — 하나면 지팡이처럼 보인다
+  const grips = new THREE.Group();
+  grips.position.set(0, 1.04, -0.40);
+  st.add(grips);
+  box(grips, 0.46, 0.07, 0.07, FRAME, 0, 0, 0);            // 가로대
+  for (const sx of [-1, 1]) {
+    box(grips, 0.10, 0.20, 0.10, DARK, sx * 0.25, -0.03, 0);      // 손잡이
+    // ★ 방아쇠 등 — **아주 약하게.** 1.6 으로 뒀더니 블룸이 먹어서
+    //   손잡이가 주황 덩어리 둘로 번졌다 (화면을 찍어 보고 알았다)
+    box(grips, 0.04, 0.04, 0.10, lit(0xff9a3c, 0.35), sx * 0.25, 0.10, 0);
   }
-  // 밑동 발판 — 「여기서부터」를 발로 안다
-  box(g, 0.62, 0.05, 0.34, DARK, x, 0.03, z + 0.05);
+  box(st, 0.08, 0.42, 0.08, FRAME, 0, 0.80, -0.40);        // 손잡이 기둥
 
-  // ── 해치 (천장에 뚫린 자리) ─────────────────────────────
-  // 천장을 실제로 뚫지는 않는다 (조종석은 캐노피라 천장 판이 없다).
-  // 대신 **테**를 둘러 「여기가 구멍이다」를 말한다
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(0.46, 0.045, 8, 20),
-    FRAME,
-  );
-  ring.rotation.x = Math.PI / 2;
-  ring.position.set(x, H - 0.06, z);
-  g.add(ring);
+  // ── 조준경 — **눈앞의 화면.** 여기가 「실내에서 조준한다」의 전부다 ──
+  const scope = new THREE.Group();
+  scope.position.set(0, 1.30, -0.62);
+  st.add(scope);
+  // 차양 — 화면을 둘러싼 후드. 실제 조준경이 이렇게 생겼다 (빛을 막는다)
+  box(scope, 0.72, 0.05, 0.20, DARK, 0, 0.26, 0.06);
+  box(scope, 0.72, 0.05, 0.20, DARK, 0, -0.26, 0.06);
+  for (const sx of [-1, 1]) box(scope, 0.05, 0.57, 0.20, DARK, sx * 0.335, 0, 0.06);
+  if (sight) {
+    sight.mesh.position.set(0, 0, 0.01);
+    scope.add(sight.mesh);
+  }
+  // 화면 테 — 빛나는 띠. 어두운 데서 「여기를 본다」가 읽힌다
+  box(scope, 0.74, 0.02, 0.02, lit(tint, 1.2), 0, 0.30, 0);
+  box(scope, 0.74, 0.02, 0.02, lit(tint, 1.2), 0, -0.30, 0);
 
-  // ── 포탑 ────────────────────────────────────────────────
-  // ★ 올라간 사람의 **어깨 높이**에 포신이 온다. 배 위로 삐죽 나와야
-  //   「주포」로 읽히지, 천장에 붙어 있으면 환기구로 보인다
-  const turret = new THREE.Group();
-  turret.position.set(x, H + 0.42, z);
-  g.add(turret);
-
-  box(turret, 0.86, 0.34, 0.86, FRAME, 0, 0, 0);          // 받침
-  const yawRig = new THREE.Group();
-  turret.add(yawRig);
-  box(yawRig, 0.5, 0.42, 0.62, DARK, 0, 0.3, 0);          // 포탑 몸
-  // 포신 — 앞(-z)으로 뻗는다
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.095, 1.85, 10),
-    FRAME,
-  );
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.3, -1.05);
-  yawRig.add(barrel);
-  // 총구 — 쏘면 여기가 밝아진다
-  const muzzle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1, 0.1, 0.09, 10),
-    lit(0xffb070, 0),
-  );
-  muzzle.rotation.x = Math.PI / 2;
-  muzzle.position.set(0, 0.3, -1.95);
-  yawRig.add(muzzle);
+  // ── 구동축 — 천장으로. 「저 위 포탑과 이어져 있다」 ────────
+  // ★ 이게 없으면 조준경이 그냥 또 하나의 모니터로 보인다. 밖의 포탑과
+  //   **물리적으로 이어져 있다**는 것이 눈에 보여야 원격 포탑이 읽힌다
+  box(st, 0.22, H - 1.5, 0.22, FRAME, 0.42, (H + 1.5) / 2 - 0.1, 0.24);
+  for (let y = 1.7; y < H - 0.15; y += 0.34) {
+    box(st, 0.28, 0.05, 0.28, DARK, 0.42, y, 0.24);        // 마디
+  }
 
   // 베이 번호 — 이 배의 물건은 다 번호를 단다 (bay-table.js 규약)
-  bayPlate(g, 'G-1', x, 1.62, z + 0.2, tint);
+  bayPlate(g, 'G-1', x - 0.55, 1.42, z + 0.1, tint);
 
-  /** 조준선이 잡을 것 — 사다리. **천장 아래까지만**이다 (올라가면 안 잡힌다) */
-  const ladderHit = box(g, 0.8, H - 0.3, 0.5, new THREE.MeshBasicMaterial({ visible: false }),
-    x, (H - 0.3) / 2 + 0.15, z);
-  ladderHit.name = '사다리';
+  // ── 원격 포탑 (배 위) — **작다. 사람이 안 선다** ───────────
+  const turret = new THREE.Group();
+  turret.position.set(x + 0.42, H + 0.28, z + 0.24);
+  g.add(turret);
+  box(turret, 0.5, 0.2, 0.5, FRAME, 0, 0, 0);              // 받침
+  const yawRig = new THREE.Group();
+  turret.add(yawRig);
+  box(yawRig, 0.34, 0.26, 0.4, DARK, 0, 0.2, 0);           // 포탑 몸
+  const pitchRig = new THREE.Group();
+  pitchRig.position.set(0, 0.2, 0);
+  yawRig.add(pitchRig);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 1.3, 10), FRAME);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0, -0.72);
+  pitchRig.add(barrel);
+  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 10), lit(0xffb070, 0));
+  muzzle.rotation.x = Math.PI / 2;
+  muzzle.position.set(0, 0, -1.36);
+  pitchRig.add(muzzle);
 
   /**
-   * ★★ **내려가는 해치** — 포탑에 올라가 있을 때 **발밑**에 있다.
-   *
-   *   처음에는 이게 없었다. 그래서 「주포를 겨누고 누르면 내려간다」로
-   *   때웠는데, 그건 **같은 프레임에 쏘기도 하는** 버그였고 —
-   *   사장님이 「주포도 조작이 안되고」라고 하신 것이 정확히 이것이다.
-   *   눌러도 총은 안 나가고 몸만 내려왔다.
-   *
-   *   올라가고 내려가는 것은 **여기**가, 쏘는 것은 **주포**가 한다.
-   *   그리고 자리가 발밑이라 **아래를 봐야** 잡힌다 — 앞을 보고 있으면
-   *   절대 안 걸리므로 「쏘려는데 내려간다」가 다시 안 난다
+   * ★ 조준선이 잡을 것 — **손잡이**(앞을 볼 때)와 **좌석**(아래를 볼 때).
+   *   v47 의 주포/해치와 같은 규약이다. 겹치지 않게 자리를 확실히 가른다
    */
-  const hatchHit = box(g, 0.95, 0.3, 0.95, new THREE.MeshBasicMaterial({ visible: false }),
-    x, H + 0.06, z);
-  hatchHit.name = '해치';
-
+  // ★ **앉은 사람 눈높이(1.20)에 걸쳐야 한다.** 처음엔 0.98 에 뒀는데
+  //   앉아서 앞을 보면 광선이 상자 **위로** 지나가 손잡이가 안 잡혔다 —
+  //   「앉았는데 겨눌 수가 없다」였다. 눈보다 조금 아래에서 위로 걸친다
+  const gripHit = box(st, 0.74, 0.58, 0.62, new THREE.MeshBasicMaterial({ visible: false }),
+    0, 1.08, -0.46);
+  gripHit.name = '조준 손잡이';
   /**
-   * 포탑에 올라갔을 때 잡을 것 — 손잡이.
-   * ★ 다만 **main.js 는 「올라가 있으면 기본이 주포」로 본다.** 올라간
-   *   사람이 어디를 봐야 총이 나가는지를 알아맞히게 하면 안 된다 —
-   *   포탑에 서 있는 것 자체가 「주포를 잡은 것」이다
+   * ★★ **자리를 두 번 고쳤다.** 처음엔 0.5 높이 · 0.66 깊이였는데,
+   *   서서 내려다보는 각이 조금만 달라져도 안 걸렸다 (0.5 는 되고 0.75 는
+   *   안 되는 식). 사람은 그렇게 정확히 안 내려다본다.
+   *
+   *   **깊이를 늘리는 것이 답이었다.** 높이만 키우면 앉은 사람(눈 1.20)을
+   *   상자가 통째로 감싸서, 안에서 쏜 광선이 뒷면을 못 잡아 **일어날 수가
+   *   없어진다.** 그래서 위끝은 1.00 에 두고(앉은 눈보다 아래) 앞뒤로 넓혔다
    */
-  const gunHit = box(turret, 1.1, 0.7, 1.1, new THREE.MeshBasicMaterial({ visible: false }), 0, 0.34, -0.5);
-  gunHit.name = '주포';
+  const seatHit = box(st, 0.80, 0.90, 0.90, new THREE.MeshBasicMaterial({ visible: false }),
+    0, 0.55, 0.06);
+  seatHit.name = '조준석';
 
   let flash = 0;
   return {
     group: g,
-    ladderHit,
-    hatchHit,
-    gunHit,
-    /** 포탑이 어디를 겨누고 있나 — 사람이 보는 쪽을 따라간다 */
-    aimAt(yaw) { yawRig.rotation.y = yaw; },
+    /** 앉기 전에 잡는 것 · 앉은 뒤 아래를 보면 잡히는 것 */
+    seatHit,
+    /** 앉은 뒤 앞을 보면 잡히는 것 — 잡고 WASD 로 겨눈다 */
+    gripHit,
+    /** 옛 이름 — main.js 가 아직 쓰는 자리가 있어 남겨 둔다 */
+    ladderHit: seatHit,
+    hatchHit: seatHit,
+    gunHit: gripHit,
+    /**
+     * ★ **포탑이 겨누는 쪽** — 방위·고도(도). 사람이 보는 쪽이 아니라
+     *   WASD 가 만든 값이다. 그래야 「실내에서 원격으로 돌린다」가 된다
+     */
+    aimAt(az = 0, el = 0) {
+      yawRig.rotation.y = -az * Math.PI / 180;
+      pitchRig.rotation.x = el * Math.PI / 180;
+    },
     /** 쐈다 — 총구가 잠깐 밝아진다 */
     fired() { flash = 0.18; },
     update(dt) {
