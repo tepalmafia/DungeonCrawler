@@ -63,6 +63,26 @@ export const REGIONS = [
     speed: 1.02, signMult: 1.15, trackMult: 1.05, debris: 14, planet: true,
     what: '제일 빨리 지나간다. 대신 눈에 잘 띈다',
   },
+  /**
+   * ★★ **성간 공백** — 마지막 구간 하나뿐이다 (PLAN2H §9 · `void-table.js`).
+   *
+   * ★ **갈래로는 안 나온다.** `route-table.js` 의 `HIDE`/`FAST` 어느 쪽에도
+   *   없으므로 해도대가 이걸 내놓는 일은 없다. 고르는 곳이 아니라
+   *   **닿는 곳**이다 — 12구간을 다 오면 여기다.
+   *
+   * ★ 숫자가 다 극단이다. `signMult`·`trackMult` 가 0 인 것이
+   *   「더는 아무도 따라오지 않는다」의 실체이고, `stars` 0.16 에
+   *   `fogFar` 900 인 것이 「거기엔 아무것도 없다」의 실체다 —
+   *   별이 거의 없고 안개도 없어서 **멀리까지 보이는데 볼 것이 없다.**
+   *   성운(안 보인다)과 반대다: 여기는 **다 보이는데 비어 있다.**
+   */
+  {
+    key: 'void', name: '성간 공백',
+    bg: 0x000104, fog: 0x000208, fogNear: 220, fogFar: 900,
+    stars: 0.16, tint: [0.70, 0.75, 0.88],
+    speed: 1.0, signMult: 0, trackMult: 0, debris: 0, planet: false,
+    what: '아무도 못 따라온다. 대신 아무것도 없다',
+  },
 ];
 
 export const REGION_BY_KEY = Object.fromEntries(REGIONS.map((r) => [r.key, r]));

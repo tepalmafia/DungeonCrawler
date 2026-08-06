@@ -59,7 +59,11 @@ export const TARGET = {
    * ★ 구역마다 다르다. 잔해밭이 많은 것이 「끌고 들어가면 떼기 쉽다」와
    *   같은 줄이고 (`regions-table.js`), 성운은 **안 보여서** 적다
    */
-  byRegion: { empty: 3, nebula: 1, debris: 7, planet: 4 },
+  // ★ `void`(성간 공백)만 **0** 이다 — 마지막 구간에서는 쏠 것이 없다.
+  //   성운을 1 로 둔 것과 대비된다: 성운은 「안 보인다」라서 적고,
+  //   성간 공백은 「없다」라서 0 이다. 여기서 벌 수 없는 것이 그 구간의
+  //   규칙이다 (`void-table.js`)
+  byRegion: { empty: 3, nebula: 1, debris: 7, planet: 4, void: 0 },
 
   /**
    * ★ **얼마나 멀리 있나** (m). 사거리 밖은 조준경에 뜨지만 안 맞는다 —

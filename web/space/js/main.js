@@ -27,7 +27,7 @@ import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
 import { REGION_BY_KEY } from './game/regions-table.js';
 import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH, CAUGHT } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './game/chase.js';
-import { LEG } from './game/route-table.js';
+import { LEG, forkOf } from './game/route-table.js';
 /** 자국은 열에 비례한다. 윈치의 자국 보탬을 열 단위로 환산하려고 쓴다 */
 const SIGN_PER_HEAT = SIGN.perHeat;
 import {
@@ -66,6 +66,9 @@ import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
 import { HELM, offWord, hitWord } from './game/helm-table.js';
 import { GUN, WHY as GUN_WHY } from './game/gun-table.js';
+import { VOID, isVoid } from './game/void-table.js';
+import { END } from './game/ending-table.js';
+import { endList, endWord } from './game/ending.js';
 import {
   makeGun, climb as climbGun, stepGun, fire as fireShot,
   flashSign, busy as gunBusy, summary as gunSummary,
@@ -122,7 +125,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 52;
+export const VERSION = 53;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -132,6 +135,7 @@ const lesson = document.getElementById('lesson');
 const pauseBox = document.getElementById('pause');
 // ★ 게임 오버 — 이 게임의 유일한 끝 (행성 충돌 · 수동 조작 중에만)
 const overBox = document.getElementById('over');
+const endBox = document.getElementById('end');
 const check = buildCheck();
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -563,6 +567,58 @@ function wreck() {
   overBox.hidden = false;
   showPause(true);
 }
+/**
+ * ★★ **도착했다 — 「이렇게 왔다」** (PLAN2H §9 · 8판)
+ *
+ * 게임 오버(`wreck`)와 **일부러 다르게 생겼다.** 저건 사고이고 이건
+ * 도착이다. 그래서 붉지 않고, 「다시 해 보세요」를 안 쓴다.
+ *
+ * ★ **여기서 점수를 만들지 않는다.** 모아서 넘기기만 하고, 무엇을 띄우고
+ *   무엇을 뺄지는 `game/ending-table.js` 가 정한다 — 표와 화면을 갈라 둬야
+ *   `tools/space-end.js` 가 브라우저 없이 목록을 물을 수 있다.
+ */
+function showEnd() {
+  if (ended) return;
+  ended = true;
+  const w = {
+    minutes: clock / 60,
+    legs: LEG.count,
+    runs: chase.runs,
+    fixed: faults.fixed,
+    trips: land.trips,
+    hits: gun.hits,
+    shakyMin: shakyT / 60,
+    // ★ 이름으로 부른다 — 「손상 3」이 아니라 「냉각 계통 손상 · 선체 균열」
+    scars: scarList(scars).map((s) => s.name),
+    open: openList(faults).map((f) => f.name),
+    food: supply.food, parts: supply.parts, ore: supply.ore,
+  };
+  endWhat = w;
+  endBox.querySelector('b').textContent = END.title;
+  endBox.querySelector('.where').textContent = END.where;
+  endBox.querySelector('.again').textContent = END.again;
+  const box = endBox.querySelector('.list');
+  box.textContent = '';
+  for (const g of endList(w)) {
+    const h = document.createElement('p');
+    h.className = 'grp';
+    h.textContent = g.name;
+    box.appendChild(h);
+    for (const r of g.rows) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const k = document.createElement('span'); k.className = 'k'; k.textContent = r.label;
+      const v = document.createElement('span'); v.className = 'v'; v.textContent = r.value;
+      row.append(k, v);
+      box.appendChild(row);
+    }
+  }
+  endBox.hidden = false;
+  hud.hidden = true; lesson.hidden = true;
+  paused = true;                      // 시계를 멈춘다. 다만 멈춤 화면은 안 띄운다
+  if (document.pointerLockElement) document.exitPointerLock();
+  console.log(`[끝] ${endWord(w)}`);
+}
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
@@ -576,6 +632,11 @@ let autoHeldWas = false;  // 자동 항법 스위치도 제 셈을 갖는다
 let gripping = false;     // ★ 조준 손잡이를 잡고 있나 — WASD 가 포탑을 돌린다
 let fireHeldWas = false;  // 쏘는 것도 제 셈을 갖는다 (Space)
 let wrecked = false;      // ★ 행성을 박았다 — 이 게임의 유일한 끝
+/** ★ 도착했다 — 끝 화면을 한 번만 띄우려고 (8판 · PLAN2H §9) */
+let ended = false;
+let endWhat = null;
+/** 굶어서 손이 떨린 시간 (초). 끝 화면 목록의 한 줄이 된다 */
+let shakyT = 0;
 let trading = 0;          // 접수구를 얼마나 잡고 있었나
 let partsWarned = false;
 // 손에 물건이 없어 못 고친다고 **한 번만** 말한다. 매 프레임 외치면 소음이다
@@ -1335,6 +1396,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     bannerT = 3.2;
     audio?.event('fault');
   }
+  // ★ **굶은 시간을 센다.** 끝 화면 목록의 한 줄이 된다 (PLAN2H §9).
+  //   재 보니 마지막 구간에 식량 45 를 들고 들어가면 5.4분을 떨고,
+  //   100 을 들고 들어가면 0분이다 — 그 차이가 목록에 남아야 앞의
+  //   11구간에서 챙긴 것이 뜻을 갖는다
+  if (shaky(supply)) shakyT += dt;
 
   // ── 위험 지대 — 부딪히는 것과 피하는 것 (FLYING.md) ────
   // ★ **빗장** — 고장을 아직 못 고쳤으면 안 온다. 첫 판에 둘이 겹치면
@@ -2102,6 +2168,31 @@ window.SPACE = {
    *   것이 없다.
    */
   newGame() { clearRaw(); location.reload(); },
+  /** ★ 끝 — 화면이 떴나 · 목록에 무엇이 있나 (8판 · tools/space-end.js) */
+  get end() {
+    return { shown: !endBox.hidden, what: endWhat, list: endWhat ? endList(endWhat) : [] };
+  },
+  /** 지금 성간 공백인가 (`void-table.js`) */
+  get inVoid() { return isVoid(route.leg) && route.phase === RPHASE.LEG; },
+  /**
+   * ★ **어느 구간의 끝에 세워 놓는다** — 검사와 점검 모드가 2시간을 안
+   *   기다리려고. `setLeg` 로 구간만 옮기면 게임이 성간 공백을 **안 거친다** —
+   *   여기서는 문턱에 세워 놓고 **게임이 스스로 들어가게** 둔다.
+   *   그래야 검사가 보는 길과 사람이 가는 길이 같다.
+   *
+   *   `seekVoid()` → 11구간 끝 → 다음 틱에 성간 공백으로 들어선다
+   *   `seekEnd()`  → 12구간 끝 → 다음 틱에 도착(끝 화면)
+   */
+  seekLegEnd(leg) {
+    route.leg = Math.max(0, Math.min(LEG.count - 1, leg));
+    route.phase = RPHASE.LEG;
+    route.fork = route.fork || forkOf('empty');
+    route.need = route.fork.seconds;
+    route.t = route.need - 0.5;
+    return { leg: route.leg, phase: route.phase };
+  },
+  seekVoid() { return this.seekLegEnd(LEG.count - 2); },
+  seekEnd() { return this.seekLegEnd(LEG.count - 1); },
   pause(v) { showPause(v ?? !paused); return paused; },
   /** 갈래를 고른다 — 검사가 관측실까지 안 걸어가고 부를 수 있게 */
   pick(key) { const ok = chooseFork(route, key); if (ok) ship.outside.setRegion(regionOf(route)); return ok; },
@@ -2350,16 +2441,30 @@ function frame(now) {
     bannerT = 3.0;
     if (chase.phase === PHASE.CALM) chase.risk = 200;
   }
+  // ★★ **성간 공백에 들어섰다** (8판 · `void-table.js`). 거점을 안 거치고
+  //   바로 마지막 구간으로 들어온다 — 고를 것도 살 것도 없다
+  if (rev === 'void') {
+    banner = VOID.enter;
+    bannerT = VOID.enterFor;
+    // 쫓아오던 것이 있으면 **여기서 떨어진다.** 「따라오지 못하는 곳」이
+    // 이름값을 하려면 붙어 있던 것도 놓쳐야 한다
+    if (chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT) {
+      chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.dist = 0;
+    }
+    chase.risk = 0;
+    audio?.event('escaped');
+    escapedAt = clock;
+    saveNow();          // 여기까지는 저장해 둔다 — 마지막 구간도 8분이다
+  }
   if (rev === 'end') {
     banner = '더는 따라오지 못합니다';
     bannerT = 6.0;
     audio?.event('escaped');
     escapedAt = clock;
     // ★ **끝났으면 저장을 지운다.** 안 지우면 다음에 켤 때 「끝난 배」로
-    //   이어져서, 이미 도착한 자리에 다시 서 있게 된다. 끝 화면은 8판
-    //   몫이지만 **지우는 것만은 지금 해 둔다** — 안 그러면 한 번 끝낸
-    //   사람이 다시 못 시작한다
+    //   이어져서, 이미 도착한 자리에 다시 서 있게 된다
     clearRaw();
+    showEnd();
   }
   // 검사용 고정이 걸려 있으면 그것을 따른다 (게임은 안 쓴다)
   const wantRegion = regionPin || regionOf(route);
@@ -2706,7 +2811,10 @@ setInterval(() => { hint.hidden = input.locked || paused; }, 200);
     e.stopPropagation();
     run();
   });
+  // ★ 끝 화면의 것은 **안 물어본다.** 저장은 이미 지워졌고, 물어볼 것이
+  //   남아 있지 않다 — 「처음부터 다시는 없다」(§9)
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
+  wire('btn-new3', () => SPACE.newGame());
   // 멈춤 화면에서 열면 **멈춘 채로** 연다 — 점검하다 배가 저 혼자 가면 곤란하다
   for (const id of ['btn-check', 'btn-check2']) wire(id, () => check.toggle(true));
 }
