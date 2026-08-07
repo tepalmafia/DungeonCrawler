@@ -653,8 +653,14 @@ export function buildCockpit(parent, room, H) {
     //    평소엔 항로, 추격 중엔 거리를 띄운다).
     //  ★ 그래서 **고를 것이 있을 때만** 안쪽 화면 둘 위에 뜬다.
     //    없으면 사라지고 원래 계기가 그대로 보인다
-    if (i === 1 || i === 3) {
-      const pi = i === 1 ? 0 : 1;
+    // ★★ **바깥 화면 둘에 얹는다** (v66 · 안쪽에서 옮겼다).
+    //   안쪽(±0.34~0.95)은 조종간과 **같은 방향**이라, 조준선이 늘
+    //   더 가까운 조종간을 먼저 잡는다 — 판은 보이는데 눌리는 것은
+    //   조종간이었다. 그리고 그 조종간이 수동 조종을 켜서, 화면에는
+    //   「눌렀더니 자동 항법이 꺼졌습니다」만 떴다.
+    //   바깥(±0.95~1.55)은 방위 47~62도라 조종간과 안 겹친다
+    if (i === 0 || i === 4) {
+      const pi = i === 0 ? 0 : 1;
       const fk = makeScreen(wid, FACE_H - 0.10, drawFork);
       fk.mesh.position.z = 0.028;
       fk.mesh.visible = false;
@@ -905,6 +911,11 @@ export function buildCockpit(parent, room, H) {
       p.land = land ? { go: i === 0, hard: !!land.hard } : null;
       const show = !!(p.fork || p.land);
       p.sc.mesh.visible = show;
+      // ★★ **고를 것이 없으면 판정 상자도 없앤다** (v66). 화면만 끄고
+      //   상자를 남기면 **빈 판이 눌린다** — 「보이는데 안 잡힌다」의 반대,
+      //   즉 「안 보이는데 잡힌다」다. 이 저장소가 둘 다 겪었다.
+      //   `Raycaster` 는 `visible === false` 인 물체를 건너뛴다
+      p.hit.visible = show;
       if (show) p.sc.redraw({ fork: p.fork, land: p.land, lit: aimedPlate === i });
     });
   }

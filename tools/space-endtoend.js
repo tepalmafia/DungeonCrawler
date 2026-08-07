@@ -77,7 +77,7 @@ console.log('\n[0] 배가 출발하나 — **★ v66: 조종석에서 고른다*
   ok((await S(() => SPACE.route)).phase === 'port', '거점에서 시작한다');
   await S(() => SPACE.putHelmSit(true));
   await until(() => SPACE.helm2.k > 0.97, 25, '좌석에 앉는 것');
-  ok(await aimAt(0, -7.75, 0.6, -0.3, ['chart0', 'chart1']),
+  ok(await aimAt(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']),
     `조종석에서 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
   await press(0.6);
   ok(await until(() => SPACE.route.phase === 'leg', 20, '출발'),
@@ -86,74 +86,58 @@ console.log('\n[0] 배가 출발하나 — **★ v66: 조종석에서 고른다*
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n[1] ★★ **주포** — 실내 조준석에 앉고 · WASD 로 겨누고 · 쏜다');
+console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서** 쏜다');
 {
+  // ══ ★★★ **이 절이 v64 부터 빨간 채로 있었다** ══════════════════════
+  //  v64 에서 **주포(포탑)를 걷어내고** 조준을 기수로 옮겼는데, 이 검사는
+  //  그대로 `gunseat` · `grip` · (2.35, −3.9) 를 겨누고 있었다.
+  //  즉 **검사가 없어진 물건을 찾고 있었고**, 그 뒤로 두 판이 그 위에
+  //  얹혔다. CLAUDE.md 가 「계통을 만들면 이 검사에 한 절을 보탠다」고
+  //  적어 둔 이유가 이것인데, **걷어낼 때 지우는 것**도 같은 규칙이다.
   await S(() => { SPACE.setPower('thrust', false); SPACE.giveOre(80); });
   ok((await S(() => SPACE.chase)).phase === 'calm', '지금은 쫓기지 않는다 — **이 상태에서 되어야 한다**');
 
-  // ① 좌석에 앉는다 — **사다리를 타고 밖으로 안 나간다**
-  // ★ **(2.35, -2.95) 는 배 밖이었다.** 조종석은 z -9.0~-3.0 인데 거기 세워
-  //   놓고 「조준석이 안 잡힌다」로 세 번 빨개졌다 — 배 안에 세워야 한다
-  // ★★ **(2.35, −3.6) 은 좌석 바로 위였다** — 늘 정답 자리에서만 앉혀 봤고,
-  //   그래서 「앉아도 몸이 안 옮겨진다」를 몇 판째 못 잡았다. 사장님이
-  //   화면으로 잡으셨다: 「앉았다고 나오는데 의자 앞에 공간이 없어서
-  //   그런지 모니터 앞에 앉질 못하네」.
-  //   **사람이 서는 자리에서** 앉힌다 — 좌석에서 1.3m 뒤
-  ok(await aimAt(2.35, -2.6, 0, -0.55, 'gunseat'),
-    `① **멀찍이 서서도** 조준석이 잡힌다 (${await S(() => SPACE.aim)})`);
+  // ① 좌석에 앉는다 — **사람이 서는 자리에서** 겨눈다 (좌석 1m 뒤)
+  ok(await aimAt(0, -7.10, 0, -0.55, 'helmseat'),
+    `① 서서 조종석 좌석이 잡힌다 (${await S(() => SPACE.aim)})`);
   await press(2.6);
-  ok(await until(() => SPACE.gun.up, 80, '앉기'), '② 눌렀더니 **앉는다**');
-  // ★ 그리고 **몸이 좌석으로 옮겨진다** — 이게 v59 가 고친 것이다
-  const sat = await until(() => Math.hypot(SPACE.pos.x - 2.35, SPACE.pos.z + 3.9) < 0.25, 40, '좌석으로 옮겨지기');
+  ok(await until(() => SPACE.helm2.sat, 60, '앉기'), '② 눌렀더니 **앉는다**');
+  const sat = await until(() => Math.hypot(SPACE.pos.x, SPACE.pos.z + 8.30) < 0.25, 40, '좌석으로 옮겨지기');
   const at = await S(() => SPACE.pos);
-  ok(sat, `②-b ★★ **몸이 좌석으로 옮겨진다** (${at.x}, ${at.z}) — 안 옮겨지면`
-    + ' 「앉았다는데 눈앞에 모니터가 없는」 화면이 된다');
-  const camY = await S(() => SPACE.camY ?? null);
-  ok(camY === null || camY < 1.62,
-    `③ **눈이 내려간다** (${camY?.toFixed?.(2) ?? '?'}) — 밖으로 올라가는 것이 아니다`);
+  ok(sat, `②-b ★★ **몸이 좌석으로 옮겨진다** (${at.x}, ${at.z})`);
+  const camY = await S(() => SPACE.camY);
+  ok(camY < 1.62, `③ **눈이 내려간다** (${camY.toFixed(2)}) — 밖으로 올라가는 것이 아니다`);
 
-  // ② 손잡이를 잡고 WASD 로 겨눈다 — **앞을 본다**
-  //   ★ 앉기 전에 좌석을 내려다본 자세 그대로면 계속 좌석이 잡힌다.
-  //     앉았으면 고개를 든다 — 사람은 저절로 하는 일이지만 검사는 못 한다
-  ok(await until(() => {
-    SPACE.put(2.35, -3.9, 0, -0.1);
-    return SPACE.aim === 'grip';
-  }, 25, '손잡이 조준'), `④ 앉아 앞을 보면 손잡이가 잡힌다 (${await S(() => SPACE.aim)})`);
+  // ② **조준은 기수가 한다** — 조종간을 밀면 겨눔이 따라 움직인다
+  ok(await aimAt(0, -7.75, 0, -0.55, 'yoke'),
+    `④ 앉아 앞을 보면 조종간이 잡힌다 (${await S(() => SPACE.aim)}) — v64 부터 **조종간이 곧 조준**이다`);
   const a0 = await S(() => SPACE.sky);
-  await S(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' })); });
   await down();
-  await p.waitForTimeout(2500);
+  for (let i = 0; i < 12; i++) {
+    await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 70, movementY: 0 })));
+    await p.waitForTimeout(160);
+  }
   await up();
-  await S(() => { window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD' })); });
   const a1 = await S(() => SPACE.sky);
-  ok(a1.az > a0.az + 1,
-    `⑤ **손잡이를 잡고 D 를 누르니 포탑이 돈다** (${a0.az} → ${a1.az}도)`);
-
-  // ③ 떠도는 것을 조준선 앞에 놓고 쏜다
+  ok(Math.abs(a1.az - a0.az) > 1,
+    `⑤ **조종간을 미니 겨눔이 움직인다** (${a0.az} → ${a1.az}도)`);
   ok(a1.n > 0, `⑥ 창밖에 떠도는 것이 있다 (${a1.n}개 · ${a1.region})`);
+
+  // ③ 떠도는 것을 조준선 앞에 놓고 쏜다 — **Space 로**
   await S(() => SPACE.putTarget('junk'));
   ok((await S(() => SPACE.sky)).locked, '⑦ 겨누니 **물렸다**고 한다');
-  const o0 = (await S(() => SPACE.supply)).ore;
-  await S(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })); });
-  await p.waitForTimeout(900);
-  await S(() => { window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' })); });
-  await p.waitForTimeout(900);
-  const g1 = await S(() => SPACE.gun);
-  ok(g1.shots > 0, `⑧ **Space 로 쏜다** (${g1.shots}발) — 「${await said()}」`);
-  ok((await S(() => SPACE.supply)).ore > o0,
-    `⑨ **부수면 광석이 는다** (${o0} → ${(await S(() => SPACE.supply)).ore}) — 쏘는 것이 줍는 일이 된다`);
+  const ore0 = await S(() => SPACE.supply.ore);
+  await S(() => { SPACE.putWeapon(1); });
+  for (let i = 0; i < 6; i++) { await S(() => SPACE.fire()); await p.waitForTimeout(400); }
+  const ore1 = await S(() => SPACE.supply.ore);
+  ok(ore1 > ore0, `⑧ **부수면 광석이 는다** (${ore0} → ${ore1}) — 쏘는 것이 줍는 일이 된다`);
 
-  // ④ 일어난다 — 아래를 보면 좌석
-  const back = await until(() => {
-    SPACE.put(2.35, -3.6, 0, -1.15);
-    return SPACE.aim === 'gunseat';
-  }, 25, '앉은 채 좌석 조준');
-  ok(back, `⑩ 아래를 보면 좌석이 잡힌다 (${await S(() => SPACE.aim)})`);
-  await press(2.6);
-  ok(await until(() => !SPACE.gun.up, 80, '일어나기'), '⑪ 일어난다 — **왕복이 닫힌다**');
+  // ④ 일어난다 — **아무 손잡이도 안 잡힌 데를** 누른다
+  await S(() => SPACE.put(0, -7.75, Math.PI, 0));
+  await press(0.8);
+  ok(await until(() => !SPACE.helm2.sat, 30, '일어나기'), '⑨ 일어난다 — **왕복이 닫힌다**');
 }
 
-// ══════════════════════════════════════════════════════════════════════════
 console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는다 (v62 부터 **입는다**)');
 {
   // ══ ★★ v62 — **한 걸음이 앞에 붙었다** ═══════════════════════════
