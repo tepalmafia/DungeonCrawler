@@ -39,7 +39,8 @@ import { buildBench } from './bench.js';
 import { buildFoodGauge, buildWinch, buildTradeHatch, buildOuterDoor } from './supply-ui.js';
 import { buildDoor } from './door.js';
 import { DOOR } from '../game/door-table.js';
-import { buildTurret, LADDER } from './turret.js';
+// ★ v64 — 주포(포탑·사다리·조준석)를 걷어냈다. 조준경만 남는다
+import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
 
 const H = 2.7;          // 천장 높이
@@ -972,8 +973,38 @@ export function buildShip(scene, camera = null) {
   //   붙어 있어서 걸어다니는 데 방해가 안 된다
   // ★★ **조준석은 배 안이다** (사장님 「실내에 조준석에서 조준해야지」).
   //   조준경 한 장을 만들어 후드 안에 끼워 준다 — 사수는 밖에 안 나간다
-  const sight = buildSight();
-  const turret = buildTurret(ship, H, ZONE.cockpit.accent, sight);
+  // ══ ★★★ **주포를 걷어냈다** (v64 · 사장님 「주포도 없애고 공격은
+  //    조정석에서 다 이루어질 수 있도록 해줘」) ═══════════════════════
+  //
+  //  v44~v63 동안 배 안에 **좌석이 둘**이었다 — 조종석과 조준석. 그래서
+  //  「올라가 있으면 아래 것을 못 잡는다」 같은 규칙을 따로 만들어야 했고,
+  //  사장님은 그 자리에 **앉지도 못하셨다** (v59·v63 에서 두 번 고쳤다).
+  //
+  //  실제 전투기는 **좌석이 하나**다. 기총은 기수에 고정이고 조종간이
+  //  곧 조준이다 — 그러면 「어디를 보느냐」와 「어디로 가느냐」가 같은
+  //  손짓이 되고, 좌석 하나로 끝난다.
+  //
+  //  ★ 조준경(`sight`)은 **남긴다.** 이제 조종석 대시에 붙는다 —
+  //    화면에 표적과 락온을 그리는 것은 여전히 필요하다
+  const sight = buildSight(0.78, 0.58);
+  // ★★ **조준경을 조종석 대시에 붙인다** (v64).
+  //   예전에는 `buildTurret` 이 붙여 줬다 — 포탑을 걷어내면서 **조준경이
+  //   같이 떨어졌다.** 화면은 그려지는데 배에 없으니 아무 데도 안 보인다.
+  //   「보이는데 못 잡는」의 반대 — **잡히는데 안 보이는** 것이고, 둘 다 없는 것이다.
+  //   자리는 조종간 바로 위, 앉은 눈(1.20)에서 살짝 아래다
+  sight.mesh.position.set(0, 1.06, -7.72);
+  sight.mesh.rotation.x = -0.22;      // 앉은 사람 쪽으로 눕는다
+  ship.add(sight.mesh);
+  const turret = {
+    group: null, sight,
+    // ★ 없어진 손잡이들 — `null` 이라야 `main.js` 의 조준 목록에서 걸러진다.
+    //   지우지 않고 `null` 로 두는 이유: 이름이 사라지면 저쪽이 조용히
+    //   `undefined` 를 읽고, 그건 「안 잡힌다」와 구별이 안 된다
+    seatHit: null, standHit: null, gripHit: null,
+    ladderHit: null, hatchHit: null, gunHit: null,
+    fired() { /* 총구 섬광은 이제 조종석 화면이 낸다 */ },
+    update() {},
+  };
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     turret, sight, outerDoor, marks, byBay,

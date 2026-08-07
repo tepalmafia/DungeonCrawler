@@ -36,7 +36,9 @@
 // 16 → 17: v62 — 우주복(suit)과 추진제(supply.fuel)가 늘었다.
 //          ★ 안 올리면 옛 저장에 `fuel` 이 없어 `undefined` 로 이어지고,
 //            그러면 추진이 영영 안 걸린다 (`isDry(undefined)` 가 참이다)
-export const SAVE_VERSION = 17;   // v62 — suit · supply.fuel 이 늘었다
+// 17 → 18: v64 — 주포가 없어지고 **조종석 전투**(combat)가 늘었다.
+//          옛 저장에는 `gun.up` 이 참인 것이 있는데, 그 좌석은 이제 없다
+export const SAVE_VERSION = 18;   // v64 — combat 이 늘었다 · 주포가 없어졌다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -111,6 +113,13 @@ export const FIELDS = {
    *   안 잇는다. 이어하면 **손을 놓은 채** 시작한다.
    */
   gun: ['cool', 'shots', 'hits', 'flash', 't'],
+  /**
+   * ★★ 조종석 전투 (v64) — **센 것과 고른 무기는 잇고, 손에 매인 것은 안 잇는다.**
+   *   `radar`·`shots` 를 빼는 이유는 「자세는 안 잇는다」와 같은 규약이다:
+   *   묶어 놓은 채로 껐다 켜면 그건 이어한 게 아니라 봐준 것이고,
+   *   날아가던 미사일이 되살아나는 것은 더 이상하다
+   */
+  combat: ['slot', 'fired', 'hits', 'kills', 'misses', 'seat'],
   /**
    * ★ 구조 신호 — **간 것도 안 간 것도 회차의 결과다** (7판).
    *   이걸 안 남기면 이어했을 때 끝 화면의 「구조 신호」 줄이 빈다 —
