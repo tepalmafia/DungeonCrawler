@@ -27,6 +27,7 @@
 import * as THREE from 'three';
 import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
+import { buildRadio } from './radio.js';
 import { buildCockpit, buildOutside, setPlan, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
   ZONE, MAT, rackRun, standoff, chamfer, ringFrames, hatch, sign, breakerPanel,
@@ -369,7 +370,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, a
 export function buildShip(scene, camera = null) {
   let chart = null;
   let bench = null;
-  let foodGauge = null, winch = null, tradeHatch = null;
+  let foodGauge = null, winch = null, tradeHatch = null, radio = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
@@ -650,6 +651,11 @@ export function buildShip(scene, camera = null) {
     winch = buildWinch(ship, { x: 3.4, z: r.z0 + 0.06, ry: 0 }, MAT, blockBox);
     // 접수구 — 거점에서만 연다. 상인은 얼굴이 없다 (PLAN §1)
     tradeHatch = buildTradeHatch(ship, { x: 3.4, z: r.z1 - 0.06, ry: Math.PI }, MAT, blockBox);
+    // ★ 무전기 — **바깥문 옆 벽**에 붙인다 (G 구조 신호 · 7판).
+    //   받는 것이 바깥문으로 들어오므로 **한 방에서 두 동작**이 되게 한다.
+    //   다른 방에 두면 「잡고 있다가 뛰어가서 문을 연다」가 되는데
+    //   그건 이 장면의 손짓이 아니다
+    radio = buildRadio(ship, { x: r.x1 - 0.14, z: (r.z0 + r.z1) / 2 - 1.05, ry: -Math.PI / 2 }, MAT);
   }
 
   // ── 기관실 ──────────────────────────────────────────────
@@ -881,5 +887,5 @@ export function buildShip(scene, camera = null) {
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     turret, sight, outerDoor, marks, byBay,
-    foodGauge, winch, tradeHatch, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
+    foodGauge, winch, tradeHatch, radio, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

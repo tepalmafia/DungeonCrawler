@@ -67,6 +67,12 @@ import { DRIFT } from './game/drift-table.js';
 import { HELM, offWord, hitWord } from './game/helm-table.js';
 import { GUN, WHY as GUN_WHY } from './game/gun-table.js';
 import { VOID, isVoid } from './game/void-table.js';
+import { RESCUE, RSTEP, RESCUE_WORD } from './game/rescue-table.js';
+import {
+  makeRescue, hearSignal, stepRescue, passSignal, canAnswer,
+  broadcasting as radioOn, holding as rescueHold, alongside as rescueNear,
+  settled as rescueDone, word as rescueWord, summary as rescueSummary,
+} from './game/rescue.js';
 import { END } from './game/ending-table.js';
 import { endList, endWord } from './game/ending.js';
 import {
@@ -125,7 +131,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 53;
+export const VERSION = 54;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -371,6 +377,8 @@ const helm = makeHelm();
 //   재료라 「쏘면 못 고친다」가 되고, 쏘면 밝아져서 「쏘고 도망」이
 //   늘 옳지 않게 된다 (game/gun-table.js).
 const gun = makeGun();
+/** ★ G 구조 신호 — 2시간에 한 번뿐인 남의 목소리 (7판) */
+const rescue = makeRescue();
 // ★★ **포탑이 겨누는 쪽** — 방위·고도(도). WASD 가 여기를 움직인다.
 //   사람이 보는 쪽과 **따로** 논다 — 그게 「실내에서 원격으로 돌린다」다
 let aimAz = 0, aimEl = 0;
@@ -461,7 +469,7 @@ function fireGun() {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, lock, land, scars,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars,
   ship: { heat, power, clock, seed, coolOpen },
   me,
 });
@@ -588,6 +596,7 @@ function showEnd() {
     trips: land.trips,
     hits: gun.hits,
     shakyMin: shakyT / 60,
+    rescue: RESCUE_WORD[rescue.step] ?? null,
     // ★ 이름으로 부른다 — 「손상 3」이 아니라 「냉각 계통 손상 · 선체 균열」
     scars: scarList(scars).map((s) => s.name),
     open: openList(faults).map((f) => f.name),
@@ -624,6 +633,8 @@ let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 �
 let steerPush = 0;
 /** 걸으려 하는데 못 걸은 시간 — `GUN.freeAfter` 를 넘으면 저절로 일어난다 */
 let stuckT = 0;
+/** 마지막 프레임의 실제 부하 — `renderer.info` 는 매 패스 되돌아간다 */
+let lastCost = { calls: 0, tris: 0 };
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let winching = false;     // 지금 윈치를 잡고 있나
 let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다른 일
@@ -865,7 +876,7 @@ function interactStep(dt) {
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
     ship.turret.seatHit, ship.turret.gripHit,
-    ship.outerDoor.hit, ship.cock.autoHit];
+    ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -874,7 +885,7 @@ function interactStep(dt) {
   let breaker = null;
   let plate = -1;
   let panel = null;
-  let onWinch = false, onHatch = false, onYoke = false;
+  let onWinch = false, onHatch = false, onYoke = false, onRadio = false;
   let onLadder = false, onGun = false, onOuter = false, onAuto = false;
   let onCrank = null;
   let onSpot = null;
@@ -894,6 +905,9 @@ function interactStep(dt) {
       if (o === ship.turret.seatHit) { onLadder = true; break; }
       if (o === ship.turret.gripHit) { onGun = true; break; }
       if (o === ship.outerDoor.hit) { onOuter = true; break; }
+      // ★ 무전기는 **신호가 와 있을 때만** 잡힌다. 평소에 잡히면
+      //   2시간에 한 번뿐인 것이 늘 있는 것처럼 읽힌다
+      if (o === ship.radio.hit) { onRadio = canAnswer(rescue); break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
       if (dv) { onCrank = dv; break; }
       const sp = carryView.spotOf(o);
@@ -991,6 +1005,22 @@ function interactStep(dt) {
   // ★★ **땅에서는 같은 윈치가 적재기가 된다** (사장님 「행성에 착륙해서
   //   가지고 올 수 있도록」). 우주 낚시는 광석만 나는데 땅은 **부품과
   //   식량이 같이 난다** — 그게 「왜 내리나」의 답이다. 손잡이는 하나다
+  // ── ★★ 무전기 — **응답한다** (G 구조 신호 · 7판) ──────────
+  //   잡고 있는 동안 자국이 오르고 구간이 안 나아간다. 놓아도 방송은
+  //   나가고 **진행만 멈춘다** — 껐다 켜며 벌을 피하는 길을 막는다
+  const answering = onRadio && input.hold;
+  const rev2 = stepRescue(rescue, dt, answering, { outerOpen: lock.open });
+  if (rev2 === 'answered') { banner = RESCUE.near; bannerT = 4.5; audio?.event('fault'); }
+  if (rev2 === 'took') {
+    supply.parts = Math.min(PARTS.max, supply.parts + rescue.got.parts);
+    supply.food = Math.min(FOOD.max, supply.food + rescue.got.food);
+    banner = `${RESCUE.took} — 부품 ${rescue.got.parts} · 식량 ${rescue.got.food}`;
+    bannerT = 4.0;
+    audio?.event('escaped');
+    sceneDone(scenes, 'G');
+  }
+  if (rev2 === 'left') { banner = RESCUE.left; bannerT = 3.5; sceneDone(scenes, 'G'); }
+
   const onDirt = landDown(land);
   loading = onDirt && onWinch && input.hold && canLoadLand(land, { doorOpen: lock.open });
   winching = !onDirt
@@ -1301,6 +1331,7 @@ function interactStep(dt) {
   // ★ 포탑에 올라가 있으면 잡히는 것이 **둘**이다 — 주포(쏜다)와
   //   사다리(내려간다). 전에는 주포 하나뿐이라 **내려올 길이 없었다**
   aimName = gun.up ? (onGun ? 'grip' : (onLadder ? 'gunseat' : null))
+    : onRadio ? 'radio'
     : onOuter ? 'outer'
     : onLadder ? 'gunseat'
     : onSpot ? `spot:${onSpot}`
@@ -1496,7 +1527,11 @@ function systemsStep(dt, valveOpen, regionMult) {
       : stepChase(chase, dt, power, heat + badSign, regionMult,
         { contactAt: 999, trackMult: 0, valveOpen }))
     : stepChase(chase, dt, power,
-      heat + badSign + (winching ? WINCH.sign / SIGN_PER_HEAT : 0), regionMult,
+      // ★ **무전은 방송이다** — 켜 둔 동안 윈치보다 굵은 자국이 난다.
+      //   도와주려고 켠 것이 나를 가리킨다: 줄기 「혼자다」와 「쫓긴다」가
+      //   여기서 만난다 (story-table.js)
+      heat + badSign + (winching ? WINCH.sign / SIGN_PER_HEAT : 0)
+        + (radioOn(rescue) ? RESCUE.sign / SIGN_PER_HEAT : 0), regionMult,
       {
         // ★ **자국은 늘 쌓인다. 붙는 것만 장면이 정한다.**
         //   자국을 같이 껐더니 A 가 없는 구간에서는 열을 올려도 아무 일이
@@ -1608,6 +1643,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     legsOnFood: legsLeftOnFood(supply, route.fork?.seconds ?? LEG.seconds),
   });
   ship.winch.update({ hauled: supply.hauled, ore: supply.ore, loads: supply.loads, moving: power.thrust });
+  ship.radio.update(rescueSummary(rescue));
   ship.tradeHatch.update({ atPort: route.phase === RPHASE.PORT, ore: supply.ore });
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
@@ -2168,6 +2204,20 @@ window.SPACE = {
    *   것이 없다.
    */
   newGame() { clearRaw(); location.reload(); },
+  /** ★ G 구조 신호 — 검사와 점검 모드가 읽는다 (7판) */
+  get rescue() { return rescueSummary(rescue); },
+  /** 신호를 켠다 — 구간 7 을 안 기다리려고 */
+  callRescue() { hearSignal(rescue); return rescueSummary(rescue); },
+  /**
+   * ★ 어느 단계로든 바로 세워 놓는다 — `putLand`·`putGun` 과 같은 구멍.
+   *   응답이 42초라 헤드리스(게임 시간 1/20)로는 14분이 걸린다. 도구가
+   *   기다리는 것과 게임이 되는 것은 다른 문제다
+   */
+  putRescue(step) {
+    rescue.step = step;
+    if (step === RSTEP.NEAR) { rescue.t = RESCUE.answer; rescue.wait = 0; rescue.took = 0; }
+    return rescueSummary(rescue);
+  },
   /** ★ 끝 — 화면이 떴나 · 목록에 무엇이 있나 (8판 · tools/space-end.js) */
   get end() {
     return { shown: !endBox.hidden, what: endWhat, list: endWhat ? endList(endWhat) : [] };
@@ -2252,8 +2302,10 @@ window.SPACE = {
   get cost() {
     let lights = 0, meshes = 0;
     scene.traverse((o) => { if (o.isLight) lights++; if (o.isMesh) meshes++; });
-    const i = renderer.info;
-    return { 그리기: i.render.calls, 삼각형: i.render.triangles, 조명: lights, 물체: meshes, 프로그램: i.programs?.length ?? 0 };
+    return {
+      그리기: lastCost.calls, 삼각형: lastCost.tris,
+      조명: lights, 물체: meshes, 프로그램: renderer.info.programs?.length ?? 0,
+    };
   },
 };
 
@@ -2334,6 +2386,20 @@ function frame(now) {
     passPlanet(land);
     sceneDone(scenes, 'B');
   }
+  // ── ★★ G — **조난 신호를 받는다** (7판 · 줄기 「혼자다」) ──
+  //   대응 박자에 무전기가 살아난다. 예고 때는 「조난 신호를 받았습니다」만
+  //   뜬다 — 예고가 예고이려면 준비할 시간이 있어야 한다 (B·C 와 같은 규약)
+  if (sev === 'act' && sceneOpen(scenes, 'G') && hearSignal(rescue)) {
+    banner = RESCUE.heard; bannerT = 5.0;
+    audio?.event('fault');
+  }
+  // ★ 대응 시계가 다 됐는데 아직 응답 안 했으면 **지나친 것이다.**
+  //   조용히 영원히 기다리면 장면이 안 끝나고, 안 끝나는 장면은 멈춘 게임이다
+  if (scenes.overdue && scenes.keys.includes('G') && !rescueDone(rescue)) {
+    if (passSignal(rescue)) { banner = RESCUE.passed; bannerT = 3.0; }
+    sceneDone(scenes, 'G');
+  }
+
   // ── ★ C — 자세 제어가 죽는다 ──────────────────────────
   // 「대응」 박자가 시작될 때 죽는다. **예고 때는 아직 멀쩡하다** —
   // 예고가 예고이려면 준비할 시간이 있어야 한다 (PLAN2H §2)
@@ -2403,7 +2469,10 @@ function frame(now) {
   // ★★ **내려가 있는 동안은 구간이 안 나아간다.** 땅에 붙은 배는 항로를
   //   가지 않는다 — 그런데 **압박은 계속 쌓인다** (stepRoute 가 시간으로
   //   센다). 「숨는 것」과 「안 쫓기는 것」은 다르다는 규약 그대로다
-  const rev = stepRoute(route, dt * helmLeg(helm), power, { hold: landBusy(land) });
+  // ★ **응답하는 동안도 구간이 안 나아간다** — 다가가느라 시간을 버리는
+  //   것이고 그동안 압박은 계속 쌓인다 (착륙과 같은 규약 · RESCUE.hold)
+  const rev = stepRoute(route, dt * helmLeg(helm), power,
+    { hold: landBusy(land) || rescueHold(rescue) });
   // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
   //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
   const missed = rev === 'arrive' && !tryDock(helm);
@@ -2743,7 +2812,14 @@ function frame(now) {
     pose: repairPose,
   }, dt);
 
+  // ★★ **부하를 재는 자리** — `renderer.info` 는 그릴 때마다 스스로 0 으로
+  //   되돌아가므로, 합성이 다 끝난 뒤에 읽으면 **마지막 전체화면 사각형
+  //   하나**만 세어진다 (실제로 「그리기 1 · 삼각형 1」로 찍혔다).
+  //   자동 되돌림을 끄고 **직접 되돌린 뒤** 한 프레임을 통째로 센다
+  renderer.info.autoReset = false;
+  renderer.info.reset();
   composer.render();
+  lastCost = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

@@ -30,9 +30,10 @@
  * 안 올리면 옛 저장이 새 코드로 읽혀서 조용히 어긋난다.
  */
 // 12 → 13: 조준석이 실내로 · 겨눔(aim) 칸이 늘었다
+// 14 → 15: 구조 신호(G) 칸이 늘었다
 // 13 → 14: **앉아 있던 자세를 안 잇는다.** 옛 저장에는 `gun.up` 이 참인 것이
 //          있고, 그대로 이으면 걸을 수 없는 자리에서 시작한다. 올려서 버린다
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -105,6 +106,12 @@ export const FIELDS = {
    *   안 잇는다. 이어하면 **손을 놓은 채** 시작한다.
    */
   gun: ['cool', 'shots', 'hits', 'flash', 't'],
+  /**
+   * ★ 구조 신호 — **간 것도 안 간 것도 회차의 결과다** (7판).
+   *   이걸 안 남기면 이어했을 때 끝 화면의 「구조 신호」 줄이 빈다 —
+   *   2시간에 한 번뿐인 선택이 저장 한 번에 없던 일이 되면 안 된다
+   */
+  rescue: ['step', 't', 'wait', 'took', 'got'],
   /** 에어록 — 문을 열어 둔 채 저장했는데 이어하니 닫혀 있으면 봐준 것이다 */
   lock: ['open', 'cycling', 'opening', 'air', 'lockout', 't', 'blown'],
   /**

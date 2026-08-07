@@ -132,12 +132,19 @@ export const SCENES = {
     uses: ['door', 'air'],
     built: false,
   },
+  /**
+   * ★★ **G 는 줄기 「혼자다」의 가운데다** (7판 · v54 · story-table.js).
+   *   그 줄기는 손목 장치(1구간)와 성간 공백(12구간) 둘로만 버티고
+   *   있었고 가운데가 비어 있었다 — 2시간 내내 아무도 없다가 마지막에
+   *   「아무도 없다」로 끝나면 그건 줄기가 아니라 배경이다.
+   *   **2시간에 딱 한 번** 남의 목소리를 넣는다. 한 번이라 무겁다.
+   */
   G: {
     key: 'G', name: '구조 신호',
     lead: '조난 신호를 받았습니다',
     room: 'airlock', hands: '가거나 안 간다 — 가면 시간과 자국',
     uses: ['route', 'supply'],
-    built: false,
+    built: true,          // game/rescue.js — v54 부터 돈다
   },
   /**
    * ★★ **H 만 다르게 생겼다** (8판 · v53 · `void-table.js`).
