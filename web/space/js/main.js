@@ -102,7 +102,16 @@ import { LOCK, WHY as LOCK_WHY, airWord } from './game/airlock-table.js';
 import {
   makeLock, cycle as cycleLock, stepLock, canHaul, haulWhy,
   innerLocked, signOf as lockSign, heatOut as lockHeatOut, summary as lockSummary,
+  isVacuum as lockVacuum, bareLeft,
 } from './game/airlock.js';
+// ★★ 우주복 — **진공에 사람이 그냥 서 있었다** (v62 · REAL.md §2-C)
+import { SUIT, suitWord } from './game/suit-table.js';
+import {
+  makeSuit, stepWear, stepSuit, canEva,
+  handMult as suitHand, moveMult as suitMove, summary as suitSummary,
+} from './game/suit.js';
+// ★★ 추진제 — **10분 시계를 맞는 물건으로 옮겼다** (v62 · REAL.md §2-D)
+import { FUEL, fuelWord, isDry, legsLeftOnFuel } from './game/fuel-table.js';
 import { STEP as LSTEP, LAND, WHY as LAND_WHY, STEP_WORD, tiltWord, bandFor }
   from './game/land-table.js';
 import {
@@ -143,7 +152,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 61;
+export const VERSION = 62;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -416,6 +425,12 @@ const sky = makeSky(makeRng(`${seed}-SKY`));
 //   바깥문이 열려 있으면 안쪽 문이 잠긴다 (game/airlock-table.js).
 const lock = makeLock();
 
+// ══ ★★ 우주복 — **에어록 문의 조건** (v62) ═══════════════════
+// ★ 넷째 시계가 **아니다.** REAL.md §7 이 「시계는 열·추진제·식량 셋으로
+//   끝」이라고 못박아 뒀다. 우주복은 「나갈 수 있나」라는 조건 하나이고,
+//   값은 **둔한 손**으로 치른다 — 그래서 늘 입고 다니지 않는다
+const suit = makeSuit();
+
 // ══ 행성 착륙 — **내려서 가지고 온다** (사장님 요청 · 장면 B) ═══
 // ★ 「착륙을 하는 일련의 과정도 있어야지 — 발견 · 조작 · 화면이 바뀌는 것」
 //   그래서 셋을 다 건다: 해도대에 뜨고(관측실), 조종간으로 진입각을 잡고
@@ -494,7 +509,7 @@ function fireGun() {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -693,6 +708,10 @@ let repairPose = null;
 let repairAct = null;
 let repairing = null;     // 지금 잡고 있는 고장
 let hearNear = 0;         // 소리가 얼마나 가까운가 0~1
+/** ★ 지금 진공에 서 있나 (v62) — 손목이 이걸 제일 먼저 말한다 */
+let vacNow = false;
+/** ★ F(감압)가 연 미소운석이 아직 열려 있나 — 「저절로 낫는」 것을 막는다 */
+let leakOpen = false;
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
 let flash = 0;            // 경보 깜빡임
 let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
@@ -882,8 +901,10 @@ function walk(dt) {
   if (move.blocked) nag(RUN_WHY[move.blocked]);
 
   // yaw 0 일 때 앞은 -z
-  const wantX = (-sin * f + cos * r) * BODY.speed * mult;
-  const wantZ = (-cos * f - sin * r) * BODY.speed * mult;
+  // ★ 우주복을 입으면 걸음도 둔하다 (0.86). **크게 안 깎는다** —
+  //   방 사이가 늘면 템포가 통째로 무너진다 (REAL.md §7 「안 하는 것」)
+  const wantX = (-sin * f + cos * r) * BODY.speed * mult * suitMove(suit);
+  const wantZ = (-cos * f - sin * r) * BODY.speed * mult * suitMove(suit);
 
   const k = Math.min(1, BODY.accel * dt);
   me.vx += (wantX - me.vx) * k;
@@ -931,7 +952,8 @@ function interactStep(dt) {
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
     ship.turret.seatHit, ship.turret.standHit, ship.turret.gripHit, ship.cock.helmSeatHit,
-    ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit, ship.mainBreaker.hit];
+    ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit, ship.mainBreaker.hit,
+    ...(ship.suitRack ? [ship.suitRack.hit] : [])];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -941,6 +963,7 @@ function interactStep(dt) {
   let plate = -1;
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false, onRadio = false, onMain = false;
+  let onSuit = false;
   let onHelmSeat = false;
   let onLadder = false, onGun = false, onOuter = false, onAuto = false;
   let onCrank = null;
@@ -973,6 +996,9 @@ function interactStep(dt) {
       // ★ 주 차단기는 **어두울 때만** 잡힌다. 평소에 잡히면 「올려 두면
       //   되는 것」이 하나 늘 뿐이고, 이 장면의 무게가 사라진다
       if (o === ship.mainBreaker.hit) { onMain = canResetDark(dark); break; }
+      // ★ 우주복 걸이 — **늘 잡힌다.** 「지금 입어야 하나」가 이 게임의
+      //   결심이므로, 나갈 일이 있을 때만 잡히게 하면 그 결심이 사라진다
+      if (ship.suitRack && o === ship.suitRack.hit) { onSuit = true; break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
       if (dv) { onCrank = dv; break; }
       const sp = carryView.spotOf(o);
@@ -1094,6 +1120,40 @@ function interactStep(dt) {
     sceneDone(scenes, 'E');
   }
 
+  // ══ ★★ 우주복 — **걸이를 잡고 있으면 입는다** (v62) ══════════
+  // ★ 22초는 짧지 않다. 일부러다 — 지금까지 채굴은 준비가 0초였고,
+  //   그래서 「멈춰서 캔다」의 값이 위험 하나뿐이었다. 놓으면 되돌아간다
+  //   (수리와 같은 규약) — 그래야 기다리기가 아니라 붙들고 있기가 된다
+  const wearing = onSuit && input.hold;
+  const wev = stepWear(suit, dt, { hold: wearing });
+  if (wev === 'wore') {
+    banner = '우주복을 입었습니다 — 손이 둔합니다';
+    bannerT = 3.2; audio?.event('latch');
+  }
+  if (wev === 'doffed') { banner = '우주복을 벗었습니다'; bannerT = 2.2; audio?.event('click'); }
+  ship.suitRack?.setWorn(suit.on);
+
+  // ★★ **지금 진공에 있나** — 두 자리다.
+  //   ① 바깥문을 연 에어록 (배기가 끝난 뒤)
+  //   ② 미소운석이 뚫어 놓고 아직 안 막은 방 (v62 · mission-table effect.air)
+  const nowRoom = roomAt(me.x, me.z);
+  const inVac = (lockVacuum(lock) && nowRoom === 'airlock')
+    || (bad.vacuum ?? []).includes(nowRoom);
+  vacNow = inVac;
+  const sev = stepSuit(suit, dt, { vacuum: inVac });
+  if (sev === 'low') {
+    banner = `우주복 공기가 얼마 없습니다 — ${(suit.air / 60).toFixed(1)}분`;
+    bannerT = 3.6; audio?.event('fault');
+  }
+  if (sev === 'out') {
+    // ★ **죽이지 않는다.** 배가 억지로 끌어들이고 문을 닫는다 —
+    //   벌은 늘 기다림이다 (기밀 상실 · 정전 · 끼인 문과 같은 규약)
+    lock.open = false; lock.opening = false; lock.cycling = 0;
+    lock.lockout = LOCK.lockout;
+    banner = '공기가 바닥났습니다 — 배가 문을 닫았습니다';
+    bannerT = 4.2; hitFlash = 1; audio?.event('caught');
+  }
+
   const onDirt = landDown(land);
   loading = onDirt && onWinch && input.hold && canLoadLand(land, { doorOpen: lock.open });
   winching = !onDirt
@@ -1178,8 +1238,12 @@ function interactStep(dt) {
     // 굶으면 **잡고 있어도 더디다** — 손이 떨려 정밀 작업이 어긋난다
     // ★ **굶음과 숨참이 같은 규약이다** — 둘 다 「손이 안 듣는다」.
     //   곱해서 쓴다: 굶은 채로 뛰어 왔으면 둘 다 치른다 (PLAN2H §7-2)
+    // ★★ **우주복이 세 번째 배수다** (v62). 셋 다 곱해서 쓴다 —
+    //   굶은 채로 우주복을 입고 뛰어 왔으면 셋을 다 치른다.
+    //   이게 「왜 늘 입고 다니지 않나」의 답 전부다: 벌이 숫자가 아니라
+    //   **못 하게 되는 일**로 온다 (물건 들기 · 굶주림과 같은 규약)
     const ev = repairStep(fixHere,
-      dt * (shaky(supply) ? FOOD.handMult : 1) * breathMult(move));
+      dt * (shaky(supply) ? FOOD.handMult : 1) * breathMult(move) * suitHand(suit));
     // ── 네 동작 ─────────────────────────────────────────
     // ★ 총 시간은 **안 바뀐다.** 원래 있던 `hold` 초를 넷이 나눠 가진다 —
     //   늘리면 층·회차 길이가 통째로 밀린다 (repair-table.js)
@@ -1308,7 +1372,14 @@ function interactStep(dt) {
       nag(canPick ? '지금은 못 고릅니다' : '거점에서 항로를 고릅니다');
     }
   } else if (breaker && pressed) {
-    if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); taught.flips++; audio?.event('click'); }
+    // ★★ **추진제가 바닥나면 추진이 안 걸린다** (v62 · fuel-table.js).
+    //   죽지는 않는다 — 구간은 coast(0.45) 로 계속 나아가고, 그동안
+    //   압박이 진짜 시간으로 쌓인다. 벌은 「끝」이 아니라 **기다림**이다
+    if (breaker.key === 'thrust' && !power.thrust && isDry(supply.fuel)) {
+      banner = fuelWord(supply.fuel);
+      bannerT = 2.6;
+      audio?.event('deny');
+    } else if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); taught.flips++; audio?.event('click'); }
     else if (canTurnOn(power)) { power[breaker.key] = true; wearFlip(faults); taught.flips++; audio?.event('click'); }
     else {
       // ★ 꽉 찼을 때 **조용히 아무 일도 안 일어나면** 고장인 줄 안다.
@@ -1436,6 +1507,7 @@ function interactStep(dt) {
   if (onHelmSeat) aimName = 'helmseat';
   else aimName = gun.up ? (onGun ? 'grip' : (onLadder ? 'gunseat' : null))
     : onRadio ? 'radio'
+    : onSuit ? 'suit'
     : onMain ? 'mainbreaker'
     : onOuter ? 'outer'
     : onLadder ? 'gunseat'
@@ -1447,7 +1519,7 @@ function interactStep(dt) {
         : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : null)))))));
   // ★ 조준점이 **주포와 사다리에서는 안 켜졌다.** 「손이 닿는다」를 알려
   //   주는 유일한 표시인데 빠져 있으면 「눌러도 되는지」를 알 길이 없다
-  cross.classList.toggle('on', !!(gun.up || onLadder || onOuter || onAuto
+  cross.classList.toggle('on', !!(gun.up || onLadder || onOuter || onAuto || onSuit
     || onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
     || onYoke || (crankDoor && crankDoor.jammed)
@@ -1495,6 +1567,19 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   그대로 쓰는데, 게임에서는 그게 **「낚는 동안 배를 못 고친다」**가
   //   된다 — 「동시에 두 곳에 못 있는다」(PLAN §1)가 여기서 또 돈다
   if (innerLocked(lock) && nearD?.key === 'airlock') nearD = null;
+  // ══ ★★ **뚫린 방은 배가 잠근다** (v62 · 미소운석) ═══════════════
+  //  v23~v61 동안 사람은 벽이 뚫린 방에 그냥 걸어 들어가 6초 동안
+  //  **맨손으로** 구멍을 막았다 (REAL.md §2 「미소운석」). 이제 그 방은
+  //  진공이고, 문은 **우주복을 입어야 열린다.**
+  //
+  //  ★ **나가는 길은 안 막는다.** 그 방 안에 있을 때는 늘 열린다 —
+  //    고장이 발밑에서 터졌을 때 갇히면 그건 긴장이 아니라 사고다.
+  //    (에어록의 「갇힌다」는 **내가 연 문**이라 성립하고, 이건 아니다)
+  if (nearD && (bad.vacuum ?? []).includes(nearD.key)
+    && roomAt(me.x, me.z) !== nearD.key && !canEva(suit)) {
+    nag(`${nearD.name}이 진공입니다 — 우주복을 입고 들어갑니다`);
+    nearD = null;
+  }
   for (const e of stepDoors(doors, dt, {
     near: nearD, cranking, calm: chase.phase !== PHASE.CHASE && allDone(tutor),
   })) {
@@ -1527,10 +1612,27 @@ function systemsStep(dt, valveOpen, regionMult) {
   const rg = REGION_BY_KEY[ship.outside.region];
   // ★ **온실이 얼면 식량이 빨리 준다.** dt 를 늘려 흉내낸다 — 표(FOOD.perSec)를
   //   안 건드리는 쪽이다. 표를 고치면 시뮬이 읽는 값과 게임이 갈라진다
-  if (stepSupply(supply, dt * (1 + bad.food), { debris: rg?.debris ?? 0 }) === 'hungry') {
+  // ★★ **추진제도 여기서 준다** — 밟는 동안만, 구역마다 다르게 (v62).
+  //   빠른 길은 짧게 끝나되 초당 더 태우고, 성운은 오래 걸리되 덜 태운다.
+  //   그래서 「어느 길로 가나」가 추진제로도 한 번 더 갈린다
+  const sup = stepSupply(supply, dt * (1 + bad.food), {
+    debris: rg?.debris ?? 0,
+    thrust: power.thrust,
+    region: ship.outside.region,
+  });
+  if (sup === 'hungry') {
     banner = '손이 떨립니다 — 식량이 모자랍니다';
     bannerT = 3.2;
     audio?.event('fault');
+  }
+  if (sup === 'lowFuel') { banner = fuelWord(supply.fuel); bannerT = 3.2; audio?.event('fault'); }
+  if (sup === 'dry') {
+    // ★ 바닥나면 **차단기가 저절로 내려간다.** 「켜 놨는데 안 간다」는
+    //   계기가 거짓말하는 것이고, 이 배에서 제일 하면 안 되는 일이다
+    power.thrust = false;
+    banner = '추진제가 바닥났습니다 — 엔진이 꺼집니다';
+    bannerT = 4.2;
+    audio?.event('deny');
   }
   // ★ **굶은 시간을 센다.** 끝 화면 목록의 한 줄이 된다 (PLAN2H §9).
   //   재 보니 마지막 구간에 식량 45 를 들고 들어가면 5.4분을 떨고,
@@ -2229,10 +2331,36 @@ window.SPACE = {
       loads: supply.loads, traded: supply.traded, shaky: shaky(supply),
       trading: +trading.toFixed(2), hold: TRADE.hold,
       legsOnFood: +legsLeftOnFood(supply, route.fork?.seconds ?? LEG.seconds).toFixed(2),
+      // ★ v62 — 추진제. 「몇 구간을 **밟고** 갈 수 있나」가 이 값의 뜻이다
+      fuel: +supply.fuel.toFixed(1),
+      dry: isDry(supply.fuel),
+      fuelWord: fuelWord(supply.fuel),
+      legsOnFuel: +legsLeftOnFuel(supply.fuel, ship.outside.region).toFixed(2),
       winching,
     };
   },
   setSupply(v) { Object.assign(supply, v); },
+  /**
+   * ★★ 우주복 (v62) — 검사와 점검 모드가 같은 구멍으로 본다.
+   *   `word` 는 **화면에 뜨는 그 문장**이다 — 따로 만들면 갈라진다
+   */
+  get suit() {
+    return {
+      ...suitSummary(suit),
+      word: suitWord(suit),
+      inVacuum: vacNow,
+      /** 우주복 없이 진공에 서서 배가 닫기까지 남은 초 (아니면 null) */
+      bareLeft: bareLeft(lock, canEva(suit)),
+      hand: suitHand(suit), move: suitMove(suit),
+    };
+  },
+  /** 검사가 우주복을 입혀 놓는다 — 22초를 헤드리스로 붙들고 있지 않으려고 */
+  putSuit(on = true, air = null) {
+    suit.on = !!on; suit.wearing = 0; suit.doffing = 0;
+    if (air !== null) suit.air = air;
+    ship.suitRack?.setWorn(suit.on);
+    return suitSummary(suit);
+  },
   /** 항로 — 어디까지 왔고 압박이 얼마인가 */
   get route() {
     return {
@@ -2620,6 +2748,28 @@ function frame(now) {
     bannerT = 4.0;
     audio?.event('caught');
   }
+  // ── ★★ F — 감압. **방이 진공이 된다** (v62 · 마지막 장면) ────
+  // ★ 여덟 장면 중 이것만 못 짓고 있었다. 「공기」가 계통이 아니었기
+  //   때문인데, v62 에 우주복이 생기면서 규칙이 됐다 (REAL.md §2-C).
+  // ★ **「흩뿌려 맞았다」(두 방)로 연다.** 한 방이면 가서 막으면 끝인데,
+  //   두 방이면 「막았는데 왜 아직 새지」가 나고 그게 이 장면이다
+  if (sev === 'act' && sceneOpen(scenes, 'F') && !leakOpen) {
+    if (openFault(faults, 'micrometeor', { branch: 'spray' })) {
+      // ★ **연 것을 기억해 둔다.** C(자세 제어)에서 배운 것이다 —
+      //   안 그러면 「다 고쳤나」와 「애초에 안 열렸나」가 구별이 안 돼서
+      //   못 연 판에서 **혼자 저절로 낫는다**
+      leakOpen = true;
+      banner = '기밀 경보 — 어딘가 벽이 뚫렸습니다';
+      bannerT = 4.4;
+      audio?.event('caught');
+    }
+  }
+  // ★ 두 방을 다 막았으면 장면이 닫힌다. **저절로 안 낫는다**
+  if (leakOpen && !faults.open.some((o) => o.key === 'micrometeor')) {
+    leakOpen = false;
+    sceneDone(scenes, 'F');
+  }
+
   // ── 대응 시계가 다 됐다 — **계통에게 끝내라고 말한다** ──
   // ★ 조용히 해소로 넘기면 「장면은 끝났는데 적은 아직 붙어 있는」 상태가
   //   된다. 대응이 2~4분을 넘었다면 그건 지대를 다 지났다는 뜻이니
@@ -2895,12 +3045,20 @@ function frame(now) {
   // ★ 땅에 내려앉아 있으면 **문을 열어 놔도 공기가 안 준다** (대기가 있다).
   //   v45 에서 「열어 놓고 잊을 수 없다」를 만들어 놨는데, 그 벌이 여기서만
   //   풀린다 — 그게 「내려오면 숨통이 트인다」다
-  const lev = stepLock(lock, dt, { outsideAir: LAND.airHolds && landDown(land) });
+  // ★★ **우주복을 입었으면 칸이 비어도 아무 일이 없다** (v62).
+  //   진공은 벌이 아니라 절차다 — 벌은 「안 입고 열었다」 쪽에만 붙는다
+  const lev = stepLock(lock, dt, {
+    outsideAir: LAND.airHolds && landDown(land),
+    suited: canEva(suit),
+  });
   if (lev === 'open') { banner = '바깥문이 열렸습니다'; bannerT = 2.4; }
   if (lev === 'shut') { banner = '바깥문이 닫혔습니다'; bannerT = 2.0; }
   if (lev === 'blown') {
-    // ★ **벌이 숫자가 아니라 기다림이다.** 45초 동안 못 연다
-    banner = `기밀 상실 — 바깥문이 닫혔습니다`;
+    // ★ **벌이 숫자가 아니라 기다림이다.** 45초 동안 못 연다.
+    // ★ v62 부터 이건 「우주복 없이 진공에 서 있었다」일 때만 온다 —
+    //   그래서 말도 바뀐다. 「기밀 상실」은 사고를 뜻하는데, 사고인 것은
+    //   문이 아니라 **사람**이다
+    banner = `우주복 없이 진공에 있었습니다 — 배가 문을 닫았습니다`;
     bannerT = 3.6;
     hitFlash = 1;
     audio?.event('caught');
@@ -3045,6 +3203,11 @@ function frame(now) {
       coolOpen,
       heat,
       ore: supply.ore,
+      // ★★ v62 — 추진제와 우주복. 둘 다 **못 하게 되는 일**이라
+      //   손목이 알아야 한다 (없으면 「추진을 켭니다」가 거짓말이 된다)
+      dry: isDry(supply.fuel),
+      inVacuum: vacNow,
+      suited: canEva(suit),
     }),
     // 고친 것 — **정비실까지 안 가도 보인다.** 이게 사장님이 말씀하신 것이다.
     // ★ 갯수는 `log.length` 가 아니라 `fixed` 다 — 기록은 여섯에서 잘리므로

@@ -370,7 +370,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, a
 export function buildShip(scene, camera = null) {
   let chart = null;
   let bench = null;
-  let foodGauge = null, winch = null, tradeHatch = null, radio = null;
+  let foodGauge = null, winch = null, tradeHatch = null, radio = null, suitRack = null;
   const ship = new THREE.Group();
   scene.add(ship);
   BLOCKERS.length = 0;
@@ -631,7 +631,14 @@ export function buildShip(scene, camera = null) {
     // 바깥문. **안 열린다** — 아직 선외 작업이 없다 (PLAN §13 5단계)
     hatch(ship, r.x1 - 0.03, (r.z0 + r.z1) / 2, 0.95, H, -Math.PI / 2, Z.light);
     blockBox(r.x1 - 0.22, (r.z0 + r.z1) / 2, 0.22, 1.0, 0);
-    // 방호복 걸이 둘 — 사람은 없지만 **입을 것은 있다**
+    // ★★ 우주복 걸이 둘 — **v62 부터 진짜로 입는다.**
+    //   v45~v61 동안 이건 **장식**이었다. 걸이는 서 있는데 사람은 우주복
+    //   없이 진공에 나가 125초 동안 윈치를 잡았다 (REAL.md §2-C).
+    //   그림은 이미 여기 있었고 규칙만 없었던 셈이다.
+    //
+    //   ★ **앞쪽(z-0.85) 하나만 잡힌다.** 둘 다 잡히면 「어느 것이 내
+    //     것인가」가 생기는데, 사람이 하나뿐인 배에서 그건 없는 질문이다.
+    //     뒤쪽 것은 그대로 두어 **여벌이 있다**는 것만 말한다
     for (const sz of [-0.85, 0.85]) {
       const suit = new THREE.Group();
       suit.position.set(r.x0 + 0.55, 0, (r.z0 + r.z1) / 2 + sz);
@@ -641,6 +648,29 @@ export function buildShip(scene, camera = null) {
       box(suit, 0.26, 0.16, 0.05, new THREE.MeshBasicMaterial({ color: 0x1a2a38 }), 0, 1.87, 0.16);
       box(suit, 0.5, 0.06, 0.34, MAT.metal, 0, 2.06, 0);
       blockBox(r.x0 + 0.55, (r.z0 + r.z1) / 2 + sz, 0.3, 0.22, 0);
+      if (sz > 0) continue;
+      // ── 잡히는 쪽 ──
+      // 걸이 불 — 입고 있으면 꺼지고 걸려 있으면 켜진다 (「여기 있다」)
+      const lampMat = new THREE.MeshBasicMaterial({ color: Z.accent });
+      box(suit, 0.1, 0.04, 0.04, lampMat, 0.21, 2.0, 0.17);
+      // ★ 조준용 상자는 **보이지 않되 넉넉하게.** 우주복 몸통만 재면
+      //   서서 볼 때 헬멧에 가려 안 잡힌다 — v16 의 조종간에서 겪은 것
+      const hit = new THREE.Mesh(
+        new THREE.BoxGeometry(0.62, 1.55, 0.6),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      hit.position.set(0, 1.32, 0.1);
+      hit.name = '우주복 걸이';
+      suit.add(hit);
+      suitRack = {
+        hit,
+        group: suit,
+        /** 입으면 걸이가 빈다 — **화면에서도 없어져야** 입은 것이 보인다 */
+        setWorn(on) {
+          for (const c of suit.children) if (c !== hit) c.visible = !on;
+          lampMat.color.set(on ? 0x2a2f36 : Z.accent);
+        },
+      };
     }
     // 바닥 위험 줄무늬 — 이 방의 정체
     for (let i = 0; i < 9; i++) {
@@ -958,5 +988,5 @@ export function buildShip(scene, camera = null) {
       ambient.intensity = ambient.userData.full * amb;
     },
     mainBreaker: mainBreaker.userData.api,
-    foodGauge, winch, tradeHatch, radio, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
+    foodGauge, winch, tradeHatch, radio, suitRack, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }

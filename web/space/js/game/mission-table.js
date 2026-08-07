@@ -100,10 +100,19 @@ export const MISSIONS = [
     lead: '어딘가에서 공기가 샌다',
     // 소리로 찾는 첫 항목. 쉭 소리가 단서다
     costs: { time: [30, 90], air: true },
-    // ★ **새는 공기가 눈에 띈다.** 공기는 아직 계통이 아니므로(5단계),
-    //   벌을 「숨을 못 쉰다」가 아니라 **자국**으로 낸다 — 얼어붙은 김이
-    //   배 뒤로 길게 끌리는 것이라 오히려 이 게임답다
-    effect: { sign: 7 },
+    // ★ **새는 공기가 눈에 띈다** — 얼어붙은 김이 배 뒤로 길게 끌린다.
+    //
+    // ★★ **v62 에서 `air` 를 보탰다** (REAL.md §2 「미소운석」).
+    //   여기 「공기는 아직 계통이 아니므로 벌을 자국으로 낸다」고 적혀
+    //   있었는데, 그건 v45 에 바깥문이, v62 에 우주복이 생기기 전 이야기다.
+    //   **벽이 뚫렸는데 벌이 자국뿐**이면 사람이 뚫린 방에 그냥 들어가
+    //   6초 동안 맨손으로 막는다 — 그게 §0 의 ①거짓말이다.
+    //
+    //   `air: true` 면 **아직 안 막은 방이 진공이 된다.** 그 방의 문은
+    //   배가 잠그고, 들어가려면 우주복을 입어야 한다 (`suit-table.js`).
+    //   그리고 「흩뿌려 맞았다」 갈래가 여기서 살아난다 — 한 방을 막아도
+    //   **다른 한 방은 아직 진공**이라 「막았는데 왜 아직」이 성립한다
+    effect: { sign: 7, air: true },
     // ★ 처음엔 방마다 갈래를 하나씩 여섯 개 뒀다가 **내 규칙에 걸렸다** —
     //   이 파일 머리에 「갈래는 2~4개」라고 적어 뒀고 space-missions.js 가
     //   그걸 잰다. 규칙이 있는 이유는 **여러 번 하면 배워지게** 하려는 것이라,
@@ -245,6 +254,11 @@ export const MISSIONS = [
   },
   {
     key: 'deadSat', name: '죽은 위성', tier: TIER.SUPPLY,
+    // ★★ **이미 지어졌다** — `target-table.js` 의 「떠도는 것들」(v49)이
+    //   이 항목이다. 표 쪽은 **영영 안 뜨는데** 목록에는 남아서
+    //   「아직 할 일이 있다」로 읽혔다 (REAL.md §2-L · space-real.js 가 잡았다).
+    //   **지우지 않고 적어 둔다** — 지우면 다음에 같은 것을 또 만든다
+    builtAs: '떠도는 것들 (target-table.js · v49)',
     where: ['airlock', 'workshop'],
     lead: '낡은 위성이 돈다',
     costs: { time: [30, 60], sign: 'stopped' },
@@ -278,6 +292,9 @@ export const MISSIONS = [
   // ── C. 마음이 무거운 것 — FTL 계보 ─────────────────────────
   {
     key: 'distress', name: '구조 신호', tier: TIER.STORY,
+    // ★★ **이미 지어졌다** — `rescue-table.js` 의 「G 구조 신호」(v54)다.
+    //   위 `deadSat` 와 같은 이유로 남겨 두고 **적기만** 한다 (REAL.md §2-L)
+    builtAs: 'G 구조 신호 (rescue-table.js · v54)',
     where: ['cockpit', 'observ'],
     lead: '누가 살려 달라고 한다',
     // ★ **안 가도 벌이 없다.** 그게 요점이다 — 벌이 있으면 선택이 아니라
@@ -432,6 +449,15 @@ export const FAULT = {
 export const wired = () => MISSIONS.filter(
   (m) => m.tier === TIER.NOW && !m.sceneOnly && (m.steps || m.branches.some((b) => b.at)),
 );
+
+/**
+ * ★ 표에 남아 있지만 **제 계통으로 이미 지어진** 것.
+ *
+ *   「한 번도 안 뜨는 것」 목록에서 뺀다 — 안 빼면 목록이 실제보다 길게
+ *   보이고, 그러면 다음에 **이미 있는 것을 또 만든다** (REAL.md §2-L).
+ *   지우는 대신 남기는 이유는, 지우면 「왜 없지」를 다시 묻게 되기 때문이다.
+ */
+export const builtElsewhere = () => MISSIONS.filter((m) => m.builtAs);
 
 /** 지금 단계에서 만들 수 있는 것들 */
 export const buildable = () => MISSIONS.filter((m) => m.tier === TIER.NOW);

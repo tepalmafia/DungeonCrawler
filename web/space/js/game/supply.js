@@ -5,12 +5,15 @@
 //  거점에서 바꾼다. 규칙만 여기 있고 화면·소리는 밖에서 한다.
 // ══════════════════════════════════════════════════════════════════════════
 import { FOOD, PARTS, ORE, SCOOP, WINCH, TRADE, isShaky } from './supply-table.js';
+import { FUEL, burnMult, isDry } from './fuel-table.js';
 
 export function makeSupply() {
   return {
     food: FOOD.start,
     parts: PARTS.start,
     ore: ORE.start,
+    /** ★ 추진제 — **밟는 동안만** 준다 (v62 · fuel-table.js) */
+    fuel: FUEL.start,
     /** 이번에 잡고 있는 윈치가 얼마나 끌어왔나 — 「한 통」을 세려고 */
     hauled: 0,
     loads: 0,        // 이번 회차에 몇 통 캤나
@@ -19,17 +22,36 @@ export function makeSupply() {
 }
 
 /**
- * 한 프레임 — 먹고, 지나가며 줍는다.
+ * 한 프레임 — 먹고, 지나가며 줍고, **밟는 동안 태운다.**
+ *
  * @param debris 지금 구역에 떠 있는 덩어리 수 (regions-table 의 debris)
+ * @param thrust ★ 추진을 켜고 있나 — **켠 동안만** 추진제가 준다 (v62)
+ * @param region 지금 구역 열쇠 — 빠른 길이 더 태운다 (`burnMult`)
+ * @returns 'hungry' | 'dry' | 'lowFuel' | null   (한 순간에 하나만)
  */
-export function stepSupply(s, dt, { debris = 0 } = {}) {
+export function stepSupply(s, dt, { debris = 0, thrust = false, region = 'empty' } = {}) {
   const was = isShaky(s.food);
   s.food = Math.max(0, s.food - FOOD.perSec * dt);
   // 줍기 — **멈추지 않아도 되고 자국도 안 는다.** 대신 변변찮다
   s.ore = Math.min(ORE.max, s.ore + debris * SCOOP.perDebris * dt);
+
+  // ★ 추진제 — 밟는 동안만. **아끼려고 계속 끄고 있으면 압박이 쌓인다**
+  //   (route-table LEG.coast). 양쪽이 다 손해라야 고르는 것이 된다
+  let fuelEv = null;
+  if (thrust && s.fuel > 0) {
+    const wasLow = s.fuel <= FUEL.low;
+    s.fuel = Math.max(0, s.fuel - FUEL.perSec * burnMult(region) * dt);
+    if (s.fuel <= 0) fuelEv = 'dry';
+    else if (!wasLow && s.fuel <= FUEL.low) fuelEv = 'lowFuel';
+  }
+
   // 굶기 시작한 순간만 알린다. 매 프레임 알리면 경보가 소음이 된다
-  return !was && isShaky(s.food) ? 'hungry' : null;
+  if (!was && isShaky(s.food)) return 'hungry';
+  return fuelEv;
 }
+
+/** ★ 지금 추진을 걸 수 있나 — 바닥나면 못 건다 */
+export const canThrust = (s) => !isDry(s.fuel);
 
 /**
  * 윈치를 잡고 있다 — **멈춰서 끌어온다.**
@@ -50,12 +72,13 @@ export function winchRelease(s) { /* 지금은 아무것도 안 한다. 자리�
 /** 지금 거래할 수 있나 */
 export function canTrade(s) { return s.ore >= TRADE.ore; }
 
-/** 거래 한 번 — 광석을 내고 식량과 부품을 받는다 */
+/** 거래 한 번 — 광석을 내고 식량·부품·**추진제**를 받는다 (v62) */
 export function trade(s) {
   if (!canTrade(s)) return false;
   s.ore -= TRADE.ore;
   s.food = Math.min(FOOD.max, s.food + TRADE.food);
   s.parts = Math.min(PARTS.max, s.parts + TRADE.parts);
+  s.fuel = Math.min(FUEL.max, s.fuel + FUEL.perTrade);
   s.traded++;
   return true;
 }

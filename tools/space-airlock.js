@@ -19,6 +19,8 @@ import {
   makeLock, cycle, stepLock, canHaul, haulWhy, innerLocked, signOf, heatOut,
 } from '../web/space/js/game/airlock.js';
 import { WINCH } from '../web/space/js/game/supply-table.js';
+import { SUIT } from '../web/space/js/game/suit-table.js';
+import { makeSuit, canEva } from '../web/space/js/game/suit.js';
 import { SIGN } from '../web/space/js/game/chase-table.js';
 import { HEATING } from '../web/space/js/game/chase-table.js';
 import { SINK } from '../web/space/js/game/heat-table.js';
@@ -67,24 +69,56 @@ console.log('\n[3] ★ **문이 열려 있어야 낚는다**');
   ok(canHaul(o), '열면 낚인다');
 }
 
-console.log('\n[4] ★★ **열어 놓고 잊을 수 없다** — 공기가 준다');
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★ **이 절의 뜻이 v62 에서 통째로 뒤집혔다** (열세 번째다)
+//
+//   예전에 여기는 「가득에서 바닥까지 **90~200초**」와 「한 번 열어 **2~4통**」을
+//   물었다. 그때는 이 칸의 공기가 곧 **선외 작업 시계**였기 때문이다.
+//
+//   그런데 그게 애초에 틀린 설계였다 (REAL.md §2-C). 사람이 우주복 없이
+//   진공에 125초 서 있었고, 「배 전체 공기가 준다」는 에어록의 정의를
+//   깨는 말이었다. v62 에서 시계를 **둘로 갈랐다**:
+//
+//     · 칸의 공기 — 12초에 빈다. **이건 벌이 아니라 절차다**
+//     · 우주복 공기 — 5분. **이쪽이 선외 작업 시계다**
+//
+//   그래서 검사도 옮긴다. **묻는 값이 아니라 묻는 물건이 바뀌었다** —
+//   이 저장소가 열두 번 겪은 「도구가 옛 설계를 지키고 있다」의 열세 번째고,
+//   이번엔 내가 만든 판을 내 도구가 막아서 알았다.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[4] ★★ **열어 놓고 잊을 수 없다** — 이제 우주복 공기가 시계다');
 {
-  const l = opened();
-  const full = (1 - LOCK.airFloor) / LOCK.airDrain;
-  console.log(`   가득에서 바닥까지 ${full.toFixed(0)}초 · 한 통이 ${WINCH.load / WINCH.perSec}초`);
-  ok(full >= 90 && full <= 200,
-    `${full.toFixed(0)}초 (90~200) — 한 통(${WINCH.load / WINCH.perSec}초)을 두어 번 캘 시간`);
-  const loads = full / (WINCH.load / WINCH.perSec);
-  ok(loads >= 1.5 && loads <= 4,
-    `한 번 열어 ${loads.toFixed(1)}통 — 한 통도 못 캐면 문이 벌이고, 다섯 통이면 잊어도 된다`);
+  const vent = (1 - LOCK.airFloor) / LOCK.airDrain;
+  console.log(`   칸이 비는 데 ${vent.toFixed(0)}초 · 우주복 ${(SUIT.air / 60).toFixed(1)}분 · 한 통이 ${WINCH.load / WINCH.perSec}초`);
+  ok(vent <= 20,
+    `★ 칸이 **${vent.toFixed(0)}초**에 빈다 (20초 이하) — 작은 칸 하나다.`
+    + ' 실제 에어록 배기가 10~30초고, **이건 벌이 아니라 절차다**');
+  const loads = SUIT.air / (WINCH.load / WINCH.perSec);
+  ok(loads >= 3 && loads <= 8,
+    `★ 우주복 한 통으로 ${loads.toFixed(1)}통 캔다 — 한 통도 못 캐면 문이 벌이고,`
+    + ' 열 통이면 잊어도 된다. **위험(한 통에 26)이 먼저 오되, 잊으면 공기가 온다**');
 
-  // ★ 바닥나면 **강제로 닫히고 한동안 못 연다**
-  let ev = null, t = 0;
-  while (t < full + 5 && ev !== 'blown') { ev = stepLock(l, DT); t += DT; }
-  ok(ev === 'blown', `${t.toFixed(0)}초에 기밀을 잃었다`);
-  ok(!l.open && l.lockout > 0, `강제로 닫히고 ${LOCK.lockout}초 못 연다 — **벌이 기다림이다**`);
-  ok(!cycle(l) && l.blocked === 'lockout', `그동안 열려고 하면 「${WHY.lockout}」`);
-  ok(l.blown === 1, '기밀을 잃은 횟수가 남는다');
+  // ★★ **우주복을 입었으면 칸이 비어도 아무 일이 없다**
+  {
+    const l = opened();
+    let ev = null, t = 0;
+    while (t < vent + SUIT.grace + 10 && ev !== 'blown') { ev = stepLock(l, DT, { suited: true }); t += DT; }
+    ok(ev !== 'blown' && l.open,
+      `★★ 입고 있으면 **${t.toFixed(0)}초를 열어 놔도 안 닫힌다** — 진공은 사고가 아니다`);
+  }
+  // ★★ 안 입었으면 **칸이 빈 뒤 grace 만에** 배가 닫는다
+  {
+    const l = opened();
+    const bare = makeSuit();
+    ok(!canEva(bare), '걸이에서 안 내렸으면 나갈 수 없다');
+    let ev = null, t = 0;
+    while (t < vent + SUIT.grace + 10 && ev !== 'blown') { ev = stepLock(l, DT, { suited: false }); t += DT; }
+    ok(ev === 'blown', `안 입었으면 ${t.toFixed(0)}초에 배가 억지로 닫는다 (배기 ${vent.toFixed(0)} + 유예 ${SUIT.grace})`);
+    ok(t < 25, `★ **한 번 겪고 배울 만큼 빠르다** (${t.toFixed(0)}초) — 예전엔 125초라 「우주복이 왜 있지」였다`);
+    ok(!l.open && l.lockout > 0, `강제로 닫히고 ${LOCK.lockout}초 못 연다 — **벌이 기다림이다**`);
+    ok(!cycle(l) && l.blocked === 'lockout', `그동안 열려고 하면 「${WHY.lockout}」`);
+    ok(l.blown === 1, '기밀을 잃은 횟수가 남는다');
+  }
 }
 
 console.log('\n[5] 닫아 두면 다시 찬다 — **차는 것이 빠지는 것보다 느리다**');

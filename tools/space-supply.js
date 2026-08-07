@@ -4,6 +4,13 @@
 //    node tools/space-supply.js
 //
 //  ★ 여기서 묻는 것
+//    ★★ **①의 뜻이 v62 에서 뒤집혔다** (열네 번째다). 예전에는 「식량이
+//       한 구간의 1.2~1.8배인가」를 물었고, 그건 「**20분 회차를 반복한다**」던
+//       옛 전제에서 나온 잣대였다. 전제는 2026-08-05 에 「2시간 한 번의
+//       여정」으로 바뀌었는데(PLAN2H) **이 잣대만 안 옮겼다** — 그래서
+//       도구가 「13분에 굶는 배」를 몇 달 동안 초록으로 지켜 줬다.
+//       지금은 **회차 하나**를 기준으로 묻는다 (REAL.md §2-D).
+//
 //    ① 식량이 한 구간의 1.2~1.8배인가 (PLAN §11) — 「다음 거점까지 갈 식량이
 //       있나」가 질문이 되려면 아슬아슬해야 한다
 //    ② 채굴 한 통이 40~90초인가 · 한 통에 접촉 위험이 20~30% 오르나
@@ -19,6 +26,7 @@ import { FOOD, PARTS, ORE, SCOOP, WINCH, TRADE } from '../web/space/js/game/supp
 import { makeSupply, stepSupply, winchStep, canTrade, trade, legsLeftOnFood, shaky }
   from '../web/space/js/game/supply.js';
 import { LEG, allForks } from '../web/space/js/game/route-table.js';
+import { FUEL } from '../web/space/js/game/fuel-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 import { SIGN } from '../web/space/js/game/chase-table.js';
 
@@ -36,9 +44,21 @@ console.log('\n[1] 식량 — 「다음 거점까지 갈 식량이 있나」가 
     const ratio = full / f.seconds;
     console.log(`  ${f.name.padEnd(20)} 구간의 ${ratio.toFixed(2)}배`);
   }
+  // ★★ **회차 하나를 기준으로 묻는다** (v62). 한 끼가 회차의 0.5~0.8 이면
+  //   시작에 한 번 · 중간에 한 번 — 「2시간에 2~3끼」다. 0.5 아래면 거점마다
+  //   무조건 들르게 되어 **고를 것이 없어지고**(그건 시계지 통화가 아니다),
+  //   0.8 위면 회차 안에서 한 번도 안 문다
+  const RUN = LEG.seconds * LEG.count;
+  const ofRun = full / RUN;
+  const meals = 1 / ofRun;
+  console.log(`  ★ 회차 ${(RUN / 60).toFixed(0)}분의 ${ofRun.toFixed(2)}배 — 회차에 ${meals.toFixed(1)}끼`);
+  ok(ofRun >= 0.5 && ofRun <= 0.8,
+    `★ 한 끼가 회차의 **${ofRun.toFixed(2)}배** (0.5~0.8) — 2시간에 ${meals.toFixed(1)}끼.`
+    + ` 예전엔 ${(full / LEG.seconds).toFixed(2)}구간(13분)이었고 그건 「밥 먹고 10분 뒤 손 떨림」이었다`);
+  // 그래도 **한 구간은 넘게** 버텨야 한다 — 구간 안에서 굶으면 고를 것이 없다
   const ratios = allForks().map((f) => FOOD.max / FOOD.perSec / f.seconds);
-  ok(Math.min(...ratios) >= 1.2 && Math.max(...ratios) <= 1.8,
-    `전부 1.2~1.8배 안 — ${Math.min(...ratios).toFixed(2)} ~ ${Math.max(...ratios).toFixed(2)}`);
+  ok(Math.min(...ratios) >= 1.2,
+    `제일 느린 길에서도 구간의 ${Math.min(...ratios).toFixed(1)}배는 버틴다 — 구간 안에서 굶으면 고를 것이 없다`);
   // 그리고 **가는 길에 따라 갈려야** 한다. 다 똑같으면 항로를 고를 이유가 없다
   ok(Math.max(...ratios) - Math.min(...ratios) >= 0.25,
     `길에 따라 여유가 갈린다 (차 ${(Math.max(...ratios) - Math.min(...ratios)).toFixed(2)}배)`);
@@ -73,14 +93,26 @@ console.log('\n[3] 줍기 — **모자라야 밖에 나갈 이유가 생긴다**
     const got = r.debris * SCOOP.perDebris * f.seconds;
     console.log(`  ${f.name.padEnd(20)} 한 구간에 광석 ${got.toFixed(0)}`);
   }
-  // 한 구간에 드는 식량을 광석으로 환산하면 얼마인가
+  // ══ ★★ **v62 — 계산서의 절반만 재고 있었다** ═══════════════════
+  //  예전에는 「한 구간의 **식량**을 줍기로 댈 수 있나」만 물었다.
+  //  v62 에 식량 시계가 회차로 늘어나면서 (REAL.md §2-D) 식량만으로는
+  //  줍기가 이기게 됐고, 그 순간 「안 캐면 굶나」가 깨진 것처럼 보였다.
+  //
+  //  깨진 게 아니라 **계산서에 줄이 하나 늘었다.** 옛 식량이 하던 일
+  //  (「다음 거점까지 갈 것이 있나」)은 **추진제**로 옮겨 갔으므로,
+  //  물어야 할 것은 「한 구간이 먹는 **식량 + 추진제**」다
   const needFood = FOOD.perSec * LEG.seconds;
-  const needOre = (needFood / TRADE.food) * TRADE.ore;
+  const needFuel = FUEL.perSec * LEG.seconds;      // 한 구간을 내내 밟았을 때
+  const oreFor = (food, fuel) =>
+    (food / TRADE.food) * TRADE.ore + (fuel / FUEL.perTrade) * TRADE.ore;
+  const needOre = oreFor(needFood, needFuel);
   const bestScoop = Math.max(...allForks().map(
     (f) => REGION_BY_KEY[f.region].debris * SCOOP.perDebris * f.seconds,
   ));
-  console.log(`  한 구간이 먹는 식량 ${needFood.toFixed(0)} = 광석 ${needOre.toFixed(0)} 어치`);
-  ok(bestScoop < needOre, `제일 잘 줍는 길로 가도 모자란다 (${bestScoop.toFixed(0)} < ${needOre.toFixed(0)})`);
+  console.log(`  한 구간이 먹는 것: 식량 ${needFood.toFixed(0)} + 추진제 ${needFuel.toFixed(0)} = 광석 ${needOre.toFixed(0)} 어치`);
+  ok(bestScoop < needOre,
+    `★ 제일 잘 줍는 길로 가도 모자란다 (${bestScoop.toFixed(0)} < ${needOre.toFixed(0)}) — **안 캐면 못 간다.**`
+    + ` 식량만 보면 ${oreFor(needFood, 0).toFixed(0)} 이라 줍기가 이긴다: 캐는 이유는 이제 **추진제** 쪽에 있다`);
   ok(bestScoop > needOre * 0.25, `그래도 바닥은 된다 — 굶어 죽는 나선은 막는다 (${(bestScoop / needOre * 100).toFixed(0)}%)`);
 }
 

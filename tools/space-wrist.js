@@ -86,11 +86,15 @@ console.log('\n[2b] ★★ **전부 동사인가** — 「열이 높습니다」
     '켭니다', '끕니다', '내립니다', '올립니다', '고릅니다', '엽니다', '닫습니다',
     '찾습니다', '끌어옵니다', '버팁니다', '비킵니다', '갑니다', '둡니다',
     '돌립니다', '캡니다', '바꿉니다',
+    // v62 — 우주복
+    '입습니다', '채웁니다',
   ];
   const S = {
     doorJammed: true, chasing: true, heatHigh: true, hazardSoon: true,
     faultsOpen: 2, foodLow: true, atPort: true, thrust: false, cool: false,
     heat: 70, ore: 0,
+    // v62 — 진공에 우주복 없이 · 추진제 바닥
+    inVacuum: true, suited: false, dry: true,
   };
   const bad = [];
   for (const j of JOBS) {
@@ -103,12 +107,21 @@ console.log('\n[2b] ★★ **전부 동사인가** — 「열이 높습니다」
 
   // 갈래가 있는 줄(추격)도 전부 검사한다 — 하나만 명사여도 그 순간 못 읽는다
   const chase = JOBS.find((j) => j.key === 'chase');
+  // ★ v62 — `dry` 를 **꺼 놓고** 네 갈래를 본다. 켜 놓으면 추진제 갈래가
+  //   넷을 다 덮어서 「넷 다 같은 말」이 되고, 그건 갈래를 안 재는 것이다.
+  //   추진제 갈래는 다섯째로 따로 묻는다
+  const D = { ...S, dry: false };
   const each = [
-    { ...S, thrust: false }, { ...S, thrust: true, cool: false },
-    { ...S, thrust: true, cool: true, heat: 90 }, { ...S, thrust: true, cool: true, heat: 5 },
+    { ...D, thrust: false }, { ...D, thrust: true, cool: false },
+    { ...D, thrust: true, cool: true, heat: 90 }, { ...D, thrust: true, cool: true, heat: 5 },
   ].map((x) => chase.say(x));
   ok(each.every((t) => ACTS.some((a) => t.endsWith(a))),
     `추격 갈래 넷도 전부 동사다 — ${each.map((t) => t.split(' · ')[1]).join(' / ')}`);
+  // ★★ v62 — **추진제가 없으면 「추진을 켭니다」가 거짓말이다.**
+  //   손목이 못 하는 일을 시키는 순간 이 장치를 안 믿게 된다
+  const dryLine = chase.say({ ...S, dry: true, thrust: false });
+  ok(!/추진을 켭니다/.test(dryLine),
+    `★ 추진제가 없을 때 「추진을 켭니다」라고 **안 한다** — 「${dryLine}」`);
 }
 
 console.log('\n[3] **급한 것에만 빨간 불** — 전부 급하면 아무것도 안 급하다');

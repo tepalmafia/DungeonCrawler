@@ -33,7 +33,10 @@
 // 14 → 15: 구조 신호(G) 칸이 늘었다
 // 13 → 14: **앉아 있던 자세를 안 잇는다.** 옛 저장에는 `gun.up` 이 참인 것이
 //          있고, 그대로 이으면 걸을 수 없는 자리에서 시작한다. 올려서 버린다
-export const SAVE_VERSION = 16;   // v58 — ship.sink 가 늘었다
+// 16 → 17: v62 — 우주복(suit)과 추진제(supply.fuel)가 늘었다.
+//          ★ 안 올리면 옛 저장에 `fuel` 이 없어 `undefined` 로 이어지고,
+//            그러면 추진이 영영 안 걸린다 (`isDry(undefined)` 가 참이다)
+export const SAVE_VERSION = 17;   // v62 — suit · supply.fuel 이 늘었다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -47,7 +50,9 @@ export const SAVE_KEY = 'spacewar.save.v1';
 export const FIELDS = {
   route: ['phase', 'leg', 'press', 't', 'need', 'fork', 'overrun'],
   chase: ['phase', 'risk', 'dist', 'sign', 'runs', 't'],
-  supply: ['food', 'parts', 'ore'],
+  // ★ v62 — `fuel` 이 늘었다. 안 담으면 이어할 때마다 탱크가 가득 차서
+  //   **껐다 켜는 것이 급유가 된다** (열 저장고에서 이미 밟은 함정이다)
+  supply: ['food', 'parts', 'ore', 'fuel'],
   /**
    * ★ **`open` 과 `log` 를 빠뜨리고 있었다.**
    *   열려 있던 고장이 저장이 안 돼서, 이어하면 **고칠 것이 통째로
@@ -113,7 +118,14 @@ export const FIELDS = {
    */
   rescue: ['step', 't', 'wait', 'took', 'got'],
   /** 에어록 — 문을 열어 둔 채 저장했는데 이어하니 닫혀 있으면 봐준 것이다 */
-  lock: ['open', 'cycling', 'opening', 'air', 'lockout', 't', 'blown'],
+  lock: ['open', 'cycling', 'opening', 'air', 'lockout', 't', 'blown', 'bare'],
+  /**
+   * ★★ 우주복 (v62) — **입은 것은 잇고, 입던 중인 것은 안 잇는다.**
+   *   `wearing`·`doffing` 은 손에 매인 값이라 「자세는 안 잇는다」와 같은
+   *   규약으로 뺀다 (조종간·윈치와 같다). `air` 는 반드시 담는다 —
+   *   안 담으면 껐다 켜는 것이 **공기 충전**이 된다
+   */
+  suit: ['on', 'air', 'evaT', 'ranOut'],
   /**
    * ★ 착륙 — **땅에 내려앉은 채로 닫았다가 켰는데 하늘이면** 그건 이어한
    *   게 아니다. `got` 은 이번 착륙에서 실은 것이라 배너와 끝 화면이 읽는다
