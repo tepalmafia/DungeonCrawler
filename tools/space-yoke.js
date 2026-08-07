@@ -215,6 +215,55 @@ console.log('\n[4] 앞을 가로지르는 것이 없나 — 조종간은 **가�
   ok(blocked.length === 0, `막는 것이 없다 — ${blocked.join(' · ') || '없음'}`);
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[5] ★★★ **잡으면 창이 화면을 채우나** (v63 · 사장님 요청)');
+{
+  //  「조정간을 잡으면 **전체 화면으로 나오게** 해야지. 앉기만 하니깐
+  //   우주가 안보여서 운전을 못하고」
+  //
+  //  ★★ 재고 나서 원인이 나왔다: v59 의 「잡으면 들여다본다」(FOCUS)가
+  //     **조종간에도 걸려 있었다.** 화각을 72 → 45 로 **좁힌다** —
+  //     계기를 읽으려고 만든 것이 모는 것에도 걸려 밖을 더 못 보게 했다.
+  //     손잡이를 **읽는 것 / 모는 것**으로 가르는 것이 v63 이 한 일이다.
+  await S(() => { SPACE.putHelmSit(true); });
+  await stand(0, -6.95, 0, -0.20);
+  const before = await S(() => ({
+    fov: +SPACE.camera.fov.toFixed(1),
+    y: +SPACE.camera.getWorldPosition(new SPACE.THREE.Vector3()).y.toFixed(3),
+    pitch: +SPACE.camera.rotation.x.toFixed(3),
+    aim: SPACE.aim,
+  }));
+  ok(before.aim === 'yoke', `앉아서 조종간이 잡힌다 (「${before.aim}」)`);
+  // ★★ **`p.mouse.down()` 을 안 쓴다.** 바로 위 [3] 에 그 이유가 적혀 있는데
+  //   내가 이 절을 새로 쓰면서 안 지켰고, 검사가 **거기서 멈췄다.**
+  //   적어 둔 규약을 안 읽으면 적어 둔 값이 없다
+  await S(() => dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+  // ★ 페이지 안에서 rAF 로 기다린다 — 밖에서 초로 기다리면 헤드리스 시계가
+  //   실제의 1/20 이라 안 끝난다 (v62 에서 세 번 겪었다)
+  await S(() => new Promise((res) => {
+    let i = 0;
+    const tick = () => { if (++i >= 50) return res(1); requestAnimationFrame(tick); };
+    tick();
+  }));
+  const held = await S(() => ({
+    fov: +SPACE.camera.fov.toFixed(1),
+    y: +SPACE.camera.getWorldPosition(new SPACE.THREE.Vector3()).y.toFixed(3),
+    pitch: +SPACE.camera.rotation.x.toFixed(3),
+    steering: SPACE.hazard?.steering ?? null,
+  }));
+  await S(() => dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+  console.log(`   화각 ${before.fov} → ${held.fov} · 눈높이 ${before.y} → ${held.y} · 고개 ${before.pitch} → ${held.pitch}`);
+  ok(held.steering === true, '★ 잡으면 조종 중이 된다');
+  ok(held.fov > before.fov + 8,
+    `★★★ 잡으면 화각이 **넓어진다** (${before.fov} → ${held.fov}) — v62 까지는 45 로 **좁아졌다.**`
+    + ' 계기를 읽는 손잡이와 모는 손잡이는 정반대여야 한다');
+  ok(held.y > before.y + 0.1,
+    `★★ 눈이 **뜬다** (${before.y} → ${held.y}) — 눈썹 차양(1.12) 위로 올라간다`);
+  ok(held.pitch > before.pitch + 0.15,
+    `★★ 고개가 **들린다** (${before.pitch} → ${held.pitch}) — 조종간을 보려고 숙인 만큼 게임이 들어 준다`);
+  await S(() => SPACE.putHelmSit(false));
+}
+
 if (SP) {
   await stand(0, -5.7, 0, -0.20);
   await p.waitForTimeout(900);
