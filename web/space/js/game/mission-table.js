@@ -235,7 +235,13 @@ export const MISSIONS = [
     lead: '얼음이 떠 있다',
     // **지루하지만 확실한 바닥.** 죽음의 나선을 막는 것이 이 항목의 일이다
     costs: { time: [40, 90], sign: 'stopped' },
-    branches: [{ key: 'plain', what: '물과 공기', weight: 5 }],
+    // ★ **갈래가 하나였다.** 파일 머리에 「2~4」라고 적어 놓고 하나만 뒀는데,
+    //   검사가 위쪽만 봐서(`> 4`) 몇 달을 통과했다. 갈래가 하나면 고를 것이
+    //   없고, 고를 것이 없으면 그건 갈래가 아니라 그냥 결과다
+    branches: [
+      { key: 'plain', what: '물과 공기', weight: 4 },
+      { key: 'rock', what: '속이 돌이다. 깨는 데만 시간을 썼다', weight: 2, worse: true },
+    ],
   },
   {
     key: 'deadSat', name: '죽은 위성', tier: TIER.SUPPLY,
@@ -249,7 +255,12 @@ export const MISSIONS = [
   },
   {
     key: 'derelict', name: '표류선', tier: TIER.SUPPLY,
-    where: ['airlock', 'cargo'],
+    // ★★ **`'cargo'` 라고 적혀 있었다 — 배에 없는 방이다** (2026-08-07).
+    //   방은 일곱이고 화물칸은 그중에 없다. 짐은 **에어록으로 들이고
+    //   정비실에 쟁인다** — 실제로 그렇게 지었는데 표만 안 고쳤다.
+    //   `space-missions.js` 가 방을 볼 때 `wired()` 만 훑어서, 아직 안
+    //   물린 항목의 방 이름은 **아무도 안 보고 있었다** (space-real.js 가 잡았다)
+    where: ['airlock', 'workshop'],
     lead: '배가 하나 떠 있다. 불이 꺼져 있다',
     // ★ Hardspace 방식 — **속을 매번 다시 뽑는다.** 같은 종류인데 안이 다르면
     //   항목 하나로 오래 간다. 그리고 Duskers 방식으로 **아무 설명도 안 붙인다**
@@ -281,7 +292,7 @@ export const MISSIONS = [
   },
   {
     key: 'othersBait', name: '남의 미끼', tier: TIER.STORY,
-    where: ['cargo'],
+    where: ['airlock'],   // ★ `'cargo'` 였다 — 배에 없는 방이다 (위 참조)
     lead: '화물이 떠 있다. 누가 살려고 던진 것이다',
     // §5-3 의 「내가 던진 것을 언젠가 누가 줍는다」의 반대편.
     // 주우면 **그를 쫓던 것이 나를 본다**
@@ -318,10 +329,28 @@ export const MISSIONS = [
   },
   {
     key: 'jettison', name: '버리기', tier: TIER.SUPPLY,
-    where: ['airlock', 'cargo'],
+    // ★★ **`'cargo'` 라고 적혀 있었다 — 배에 없는 방이다** (2026-08-07).
+    //   방은 일곱이고 화물칸은 그중에 없다. 짐은 **에어록으로 들이고
+    //   정비실에 쟁인다** — 실제로 그렇게 지었는데 표만 안 고쳤다.
+    //   `space-missions.js` 가 방을 볼 때 `wired()` 만 훑어서, 아직 안
+    //   물린 항목의 방 이름은 **아무도 안 보고 있었다** (space-real.js 가 잡았다)
+    where: ['airlock', 'workshop'],
     lead: '실은 것을 던지면 산다',
     costs: { cargo: 'all' },
-    branches: [{ key: 'works', what: '거의 확실히 뿌리친다', weight: 5 }],
+    // ★★ **「거의 확실히 뿌리친다」 하나뿐이었다 — 두 가지가 틀렸다.**
+    //   ① 갈래가 하나면 고를 것이 없다 (위 얼음 덩어리와 같은 구멍)
+    //   ② **말이 안 된다.** 화물을 던져도 질량은 조금 줄 뿐이라 그것만으로
+    //      뿌리쳐지지 않는다. 그리고 던진 것은 **새 표적**이 되어 오히려
+    //      레이더에 하나 더 뜬다.
+    //
+    //   그래서 「뿌리친다」가 아니라 **「저쪽이 그걸 줍느라 늦는다」**로 바꾼다.
+    //   이러면 「남의 미끼」(othersBait)와 정확히 짝이 맞는다 — 내가 던진
+    //   것을 언젠가 누가 줍고, 남이 던진 것을 내가 줍는다 (PLAN §5-3).
+    //   던지는 쪽에서 보면 **시간을 사는 것**이지 사라지는 것이 아니다.
+    branches: [
+      { key: 'slows', what: '저쪽이 그걸 줍느라 늦는다. 그 사이에 벌린다', weight: 4 },
+      { key: 'ignored', what: '거들떠보지도 않는다. 광석만 잃었다', weight: 2, worse: true },
+    ],
   },
   {
     key: 'silentRun', name: '숨죽이기', tier: TIER.NOW,

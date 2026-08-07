@@ -237,6 +237,7 @@ node tools/space-check.js        스페이스워 — ★ 점검 모드(F2·`)·�
 node tools/space-end.js          스페이스워 — ★ H 성간 공백 · 끝 화면이 **점수가 아닌 목록인가**
 node tools/space-blackout.js     스페이스워 — ★ E 정전 · 어둠이 벌인가 · 갇히지 않나
 node tools/space-rescue.js       스페이스워 — ★ G 구조 신호 · 가는 것이 진짜 선택인가 (윈치와 견준다)
+node tools/space-real.js         스페이스워 — ★★ **말이 되나** · 미션과 설정을 통째로 (docs/space/REAL.md)
 node tools/space-sky.js          스페이스워 — ★ 창밖 · **별이 흐르지 않나**(고증) · 행성에 낮과 밤이 있나 (--see 8391)
 node tools/space-story.js        스페이스워 — ★★ **스토리 그물** · 줄기가 닫히나 · 게임과 안 갈라졌나
 node tools/space-story.js --write   docs/space/STORY.md 를 표에서 **다시 뽑는다** (손으로 안 적는다)
