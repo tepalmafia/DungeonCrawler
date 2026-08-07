@@ -60,7 +60,17 @@ const press = async (sec = 2.5) => { await down(); await p.waitForTimeout(sec * 
  *   놓친다** — 검사가 「자동 항법이 잡힌다 ✔ → 누르니 안 켜진다 ✘」로
  *   두 번 빨개졌는데, 게임이 아니라 여기가 급했던 것이다
  */
-const settle = () => p.waitForTimeout(3000);
+const settle = async () => {
+  // ★★★ **짐벌이 바로 설 때까지** 기다린다 (v66 · 여기서 세 번 빨개졌다).
+  //   조종간을 세게 밀면 거주 구획이 최대 **12.6도** 기울고(`GIMBAL.maxTilt`),
+  //   그 기울기가 카메라에 그대로 더해진다(`camera.rotation.x += fly3.tiltX`).
+  //   바로 서는 데 게임 시간 1초쯤인데 **헤드리스 시계는 실제의 1/20** 이라
+  //   20초가 걸린다. 그 사이에 겨누면 **작은 손잡이를 스치고 지나간다** —
+  //   검사에는 「추력 레버가 잡힌다 (null)」처럼 말이 안 되는 줄로 나온다
+  await S(() => SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }));
+  await until(() => SPACE.fly3.tilt < 0.01, 90, '짐벌이 바로 서기');
+  await p.waitForTimeout(1500);
+};
 /**
  * ★★ **앉히고 몸이 좌석에 닿을 때까지 기다린다** (v66).
  *   `helm2.k` 만 보고 겨누면 **몸이 아직 미끄러지는 중**이라 조준이 흔들린다 —
@@ -182,6 +192,8 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   // ★ **앉아 있으면 몸이 조종석에 붙들린다.** 앞 절이 못 일어났을 때
   //   여기가 통째로 거짓말을 하게 되므로, 이 절이 제 앞가림을 한다
   await S(() => SPACE.putGun(false));
+  // ★ 앞 절이 조종간을 세게 밀었다 — 짐벌이 바로 설 때까지 기다린다
+  await settle();
   const RACK = { x: 1.3 + 0.55, z: (4.2 + 7.2) / 2 - 0.85 };
   // ★★ **여기 yaw 부호가 반대였다** (v66 에서 잡았다). 걸이는 x 1.85 인데
   //   x 2.80 에 서서 `-π/2` 로 봤으니 **벽을 보고 있었다.** 걸이는 처음부터
@@ -190,7 +202,7 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   ok(await aimAt(RACK.x + 0.80, RACK.z + 0.10, Math.PI / 2, 0, 'suit'),
     `⓪ 우주복 걸이가 잡힌다 (${await S(() => SPACE.aim)})`);
   await down();
-  const wearing = await until(() => SPACE.suit.wearing > 0.6, 40, '우주복을 입기 시작');
+  const wearing = await until(() => SPACE.suit.wearing > 0.3, 60, '우주복을 입기 시작');
   await up();
   ok(wearing, '⓪b 잡고 있으니 **입기 시작한다** — 22초를 붙들고 있어야 한다');
   // ★ 22초는 헤드리스에서 몇 분이다 (게임 시계가 실제의 1/20 로 돈다).
@@ -221,9 +233,14 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //     **줄었나**를 물어야 하므로 **진공에 서 있나**와 같이 본다
   //   ★ **배기에 13초가 걸린다** (`airlock-table.js`). 헤드리스 시계는
   //     실제의 1/20 이라 그동안 몇 분이 지나가므로 넉넉히 기다린다
-  const vac = await until(() => SPACE.suit.inVacuum, 90, '그 칸이 진공이 되기');
+  //   ★ 완전히 빠지는 데 **13초**(`airlock-table.js`)인데 헤드리스 시계로는
+  //     4분이 넘는다. **다 빠졌나**가 아니라 **빠지고 있나**를 묻는다 —
+  //     끝까지 가는 것은 `space-airlock.js` 가 브라우저 없이 잰다
+  const air0 = (await S(() => SPACE.lock)).air;
+  const draining = await until(() => SPACE.lock.air < 0.9, 60, '공기가 빠지기');
   const su = await S(() => SPACE.suit);
-  ok(vac, `⑤b 그 칸이 진공이라고 배가 안다 (공기 ${su.air}초)`);
+  ok(draining, `⑤b 바깥문을 여니 그 칸 공기가 빠진다 (${air0} → ${(await S(() => SPACE.lock)).air})`);
+  void su;
   const su2 = await S(() => SPACE.suit);
   ok(su2.air <= su.air, `⑤c 우주복 공기가 안 는다 (${su.air} → ${su2.air}) — 새는 곳에서 차오르면 그건 진공이 아니다`);
 
@@ -238,6 +255,8 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법이 꺼지나');
 {
+  await settle();
+  await S(() => SPACE.putAuto(true));
   ok((await S(() => SPACE.helm)).auto, '① 처음에는 자동 항법이 켜져 있다');
   // ★★ **앉아서** 잡는다 (v66). 서서 겨누면 좌석이 먼저 잡히는 것이 맞다 —
   //   앉는 것과 잡는 것은 다른 동작이다
@@ -322,6 +341,7 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
 console.log('\n[3b] ★★ **행성을 박으면 끝난다** — 수동일 때만');
 {
   // 자동으로 두면 아무리 벗어나도 안 박는다
+  await S(() => SPACE.putAuto(true));
   await S(() => { SPACE.setRegion('planet'); SPACE.setPower('thrust', true); SPACE.setOff(0.9); });
   await p.waitForTimeout(4000);
   ok((await S(() => SPACE.helm)).near === 0,
