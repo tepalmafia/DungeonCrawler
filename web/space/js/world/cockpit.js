@@ -616,7 +616,22 @@ export function buildCockpit(parent, room, H) {
   // ★ 처음 만든 좌석은 **너무 컸다.** 등받이가 눈높이까지 올라와 조종석
   //   한가운데를 막았다 — 앉은 사람 것인데 선 사람 눈으로 만들었다.
   //   앉은 어깨높이(바닥에서 1.25)를 넘지 않게 낮췄다.
+  let helmSeatHit = null;
   for (const [sx, sz] of SEATS) {
+    // ★★ **좌석을 겨눌 수 있게 한다** (v61 · 사장님 「좌석은 센터에 있어야지.
+    //   어떻게 앉아서 조정을 할 수 있을지 먼저 생각해봐」).
+    //   좌석이 한가운데로 오면 등받이가 조종간을 가린다 — 서서 잡을 수가
+    //   없다. 그러면 답은 하나다: **앉고 나서 잡는다.** 주포 좌석과 같은
+    //   얼개다 (`world/turret.js` 의 seatHit). 넉넉하게 잡는다 —
+    //   작은 것을 정확히 겨누게 하면 그건 어려움이 아니라 짜증이다
+    helmSeatHit = new THREE.Mesh(
+      new THREE.BoxGeometry(1.05, 1.35, 1.15),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    helmSeatHit.position.set(sx, 0.85, sz + 0.05);
+    helmSeatHit.name = '조종석 좌석';
+    g.add(helmSeatHit);
+
     const seat = new THREE.Group();
     seat.position.set(sx, 0, sz);
     g.add(seat);
@@ -760,7 +775,7 @@ export function buildCockpit(parent, room, H) {
     //   조종석에 들어서는 순간 알아야 한다
     setAuto(state.auto !== false);
   }
-  return { update, yokeHit, autoHit };
+  return { update, yokeHit, autoHit, helmSeatHit };
 }
 
 /**

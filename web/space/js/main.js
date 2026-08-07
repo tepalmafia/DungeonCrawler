@@ -173,7 +173,8 @@ const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 400);
 const FOV_WIDE = 72;
 /** 지금 얼마나 당겨져 있나 0~1 */
 let focusK = 0;
-/** ★ 조종간을 잡으면 앉는다 0~1 (v61) */
+/** ★★ 조종석 좌석에 앉아 있나 (v61) · 그리고 얼마나 앉았나 0~1 */
+let helmSat = false;
 let helmSitK = 0;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
@@ -819,6 +820,12 @@ function walk(dt) {
   //   앉아 있으면 `gunBusy` 가 참이라 walk() 가 맨 앞에서 되돌아갔고,
   //   D 를 아무리 눌러도 포탑이 안 돌았다. 검사가 「0 → 0도」로 잡아 줬다.
   //   **빗장은 걷는 것에만 건다** — 겨누는 것은 걷는 것이 아니다
+  // ★ 앉아 있으면 안 걷는다. 다만 **걸으려 하면 일어난다** — v52 에서
+  //   주포 좌석에 갇혔던 것과 같은 함정을 안 판다
+  if (helmSat) {
+    if (f !== 0 || r !== 0) { helmSat = false; banner = '조종석에서 일어납니다'; bannerT = 1.8; }
+    return;
+  }
   if (gunBusy(gun)) {
     // ══ ★★ **몸을 좌석으로 옮긴다** (v59) ══════════════════════
     //  사장님: 「앉았다고 나오는데 의자 앞에 공간이 없어서 그런지
@@ -923,7 +930,7 @@ function interactStep(dt) {
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
-    ship.turret.seatHit, ship.turret.standHit, ship.turret.gripHit,
+    ship.turret.seatHit, ship.turret.standHit, ship.turret.gripHit, ship.cock.helmSeatHit,
     ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit, ship.mainBreaker.hit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
@@ -934,6 +941,7 @@ function interactStep(dt) {
   let plate = -1;
   let panel = null;
   let onWinch = false, onHatch = false, onYoke = false, onRadio = false, onMain = false;
+  let onHelmSeat = false;
   let onLadder = false, onGun = false, onOuter = false, onAuto = false;
   let onCrank = null;
   let onSpot = null;
@@ -949,6 +957,9 @@ function interactStep(dt) {
       if (o === ship.winch.hit) { onWinch = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
+      // ★ 좌석 — **앉아 있을 때는 안 잡힌다.** 앉은 채로 좌석이 잡히면
+      //   조종간을 잡으려다 일어나게 된다 (주포 좌석에서 이미 밟은 함정)
+      if (o === ship.cock.helmSeatHit) { onHelmSeat = !helmSat; break; }
       if (o === ship.cock.autoHit) { onAuto = true; break; }
       if (o === ship.turret.seatHit) { onLadder = true; break; }
       // ★ 서서 다가갈 때 잡히는 큰 상자 — **앉으면 무시한다.** 안 그러면
@@ -1375,6 +1386,30 @@ function interactStep(dt) {
       audio?.event('click');
     }
   }
+  // ══ ★★ **조종석 좌석 — 앉고 일어난다** (v61) ══════════════════════
+  //  사장님: 「좌석은 센터에 있어야지. 조정석 뒤에. 어떻게 앉아서 조정을
+  //           할 수 있을지 먼저 생각해봐」
+  //
+  //  ★ 좌석이 한가운데 오면 **등받이가 조종간을 가린다** — 서서는 못 잡는다
+  //    (`space-yoke [1]` 이 그 자리에서 빨개졌다. v16 의 그 문제다).
+  //    지난번엔 좌석을 옆으로 밀어 피했는데 그건 푼 게 아니다.
+  //  ★ 실제 조종석은 **앉은 눈이 올 자리(DEP)를 먼저 못박고** 나머지를
+  //    거기서 잰다 (helm-table.js HELM_SEAT). 그러면 답이 하나다 —
+  //    **앉고 나서 잡는다.** 주포 좌석과 **같은 얼개**이므로 새 동작이 아니다
+  if (onHelmSeat && gunPressed && !gun.up) {
+    helmSat = true;
+    banner = '조종석에 앉습니다';
+    bannerT = 1.8;
+    audio?.event('click');
+  } else if (helmSat && gunPressed && !onYoke && !steering) {
+    // ★ 일어나는 것은 **조종간이 아닌 데를 누를 때**다. 조종간을 누르면
+    //   잡는 것이지 일어나는 것이 아니다 — 한 손잡이가 두 일을 하면 부딪힌다
+    helmSat = false;
+    banner = '일어납니다';
+    bannerT = 1.6;
+    audio?.event('click');
+  }
+
   // ★ **잡고 있는 동안** WASD 가 포탑을 돌린다 (walk() 가 읽는다)
   gripping = atGrip && input.hold;
   // 쏘는 것은 **Space** — 잡는 손과 쏘는 손이 같으면 겨누다 말고 쏘게 된다
@@ -1398,7 +1433,8 @@ function interactStep(dt) {
 
   // ★ 포탑에 올라가 있으면 잡히는 것이 **둘**이다 — 주포(쏜다)와
   //   사다리(내려간다). 전에는 주포 하나뿐이라 **내려올 길이 없었다**
-  aimName = gun.up ? (onGun ? 'grip' : (onLadder ? 'gunseat' : null))
+  if (onHelmSeat) aimName = 'helmseat';
+  else aimName = gun.up ? (onGun ? 'grip' : (onLadder ? 'gunseat' : null))
     : onRadio ? 'radio'
     : onMain ? 'mainbreaker'
     : onOuter ? 'outer'
@@ -1780,6 +1816,9 @@ window.SPACE = {
   get fly3() { return { ...flySummary(fly3), word: attitudeWord(fly3), deg: Math.round(rollDeg(fly3.roll)) }; },
   /** 검사가 축을 밀어 놓는다 */
   putFly(a) { Object.assign(fly3, a); return flySummary(fly3); },
+  /** ★ 조종석에 앉아 있나 (v61) */
+  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2) }; },
+  putHelmSit(v) { helmSat = !!v; return helmSat; },
   get heat() { return heat; },
   /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
   get sink() {
@@ -2804,9 +2843,10 @@ function frame(now) {
   //  ★ 새 동작을 안 만들었다. **잡는 것 하나로 앉기까지 된다** —
   //    「한 손잡이가 두 일을 하면 부딪힌다」와 안 부딪히는 이유는,
   //    앉는 것이 잡는 것의 **결과**이지 다른 일이 아니기 때문이다
-  helmSitK += ((steering ? 1 : 0) - helmSitK) * Math.min(1, dt * HELM_SEAT.slide * 0.5);
+  helmSitK += ((helmSat ? 1 : 0) - helmSitK) * Math.min(1, dt * HELM_SEAT.slide * 0.6);
   if (helmSitK > 0.002) {
-    const s = steering ? HELM_SEAT.seatAt : HELM_SEAT.standAt;
+    // 앉는 동안 몸이 **미끄러진다.** 툭 옮기면 그것도 거짓말이다 (주포 좌석과 같다)
+    const s = helmSat ? HELM_SEAT.seatAt : HELM_SEAT.standAt;
     const k = Math.min(1, dt * HELM_SEAT.slide);
     me.x += (s.x - me.x) * k;
     me.z += (s.z - me.z) * k;
