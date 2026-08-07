@@ -24,10 +24,15 @@
 
 /** 무엇을 낼 것인가 — **여기 한 곳에 적는다** */
 const GROUPS = [
-  ['주포', [
-    ['사다리 앞으로', (S) => { S.put(1.9, -3.9, -Math.PI / 2, 0.1); return '조종석 사다리 앞 — 누르면 올라갑니다'; }],
-    ['광석 60 싣기', (S) => { S.giveOre(60); return '광석을 실었습니다 — 탄약이 곧 수리 재료입니다'; }],
-    ['적을 붙인다', (S) => { S.forceContact(); return '추격 — 이제 맞힐 것이 있습니다'; }],
+  // ★★★ v64 — 주포가 없어지고 **조종석 전투**가 됐다 (레이더·락온·미사일)
+  ['전투 (조종석)', [
+    ['조종석에 앉기', (S) => { S.putGun(true); return '조종석 — 조종간을 잡고 마우스로 겨눕니다'; }],
+    ['광석 60 · 부품 8', (S) => { S.setSupply({ ore: 200, parts: 8 }); return '탄약을 실었습니다 — 탄약이 곧 수리 재료입니다'; }],
+    ['★ 적 우주선 부르기', (S) => { const r = S.callRaider(); return `적 우주선 — ${r.dist}m · 맷집 ${r.hp}`; }],
+    ['레이더 켜기/끄기', (S) => { const on = S.power.sensor; S.setPower('sensor', !on); return on ? '레이더를 껐습니다 — 묶을 수 없습니다' : '레이더 ON — 자국이 20 오릅니다'; }],
+    ['기총 / 열추적 / 유도', (S) => { const n = (S.combat.slot % 3) + 1; S.putWeapon(n); return `${S.combat.name} 로 바꿨습니다`; }],
+    ['한 발 쏘기', (S) => { const r = S.fire(); return `쏨 ${r.fired} · 맞음 ${r.hits} · 부숨 ${r.kills}`; }],
+    ['적을 붙인다', (S) => { S.forceContact(); return '추격 — 적 우주선이 같이 뜹니다'; }],
   ]],
   ['에어록 · 광물 · 구조 신호', [
     // ★ 7판 G — 구간 7 을 안 기다리고 무전을 켠다

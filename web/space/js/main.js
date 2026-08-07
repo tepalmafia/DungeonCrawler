@@ -160,7 +160,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 63;
+export const VERSION = 64;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -566,7 +566,7 @@ function takeBumps(list) {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -899,18 +899,8 @@ function walk(dt) {
     if (r !== 0) steerPush = Math.max(-1, Math.min(1, r));
     return;
   }
-  if (false) {
-    // 주포 — WASD 가 **포탑**을 돌린다. 사람은 안 움직인다
-    aimAz = Math.max(-TARGET.azLimit, Math.min(TARGET.azLimit,
-      aimAz + r * GUN.aimRate * dt));
-    aimEl = Math.max(-TARGET.elLimit, Math.min(TARGET.elLimit,
-      aimEl + f * GUN.aimRate * dt));
-    return;
-  }
-  // ★★ **이 빗장이 위에 있었다 — 그래서 겨눔이 한 번도 안 돌았다.**
-  //   앉아 있으면 `gunBusy` 가 참이라 walk() 가 맨 앞에서 되돌아갔고,
-  //   D 를 아무리 눌러도 포탑이 안 돌았다. 검사가 「0 → 0도」로 잡아 줬다.
-  //   **빗장은 걷는 것에만 건다** — 겨누는 것은 걷는 것이 아니다
+  // ★ v64 — 여기 있던 「WASD 가 포탑을 돌린다」를 걷어냈다.
+  //   **조준은 이제 기수가 한다** (조종간이 곧 조준 · `noseAim()`)
   // ★ 앉아 있으면 안 걷는다. 다만 **걸으려 하면 일어난다** — v52 에서
   //   주포 좌석에 갇혔던 것과 같은 함정을 안 판다
   if (helmSat) {
@@ -918,7 +908,28 @@ function walk(dt) {
     return;
   }
   // ★ v64 — 여기 있던 **주포 좌석 미끄러짐과 자동 일어나기**를 걷어냈다.
-  //   좌석이 하나가 됐으므로 조종석 것(`helmSitK`)만 남는다
+  //   좌석이 하나가 됐으므로 조종석 것(`helmSitK`)만 남는다.
+  //
+  //   ★★★ **도려내면서 그 아래 세 줄까지 같이 지웠다** — `sin`·`cos` 와
+  //     **달리기 한 덩어리**(`mult`). 걸음이 통째로 죽었고, `node --check` 는
+  //     둘 다 통과하며 **브라우저 첫 프레임에 터진다.** 두 번 연달아 겪었다.
+  //     도려낼 때는 **도려낸 자리 아래가 무엇을 쓰는지**부터 본다.
+  stuckT = 0;
+  const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
+
+  // ── 달리기 (game/move.js · PLAN2H §7-2) ─────────────────
+  // ★ **제자리에서 Shift 만 눌러도 숨이 빠지면** 그건 벌이 아니라
+  //   함정이다. 실제로 움직이는 중일 때만 뛴 것으로 친다
+  const moving = f !== 0 || r !== 0;
+  const armsFull = !!(carry.held && CARRY_KINDS[carry.held]?.both);
+  const mult = moveStep(move, dt, input.run, moving, {
+    bothHands: armsFull,
+    // ★ 어두우면 못 뛴다 (7판 · E 정전)
+    dark: isDark(dark),
+  });
+  // ★ **조용히 안 막는다.** 못 뛰면 왜인지 말한다
+  if (move.blocked) nag(RUN_WHY[move.blocked]);
+
   // yaw 0 일 때 앞은 -z
   // ★ 우주복을 입으면 걸음도 둔하다 (0.86). **크게 안 깎는다** —
   //   방 사이가 늘면 템포가 통째로 무너진다 (REAL.md §7 「안 하는 것」)
@@ -1493,6 +1504,17 @@ function interactStep(dt) {
   gripping = steering;
   // 쏘는 것은 **Space** — 잡는 손과 쏘는 손이 같으면 겨누다 말고 쏘게 된다
   const firePressed = input.keys.has('Space');
+  // ══ ★★★ **무기 고르기 1 · 2 · 3** (v64) ═════════════════════
+  //  ★ 조종석에 앉아 있을 때만 먹는다 — 걷다가 눌러도 아무 일이 없어야
+  //    「이 키가 뭐지」가 안 생긴다. 그리고 **바뀌면 말한다**
+  for (const w of WEAPON_LIST) {
+    if (!helmSat || !input.keys.has(`Digit${w.slot}`)) continue;
+    if (combat.slot === w.slot) continue;
+    pickSlot(combat, w.slot);
+    banner = `${w.name} — ${w.what}`;
+    bannerT = 2.6;
+    audio?.event('click');
+  }
   // ★★★ v64 — **조종석에 앉아 있으면 쏜다.** 포탑에 올라갈 필요가 없다
   if (helmSat && firePressed && !fireHeldWas) fireGun();
   fireHeldWas = firePressed;
@@ -1796,7 +1818,16 @@ function systemsStep(dt, valveOpen, regionMult) {
   if (winching && chase.phase === PHASE.CALM) {
     chase.risk = Math.min(100, riskWas + WINCH.riskRise * dt);
   }
-  if (ev === 'contact') { banner = '접촉 — 무언가 따라붙었습니다'; bannerT = 2.6; }
+  if (ev === 'contact') {
+    banner = '접촉 — 무언가 따라붙었습니다';
+    bannerT = 2.6;
+    // ══ ★★★ **쫓아오는 것이 창밖에 보인다** (v64) ═══════════════
+    //  v47~v63 동안 추격자는 **계기의 숫자로만** 있었다 — 그래서
+    //  「겨눈다」가 성립하지 않았고 주포는 「쫓길 때 누르는 버튼」이었다.
+    //  이제 접촉하면 **적 우주선이 실제로 뜬다.** 부수거나, 안 부수면
+    //  들이받힌다. 「쫓긴다」가 처음으로 눈에 보이는 것이 된다
+    if (!sky.list.some((t) => TKINDS[t.kind]?.rams)) spawnRaider(sky);
+  }
   if (ev === 'escaped') {
     banner = '뿌리쳤습니다'; bannerT = 3.2; escapedAt = clock;
     // ★ 항로에도 남긴다. 이게 없으면 「뿌리쳐도 아무것도 안 쌓인다」가
@@ -2448,6 +2479,27 @@ window.SPACE = {
   setAir(v) { lock.air = Math.max(0, Math.min(1, v)); return lockSummary(lock); },
   /** ★ 주포 — 올라갔나 · 쏘면 뭐가 주나 */
   get gun() { return { ...gunSummary(gun), flashSign: flashSign(gun) }; },
+  /**
+   * ★★★ 조종석 전투 (v64) — 검사와 점검 모드가 **같은 구멍**으로 본다.
+   *   `word` 는 화면에 뜨는 그 문장이다 — 따로 만들면 갈라진다
+   */
+  get combat() {
+    const a = aimedAt(sky, aimAz, aimEl);
+    return {
+      ...cbtSummary(combat),
+      word: lockWord({ on: combat.radar.on, locked: combat.radar.id !== null, t: combat.radar.t }),
+      aim: { az: +aimAz.toFixed(1), el: +aimEl.toFixed(1) },
+      locked: isLocked(combat, a?.t ?? null),
+      target: a ? { id: a.t.id, kind: a.t.kind, dist: +a.t.dist.toFixed(0), hp: a.t.hp, off: +a.off.toFixed(1) } : null,
+      why: a ? null : '겨눈 것이 없습니다',
+    };
+  },
+  /** 검사가 무기를 고른다 */
+  putWeapon(n) { pickSlot(combat, n); return cbtSummary(combat); },
+  /** 검사가 쏜다 */
+  fire() { fireGun(); return cbtSummary(combat); },
+  /** ★ 검사·점검 모드가 **적 우주선**을 하나 부른다 */
+  callRaider() { const t = spawnRaider(sky); return { id: t.id, dist: +t.dist.toFixed(0), hp: t.hp }; },
   /** 검사가 사다리를 안 타고 올라간다 */
   /**
    * ★ 검사가 주포에 앉혀 놓는다.
@@ -3177,9 +3229,12 @@ function frame(now) {
   //    켜면 보이고, 켜면 보인다 (자국 20 · chase-table SIGN.sensor)
   combat.radar.on = power.sensor;
   const aimedNow = aimedAt(sky, aimAz, aimEl);
-  const rev = stepRadar(combat, dt, aimedNow);
-  if (rev === 'lock') { banner = '묶었습니다'; bannerT = 1.6; audio?.event('latch'); }
-  if (rev === 'break') { banner = '놓쳤습니다'; bannerT = 1.6; }
+  // ★ 이름을 `rev` 로 썼다가 **같은 함수 안의 항로 `rev` 와 부딪혀 게임이
+  //   통째로 안 떴다.** `node --check` 는 통과한다 — 한 함수가 워낙 길어
+  //   눈으로도 안 보였다. 브라우저를 한 번 띄우자 첫 줄에 나왔다
+  const radEv = stepRadar(combat, dt, aimedNow);
+  if (radEv === 'lock') { banner = '묶었습니다'; bannerT = 1.6; audio?.event('latch'); }
+  if (radEv === 'break') { banner = '놓쳤습니다'; bannerT = 1.6; }
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
 
