@@ -200,7 +200,7 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
 console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법이 꺼지나');
 {
   ok((await S(() => SPACE.helm)).auto, '① 처음에는 자동 항법이 켜져 있다');
-  ok(await aimAt(0, -6.4, 0, -0.2, 'yoke'), `② 조종간이 잡힌다 (${await S(() => SPACE.aim)})`);
+  ok(await aimAt(0, -7.3, 0, -0.2, 'yoke'), `② 조종간이 잡힌다 (${await S(() => SPACE.aim)})`);
   await down();
   for (let i = 0; i < 22; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 90, movementY: 0 })));
@@ -301,7 +301,7 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   await press(1.0);
   ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '문 닫기'),
     '⑨ 문을 닫는다');
-  await aimAt(0, -6.4, 0, -0.2, 'yoke');
+  await aimAt(0, -7.3, 0, -0.2, 'yoke');
   await press(1.0);
   ok(await until(() => SPACE.land.step === 'up', 40, '이륙'),
     `⑩ 조종간을 잡으니 뜬다 — 「${await said()}」`);

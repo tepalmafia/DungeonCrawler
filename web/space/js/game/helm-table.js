@@ -191,13 +191,15 @@ export function offWord(off) {
  *  @property standAt 일어나서 서는 자리 — 좌석 **뒤**다
  */
 export const HELM_SEAT = {
-  seatAt: { x: 0, z: -6.95 },
+  // ★★★ **v65 — 0.9m 앞으로.** 유리에 가까워질수록 시야각이 커진다
+  //   (VIEW.md 안②). 콘솔도 **같이** 밀었다 — 따로 움직이면 DEP 가 깨진다
+  seatAt: { x: 0, z: -7.85 },
   eye: 1.20,
   reach: 0.50,
   drop: 0.22,
   yaw: 0,
   pitch: -0.10,
-  standAt: { x: 0, z: -5.95 },
+  standAt: { x: 0, z: -6.85 },
   slide: 6.0,
 };
 

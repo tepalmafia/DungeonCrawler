@@ -12,6 +12,28 @@
 //
 //  ★ 이 배의 다른 화면과 같은 규약 — 캔버스에 데이터를 그린다.
 //    「화면 속 내용은 그림이 아니라 데이터다」 (world/cockpit.js 머리말)
+//
+//  ══════════════════════════════════════════════════════════════════════════
+//  ★★★ **v65 — 화면에서 HUD 로** (사장님 「레이더는 반투명하게, 그 대신
+//     잘 보여야지 조준을 할 수 있겠지?」)
+//
+//  ★ 이 판이 왜 났나. 이 조준경은 **0.78 × 0.58 짜리 불투명 판**이었고
+//    앉은 눈 앞 0.77m 에 서 있었다 — 계산하면 **37도**를 덮는다.
+//    창의 세로 폭이 34.6도였으니 **창보다 큰 검은 판이 창 앞에** 있었던
+//    셈이다. 사장님이 보신 「가운데 검은 화면」이 이것이다.
+//
+//  ★★ 「반투명한데 잘 보인다」는 실제 전투기가 이미 푼 문제다 — **HUD** 다.
+//     ① **배경을 안 그린다.** 검은 판이 아니라 **선만 빛난다**
+//     ② **가산 혼합(additive)** — 별빛 위에 얹혀도 안 지워지고, 어두운
+//        우주에서는 더 또렷하다. 어두운 픽셀은 아무것도 안 가린다
+//     ③ **초록 단색** — 실제 HUD 가 초록인 이유는 사람 눈이 제일 밝게
+//        보는 색이라 낮에도 읽히기 때문이다
+//     ④ **표적 위에 얹힌다** — 상자와 다이아몬드가 표적 자리에 그려지므로,
+//        「화면을 보고 겨눈다」가 아니라 **「밖을 보면 겨눠져 있다」**가 된다
+//
+//  ★ 고증: F-35 는 HUD 를 아예 없애고 **헬멧 바이저 전체**를 화면으로
+//    썼다 (HMDS). 가상 HUD 는 40도 × 30도다. 우리는 앞유리 한 장을
+//    통째로 쓰므로 그보다 넓고, 그게 「전체 화면」이라는 말과 맞는다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { KINDS, TARGET, rangeWord } from '../game/target-table.js';
@@ -48,8 +70,10 @@ function glyph(ctx, kind, x, y, r) {
 }
 
 function draw(ctx, w, h, s) {
-  ctx.fillStyle = '#03100c';
-  ctx.fillRect(0, 0, w, h);
+  // ★★ **배경을 안 칠한다** (v65). 여기 `fillRect('#03100c')` 가 있었고,
+  //   그것 하나가 이 물건을 「창 앞의 검은 판」으로 만들고 있었다.
+  //   지우면 선만 남고, 가산 혼합이 그 선을 별빛 위에 얹는다
+  ctx.clearRect(0, 0, w, h);
   const f = (k) => Math.round(h * k);
 
   // ★ 안 앉아 있으면 **꺼져 있다.** 늘 켜 두면 「지금 겨누는 중인가」가 안 읽힌다
@@ -129,18 +153,36 @@ function draw(ctx, w, h, s) {
   }
 }
 
-/** 조준경 한 장 — turret.js 가 후드 안에 끼운다 */
-export function buildSight(width = 0.66, height = 0.5) {
+/**
+ * ★★★ **HUD 한 장** — 앞유리 안쪽에 선다 (v65).
+ *
+ *   `transparent` + `AdditiveBlending` + `depthWrite: false` 셋이 한 벌이다:
+ *     · `transparent` 없이는 검은 배경이 그대로 칠해진다
+ *     · 가산 혼합이라야 **어두운 픽셀이 아무것도 안 가린다**
+ *     · `depthWrite: false` 라야 뒤의 별과 표적이 이 판에 안 잘린다
+ *
+ *   ★ `depthTest` 는 **켜 둔다.** v57 에서 별을 `depthTest: false` 로 두었다가
+ *     천장과 계기 위에까지 그려진 일이 있다 — 투명한 것은 불투명한 것보다
+ *     **나중에** 그려지므로, 깊이 검사를 끄면 앞뒤가 통째로 무너진다
+ */
+export function buildSight(width = 2.1, height = 1.5) {
   const cv = document.createElement('canvas');
-  cv.width = 512; cv.height = 384;
+  cv.width = 1024; cv.height = 768;
   const ctx = cv.getContext('2d');
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(width, height),
-    new THREE.MeshBasicMaterial({ map: tex }),
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
   );
-  mesh.name = '조준경';
+  mesh.renderOrder = 6;
+  mesh.name = 'HUD';
   return {
     mesh,
     redraw(s) { draw(ctx, cv.width, cv.height, s || {}); tex.needsUpdate = true; },
