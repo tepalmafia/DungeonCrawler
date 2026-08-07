@@ -33,11 +33,15 @@ console.log('\n══ 손목 장치 ══');
 console.log('\n[1] **늘 한 줄이 나온다** — 「할 일 없음」으로 비면 그건 고장난 게임이다');
 {
   // 켤 수 있는 조건을 전부 껐다 켰다 하며 쓸어 본다 (2^8 = 256 가지)
-  const FLAGS = ['doorJammed', 'chasing', 'heatHigh', 'hazardSoon', 'foodLow', 'atPort'];
+  // ★★ **v62 에 두 칸을 빠뜨렸다가 화면에서 들켰다.** `dry`·`inVacuum` 을
+  //   여기 안 넣으니 새 줄 둘이 25·26자인데 **초록이었다** — 쓸어 보는
+  //   목록에 없으면 아무리 쓸어도 안 나온다. 계통을 하나 만들면
+  //   **여기에도 한 칸을 보탠다**
+  const FLAGS = ['doorJammed', 'chasing', 'heatHigh', 'hazardSoon', 'foodLow', 'atPort', 'dry', 'inVacuum'];
   let empty = 0, tooLong = 0, worst = '';
   for (let m = 0; m < (1 << FLAGS.length); m++) {
     for (const faultsOpen of [0, 1, 3]) for (const thrust of [true, false]) {
-      const s = { ...calm(), faultsOpen, thrust };
+      const s = { ...calm(), faultsOpen, thrust, suited: false };
       FLAGS.forEach((f, i) => { s[f] = !!(m & (1 << i)); });
       const j = jobFor(s);
       if (!j?.text) empty++;
