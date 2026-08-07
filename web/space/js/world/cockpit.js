@@ -27,6 +27,7 @@ import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 import { CIRCUITS, SIGN } from '../game/chase-table.js';
 import { STEP, LAND } from '../game/land-table.js';
 import { HELM_SEAT, YOKE_AT } from '../game/helm-table.js';
+import { CANOPY, CONSOLE_PTS, GLASS_Y, BROW_Y, DASH_Y, SHELF_Y } from '../game/view-table.js';
 import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
 import { DUST } from '../game/sky-table.js';
 
@@ -46,21 +47,11 @@ const BLUE = 0x63b6ff;
 const AMBER = 0xff9a3c;
 
 // ── 캐노피 ─────────────────────────────────────────────────
-// 정면에서 좌우로 꺾여 들어오는 여섯 점. **평면 하나가 아니라 꺾인 띠**다 —
-// 이것 하나로 「감싸는 조종석」이 되는지 아닌지가 갈린다.
-export const CANOPY = [
-  [-3.00, -7.40],
-  [-2.55, -8.85],
-  [-1.05, -9.46],
-  [1.05, -9.46],
-  [2.55, -8.85],
-  [3.00, -7.40],
-];
-/** 콘솔이 그리는 호. **충돌도 이 값을 읽는다** — 두 곳에 적으면 갈라진다 */
-export const CONSOLE_PTS = [
-  [-2.30, -7.95], [-1.30, -8.62], [-0.45, -8.88],
-  [0.45, -8.88], [1.30, -8.62], [2.30, -7.95],
-];
+// ★★ **좌표는 `game/view-table.js` 에 있다** (v65). 시야각이 이 숫자들에서
+//   나오는데, 이 파일은 three.js 를 쓰므로 `tools/` 가 못 읽는다 —
+//   그래서 「시야가 몇 도인가」를 재려면 브라우저를 띄워야 했다.
+//   **잴 수 있는 것은 표에서 잰다** (`tools/space-view.js`).
+export { CANOPY, CONSOLE_PTS } from '../game/view-table.js';
 
 /** 좌석이 서 있는 자리. 충돌이 같이 읽는다 */
 /**
@@ -77,7 +68,7 @@ export const CONSOLE_PTS = [
  */
 export const SEATS = [[HELM_SEAT.seatAt.x, HELM_SEAT.seatAt.z]];
 
-const SILL = 0.82;      // 창 아래끝
+const SILL = GLASS_Y.sill;   // 창 아래끝 — 표에서 (view-table.js)
 // 조종간이 서는 z. 좌석(-6.95)보다 앞, 콘솔(-7.95~)보다 뒤 — **둘 사이**
 const YOKE_Z = YOKE_AT.z;
 // 조종간 가로대 높이.
@@ -87,7 +78,7 @@ const YOKE_Z = YOKE_AT.z;
 //   읽히면서 눈에는 먼저 들어온다. 판정 상자도 같이 키웠다 —
 //   **작은 것을 정확히 겨누게 하는 건 어려움이 아니라 짜증이다**
 const YOKE_Y = YOKE_AT.y;
-const HEAD = 2.34;      // 창 위끝
+const HEAD = GLASS_Y.head;   // 창 위끝 — 표에서
 
 function seg(a, b) {
   const dx = b[0] - a[0], dz = b[1] - a[1];
@@ -494,12 +485,19 @@ export function buildCockpit(parent, room, H) {
 
   // ── 머리 위 창 ────────────────────────────────────────
   // 참고 사진에서 제일 인상적이었던 것. 위를 보면 우주가 있다
-  const roof = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.5), GLASS);
+  // ★ v65 — 앞유리 쪽으로 당기고 키운다. 위끝(2.62)과 이어지면 「위가
+  //   뚫린」 것이 되고, 그게 버블의 절반이다
+  const roof = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.0), GLASS);
   roof.rotation.x = Math.PI / 2;
-  roof.position.set(0, H - 0.02, -8.62);
+  roof.position.set(0, H - 0.02, -8.66);
   g.add(roof);
-  for (const x of [-1.7, 0, 1.7]) box(g, 0.12, 0.14, 1.6, FRAME, x, H - 0.07, -8.62);
-  box(g, 3.6, 0.14, 0.14, FRAME, 0, H - 0.07, -7.86);
+  // ★★★ **12시를 비운다** (v65 · 사장님 「12시 비우고」).
+  //   여기 `x = 0` 리브가 있었다 — **정면 한복판을 세로로 가로지르는
+  //   구조재**다. 실제 전투기는 12시에 아무것도 안 둔다 (F-16 이 「틀 없는」
+  //   버블인 이유고, F-35 도 정면만은 비운다). 창을 아무리 키워도
+  //   한복판이 막혀 있으면 넓어진 것이 안 읽힌다
+  for (const x of [-1.7, 1.7]) box(g, 0.12, 0.14, 1.6, FRAME, x, H - 0.07, -8.66);
+  box(g, 3.6, 0.14, 0.14, FRAME, 0, H - 0.07, -7.90);
   box(g, 3.3, 0.04, 0.05, stripMat(BLUE), 0, H - 0.15, -7.82);
 
   // ── 천장 리브 ─────────────────────────────────────────
@@ -566,19 +564,19 @@ export function buildCockpit(parent, room, H) {
   const CONSOLE = CONSOLE_PTS;
   for (let i = 0; i < CONSOLE.length - 1; i++) {
     const a = CONSOLE[i], b = CONSOLE[i + 1];
-    pane(g, a, b, 0, 0.58, DARK, 0.44);                // ① 무릎 가림판
-    pane(g, a, b, 0.58, 0.84, PANEL, 0.52);            // ② 스위치 선반
-    rail(g, a, b, 0.84, FRAME, 0.54, 0.05);            // 선반 테
+    pane(g, a, b, 0, SHELF_Y.lo, DARK, 0.44);          // ① 무릎 가림판
+    pane(g, a, b, SHELF_Y.lo, SHELF_Y.hi, PANEL, 0.52); // ② 스위치 선반
+    rail(g, a, b, SHELF_Y.hi, FRAME, 0.54, 0.05);      // 선반 테
     // ③ **대시 얼굴** — 화면이 박히는 판. 사람 쪽으로 눕는다
     const s0 = seg(a, b);
     const face = new THREE.Mesh(new THREE.BoxGeometry(s0.len, 0.60, 0.07), DARK);
-    face.position.set(s0.mx, 1.00, s0.mz + 0.10);
+    face.position.set(s0.mx, DASH_Y, s0.mz + 0.10);
     face.rotation.y = s0.rot;
     face.rotateX(-0.36);
     g.add(face);
     // ④ **눈썹 차양** — 창에서 들어오는 빛을 막는다. 실제 조종석의 그 챙이다
-    rail(g, a, b, 1.12, FRAME, 0.30, 0.06, 0.12);
-    rail(g, a, b, 1.44, stripMat(BLUE), 0.04, 0.02, 0.22);
+    rail(g, a, b, BROW_Y, FRAME, 0.30, 0.06, 0.12);
+    rail(g, a, b, 1.30, stripMat(BLUE), 0.04, 0.02, 0.22);
   }
 
   const DRAWERS = [drawShip, drawPower, drawHeat, drawCourse, drawSign, drawLog];
@@ -594,7 +592,7 @@ export function buildCockpit(parent, room, H) {
     const slot = new THREE.Group();
     // ★ 대시 얼굴(1.17 · +0.10)보다 **아주 조금만** 앞으로. 예전엔 +0.14 라
     //   판에서 떨어져 나와 「걸어 놓은 모니터」로 보였다. 박혀 있어야 한다
-    slot.position.set(s.mx, 1.00, s.mz + 0.145);
+    slot.position.set(s.mx, DASH_Y, s.mz + 0.145);
     slot.rotation.y = s.rot;
     slot.rotateX(-0.36);                               // 사람 쪽으로 눕힌다
     g.add(slot);

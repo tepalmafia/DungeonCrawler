@@ -951,7 +951,7 @@ export function buildShip(scene, camera = null) {
     breaker: { x: spine.x0 + 0.5, z: 3.3 },
     valve: { x: 0, z: engine.z1 - 0.9 },
     winch: { x: 3.0, z: R.airlock.z0 + 0.7 },
-    yoke: { x: 0, z: -7.0 },
+    yoke: { x: 0, z: -7.9 },
   };
 
   // ★ `group` — tools 가 배 안에만 광선을 쏘려고 쓴다 (창밖·성운은 뺀다)
@@ -986,14 +986,21 @@ export function buildShip(scene, camera = null) {
   //
   //  ★ 조준경(`sight`)은 **남긴다.** 이제 조종석 대시에 붙는다 —
   //    화면에 표적과 락온을 그리는 것은 여전히 필요하다
-  const sight = buildSight(0.78, 0.58);
+  // ★★★ **v65 — 판이 아니라 HUD 다.** 0.78 × 0.58 짜리 **불투명 판**이
+  //   앉은 눈 앞 0.77m 에 서서 **37도**를 덮고 있었다 (창이 34.6도였으니
+  //   창보다 큰 검은 판이 창 앞에 있었던 셈이다). 사장님이 보신
+  //   「가운데 검은 화면」이 이것이다.
+  //   이제 **앞유리 한 장 크기**로 키우고 배경을 지웠다 — 커졌는데
+  //   **덜 가린다.** 선만 빛나기 때문이다 (gunsight.js 머리말)
+  const sight = buildSight(2.2, 1.55);
   // ★★ **조준경을 조종석 대시에 붙인다** (v64).
   //   예전에는 `buildTurret` 이 붙여 줬다 — 포탑을 걷어내면서 **조준경이
   //   같이 떨어졌다.** 화면은 그려지는데 배에 없으니 아무 데도 안 보인다.
   //   「보이는데 못 잡는」의 반대 — **잡히는데 안 보이는** 것이고, 둘 다 없는 것이다.
   //   자리는 조종간 바로 위, 앉은 눈(1.20)에서 살짝 아래다
-  sight.mesh.position.set(0, 1.06, -7.72);
-  sight.mesh.rotation.x = -0.22;      // 앉은 사람 쪽으로 눕는다
+  // ★ **유리 바로 안쪽**에 세운다 (앞유리 z −9.30). 눕히지 않는다 —
+  //   HUD 는 밖을 보는 판이라 창과 나란해야 표적 위에 얹힌다
+  sight.mesh.position.set(0, 1.62, -9.22);
   ship.add(sight.mesh);
   const turret = {
     group: null, sight,

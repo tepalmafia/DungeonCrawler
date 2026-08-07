@@ -140,7 +140,7 @@ if (see >= 0) {
   console.log('\n[7] ★★ **지대 밖에서 조종간을 잡으면 뭔가 일어나나**');
   {
     // 조종간 앞에 선다
-    await S(() => SPACE.put(0, -6.4, 0, -0.2));
+    await S(() => SPACE.put(0, -7.3, 0, -0.2));
     await p.waitForTimeout(900);
     const aim = await S(() => SPACE.aim);
     ok(aim === 'yoke', `조종간을 겨눴다 (${aim})`);

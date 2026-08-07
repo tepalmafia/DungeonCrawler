@@ -118,7 +118,7 @@ console.log('\n[5] 가르침 글과 **같은 방**을 가리킨다 — 글은 �
   const roomOf = (p) => ROOMS.find((r) => p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1)?.name;
   const MARKS = {
     chart: { x: -3.7, z: 0.6 }, breaker: { x: -0.8, z: 3.3 },
-    valve: { x: 0, z: 15.1 }, yoke: { x: 0, z: -7.0 }, winch: { x: 3.0, z: 4.9 },
+    valve: { x: 0, z: 15.1 }, yoke: { x: 0, z: -7.9 }, winch: { x: 3.0, z: 4.9 },
   };
   for (const [key, mark] of Object.entries(AIMS)) {
     const L = LESSONS.find((l) => l.key === key);
