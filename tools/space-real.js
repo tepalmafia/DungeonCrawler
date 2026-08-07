@@ -32,17 +32,25 @@ import { MISSIONS, FAULT, wired } from '../web/space/js/game/mission-table.js';
 import { HEAT, BODY, WEAR } from '../web/space/js/game/systems-table.js';
 import { HEATING, SIGN, CIRCUITS, POWER_MAX } from '../web/space/js/game/chase-table.js';
 import { heatRate } from '../web/space/js/game/chase.js';
+import { totalRate } from '../web/space/js/game/heat.js';
 import { FOOD } from '../web/space/js/game/supply-table.js';
 import { LOCK } from '../web/space/js/game/airlock-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 import { SCENES } from '../web/space/js/game/scene-table.js';
+import { SINK } from '../web/space/js/game/heat-table.js';
 
 let fail = 0, soft = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
-/** 아직 안 고친 것 — 세되 통과시킨다. `REAL.md` 가 판을 나눠 뒀다 */
-const todo = (c, m, plan) => {
-  console.log((c ? '  ✔ ' : '  ☐ ') + m + (c ? '' : `   → ${plan}`));
+/**
+ * 아직 안 고친 것 — 세되 통과시킨다. `REAL.md` 가 판을 나눠 뒀다.
+ *
+ * ★ **통과했을 때는 다른 문장을 찍는다.** 처음엔 문제 문장을 그대로
+ *   찍었는데, 그러면 「✔ 냉각을 켜면 센서를 못 켠다」처럼 **고쳤다는
+ *   표시 옆에 안 고쳐진 문장**이 붙어서 읽는 사람이 반대로 이해한다
+ */
+const todo = (c, m, plan, fixed) => {
+  console.log((c ? '  ✔ ' : '  ☐ ') + (c ? (fixed ?? m) : m) + (c ? '' : `   → ${plan}`));
   if (!c) soft++;
 };
 
@@ -106,10 +114,12 @@ console.log('\n[2] ★★ **자릿수** — 방향은 맞는데 10배 틀린 것
   console.log(`   추진만  → 과열까지 ${Number.isFinite(thr) ? thr.toFixed(0) + '초' : '안 오른다'}`);
   todo(idle >= 900,
     `아무것도 안 하는 배가 **15분은 버틴다** (지금 ${Number.isFinite(idle) ? idle.toFixed(0) : '∞'}초)`,
-    'v58 · HEATING.idle 0.5 → 0.06');
+    'v58 · HEATING.idle 0.5 → 0.06',
+    `★ 아무것도 안 하는 배가 ${(idle / 60).toFixed(0)}분 버틴다 (예전 132초)`);
   todo(thr >= 30 && thr <= 60,
     `추진만 켜면 **30~60초**에 과열 (지금 ${thr.toFixed(0)}초)`,
-    'v58 · HEATING.thrust 4.6 → 1.9');
+    'v58 · HEATING.thrust 4.6 → 1.9',
+    `★ 추진만 켜면 ${thr.toFixed(0)}초에 과열 (예전 13초) — 냉각을 켜야만 밟을 수 있다`);
   // 사람 — 걷기라고 부르는 값이 정말 걸음인가
   todo(BODY.speed <= 1.6 || BODY.gravity !== undefined,
     `걷기 ${BODY.speed} m/s — 사람 걸음은 1.3~1.5 다. 그보다 빠르면 **왜 빠른지**가 표에 있어야 한다`,
@@ -124,18 +134,29 @@ console.log('\n[2] ★★ **자릿수** — 방향은 맞는데 10배 틀린 것
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n[3] ★★ **열역학** — 진공에서 열이 저절로 사라지나 (REAL.md §2-B·I)');
 {
-  // 라디에이터(밸브)가 닫힌 채로 냉각 회로만 돌 때
-  const closed = heatRate({ thrust: false, cool: true }, false);
-  console.log(`   냉각 ON · 라디에이터 닫힘 → ${closed >= 0 ? '+' : ''}${closed.toFixed(2)}/초`);
+  // ★★ **선체가 아니라 「총열」로 묻는다** (v58). 냉각 회로는 선체를
+  //   식히는 것이 맞다 — 다만 그 열이 **저장고로 옮겨갈 뿐** 안 없어진다.
+  //   그래서 선체 온도로 재면 영영 답이 안 나온다
+  const closed = totalRate({ thrust: true, valveOpen: false });
+  console.log(`   냉각 ON · 라디에이터 닫힘 → 총열 ${closed >= 0 ? '+' : ''}${closed.toFixed(2)}/초`);
   todo(closed >= 0,
     '라디에이터가 닫혀 있으면 **총열은 안 준다** — 진공에서 열을 버리는 길은 복사뿐이고,'
     + ' 냉각 회로는 열을 **옮길 뿐**이다',
-    'v58 · 열을 두 칸으로 (선체 온도 / 열 저장고)');
+    '(v58 에서 고쳤다 — game/heat.js)',
+    '★ 라디에이터가 닫혀 있으면 **총열이 절대 안 준다** — 냉각 회로는 옮길 뿐이다');
   // 자국 — 열을 버리는 두 가지가 부호가 반대다
-  console.log(`   자국: 냉각 ${SIGN.cool} · 라디에이터 ${SIGN.valveOpen}`);
-  todo(Math.sign(SIGN.cool) === Math.sign(SIGN.valveOpen),
+  // ★★ **v58 에서 이 검사의 뜻이 뒤집혔다.** 예전에는 「둘 다 열을 버리는
+  //   일인데 부호가 반대다」를 틀렸다고 봤다. 지금은 **둘이 다른 일**이라
+  //   부호가 반대인 것이 **맞다**:
+  //     냉각    — 선체에서 저장고로 **미룬다.** 선체가 식으니 적외선이 준다 (−)
+  //     라디에이터 — 저장고에서 우주로 **버린다.** 몰아서 값을 치른다 (+)
+  //   대신 **미루는 것이 공짜면 안 된다** — 나중에 치르는 쪽이 더 커야 한다
+  console.log(`   자국: 냉각 ${SIGN.cool}(미루기) · 라디에이터 ${SIGN.valveOpen}(값 치르기)`);
+  todo(SIGN.cool < 0 && SIGN.valveOpen > 0 && Math.abs(SIGN.valveOpen) > Math.abs(SIGN.cool),
     `냉각(${SIGN.cool})과 라디에이터(${SIGN.valveOpen})가 **둘 다 열을 버리는 일**인데 부호가 반대다`,
-    'v58 · 냉각은 선체→저장고(자국↓·미루기), 라디에이터는 저장고→우주(자국↑↑·값 치르기)');
+    'v58 · 냉각은 미루기(−), 라디에이터는 값 치르기(+)',
+    `★ 미루면 자국이 ${-SIGN.cool} 줄고 버릴 때 ${SIGN.valveOpen} 오른다 —`
+    + ' **미루는 것이 공짜가 아니다.** 「스텔스는 잠깐만 가능하다」가 이 두 숫자다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -145,16 +166,21 @@ console.log('\n[4] ★★ **전력** — 사장님이 짚으신 것 (REAL.md §2
   todo(POWER_MAX >= CIRCUITS.length,
     '**냉각을 켜면 센서를 못 켠다.** 주 추진은 수십 MW, 냉각 펌프는 수 kW,'
     + ' 센서 수신기는 수백 W 다 — 전구를 켜면 엔진이 꺼지는 자동차다',
-    'v58 · POWER_MAX 를 없앤다. 묶는 것은 전력이 아니라 열이다');
+    'v58 · POWER_MAX 를 없앤다. 묶는 것은 전력이 아니라 열이다',
+    `★ 회로 ${CIRCUITS.length} 을 **다 켤 수 있다.** 묶는 것은 전력이 아니라 **열**이다 —`
+    + ' 다 켜면 저장고가 빨리 차고, 차면 라디에이터를 열어야 하고, 열면 자국이 폭발한다');
   // 방향까지 반대다 — 추진을 켜면 냉각이 제일 필요한데 그때 못 켠다
   todo(POWER_MAX >= 3,
     '그리고 **방향이 반대다** — 추진이 열을 제일 많이 내므로 그때 냉각이 제일 필요한데,'
     + ' 지금 규칙은 바로 그때 냉각을 막는다',
-    'v58 · 같이 풀린다');
+    'v58 · 같이 풀린다',
+    '★ 추진을 켠 채로 냉각을 켤 수 있다 — 열이 제일 많이 날 때 식힐 수 있다');
   // 능동 탐지의 값이 너무 싸다
   todo(SIGN.sensor >= 15,
     `센서 자국이 ${SIGN.sensor} — 능동 레이더는 **등대를 켜는 것**이다. 그런데 추진(${SIGN.thrust})의 6분의 1 이다`,
-    'v58 · 수동/능동으로 가르고 능동은 20');
+    'v58 · 수동/능동으로 가르고 능동은 20',
+    `★ 능동 탐지 자국이 ${SIGN.sensor} — 켜면 접촉 기준(${SIGN.contactAt})을 넘긴다.`
+    + ' 수동 청취는 늘 켜져 있고, 끄는 것은 **거리**다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -175,15 +201,19 @@ console.log('\n[6] ★★ **설정끼리 안 부딪히나**');
 {
   // 「우주에서 스텔스는 불가능하다」(CHASE2) vs 「숨죽이기」(mission)
   const silent = MISSIONS.find((m) => m.key === 'silentRun');
-  todo(false,
+  todo(SINK.max > 0 && SINK.dumpRate > 0,
     `「우주에서 스텔스는 불가능하다」(CHASE2)를 적어 놓고 미션에 「${silent.name}」(전부 끄고 기다린다)이 있다`,
-    'v58 · 열 저장고가 이걸 말이 되게 한다 — 잠깐은 숨을 수 있고, 저장고가 차면 못 숨는다');
+    'v58 · 열 저장고',
+    `★ 「${silent.name}」이 이제 말이 된다 — 저장고에 담는 동안은 숨고, 차면 못 숨는다.`
+    + ' **스텔스는 불가능한 게 아니라 잠깐만 가능하다** (space-heat.js [4])');
   // 버리기 — 던지면 뿌리쳐지나
   const jet = MISSIONS.find((m) => m.key === 'jettison');
-  todo(false,
+  todo(!jet.branches.some((b) => /뿌리친다/.test(b.what)),
     `「${jet.name}」 — 「${jet.branches[0].what}」. 화물을 던져도 질량은 조금 줄 뿐이고,`
     + ' 던진 것은 **새 표적**이 되어 오히려 자국이 된다',
-    'v59 · 「뿌리친다」가 아니라 「저쪽이 그걸 줍느라 늦는다」로 (남의 미끼와 짝이 맞는다)');
+    'v59 · 「뿌리친다」가 아니라 「저쪽이 그걸 줍느라 늦는다」로',
+    `★ 「${jet.name}」이 **시간을 사는 것**이 됐다 — 「${jet.branches[0].what}」.`
+    + ' 「남의 미끼」와 짝이 맞는다: 내가 던진 것을 언젠가 누가 줍는다');
   // 미소운석 — 뚫린 방에 들어가 7초를 고친다
   const micro = MISSIONS.find((m) => m.key === 'micrometeor');
   todo(!micro.effect.sign || micro.effect.air,

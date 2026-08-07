@@ -33,7 +33,7 @@
 // 14 → 15: 구조 신호(G) 칸이 늘었다
 // 13 → 14: **앉아 있던 자세를 안 잇는다.** 옛 저장에는 `gun.up` 이 참인 것이
 //          있고, 그대로 이으면 걸을 수 없는 자리에서 시작한다. 올려서 버린다
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;   // v58 — ship.sink 가 늘었다
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -122,7 +122,9 @@ export const FIELDS = {
   /** 배 자체 — main.js 가 들고 있는 것들 */
   // ★ `coolOpen` — 밸브가 열린 채 저장했는데 이어하니 잠겨 있으면
   //   그건 이어한 게 아니다. 잠금식이 된 순간부터 이건 **상태**다
-  ship: ['heat', 'power', 'clock', 'seed', 'coolOpen'],
+  // ★ v58 — `sink`(열 저장고)가 늘었다. 안 담으면 이어했을 때 저장고가
+  //   0 으로 돌아가고, 그러면 **껐다 켜는 것이 열을 버리는 방법**이 된다
+  ship: ['heat', 'sink', 'power', 'clock', 'seed', 'coolOpen'],
   /**
    * ★★ 영구 손상 — **이걸 빠뜨리면 흉터가 저장 한 번에 낫는다.**
    *   「못 고친다」가 이 계통의 전부인데 껐다 켜서 없어지면 그건 영구가

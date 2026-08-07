@@ -19,6 +19,7 @@ import { makeScars, noteFix, noteScene, has, valveMult, signOf, list }
 import { makeFaults, stepFaults, clear, wearStep } from '../web/space/js/game/fault.js';
 import { WEAR, VALVE, HEAT } from '../web/space/js/game/systems-table.js';
 import { SIGN, HEATING } from '../web/space/js/game/chase-table.js';
+import { SINK } from '../web/space/js/game/heat-table.js';
 import { LOCK } from '../web/space/js/game/airlock-table.js';
 import { HELM, signMult as helmSign } from '../web/space/js/game/helm-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
@@ -118,7 +119,7 @@ console.log('\n[4] ★★ **우회할 수 있나** — 못 고치는 것에 길�
   ok(turn > VALVE.turnTime && turn <= 6,
     `${turn}초 (6초 이하) — 손이 더 묶이되 **쳇바퀴는 아니다**`);
   // ★ 밸브가 느려도 **다른 길로 열이 빠지나**
-  const valveCool = Math.abs(HEATING.coolValve + HEATING.idle);
+  const valveCool = SINK.dumpRate;   // ★ v58 — 식히는 것은 라디에이터다 (heat-table.js)
   ok(LOCK.heatOut > 0 && LOCK.heatOut < valveCool,
     `바깥문으로도 식는다 (-${LOCK.heatOut}/초) — 밸브(-${valveCool.toFixed(1)})보다 약하지만 **길이 있다**`);
 

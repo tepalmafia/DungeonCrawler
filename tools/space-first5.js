@@ -27,6 +27,8 @@ import { makeTutor, stepTutor, lineOf, nowKey, allDone, canFire } from '../web/s
 import { SIGN, CHASE, CAUGHT } from '../web/space/js/game/chase-table.js';
 import { makeChase, stepChase, heatRate, canTurnOn, PHASE, signatureOf } from '../web/space/js/game/chase.js';
 import { HEAT, VALVE } from '../web/space/js/game/systems-table.js';
+// ★ v58 — 열이 두 칸이 됐다. 밸브 가르침이 저장고를 본다 (tutor-table.js)
+import { makeHeat, stepHeat, sinkAt } from '../web/space/js/game/heat.js';
 import { makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, regionOf, RPHASE }
   from '../web/space/js/game/route.js';
 import { makeFaults, stepFaults, effectsOf, wearStep, clear } from '../web/space/js/game/fault.js';
@@ -55,7 +57,7 @@ function play(policy, seed = 'F5') {
   // 정박 상태로 시작한다 (main.js 와 같아야 한다)
   const power = { thrust: false, cool: true, sensor: false };
   const me = {
-    heat: HEAT.start, coolFor: 0, turn: 0,
+    heat: HEAT.start, st: makeHeat(), coolFor: 0, turn: 0,
     walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0, steered: 0,
     busy: 0,                     // 걸어가는 중이면 손이 안 닿는다
   };
@@ -86,8 +88,12 @@ function play(policy, seed = 'F5') {
     wearStep(faults, DT, { power, valveOpen: me.coolFor > 0, region: regionOf(route) });
     const bad = effectsOf(faults);
     me.coolFor = Math.max(0, me.coolFor - DT);
-    me.heat = Math.max(0, Math.min(HEAT.max,
-      me.heat + (heatRate(power, me.coolFor > 0) + bad.heat) * DT));
+    // ★★ v58 — 열이 두 칸이다. 여기도 게임과 같은 규칙을 쓴다 (heat.js)
+    me.st.hull = me.heat;
+    stepHeat(me.st, DT, {
+      thrust: power.thrust, cool: power.cool, valveOpen: me.coolFor > 0, extra: bad.heat,
+    });
+    me.heat = me.st.hull;
     if (me.heat >= HEAT.max - 0.5) log.hot += DT;
 
     // ── 추격 (main.js:529 — 거점 빗장) ───────────────────
@@ -117,7 +123,7 @@ function play(policy, seed = 'F5') {
     const tev = stepTutor(tutor, DT, {
       walked: me.walked, turned: me.turned,
       atPort, forkPicked: route.leg + (route.fork ? 1 : 0),
-      heat: me.heat, thrust: power.thrust, flips: me.flips, cooled: me.cooled,
+      heat: me.heat, sink: sinkAt(me.st), thrust: power.thrust, flips: me.flips, cooled: me.cooled,
       faultsOpen: faults.open.length, faultsFixed: me.fixed,
       hazardSeen: me.hazardSeen, dodged: hazard.dodged, steered: me.steered,
       foodLow: shaky(supply), loads: supply.loads, traded: supply.traded,
@@ -153,7 +159,12 @@ const 굳은사람 = () => {};
 function 먼저하는사람({ t, route, power, me, atPort }) {
   if (t > 12 && atPort && !route.fork) { chooseFork(route, route.offer[0].key); me.busy = WALK; return; }
   if (route.fork && !power.thrust && canTurnOn(power)) { power.thrust = true; me.flips++; me.busy = WALK; return; }
-  if (me.heat > 62 && me.coolFor <= 0) { me.coolFor = VALVE.holds; me.cooled++; me.busy = WALK; }
+  // ★ v58 — 「열이 62 넘으면」이었다. 냉각이 선체를 잡아 주므로 **그 줄이
+  //   영영 안 걸리게 됐고**, 그래서 이 사람이 가르침 셋에서 멈췄다.
+  //   지금 라디에이터를 여는 까닭은 **저장고가 차서**다
+  if ((sinkAt(me.st) > 0.6 || me.heat > 62) && me.coolFor <= 0) {
+    me.coolFor = VALVE.holds; me.cooled++; me.busy = WALK;
+  }
   me.walked = 99; me.turned = 99;
 }
 
