@@ -136,7 +136,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 56;
+export const VERSION = 57;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1716,6 +1716,18 @@ window.SPACE = {
   get locked() { return input.locked; },
   get blockers() { return BLOCKERS.length; },
   get region() { return ship.outside.region; },
+  /**
+   * ★ 창밖 (v57). `SPACE.land.view` 안에 묻혀 있었는데, 하늘은 착륙과
+   *   아무 상관이 없다 — `space-sky.js` 가 「별이 흐르나」를 물으려고
+   *   착륙 상태를 들춰 봐야 하는 것은 길이 잘못 난 것이다.
+   *
+   * ★★ **`sky` 라고 지었다가 조용히 먹혔다.** `SPACE.sky` 는 이미
+   *   **떠도는 것들**(v49 · space-target.js)이 쓰고 있었고, 객체 리터럴은
+   *   뒤에 적은 것이 이긴다 — 그래서 이쪽이 통째로 사라졌는데
+   *   **오류는 한 줄도 안 났다.** 검사는 `undefined === undefined` 로
+   *   초록을 찍고 있었다. 이름을 겹치면 이렇게 조용히 진다
+   */
+  get outside() { return ship.outside.view; },
   get power() { return { ...power }; },
   setPower(k, v) { if (v && !canTurnOn(power) && !power[k]) return false; power[k] = v; return true; },
   get chase() { return { phase: chase.phase, risk: +chase.risk.toFixed(1), dist: +chase.dist.toFixed(1), sign: +chase.sign.toFixed(1), runs: chase.runs }; },
@@ -2606,7 +2618,9 @@ function frame(now) {
   //   `update` 보다 **먼저** 넣는다. 나중에 넣으면 이번 프레임은 옛 고도로
   //   그려지고, 그 한 프레임이 마디가 바뀌는 순간마다 툭 끊겨 보인다
   ship.outside.setLand({ step: land.step, t: land.t });
-  ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard));
+  // ★ 카메라를 준다 (v57). 별 천구가 **눈을 따라다녀야** 한다 —
+  //   안 그러면 조종석에서 기관실까지 25m 를 걸을 때 별자리가 밀린다
+  ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard), camera);
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
   // ★ **해도대가 어긋나면 눈금이 밀린다** (chartDrift). 다만 **거짓말인 줄은
