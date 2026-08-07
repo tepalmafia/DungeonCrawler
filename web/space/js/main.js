@@ -67,7 +67,7 @@ import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
-import { HELM, HELM_SEAT, offWord, hitWord } from './game/helm-table.js';
+import { HELM, HELM_SEAT, FLY_VIEW, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
@@ -152,7 +152,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 62;
+export const VERSION = 63;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -710,6 +710,22 @@ let repairing = null;     // 지금 잡고 있는 고장
 let hearNear = 0;         // 소리가 얼마나 가까운가 0~1
 /** ★ 지금 진공에 서 있나 (v62) — 손목이 이걸 제일 먼저 말한다 */
 let vacNow = false;
+/** ★★ 모는 눈이 얼마나 열렸나 0~1 (v63 · FLY_VIEW) */
+let flyK = 0;
+/** ★★ 조종간을 **쥐고 있나** — 조준선이 떠나도 놓을 때까지 쥔 것이다 (v63) */
+let yokeHeld = false;
+/** ★★ 주포 손잡이도 같은 걸쇠 (v63) */
+let gripHeld = false;
+/**
+ * ★★ **계기를 읽는 손잡이를 잡고 있나** (v63).
+ *
+ *   v59 의 「잡으면 들여다본다」는 **계기를 읽으려고** 만든 것인데,
+ *   실제로 걸려 있던 것은 조종간과 주포뿐이었다 (`steering || gripping`) —
+ *   즉 **읽을 것이 없는 손잡이에만 걸려 있었고, 읽을 손잡이에는 안 걸려
+ *   있었다.** 사장님 말씀(「스크린 화면을 확대해서」)의 그 스크린은
+ *   대시에 박힌 계기지 조종간이 아니다. 자리를 바로잡는다
+ */
+let readGrip = false;
 /** ★ F(감압)가 연 미소운석이 아직 열려 있나 — 「저절로 낫는」 것을 막는다 */
 let leakOpen = false;
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
@@ -1051,7 +1067,17 @@ function interactStep(dt) {
   cranking = crankDoor && crankDoor.jammed && input.hold ? crankDoor : null;
 
   // ── 조종간 — **잡고 좌우로 민다** (FLYING.md §3-B) ─────
-  steering = onYoke && input.hold;
+  // ══ ★★★ **잡으면 놓을 때까지 잡은 것이다** (v63) ═══════════════════
+  //  여태 `steering = onYoke && input.hold` 였다 — **조준선이 조종간에서
+  //  벗어나는 순간 손이 떨어졌다.** 그런데 v63 은 잡으면 고개를 들어
+  //  창을 보여 준다. 두 규칙이 정면으로 부딪힌다: 창을 보면 조준선이
+  //  조종간을 떠나므로 **보는 순간 놓아진다.**
+  //
+  //  실제로도 조종간은 **딴 데를 본다고 놓아지지 않는다.** 손이 떨어지는
+  //  것은 **놓았을 때**뿐이다. 걸쇠를 하나 둔다
+  if (!input.hold) yokeHeld = false;
+  else if (onYoke) yokeHeld = true;
+  steering = yokeHeld;
   // ★★ **잡는 순간 자동 항법이 꺼진다** (사장님 「수동으로 운전할때는
   //   자동항법 꺼지는 걸로」). 이게 있어야 「내가 몬다」가 성립한다 —
   //   전에는 놓으면 배가 저절로 항로로 돌아와서 **한 일이 아무 자국도
@@ -1469,7 +1495,12 @@ function interactStep(dt) {
   //    **앉고 나서 잡는다.** 주포 좌석과 **같은 얼개**이므로 새 동작이 아니다
   if (onHelmSeat && gunPressed && !gun.up) {
     helmSat = true;
-    banner = '조종석에 앉습니다';
+    // ★★ **앉으면 시선이 조종간 쪽으로 내려간다** (v63).
+    //   `HELM_SEAT.pitch` 가 표에 있었는데 **아무도 안 읽고 있었다** —
+    //   그래서 앉아도 시선이 그대로라 조종간을 손으로 더듬어 찾아야 했다.
+    //   재 보니 조종간은 34도 아래에 있다 (`SIT_LOOK`)
+    me.pitch = SIT_LOOK;
+    banner = '조종석에 앉습니다 — 조종간을 잡으면 창이 열립니다';
     bannerT = 1.8;
     audio?.event('click');
   } else if (helmSat && gunPressed && !onYoke && !steering) {
@@ -1482,7 +1513,11 @@ function interactStep(dt) {
   }
 
   // ★ **잡고 있는 동안** WASD 가 포탑을 돌린다 (walk() 가 읽는다)
-  gripping = atGrip && input.hold;
+  // ★★ 주포 손잡이도 **같은 걸쇠**다 (v63). 겨누려고 화면을 보는 순간
+  //   조준선이 손잡이를 떠나는데, 그때 손이 떨어지면 겨눌 수가 없다
+  if (!input.hold) gripHeld = false;
+  else if (atGrip) gripHeld = true;
+  gripping = gun.up && gripHeld;
   // 쏘는 것은 **Space** — 잡는 손과 쏘는 손이 같으면 겨누다 말고 쏘게 된다
   const firePressed = input.keys.has('Space');
   if (gun.up && firePressed && !fireHeldWas) fireGun();
@@ -1501,6 +1536,9 @@ function interactStep(dt) {
     }
   }
   gunHeldWas = input.hold;
+  // ★★ **계기를 읽는 손잡이인가** (v63). 여기서만 화면을 당긴다 —
+  //   조종간·주포는 반대로 **넓히고 든다** (helm-table.js FLY_VIEW)
+  readGrip = !!(input.hold && (onValve || breaker || plate >= 0 || panel));
 
   // ★ 포탑에 올라가 있으면 잡히는 것이 **둘**이다 — 주포(쏜다)와
   //   사다리(내려간다). 전에는 주포 하나뿐이라 **내려올 길이 없었다**
@@ -2439,7 +2477,21 @@ window.SPACE = {
   /** ★ 주포 — 올라갔나 · 쏘면 뭐가 주나 */
   get gun() { return { ...gunSummary(gun), flashSign: flashSign(gun) }; },
   /** 검사가 사다리를 안 타고 올라간다 */
-  putGun(up) { gun.up = !!up; gun.moving = 0; return gunSummary(gun); },
+  /**
+   * ★ 검사가 주포에 앉혀 놓는다.
+   *   ★★ v63 — **몸도 좌석으로 옮긴다.** 예전엔 `gun.up` 만 켰고, 그러면
+   *   「올라갔다」고 나오는데 **화면은 그대로**였다 (자리를 옮기는 것은
+   *   `walk()` 안의 `gunBusy` 가지인데 `moving = 0` 이라 안 돈다).
+   *   그 상태로 스크린샷을 찍으면 「주포가 안 된다」로 보인다 —
+   *   실제로 사장님이 그렇게 보셨다
+   */
+  putGun(up) {
+    gun.up = !!up; gun.moving = 0; gun.goingUp = false;
+    const at = up ? GUN_SEAT.at : GUN_SEAT.standAt;
+    me.x = at.x; me.z = at.z;
+    if (up) me.pitch = 0;
+    return gunSummary(gun);
+  },
   /** 검사가 쏜다 — **게임과 같은 길로** (fireGun 이 배너·열·거리를 다 한다) */
   fireGun() { fireGun(); return gunSummary(gun); },
   /** ★ 조종 — 조종간이 늘 먹나 · 벗어나면 느려지고 안 보이나 */
@@ -2973,8 +3025,22 @@ function frame(now) {
   //    「있는 줄 아는」 것이었다. 잡으면 몸이 기울고 눈이 좁아진다.
   //  ★ 확대창을 띄우는 것이 아니라 **카메라가 움직인다** —
   //    「손이 곧 상태창」을 안 깬다 (UI 를 하나도 안 늘렸다)
-  const wantFocus = (steering || gripping) ? 1 : 0;
+  //  ★★★ **v63 — 손잡이를 둘로 갈랐다.** 사장님: 「조정간을 잡으면
+  //     전체 화면으로 나오게 해야지. 앉기만 하니깐 우주가 안보여서
+  //     운전을 못하고」
+  //
+  //   여기가 그 자리다. `wantFocus` 에 `steering || gripping` 이 들어 있었다 —
+  //   **모는 손잡이에 「들여다보기」를 걸어 놨던 것**이고, 그러면 화각이
+  //   72 → 45 로 **좁아진다.** 계기를 읽으려고 만든 것이 모는 것에도 걸려
+  //   밖을 더 못 보게 하고 있었다. 정확히 반대로 해야 하는 자리다.
+  //
+  //     읽는 손잡이 (밸브·차단기·해도대·패널) → 좁히고 당긴다 (FOCUS)
+  //     모는 손잡이 (조종간·주포)            → **넓히고 든다** (FLY_VIEW)
+  const wantFocus = (!steering && !gripping && readGrip) ? 1 : 0;
   focusK += (wantFocus - focusK) * Math.min(1, dt * FOCUS.rate);
+  // ★★ 모는 눈 — 잡고 있는 동안 창이 화면을 채운다
+  const wantFly = (steering || gripping || gun.up) ? 1 : 0;
+  flyK += (wantFly - flyK) * Math.min(1, dt * FLY_VIEW.rate);
 
   // ══ ★★ **조종간을 잡으면 앉는다** (v61) ═══════════════════════════
   //  사장님: 「좌석은 센터에 있어야지. 조정석 뒤에. 어떻게 앉아서 조정을
@@ -3002,7 +3068,9 @@ function frame(now) {
     me.z += (s.z - me.z) * k;
     camera.position.y -= (BODY.eye - HELM_SEAT.eye) * helmSitK;
   }
-  const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK;
+  // ★ 화각 — 읽을 때는 좁히고(45) 몰 때는 넓힌다(94). 둘이 동시에 1 이
+  //   될 수 없으므로(`wantFocus` 가 `steering` 을 뺀다) 그냥 더한다
+  const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK + (FLY_VIEW.fov - FOV_WIDE) * flyK;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (focusK > 0.001) {
     // 보는 쪽으로 몸을 기울인다 — 자리는 그대로고 **눈만** 나아간다
@@ -3010,6 +3078,23 @@ function frame(now) {
     camera.position.x -= Math.sin(me.yaw) * Math.cos(me.pitch) * lean;
     camera.position.z -= Math.cos(me.yaw) * Math.cos(me.pitch) * lean;
     camera.position.y += Math.sin(me.pitch) * lean;
+  }
+  if (flyK > 0.001) {
+    // ══ ★★★ **잡으면 창이 화면을 채운다** (v63) ═══════════════════
+    //  ① 눈이 **뜬다** — 눈썹 차양 위로. 앉은 눈(1.20)에서 계기 위로
+    //     올라가는 30cm 가 「우주가 안 보인다」를 「보인다」로 바꾼다
+    //  ② 눈이 **앞으로** 나간다 — 유리 바로 뒤. 창틀이 시야에서 물러난다
+    //  ③ 고개가 **들린다** — 조종간을 보려고 숙인 34도를 게임이 들어 준다.
+    //     ★ `me.pitch` 자체를 안 건드린다. 건드리면 놓는 순간 시선이
+    //       하늘로 튀고, 그건 조종이 아니라 사고다 — **카메라만** 든다
+    const yawS = Math.sin(me.yaw), yawC = Math.cos(me.yaw);
+    const lean = FLY_VIEW.lean * flyK;
+    camera.position.y += FLY_VIEW.rise * flyK;
+    camera.position.x -= yawS * lean;
+    camera.position.z -= yawC * lean;
+    // 숙인 고개를 **`aimAt` 까지** 끌어올린다 (수평보다 조금 위 = 창의 한복판)
+    const want = Math.max(me.pitch, FLY_VIEW.aimAt);
+    camera.rotation.x += (want - me.pitch) * flyK;
   }
 
   const valveOpen = interactStep(dt);
