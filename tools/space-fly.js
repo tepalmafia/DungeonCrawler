@@ -154,15 +154,39 @@ console.log('\n[2b] ★★ **잔해가 없어도 조종간이 먹나** — 거�
   ok(h.lane > 0.2, `잔해가 하나도 없어도 밀면 배가 기운다 (lane ${h.lane.toFixed(2)})`);
   ok(h.phase === HPHASE.IDLE, '그런데 잔해는 안 뜬다 — 조종과 잔해는 다른 것이다');
 
-  // 놓으면 가운데로 — 이것도 잔해와 무관해야 한다
-  let back = 0;
-  while (back < 6 && h.lane > 0.01) { steerShip(h, DT, { atSeat: false, push: 0 }); back += DT; }
-  ok(h.lane <= 0.01, `놓으면 가운데로 돌아온다 (${back.toFixed(1)}초)`);
+  // ★★ **놓았을 때가 자동/수동에 따라 달라야 한다** (v55).
+  //   여기는 원래 「놓으면 무조건 가운데로 돌아온다」만 물었고, 그래서
+  //   **옛 규칙을 지키는 검사**가 되어 있었다. 사장님이 「운전을 왜 임의로
+  //   못하지?」라고 하신 것이 바로 이것이다 — v47 에 조종간(helm)은
+  //   「수동이면 놓아도 그대로」로 고쳤는데 좌우 자리는 그 규칙을 못 받았다.
+  const lane0 = h.lane;
+  let stay = 0;
+  while (stay < 6) { steerShip(h, DT, { atSeat: false, push: 0, manual: true }); stay += DT; }
+  ok(Math.abs(h.lane - lane0) < 0.01,
+    `★ **수동이면 놓아도 그대로다** (${lane0.toFixed(2)} → ${h.lane.toFixed(2)}) — 조종간과 같은 규칙`);
 
-  // 반대쪽으로도
+  let back = 0;
+  while (back < 20 && h.lane > 0.01) { steerShip(h, DT, { atSeat: false, push: 0 }); back += DT; }
+  ok(h.lane <= 0.01, `자동 항법이면 가운데로 돌아온다 (${back.toFixed(1)}초) — 그게 자동이 하는 일이다`);
+
+  // ★ 그리고 **폭이 넉넉한가** — 덩어리는 ±0.85 에 난다
+  let wide = 0;
+  while (wide < 10 && h.lane < HAZARD.laneMax - 0.01) {
+    steerShip(h, DT, { atSeat: true, push: 1 }); wide += DT;
+  }
+  console.log(`  끝까지 미는 데 ${wide.toFixed(1)}초 · 폭 ±${HAZARD.laneMax}`);
+  ok(HAZARD.laneMax > 0.85 * 1.8,
+    `배(±${HAZARD.laneMax})가 **잔해밭(±0.85)보다 넓게** 움직인다 — 옆으로 빠져나갈 수 있다`);
+  ok(wide >= 2 && wide <= 6, `끝에서 끝까지 ${(wide * 2).toFixed(1)}초 (4~12) — 넓히면서 속도도 같이 올렸다`);
+
+  // 반대쪽으로도 — ★ 폭이 넓어졌으므로 **끝에서 끝까지**를 재야 한다.
+  //   1.5초만 밀고 「반대로 안 간다」고 하면 그건 폭이 넓어진 것을 모르는
+  //   검사다 (실제로 여기서 lane 0.43 으로 빨개졌다)
   let t2 = 0;
-  while (t2 < 1.5) { steerShip(h, DT, { atSeat: true, push: -1 }); t2 += DT; }
-  ok(h.lane < -0.2, `반대로도 기운다 (lane ${h.lane.toFixed(2)})`);
+  while (t2 < 8 && h.lane > -HAZARD.laneMax + 0.05) {
+    steerShip(h, DT, { atSeat: true, push: -1 }); t2 += DT;
+  }
+  ok(h.lane < -0.2, `반대로도 끝까지 기운다 (lane ${h.lane.toFixed(2)} · ${t2.toFixed(1)}초)`);
 }
 
 console.log('\n[3] 안 앉아 있으면 부딪히나 — **벌이 없으면 조종은 장식이다**');
