@@ -67,7 +67,7 @@ import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
-import { HELM, offWord, hitWord } from './game/helm-table.js';
+import { HELM, HELM_SEAT, offWord, hitWord } from './game/helm-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
@@ -143,7 +143,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 60;
+export const VERSION = 61;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -173,6 +173,8 @@ const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 400);
 const FOV_WIDE = 72;
 /** 지금 얼마나 당겨져 있나 0~1 */
 let focusK = 0;
+/** ★ 조종간을 잡으면 앉는다 0~1 (v61) */
+let helmSitK = 0;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
 scene.add(camera);
@@ -2784,6 +2786,32 @@ function frame(now) {
   //    「손이 곧 상태창」을 안 깬다 (UI 를 하나도 안 늘렸다)
   const wantFocus = (steering || gripping) ? 1 : 0;
   focusK += (wantFocus - focusK) * Math.min(1, dt * FOCUS.rate);
+
+  // ══ ★★ **조종간을 잡으면 앉는다** (v61) ═══════════════════════════
+  //  사장님: 「좌석은 센터에 있어야지. 조정석 뒤에. 어떻게 앉아서 조정을
+  //           할 수 있을지 먼저 생각해봐」
+  //
+  //  ★ 여태 **서서** 조종간을 잡았다. 그래서 조종간을 서 있는 눈(1.62)에
+  //    맞춰 자꾸 올렸고(v16 에서 1.06 → 1.18), 올릴수록 **앉은 사람에게는
+  //    더 못 쓰는 물건**이 됐다. 그리고 좌석이 한가운데 있으면 등받이가
+  //    조종간을 가리길래 **좌석을 옆으로 밀었다** — 문제를 푼 게 아니라
+  //    피한 것이다.
+  //
+  //  ★ 실제 조종석은 **앉은 눈이 올 자리(DEP)를 먼저 못박고** 나머지를
+  //    거기서 잰다 (helm-table.js HELM_SEAT). 그러면 답이 하나다 —
+  //    **조종간을 잡으면 앉는다.** 눈이 1.20 으로 내려가고 몸이 좌석으로
+  //    미끄러지면, 조종간(0.98)은 눈보다 22cm 아래 — 손이 가는 자리다.
+  //  ★ 새 동작을 안 만들었다. **잡는 것 하나로 앉기까지 된다** —
+  //    「한 손잡이가 두 일을 하면 부딪힌다」와 안 부딪히는 이유는,
+  //    앉는 것이 잡는 것의 **결과**이지 다른 일이 아니기 때문이다
+  helmSitK += ((steering ? 1 : 0) - helmSitK) * Math.min(1, dt * HELM_SEAT.slide * 0.5);
+  if (helmSitK > 0.002) {
+    const s = steering ? HELM_SEAT.seatAt : HELM_SEAT.standAt;
+    const k = Math.min(1, dt * HELM_SEAT.slide);
+    me.x += (s.x - me.x) * k;
+    me.z += (s.z - me.z) * k;
+    camera.position.y -= (BODY.eye - HELM_SEAT.eye) * helmSitK;
+  }
   const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (focusK > 0.001) {

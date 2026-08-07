@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 import { CIRCUITS, SIGN } from '../game/chase-table.js';
 import { STEP, LAND } from '../game/land-table.js';
+import { HELM_SEAT, YOKE_AT } from '../game/helm-table.js';
 import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
 import { DUST } from '../game/sky-table.js';
 
@@ -62,18 +63,30 @@ export const CONSOLE_PTS = [
 ];
 
 /** 좌석이 서 있는 자리. 충돌이 같이 읽는다 */
-export const SEATS = [[-1.05, -6.95], [1.05, -6.95]];
+/**
+ * ★★ **하나다** (v61 · 사장님 「운전석도 하나만 하고」).
+ *
+ * 둘이었다. 그런데 이 배에는 **사람이 하나**다 — 「상인은 얼굴을 안
+ * 만든다」(PLAN §1)와 같은 줄에서, 이 배에 다른 승무원은 없다.
+ * 빈 좌석이 하나 더 있으면 그건 **없는 사람을 가리키는 물건**이다.
+ *
+ * ★ 그리고 **가운데를 비운다.** 좌석을 한가운데 두면 등받이가 조종간을
+ *   가리고, 그게 v16 에서 「조정간이 안잡히잔아」가 났던 자리다.
+ *   실제 우주선도 **급할 때 쓰는 것을 한가운데** 둔다 (크루 드래건의
+ *   비상 탈출 레버 · REALSHIP.md §3) — 그 자리는 조종간 것이다.
+ */
+export const SEATS = [[HELM_SEAT.seatAt.x, HELM_SEAT.seatAt.z]];
 
 const SILL = 0.82;      // 창 아래끝
 // 조종간이 서는 z. 좌석(-6.95)보다 앞, 콘솔(-7.95~)보다 뒤 — **둘 사이**
-const YOKE_Z = -7.42;
+const YOKE_Z = YOKE_AT.z;
 // 조종간 가로대 높이.
 // ★ 1.06 에서 올렸다. 그 높이에서는 **서서 자연스럽게 내려다보는 각도**
 //   (고개 -0.2 쯤)에 안 걸리고, -0.30 까지 숙여야 겨우 한가운데 왔다.
 //   콘솔 상판이 0.86 이므로 1.18 이면 여전히 「상판에서 올라온 기둥 위」로
 //   읽히면서 눈에는 먼저 들어온다. 판정 상자도 같이 키웠다 —
 //   **작은 것을 정확히 겨누게 하는 건 어려움이 아니라 짜증이다**
-const YOKE_Y = 1.18;
+const YOKE_Y = YOKE_AT.y;
 const HEAD = 2.34;      // 창 위끝
 
 function seg(a, b) {
@@ -516,11 +529,41 @@ export function buildCockpit(parent, room, H) {
 
   // ── 콘솔 · 화면 ───────────────────────────────────────
   // 참고 사진의 핵심. 화면이 여럿이고 **그게 빛난다**
+  // ══ ★★ **콘솔을 다시** (v61 · 사장님 「조종석 계기판이나 스크린 모니터
+  //    등도 고증해서 직관적으로 다시 설계해」) ══════════════════════════
+  //
+  //  ★ 무엇이 틀려 있었나 — **화면이 허공에 떠 있었다.**
+  //    콘솔 몸통은 0~0.86, 상판은 0.88, 그런데 화면은 1.16 에 있었다.
+  //    사이 **28cm 가 텅 비어** 있어서, 여섯 장이 어디에도 안 붙은 채
+  //    공중에 걸린 것으로 보였다. 조종간이 뜬 것과 같은 병이다.
+  //
+  //  ★ 고증 (REALSHIP.md §3 · 크루 드래건)
+  //    「큰 터치스크린 셋 + 물리 버튼 약 30개. 버튼 상당수가 **투명 덮개
+  //     아래**. 한가운데 **큰 물리 레버**」
+  //    → 화면은 **대시에 박혀 있고**, 그 아래에 **물리 스위치 띠**가 있고,
+  //      가운데는 손잡이 몫으로 비운다.
+  //
+  //  그래서 층이 넷이 된다 — 아래에서 위로:
+  //    ① 무릎 가림판 (0~0.62)   다리가 들어가는 자리는 비운다
+  //    ② 스위치 선반 (0.62~0.90) **물리 버튼이 사는 층**
+  //    ③ 대시 얼굴  (0.90~1.44) **화면이 여기 박힌다**
+  //    ④ 눈썹 차양  (1.44~)     빛을 막는다. 화면이 창빛에 안 씻긴다
   const CONSOLE = CONSOLE_PTS;
   for (let i = 0; i < CONSOLE.length - 1; i++) {
     const a = CONSOLE[i], b = CONSOLE[i + 1];
-    pane(g, a, b, 0, 0.86, DARK, 0.5);                 // 콘솔 몸통
-    rail(g, a, b, 0.88, FRAME, 0.52, 0.06);            // 상판
+    pane(g, a, b, 0, 0.62, DARK, 0.44);                // ① 무릎 가림판
+    pane(g, a, b, 0.62, 0.90, PANEL, 0.52);            // ② 스위치 선반
+    rail(g, a, b, 0.90, FRAME, 0.54, 0.05);            // 선반 테
+    // ③ **대시 얼굴** — 화면이 박히는 판. 사람 쪽으로 눕는다
+    const s0 = seg(a, b);
+    const face = new THREE.Mesh(new THREE.BoxGeometry(s0.len, 0.60, 0.07), DARK);
+    face.position.set(s0.mx, 1.17, s0.mz + 0.10);
+    face.rotation.y = s0.rot;
+    face.rotateX(-0.36);
+    g.add(face);
+    // ④ **눈썹 차양** — 창에서 들어오는 빛을 막는다. 실제 조종석의 그 챙이다
+    rail(g, a, b, 1.47, FRAME, 0.30, 0.06, 0.12);
+    rail(g, a, b, 1.44, stripMat(BLUE), 0.04, 0.02, 0.22);
   }
 
   const DRAWERS = [drawShip, drawPower, drawHeat, drawCourse, drawSign, drawLog];
@@ -534,7 +577,9 @@ export function buildCockpit(parent, room, H) {
     //   화면 여섯 장이 전부 민판으로 보였고, 코드에는 아무 이상이 없었다.
     //   묶어 두면 안쪽 좌표라 각도가 어떻든 앞뒤가 안 바뀐다.
     const slot = new THREE.Group();
-    slot.position.set(s.mx, 1.16, s.mz + 0.14);
+    // ★ 대시 얼굴(1.17 · +0.10)보다 **아주 조금만** 앞으로. 예전엔 +0.14 라
+    //   판에서 떨어져 나와 「걸어 놓은 모니터」로 보였다. 박혀 있어야 한다
+    slot.position.set(s.mx, 1.17, s.mz + 0.145);
     slot.rotation.y = s.rot;
     slot.rotateX(-0.36);                               // 사람 쪽으로 눕힌다
     g.add(slot);
@@ -561,7 +606,9 @@ export function buildCockpit(parent, room, H) {
     const t = i / 21;
     const x = -2.1 + t * 4.2;
     const z = -8.0 - Math.cos((t - 0.5) * 2.0) * 0.85;
-    box(g, 0.07, 0.045, 0.07, i % 3 === 0 ? stripMat(AMBER) : DARK, x, 0.92, z);
+    // ★ 선반(0.90) 위에 앉는다. 셋 중 하나는 불이 들어온다 —
+    //   「덮개 아래 버튼」의 문법 (REALSHIP §3)
+    box(g, 0.07, 0.045, 0.07, i % 3 === 0 ? stripMat(AMBER) : DARK, x, 0.94, z);
   }
 
   // ── 좌석 둘 ───────────────────────────────────────────
@@ -606,12 +653,42 @@ export function buildCockpit(parent, room, H) {
   g.add(yoke);
   yokes.push(yoke);
 
-  // 기둥 — 콘솔 상판(0.86)에서 올라온다. 어디서 나온 물건인지 보여야 한다
-  box(g, 0.13, YOKE_Y - 0.80, 0.13, FRAME, 0, (0.80 + YOKE_Y) / 2, YOKE_Z).name = '조종간기둥';
+  // ══ ★★ **바닥에서 올라온다** (v61 · 사장님 「조정 핸들이 공중에 떠
+  //    있는 것도 고치고」) ═══════════════════════════════════════════
+  //  ★ 기둥이 **y 0.80 에서 시작하고 있었다.** 「콘솔 상판(0.86)에서
+  //    올라온다」고 주석에 적어 놓았는데, 조종간은 z −7.42 라 콘솔
+  //    (z −7.95~−8.88)보다 **앞**이다 — 상판이 거기까지 안 온다.
+  //    그래서 기둥도 밑동도 **허공에 80cm 떠 있었다.**
+  //    주석이 거짓말을 하고 있었고, 그걸 몇 판 동안 아무도 안 봤다
+  //    (`REAL.md §0` 의 ①거짓말 — 서 있는 자리에서는 안 보인다).
+  //
+  //  ★ 실제 우주선의 조종 기둥은 **바닥에 박혀 있다** (셔틀의 control
+  //    column · 드래건의 가운데 레버 · REALSHIP.md §3). 여기도 그렇게 한다:
+  //    바닥 받침 → 기둥 → 목 → T 자
+  const PED_R = 0.30;
+  // 받침 — 바닥에 볼트로 박은 판. **넓어야 「박혀 있다」로 읽힌다**
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(PED_R, PED_R + 0.05, 0.07, 16), DARK);
+  plinth.position.set(0, 0.035, YOKE_Z);
+  g.add(plinth);
+  // 볼트 여섯 — 「뜯을 수 있는 물건」의 문법 (REALSHIP §6)
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    box(g, 0.045, 0.02, 0.045, FRAME,
+      Math.cos(a) * (PED_R - 0.05), 0.08, YOKE_Z + Math.sin(a) * (PED_R - 0.05));
+  }
+  // 기둥 — **바닥부터** 조종간까지. 아래가 굵고 위가 가늘다
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.085, 0.15, YOKE_Y - 0.14, 12), FRAME,
+  );
+  post.name = '조종간기둥';
+  post.position.set(0, (YOKE_Y - 0.14) / 2 + 0.07, YOKE_Z);
+  g.add(post);
+  // 무릎 높이 가로대 — 발을 걸치는 자리. 이게 있어야 기둥이 「가구」가 된다
+  box(g, 0.44, 0.05, 0.05, FRAME, 0, 0.30, YOKE_Z - 0.02);
   // 밑동 덮개 — 셔틀 문법. 급한 조작기는 **움푹한 자리에 앉는다**
   const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.06, 12), DARK);
   collar.name = '조종간밑동';
-  collar.position.set(0, 0.83, YOKE_Z);
+  collar.position.set(0, YOKE_Y - 0.20, YOKE_Z);
   g.add(collar);
 
   // T 자 — 가로대 하나에 손잡이 둘. 이 모양이라야 「좌우로 민다」가 읽힌다
