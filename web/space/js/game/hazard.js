@@ -93,12 +93,16 @@ function spawn(h, region) {
  *   조종간은 **늘 먹어야 한다.** 막을 것은 잔해가 오는 시점이지 조종이
  *   아니다. 잡고 밀면 창밖이 흐르고 조종간이 눕는다 — 그게 「먹고 있다」다.
  */
-export function steerShip(h, dt, { atSeat = false, push = 0 } = {}) {
+export function steerShip(h, dt, { atSeat = false, push = 0, manual = false } = {}) {
   if (atSeat && push !== 0) {
     h.lane = clamp(h.lane + push * HAZARD.tiltRate * dt, -HAZARD.laneMax, HAZARD.laneMax);
     h.seat += dt;
-  } else if (h.lane !== 0) {
-    // 놓으면 가운데로 돌아온다 — **잡고 있어야 한다**는 뜻이다
+  } else if (h.lane !== 0 && !manual) {
+    // ★★ **수동이면 안 돌아온다** (2026-08-06 · 사장님 「운전을 왜 임의로
+    //   못하지?」). v47 에 조종간(helm)은 「수동이면 놓아도 그대로」로
+    //   고쳤는데 **좌우 자리는 그 규칙을 못 받아서**, 손을 떼면 저절로
+    //   가운데로 끌려갔다 — 계통 둘이 서로 다른 규칙을 쓰고 있었다.
+    //   자동 항법일 때만 되돌린다. 그게 자동 항법이 하는 일이다
     const back = HAZARD.recenter * dt;
     h.lane = Math.abs(h.lane) <= back ? 0 : h.lane - Math.sign(h.lane) * back;
   }

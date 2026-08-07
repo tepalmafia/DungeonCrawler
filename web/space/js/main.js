@@ -131,7 +131,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 54;
+export const VERSION = 55;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -875,7 +875,7 @@ function interactStep(dt) {
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
-    ship.turret.seatHit, ship.turret.gripHit,
+    ship.turret.seatHit, ship.turret.standHit, ship.turret.gripHit,
     ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
@@ -903,6 +903,9 @@ function interactStep(dt) {
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
       if (o === ship.cock.autoHit) { onAuto = true; break; }
       if (o === ship.turret.seatHit) { onLadder = true; break; }
+      // ★ 서서 다가갈 때 잡히는 큰 상자 — **앉으면 무시한다.** 안 그러면
+      //   앉은 사람을 상자가 감싸서 앞을 봐도 이게 걸리고, 손잡이를 못 잡는다
+      if (o === ship.turret.standHit) { onLadder = !gun.up; break; }
       if (o === ship.turret.gripHit) { onGun = true; break; }
       if (o === ship.outerDoor.hit) { onOuter = true; break; }
       // ★ 무전기는 **신호가 와 있을 때만** 잡힌다. 평소에 잡히면
@@ -1450,7 +1453,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ **조종간은 늘 먹는다.** 잔해가 오는 시점만 빗장이 막고, 조종은 안 막는다 —
   //   전에는 좌우 조작이 `stepHazard` 안에 있어서 **거점에서는 조종간이
   //   죽은 물건**이었다. 잡으면 마우스까지 뺏기니 얼어붙은 것처럼 보였다
-  steerShip(hazard, dt, { atSeat: steering, push: steerPush });
+  // ★ 수동 항법이면 놓아도 그대로 간다 — 조종간(helm)과 같은 규칙
+  steerShip(hazard, dt, { atSeat: steering, push: steerPush, manual: !helm.auto });
   // ★ **잔해밭은 이제 아무 구간에나 안 온다.** 배치표가 D 를 놓은 구간
   //   (지금은 5) 에서만 열린다 — 「구간마다 이름이 있는 장면 하나」의 실체다.
   //   ★ 이미 지대 안에 들어와 있으면 계속 돈다. 장면이 끝났다고 바위를
