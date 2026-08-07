@@ -50,6 +50,11 @@ const GROUPS = [
     ['항로 밖으로', (S) => { S.setOff(0.9); return '항로를 크게 벗어났습니다'; }],
     ['행성 곁으로', (S) => { S.setRegion('planet'); S.setPower('thrust', true); return '행성 곁 — 수동이면 끌려갑니다'; }],
   ]],
+  // ★ 7판 E — 구간 8 을 안 기다리고 불을 끈다
+  ['정전', [
+    ['전력 내리기', (S) => { S.killLights(); return '정전 — 주 차단기는 기관실입니다'; }],
+    ['주 차단기 앞으로', (S) => { S.put(3.4, 12.6, -Math.PI / 2, -0.1); return '주 차단기 앞 — 잡고 있으면 올라갑니다'; }],
+  ]],
   ['배 · 항로', [
     ['구간 3 (행성)', (S) => { S.setLeg(3); S.seekScene(600); return '구간 3 — 장면 B(행성)'; }],
     ['구간 6 (자동 조종)', (S) => { S.setLeg(6); S.seekScene(600); return '구간 6 — 장면 C(자세 제어)'; }],

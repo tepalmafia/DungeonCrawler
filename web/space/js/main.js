@@ -68,6 +68,11 @@ import { HELM, offWord, hitWord } from './game/helm-table.js';
 import { GUN, WHY as GUN_WHY } from './game/gun-table.js';
 import { VOID, isVoid } from './game/void-table.js';
 import { RESCUE, RSTEP, RESCUE_WORD } from './game/rescue-table.js';
+import { DARK, DSTEP } from './game/blackout-table.js';
+import {
+  makeDark, killPower, stepDark, isDark, canReset as canResetDark,
+  settled as darkDone, summary as darkSummary,
+} from './game/blackout.js';
 import {
   makeRescue, hearSignal, stepRescue, passSignal, canAnswer,
   broadcasting as radioOn, holding as rescueHold, alongside as rescueNear,
@@ -131,7 +136,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 55;
+export const VERSION = 56;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -379,6 +384,8 @@ const helm = makeHelm();
 const gun = makeGun();
 /** ★ G 구조 신호 — 2시간에 한 번뿐인 남의 목소리 (7판) */
 const rescue = makeRescue();
+/** ★ E 정전 — 어두우면 소리밖에 없다 (7판) */
+const dark = makeDark();
 // ★★ **포탑이 겨누는 쪽** — 방위·고도(도). WASD 가 여기를 움직인다.
 //   사람이 보는 쪽과 **따로** 논다 — 그게 「실내에서 원격으로 돌린다」다
 let aimAz = 0, aimEl = 0;
@@ -819,8 +826,9 @@ function walk(dt) {
   const armsFull = !!(carry.held && CARRY_KINDS[carry.held]?.both);
   const mult = moveStep(move, dt, input.run, moving, {
     bothHands: armsFull,
-    // 정전은 아직 없다 (PLAN2H E 장면). 자리를 비워 둔다
-    dark: false,
+    // ★ **비워 둔 자리가 채워졌다** (7판 · E 정전). 어두우면 못 뛴다 —
+    //   방 사이가 걸어서 6~11초가 되고, 그게 이 장면의 무게다
+    dark: isDark(dark),
   });
   // ★ **조용히 안 막는다.** 못 뛰면 왜인지 말한다 — 윈치·해도대·조종간에서
   //   이미 세 번 겪은 것이고, 조용한 것은 「어렵다」가 아니라 「고장」으로 읽힌다
@@ -876,7 +884,7 @@ function interactStep(dt) {
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
     ship.turret.seatHit, ship.turret.standHit, ship.turret.gripHit,
-    ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit];
+    ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit, ship.mainBreaker.hit];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
 
@@ -885,7 +893,7 @@ function interactStep(dt) {
   let breaker = null;
   let plate = -1;
   let panel = null;
-  let onWinch = false, onHatch = false, onYoke = false, onRadio = false;
+  let onWinch = false, onHatch = false, onYoke = false, onRadio = false, onMain = false;
   let onLadder = false, onGun = false, onOuter = false, onAuto = false;
   let onCrank = null;
   let onSpot = null;
@@ -911,6 +919,9 @@ function interactStep(dt) {
       // ★ 무전기는 **신호가 와 있을 때만** 잡힌다. 평소에 잡히면
       //   2시간에 한 번뿐인 것이 늘 있는 것처럼 읽힌다
       if (o === ship.radio.hit) { onRadio = canAnswer(rescue); break; }
+      // ★ 주 차단기는 **어두울 때만** 잡힌다. 평소에 잡히면 「올려 두면
+      //   되는 것」이 하나 늘 뿐이고, 이 장면의 무게가 사라진다
+      if (o === ship.mainBreaker.hit) { onMain = canResetDark(dark); break; }
       const dv = ship.doors.find((x) => x.view.hit === o);
       if (dv) { onCrank = dv; break; }
       const sp = carryView.spotOf(o);
@@ -1023,6 +1034,14 @@ function interactStep(dt) {
     sceneDone(scenes, 'G');
   }
   if (rev2 === 'left') { banner = RESCUE.left; bannerT = 3.5; sceneDone(scenes, 'G'); }
+
+  // ── ★★ 주 차단기 — **어둠 속에서 올린다** (E 정전 · 7판) ──────
+  const dev = stepDark(dark, dt, onMain && input.hold);
+  if (dev === 'back') {
+    banner = DARK.back; bannerT = 4.5;
+    audio?.event('escaped');
+    sceneDone(scenes, 'E');
+  }
 
   const onDirt = landDown(land);
   loading = onDirt && onWinch && input.hold && canLoadLand(land, { doorOpen: lock.open });
@@ -1335,6 +1354,7 @@ function interactStep(dt) {
   //   사다리(내려간다). 전에는 주포 하나뿐이라 **내려올 길이 없었다**
   aimName = gun.up ? (onGun ? 'grip' : (onLadder ? 'gunseat' : null))
     : onRadio ? 'radio'
+    : onMain ? 'mainbreaker'
     : onOuter ? 'outer'
     : onLadder ? 'gunseat'
     : onSpot ? `spot:${onSpot}`
@@ -1648,6 +1668,13 @@ function systemsStep(dt, valveOpen, regionMult) {
   });
   ship.winch.update({ hauled: supply.hauled, ore: supply.ore, loads: supply.loads, moving: power.thrust });
   ship.radio.update(rescueSummary(rescue));
+  {
+    // ★ 정전이면 등을 죽인다. **0 이 아니다** — 완전한 암흑은 무서운 게
+    //   아니라 아무것도 못 하는 것이고, 그러면 「게임이 꺼졌나」로 읽힌다
+    const d = isDark(dark);
+    ship.setDark(d ? DARK.lamp : 1, d ? DARK.ambient : 1);
+    ship.mainBreaker.update(darkSummary(dark));
+  }
   ship.tradeHatch.update({ atPort: route.phase === RPHASE.PORT, ore: supply.ore });
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
@@ -2212,6 +2239,14 @@ window.SPACE = {
   get rescue() { return rescueSummary(rescue); },
   /** 신호를 켠다 — 구간 7 을 안 기다리려고 */
   callRescue() { hearSignal(rescue); return rescueSummary(rescue); },
+  /** ★ E 정전 — 검사와 점검 모드가 읽는다 (7판) */
+  get dark() { return darkSummary(dark); },
+  /** 전력을 내린다 — 구간 8 을 안 기다리려고 */
+  killLights() {
+    killPower(dark);
+    for (const k of Object.keys(power)) power[k] = false;
+    return darkSummary(dark);
+  },
   /**
    * ★ 어느 단계로든 바로 세워 놓는다 — `putLand`·`putGun` 과 같은 구멍.
    *   응답이 42초라 헤드리스(게임 시간 1/20)로는 14분이 걸린다. 도구가
@@ -2402,6 +2437,25 @@ function frame(now) {
   if (scenes.overdue && scenes.keys.includes('G') && !rescueDone(rescue)) {
     if (passSignal(rescue)) { banner = RESCUE.passed; bannerT = 3.0; }
     sceneDone(scenes, 'G');
+  }
+
+  // ── ★★ E — **전력이 나간다** (7판 · 줄기 「배가 낡아 간다」) ──
+  //   대응 박자에 셋이 한꺼번에 내려간다. 예고 때는 「전력 계통 이상」만
+  //   뜬다 — 예고가 예고이려면 준비할 시간이 있어야 한다
+  if (sev === 'act' && sceneOpen(scenes, 'E') && killPower(dark)) {
+    // ★ **회로 셋이 다 꺼진다.** 그래서 열은 0.5/초로 천천히 오르고
+    //   (재 봤다 — 132초에 100), 추진이 꺼져 구간도 안 나아간다.
+    //   시계는 새로 안 만들었다 — 이미 있었다 (blackout-table.js)
+    for (const k of Object.keys(power)) power[k] = false;
+    banner = DARK.hit; bannerT = 5.5;
+    audio?.event('fault');
+  }
+  // ★ 대응 시계가 다 됐는데 아직 안 올렸으면 **저절로 돌아온다.**
+  //   장면이 안 끝나면 배가 영영 어둡고, 그건 긴장이 아니라 멈춘 게임이다
+  if (scenes.overdue && scenes.keys.includes('E') && !darkDone(dark)) {
+    dark.step = DSTEP.BACK;
+    banner = DARK.back; bannerT = 3.0;
+    sceneDone(scenes, 'E');
   }
 
   // ── ★ C — 자세 제어가 죽는다 ──────────────────────────

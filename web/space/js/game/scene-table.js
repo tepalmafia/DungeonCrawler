@@ -123,7 +123,7 @@ export const SCENES = {
     lead: '전력 계통 이상',
     room: 'hall', hands: '어둠 속에서 차단기를 찾는다',
     uses: ['power', 'dark'],
-    built: false,
+    built: true,          // game/blackout.js — v56 부터 돈다
   },
   F: {
     key: 'F', name: '감압',

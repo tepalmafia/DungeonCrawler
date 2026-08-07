@@ -670,6 +670,60 @@ export function buildShip(scene, camera = null) {
     solid(standoff(ship, engine, H, 'z', [cx, 'y0'], EZ.accent, true));
   }
 
+  // ★★ 주 차단기 — **정전 때 여기까지 걸어와야 한다** (E 장면 · 7판).
+  //   반응로 옆 벽에 붙인 큰 레버 하나. 평소에는 아무 일도 안 하고,
+  //   어두울 때만 잡힌다. **비상등이 여기만 붉게 켜지므로** 어둠 속에서
+  //   어디로 가야 하는지는 알 수 있다 — 다만 **무엇이 고장인지는
+  //   여전히 안 가르친다** (규칙은 규칙이다)
+  const mainBreaker = new THREE.Group();
+  mainBreaker.position.set(engine.x1 - 0.14, 0, engine.z0 + 2.6);
+  mainBreaker.rotation.y = -Math.PI / 2;
+  ship.add(mainBreaker);
+  {
+    const B = mainBreaker;
+    const put = (w, h2, d, mat, x, y, z) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h2, d), mat);
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+      B.add(m); return m;
+    };
+    put(0.9, 1.1, 0.22, MAT.body, 0, 1.15, 0);          // 함
+    put(0.96, 0.07, 0.28, MAT.metal, 0, 1.74, 0);       // 차양
+    const lever = put(0.16, 0.5, 0.12, MAT.rail, 0, 1.1, 0.14);
+    lever.rotation.x = 0.5;                              // 내려간 채다
+    // 비상등 — 어두울 때만 켜진다
+    const emMat = new THREE.MeshStandardMaterial({
+      color: 0x3a1a18, emissive: 0x3a1a18, emissiveIntensity: 1.0, roughness: 0.5,
+    });
+    put(0.24, 0.1, 0.08, emMat, 0, 1.66, 0.12);
+    // ★★ **세기를 두 번 낮췄다.** 처음엔 9 · 도달 7 이었는데 기관실이
+    //   통째로 붉게 타고 차단기가 **하얀 덩어리**가 됐다 (블룸이 얹혀서
+    //   더 심했다). 비상등이 할 일은 「여기다」이지 「앞이 안 보인다」가
+    //   아니다 — 어둠을 없애면 어둠을 만든 뜻이 사라진다
+    const emLight = new THREE.PointLight(0xff4a30, 0, 3.4, 2);
+    emLight.position.set(0, 1.7, 0.4);
+    B.add(emLight);
+    const hit = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 1.5, 0.7),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    hit.position.set(0, 1.15, 0.2);
+    hit.name = '주 차단기';
+    B.add(hit);
+    blockBox(engine.x1 - 0.2, engine.z0 + 2.6, 0.24, 0.9, -Math.PI / 2);
+    mainBreaker.userData.api = {
+      hit,
+      /** @param s `blackout.summary()` */
+      update(s) {
+        const on = !!s?.dark;
+        emMat.emissive.set(on ? 0xff4a30 : 0x3a1a18);
+        emMat.emissiveIntensity = on ? 1.8 : 1.0;
+        emLight.intensity = on ? 2.2 : 0;
+        // 올리는 만큼 레버가 선다 — **되고 있다는 것이 눈에 보여야 한다**
+        lever.rotation.x = 0.5 - 0.5 * (s?.at ?? 0);
+      },
+    };
+  }
+
   // 반응로 — 방 한가운데 서 있는 덩어리. 「여기가 심장」이라고 말해 준다
   const CORE_Z = engine.z0 + 2.6;
   const core = new THREE.Group();
@@ -779,7 +833,9 @@ export function buildShip(scene, camera = null) {
   //   안 닿는 곳」이 진짜로 까매지므로, 켜기 전과 같은 값이면 안 된다.
   //   바탕빛을 올리는 게 정답이다 — 스포트라이트만 올리면 등 아래만 하얗게
   //   타고 구석은 그대로 까맣다.
-  scene.add(new THREE.AmbientLight(0x44536e, 2.1));
+  const ambient = new THREE.AmbientLight(0x44536e, 2.1);
+  ambient.userData.full = 2.1;
+  scene.add(ambient);
 
   /**
    * 천장등 하나. **SpotLight 로 만든다.**
@@ -790,8 +846,12 @@ export function buildShip(scene, camera = null) {
    *   그리는 셈이 된다. SpotLight 는 **한 면**이면 된다.
    *   그리고 실제로도 천장에 박힌 등은 아래로 쏘는 물건이라 더 맞다.
    */
+  /** ★ 정전 때 한꺼번에 죽이려고 모아 둔다 (E 장면 · blackout-table.js) */
+  const lamps = [];
   function ceilingLamp(x, z, color, power, reach, shadow = false) {
     const l = new THREE.SpotLight(color, power, reach, Math.PI * 0.48, 0.75, 1.7);
+    l.userData.full = power;
+    lamps.push(l);
     l.position.set(x, H - 0.22, z);
     l.target.position.set(x, 0, z);
     scene.add(l);
@@ -887,5 +947,16 @@ export function buildShip(scene, camera = null) {
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     turret, sight, outerDoor, marks, byBay,
+    /**
+     * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
+     *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —
+     *   완전한 암흑은 무서운 게 아니라 **아무것도 못 하는 것**이라
+     *   사람이 「게임이 꺼졌나」로 읽는다 (blackout-table.js DARK.lamp).
+     */
+    setDark(k = 1, amb = 1) {
+      for (const l of lamps) l.intensity = l.userData.full * k;
+      ambient.intensity = ambient.userData.full * amb;
+    },
+    mainBreaker: mainBreaker.userData.api,
     foodGauge, winch, tradeHatch, radio, alarm, lampEngine, lampCore, matEngine, coreGlow, skins };
 }
