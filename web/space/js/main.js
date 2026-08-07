@@ -69,6 +69,10 @@ import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
 import { HELM, offWord, hitWord } from './game/helm-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
+// ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
+import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
+import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
+  from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
 import { RESCUE, RSTEP, RESCUE_WORD } from './game/rescue-table.js';
 import { DARK, DSTEP } from './game/blackout-table.js';
@@ -139,7 +143,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 59;
+export const VERSION = 60;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -650,6 +654,9 @@ function showEnd() {
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
+/** ★ 세 축 (v60). `steerPush` 는 좌우 하나뿐이었다 — 우주는 삼차원이다 */
+const fly3 = makeFlight();
+const flyPush = { pitch: 0, yaw: 0, roll: 0 };
 /** 걸으려 하는데 못 걸은 시간 — `GUN.freeAfter` 를 넘으면 저절로 일어난다 */
 let stuckT = 0;
 /** 마지막 프레임의 실제 부하 — `renderer.info` 는 매 패스 되돌아간다 */
@@ -1504,14 +1511,22 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ **조종간이 헐거우면 배가 저절로 흐른다** (looseYoke). 잡고 있지 않으면
   //   한쪽으로 밀리므로, 위험 지대에서 가만히 있는 것이 정답이 아니게 된다
   if (bad.drift && !steering) {
-    hazard.lane = Math.max(-HAZARD.laneMax, Math.min(HAZARD.laneMax,
-      hazard.lane + bad.drift * dt * (driftWay || 1)));
+    // ★ v60 — `hazard.lane` 이 아니라 **축**을 민다. lane 은 이제 거울이라
+    //   거기 적어 봐야 다음 줄에서 덮어써진다
+    fly3.yaw = Math.max(-AXES.yaw.max, Math.min(AXES.yaw.max,
+      fly3.yaw + bad.drift * dt * (driftWay || 1)));
   }
   // ★ **조종간은 늘 먹는다.** 잔해가 오는 시점만 빗장이 막고, 조종은 안 막는다 —
   //   전에는 좌우 조작이 `stepHazard` 안에 있어서 **거점에서는 조종간이
   //   죽은 물건**이었다. 잡으면 마우스까지 뺏기니 얼어붙은 것처럼 보였다
   // ★ 수동 항법이면 놓아도 그대로 간다 — 조종간(helm)과 같은 규칙
-  steerShip(hazard, dt, { atSeat: steering, push: steerPush, manual: !helm.auto });
+  // ★★ **세 축을 한 자리에서 굴린다** (v60 · game/flight.js).
+  //   `hazard.lane` 은 이제 **거울**이다 — 잔해 피하기·창밖 시차가
+  //   그 값을 읽고 있어서, 축을 늘리면서 그 둘을 안 건드리려면
+  //   좌우 축을 그대로 흘려보내는 편이 안전하다
+  stepFlight(fly3, dt, { atSeat: steering, push: flyPush, manual: !helm.auto });
+  hazard.lane = Math.max(-HAZARD.laneMax, Math.min(HAZARD.laneMax, fly3.yaw));
+  steerShip(hazard, dt, { atSeat: false, push: 0, manual: true });
   // ★ **잔해밭은 이제 아무 구간에나 안 온다.** 배치표가 D 를 놓은 구간
   //   (지금은 5) 에서만 열린다 — 「구간마다 이름이 있는 장면 하나」의 실체다.
   //   ★ 이미 지대 안에 들어와 있으면 계속 돈다. 장면이 끝났다고 바위를
@@ -1759,6 +1774,10 @@ function systemsStep(dt, valveOpen, regionMult) {
 // 손으로 20분 돌려 보는 것을 대신하지는 못한다 (docs/POSTMORTEM.md §1-③).
 window.SPACE = {
   get version() { return VERSION; },
+  /** ★ 세 축 + 짐벌 (v60) — `space-flight.js` 가 읽는다 */
+  get fly3() { return { ...flySummary(fly3), word: attitudeWord(fly3), deg: Math.round(rollDeg(fly3.roll)) }; },
+  /** 검사가 축을 밀어 놓는다 */
+  putFly(a) { Object.assign(fly3, a); return flySummary(fly3); },
   get heat() { return heat; },
   /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
   get sink() {
@@ -2469,9 +2488,18 @@ function frame(now) {
   //   interactStep 에서 나오고 그건 이 아래에서 돈다. 16ms 라 안 느껴진다.
   if (steering) {
     steerPush = Math.max(-1, Math.min(1, look.dx * 0.03));
-    me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
+    // ══ ★★ **세 축** (v60) ══════════════════════════════════════
+    //  여태 마우스 Y 는 **고개**만 움직였다. 조종간을 잡고 있는데
+    //  위아래가 시선이면 그건 조종간이 아니라 손잡이다.
+    //    좌우 → 옆미끄러짐 · 위아래 → **기수** · Q/E → **비틀기(360도)**
+    //  ★ 잡는 동안 고개가 안 돌아가는 것이 맞다 — 두 손으로 미는 중이다.
+    //    놓으면 그대로 돌아온다
+    flyPush.yaw = steerPush;
+    flyPush.pitch = Math.max(-1, Math.min(1, -look.dy * 0.03));
+    flyPush.roll = (input.keys.has('KeyE') ? 1 : 0) - (input.keys.has('KeyQ') ? 1 : 0);
   } else {
     steerPush = 0;
+    flyPush.pitch = 0; flyPush.yaw = 0; flyPush.roll = 0;
     me.yaw -= look.dx * 0.0022;
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
     // 얼마나 둘러봤나 — 조종간을 잡고 있을 때는 안 센다. 그건 배를 민 것이다
@@ -2685,6 +2713,9 @@ function frame(now) {
   ship.outside.setLand({ step: land.step, t: land.t });
   // ★ 카메라를 준다 (v57). 별 천구가 **눈을 따라다녀야** 한다 —
   //   안 그러면 조종석에서 기관실까지 25m 를 걸을 때 별자리가 밀린다
+  // ★ v60 — 선체 자세를 창밖에 넘긴다. **배를 굴리지 않고 밖을 굴린다** —
+  //   그게 곧 짐벌이고, 걸어다니는 사람의 충돌이 안 어긋난다
+  ship.outside.setAttitude(fly3);
   ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard), camera);
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
@@ -2738,7 +2769,10 @@ function frame(now) {
   camera.rotation.set(0, 0, 0, 'YXZ');
   camera.rotation.y = me.yaw;
   camera.rotation.x = me.pitch;
-  camera.rotation.z = sw * 0.06;   // 아주 살짝 기운다
+  // ★★ **짐벌이 새는 만큼만** 방이 기운다 (v60 · flight-table.js GIMBAL).
+  //   0 이면 배가 도는지 몸으로 모르고, 크면 걷다가 넘어지는 게임이 된다
+  camera.rotation.z = sw * 0.06 + fly3.tiltZ;
+  camera.rotation.x += fly3.tiltX;
 
   // ══ ★★ **잡으면 들여다본다** (v59 · systems-table.js FOCUS) ══════
   //  사장님: 「조정석을 잡을 때는 스크린 화면을 확대해서 몰입하게」
