@@ -27,7 +27,11 @@ import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 import { CIRCUITS, SIGN } from '../game/chase-table.js';
 import { STEP, LAND } from '../game/land-table.js';
 import { HELM_SEAT, YOKE_AT } from '../game/helm-table.js';
-import { CANOPY, CONSOLE_PTS, GLASS_Y, BROW_Y, DASH_Y, SHELF_Y } from '../game/view-table.js';
+import {
+  CANOPY, CONSOLE_PTS, GLASS_Y, BROW_Y, browAt, browSeg,
+  FACE_H, SHELF_H, PANEL_GAP, PANEL_DIST, DEP, SIDE, ROOF, STRUCTS,
+} from '../game/view-table.js';
+import { drawFork } from './chart.js';
 import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
 import { DUST } from '../game/sky-table.js';
 
@@ -69,6 +73,8 @@ export { CANOPY, CONSOLE_PTS } from '../game/view-table.js';
 export const SEATS = [[HELM_SEAT.seatAt.x, HELM_SEAT.seatAt.z]];
 
 const SILL = GLASS_Y.sill;   // 창 아래끝 — 표에서 (view-table.js)
+/** 계기판 호 위의 z — 스위치를 얹을 때 쓴다. **손으로 안 적는다** */
+const panelZof = (x) => DEP.z - PANEL_DIST * Math.sqrt(Math.max(0, 1 - (x / 2.20) ** 2));
 // 조종간이 서는 z. 좌석(-6.95)보다 앞, 콘솔(-7.95~)보다 뒤 — **둘 사이**
 const YOKE_Z = YOKE_AT.z;
 // 조종간 가로대 높이.
@@ -467,43 +473,50 @@ export function buildCockpit(parent, room, H) {
   parent.add(g);
   const screens = [];
 
-  // ── 캐노피 · 창틀 · 띠조명 ────────────────────────────
+  // ══ ★★★ **캐노피 — 유리가 천장까지 올라간다** (v66) ══════════════
+  //  v65 까지 유리 위끝이 2.62 였고 그 위로 **「위 선체띠 + 위 창틀」**이
+  //  한 줄 둘려 있었다. 즉 창의 **위쪽이 잘려** 있었고, 그 바로 위가
+  //  머리 위 창이라 「유리 — 쇠띠 — 유리」로 끊겼다.
+  //  실제 버블 캐노피는 안 끊긴다 (F-16 은 조종사 앞에 활대가 아예 없다).
+  //  이제 정면은 **바닥 0.45 에서 천장까지 유리 한 장**이고, 천장에서
+  //  머리 위 창이 이어받는다.
   for (let i = 0; i < CANOPY.length - 1; i++) {
     const a = CANOPY[i], b = CANOPY[i + 1];
-    pane(g, a, b, SILL, HEAD, GLASS);                 // 유리
+    pane(g, a, b, SILL, HEAD, GLASS);                 // 유리 — 천장까지
     pane(g, a, b, 0, SILL, PANEL, 0.14);              // 아래 선체
-    pane(g, a, b, HEAD, H, FRAME, 0.14);              // 위 선체
     rail(g, a, b, SILL - 0.06, FRAME, 0.2, 0.14);     // 아래 창틀
-    rail(g, a, b, HEAD + 0.06, FRAME, 0.2, 0.14);     // 위 창틀
-    // ★ 띠조명. 참고 사진에서 이게 방의 성격을 절반쯤 만들고 있었다
-    rail(g, a, b, HEAD - 0.02, stripMat(BLUE), 0.05, 0.035, 0);
+    // ★ 띠조명을 **창턱으로 내렸다.** 위에 있으면 그게 곧 「위를 자르는 것」
+    //   이다 — 눈 아래에서 유리를 훑는 편이 실제 조종석 조명과도 맞다
+    rail(g, a, b, SILL + 0.05, stripMat(BLUE), 0.05, 0.035, 0.02);
   }
-  // 창 사이 기둥(멀리언) — 없으면 창이 한 장짜리로 보인다
+  // 창 사이 기둥(멀리언) — 없으면 창이 한 장짜리로 보인다.
+  // ★★ **전부 `CLEAR.yaw`(60도) 밖에 선다** — 앞 것이 ±2.05 로 밀려난
+  //   이유가 그것이다 (v65 는 ±1.05 = 43도라 정면 안쪽이었다)
   for (const p of CANOPY) {
     box(g, 0.16, H, 0.16, FRAME, p[0], H / 2, p[1]);
   }
 
   // ── 머리 위 창 ────────────────────────────────────────
-  // 참고 사진에서 제일 인상적이었던 것. 위를 보면 우주가 있다
-  // ★ v65 — 앞유리 쪽으로 당기고 키운다. 위끝(2.62)과 이어지면 「위가
-  //   뚫린」 것이 되고, 그게 버블의 절반이다
-  const roof = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.0), GLASS);
+  // ★ 자리는 `view-table.js ROOF` 가 정한다 — 검사가 「유리 위끝에서
+  //   이어받나」를 물으려면 그 값을 알아야 한다
+  const roofW = ROOF.x1 - ROOF.x0, roofD = ROOF.z1 - ROOF.z0;
+  const roof = new THREE.Mesh(new THREE.PlaneGeometry(roofW, roofD), GLASS);
   roof.rotation.x = Math.PI / 2;
-  roof.position.set(0, H - 0.02, -8.66);
+  roof.position.set((ROOF.x0 + ROOF.x1) / 2, H - 0.02, (ROOF.z0 + ROOF.z1) / 2);
   g.add(roof);
-  // ★★★ **12시를 비운다** (v65 · 사장님 「12시 비우고」).
-  //   여기 `x = 0` 리브가 있었다 — **정면 한복판을 세로로 가로지르는
-  //   구조재**다. 실제 전투기는 12시에 아무것도 안 둔다 (F-16 이 「틀 없는」
-  //   버블인 이유고, F-35 도 정면만은 비운다). 창을 아무리 키워도
-  //   한복판이 막혀 있으면 넓어진 것이 안 읽힌다
-  for (const x of [-1.7, 1.7]) box(g, 0.12, 0.14, 1.6, FRAME, x, H - 0.07, -8.66);
-  box(g, 3.6, 0.14, 0.14, FRAME, 0, H - 0.07, -7.90);
-  box(g, 3.3, 0.04, 0.05, stripMat(BLUE), 0, H - 0.15, -7.82);
+  // ★★★ **12시를 비운다.** 구조재의 자리는 `STRUCTS` 가 말하고,
+  //   `space-view.js` 가 그 목록을 통째로 훑어 정면 원뿔을 지킨다.
+  //   v65 는 여기서 `x = 0` 리브를 지웠는데 **진짜 기둥은 ship.js 에**
+  //   있었다 — 한 파일만 보면 못 잡는다
+  for (const s of STRUCTS) box(g, s.w, s.h, s.d, FRAME, s.x, s.y, s.z);
+  box(g, roofW * 0.9, 0.04, 0.05, stripMat(BLUE), 0, H - 0.15, ROOF.z1 - 0.08);
 
   // ── 천장 리브 ─────────────────────────────────────────
   // 민판 천장이 제일 싸구려로 보인다. 구조재를 지르면 배가 된다
+  // ★ v66 — 첫 리브가 z −7.4 였는데 그건 **머리 위 창 구멍 안**이다.
+  //   유리를 가로지르는 쇠막대가 된다. 구멍 뒤(−7.05)에서 시작한다
   for (let i = 0; i < 4; i++) {
-    const z = -7.4 + i * 1.05;
+    const z = -7.05 + i * 1.05;
     box(g, 6.0, 0.16, 0.18, FRAME, 0, H - 0.09, z);
     box(g, 5.4, 0.035, 0.05, stripMat(BLUE), 0, H - 0.19, z + 0.11);
   }
@@ -561,67 +574,127 @@ export function buildCockpit(parent, room, H) {
   //
   //     ★ v61 에서 「28cm 구멍을 네 겹으로 메웠다」고 적었는데, 그 네 겹의
   //       **높이가 틀렸던 것**이다. 겹의 수가 아니라 자리가 문제였다.
+  //  ★★★ **v66 — 계기판이 좁아지고, 가운데가 비고, 위끝이 곡면이 됐다**
+  //
+  //   ① **좁아졌다** (±2.30 → ±1.55). 실제 전투기의 주계기판은 폭 0.5m
+  //      남짓이다 (F-16 은 125mm MFD 셋). 4.6m 짜리는 조종석이 아니라
+  //      관제실이고, 무엇보다 **바깥쪽이 시야를 먹고 있었다**
+  //   ② **가운데 칸을 비운다** (`PANEL_GAP`). 조종간이 그 앞에 서 있어
+  //      화면을 박아 봐야 절반이 가린다 — F-15 · F-22 · Su-27 이
+  //      가운데 조종간을 쓰면서 계기판을 좌우로 가르는 이유가 이것이다.
+  //      그 자리는 **HUD** 몫이다
+  //   ③ **위끝이 자리마다 다르다** (`browSeg`). 높이를 하나로 두면 바깥쪽이
+  //      **눈에는 더 높아 보인다** — 같은 높이라도 멀면 내려다보는 각이
+  //      얕아지기 때문이다. 실제 차양이 좌우로 갈수록 뚝 떨어지는 이유고,
+  //      검사가 이걸로 두 번 잡아 줬다
   const CONSOLE = CONSOLE_PTS;
+  /** 이 칸의 차양 높이 · 대시 · 선반 — 전부 위끝에서 내려온다 */
+  const layers = (a, b) => {
+    const top = browSeg(a, b);
+    return { top, faceLo: top - FACE_H, shelfLo: top - FACE_H - SHELF_H };
+  };
   for (let i = 0; i < CONSOLE.length - 1; i++) {
     const a = CONSOLE[i], b = CONSOLE[i + 1];
-    pane(g, a, b, 0, SHELF_Y.lo, DARK, 0.44);          // ① 무릎 가림판
-    pane(g, a, b, SHELF_Y.lo, SHELF_Y.hi, PANEL, 0.52); // ② 스위치 선반
-    rail(g, a, b, SHELF_Y.hi, FRAME, 0.54, 0.05);      // 선반 테
-    // ③ **대시 얼굴** — 화면이 박히는 판. 사람 쪽으로 눕는다
-    const s0 = seg(a, b);
-    const face = new THREE.Mesh(new THREE.BoxGeometry(s0.len, 0.60, 0.07), DARK);
-    face.position.set(s0.mx, DASH_Y, s0.mz + 0.10);
-    face.rotation.y = s0.rot;
-    face.rotateX(-0.36);
-    g.add(face);
-    // ④ **눈썹 차양** — 창에서 들어오는 빛을 막는다. 실제 조종석의 그 챙이다
-    rail(g, a, b, BROW_Y, FRAME, 0.30, 0.06, 0.12);
-    rail(g, a, b, 1.30, stripMat(BLUE), 0.04, 0.02, 0.22);
+    const L = layers(a, b);
+    pane(g, a, b, 0, L.shelfLo, DARK, 0.44);              // ① 무릎 가림판
+    pane(g, a, b, L.shelfLo, L.faceLo, PANEL, 0.52);      // ② 스위치 선반
+    rail(g, a, b, L.faceLo, FRAME, 0.54, 0.05);           // 선반 테
+    // ③ **대시 얼굴** — 화면이 박히는 판. 가운데 칸에는 안 세운다
+    if (i !== PANEL_GAP) {
+      const s0 = seg(a, b);
+      const face = new THREE.Mesh(new THREE.BoxGeometry(s0.len, FACE_H, 0.07), DARK);
+      face.position.set(s0.mx, L.top - FACE_H / 2, s0.mz + 0.10);
+      face.rotation.y = s0.rot;
+      face.rotateX(-0.36);
+      g.add(face);
+    }
+    // ④ **눈썹 차양** — 창빛을 막는다. **이 선이 곧 기수 너머 17도**다
+    rail(g, a, b, L.top, FRAME, 0.30, 0.06, 0.12);
   }
 
-  const DRAWERS = [drawShip, drawPower, drawHeat, drawCourse, drawSign, drawLog];
-  const WID = [0.72, 0.82, 0.94, 0.82, 0.62, 0.62];
+  /** 항로 갈래 판 둘 — 안쪽 계기 화면 위에 얹힌다 (아래 루프에서 채운다) */
+  const plates = [];
+  // ★ 화면 **넷** — 가운데를 비웠으므로 다섯이 아니다.
+  //   밀려난 **자국**은 HUD 로 올렸다 (`world/gunsight.js`) — 자국은 모는
+  //   동안 보는 것이라 원래 거기 있어야 했다
+  const DRAWERS = { 0: drawShip, 1: drawPower, 3: drawCourse, 4: drawHeat };
   for (let i = 0; i < CONSOLE.length - 1; i++) {
+    if (!DRAWERS[i]) continue;
     const a = CONSOLE[i], b = CONSOLE[i + 1];
     const s = seg(a, b);
+    const L = layers(a, b);
     // ★ 테두리와 화면을 **한 묶음(Group)** 으로 만든다.
     //   처음엔 테두리를 만들고 `position.add(0,0,0.02)` 로 밀었는데, 그건
-    //   **월드 좌표**라 각도가 있는 화면은 테두리가 앞을 덮어 버렸다 —
-    //   화면 여섯 장이 전부 민판으로 보였고, 코드에는 아무 이상이 없었다.
-    //   묶어 두면 안쪽 좌표라 각도가 어떻든 앞뒤가 안 바뀐다.
+    //   **월드 좌표**라 각도가 있는 화면은 테두리가 앞을 덮어 버렸다.
+    //   묶어 두면 안쪽 좌표라 각도가 어떻든 앞뒤가 안 바뀐다
     const slot = new THREE.Group();
-    // ★ 대시 얼굴(1.17 · +0.10)보다 **아주 조금만** 앞으로. 예전엔 +0.14 라
-    //   판에서 떨어져 나와 「걸어 놓은 모니터」로 보였다. 박혀 있어야 한다
-    slot.position.set(s.mx, DASH_Y, s.mz + 0.145);
+    slot.position.set(s.mx, L.top - FACE_H / 2, s.mz + 0.145);
     slot.rotation.y = s.rot;
     slot.rotateX(-0.36);                               // 사람 쪽으로 눕힌다
     g.add(slot);
 
-    const bez = new THREE.Mesh(new THREE.BoxGeometry(WID[i] + 0.07, 0.57, 0.04), FRAME);
+    const wid = s.len - 0.10;
+    const bez = new THREE.Mesh(new THREE.BoxGeometry(wid + 0.06, FACE_H - 0.03, 0.04), FRAME);
     bez.position.z = -0.02;
     slot.add(bez);
 
-    const sc = makeScreen(WID[i], 0.5, DRAWERS[i]);
+    const sc = makeScreen(wid, FACE_H - 0.10, DRAWERS[i]);
     sc.mesh.position.z = 0.012;
     slot.add(sc.mesh);
     screens.push(sc);
 
-    // ★ 여기 점광원 둘이 있었는데 **뺐다.**
-    //   점광원은 화면에 보이는 모든 픽셀에서 계산된다 — 이 방 한구석을
-    //   조금 파랗게 하려고 배 전체의 픽셀값을 두 번 더 계산하는 셈이었다.
-    //   화면 자체가 이미 스스로 빛나는(MeshBasicMaterial) 물건이라,
-    //   빼도 「화면이 밝다」는 그대로다. 잃은 것은 콘솔 상판의 옅은 파란
-    //   반사뿐이고, 그건 환경맵(main.js)이 절반쯤 대신한다.
+    // ══ ★★★ **항로 갈래는 계기 화면이 「쪽을 바꿔」 띄운다** (v66) ══════
+    //  사장님: 「항로도 조정석에서 해야하는거 아냐?? 왜 다른곳에 있어?」
+    //
+    //  ★ 처음엔 선반에 판 둘을 따로 세웠다. 화면을 찍어 보니 **계기
+    //    화면을 통째로 덮고** 있었다 — 조종석에 자리가 그만큼 없다.
+    //    실제 MFD 는 이럴 때 **쪽을 바꾼다.** 화면 하나가 상황에 따라
+    //    다른 것을 보여주는 것은 이 배의 규약이기도 하다 (drawCourse 가
+    //    평소엔 항로, 추격 중엔 거리를 띄운다).
+    //  ★ 그래서 **고를 것이 있을 때만** 안쪽 화면 둘 위에 뜬다.
+    //    없으면 사라지고 원래 계기가 그대로 보인다
+    if (i === 1 || i === 3) {
+      const pi = i === 1 ? 0 : 1;
+      const fk = makeScreen(wid, FACE_H - 0.10, drawFork);
+      fk.mesh.position.z = 0.028;
+      fk.mesh.visible = false;
+      slot.add(fk.mesh);
+      const hit = new THREE.Mesh(
+        new THREE.BoxGeometry(wid + 0.10, FACE_H + 0.10, 0.26),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      hit.position.z = 0.05;
+      hit.name = `항로 갈래 ${pi}`;
+      slot.add(hit);
+      plates[pi] = { i: pi, hit, sc: fk, fork: null, land: null };
+    }
   }
 
-  // 콘솔 위 작은 스위치들 — 손이 갈 데가 많아 보여야 한다
-  for (let i = 0; i < 22; i++) {
-    const t = i / 21;
-    const x = -2.1 + t * 4.2;
-    const z = -8.0 - Math.cos((t - 0.5) * 2.0) * 0.85;
-    // ★ 선반(0.90) 위에 앉는다. 셋 중 하나는 불이 들어온다 —
-    //   「덮개 아래 버튼」의 문법 (REALSHIP §3)
-    box(g, 0.07, 0.045, 0.07, i % 3 === 0 ? stripMat(AMBER) : DARK, x, 0.94, z);
+  // 선반 위 작은 스위치들 — 손이 갈 데가 많아 보여야 한다.
+  // ★ v66 — 자리를 **선반에서 뽑는다.** 전에는 y 0.94 로 박아 놨는데,
+  //   차양이 곡면이 된 지금 그 높이는 자리에 따라 **차양 위**다 —
+  //   즉 스위치가 창을 먹는다. 높이를 손으로 적으면 반드시 이렇게 된다
+  for (let i = 0; i < 18; i++) {
+    const t = i / 17;
+    const x = -1.42 + t * 2.84;
+    const z = panelZof(x);
+    const y = browAt(x, z) - FACE_H + 0.03;
+    box(g, 0.07, 0.045, 0.07, i % 3 === 0 ? stripMat(AMBER) : DARK, x, y, z + 0.16);
+  }
+
+  // ══ ★★ **옆 콘솔** — 스로틀은 왼쪽, 자동 항법은 오른쪽 (v66) ══════
+  //  고증: 실제 전투기는 **스로틀을 왼쪽 콘솔**에 둔다 (F-16 · F-15 ·
+  //  Su-27 다 같다). 왼손은 늘 추력에 있고 오른손이 조종간이다.
+  //  v65 까지 이 배는 **추진을 통로의 차단기로** 켰다 — 「모든 비행 조작은
+  //  운전석에 있어야지」(사장님)가 정확히 맞는 지적이었다.
+  //  방위각 60도 밖이라 시야는 하나도 안 먹는다
+  //  ★ **띠조명을 여기 달았다가 뺐다** — 화면을 찍어 보니 눈에서 1m 도
+  //    안 되는 자리라 **주황 덩어리 넷이 창을 가로막고** 있었다.
+  //    같은 폭이라도 가까우면 화면에서 크다 (`atan`). 조종석 안쪽 물건에
+  //    악센트를 다는 것은 벽에 다는 것과 완전히 다른 일이다
+  for (const sx of [-1, 1]) {
+    box(g, 0.62, 0.52, 1.30, DARK, sx * SIDE.x, 0.26, SIDE.z);
+    box(g, 0.66, 0.06, 1.34, PANEL, sx * SIDE.x, 0.55, SIDE.z);
   }
 
   // ── 좌석 둘 ───────────────────────────────────────────
@@ -737,37 +810,74 @@ export function buildCockpit(parent, room, H) {
   yokeHit.position.set(0, YOKE_Y, YOKE_Z);
   g.add(yokeHit);
 
+  // ══ ★★★ **추력 레버 — 왼손** (v66 · 사장님 「추진도 그렇고 모든 비행
+  //    조작은 운전석에 있어야지」) ═══════════════════════════════════════
+  //
+  //  ★ 여태 추진은 **통로의 차단기**였다. 그건 「전력을 어디로 돌리나」의
+  //    한 칸이었을 뿐, 배를 모는 손잡이가 아니었다. 조종석에 앉아서
+  //    출발을 못 하는 배였던 셈이다.
+  //  ★ 고증대로 **왼쪽 콘솔**에 둔다. 그리고 **레버**다 — 딸깍이 아니라
+  //    밀고 당기는 것이라야 「추력」으로 읽힌다 (실제 스로틀에도 IDLE ·
+  //    MIL 디텐트가 있어 두 자리로 딱딱 걸린다)
+  const TH = SIDE.throttle;
+  box(g, 0.24, 0.10, 0.46, DARK, TH.x, TH.y - 0.22, TH.z);      // 레버 홈
+  const thrLever = new THREE.Group();
+  thrLever.position.set(TH.x, TH.y - 0.18, TH.z);
+  thrLever.name = '추력 레버';
+  g.add(thrLever);
+  box(thrLever, 0.07, 0.30, 0.07, FRAME, 0, 0.15, 0);            // 자루
+  const thrLamp = new THREE.MeshBasicMaterial({ color: 0x2a2f36 });
+  box(thrLever, 0.15, 0.13, 0.20, DARK, 0, 0.31, 0);             // 손잡이
+  box(thrLever, 0.10, 0.04, 0.12, thrLamp, 0, 0.385, 0.02);      // 불
+  const thrHit = new THREE.Mesh(
+    new THREE.BoxGeometry(0.48, 0.62, 0.66),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  thrHit.position.set(TH.x, TH.y, TH.z);
+  thrHit.name = '추력 레버';
+  g.add(thrHit);
+  const setThrust = (on) => {
+    thrLamp.color.set(on ? 0xff9a3c : 0x2a2f36);
+    thrLever.rotation.x = on ? -0.42 : 0.30;      // 밀면 켜짐 · 당기면 꺼짐
+  };
+  setThrust(false);
+
   // ── ★★ 자동 항법 스위치 (2026-08-06 · 사장님) ──────────────
   // 「수동으로 운전할때는 자동항법 꺼지는 걸로」
   //
   // ★ **끄는 것은 조종간이 하고, 켜는 것은 이 스위치가 한다.** 둘을 같은
   //   손잡이에 얹으면 「잡았더니 켜졌다 껐다」가 되어 지금 어느 쪽인지를
-  //   모른다. 그리고 **불로 말한다** — 초록이면 자동, 주황이면 수동.
-  //   계기를 하나 더 다는 대신 스위치 자체가 계기다 (「손이 곧 상태창」)
-  // ★ **자리를 두 번 옮겼다.** 처음엔 콘솔 상판(y 0.92)에 눕혀 놨는데,
-  //   서 있는 사람 눈(1.62)에서 0.7m 아래라 **거의 수직으로 내려다봐야**
-  //   잡혔다 — 검사가 「autopilot 조준을 못 봤다」로 잡아 줬다.
-  //   조종간(1.18) 바로 옆, **같은 높이**로 올린다. 손이 가는 자리는
-  //   손잡이 옆이지 상판 위가 아니다
-  const AUTO_X = -0.58, AUTO_Y = YOKE_Y - 0.06, AUTO_Z = YOKE_Z + 0.02;
+  //   모른다. 그리고 **불로 말한다** — 초록이면 자동, 주황이면 수동
+  // ★ v66 — **오른쪽으로 옮겼다.** 왼쪽은 스로틀 몫이다 (고증)
+  const AU = SIDE.auto;
   const autoLamp = new THREE.MeshBasicMaterial({ color: 0x6fd8a0 });
-  // 기둥 — 상판에서 올라온다. 어디서 나온 물건인지 보여야 한다
-  box(g, 0.09, AUTO_Y - 0.84, 0.09, FRAME, AUTO_X, (0.84 + AUTO_Y) / 2, AUTO_Z);
-  const autoBox = box(g, 0.26, 0.16, 0.16, DARK, AUTO_X, AUTO_Y, AUTO_Z);
+  const autoBox = box(g, 0.26, 0.16, 0.16, DARK, AU.x, AU.y, AU.z);
   autoBox.name = '자동항법';
-  const autoLight = box(g, 0.17, 0.055, 0.10, autoLamp, AUTO_X, AUTO_Y + 0.085, AUTO_Z + 0.02);
+  const autoLight = box(g, 0.17, 0.055, 0.10, autoLamp, AU.x, AU.y + 0.085, AU.z + 0.02);
   autoLight.name = '자동항법등';
-  // ★ 히트 박스를 **넉넉하게.** 작은 것을 정확히 겨누게 하면 그건 어려움이
-  //   아니라 짜증이다 (조종간에서 이미 적어 둔 선). 실제로 검사가 조준각을
-  //   0.16 라디안만 얕게 잡았더니 안 걸렸다 — 사람은 그보다 더 대충 본다
+  box(g, 0.09, AU.y - 0.55, 0.09, FRAME, AU.x, (0.55 + AU.y) / 2, AU.z);
   const autoHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.56, 0.62, 0.5),
+    new THREE.BoxGeometry(0.52, 0.56, 0.46),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
-  autoHit.position.set(AUTO_X, AUTO_Y, AUTO_Z);
+  autoHit.position.set(AU.x, AU.y, AU.z);
   autoHit.name = '자동 항법 스위치';
   g.add(autoHit);
   const setAuto = (on) => { autoLamp.color.set(on ? 0x6fd8a0 : 0xff9a3c); };
+
+  // ══ ★★★ **항로 갈래 판 둘 — 조종석으로 왔다** (v66) ═══════════════
+  //  사장님: 「항로도 조정석에서 해야하는거 아냐?? 왜 다른곳에 있어?」
+  //
+  //  ★ 맞다. 여태 항로는 **관측실 해도대**에서만 골랐다. 「어디로 갈까」를
+  //    정하는 자리와 **가는 자리**가 달랐던 셈이다. 여객기가 항로를 넣는
+  //    판(MCP)을 차양 언저리에 두는 것과 같은 자리로 가져온다.
+  //  ★ 다만 **해도대를 없애지는 않는다.** 거기는 이제 「고르는 곳」이
+  //    아니라 **「보는 곳」**이다 — 압박과 항로 전경은 여전히 관측실에서만
+  //    보이고, 그래서 「무엇을 안 보고 갈까」가 그대로 산다
+  //  ★ 그리고 **배전 차단기는 통로에 남긴다.** 그건 뛰어가서 내리는
+  //    것이고, 손에 닿는 순간 추격의 긴장이 죽는다
+  // (갈래 판은 위 화면 루프에서 계기 화면 위에 얹는다)
+  let aimedPlate = -1;
 
   // ── 조명 ──────────────────────────────────────────────
   // 참고 사진은 **찬 파랑 + 따뜻한 주황** 두 색이다. 한 색이면 밋밋하다
@@ -787,8 +897,24 @@ export function buildCockpit(parent, room, H) {
     // ★ 자동 항법 등 — **초록이면 자동, 주황이면 수동.** 지금 어느 쪽인지를
     //   조종석에 들어서는 순간 알아야 한다
     setAuto(state.auto !== false);
+    setThrust(!!state.thrust);
+    // ★★ 갈래 판 — 해도대에 있던 규약을 그대로 가져왔다
+    const land = !state.atPort && state.land?.offered ? state.land : null;
+    plates.forEach((p, i) => {
+      p.fork = !land && state.atPort ? state.offer?.[i] : null;
+      p.land = land ? { go: i === 0, hard: !!land.hard } : null;
+      const show = !!(p.fork || p.land);
+      p.sc.mesh.visible = show;
+      if (show) p.sc.redraw({ fork: p.fork, land: p.land, lit: aimedPlate === i });
+    });
   }
-  return { update, yokeHit, autoHit, helmSeatHit };
+  return {
+    update, yokeHit, autoHit, helmSeatHit, thrHit, plates,
+    /** 조준선이 어느 갈래 판에 걸렸나 — 밖에서 넣어 준다 */
+    setAim(i) { aimedPlate = i; },
+    keyAt(i) { return plates[i]?.fork?.key ?? null; },
+    landAt(i) { return plates[i]?.land ?? null; },
+  };
 }
 
 /**
@@ -1037,6 +1163,9 @@ export function buildOutside(scene, z) {
     //    자세 제어가 죽은 채로 조종간을 잡을 때 한쪽이 사라진다
     out.rotation.x += (att.pitch - out.rotation.x) * Math.min(1, dt * 3);
     out.rotation.z = driftRoll + att.roll + lane * 0.06;
+    // ★★★ 좌우 — **부호가 반대다.** 배가 오른쪽으로 틀면 창밖은 왼쪽으로
+    //   흐른다. 이 한 줄이 v66 이전에 통째로 없었다
+    out.rotation.y += (-att.yaw - out.rotation.y) * Math.min(1, dt * 3);
 
     // ★★ **천구를 눈에 붙인다.** 별은 무한히 멀리 있으므로 배 안에서
     //   어디로 걸어가든 자리가 안 바뀌어야 한다. 예전엔 천구가 조종석
@@ -1194,7 +1323,15 @@ export function buildOutside(scene, z) {
    *   가 굴리고, 여기는 **보여 주기만** 한다 (순수/그림 가르기).
    */
   const att = { pitch: 0, yaw: 0, roll: 0 };
-  const setAttitude = (a) => { att.pitch = a.pitch ?? 0; att.roll = a.roll ?? 0; };
+  // ★★★ **v66 — `yaw` 가 빠져 있었다. 그게 「핸들 운전이 안되잔아」다.**
+  //   조종간 좌우(마우스 X · A/D)는 `fly3.yaw` 를 움직이고, 그 값이 항로
+  //   이탈·잔해 회피·조준 기수각까지 다 먹인다. 그런데 **창밖 그룹의
+  //   `rotation.y` 를 아무도 안 물렸다** — 숫자는 다 도는데 별이 한 톨도
+  //   안 움직였다. 사람에게는 「안 먹는다」와 완전히 같다.
+  //   계통 검사는 전부 초록이었다. **눈에만 보이는 종류**였기 때문이다
+  const setAttitude = (a) => {
+    att.pitch = a.pitch ?? 0; att.roll = a.roll ?? 0; att.yaw = a.yaw ?? 0;
+  };
 
   return {
     update, setRegion, roll, setLand, setAttitude,

@@ -200,7 +200,11 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
 console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법이 꺼지나');
 {
   ok((await S(() => SPACE.helm)).auto, '① 처음에는 자동 항법이 켜져 있다');
-  ok(await aimAt(0, -7.3, 0, -0.2, 'yoke'), `② 조종간이 잡힌다 (${await S(() => SPACE.aim)})`);
+  // ★★ **앉아서** 잡는다 (v66). 서서 겨누면 좌석이 먼저 잡히는 것이 맞다 —
+  //   앉는 것과 잡는 것은 다른 동작이다
+  await S(() => SPACE.putHelmSit(true));
+  await until(() => SPACE.helm2.k > 0.97, 25, '좌석에 앉는 것');
+  ok(await aimAt(0, -7.75, 0, -0.34, 'yoke'), `② 조종간이 잡힌다 (${await S(() => SPACE.aim)})`);
   await down();
   for (let i = 0; i < 22; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 90, movementY: 0 })));
@@ -218,12 +222,62 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
     `⑤ **놓아도 그대로 간다** (${h1.off} → ${h2.off}) — 수동이면 되돌리는 것도 내 손이다`);
 
   // 자동 항법 스위치로 되돌린다
-  ok(await aimAt(-0.58, -6.6, 0, -0.55, 'autopilot'),
+  ok(await aimAt(0, -7.75, -0.9, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
   await press(0.8);
   ok((await S(() => SPACE.helm)).auto, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
   ok(await until(() => SPACE.helm.off < 0.05, 60, '항로 복귀'),
     '⑧ **배가 스스로 항로로 돌아온다**');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ **v66 — 비행 조작이 전부 조종석에 있나** (사장님 「항로도 조정석에서
+//    해야하는거 아냐?? 추진도 그렇고 모든 비행 조작은 운전석에 있어야지」)
+//
+//  ★ 그리고 **「핸들 운전이 안되잔아」의 진짜 원인**을 여기서 잡는다.
+//    조종간 좌우는 `fly3.yaw` 를 분명히 움직였는데 **창밖 그룹의
+//    `rotation.y` 를 아무도 안 물리고 있었다** — 숫자는 다 도는데 별이
+//    한 톨도 안 움직였다. 계통 검사는 전부 초록이었다. 숫자만 봤기 때문이다.
+//    **그래서 이 절은 숫자가 아니라 「하늘이 돌았나」를 묻는다.**
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력·항로');
+{
+  await S(() => SPACE.putHelmSit(true));
+  await until(() => SPACE.helm2.k > 0.97, 25, '좌석에 앉는 것');
+
+  // ── ① 하늘이 정말 도나 ───────────────────────────────────
+  const skyYaw = () => S(() => {
+    let r = SPACE.camera; while (r.parent) r = r.parent;
+    let v = 0;
+    r.traverse((o) => { if (!v && o.type === 'Group' && Math.abs(o.rotation.y) > 0.02) v = +o.rotation.y.toFixed(3); });
+    return v;
+  });
+  await aimAt(0, -7.75, 0, -0.34, 'yoke');
+  await down();
+  for (let i = 0; i < 14; i++) {
+    await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })));
+    await p.waitForTimeout(160);
+  }
+  const yawNow = (await S(() => SPACE.fly3)).yaw;
+  const sky = await skyYaw();
+  await up();
+  ok(Math.abs(yawNow) > 0.15, `① 밀면 기수가 돈다 (yaw ${yawNow})`);
+  ok(Math.abs(sky) > 0.02,
+    `② ★★★ **창밖이 실제로 ${sky} rad 돌았다.** v65 까지 이 값이 **늘 0**이었다 —`
+    + ' `setAttitude` 가 yaw 를 버리고 있었고, 그게 「핸들 운전이 안되잔아」다');
+
+  // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
+  ok(await aimAt(0, -7.75, 0.9, -0.1, 'throttle'),
+    `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
+  await press(0.8);
+  ok(/추력 레버/.test(await said()), `④ 눌렀더니 「${await said()}」`);
+
+  // ── ③ 항로 갈래 — 계기 화면이 쪽을 바꾼다 ────────────────
+  // ★ 게임은 **거점에서 시작한다** — 갈래는 처음부터 떠 있다.
+  //   다만 [3] 에서 이미 한 번 골랐을 수 있으므로, 없으면 없는 대로 말한다
+  ok(await aimAt(0, -7.75, 0.6, -0.3, ['chart0', 'chart1']),
+    `⑤ **항로 갈래 판**이 계기 화면 위에 잡힌다 (${await S(() => SPACE.aim)}) —`
+    + ' 관측실까지 안 가도 항로를 고른다');
 }
 
 console.log('\n[3b] ★★ **행성을 박으면 끝난다** — 수동일 때만');
@@ -301,7 +355,7 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   await press(1.0);
   ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '문 닫기'),
     '⑨ 문을 닫는다');
-  await aimAt(0, -7.3, 0, -0.2, 'yoke');
+  await aimAt(0, -7.75, 0, -0.45, 'yoke');
   await press(1.0);
   ok(await until(() => SPACE.land.step === 'up', 40, '이륙'),
     `⑩ 조종간을 잡으니 뜬다 — 「${await said()}」`);

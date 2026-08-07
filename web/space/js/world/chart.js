@@ -110,8 +110,13 @@ function drawMap(ctx, w, h, s) {
   ctx.textAlign = 'left';
 }
 
-/** 갈래 판 하나 */
-function drawFork(ctx, w, h, s) {
+/**
+ * 갈래 판 하나.
+ * ★★ v66 — **판은 조종석으로 갔고, 그리는 법만 여기 남았다.**
+ *   사장님 「항로도 조정석에서 해야하는거 아냐??」. 판을 두 벌 그리면
+ *   반드시 갈라지므로 **그리는 함수는 하나**다 (`world/cockpit.js` 가 쓴다)
+ */
+export function drawFork(ctx, w, h, s) {
   bg(ctx, w, h);
   // ★ **내릴 자리** — 항행 중에 장면 B 가 켜면 같은 판 둘이 다른 것을 묻는다.
   //   판을 새로 만들지 않는다. 「고르는 자리는 해도대」라는 규약이 이미 있고,
@@ -202,54 +207,21 @@ export function buildChart(parent, at, block, MAT) {
   map.mesh.position.set(0.2, 0.981, 0);
   g.add(map.mesh);
 
-  // ── 갈래 판 둘 ────────────────────────────────────────
-  // 먼 쪽 가장자리에서 **사람 쪽으로 기울여** 세운다. 눕혀 두면 서서
-  // 내려다볼 때 글씨가 납작해져 안 읽힌다 — 조종석에서 이미 겪었다.
+  // ★★★ **갈래 판 둘이 여기 있었다 — v66 에서 조종석으로 갔다.**
+  //   사장님: 「항로도 조정석에서 해야하는거 아냐?? 왜 다른곳에 있어?
+  //            추진도 그렇고 모든 비행 조작은 운전석에 있어야지」
+  //
+  //   맞는 말이었다. 「어디로 갈까」를 정하는 자리와 **가는 자리**가
+  //   달랐다. 판은 조종석 선반으로 옮겼고(`view-table.js FORK_AT`),
+  //   **해도대는 남는다** — 다만 이제 「고르는 곳」이 아니라 **「보는 곳」**
+  //   이다. 압박과 항로 전경은 여전히 여기서만 보이므로, 「무엇을 안 보고
+  //   갈까」(PLAN §9-1)는 그대로 산다. 방을 없애면 그게 죽는다
   const plates = [];
-  // ★ 두 판의 폭(0.74)과 간격(±0.37)을 **딱 맞춘다.** 조금이라도 벌리면
-  //   가운데에 틈이 생겨 정면으로 서면 아무것도 안 잡힌다 —
-  //   화면으로는 「판이 있는데 안 눌린다」로만 보인다
-  for (const [i, sz] of [[0, -0.37], [1, 0.37]]) {
-    const arm = new THREE.Group();
-    arm.position.set(-0.34, 0.97, sz);
-    arm.rotation.y = Math.PI / 2;      // 사람(+x) 쪽을 본다
-    g.add(arm);
-
-    const sc = makeScreen(0.7, 0.34, drawFork);
-    sc.mesh.rotation.x = -0.55;        // 뒤로 눕힌다
-    sc.mesh.position.set(0, 0.13, 0.02);
-    arm.add(sc.mesh);
-
-    // 조준 판정용 — 화면은 얇아서 그냥 두면 조준하기가 괴롭다 (차단기와 같은 처방)
-    const hit = new THREE.Mesh(
-      new THREE.BoxGeometry(0.74, 0.4, 0.34),
-      new THREE.MeshBasicMaterial({ visible: false }),
-    );
-    hit.position.set(0, 0.13, 0.02);
-    arm.add(hit);
-
-    plates.push({ i, hit, sc, fork: null });
-  }
 
   let aimed = -1;
   return {
     plates,
-    /** 조준선이 어느 판에 걸렸나 — 밖에서 넣어 준다 */
-    setAim(i) { aimed = i; },
-    /** 이 판이 지금 무슨 갈래인가 (밖에서 누를 때 쓴다) */
-    keyAt(i) { return plates[i]?.fork?.key ?? null; },
-    /** ★ 이 판이 지금 「내린다/지나친다」인가 — 밖에서 누를 때 쓴다 */
-    landAt(i) { return plates[i]?.land ?? null; },
-    update(s) {
-      map.redraw(s);
-      // ★ 착륙 제안은 **항행 중에만** 뜬다. 거점에서는 갈래가 우선이다 —
-      //   한 판이 두 가지를 동시에 물으면 뭘 누르는지 모른다
-      const land = !s.atPort && s.land?.offered ? s.land : null;
-      plates.forEach((p, i) => {
-        p.fork = !land && s.atPort ? s.offer[i] : null;
-        p.land = land ? { go: i === 0, hard: !!land.hard } : null;
-        p.sc.redraw({ fork: p.fork, land: p.land, lit: aimed === i && !!(p.fork || p.land) });
-      });
-    },
+    setAim() {},
+    update(s) { map.redraw(s); },
   };
 }

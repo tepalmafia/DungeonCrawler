@@ -329,7 +329,7 @@ if (see >= 0) {
   {
     // 조종간 앞에 서서 잡는다
     const y = await S(() => SPACE.yokeAt ?? null);
-    await S(() => SPACE.put(0, -7.3, 0, -0.2));
+    await S(() => SPACE.put(0, -7.75, 0, -0.2));
     await p.waitForTimeout(900);
     const before = await S(() => SPACE.drift.spin);
     await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));

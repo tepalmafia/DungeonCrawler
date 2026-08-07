@@ -160,7 +160,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 65;
+export const VERSION = 66;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -896,7 +896,14 @@ function walk(dt) {
     // ★ **마우스도 계속 먹게 둔다.** WASD 를 안 누르고 있을 때 0 으로
     //   덮어쓰면 마우스로 밀던 사람이 갑자기 조종을 잃는다 —
     //   조작을 하나 더 만드는 것이지 있던 것을 뺏는 것이 아니다
-    if (r !== 0) steerPush = Math.max(-1, Math.min(1, r));
+    if (r !== 0) {
+      steerPush = Math.max(-1, Math.min(1, r));
+      // ★★★ **v66 — 이 한 줄이 없었다.** `flyPush.yaw` 는 이 함수보다
+      //   **윗줄에서 이미 마우스 값으로** 정해진 뒤라, A/D 로는 항로만
+      //   조금 벗어나고 **기수가 안 돌았다.** 즉 A/D 로 미는 사람에게는
+      //   조종간이 아무 일도 안 하는 물건이었다
+      flyPush.yaw = steerPush;
+    }
     return;
   }
   // ★ v64 — 여기 있던 「WASD 가 포탑을 돌린다」를 걷어냈다.
@@ -976,14 +983,14 @@ function interactStep(dt) {
   ray.setFromCamera(CENTER, camera);
 
   // 조준선에 뭐가 걸리나. 가까운 것 하나만 본다
-  const plates = ship.chart.plates;
+  const plates = ship.cock.plates;
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
     ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
     // ★ v64 — 주포 손잡이 셋(좌석·발판·손잡이)이 여기 있었다. 걷어냈다
     ship.cock.helmSeatHit,
-    ship.outerDoor.hit, ship.cock.autoHit, ship.radio.hit, ship.mainBreaker.hit,
+    ship.outerDoor.hit, ship.cock.autoHit, ship.cock.thrHit, ship.radio.hit, ship.mainBreaker.hit,
     ...(ship.suitRack ? [ship.suitRack.hit] : [])];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
@@ -996,7 +1003,7 @@ function interactStep(dt) {
   let onWinch = false, onHatch = false, onYoke = false, onRadio = false, onMain = false;
   let onSuit = false;
   let onHelmSeat = false;
-  let onOuter = false, onAuto = false;
+  let onOuter = false, onAuto = false, onThr = false;
   let onCrank = null;
   let onSpot = null;
   if (near) {
@@ -1015,6 +1022,7 @@ function interactStep(dt) {
       //   조종간을 잡으려다 일어나게 된다 (주포 좌석에서 이미 밟은 함정)
       if (o === ship.cock.helmSeatHit) { onHelmSeat = !helmSat; break; }
       if (o === ship.cock.autoHit) { onAuto = true; break; }
+      if (o === ship.cock.thrHit) { onThr = true; break; }
 
 
       if (o === ship.outerDoor.hit) { onOuter = true; break; }
@@ -1043,10 +1051,10 @@ function interactStep(dt) {
   armsFullNow = !!(carry.held && CARRY_KINDS[carry.held]?.both);
   const armsFull = armsFullNow;
   if (armsFull && !onSpot
-    && (onValve || breaker || plate >= 0 || panel || onWinch || onHatch || onYoke || onCrank)) {
+    && (onValve || breaker || plate >= 0 || panel || onWinch || onHatch || onYoke || onCrank || onThr)) {
     nag(`${CARRY_KINDS[carry.held].name}을 안고 있습니다 — 어딘가 붙여 놓으세요`);
     onValve = false; breaker = null; plate = -1; panel = null;
-    onWinch = false; onHatch = false; onYoke = false; onCrank = null;
+    onWinch = false; onHatch = false; onYoke = false; onCrank = null; onThr = false;
   }
 
   // ★ **잡은 순간에만** 손 쓰는 법을 한 번 봤다고 센다. 뜬 프레임마다
@@ -1070,7 +1078,7 @@ function interactStep(dt) {
   // ★ 다만 **내릴 자리가 떠 있으면 항행 중에도 눌린다** (장면 B).
   //   판을 새로 안 만든다 — 「고르는 자리는 해도대」라는 규약을 그대로 쓴다
   const canPick = route.phase === RPHASE.PORT || land.offered;
-  ship.chart.setAim(canPick ? plate : -1);
+  ship.cock.setAim(canPick ? plate : -1);
 
   // ── 비상 크랭크 — **끼인 문을 손으로 연다** ──────────
   // ★ 안 낀 문의 크랭크는 **안 잡힌다.** 멀쩡한 문에서 손잡이가 돌아가면
@@ -1400,7 +1408,7 @@ function interactStep(dt) {
       audio?.event('click');
     }
   } else if (plate >= 0 && pressed) {
-    if (canPick && chooseFork(route, ship.chart.keyAt(plate))) {
+    if (canPick && chooseFork(route, ship.cock.keyAt(plate))) {
       ship.outside.setRegion(regionOf(route));
       banner = `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`;
       bannerT = 2.4;
@@ -1408,6 +1416,26 @@ function interactStep(dt) {
     } else {
       // ★ 거절음만 났다. 소리는 「안 된다」까지고 **왜**를 못 말한다
       nag(canPick ? '지금은 못 고릅니다' : '거점에서 항로를 고릅니다');
+    }
+  } else if (onThr && pressed) {
+    // ══ ★★★ **추력 레버** (v66 · 사장님 「추진도 그렇고 모든 비행 조작은
+    //    운전석에 있어야지」) ═══════════════════════════════════════════
+    //  ★ 여태 추진은 **통로의 차단기**였다. 조종석에 앉아서는 출발조차
+    //    못 하는 배였던 셈이다. 고증대로 **왼쪽 콘솔**로 가져왔다.
+    //  ★ 규칙은 차단기 때와 **똑같이** 둔다 — 추진제가 마르면 안 걸리고,
+    //    전력이 모자라면 못 켠다. 자리만 옮긴 것이지 규칙을 바꾼 게 아니다
+    if (!power.thrust && isDry(supply.fuel)) {
+      banner = fuelWord(supply.fuel); bannerT = 2.6; audio?.event('deny');
+    } else if (power.thrust) {
+      power.thrust = false; wearFlip(faults); taught.flips++;
+      banner = '추력 레버를 당깁니다 — 관성으로 갑니다'; bannerT = 1.8;
+      audio?.event('click');
+    } else if (canTurnOn(power)) {
+      power.thrust = true; wearFlip(faults); taught.flips++;
+      banner = '추력 레버를 밉니다'; bannerT = 1.6;
+      audio?.event('click');
+    } else {
+      banner = '전력이 모자랍니다'; bannerT = 1.6; audio?.event('deny');
     }
   } else if (breaker && pressed) {
     // ★★ **추진제가 바닥나면 추진이 안 걸린다** (v62 · fuel-table.js).
@@ -1548,10 +1576,10 @@ function interactStep(dt) {
     : onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
       : (panel ? `panel:${panel.room}`
-        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : null)))))));
+        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : (onThr ? 'throttle' : null))))))));
   // ★ 조준점이 **주포와 사다리에서는 안 켜졌다.** 「손이 닿는다」를 알려
   //   주는 유일한 표시인데 빠져 있으면 「눌러도 되는지」를 알 길이 없다
-  cross.classList.toggle('on', !!(onOuter || onAuto || onSuit
+  cross.classList.toggle('on', !!(onOuter || onAuto || onThr || onSuit
     || onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
     || onYoke || (crankDoor && crankDoor.jammed)
@@ -1947,6 +1975,12 @@ function systemsStep(dt, valveOpen, regionMult) {
     // 조종 — 남은 시간과 다가오는 것 (world/cockpit.js drawCourse 가 읽는다)
     lane: hazard.lane, hazPhase: hazard.phase,
     hazWarn: warnLeft(hazard), incoming: incoming(hazard), clearBy: clearOf(hazard),
+    // ★★ v66 — **항로와 추진이 조종석으로 왔다.** 갈래 판 둘이 선반에
+    //   있고, 추력 레버가 왼쪽 콘솔에 있다 (사장님 「모든 비행 조작은
+    //   운전석에 있어야지」). 해도대에 넘기던 것과 **같은 값**을 넘긴다 —
+    //   두 벌을 만들면 반드시 갈라진다
+    offer: route.offer, thrust: power.thrust,
+    land: { offered: land.offered, hard: land.hard },
   });
 }
 
@@ -2304,7 +2338,7 @@ window.SPACE = {
   get reach() { return BODY.reach; },
   get aimTargets() {
     const pans = Object.values(ship.panels);
-    return [ship.valve, ...ship.breakers.map((x) => x.hit), ...ship.chart.plates.map((x) => x.hit),
+    return [ship.valve, ...ship.breakers.map((x) => x.hit), ...ship.cock.plates.map((x) => x.hit),
       ...pans.map((x) => x.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
       ...ship.doors.map((d) => d.view.hit)];
   },
@@ -3242,6 +3276,9 @@ function frame(now) {
   ship.sight.redraw({
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,
+    // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며
+    //   화면 한 장이 밀려났고, 자국은 **모는 동안 보는 것**이라 여기가 맞다
+    power, sign: chase.sign, contactAt: contactAt(route),
   });
 
   const dev = stepDrift(drift, dt, steering);

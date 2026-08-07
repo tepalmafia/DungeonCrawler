@@ -42,6 +42,7 @@ import { DOOR } from '../game/door-table.js';
 // ★ v64 — 주포(포탑·사다리·조준석)를 걷어냈다. 조준경만 남는다
 import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
+import { DEP, ROOF, HUD as HUDV } from '../game/view-table.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -389,7 +390,8 @@ export function buildShip(scene, camera = null) {
   // ── 껍데기 ──────────────────────────────────────────────
   // 방마다 바닥·천장·벽·모따기·링 프레임이 **한 곳에서 다 돈다** —
   // 방을 늘릴 때 ROOMS 에 한 줄만 더하면 되게.
-  const ROOF = { x0: -1.75, x1: 1.75, z0: -8.9, z1: -7.4 };   // 조종석 머리 위 창
+  // 조종석 머리 위 창 — **자리는 `view-table.js` 가 정한다** (v66).
+  //   유리 위끝(천장)에서 이어받아야 하므로 시야 표와 같은 값이어야 한다
   for (const r of ROOMS) {
     const tone = ZONE[r.tone];
     const gaps = { z0: doorGaps(r, 'z0'), z1: doorGaps(r, 'z1'), x0: doorGaps(r, 'x0'), x1: doorGaps(r, 'x1') };
@@ -424,7 +426,20 @@ export function buildShip(scene, camera = null) {
 
     // ★ 「배 같다」를 고치는 둘
     chamfer(ship, r, H, w, gaps);
-    ringFrames(ship, r, H, (r.z1 - r.z0) >= (r.x1 - r.x0) ? 'z' : 'x', 3.2, tone.light, gaps);
+    // ══ ★★★ **캐노피도 개구부다** (v66 · 사장님 「중앙에 철이 막고 있잔아」) ══
+    //  조종석은 폭 6.8 · 깊이 6.0 이라 `along = 'x'` 로 갈리고 `n = 1` 이라
+    //  **딱 한 줄이 `t = 0` 에 선다.** 그 줄이 앞뒤 벽에 세로 기둥을 세우는데,
+    //  조종석의 앞(z0)은 **벽이 아니라 캐노피**다 — 벽이 없는 자리에 벽
+    //  기둥을 세우고 있었고, 그게 **높이 2.7m 짜리 쇠기둥이 정확히 12시**에
+    //  서 있던 이유다.
+    //
+    //  ★ 새 규칙이 아니다. 「문구멍에는 기둥을 안 세운다」(v23)를 그대로
+    //    쓴다 — **캐노피도 구멍이라고 말해 주면 된다.** `wallRun` 은
+    //    이미 조종석 앞을 안 세우는데 `ringFrames` 만 모르고 있었다
+    const rgaps = r.key === 'cockpit'
+      ? { ...gaps, z0: [[r.x0 - 1, r.x1 + 1]] }
+      : gaps;
+    ringFrames(ship, r, H, (r.z1 - r.z0) >= (r.x1 - r.x0) ? 'z' : 'x', 3.2, tone.light, rgaps);
   }
 
   // ── 해치 ────────────────────────────────────────────────
@@ -992,7 +1007,12 @@ export function buildShip(scene, camera = null) {
   //   「가운데 검은 화면」이 이것이다.
   //   이제 **앞유리 한 장 크기**로 키우고 배경을 지웠다 — 커졌는데
   //   **덜 가린다.** 선만 빛나기 때문이다 (gunsight.js 머리말)
-  const sight = buildSight(2.2, 1.55);
+  //   ★★★ **v66 — 다시 줄였다. 2.2 × 1.55 는 94도 × 74도였다.**
+  //     「크게 만들면 잘 보인다」고 생각했는데 실제 HUD 는 **작다** —
+  //     F-16 Block 60 이 25도 × 25도다. 94도짜리는 HUD 가 아니라
+  //     **창을 통째로 덮은 초록 격자**이고, 사장님 화면의 그 격자다.
+  //     크기·거리는 `view-table.js HUD` 가 정하고 `space-view.js` 가 지킨다
+  const sight = buildSight(HUDV.w, HUDV.h);
   // ★★ **조준경을 조종석 대시에 붙인다** (v64).
   //   예전에는 `buildTurret` 이 붙여 줬다 — 포탑을 걷어내면서 **조준경이
   //   같이 떨어졌다.** 화면은 그려지는데 배에 없으니 아무 데도 안 보인다.
@@ -1000,7 +1020,10 @@ export function buildShip(scene, camera = null) {
   //   자리는 조종간 바로 위, 앉은 눈(1.20)에서 살짝 아래다
   // ★ **유리 바로 안쪽**에 세운다 (앞유리 z −9.30). 눕히지 않는다 —
   //   HUD 는 밖을 보는 판이라 창과 나란해야 표적 위에 얹힌다
-  sight.mesh.position.set(0, 1.62, -9.22);
+  // ★★ **앉은 눈높이에 놓는다.** HUD 는 DEP 에 맞춰져 있어야 표적 위에
+  //   얹힌다 — v65 는 눈이 30cm 뜨는데 HUD 는 고정이라 어긋나 있었고,
+  //   그 어긋남을 **크게 만들어 덮고** 있었다
+  sight.mesh.position.set(0, DEP.y + 0.06, DEP.z - HUDV.dist);
   ship.add(sight.mesh);
   const turret = {
     group: null, sight,
