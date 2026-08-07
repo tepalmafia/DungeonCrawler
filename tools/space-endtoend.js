@@ -54,6 +54,14 @@ const up = () => S(() => window.dispatchEvent(new MouseEvent('mouseup', { button
 /** 사람이 누르는 것 — 헤드리스는 프레임이 성기므로 넉넉히 잡는다 */
 const press = async (sec = 2.5) => { await down(); await p.waitForTimeout(sec * 1000); await up(); };
 /**
+ * ★★ **화면이 움직임을 멈출 때까지 기다린다** (v66).
+ *   조종간을 놓으면 화각·눈높이가 되돌아오는 데 시간이 걸리고(`FLY_VIEW.rate`),
+ *   그동안 조준선이 흔들린다. 굳기 전에 겨누면 **잡았다고 나온 다음 프레임에
+ *   놓친다** — 검사가 「자동 항법이 잡힌다 ✔ → 누르니 안 켜진다 ✘」로
+ *   두 번 빨개졌는데, 게임이 아니라 여기가 급했던 것이다
+ */
+const settle = () => p.waitForTimeout(3000);
+/**
  * ★★ **앉히고 몸이 좌석에 닿을 때까지 기다린다** (v66).
  *   `helm2.k` 만 보고 겨누면 **몸이 아직 미끄러지는 중**이라 조준이 흔들린다 —
  *   검사가 「chart0 을 잡았는데 누르니 조종간이 눌렸다」로 두 번 빨개졌다.
@@ -153,7 +161,8 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
 
   // ④ 일어난다 — **아무 손잡이도 안 잡힌 데를** 누른다
   await S(() => SPACE.put(0, -7.75, Math.PI, 0));
-  await press(0.8);
+  await settle();
+  await press(2.5);
   ok(await until(() => !SPACE.helm2.sat, 30, '일어나기'), '⑨ 일어난다 — **왕복이 닫힌다**');
 }
 
@@ -239,9 +248,10 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
     `⑤ **놓아도 그대로 간다** (${h1.off} → ${h2.off}) — 수동이면 되돌리는 것도 내 손이다`);
 
   // 자동 항법 스위치로 되돌린다
+  await settle();
   ok(await aimAt(0, -7.75, -0.9, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
-  await press(0.8);
+  await press(2.5);
   ok((await S(() => SPACE.helm)).auto, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
   ok(await until(() => SPACE.helm.off < 0.05, 60, '항로 복귀'),
     '⑧ **배가 스스로 항로로 돌아온다**');
@@ -283,9 +293,10 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
     + ' `setAttitude` 가 yaw 를 버리고 있었고, 그게 「핸들 운전이 안되잔아」다');
 
   // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
+  await settle();
   ok(await aimAt(0, -7.75, 0.9, -0.1, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
-  await press(0.8);
+  await press(2.5);
   ok(/추력 레버/.test(await said()), `④ 눌렀더니 「${await said()}」`);
 
   // ── ③ 항로 갈래 — 계기 화면이 쪽을 바꾼다 ────────────────
