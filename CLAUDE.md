@@ -245,6 +245,7 @@ node tools/space-end.js          스페이스워 — ★ H 성간 공백 · 끝 
 node tools/space-blackout.js     스페이스워 — ★ E 정전 · 어둠이 벌인가 · 갇히지 않나
 node tools/space-rescue.js       스페이스워 — ★ G 구조 신호 · 가는 것이 진짜 선택인가 (윈치와 견준다)
 node tools/space-flight.js       스페이스워 — ★★ 세 축(위아래·좌우·360도) + **짐벌** · 정비공인 채인가
+node tools/space-yoke.js         스페이스워 — ★ 조종간 · **앉아서** 보이고·잡히고·먹나 (v61 부터 앉는다)
 node tools/space-heat.js         스페이스워 — ★★ 열 저장고 · 냉각은 옮기고 라디에이터가 버린다 · 쳇바퀴가 아닌가
 node tools/space-real.js         스페이스워 — ★★ **말이 되나** · 미션과 설정을 통째로 (docs/space/REAL.md)
 node tools/space-sky.js          스페이스워 — ★ 창밖 · **별이 흐르지 않나**(고증) · 행성에 낮과 밤이 있나 (--see 8391)

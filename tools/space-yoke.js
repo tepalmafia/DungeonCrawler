@@ -83,18 +83,32 @@ const SEE = `(() => {
 })()`;
 const isYoke = (n) => /조종간/.test(n);
 
-console.log('\n[1] **눈에 보이나** — 조종석에 서서 조종간 쪽을 본다');
+console.log('\n[1] **눈에 보이나** — ★ v61 부터는 **앉아서** 본다');
 {
-  // 좌석 둘(x = ±1.05) 사이. 사람이 실제로 서는 자리다.
+  // ══ ★★ **묻는 것이 바뀌었다** (v61) ══════════════════════════════
+  //  여태 「**서서** 조종간이 제일 먼저 걸리나」를 물었다. 그때는 좌석이
+  //  둘이라 가운데가 비어 있었으므로 그 질문이 맞았다.
+  //
+  //  사장님이 「좌석은 센터에 있어야지. 조정석 뒤에」라고 하셨고, 좌석을
+  //  한가운데 놓으니 **등받이가 조종간을 가린다** — 서서는 못 잡는다.
+  //  지난번엔 좌석을 옆으로 밀어 피했는데 그건 푼 게 아니다.
+  //
+  //  ★ 실제 조종석은 **앉은 눈이 올 자리(DEP)** 부터 잡는다. 그러면 답이
+  //    하나다 — **앉고 나서 잡는다.** 그래서 이 검사도 **앉혀 놓고** 묻는다.
+  //    안 고쳤으면 도구가 「서서 잡히는 조종석」이라는 **틀린 설계를
+  //    지켰을 것이다** (이 저장소에서 열두 번째다).
+  await S(() => SPACE.putHelmSit(true));
+  await new Promise((r) => setTimeout(r, 900));
   // ★ 고개 각도를 손으로 못박지 않는다. 못박으면 조종간을 옮길 때마다
   //   검사가 같이 틀리고, 그러면 「고개를 몇 도 숙여야 보이나」라는
   //   **엉뚱한 것**을 재게 된다. 여기서 묻는 것은 하나다 —
   //   **조종간을 똑바로 보면 조종간이 제일 먼저 걸리나.**
-  await stand(0, -5.6, 0, 0);
+  // 앉은 자리에서, 조종간을 향해 고개를 조금 숙인 자세
+  await stand(0, -6.95, 0, -0.30);
   const seen = await S(`(() => {
     const T = SPACE.THREE, cam = SPACE.camera;
     const from = cam.getWorldPosition(new T.Vector3());
-    const to = new T.Vector3(0, 1.06, -7.42);
+    const to = new T.Vector3(0, 0.98, -7.45);   // ★ v61 — DEP 에서 계산된 자리
     const ray = new T.Raycaster(from, to.clone().sub(from).normalize(), 0.05, 6);
     const out = [];
     for (const h of ray.intersectObject(SPACE.shipGroup, true)) {
@@ -106,14 +120,17 @@ console.log('\n[1] **눈에 보이나** — 조종석에 서서 조종간 쪽을
     return out;
   })()`);
   ok(!!seen[0] && isYoke(seen[0].name),
-    `서서 보면 조종간이 제일 먼저 걸린다 — ${seen.slice(0, 3).map((h) => `${h.name}(${h.d})`).join(' · ') || '아무것도 안 걸림'}`);
+    `★ **앉아서** 보면 조종간이 제일 먼저 걸린다 — ${seen.slice(0, 3).map((h) => `${h.name}(${h.d})`).join(' · ') || '아무것도 안 걸림'}`);
 
   // ★ **고개를 자연스럽게 숙인 범위**에서 화면 한가운데에 들어오나.
   //   위 검사는 「똑바로 보면」이고 이건 「눈이 가는 자리에 있나」다.
   //   둘 다 있어야 「있긴 한데 찾아야 보인다」를 잡는다
   const band = [];
-  for (const pitch of [-0.10, -0.15, -0.20, -0.25, -0.30, -0.35]) {
-    await stand(0, -5.6, 0, pitch);
+  // ★ v61 — **앉은 자리에서** 쓸어 본다. 서 있는 자리(z −5.6)에서 재면
+  //   좌석 등받이가 가려서 영영 안 걸린다 — 그건 조종간이 나쁜 게 아니라
+  //   **서서 잡으려 한 것**이 잘못이다
+  for (const pitch of [-0.10, -0.20, -0.30, -0.40, -0.50, -0.60]) {
+    await stand(0, -6.95, 0, pitch);
     const hit = await S(SEE);
     if (hit[0] && isYoke(hit[0].name)) band.push(pitch);
   }
@@ -180,8 +197,10 @@ console.log('\n[4] 앞을 가로지르는 것이 없나 — 조종간은 **가�
   const blocked = await S(() => {
     const T = SPACE.THREE, out = [];
     for (const dx of [-0.2, -0.1, 0, 0.1, 0.2]) {
-      const from = new T.Vector3(dx, 1.62, -5.6);
-      const to = new T.Vector3(0, 1.06, -7.42);
+      // ★ v61 — **앉은 눈**에서 쏜다 (helm-table.js HELM_SEAT.eye 1.20).
+      //   서 있는 눈(1.62 · z −5.6)에서 재면 좌석 등받이가 늘 먼저 걸린다
+      const from = new T.Vector3(dx, 1.20, -6.95);
+      const to = new T.Vector3(0, 0.98, -7.45);   // ★ v61 — DEP 에서 계산된 자리
       const dir = to.clone().sub(from).normalize();
       const ray = new T.Raycaster(from, dir, 0.05, from.distanceTo(to) - 0.12);
       for (const h of ray.intersectObject(SPACE.shipGroup, true)) {
