@@ -68,7 +68,11 @@ const settle = () => p.waitForTimeout(3000);
  *   자리가 굳을 때까지 기다리는 것이 맞다
  */
 const sit = async () => {
-  await S(() => SPACE.putHelmSit(true));
+  // ★★ **`putHelmSit` 이 아니라 `putGun`** — 앞의 것은 깃발만 켜고 **몸은
+  //   안 옮긴다.** 그러면 사람은 통로에 서 있는데 카메라만 조종석에 있는,
+  //   화면으로는 멀쩡해 보이는 상태가 된다. 검사가 그 상태로 에어록을
+  //   겨눠서 「잡힌다 ✔ (null)」 같은 말이 안 되는 줄을 뱉었다
+  await S(() => SPACE.putGun(true));
   await until(() => SPACE.helm2.k > 0.99 && Math.abs(SPACE.pos.z + 8.30) < 0.06, 30, '좌석에 앉는 것');
   await p.waitForTimeout(600);
 };
@@ -160,7 +164,9 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
   await S(() => SPACE.putAuto?.(true));
 
   // ④ 일어난다 — **아무 손잡이도 안 잡힌 데를** 누른다
-  await S(() => SPACE.put(0, -7.75, Math.PI, 0));
+  // ★ **위를 본다.** 뒤를 보면 조종석 문 크랭크가 잡혀서 「빈 데」가 아니다 —
+  //   그러면 v66 의 걸쇠(`emptyAimT`)가 일부러 안 일어나게 막는다. 맞는 동작이다
+  await S(() => SPACE.put(0, -7.75, 0, 0.9));
   await settle();
   await press(2.5);
   ok(await until(() => !SPACE.helm2.sat, 30, '일어나기'), '⑨ 일어난다 — **왕복이 닫힌다**');
@@ -173,6 +179,9 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //  (REAL.md §2-C). 이제 걸이를 먼저 잡아야 한다 — **여기까지 못 오면
   //  뒤의 낚기는 아무 뜻이 없다.** 계통 검사(space-suit.js)가 다 초록인데
   //  사람은 거기까지 못 가는 상태를 2026-08-06 에 넷이나 쌓아 뒀다
+  // ★ **앉아 있으면 몸이 조종석에 붙들린다.** 앞 절이 못 일어났을 때
+  //   여기가 통째로 거짓말을 하게 되므로, 이 절이 제 앞가림을 한다
+  await S(() => SPACE.putGun(false));
   const RACK = { x: 1.3 + 0.55, z: (4.2 + 7.2) / 2 - 0.85 };
   // ★★ **여기 yaw 부호가 반대였다** (v66 에서 잡았다). 걸이는 x 1.85 인데
   //   x 2.80 에 서서 `-π/2` 로 봤으니 **벽을 보고 있었다.** 걸이는 처음부터
