@@ -89,6 +89,13 @@ export const LINES = [
     of: (w) => (w.hits > 0 ? `${w.hits}개` : null),
   },
   {
+    // ★★ **간 것도 안 간 것도 남는다** (G 구조 신호 · 7판).
+    //   줄기 「혼자다」의 조이기가 여기서 갚인다 — 2시간에 한 번뿐인
+    //   선택이었으므로 목록에 한 줄로 남아야 고른 것이 뜻을 갖는다
+    group: 'came', label: '구조 신호',
+    of: (w) => w.rescue ?? null,
+  },
+  {
     group: 'came', label: '손이 떨린 시간',
     // 굶은 시간. 0 이면 안 띄운다 — 굶은 적이 없으면 그건 줄이 아니다
     of: (w) => (w.shakyMin >= 0.5 ? `${Math.round(w.shakyMin)}분` : null),
