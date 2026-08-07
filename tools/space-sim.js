@@ -20,6 +20,9 @@
 //    그리고 「재미있나」는 여기서 절대 안 나온다 — 그건 직접 돌려 봐야 한다.
 // ══════════════════════════════════════════════════════════════════════════
 import { SIGN, CHASE, POWER_MAX } from '../web/space/js/game/chase-table.js';
+// ★★ v58 — 열이 두 칸이 됐다. 시뮬도 같은 규칙을 써야 한다 (heat.js)
+import { makeHeat, stepHeat, sinkFull } from '../web/space/js/game/heat.js';
+import { SINK } from '../web/space/js/game/heat-table.js';
 import { makeChase, stepChase, heatRate, signatureOf, PHASE } from '../web/space/js/game/chase.js';
 import { HEAT, VALVE, wantValve } from '../web/space/js/game/systems-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
@@ -38,13 +41,14 @@ function run(plan, { regionKey = 'empty', force = false } = {}) {
   //   그 프레임에 riskFall 이 빠져서 99.96 이 된다. 단계를 직접 넣는다.
   if (force) { c.phase = PHASE.CHASE; c.dist = CHASE.startDist; c.timer = 0; }
   let heat = HEAT.start;
+  const st = makeHeat();
   let coolFor = 0;
   let t = 0, contactAt = force ? 0 : -1;
   const trip = { valve: 0, breaker: 0 };
   let last = null;
 
   while (t < CAP) {
-    const p = plan({ t, heat, coolFor, chase: c, sign: c.sign });
+    const p = plan({ t, heat, coolFor, chase: c, sign: c.sign, sink: st.sink, sinkFull: sinkFull(st) });
     // 밸브를 열러 갔다면 걸린다 (실제로는 기관실까지 뛰어야 한다 — 위 주의)
     // ★ **잠금식이다.** 26초 걸림이 아니라 「열면 잠글 때까지」 —
     //   `coolFor` 는 이제 「열려 있나」다 (0 또는 1)
@@ -55,8 +59,19 @@ function run(plan, { regionKey = 'empty', force = false } = {}) {
     if (last !== null && key !== last) trip.breaker++;
     last = key;
 
-    heat = Math.max(0, Math.min(HEAT.max, heat + heatRate(power, coolFor > 0) * DT));
-    const ev = stepChase(c, DT, power, heat, mult);
+    // ★★ **v58 — 두 곳을 고쳤다.**
+    //   ① 열이 두 칸이 됐다. 예전에는 `heatRate` 한 번이라 **저장고가
+    //      차는 것을 시뮬이 못 봤다** — 그래서 「밀어붙이기」가 영원히
+    //      안 붙는 것으로 나왔다. 실제로는 6분쯤 뒤에 저장고가 차고,
+    //      차면 냉각이 죽어 선체가 오르고, 그때 붙는다
+    //   ② **밸브를 `stepChase` 에 안 넘기고 있었다.** 그래서 라디에이터를
+    //      열어도 자국이 안 올랐고, 「열면 뿌리친다 · 잠그면 뿌리친다」로
+    //      나와서 밸브가 아무 뜻이 없어 보였다. 표에는 `SIGN.valveOpen`
+    //      17 이 있었는데 **시뮬이 그 줄을 안 읽고 있었다**
+    st.hull = heat;
+    stepHeat(st, DT, { thrust: power.thrust, cool: power.cool, valveOpen: coolFor > 0 });
+    heat = st.hull;
+    const ev = stepChase(c, DT, power, heat, mult, { valveOpen: coolFor > 0 });
     t += DT;
     if (ev === 'contact') contactAt = t;
     if (ev === 'escaped') return { ok: true, chaseSec: t - contactAt, toContact: contactAt, heat, trip };
@@ -70,32 +85,41 @@ function run(plan, { regionKey = 'empty', force = false } = {}) {
 }
 
 // ── 사람이 실제로 할 법한 선택들 ───────────────────────────
-// **셋 중 둘**이라는 규칙 안에서만 짠다.
-// 「번갈아」는 **틈(hysteresis)** 을 둔다 — 안 그러면 기준선에서 매 프레임
-// 왔다 갔다 해서 차단기를 만 번 만지는 사람이 된다. 사람은 그렇게 안 한다.
-const HI = 70, LO = 40;
+//
+//  ★★ **v58 에서 통째로 다시 썼다.** 예전 전략 다섯은 전부
+//     「밸브를 계속 열어 둔다」였고, 그때는 그게 정답이었다 — 밸브가
+//     열을 없애는 유일한 길이었으니까.
+//
+//     지금은 **반대다.** 라디에이터를 열면 자국이 +17 이라
+//     추격 중에는 **여는 순간 진다** (붙는 속도가 벌어지는 속도를 넘는다).
+//     대신 **열 저장고**가 6분쯤 버텨 주므로, 추격 동안은 닫아 두고
+//     **뿌리친 뒤에 비운다.** 밸브의 자리가 추격 **안**에서 추격
+//     **사이**로 옮겨간 것이다.
+//
+//     그래서 여기 전략도 그 축으로 다시 짰다 — 안 그러면 시뮬이
+//     **옛 정답을 흉내 내는 사람**을 재게 되고, 그건 아무것도 못 잰다.
 const PLANS = {
-  '밀어붙이기 (추진+냉각, 밸브 계속)': (s) => ({
-    thrust: true, cool: true, sensor: false, turnValve: wantValve(s.heat, true),
+  // ★ 새 정답 — 저장고에 담아 두고 달린다
+  '저장고로 버틴다 (추진+냉각, 라디에이터 닫음)': () => ({
+    thrust: true, cool: true, sensor: false, turnValve: false,
   }),
-  '눈 뜨고 달리기 (추진+센서)': () => ({
-    thrust: true, cool: false, sensor: true, turnValve: false,
+  // ★ 예전 정답 — 이제는 진다. 「늘 하던 것이 안 통한다」
+  '라디에이터를 연 채 (예전 정답)': () => ({
+    thrust: true, cool: true, sensor: false, turnValve: true,
   }),
-  '숨죽이기 (냉각+센서, 안 민다)': (s) => ({
-    thrust: false, cool: true, sensor: true, turnValve: wantValve(s.heat, false),
+  '눈 뜨고 달리기 (능동 탐지까지)': () => ({
+    thrust: true, cool: true, sensor: true, turnValve: false,
   }),
-  '번갈아 (뜨거우면 식히고 식으면 민다)': (s) => {
-    if (s.heat > HI) s.mode = 'cool';
-    else if (s.heat < LO) s.mode = 'push';
-    const push = s.mode !== 'cool';
-    return { thrust: push, cool: true, sensor: false, turnValve: wantValve(s.heat, push) };
-  },
-  '번갈아 + 눈 (거리를 보며)': (s) => {
-    if (s.heat > HI) s.mode = 'cool';
-    else if (s.heat < LO) s.mode = 'push';
-    if (s.mode === 'cool') return { thrust: false, cool: true, sensor: true, turnValve: wantValve(s.heat, false) };
-    return { thrust: true, cool: false, sensor: true, turnValve: false };
-  },
+  '냉각을 안 켠다 (선체가 오른다)': () => ({
+    thrust: true, cool: false, sensor: false, turnValve: false,
+  }),
+  '안 민다 (냉각만)': () => ({
+    thrust: false, cool: true, sensor: false, turnValve: false,
+  }),
+  // ★ 저장고가 차면 어쩔 수 없이 연다 — **추격이 길어지면 값을 치른다**
+  '버티다 차면 연다': (s) => ({
+    thrust: true, cool: true, sensor: false, turnValve: !!s.sinkFull,
+  }),
 };
 
 // ── 1) 평온 — 접촉까지 얼마나 ────────────────────────────────
@@ -155,17 +179,27 @@ console.log(`  ${ok4 ? '✔' : '✘'} 조심하면 안 붙을 수 있다        
 //   추격 중에는 추진을 켜야만 거리가 벌어지므로(`CHASE.thrustGain`)
 //   차단기를 만질 이유가 없다. 차단기의 자리는 **평온할 때**다.
 //
-//   그러니 추격에서 물어야 할 것은 횟수가 아니라 이것이다:
-//   **「밸브가 답에 쓰이나」** — 같은 길을 밸브만 잠근 채 가면 잡혀야 한다.
-//   안 그러면 밸브는 있으나 마나 한 물건이다.
-const shut = run((s) => ({ thrust: true, cool: true, sensor: false, turnValve: false }),
+//  ★★ **v58 — 이 검사의 뜻이 뒤집혔다.**
+//     예전에는 「같은 길을 밸브만 잠근 채 가면 잡혀야 한다」를 물었다.
+//     밸브가 열을 없애는 유일한 길이었으므로 그게 맞았다.
+//
+//     지금은 반대다 — 라디에이터를 여는 것은 **열을 버리는 것이고 곧
+//     나를 밝히는 것**(자국 +17)이라, 추격 중에는 **닫아야 이긴다.**
+//     저장고가 6분쯤 버텨 주므로 추격(90~180초)은 닫은 채로 난다.
+//
+//     그러니 물어야 할 것은 이것이다:
+//     **「추격 중에 여는 것이 손해인가」** — 손해가 아니면 저장고가
+//     있으나 마나 하고, 「스텔스는 잠깐만 가능하다」도 뜻을 잃는다.
+const shut = run(() => ({ thrust: true, cool: true, sensor: false, turnValve: false }),
   { force: true });
-const openWin = won.find(([n]) => n.startsWith('밀어붙이기'))?.[1];
-const ok5 = !!openWin?.ok && !shut.ok;
-console.log(`  ${ok5 ? '✔' : '✘'} ★ 밸브가 답에 쓰인다            `
-  + `열면 ${openWin?.ok ? '뿌리친다' : '못 뿌리친다'} · 잠그면 ${shut.ok ? '뿌리친다' : '잡힌다'}`);
-console.log('     (추격 중 차단기는 안 센다 — 추진을 켜야 거리가 벌어지므로 만질 이유가 없다.');
-console.log('      차단기의 자리는 평온할 때 「열을 미리 낮춰 둘 것인가」이다)');
+const open = run(() => ({ thrust: true, cool: true, sensor: false, turnValve: true }),
+  { force: true });
+const ok5 = shut.ok && !open.ok;
+console.log(`  ${ok5 ? '✔' : '✘'} ★ 추격 중엔 닫아야 이긴다        `
+  + `닫으면 ${shut.ok ? `${shut.chaseSec.toFixed(0)}초에 뿌리친다` : '잡힌다'}`
+  + ` · 열면 ${open.ok ? '뿌리친다' : '잡힌다'} (자국 +${SIGN.valveOpen})`);
+console.log('     (밸브의 자리가 추격 **안**에서 추격 **사이**로 옮겨갔다 —');
+console.log('      달리는 동안 저장고에 담고, 뿌리친 뒤에 비운다)');
 
 
 console.log('\n  ※ 방 사이를 뛰는 시간이 0 으로 계산된다. 실제 플레이는 이보다 길다.');

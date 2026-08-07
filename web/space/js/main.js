@@ -25,8 +25,11 @@ import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
 import { REGION_BY_KEY } from './game/regions-table.js';
-import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH, CAUGHT } from './game/chase-table.js';
+import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH, CAUGHT, HEATING } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './game/chase.js';
+// ★★ v58 — 열이 두 칸이 됐다 (선체 온도 / 열 저장고). docs/space/REAL.md §4-A
+import { SINK, SINK_WORD, coolEfficiency } from './game/heat-table.js';
+import { stepHeat, sinkFull, sinkAt, hideLeft } from './game/heat.js';
 import { LEG, forkOf } from './game/route-table.js';
 /** 자국은 열에 비례한다. 윈치의 자국 보탬을 열 단위로 환산하려고 쓴다 */
 const SIGN_PER_HEAT = SIGN.perHeat;
@@ -136,7 +139,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 57;
+export const VERSION = 58;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -237,6 +240,10 @@ const me = {
   yaw: 0, pitch: 0,       // yaw 0 = -z 방향 = 창 쪽
 };
 let heat = HEAT.start;
+// ★★ **열 저장고** (v58). 배는 열을 버릴 수는 있어도 없앨 수는 없다 —
+//   냉각 회로는 선체에서 여기로 **옮기고**, 라디에이터를 열어야 **나간다**.
+//   가득 차면 냉각이 안 먹고 선체가 오른다. 이게 「얼마나 숨을 수 있나」다
+let sink = SINK.start;
 let turn = 0;             // 밸브를 얼마나 돌렸나 (0~1)
 /** ★ 냉각 밸브가 **열려 있나.** 잠글 때까지 열린 채다 (VALVE.latching) */
 let coolOpen = false;
@@ -477,7 +484,7 @@ function fireGun() {
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
   route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars,
-  ship: { heat, power, clock, seed, coolOpen },
+  ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
 /** 구간이 끝날 때 저장한다. **초마다 저장하면 되돌리기가 된다** */
@@ -505,6 +512,7 @@ function loadOnce() {
   // ★ `let` 로 들고 있는 것들은 손으로 되돌린다 — 객체가 아니라 값이라
   //   `apply` 가 못 건드린다. 여기를 빠뜨리면 「열만 0 으로 시작」이 된다
   heat = box.ship.heat ?? heat;
+  sink = box.ship.sink ?? SINK.start;
   clock = box.ship.clock ?? clock;
   Object.assign(power, box.ship.power ?? {});
   coolOpen = box.ship.coolOpen ?? false;
@@ -709,6 +717,8 @@ function tutorState() {
     walked: taught.walked, turned: taught.turned,
     atPort: route.phase === RPHASE.PORT, forkPicked: route.leg + (route.fork ? 1 : 0),
     heat, thrust: power.thrust, flips: taught.flips, cooled: taught.cooled,
+    // ★ v58 — 밸브 가르침이 이제 **저장고**를 보고 뜬다 (tutor-table.js valve)
+    sink: sinkAt({ sink }),
     faultsOpen: faults.open.length, faultsFixed: taught.fixed,
     hazardSeen: taught.hazardSeen, dodged: hazard.dodged,
     // ★ **조종간을 실제로 잡고 민 시간.** 「비켰나」를 dodged 로 보면
@@ -1264,7 +1274,9 @@ function interactStep(dt) {
       //   무엇이 막았는지 글자로 말해 준다 — 규칙을 알아맞히게 하지 않는다.
       //   소리도 **딸깍이 아닌 다른 소리**를 낸다. 같은 소리를 내면
       //   「눌렸는데 안 먹었다」가 되어 고장으로 읽힌다
-      banner = `전력이 모자랍니다 — 셋 중 ${POWER_MAX}개만`;
+      // ★ v58 이후로는 여기 안 온다 (POWER_MAX 가 3 이라 늘 켜진다).
+      //   지우지 않는 이유: 정전(E)처럼 회로가 죽는 상황이 앞으로 또 생긴다
+      banner = '전력이 모자랍니다';
       bannerT = 1.6;
       audio?.event('deny');
     }
@@ -1524,9 +1536,25 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   접어야 한다. 이게 없으면 밸브가 잠금식(v43)이라 오른 열이 저절로
   //   빠지고, 그러면 이륙에 값이 하나도 안 붙는다
   const cooled = landNoCool(land) ? { ...power, cool: false } : power;
-  heat += (heatRate(cooled, valveOpen) + bad.heat
-    + (valveOpen && cooled.cool ? bad.coolValve : 0)) * dt;
-  heat = Math.max(0, Math.min(HEAT.max, heat));
+  // ★★ **v58 — 한 줄이던 것이 두 칸이 됐다** (game/heat.js · REAL.md §4-A).
+  //   예전에는 `heatRate` 한 번으로 끝났고, 그 함수가 「냉각을 켜면 열이
+  //   없어진다」를 말하고 있었다. 진공에서는 그럴 수 없다 —
+  //   냉각 회로는 **옮기고**, 라디에이터(밸브)에서만 **나간다.**
+  const st = { hull: heat, sink };
+  stepHeat(st, dt, {
+    thrust: cooled.thrust,
+    cool: cooled.cool,
+    valveOpen,
+    // 고장이 얹는 열. 「원인 모를 열」과 「오염된 냉매」가 여기로 온다
+    // ★ 정전이면 **잔열**이 얹힌다 — 냉각 펌프가 멎어서 반응로의 남은
+    //   열이 갈 데가 없다 (chase-table.js HEATING.blackout).
+    //   이게 없으면 정전이 아프지 않은 것이 된다
+    extra: bad.heat + (valveOpen && cooled.cool ? bad.coolValve : 0)
+      + (isDark(dark) ? HEATING.blackout : 0),
+    noCool: landNoCool(land),
+  });
+  heat = st.hull;
+  sink = st.sink;
 
   // ★★ **거점은 안전하다** (PLAN §4-2). 여기 위 158행에 그렇게 적어 놓고
   //   **정작 추격은 안 막고 있었다.** 그래서 켜자마자 거점에 서 있기만 해도
@@ -1680,6 +1708,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
   ship.cock.update({
     heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
+    // ★ 열 저장고 (v58) — 「지금 뜨거운가」 옆에 「쌓인 총열」을 나란히 놓는다.
+    //   따로 두면 둘의 관계가 안 읽히고, 관계가 안 읽히면 이 계통은
+    //   말이 되는 대신 **어려운** 것이 된다
+    sink: sinkAt({ sink }), sinkWord: SINK_WORD(sink), sinkFull: sinkFull({ sink }),
+    hide: hideLeft({ sink }, { thrust: power.thrust, cool: power.cool }),
     region: ship.outside.region, power, chase,
     // ★ 자동 항법 등 — 초록이면 자동, 주황이면 수동. 조종석에 들어서는
     //   순간 지금 어느 쪽인지가 보여야 한다
@@ -1702,6 +1735,13 @@ function systemsStep(dt, valveOpen, regionMult) {
 window.SPACE = {
   get version() { return VERSION; },
   get heat() { return heat; },
+  /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
+  get sink() {
+    return { v: +sink.toFixed(1), at: +sinkAt({ sink }).toFixed(3),
+      full: sinkFull({ sink }), word: SINK_WORD(sink),
+      hide: +hideLeft({ sink }, { thrust: power.thrust, cool: power.cool }).toFixed(0) };
+  },
+  setSink(v) { sink = Math.max(0, Math.min(SINK.max, v)); return sink; },
   get turn() { return turn; },
   get coolFor() { return coolOpen ? 999 : 0; },
   /** 냉각 밸브가 열려 있나 — 검사와 가르침이 읽는다 */

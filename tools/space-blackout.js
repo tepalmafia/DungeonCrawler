@@ -19,6 +19,7 @@ import {
   makeDark, killPower, stepDark, isDark, canReset, resetAt, settled, summary,
 } from '../web/space/js/game/blackout.js';
 import { heatRate } from '../web/space/js/game/chase.js';
+import { HEATING } from '../web/space/js/game/chase-table.js';
 import { HEAT } from '../web/space/js/game/systems-table.js';
 import { BEAT, SCENES } from '../web/space/js/game/scene-table.js';
 import { whyNotRun, WHY as WHY_RUN } from '../web/space/js/game/move-table.js';
@@ -31,16 +32,22 @@ console.log('\nE 정전 — 어둠이 벌인가');
 
 console.log('\n[1] ★★ **시계가 있나** — 오래 끌면 아픈가');
 {
+  // ★★ **v58 — 정전의 시계는 「다 꺼짐」이 아니라 「잔열」이다.**
+  //   `HEATING.idle` 을 0.5 에서 0.06 으로 옳게 고치자 정전이 아프지
+  //   않은 것이 됐고, 이 검사가 그 자리에서 빨개졌다. 진짜 답은 물리에
+  //   있었다 — **냉각 펌프가 멎어서 반응로 잔열이 선체로 온다.**
+  //   숫자는 예전과 같은 0.5/초인데 **이유가 생겼다**
   const rows = [
-    ['추진+냉각', { thrust: true, cool: true }],
-    ['추진만', { thrust: true, cool: false }],
-    ['다 꺼짐(정전)', { thrust: false, cool: false }],
+    ['추진+냉각', { thrust: true, cool: true }, 0],
+    ['추진만', { thrust: true, cool: false }, 0],
+    ['다 꺼짐(순항)', { thrust: false, cool: false }, 0],
+    ['정전(잔열)', { thrust: false, cool: false }, HEATING.blackout],
   ];
   let outRate = 0;
-  for (const [n, p] of rows) {
-    const r = heatRate(p, false);
+  for (const [n, p, extra] of rows) {
+    const r = heatRate(p, false) + extra;
     const to100 = r > 0 ? (HEAT.max - HEAT.start) / r : Infinity;
-    if (n.startsWith('다 꺼짐')) outRate = r;
+    if (n.startsWith('정전')) outRate = r;
     console.log(`   ${n.padEnd(14)} ${(r >= 0 ? '+' : '') + r.toFixed(2)}/초 → 100까지 ${
       Number.isFinite(to100) ? to100.toFixed(0) + '초' : '안 오른다'}`);
   }
@@ -48,8 +55,10 @@ console.log('\n[1] ★★ **시계가 있나** — 오래 끌면 아픈가');
   ok(outRate > 0, '정전이어도 열은 **오른다** — 0 이면 시계가 없고, 시계가 없으면 서두를 이유가 없다');
   ok(to100 >= BEAT.act[0] * 0.8 && to100 <= BEAT.act[1] * 1.2,
     `100까지 ${to100.toFixed(0)}초 — 대응 박자(${BEAT.act[0]}~${BEAT.act[1]}초)와 겹친다. **새 숫자를 안 만들었다**`);
-  ok(outRate < heatRate({ thrust: true, cool: false }, false) / 5,
+  ok(outRate < heatRate({ thrust: true, cool: false }, false) / 2,
     '그런데 추진도 꺼지므로 **급하지는 않다** — 급하면 어둠 속을 뛰게 되고, 뛸 수가 없다');
+  ok(HEATING.blackout > HEATING.idle * 3,
+    `★ 잔열(${HEATING.blackout})이 순항 열(${HEATING.idle})보다 훨씬 크다 — **펌프가 멎은 것**이 벌이다`);
 }
 
 console.log('\n[2] ★★ **어둠이 벌인가** — 못 뛰는 것이 실제로 시간을 먹나');

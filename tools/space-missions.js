@@ -13,7 +13,17 @@ import { MISSIONS, TIER, buildable, wired, branchWeights } from '../web/space/js
 const bad = [];
 for (const m of MISSIONS) {
   if (!m.branches?.length) bad.push(`${m.key}: 갈래가 없다`);
+  // ★★ **위쪽만 보고 있었다** (2026-08-07 · `space-real.js` 가 잡았다).
+  //   규칙은 「2~4」라고 파일 머리에 적어 놓고 검사는 `> 4` 만 봤다.
+  //   그래서 **갈래가 하나뿐인 항목 셋이 몇 달째 통과**하고 있었다 —
+  //   갈래가 하나면 고를 것이 없고, 고를 것이 없으면 그건 갈래가 아니라
+  //   그냥 결과다. 도구가 나쁜 설계를 지킨 다섯 번째다.
+  //   `sceneOnly` 만 예외다 — 장면이 부르는 것은 **정해진 일**이라
+  //   갈래가 하나인 것이 맞다 (자동 조종이 죽으면 자이로를 간다, 끝)
   if (m.branches.length > 4) bad.push(`${m.key}: 갈래가 ${m.branches.length}개 — FTL 규칙은 2~4`);
+  if (m.branches.length < 2 && !m.sceneOnly) {
+    bad.push(`${m.key}: 갈래가 ${m.branches.length}개 — 하나뿐이면 고를 것이 없다`);
+  }
   if (!m.where?.length) bad.push(`${m.key}: 쓰는 방이 없다`);
   if (m.where.length === 1 && !['any'].includes(m.where[0]) && m.tier === TIER.NOW) {
     bad.push(`${m.key}: 방 하나에서 끝난다 (지금 단계 항목인데)`);

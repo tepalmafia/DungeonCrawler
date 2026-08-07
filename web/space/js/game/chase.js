@@ -11,6 +11,7 @@
 //  영영 못 재고, 못 재면 감으로 맞추게 된다.
 // ══════════════════════════════════════════════════════════════════════════
 import { SIGN, CHASE, CAUGHT, HEATING, POWER_MAX } from './chase-table.js';
+import { hullRate } from './heat.js';
 
 /** 평온 · 추격 · 뿌리침 직후 · 잡힘 */
 export const PHASE = { CALM: 'calm', CHASE: 'chase', SHAKEN: 'shaken', CAUGHT: 'caught' };
@@ -44,10 +45,15 @@ export function signatureOf(power, heat, regionMult = 1, valveOpen = false) {
 
 /** 열이 이번 프레임에 얼마나 움직이나 */
 export function heatRate(power, valveOpen) {
-  let r = HEATING.idle;
-  if (power.thrust) r += HEATING.thrust;
-  if (power.cool) r += valveOpen ? HEATING.coolValve : HEATING.coolOnly;
-  return r;
+  // ★★ **v58 — 여기가 통째로 옮겨갔다** (`game/heat.js`).
+  //   예전에는 이 세 줄이 「냉각을 켜면 열이 없어진다」를 말하고 있었는데,
+  //   진공에서는 그럴 수 없다 — 냉각 회로는 열을 **옮길 뿐**이고,
+  //   진짜로 버리는 것은 라디에이터다.
+  //
+  //   이 함수는 이제 **선체 온도의 변화율**만 말한다. 이름과 인자를 그대로
+  //   둔 이유는 옛 검사 다섯이 두 인자로 부르고 있어서다 — 부르는 쪽을
+  //   다 고치는 것보다 **뜻을 한 곳에서 바로잡는 편**이 안전하다
+  return hullRate(null, { thrust: power.thrust, cool: power.cool, valveOpen });
 }
 
 /** 켤 수 있는 개수를 넘겼나 — 넘기면 마지막에 켠 것이 안 켜진다 */

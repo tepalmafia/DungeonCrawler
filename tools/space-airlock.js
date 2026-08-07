@@ -21,6 +21,7 @@ import {
 import { WINCH } from '../web/space/js/game/supply-table.js';
 import { SIGN } from '../web/space/js/game/chase-table.js';
 import { HEATING } from '../web/space/js/game/chase-table.js';
+import { SINK } from '../web/space/js/game/heat-table.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -101,7 +102,7 @@ console.log('\n[6] ★ **열 이유가 있나** — 벌만 있으면 아무도 �
   console.log(`   자국 +${signOf(l)} · 열 -${heatOut(l)}/초`);
   ok(heatOut(l) > 0, `열이 빠진다 (-${heatOut(l)}/초) — 문을 여는 데 좋은 점이 하나는 있어야 한다`);
   // ★ 다만 **밸브보다 약해야** 한다. 문으로 식히는 게 밸브보다 나으면 밸브가 뜻을 잃는다
-  const valve = Math.abs(HEATING.coolValve + HEATING.idle);
+  const valve = SINK.dumpRate;   // ★ v58 — 식히는 것은 라디에이터다 (heat-table.js)
   ok(heatOut(l) < valve,
     `그래도 밸브(${valve.toFixed(1)}/초)보다 약하다 — 안 그러면 냉각 밸브가 뜻을 잃는다`);
   // ★ 그리고 **자국이 는다.** 윈치 소리에 **더해진다**

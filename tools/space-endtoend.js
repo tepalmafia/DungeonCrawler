@@ -327,6 +327,23 @@ console.log('\n[6] ★★ **영구 손상** — 남고 · 보이고 · 우회할
 //     끊겨 게임이 통째로 안 떴고, 한 번은 별이 **천장과 계기 위에** 찍혔다.
 //     둘 다 다른 검사는 전부 초록이었다.
 // ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6a] ★★ **열 저장고** — 냉각은 옮기고, 라디에이터가 버린다 (v58)');
+{
+  // ★ 손이 안 닿는 계통이라 더 넣어야 한다 — 눈에만 닿는 것은 조용히 망가진다
+  await S(() => { SPACE.setHeat(40); SPACE.setSink(60); SPACE.setPower('cool', true); });
+  const a = await S(() => ({ heat: SPACE.heat, sink: SPACE.sink }));
+  ok(typeof a.sink?.v === 'number', `① 저장고를 읽을 수 있다 (${a.sink?.v})`);
+  ok(a.sink.word === '비었다', `② 「${a.sink.word}」 — 숫자가 아니라 말로 나온다`);
+  await S(() => SPACE.setSink(830));
+  const b = await S(() => SPACE.sink);
+  ok(b.full === true, `③ 가득 차면 그렇게 말한다 — 「${b.word}」`);
+  ok(b.hide === 0, '④ 「몇 분 더 숨을 수 있나」가 0 이 된다 — 지금 가야 한다');
+  await S(() => { SPACE.setSink(60); SPACE.setPower('cool', true); SPACE.setPower('sensor', true); });
+  const p3 = await S(() => SPACE.power);
+  ok(p3.cool && p3.sensor,
+    '⑤ ★★ **냉각과 능동 탐지가 같이 켜진다** — 사장님이 짚으신 것 (전력 제한을 없앴다)');
+}
+
 console.log('\n[6b] ★ **창밖이 살아 있나** — 별은 박혀 있고 먼지가 흐른다');
 {
   await S(() => SPACE.setRegion('empty', true));

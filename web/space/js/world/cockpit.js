@@ -154,26 +154,81 @@ function label(ctx, w, h, text) {
   ctx.beginPath(); ctx.moveTo(h * 0.06, h * 0.2); ctx.lineTo(w - h * 0.06, h * 0.2); ctx.stroke();
 }
 
-/** 열 — 1단계에서 실제로 도는 유일한 수치 */
+/**
+ * ★★ 열 — **두 줄이다** (v58 · docs/space/REAL.md §4-A).
+ *
+ *   위: **선체 온도** — 지금 뜨거운가. 자국이 여기서 난다
+ *   아래: **열 저장고** — 배 안에 쌓인 총열. 안 버리면 안 준다
+ *
+ * ★ 왜 한 화면에 나란히 두나. **둘의 관계가 이 계통의 전부**이기 때문이다 —
+ *   「냉각을 켜면 위가 내려가고 아래가 오른다」가 눈에 한 번에 들어와야
+ *   「옮기는 것이지 없애는 것이 아니다」가 설명 없이 읽힌다. 따로 두면
+ *   말이 되는 대신 **어려운** 것이 되고, 그러면 칸 두 개짜리 옛 규칙이
+ *   차라리 나았다 (그게 이 판에서 제일 위험한 자리다).
+ *
+ * ★ 그리고 **「얼마나 더 숨을 수 있나」를 초로 적는다.** 숫자가 아니라
+ *   시간이라야 판단이 된다 — 「저장고 62%」로는 아무것도 못 정한다
+ */
 function drawHeat(ctx, w, h, s) {
   bg(ctx, w, h);
-  label(ctx, w, h, '열 · HEAT');
+  label(ctx, w, h, '열');
+  const pad = h * 0.07, bw = w - pad * 2, bh = h * 0.13;
+
+  // ── 위: 선체 온도 ─────────────────────────────────────
   const t = Math.max(0, Math.min(1, s.heat / 100));
   const hot = t > 0.62;
-  const pad = h * 0.07, bw = w - pad * 2, by = h * 0.28, bh = h * 0.16;
+  const by = h * 0.26;
   ctx.fillStyle = hot ? '#ff6a4a' : '#5fe0a8';
   ctx.fillRect(pad, by, bw * t, bh);
   ctx.strokeStyle = DIM;
   ctx.strokeRect(pad, by, bw, bh);
+  // 경고선 — 이 위로는 벽이 달아오른다
   ctx.strokeStyle = 'rgba(255,140,90,.85)';
   ctx.beginPath();
-  ctx.moveTo(pad + bw * 0.62, by - h * 0.04); ctx.lineTo(pad + bw * 0.62, by + bh + h * 0.04); ctx.stroke();
-  ctx.fillStyle = hot ? '#ffb0a0' : FG;
-  ctx.font = `700 ${Math.round(h * 0.3)}px ui-monospace, monospace`;
-  ctx.fillText(String(Math.round(s.heat)), pad, h * 0.86);
-  ctx.font = `600 ${Math.round(h * 0.1)}px system-ui, sans-serif`;
+  ctx.moveTo(pad + bw * 0.62, by - h * 0.03); ctx.lineTo(pad + bw * 0.62, by + bh + h * 0.03); ctx.stroke();
+  ctx.font = `600 ${Math.round(h * 0.095)}px system-ui, sans-serif`;
   ctx.fillStyle = hot ? '#ffb0a0' : DIM;
-  ctx.fillText(s.cooling ? '냉각 열림' : '냉각 막힘', w * 0.45, h * 0.86);
+  ctx.fillText('선체', pad, by - h * 0.03);
+  ctx.fillStyle = hot ? '#ffb0a0' : FG;
+  ctx.font = `700 ${Math.round(h * 0.16)}px ui-monospace, monospace`;
+  ctx.textAlign = 'right';
+  ctx.fillText(String(Math.round(s.heat)), w - pad, by - h * 0.02);
+  ctx.textAlign = 'left';
+
+  // ── 아래: 열 저장고 ───────────────────────────────────
+  const k = Math.max(0, Math.min(1, s.sink ?? 0));
+  const full = s.sinkFull;
+  const ky = h * 0.56;
+  ctx.fillStyle = full ? '#ff6a4a' : k > 0.7 ? '#ffd27a' : '#7fa8d8';
+  ctx.fillRect(pad, ky, bw * k, bh);
+  ctx.strokeStyle = DIM;
+  ctx.strokeRect(pad, ky, bw, bh);
+  ctx.font = `600 ${Math.round(h * 0.095)}px system-ui, sans-serif`;
+  ctx.fillStyle = full ? '#ffb0a0' : DIM;
+  ctx.fillText('저장고', pad, ky - h * 0.03);
+  ctx.textAlign = 'right';
+  ctx.fillText(s.sinkWord ?? '', w - pad, ky - h * 0.03);
+  ctx.textAlign = 'left';
+
+  // ── 맨 아래 한 줄 — **판단에 쓰는 것은 이 줄이다** ────
+  // ★ 글자가 **화면 밖으로 넘쳤다** (찍어 보고 알았다). 이 화면은 폭이
+  //   0.94 뿐이라 열여덟 자쯤이 한계다 — 짧게 쓴다
+  ctx.font = `600 ${Math.round(h * 0.115)}px system-ui, sans-serif`;
+  if (full) {
+    ctx.fillStyle = '#ff8a6a';
+    ctx.fillText('저장고가 찼다 — 버려야 한다', pad, h * 0.9);
+  } else if (s.cooling) {
+    ctx.fillStyle = '#ffb060';
+    ctx.fillText('버리는 중 — 눈에 띈다', pad, h * 0.9);
+  } else {
+    ctx.fillStyle = DIM;
+    // ★ 「40분쯤」이 떴다 — 밟지 않으면 저장고가 거의 안 차기 때문인데,
+    //   2시간짜리에서 40분은 「신경 안 써도 된다」와 같은 말이다.
+    //   15분을 넘으면 **숫자를 안 센다** — 셀 필요가 없다는 뜻이니까
+    const m = Math.max(0, Math.round((s.hide ?? 0) / 60));
+    ctx.fillText(m > 15 ? '한참 숨을 수 있다' : m >= 1 ? `이대로 ${m}분 더 숨는다` : '곧 버려야 한다',
+      pad, h * 0.9);
+  }
 }
 
 /**
@@ -939,9 +994,12 @@ export function buildOutside(scene, z) {
     //   셰이더가 자르면 아예 안 그려진다. 그리고 차례가 밝기순이라
     //   **어두운 별부터 사라진다** — 성운의 먼지가 하는 일이 정확히 그것이다
     stars.setDensity(cur.stars);
-    // 은하수도 같이 흐려진다. 성간 공백(stars 0.16)에서 띠까지 남아 있으면
-    // 「아무것도 없는 곳」이 안 된다 — 은하수는 **뭔가 있는 것**이다
-    band.setFade(starFade * Math.min(1, cur.stars * 1.1));
+    // ★★ **띠는 별과 따로 간다** (v58 · REAL.md §2-H).
+    //   전에는 `cur.stars` 하나로 둘을 같이 흐렸는데, 그러면 성간 공백에서
+    //   **별까지 사라졌다** — 고증으로 틀렸다. 원반을 벗어나면 띠만 없어지고
+    //   별은 먼지가 없어 오히려 또렷하다. 구역이 `band` 를 따로 적으면
+    //   그 값을 쓰고, 안 적으면 예전처럼 `stars` 를 따라간다
+    band.setFade(starFade * Math.min(1, (want.band ?? cur.stars) * 1.1));
     band.setTint(cur.tint);
     dust.setFade(starFade);
     dust.flow(d);

@@ -132,7 +132,14 @@ console.log('\n[4] 안 고치면 어떻게 되나 — **벌이 없으면 장식�
   };
   const noValve = climb(false);
   const withValve = climb(true);
-  ok(noValve.sec <= 20, `밸브 없이는 ${noValve.sec.toFixed(0)}초 만에 열이 꽉 찬다`);
+  // ★★ **v58 — 벌이 옮겨갔다.** 예전에는 밸브를 안 열면 **선체**가 20초
+  //   만에 꽉 찼는데, 그건 「추진만 켜면 13초에 과열」과 같은 자릿수 오류의
+  //   뒷면이었다. 지금은 냉각 회로가 선체를 잡아 주므로 선체는 안 찬다 —
+  //   대신 **열 저장고**가 차고, 차면 냉각이 죽어 그때 선체가 오른다.
+  //   즉 벌이 **즉사에서 시한폭탄으로** 바뀌었다 (tools/space-heat.js 가 잰다)
+  ok(noValve.sec >= 60,
+    `밸브 없이도 선체는 ${Number.isFinite(noValve.sec) ? noValve.sec.toFixed(0) + '초' : '안'} 찬다 —`
+    + ' **즉사가 아니다.** 대신 열 저장고가 차고, 차면 그때부터 선체가 오른다 (space-heat.js [3])');
   // ★ 밸브를 열어 둬도 **결국 오른다.** 다만 시간이 있다 —
   //   고치는 데 50초쯤 걸리므로(위 [2]), 그보다는 넉넉해야 고장이 사형이 안 된다
   ok(withValve.sec >= 60 && withValve.sec <= 180,
