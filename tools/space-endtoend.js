@@ -60,6 +60,22 @@ const press = async (sec = 2.5) => { await down(); await p.waitForTimeout(sec * 
  *   놓친다** — 검사가 「자동 항법이 잡힌다 ✔ → 누르니 안 켜진다 ✘」로
  *   두 번 빨개졌는데, 게임이 아니라 여기가 급했던 것이다
  */
+/**
+ * ★★ **조금씩 둘러보며 찾는다** (v66).
+ *   `aimAt` 은 **딱 한 각도**만 겨눈다. 사람은 손잡이를 찾을 때 고개를
+ *   조금씩 움직이는데, 검사만 한 점을 노려보고 「없다」고 한다 —
+ *   그러면 「손이 안 닿는다」와 「검사가 1도 빗나갔다」가 **같은 로그**로 나온다.
+ *   좁은 범위를 훑되 **범위를 좁게** 둔다. 넓히면 「어디선가는 잡힌다」가
+ *   되어 검사가 아무것도 안 지키게 된다
+ */
+const aimAround = async (x, z, yaw, pitch, want) => {
+  for (const dy of [0, 0.12, -0.12, 0.24, -0.24]) {
+    for (const dp of [0, 0.12, -0.12, 0.24, -0.24]) {
+      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 3)) return true;
+    }
+  }
+  return false;
+};
 const settle = async () => {
   // ★★★ **짐벌이 바로 설 때까지** 기다린다 (v66 · 여기서 세 번 빨개졌다).
   //   조종간을 세게 밀면 거주 구획이 최대 **12.6도** 기울고(`GIMBAL.maxTilt`),
@@ -109,7 +125,7 @@ console.log('\n[0] 배가 출발하나 — **★ v66: 조종석에서 고른다*
   //   **이 검사도 같이 옮긴다.** 안 옮기면 검사가 옛 설계를 지키게 된다
   ok((await S(() => SPACE.route)).phase === 'port', '거점에서 시작한다');
   await sit();
-  ok(await aimAt(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']),
+  ok(await aimAround(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']),
     `조종석에서 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
   await press(0.6);
   ok(await until(() => SPACE.route.phase === 'leg', 20, '출발'),
@@ -199,7 +215,7 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //   x 2.80 에 서서 `-π/2` 로 봤으니 **벽을 보고 있었다.** 걸이는 처음부터
   //   잘 있었고 **검사가 딴 데를 보고 있었을 뿐**이다 — 「안 잡힌다」와
   //   「엉뚱한 데를 본다」는 로그가 똑같이 나온다
-  ok(await aimAt(RACK.x + 0.80, RACK.z + 0.10, Math.PI / 2, 0, 'suit'),
+  ok(await aimAround(RACK.x + 0.80, RACK.z + 0.10, Math.PI / 2, 0, 'suit'),
     `⓪ 우주복 걸이가 잡힌다 (${await S(() => SPACE.aim)})`);
   await down();
   const wearing = await until(() => SPACE.suit.wearing > 0.3, 60, '우주복을 입기 시작');
@@ -280,7 +296,7 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
 
   // 자동 항법 스위치로 되돌린다
   await settle();
-  ok(await aimAt(0, -7.75, -0.9, -0.1, 'autopilot'),
+  ok(await aimAround(0, -7.75, -0.9, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
   await press(2.5);
   ok((await S(() => SPACE.helm)).auto, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
@@ -325,7 +341,7 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
 
   // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
   await settle();
-  ok(await aimAt(0, -7.75, 0.9, -0.1, 'throttle'),
+  ok(await aimAround(0, -7.75, 0.9, -0.1, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
   await press(2.5);
   ok(/추력 레버/.test(await said()), `④ 눌렀더니 「${await said()}」`);
@@ -384,7 +400,7 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
 
   // ★ v66 — 「내린다 / 지나친다」도 **조종석 계기 화면**에 뜬다
   await sit();
-  ok(await aimAt(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']), '② 조종석에서 내릴지 고른다');
+  ok(await aimAround(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']), '② 조종석에서 내릴지 고른다');
   await press(0.6);
   ok(await until(() => SPACE.land.step === 'approach', 30, '내려가기 시작'),
     `③ 「내린다」를 누르니 내려간다 — 「${await said()}」`);
