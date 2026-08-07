@@ -919,7 +919,19 @@ export function buildOutside(scene, z) {
   function update(dt, speed, lane = 0, inc = null, camera = null) {
     // 배가 기울면 창밖이 반대로 밀린다 — 그게 「내가 움직였다」로 읽힌다
     out.position.x += (-lane * 3.2 - out.position.x) * Math.min(1, dt * 3);
-    out.rotation.z += (lane * 0.06 - out.rotation.z) * Math.min(1, dt * 3);
+
+    // ══ ★★ **세 축** (v60) — 배가 돌면 **창밖이 돈다** ══════════════
+    //  사장님: 「비행이가 360도 회전도 가능하게, 위 아래로 조정이
+    //           가능하게」 → 「실제 우주선 개념으로 가자」
+    //
+    //  ★ **배를 굴리지 않고 밖을 굴린다.** 배(선체·방·물건)를 굴리면
+    //    걸어다니는 사람과 충돌이 통째로 어긋난다 — 정비공이 벽을 뚫는다.
+    //    그리고 이게 곧 **짐벌**이다: 거주 구획은 제 수평을 지키고
+    //    선체만 도는 것 (game/flight-table.js GIMBAL).
+    //  ★ `drift`(장면 C)의 굴림과 **더한다.** 둘 중 하나가 덮어쓰면
+    //    자세 제어가 죽은 채로 조종간을 잡을 때 한쪽이 사라진다
+    out.rotation.x += (att.pitch - out.rotation.x) * Math.min(1, dt * 3);
+    out.rotation.z = driftRoll + att.roll + lane * 0.06;
 
     // ★★ **천구를 눈에 붙인다.** 별은 무한히 멀리 있으므로 배 안에서
     //   어디로 걸어가든 자리가 안 바뀌어야 한다. 예전엔 천구가 조종석
@@ -1069,10 +1081,18 @@ export function buildOutside(scene, z) {
    *     걸어다니는 사람과 충돌이 통째로 어긋난다 — 정비공이 벽을 뚫는다.
    *     보이는 것만 굴리면 「배가 돈다」는 읽히고 손은 멀쩡하다.
    */
-  const roll = (rad) => { out.rotation.z = rad; };
+  let driftRoll = 0;
+  const roll = (rad) => { driftRoll = rad; };
+
+  /**
+   * ★★ **선체 자세** (v60). 세 축을 밖에서 받는다 — 값은 `game/flight.js`
+   *   가 굴리고, 여기는 **보여 주기만** 한다 (순수/그림 가르기).
+   */
+  const att = { pitch: 0, yaw: 0, roll: 0 };
+  const setAttitude = (a) => { att.pitch = a.pitch ?? 0; att.roll = a.roll ?? 0; };
 
   return {
-    update, setRegion, roll, setLand,
+    update, setRegion, roll, setLand, setAttitude,
     get region() { return regionKey; },
     /** 검사가 「화면이 정말 바뀌었나」를 묻는다 — 고도·발광·땅 */
     get view() {
