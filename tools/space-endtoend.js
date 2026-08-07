@@ -69,14 +69,20 @@ console.log('\n처음부터 끝까지 되나 — 사장님이 시키신 것 전�
 console.log(`  판본 v${await S(() => SPACE.version)}`);
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n[0] 배가 출발하나 — **해도대에서 손으로 고른다**');
+console.log('\n[0] 배가 출발하나 — **★ v66: 조종석에서 고른다**');
 {
+  // ★★ **v65 까지는 관측실 해도대에서 골랐다.** 사장님 「항로도 조정석에서
+  //   해야하는거 아냐?? 왜 다른곳에 있어?」 — 맞는 말이라 조종석으로 옮겼고,
+  //   **이 검사도 같이 옮긴다.** 안 옮기면 검사가 옛 설계를 지키게 된다
   ok((await S(() => SPACE.route)).phase === 'port', '거점에서 시작한다');
-  ok(await aimAt(-2.4, 0.42, Math.PI / 2, -0.30, ['chart0', 'chart1']),
-    `조준선이 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
+  await S(() => SPACE.putHelmSit(true));
+  await until(() => SPACE.helm2.k > 0.97, 25, '좌석에 앉는 것');
+  ok(await aimAt(0, -7.75, 0.6, -0.3, ['chart0', 'chart1']),
+    `조종석에서 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
   await press(0.6);
   ok(await until(() => SPACE.route.phase === 'leg', 20, '출발'),
     `눌렀더니 배가 간다 — 「${await said()}」`);
+  await S(() => SPACE.putHelmSit(false));
 }
 
 // ══════════════════════════════════════════════════════════════════════════
