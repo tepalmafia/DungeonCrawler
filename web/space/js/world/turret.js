@@ -37,9 +37,13 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { bayPlate } from './kit.js';
+import { SEAT as SEAT_AT } from '../game/gun-table.js';   // ★ 이 파일엔 이미 SEAT(재질)가 있다
 
 /** 조준석이 서는 자리 — 조종석 뒤쪽 오른편, 들어서면 바로 보인다 */
-export const LADDER = { x: 2.35, z: -3.9 };
+// ★ v59 — 자리는 **표에 있다** (game/gun-table.js SEAT). 두 곳에 적으면
+//   갈라진다 — 실제로 「앉으면 옮겨진다」를 만들 때 여기와 표가 어긋나면
+//   사람이 좌석 옆에 앉는다
+export const LADDER = { x: SEAT_AT.at.x, z: SEAT_AT.at.z };
 /** 앉으면 눈높이가 이만큼 **내려간다** (m). 올라가는 것이 아니다 */
 export const TURRET_RISE = -0.42;
 
