@@ -729,7 +729,6 @@ function showEnd() {
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
-let emptyAimT = 0;
 /** ★ 세 축 (v60). `steerPush` 는 좌우 하나뿐이었다 — 우주는 삼차원이다 */
 const fly3 = makeFlight();
 const flyPush = { pitch: 0, yaw: 0, roll: 0 };
@@ -1061,13 +1060,18 @@ function interactStep(dt) {
   // ★★ **지금 조종석 손잡이가 잡혀 있나** (v66). 이름을 하나씩 적는 대신
   //   묶어 둔다 — 손잡이를 늘릴 때마다 이 줄을 고쳐야 하는 것이 맞다
   const cockGrip = onYoke || onAuto || onThr || plate >= 0;
-  // ★★★ **빈 데를 보고 있던 시간** — 일어나는 데 쓴다.
-  //   앉는 순간 몸이 좌석으로 미끄러지는 동안(`slide`) 조준선이 흔들려
-  //   **한 프레임쯤 아무것도 안 잡히는 때**가 생긴다. 그 프레임에 누르면
-  //   손잡이를 누른 것인데 일어나 버린다 — 검사가 「누르니 자동 항법이
-  //   켜진다 → 『일어납니다』」로 잡아 줬다.
-  //   조종간에 걸쇠를 단 것(v63)과 같은 처방이다: **손은 흔들려도 안 바뀐다**
-  emptyAimT = cockGrip || aimName ? 0 : emptyAimT + dt;
+  // ★★★ **일어나는 것은 「자리가 굳은 뒤 · 빈 데를 누를 때」다** (v66).
+  //
+  //   앉는 순간 몸이 좌석으로 **미끄러지는 동안**(`slide`) 조준선이 흔들려
+  //   한 프레임쯤 아무것도 안 잡히는 때가 생긴다. 그 프레임에 누르면
+  //   손잡이를 누른 것인데 일어나 버린다 — 검사가 「자동 항법 스위치가
+  //   잡힌다 ✔ → 누르니 『일어납니다』 ✘」로 정확히 잡아 줬다.
+  //
+  //   ★ **처음엔 「빈 데를 0.35초 넘게 보고 있어야」로 막았다가 물렀다.**
+  //     `dt` 가 0.05 로 잘려 있어 헤드리스에서는 그 0.35초가 **일곱 프레임**
+  //     이고, 그러면 「눌러도 안 일어난다」가 된다. 그리고 실제로도 그건
+  //     **엉뚱한 것을 재는 조건**이다 — 막아야 하는 것은 「짧게 봤나」가
+  //     아니라 **「자리가 아직 흔들리나」**다. 그걸 직접 묻는다.
 
   // ★ **잡은 순간에만** 손 쓰는 법을 한 번 봤다고 센다. 뜬 프레임마다
   //   세면 1초에 예순 번이라 즉시 그친다.
@@ -1532,7 +1536,7 @@ function interactStep(dt) {
     banner = '조종석에 앉습니다 — 조종간을 잡으면 창이 열립니다';
     bannerT = 1.8;
     audio?.event('click');
-  } else if (helmSat && gunPressed && !steering && !cockGrip && emptyAimT > 0.35) {
+  } else if (helmSat && gunPressed && !steering && !cockGrip && !aimName && helmSitK > 0.995) {
     // ★ 일어나는 것은 **아무것도 안 잡힌 데를 누를 때**다. 손잡이를 누르면
     //   그건 잡는 것이지 일어나는 것이 아니다 — 한 손잡이가 두 일을 하면 부딪힌다
     //
@@ -2073,6 +2077,7 @@ window.SPACE = {
   },
   /** 지금 조준선에 뭐가 걸리나 — 검사용 */
   get aim() { return aimName; },
+
   resetChase() { resetChase(chase); },
   /** 거리를 밀어 놓고 「뿌리침·잡힘」이 실제로 나는지 보려고 낸 구멍 */
   setDist(v) { chase.dist = v; },

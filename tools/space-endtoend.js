@@ -219,8 +219,11 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //   ★ 「300 보다 작나」로 물으면 안 된다 — 공기가 300초짜리라 헤드리스
   //     몇 초로는 소수점이 안 보이고, 여기서 잰 값이 반올림돼 300 으로 나온다.
   //     **줄었나**를 물어야 하므로 **진공에 서 있나**와 같이 본다
+  //   ★ **배기에 13초가 걸린다** (`airlock-table.js`). 헤드리스 시계는
+  //     실제의 1/20 이라 그동안 몇 분이 지나가므로 넉넉히 기다린다
+  const vac = await until(() => SPACE.suit.inVacuum, 90, '그 칸이 진공이 되기');
   const su = await S(() => SPACE.suit);
-  ok(su.inVacuum, `⑤b 그 칸이 진공이라고 배가 안다 (공기 ${su.air}초)`);
+  ok(vac, `⑤b 그 칸이 진공이라고 배가 안다 (공기 ${su.air}초)`);
   const su2 = await S(() => SPACE.suit);
   ok(su2.air <= su.air, `⑤c 우주복 공기가 안 는다 (${su.air} → ${su2.air}) — 새는 곳에서 차오르면 그건 진공이 아니다`);
 
