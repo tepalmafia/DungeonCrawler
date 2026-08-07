@@ -26,6 +26,8 @@ import * as THREE from 'three';
 import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 import { CIRCUITS, SIGN } from '../game/chase-table.js';
 import { STEP, LAND } from '../game/land-table.js';
+import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
+import { DUST } from '../game/sky-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
   color: 0x0a1622, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
@@ -632,96 +634,50 @@ export function buildCockpit(parent, room, H) {
 /**
  * 창밖 — **여기가 이 게임 화면의 절반이다.**
  *
- * 참고 사진에서 아름다운 부분은 전부 창밖이었다 (행성 · 성운 · 은하 · 다른 배).
- * 그런데 그건 **그림이라 내가 안 만든다.** 지금은 별과 민짜 구(球)로 자리만
- * 잡아 두고, 규격은 `core/asset-table.js` 의 `sky/*` 에 적어 뒀다.
- * 그림이 오면 이 함수는 통째로 걷힌다 — 다듬는 데 시간을 더 쓰지 않는다.
+ * ★★ **다시 지었다** (2026-08-07 · v57 · 사장님 「우주 배경을 실사화해줘.
+ *    인터넷에서 고증해서. 행성도 그렇고 지금은 하얀색이 너무 많이 날아오는데?」)
+ *
+ *    ★ 무엇이 틀려 있었나 — **두 가지가 겹쳐 있었다**
+ *      ① 별이 **흰 정사각형**이었다. three 의 기본 점은 지도를 안 주면
+ *         네모를 그린다. 900 개가 전부 같은 크기의 흰 네모라 별하늘이
+ *         아니라 눈보라였다
+ *      ② 별이 **흘렀다.** 이건 고증으로 틀렸다 — 제일 가까운 별도 4광년이라
+ *         어떤 배로도 별은 한 번도 안 움직인다. 흐르는 별은 영화에서 온
+ *         그림이지 우주에서 온 것이 아니다
+ *
+ *    ★ 그래서 고친 것은 **개수가 아니라 무엇이 흐르는가**다.
+ *      별은 **천구에 박아 두고**(`world/sky.js`), 흐르는 것은 **먼지**로
+ *      바꿨다. 「배가 움직인다」는 먼지 130 알이면 나고, 별 900 개는
+ *      그 일을 하고 있지도 않았다.
+ *
+ *    숫자와 고증한 근거는 전부 `game/sky-table.js` 한 곳이다.
+ *
+ * ★ 그림(sky/deep · sky/planet)이 오면 그것이 이 위에 얹힌다. 여기 있는 것은
+ *   **기하와 빛**이라 「좋아 보이는가」가 아니라 「맞나」로 판정된다 —
+ *   그래서 내가 만들어도 되는 것들이다 (CLAUDE.md 「그림은 내가 안 그린다」).
  */
 export function buildOutside(scene, z) {
   const out = new THREE.Group();
   scene.add(out);
 
-  // ── 먼 하늘 ─────────────────────────────────────────────
-  // 아주 멀어서 **거의 안 움직인다.** 이건 배경이고, 그림(sky/deep)이
-  // 오면 통째로 이걸로 바뀐다.
-  const FAR = 2200;
-  const fp = new Float32Array(FAR * 3);
-  const fc = new Float32Array(FAR * 3);
-  for (let i = 0; i < FAR; i++) {
-    const r = 200 + Math.random() * 90;
-    const th = Math.random() * Math.PI * 2;
-    const ph = Math.acos(2 * Math.random() - 1);
-    // ★ **배를 통째로 감싼다.** 전에는 `z - abs(...)` 라 별이 조종석
-    //   **앞쪽으로만** 뿌려졌다. 조종석에서는 멀쩡해 보였지만, 곁방 창은
-    //   옆으로 나 있어서 구멍을 뚫어도 **볼 것이 하나도 없었다.**
-    //   관측실이 「밖을 본다」가 목적인데 밖이 없었던 이유의 절반이다
-    //   (docs/space/REF.md).
-    fp[i * 3] = r * Math.sin(ph) * Math.cos(th);
-    fp[i * 3 + 1] = r * Math.cos(ph) * 0.6;
-    fp[i * 3 + 2] = z + r * Math.sin(ph) * Math.sin(th);
-    const w = 0.62 + Math.random() * 0.32;
-    fc[i * 3] = w; fc[i * 3 + 1] = w; fc[i * 3 + 2] = 1;
-  }
-  const fg = new THREE.BufferGeometry();
-  fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
-  fg.setAttribute('color', new THREE.BufferAttribute(fc, 3));
-  const farStars = new THREE.Points(fg, new THREE.PointsMaterial({ size: 0.85, sizeAttenuation: true, vertexColors: true }));
-  out.add(farStars);
-
-  // ── 가까이 흐르는 것 ────────────────────────────────────
-  //
-  // ★ 이게 없어서 **배가 서 있었다.** 사장님 지적이 정확했다 —
-  //   「목적지 없이 항해한다」가 전제인데 창밖이 정지 화면이면 그 전제가
-  //   통째로 무너진다. 별을 아무리 많이 뿌려도 **안 움직이면 벽지**다.
-  //
-  //   먼 것만 있으면 시차(parallax)가 안 생겨 움직여도 티가 안 난다.
-  //   그래서 **가까운 층을 따로 둔다.** 깊이를 넓게 흩어 놓으면 원근 때문에
-  //   가까운 것은 빠르게, 먼 것은 느리게 지나간다 — 시차는 공짜로 나온다.
-  const NEAR = 900;
-  const SPREAD = 90;          // 좌우·위아래로 흩어지는 폭
-  // ★ 되돌리는 지점이 **배 안쪽**이었다 (z + 6 = 조종석 한복판).
-  //   그래서 잔해 덩어리가 조종석 안으로 날아 들어와, 화면 절반을 덮는
-  //   흰 사각형으로 보였다 — 가까운 면 하나가 실내 조명을 받은 것이었다.
-  //   창 바로 앞에서 되돌린다. 어차피 그 뒤는 선체가 가려서 안 보인다.
-  const Z_NEAR = z - 0.5;     // 이보다 뒤로 가면 되돌린다
-  const Z_FAR = z - 190;      // 되돌아가는 자리
-  const np = new Float32Array(NEAR * 3);
-  const nc = new Float32Array(NEAR * 3);
-  const place = (i, zz) => {
-    // 창 정면에만 몰리지 않게 원판으로 흩는다
-    const a = Math.random() * Math.PI * 2;
-    const rad = Math.sqrt(Math.random()) * SPREAD;
-    np[i * 3] = Math.cos(a) * rad;
-    np[i * 3 + 1] = Math.sin(a) * rad * 0.7;
-    np[i * 3 + 2] = zz;
-    const w = 0.75 + Math.random() * 0.25;
-    nc[i * 3] = w; nc[i * 3 + 1] = w * 0.97; nc[i * 3 + 2] = 1;
-  };
-  for (let i = 0; i < NEAR; i++) place(i, Z_FAR + Math.random() * (Z_NEAR - Z_FAR));
-  const ng = new THREE.BufferGeometry();
-  ng.setAttribute('position', new THREE.BufferAttribute(np, 3));
-  ng.setAttribute('color', new THREE.BufferAttribute(nc, 3));
-  const nearStars = new THREE.Points(ng, new THREE.PointsMaterial({ size: 1.15, sizeAttenuation: true, vertexColors: true }));
-  out.add(nearStars);
+  // ── 별 · 은하수 · 먼지 ──────────────────────────────────
+  // ★ 천구와 띠는 **눈을 따라다닌다** (아래 update). 별은 무한히 멀리
+  //   있으므로 통로를 걸어가도 자리가 안 바뀌어야 한다 — 예전엔 천구가
+  //   조종석에 박혀 있어서 **기관실까지 25m 를 걸으면 별자리가 밀렸다**
+  const band = buildBand(out);
+  const stars = buildStars(out);
+  const dust = buildDust(out, z);
+  const Z_NEAR = z - DUST.near;
+  const Z_FAR = z - DUST.far;
 
   // ── 행성 ────────────────────────────────────────────────
-  // **자리만 잡아 둔 것.** 그림(sky/planet)이 오면 이 구는 사라진다.
-  //
-  // ★ 조명을 안 쓴다 (MeshBasicMaterial). 처음엔 태양을 하나 놓았는데,
-  //   DirectionalLight 는 거리가 없어서 **배 안까지 같이 밝혔다** —
-  //   창밖을 예쁘게 하려다 실내 조명이 통째로 망가지는 종류의 실수다.
-  const planet = new THREE.Mesh(
-    new THREE.SphereGeometry(46, 40, 28),
-    new THREE.MeshBasicMaterial({ color: 0x22406b }),
-  );
-  planet.position.set(-62, 6, z - 108);
-  out.add(planet);
-  const air = new THREE.Mesh(
-    new THREE.SphereGeometry(48.6, 40, 28),
-    new THREE.MeshBasicMaterial({ color: 0x5aa8ff, transparent: true, opacity: 0.22, side: THREE.BackSide }),
-  );
-  air.position.copy(planet.position);
-  out.add(air);
+  // ★ 민짜 공이 아니다 — **터미네이터(낮/밤 경계)와 대기 테두리**가 있다.
+  //   빛은 행성 자기 셰이더 안에서만 돈다. 장면에 조명을 안 보태므로
+  //   예전처럼 **배 안까지 같이 밝아지는** 일이 없다 (world/sky.js)
+  const world = buildPlanet(out, 46);
+  world.setPos(-62, 6, z - 108);
+  /** 천구를 눈에 붙일 때 쓰는 그릇. 매 프레임 새로 만들면 쓰레기가 쌓인다 */
+  const DOME = new THREE.Vector3();
 
   // ── 잔해 ────────────────────────────────────────────────
   // 잔해밭 구역에서만 보인다. 별과 같은 방식으로 흘려보내되 **덩어리**라
@@ -876,9 +832,6 @@ export function buildOutside(scene, z) {
     return 0;
   }
 
-  const nearPos = ng.attributes.position;
-  const nearCol = ng.attributes.color;
-
   // ★ 다가오는 덩어리 — **부딪히는 것.** 창밖의 잔해와 달리 이건 **위치가
   //   정해져 있고 실제로 부딪힌다** (game/hazard.js). 크게 하나만 만든다:
   //   여럿 띄우면 어느 것을 피해야 하는지 안 보인다.
@@ -908,10 +861,22 @@ export function buildOutside(scene, z) {
    * @param lane  배가 좌우 어디에 있나 (-1 ~ 1). 창밖이 **반대로** 흐른다
    * @param inc   다가오는 덩어리 { in, lane } 또는 null
    */
-  function update(dt, speed, lane = 0, inc = null) {
+  function update(dt, speed, lane = 0, inc = null, camera = null) {
     // 배가 기울면 창밖이 반대로 밀린다 — 그게 「내가 움직였다」로 읽힌다
     out.position.x += (-lane * 3.2 - out.position.x) * Math.min(1, dt * 3);
     out.rotation.z += (lane * 0.06 - out.rotation.z) * Math.min(1, dt * 3);
+
+    // ★★ **천구를 눈에 붙인다.** 별은 무한히 멀리 있으므로 배 안에서
+    //   어디로 걸어가든 자리가 안 바뀌어야 한다. 예전엔 천구가 조종석
+    //   앞에 박혀 있어서 **기관실까지 25m 를 걸으면 별자리가 밀렸고**,
+    //   반지름이 330 이라 카메라 far(400)에 잘리기도 했다.
+    //   기울기(out.rotation.z)는 그대로 받는다 — **배가 돌면 하늘도 돈다**
+    if (camera) {
+      DOME.copy(camera.position);
+      out.worldToLocal(DOME);
+      stars.points.position.copy(DOME);
+      band.mesh.position.copy(DOME);
+    }
 
     // 다가오는 덩어리 — 남은 시간이 곧 거리다.
     // ★ 높이 1.5 는 **눈높이**다 (BODY.eye 1.62). 처음엔 -0.4 에 뒀더니
@@ -960,37 +925,26 @@ export function buildOutside(scene, z) {
     glow.visible = gl > 0.004;
     glowMat.opacity = gl;
 
-    // ① 별은 **고도만큼만 흐른다** — 땅에서는 멎는다
+    // ① **흐르는 것은 먼지뿐이다.** 별은 안 흐른다 (위 ★★ 참고)
     const d = speed * want.speed * dt * (0.12 + 0.88 * alt);
     // ★★ **별이 땅에서도 그대로 떠 있었다.** 지면과 능선을 다 만들어 놓고
     //   화면을 찍어 보니 「갈색 벽 앞에 우주」였다 — 대기가 있는 행성에
     //   내려앉았는데 별이 총총하면 그건 착륙이 아니다. 고도가 낮아지면
     //   **대기가 별을 지운다**
     const starFade = Math.max(0, Math.min(1, (alt - 0.06) / 0.44));
-    farStars.visible = starFade > 0.03;
-    farStars.material.opacity = starFade;
-    farStars.material.transparent = true;
-    // ★ 가까운 별은 **색을 죽이는 것만으로는 안 사라진다** — 검게 칠한
-    //   점이 갈색 하늘 위에 **까만 점**으로 남는다. 실제로 그렇게 찍혔다.
-    //   밀도는 색으로, 있고 없고는 **투명도와 visible** 로 한다
-    nearStars.visible = starFade > 0.03;
-    nearStars.material.opacity = starFade;
-    nearStars.material.transparent = true;
-    const arr = nearPos.array, col = nearCol.array;
-    const shown = Math.round(NEAR * cur.stars);
-    for (let i = 0; i < NEAR; i++) {
-      const k3 = i * 3;
-      arr[k3 + 2] += d;
-      if (arr[k3 + 2] > Z_NEAR) place(i, Z_FAR);
-      // 밀도는 **색을 죽여서** 흉내 낸다. 개수를 바꾸면 버퍼를 다시 만들어야
-      // 하는데, 그건 구역이 바뀔 때마다 뚝 끊긴다
-      const on = (i < shown ? 1 : 0) * starFade;
-      col[k3] = cur.tint.r * on;
-      col[k3 + 1] = cur.tint.g * on;
-      col[k3 + 2] = cur.tint.b * on;
-    }
-    nearPos.needsUpdate = true;
-    nearCol.needsUpdate = true;
+    stars.setFade(starFade);
+    stars.setTint(cur.tint);
+    // ★ 밀도는 **개수를 자르는 것**으로 한다. 예전엔 색을 죽여 흉내 냈는데,
+    //   검게 칠한 점은 사라지지 않고 **갈색 하늘 위의 까만 점**으로 남았다.
+    //   셰이더가 자르면 아예 안 그려진다. 그리고 차례가 밝기순이라
+    //   **어두운 별부터 사라진다** — 성운의 먼지가 하는 일이 정확히 그것이다
+    stars.setDensity(cur.stars);
+    // 은하수도 같이 흐려진다. 성간 공백(stars 0.16)에서 띠까지 남아 있으면
+    // 「아무것도 없는 곳」이 안 된다 — 은하수는 **뭔가 있는 것**이다
+    band.setFade(starFade * Math.min(1, cur.stars * 1.1));
+    band.setTint(cur.tint);
+    dust.setFade(starFade);
+    dust.flow(d);
 
     // 잔해
     const nd = want.debris;
@@ -1005,58 +959,43 @@ export function buildOutside(scene, z) {
       if (m.position.z > Z_NEAR) placeRock(m);
     }
 
-    // 먼 하늘은 아주 천천히 돈다. 배가 미세하게 틀어지고 있다는 뜻이고,
-    // 이게 있어야 오래 봐도 「멈춰 있다」는 느낌이 안 든다
-    farStars.rotation.y += dt * 0.0016;
+    // ★ 하늘은 아주 천천히 돈다. 배가 미세하게 틀어지고 있다는 뜻이고,
+    //   이게 있어야 오래 봐도 「멈춰 있다」는 느낌이 안 든다.
+    //   **별과 은하수가 같이 돈다** — 따로 돌면 그 순간 가짜가 된다
+    stars.points.rotation.y += dt * 0.0016;
+    band.mesh.rotation.y = stars.points.rotation.y;
 
     // ★ 착륙 중에는 행성이 **정면에서 커진다** — 「저기로 내려간다」
     //   ★ 여기를 안 건드렸을 때 화면이 심심했다. 구역용 행성은 화면 왼쪽
     //     구석에 작게 떠 있어서, 내려가는 동안 **아무것도 안 커졌다**
     if (down > 0.001 && land.step !== STEP.LANDED) {
-      // ★ **구역용 행성 색(0x22406b)으로는 아무것도 안 보였다.** 어두운
-      //   하늘에 어두운 파란 공이라 화면에서 사라진다 — 잔해 덩어리에서
-      //   두 번 밟은 함정을 세 번째로 밟았다. 내려갈 행성은 **밝고 따뜻하게**
-      //   그리고 안개를 안 먹인다 (거리감보다 「저기 있다」가 먼저다)
-      planet.material.color.setHex(0xb98457);
-      planet.material.fog = false;
-      air.material.color.setHex(0xffc188);
-      air.material.opacity = 0.3;
-      air.material.fog = false;
+      // ★ **구역용 색으로는 아무것도 안 보였다.** 어두운 하늘에 어두운 파란
+      //   공이라 화면에서 사라진다 — 잔해 덩어리에서 두 번 밟은 함정을
+      //   세 번째로 밟았다. 내려갈 행성은 **밝고 따뜻하게** 간다
+      world.setMood(true);
       // ★ **처음엔 다가가기 시작하자마자 행성이 창을 다 덮었다.**
       //   커지는 것만 만들고 **멀리서 시작하는 것**을 안 만들었기 때문이다 —
       //   「다가간다」는 작던 것이 커지는 것이지 처음부터 큰 것이 아니다.
       //   멀리서 작게 떠 있다가 가까워지며 아래로 커진다
       const g = 1 + down * 2.6;
       const dist = 520 - down * 360;
-      planet.visible = alt > 0.08;
-      air.visible = planet.visible;
-      planet.scale.setScalar(g);
-      air.scale.setScalar(g * 1.03);
-      planet.position.set(0, 14 - 46 * g * 0.85 * down, z - dist);
-      air.position.copy(planet.position);
+      world.visible = alt > 0.08;
+      world.setScale(g);
+      world.setPos(0, 14 - 46 * g * 0.85 * down, z - dist);
       return;
     }
-    planet.scale.setScalar(1);
-    air.scale.setScalar(1);
+    world.setScale(1);
     // 착륙이 끝나면 **구역용 색으로 되돌린다** — 안 되돌리면 그 뒤로 모든
     // 구역에서 행성이 갈색으로 뜬다 (한 번 바꿔 놓고 안 되돌리는 종류의 사고)
-    planet.material.color.setHex(0x22406b);
-    planet.material.fog = true;
-    air.material.color.setHex(0x5aa8ff);
-    air.material.opacity = 0.22;
-    air.material.fog = true;
+    world.setMood(false);
 
     // 행성 — 구역에 따라 있고 없다
-    const showPlanet = want.planet;
-    planet.visible = showPlanet;
-    air.visible = showPlanet;
-    if (showPlanet) {
-      planet.position.z += d * 0.045;
-      air.position.copy(planet.position);
-      if (planet.position.z > z - 40) {
-        planet.position.set(-62 - Math.random() * 40, 6, z - 190);
-        air.position.copy(planet.position);
-      }
+    world.visible = want.planet;
+    if (want.planet) {
+      const p = world.pos;
+      p.z += d * 0.045;
+      if (p.z > z - 40) p.set(-62 - Math.random() * 40, 6, z - 190);
+      world.setPos(p.x, p.y, p.z);
     }
   }
 
@@ -1082,7 +1021,19 @@ export function buildOutside(scene, z) {
       return {
         alt: +altOf().toFixed(3), glow: +glowOf().toFixed(3),
         ground: groundG.visible, groundY: +groundG.position.y.toFixed(1),
-        sky: `#${bg.getHexString()}`, planetScale: +planet.scale.x.toFixed(2),
+        sky: `#${bg.getHexString()}`, planetScale: +world.planet.scale.x.toFixed(2),
+        // ★★ **v57 — 「별이 흐르나」를 화면 없이 물을 수 있어야 한다.**
+        //   이 판에서 고친 것이 정확히 그것이라, 여기 안 내놓으면
+        //   `space-sky.js` 는 「예쁜가」밖에 못 묻는다.
+        //   `star0` 은 첫 별의 버퍼 z — **한 번도 안 변해야 한다.**
+        //   `dust0` 은 첫 먼지의 z — **변해야 한다.** 둘을 나란히 놓는다
+        star0: +stars.points.geometry.attributes.position.array[2].toFixed(3),
+        dust0: +dust.points.geometry.attributes.position.array[2].toFixed(3),
+        // 천구가 눈을 따라온 만큼. 걸어가면 이게 따라 움직여야 별이 안 밀린다
+        domeZ: +stars.points.position.z.toFixed(2),
+        band: +band.mesh.material.uniforms.uFade.value.toFixed(3),
+        starFade: +stars.points.material.uniforms.uFade.value.toFixed(3),
+        cut: Math.round(stars.points.material.uniforms.uCut.value),
         // ★ **별 밀도** (8판 · 성간 공백). 「비어 보이나」를 눈으로 판정하면
         //   덜 갈아탄 화면을 「안 바뀌었다」로 읽는다 — 색 갈아타기는 6초라
         //   헤드리스에서는 실제로 2분이 걸린다. 숫자로 묻는다
