@@ -23,7 +23,7 @@ import { Input } from './core/input.js';
 import { makeAudio } from './core/audio.js';
 import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
-import { BODY, HEAT, VALVE, CRUISE } from './game/systems-table.js';
+import { BODY, HEAT, VALVE, CRUISE, FOCUS } from './game/systems-table.js';
 import { REGION_BY_KEY } from './game/regions-table.js';
 import { CIRCUITS, POWER_MAX, SIGN, CHASE as CH, CAUGHT, HEATING } from './game/chase-table.js';
 import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './game/chase.js';
@@ -68,7 +68,7 @@ import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
 import { HELM, offWord, hitWord } from './game/helm-table.js';
-import { GUN, WHY as GUN_WHY } from './game/gun-table.js';
+import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 import { VOID, isVoid } from './game/void-table.js';
 import { RESCUE, RSTEP, RESCUE_WORD } from './game/rescue-table.js';
 import { DARK, DSTEP } from './game/blackout-table.js';
@@ -139,7 +139,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 58;
+export const VERSION = 59;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -165,6 +165,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 400);
+/** 평소 화각 — 손잡이를 잡으면 `FOCUS.fov` 로 당겨진다 (v59) */
+const FOV_WIDE = 72;
+/** 지금 얼마나 당겨져 있나 0~1 */
+let focusK = 0;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
 scene.add(camera);
@@ -807,6 +811,23 @@ function walk(dt) {
   //   D 를 아무리 눌러도 포탑이 안 돌았다. 검사가 「0 → 0도」로 잡아 줬다.
   //   **빗장은 걷는 것에만 건다** — 겨누는 것은 걷는 것이 아니다
   if (gunBusy(gun)) {
+    // ══ ★★ **몸을 좌석으로 옮긴다** (v59) ══════════════════════
+    //  사장님: 「앉았다고 나오는데 의자 앞에 공간이 없어서 그런지
+    //           모니터 앞에 앉질 못하네」
+    //
+    //  ★ 여태 **앉아도 자리가 안 바뀌었다.** 바뀌는 것은 눈높이(−0.42m)
+    //    뿐이라, 좌석에서 2m 떨어진 데서 눌러도 「앉습니다」가 뜨고
+    //    **그 자리에서 눈만 내려갔다** — 그래서 앞에 조준경이 없었다.
+    //    조준선이 닿는 거리(2.3m)가 좌석보다 넓은 것이 원인이었다.
+    //
+    //  ★ 툭 옮기지 않고 **미끄러진다.** 순간이동도 그것대로 거짓말이고,
+    //    앉는 데 이미 1.8초(GUN.climb)가 걸리므로 그 사이에 닿는다
+    const seatTo = (gun.goingUp || gun.up) ? GUN_SEAT.at : GUN_SEAT.standAt;
+    const seatK = Math.min(1, dt * GUN_SEAT.slide);
+    me.x += (seatTo.x - me.x) * seatK;
+    me.z += (seatTo.z - me.z) * seatK;
+    me.vx = 0; me.vz = 0;
+
     // ★★ **갇히지 않는다** (2026-08-06 · 사장님 「계속 그 자리에서
     //   움직이질 못해」). 앉으면 걸음이 막히는 것은 맞다 — 앉은 채로
     //   걸어다니면 조준석이 아니다. 틀린 것은 **막힌 채로 아무 말도 안
@@ -1336,6 +1357,10 @@ function interactStep(dt) {
   const atGrip = gun.up && onGun;   // 손잡이 — 잡고 WASD 로 겨눈다
   if (atSeat && gunPressed && gun.moving <= 0) {
     if (climbGun(gun)) {
+      // ★ 앉을 때 **고개도 돌려 준다.** 좌석을 내려다본 자세 그대로 앉으면
+      //   눈앞에 방석이 있고, 그게 「앉았는데 모니터가 없다」로 보인다.
+      //   사람은 앉으면서 저절로 앞을 보므로 게임도 그래야 한다
+      if (gun.goingUp) { me.yaw = GUN_SEAT.yaw; me.pitch = GUN_SEAT.pitch; }
       banner = gun.goingUp ? '조준석에 앉습니다' : '일어납니다';
       bannerT = 1.8;
       audio?.event('click');
@@ -2714,6 +2739,26 @@ function frame(now) {
   camera.rotation.y = me.yaw;
   camera.rotation.x = me.pitch;
   camera.rotation.z = sw * 0.06;   // 아주 살짝 기운다
+
+  // ══ ★★ **잡으면 들여다본다** (v59 · systems-table.js FOCUS) ══════
+  //  사장님: 「조정석을 잡을 때는 스크린 화면을 확대해서 몰입하게」
+  //
+  //  ★ 계기가 **작아서 안 읽혔다.** 실제 크기로 콘솔에 박혀 있으므로
+  //    서서 보면 글씨가 뭉갠다 — 그래서 여태 계기를 「보는」 것이 아니라
+  //    「있는 줄 아는」 것이었다. 잡으면 몸이 기울고 눈이 좁아진다.
+  //  ★ 확대창을 띄우는 것이 아니라 **카메라가 움직인다** —
+  //    「손이 곧 상태창」을 안 깬다 (UI 를 하나도 안 늘렸다)
+  const wantFocus = (steering || gripping) ? 1 : 0;
+  focusK += (wantFocus - focusK) * Math.min(1, dt * FOCUS.rate);
+  const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK;
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  if (focusK > 0.001) {
+    // 보는 쪽으로 몸을 기울인다 — 자리는 그대로고 **눈만** 나아간다
+    const lean = FOCUS.lean * focusK;
+    camera.position.x -= Math.sin(me.yaw) * Math.cos(me.pitch) * lean;
+    camera.position.z -= Math.cos(me.yaw) * Math.cos(me.pitch) * lean;
+    camera.position.y += Math.sin(me.pitch) * lean;
+  }
 
   const valveOpen = interactStep(dt);
   // ★ 벗어나 있으면 **자국이 준다** — 쫓는 쪽이 내 항로를 예측하고
