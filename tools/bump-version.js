@@ -52,6 +52,30 @@ for (const f of [MAIN, HTML]) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★ **충돌 표시가 남아 있으면 아무것도 안 한다** (2026-08-06)
+//
+//    머지 충돌을 풀고 `main.js` 만 확인하고 넘어갔는데, `index.html` 에
+//    `<<<<<<< HEAD` 가 그대로 남아 **게임 화면 맨 위에 그 글자가 떴다.**
+//    양쪽 내용이 `?v=56` 으로 **똑같아서** 눈에도 안 띄었다 — 충돌이
+//    사소할수록 더 조용히 남는다.
+//
+//    이 도구는 판을 올릴 때마다 이 두 파일을 반드시 만진다. 그러니
+//    **여기가 막을 자리다.** 빠뜨리면 아무것도 안 하고 멈춘다 —
+//    「엉뚱한 파일을 고치고 로그에는 성공이라 찍은」 옛 사고와 같은 규약.
+// ══════════════════════════════════════════════════════════════════════════
+function noConflict(path) {
+  const t = fs.readFileSync(path, 'utf8');
+  const bad = t.split('\n').filter((l) => /^(<{7}|={7}$|>{7})/.test(l));
+  if (!bad.length) return;
+  console.error(`✘ ${path} 에 머지 충돌 표시가 ${bad.length}줄 남아 있습니다:`);
+  for (const l of bad.slice(0, 6)) console.error(`    ${l}`);
+  console.error('  풀고 다시 부르십시오. 판본은 안 올렸습니다.');
+  process.exit(1);
+}
+noConflict(MAIN);
+noConflict(HTML);
+
 let main = fs.readFileSync(MAIN, 'utf8');
 const RE = /export const VERSION = (\d+)/;
 const cur = parseInt((main.match(RE) || [, '0'])[1], 10);

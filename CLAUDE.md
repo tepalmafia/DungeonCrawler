@@ -227,6 +227,7 @@ node tools/space-scar.js         스페이스워 — ★ 영구 손상 · 혹사
 node tools/space-target.js       스페이스워 — ★ 떠도는 것들(쓰레기·위성) · 겨누는 것이 일인가
 node tools/space-check.js        스페이스워 — ★ 점검 모드(F2·`)·새 게임·★이어했을 때 **걸어지나** (진짜 마우스로)
 node tools/space-end.js          스페이스워 — ★ H 성간 공백 · 끝 화면이 **점수가 아닌 목록인가**
+node tools/space-blackout.js     스페이스워 — ★ E 정전 · 어둠이 벌인가 · 갇히지 않나
 node tools/space-rescue.js       스페이스워 — ★ G 구조 신호 · 가는 것이 진짜 선택인가 (윈치와 견준다)
 node tools/space-story.js        스페이스워 — ★★ **스토리 그물** · 줄기가 닫히나 · 게임과 안 갈라졌나
 node tools/space-story.js --write   docs/space/STORY.md 를 표에서 **다시 뽑는다** (손으로 안 적는다)
