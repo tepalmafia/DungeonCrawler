@@ -24,6 +24,7 @@ import { TARGET } from '../web/space/js/game/target-table.js';
 import { SCENES } from '../web/space/js/game/scene-table.js';
 import { makeRoute, stepRoute, chooseFork, RPHASE } from '../web/space/js/game/route.js';
 import { FOOD } from '../web/space/js/game/supply-table.js';
+import { FUEL, burnMult } from '../web/space/js/game/fuel-table.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -60,11 +61,27 @@ console.log('\n[2] ★ **그런데 손은 노나** — 고장까지 끄면 8분�
   console.log(`   먹는 식량 ${eat.toFixed(0)} · 가득이 ${FOOD.max}`);
   ok(eat < FOOD.max,
     `가득 채워 들어가면 굶지 않는다 (${eat.toFixed(0)} < ${FOOD.max}) — **챙긴 사람은 편안하다**`);
-  const shakyFrom = FOOD.max - (FOOD.max - FOOD.shaky);
-  const half = f.seconds * FOOD.perSec / 2;
-  ok(FOOD.shaky + eat > FOOD.max * 0.5,
-    `반만 채워 들어가면 떤다 — **안 챙긴 사람은 값을 치른다** (${(FOOD.max * 0.5).toFixed(0)} 로는 모자란다)`);
-  void shakyFrom; void half;
+  // ══ ★★ **이 물음이 v62 에서 옮겨 갔다** (열다섯 번째) ═══════════
+  //  예전에는 「**반만 채워** 들어가면 떠나」를 물었다. 그때는 식량이
+  //  13분에 바닥나서 마지막 구간(8분) 하나가 통째로 식량 싸움이었다.
+  //
+  //  v62 에 식량 시계를 회차 기준으로 옮기면서 (REAL.md §2-D) 마지막
+  //  구간의 식량 값은 13 이 됐다 — 반만 채워도 넉넉하다. **줄기가
+  //  약해진 게 아니라 통화가 바뀐 것**이다: 「다음 거점까지 갈 것이 있나」는
+  //  이제 **추진제**가 묻는다 (fuel-table.js).
+  //
+  //  그리고 마지막 구간에는 **거점이 없다.** 그래서 여기서 물어야 할 것은
+  //  「들고 들어간 추진제가 모자라면 무슨 일이 나나」다.
+  const need = FUEL.perSec * burnMult(VOID.region) * f.seconds;
+  const coastMin = f.seconds / LEG.coast / 60;
+  const coastEat = (f.seconds / LEG.coast) * FOOD.perSec;
+  console.log(`   드는 추진제 ${need.toFixed(0)} · 바닥이면 ${coastMin.toFixed(1)}분 (${min.toFixed(1)}분 → 관성)`);
+  ok(need > 0 && need < FUEL.max,
+    `가득 채워 들어가면 건넌다 (${need.toFixed(0)} < ${FUEL.max}) — **챙긴 사람은 편안하다**`);
+  ok(coastMin > min * 1.5 && coastEat > eat * 1.5,
+    `★★ 추진제가 바닥이면 **${coastMin.toFixed(1)}분**으로 늘어지고 식량도 ${coastEat.toFixed(0)} 든다`
+    + ` (${min.toFixed(1)}분 · ${eat.toFixed(0)}) — **안 챙긴 사람은 값을 치른다.**`
+    + ' 거점이 없으므로 여기서는 살 수도 없다');
 }
 
 console.log('\n[3] ★ **마지막 구간에는 거점이 없나** — 항로를 실제로 돌려 본다');

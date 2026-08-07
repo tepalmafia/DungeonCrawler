@@ -121,7 +121,14 @@ export function open(f, key, { branch = null } = {}) {
   const m = BY_KEY[key];
   if (!m) return null;
   const b = branch ? m.branches.find((x) => x.key === branch) : m.branches[0];
-  const steps = (m.steps || []).map((s) => ({ ...s }));
+  // ★★ **갈래가 자리를 정하는 항목도 열 수 있어야 한다** (v62).
+  //   여기는 `m.steps` 만 봤고, 그래서 미소운석처럼 **갈래가 방을 뽑는**
+  //   항목은 장면이 불러도 `null` 이 돌아왔다 — 조용히 아무 일도 안 났다.
+  //   `spawn` 은 이미 이렇게 하고 있었으므로, 둘이 갈라져 있던 것이다
+  const at = b?.at ? (Array.isArray(b.at) ? b.at : [b.at]) : null;
+  const steps = at
+    ? at.map((room) => ({ at: room, hold: m.hold ?? 7, what: null }))
+    : (m.steps || []).map((s) => ({ ...s }));
   if (!steps.length) return null;
   const made = {
     key: m.key, name: m.name, lead: m.lead, sys: m.sys, effect: m.effect || {},
@@ -173,6 +180,13 @@ export function effectsOf(f) {
   const out = {
     heat: 0, coolValve: 0, sign: 0, food: 0, drift: 0,
     flaky: false, chartLie: false, noWinch: false, doorWild: false,
+    /**
+     * ★★ **뚫려서 진공이 된 방** (v62 · 미소운석).
+     *   아직 **안 막은** 걸음의 방만 들어간다 — 한 방을 막으면 그 방은
+     *   곧 다시 기밀이 되고 다음 방이 남는다. 그래야 「흩뿌려 맞았다」의
+     *   「막았는데 왜 아직 새지」가 규칙 하나로 성립한다
+     */
+    vacuum: [],
   };
   for (const o of f.open) {
     if (o.effect.heat) out.heat += o.effect.heat;
@@ -184,6 +198,10 @@ export function effectsOf(f) {
     if (o.effect.chartLie) out.chartLie = true;         // 해도대가 거짓말한다
     if (o.effect.noWinch) out.noWinch = true;           // 윈치를 못 쓴다
     if (o.effect.doorWild) out.doorWild = true;         // 문이 제멋대로 여닫힌다
+    if (o.effect.air) {
+      // ★ **아직 안 막은 걸음의 방만** 진공이다 (v62)
+      for (const s of o.steps.slice(o.step)) if (s.at && !out.vacuum.includes(s.at)) out.vacuum.push(s.at);
+    }
   }
   return out;
 }
@@ -239,7 +257,9 @@ export function clear(f, fault) {
   const sys = fault.sys;
   if (sys && f.wear[sys] != null) f.wear[sys] = Math.max(0, f.wear[sys] - WEAR.relief);
   // 기록 — 배너는 사라진다. **다시 볼 데가 있어야** 「무슨 증상이었지」가 안 남는다
-  f.log.unshift({ name: fault.name, reveal: fault.reveal, at: +f.t.toFixed(0) });
+  // ★ v62 — `key` 를 같이 남긴다. 「무엇을 고쳤나」를 이름으로만 찾으면
+  //   장면(F)이 이름 문자열에 매이고, 이름은 바뀌기 쉽다
+  f.log.unshift({ key: fault.key, name: fault.name, reveal: fault.reveal, at: +f.t.toFixed(0) });
   if (f.log.length > 6) f.log.pop();
 }
 

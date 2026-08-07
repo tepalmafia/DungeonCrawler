@@ -28,7 +28,7 @@
 //    된다. **고치기 전에 먼저 빨갛게 만들어 두는 것**이 요점이다 —
 //    안 그러면 「고쳤다」를 증명할 방법이 없다.
 // ══════════════════════════════════════════════════════════════════════════
-import { MISSIONS, FAULT, wired } from '../web/space/js/game/mission-table.js';
+import { MISSIONS, FAULT, wired, builtElsewhere } from '../web/space/js/game/mission-table.js';
 import { HEAT, BODY, WEAR } from '../web/space/js/game/systems-table.js';
 import { HEATING, SIGN, CIRCUITS, POWER_MAX } from '../web/space/js/game/chase-table.js';
 import { heatRate } from '../web/space/js/game/chase.js';
@@ -39,6 +39,8 @@ import { LEG } from '../web/space/js/game/route-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 import { SCENES } from '../web/space/js/game/scene-table.js';
 import { SINK } from '../web/space/js/game/heat-table.js';
+import { SUIT } from '../web/space/js/game/suit-table.js';
+import { FUEL } from '../web/space/js/game/fuel-table.js';
 
 let fail = 0, soft = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -56,8 +58,16 @@ const todo = (c, m, plan, fixed) => {
 
 /** 배에 실제로 있는 방 — `world/ship.js` 의 ROOMS 와 같아야 한다 */
 const ROOMS = ['cockpit', 'spine', 'observ', 'workshop', 'garden', 'airlock', 'engine'];
-/** `game/fault.js effectsOf` 가 실제로 굴리는 효과 */
-const EFFECTS = ['heat', 'coolValve', 'sign', 'food', 'drift', 'flaky', 'chartLie', 'noWinch', 'doorWild'];
+/**
+ * `game/fault.js effectsOf` 가 실제로 굴리는 효과.
+ *
+ * ★ v62 에 `air` 가 늘었다 — 미소운석이 뚫은 방이 **진공이 된다**
+ *   (`effectsOf` 가 `out.vacuum` 에 방 이름을 담고, main.js 가 그 방의
+ *   문을 잠근다). 이 목록에 안 적으면 검사가 「게임이 안 굴리는 효과」로
+ *   잡는데, **그게 이 검사가 하는 일 전부다**: 표에만 적고 안 만든 것을
+ *   못 지나가게 한다
+ */
+const EFFECTS = ['heat', 'coolValve', 'sign', 'food', 'drift', 'flaky', 'chartLie', 'noWinch', 'doorWild', 'air'];
 
 console.log('\n말이 되나 — 미션과 설정을 통째로');
 
@@ -123,12 +133,17 @@ console.log('\n[2] ★★ **자릿수** — 방향은 맞는데 10배 틀린 것
   // 사람 — 걷기라고 부르는 값이 정말 걸음인가
   todo(BODY.speed <= 1.6 || BODY.gravity !== undefined,
     `걷기 ${BODY.speed} m/s — 사람 걸음은 1.3~1.5 다. 그보다 빠르면 **왜 빠른지**가 표에 있어야 한다`,
-    'v59 · BODY.gravity 0.4 를 적고 주석의 「뛰지 않는다」를 지운다');
+    'v62 · BODY.gravity 0.4 를 적고 주석의 「뛰지 않는다」를 지운다',
+    `★ 걷기 ${BODY.speed} m/s 에 **이유가 붙었다** — 회전 구획이 ${BODY.gravity}g 다.`
+    + ' 저중력에서 사람은 성큼성큼 뛰듯 걷는다. **숫자가 아니라 주석이 틀렸었다**');
   // 식량 — 이게 정말 식량의 시계인가
   const foodMin = 100 / FOOD.perSec / 60;
   todo(foodMin >= 60,
     `식량 100 → 0 이 ${foodMin.toFixed(1)}분. 밥 먹고 ${((100 - FOOD.shaky) / FOOD.perSec / 60).toFixed(0)}분 뒤에 손이 떨리는 사람은 없다`,
-    'v59 · 10분 시계는 추진제로 옮기고 식량은 2시간에 2~3끼');
+    'v62 · 10분 시계는 추진제로 옮기고 식량은 2시간에 2~3끼',
+    `★★ 식량이 ${foodMin.toFixed(0)}분 간다 (예전 13분) — 회차 98분에 두 끼다.`
+    + ` 10분 시계는 **추진제**로 옮겼다 (한 통에 ${(FUEL.max / FUEL.perSec / 60).toFixed(0)}분 밟는다) —`
+    + ' 도망치는 배는 실제로 추진제가 먼저 바닥난다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -187,13 +202,18 @@ console.log('\n[4] ★★ **전력** — 사장님이 짚으신 것 (REAL.md §2
 console.log('\n[5] ★★ **사람** — 우주복 없이 진공에 서 있지 않나 (REAL.md §2-C)');
 {
   const secs = (1 - LOCK.airFloor) / LOCK.airDrain;
-  console.log(`   바깥문 열고 사람이 그 안에 ${secs.toFixed(0)}초 버틴다`);
-  todo(LOCK.suit !== undefined,
+  const bare = secs + SUIT.grace;      // 안 입고 열었을 때 배가 닫기까지
+  console.log(`   칸이 비는 데 ${secs.toFixed(0)}초 · 안 입고 열면 ${bare.toFixed(0)}초에 배가 닫는다`);
+  todo(LOCK.needSuit && SUIT.wearFor > 0 && SUIT.air > 0 && SUIT.handMult < 1,
     `우주복이 표에 없다. 진공에서 사람은 **15초**면 의식을 잃는데 여기서는 ${secs.toFixed(0)}초 동안 윈치를 잡는다`,
-    'v59 · suit-table.js (입는 22초 · 등에 진 공기 · 둔한 장갑)');
-  todo(secs <= 20,
+    'v62 · suit-table.js (입는 22초 · 등에 진 공기 · 둔한 장갑)',
+    `★★ 우주복이 있다 — 입는 데 ${SUIT.wearFor}초 · 등에 진 공기 ${(SUIT.air / 60).toFixed(0)}분 ·`
+    + ` 입으면 손이 ${SUIT.handMult}배로 둔하다. **그래서 늘 입고 다니지 않는다**`);
+  todo(bare <= 25,
     '「공기가 준다」가 벌인데, 에어록은 **배와 격리된 칸**이다 — 배 전체 공기가 줄면 그건 에어록이 아니다',
-    'v59 · 공기는 에어록 한 칸 것으로');
+    'v62 · 공기는 에어록 한 칸 것으로',
+    `★★ 공기가 **에어록 한 칸**의 것이 됐다 (${secs.toFixed(0)}초에 빈다). 그리고 안 입고 열면`
+    + ` ${bare.toFixed(0)}초에 배가 억지로 닫는다 — 15초의 자릿수 안이다. **죽이지는 않는다**`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -219,7 +239,9 @@ console.log('\n[6] ★★ **설정끼리 안 부딪히나**');
   todo(!micro.effect.sign || micro.effect.air,
     `「${micro.name}」 — 벽이 뚫렸는데 벌이 **자국**뿐이다 (effect.sign ${micro.effect.sign}).`
     + ' 그리고 뚫린 방에 사람이 들어가 6초 동안 손으로 막는다',
-    'v59 · 뚫린 방은 문이 잠기고, 들어가려면 우주복을 입는다 (C 와 같은 표)');
+    'v62 · 뚫린 방은 문이 잠기고, 들어가려면 우주복을 입는다 (C 와 같은 표)',
+    `★★ 「${micro.name}」이 **방을 진공으로 만든다** (effect.air). 그 방의 문은 배가 잠그고,`
+    + ' 들어가려면 우주복을 입어야 한다. 이것이 **장면 F(감압)** 이 되면서 여덟 장면이 다 섰다');
   // 성간 공백 — 별이 준다
   todo(REGION_BY_KEY.void.stars >= 0.8,
     `성간 공백의 별이 ${REGION_BY_KEY.void.stars} 배다. 원반을 벗어나면 **은하수 띠**가 사라지지`
@@ -238,14 +260,24 @@ console.log('\n[7] ★ **죽은 항목** — 계통으로 이미 지어졌는데
   ];
   for (const [key, where] of built) {
     const m = MISSIONS.find((x) => x.key === key);
-    todo(!m, `「${m.name}」이 표에 남아 있는데 **${where}** 로 이미 지어졌다 — 표 쪽은 영영 안 뜬다`,
-      'v59 · 표에서 빼거나 「지어졌다」를 적는다');
+    // ★★ **「지웠나」가 아니라 「적었나」를 묻는다** (v62).
+    //   처음엔 `!m`(표에서 빠졌나)를 물었는데, 지우면 「왜 이건 없지」를
+    //   다음에 또 묻게 된다. `builtAs` 한 줄이면 목록에도 남고
+    //   「안 뜨는 것」에서도 빠진다 — REAL.md §4-L 이 「빼거나 적는다」였다
+    todo(!m || !!m.builtAs,
+      `「${m?.name}」이 표에 남아 있는데 **${where}** 로 이미 지어졌다 — 표 쪽은 영영 안 뜬다`,
+      'v62 · 표에서 빼거나 「지어졌다」를 적는다',
+      `★ 「${m?.name}」에 **「${m?.builtAs}」로 지어졌다**고 적혀 있다 — 목록에서도 빠진다`);
   }
   const live = wired();
   console.log(`   지금 실제로 뜨는 고장: ${live.length}종 / 표 ${MISSIONS.length}개`);
   ok(live.length >= 6, `${live.length}종이 실제로 뜬다 — 6종 미만이면 같은 것만 반복된다`);
-  const never = MISSIONS.filter((m) => !live.includes(m) && !m.sceneOnly);
+  // ★ `builtAs` 가 붙은 것은 뺀다 — 이미 지어진 것이 「할 일」로 읽히면
+  //   다음에 **이미 있는 것을 또 만든다** (REAL.md §2-L)
+  const gone = builtElsewhere();
+  const never = MISSIONS.filter((m) => !live.includes(m) && !m.sceneOnly && !m.builtAs);
   console.log(`   한 번도 안 뜨는 것: ${never.length}개 — ${never.map((m) => m.name).join(' · ')}`);
+  console.log(`   ★ 제 계통으로 이미 지어진 것: ${gone.length}개 — ${gone.map((m) => `${m.name}(${m.builtAs})`).join(' · ')}`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -260,7 +292,14 @@ console.log('\n[8] ★ **장면** — 표가 가리키는 것이 다 있나');
 console.log('');
 console.log(fail ? `✘ ${fail} 군데 — **지금 틀린 것**` : '✔ 지금 틀린 것은 없다');
 console.log(soft ? `☐ ${soft} 군데 — **고치기로 한 것** (docs/space/REAL.md)` : '');
-console.log('\n  ※ ☐ 는 실패가 아니라 **약속**이다. `REAL.md` 가 v58·v59 로 나눠 뒀고,');
-console.log('     고칠 때마다 하나씩 ✔ 로 바뀐다. 고치기 전에 먼저 빨갛게 만들어');
-console.log('     두는 이유는, 안 그러면 **「고쳤다」를 증명할 방법이 없기** 때문이다.');
+if (soft) {
+  console.log('\n  ※ ☐ 는 실패가 아니라 **약속**이다. `REAL.md` 가 판을 나눠 뒀고,');
+  console.log('     고칠 때마다 하나씩 ✔ 로 바뀐다. 고치기 전에 먼저 빨갛게 만들어');
+  console.log('     두는 이유는, 안 그러면 **「고쳤다」를 증명할 방법이 없기** 때문이다.');
+} else {
+  console.log('\n  ※ ★★ **☐ 가 하나도 안 남았다** — 감사에서 나온 열둘을 v58·v62 로 다 고쳤다.');
+  console.log('     ☐ 를 먼저 빨갛게 만들어 두는 방식이 통했다는 뜻이다. 새 것을 만들다');
+  console.log('     말이 안 되는 자리를 만나면 **여기에 ☐ 로 먼저 적고** 그 다음 판에 고친다.');
+  console.log('     ※ 그리고 「말이 되나」와 「재미있나」는 여전히 다른 물음이다 — 뒤쪽은 2시간 돌려 봐야 한다.');
+}
 process.exit(fail ? 1 : 0);

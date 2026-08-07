@@ -148,8 +148,27 @@ console.log('\n[1] ★★ **주포** — 실내 조준석에 앉고 · WASD 로 
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n[2] ★ **에어록 바깥문** — 열고 · 낚고 · 닫는다');
+console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는다 (v62 부터 **입는다**)');
 {
+  // ══ ★★ v62 — **한 걸음이 앞에 붙었다** ═══════════════════════════
+  //  v45~v61 동안 사람은 우주복 없이 진공에 서서 윈치를 잡았다
+  //  (REAL.md §2-C). 이제 걸이를 먼저 잡아야 한다 — **여기까지 못 오면
+  //  뒤의 낚기는 아무 뜻이 없다.** 계통 검사(space-suit.js)가 다 초록인데
+  //  사람은 거기까지 못 가는 상태를 2026-08-06 에 넷이나 쌓아 뒀다
+  const RACK = { x: 1.3 + 0.55, z: (4.2 + 7.2) / 2 - 0.85 };
+  ok(await aimAt(RACK.x + 0.95, RACK.z, -Math.PI / 2, 0, 'suit'),
+    `⓪ 우주복 걸이가 잡힌다 (${await S(() => SPACE.aim)})`);
+  await down();
+  const wearing = await until(() => SPACE.suit.wearing > 0.6, 40, '우주복을 입기 시작');
+  await up();
+  ok(wearing, '⓪b 잡고 있으니 **입기 시작한다** — 22초를 붙들고 있어야 한다');
+  // ★ 22초는 헤드리스에서 몇 분이다 (게임 시계가 실제의 1/20 로 돈다).
+  //   **손이 닿는다는 것까지가 여기서 잴 수 있는 것**이고, 22초를 채우는
+  //   것은 `space-suit.js [1]` 이 표에서 잰다. 건너뛴 것을 소리 내어 적는다
+  console.log('   ※ 나머지 22초는 건너뛴다 — 헤드리스 시계로는 몇 분이다 (space-suit.js [1] 이 잰다)');
+  await S(() => SPACE.putSuit(true));
+  ok((await S(() => SPACE.suit)).canEva, '⓪c 입었다 — 이제 나갈 수 있다');
+
   const at = await S(() => SPACE.outerAt);
   ok(await aimAt(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer'),
     `① 바깥문 손잡이가 잡힌다 (${await S(() => SPACE.aim)})`);
@@ -165,12 +184,16 @@ console.log('\n[2] ★ **에어록 바깥문** — 열고 · 낚고 · 닫는다
   const pulled = await until(() => SPACE.supply.ore > window.__o0 + 1, 45, '광석이 끌려오기');
   await up();
   ok(pulled, `⑤ 잡고 있으니 광석이 온다 (${o0} → ${(await S(() => SPACE.supply)).ore})`);
+  // ★★ 그동안 **우주복 공기가 줄었나** — 안 줄면 진공이 진공이 아니다
+  const su = await S(() => SPACE.suit);
+  ok(su.air < 300, `⑤b 그동안 우주복 공기가 준다 (${su.air}초) — 그 칸은 진공이다`);
 
   const at2 = await S(() => SPACE.outerAt);
   await aimAt(at2.x - 1.1, at2.z, -Math.PI / 2, 0, 'outer');
   await press(1.0);
   ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '바깥문 닫히기'),
     '⑥ 다시 눌러 닫는다 — **왕복이 닫힌다**');
+  await S(() => SPACE.putSuit(false));
 }
 
 // ══════════════════════════════════════════════════════════════════════════
