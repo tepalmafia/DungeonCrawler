@@ -49,7 +49,9 @@ import { MISSILES } from '../game/supply-table.js';
 /** 여섯 줄. **표에서 뽑는다** — 여기 손으로 안 적는다 */
 export const ROWS = ['heat', 'cool', 'speed', 'power', 'sign', 'missiles'];
 
-const GREEN = { fg: '#8fe6c0', dim: 'rgba(143,230,192,.45)', hot: '#ff9a5c', bg: null };
+// ★ v73 — 초록을 한 톤 죽였다. 판 자체가 반투명이라 글씨까지 밝으면
+//   결국 같은 밝기로 보인다 — 「거슬린다」의 절반은 글씨였다
+const GREEN = { fg: '#6fc4a2', dim: 'rgba(143,230,192,.34)', hot: '#ff9a5c', bg: null };
 const AMBER = { fg: '#ffc98a', dim: 'rgba(255,201,138,.42)', hot: '#ff7a55', bg: '#1a1008' };
 export const THEME = { hud: GREEN, bench: AMBER };
 
@@ -183,7 +185,11 @@ export function buildStatusHud(w, h) {
     new THREE.PlaneGeometry(w, h),
     new THREE.MeshBasicMaterial({
       map: tex, transparent: true, blending: THREE.AdditiveBlending,
-      depthWrite: false, depthTest: false, opacity: 0.95,
+      depthWrite: false, depthTest: false,
+      // ★★★ v73 — **반투명하게** (사장님 요청). 0.95 는 사실상 불투명이라
+      //   창을 덮었다. 0.52 면 별이 비쳐 보이고, 그래야 「얹혀 있는 것」이
+      //   되지 「창에 붙은 판」이 안 된다
+      opacity: 0.52,
     }),
   );
   mesh.renderOrder = 940;

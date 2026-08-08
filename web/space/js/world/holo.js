@@ -189,14 +189,31 @@ export function buildHolo(camera) {
   }
 
   let lift = 0;
+  /** ★ v73 — 조종간을 잡으면 이만큼 접힌다 (0 폄 · 1 접힘) */
+  let fold = 0;
   function update(s, dt = 0.016) {
-    lift += ((s.raised ? 1 : 0) - lift) * Math.min(1, dt / WRIST.raise);
+    // ══ ★★★ **조종간을 잡으면 접힌다** (v73) ═══════════════════════════
+    //
+    //  사장님 「**q 화면은 조정간을 잡으면 없어지게** 하고」.
+    //
+    //  ★ 맞는 말이다. 이 판은 「지금 뭘 할지」를 말하는 물건인데, 조종간을
+    //    잡은 동안에는 **할 일이 이미 정해져 있다** — 겨누고 쏘는 것이다.
+    //    그 위에 「어딘가 문이 안 열립니다」가 떠 있으면 도움이 아니라
+    //    가림막이고, 왼쪽 아래는 **레이더가 있는 자리**다.
+    //
+    //  ★ 지우지 않고 **접는다** — 놓으면 그대로 돌아온다. 툭 사라졌다
+    //    툭 나타나면 「없어졌나」가 되고, 접히면 「지금은 안 쓴다」가 된다
+    const hide = s.flying ? 1 : 0;
+    fold += (hide - fold) * Math.min(1, dt / WRIST.fold);
+    g.visible = fold < 0.985;
+    lift += ((s.raised && !s.flying ? 1 : 0) - lift) * Math.min(1, dt / WRIST.raise);
 
     // ★ 자리 — **왼쪽 아래 구석.** 손목과 같은 자리인데 **뒤가 비치므로**
     //   같은 자리도 안 가린다. 들면 조금 커지고 가운데로 조금 온다
-    g.position.set(-0.27 + lift * 0.07, -0.20 + lift * 0.05, -0.62 + lift * 0.10);
+    g.position.set(-0.27 + lift * 0.07, -0.20 + lift * 0.05 - fold * 0.22, -0.62 + lift * 0.10);
     g.rotation.set(-0.16 + lift * 0.10, 0.34 - lift * 0.22, 0.05 - lift * 0.04);
-    g.scale.setScalar(0.92 + lift * 0.30);
+    g.scale.setScalar((0.92 + lift * 0.30) * (1 - fold * 0.9));
+    if (!g.visible) return;
 
     // 아주 옅은 떨림 — 홀로그램이 「투사된 것」으로 읽히는 이유의 절반이다.
     // 크게 흔들면 못 읽으니 **읽는 데 지장 없는 만큼만**
@@ -207,5 +224,10 @@ export function buildHolo(camera) {
   }
   update({ job: null, log: [], fixed: 0, clock: 0, raised: false }, 1);
 
-  return { group: g, update, get lift() { return +lift.toFixed(3); } };
+  return {
+    group: g, update,
+    get lift() { return +lift.toFixed(3); },
+    /** ★ v73 — 검사가 「조종간을 잡으면 정말 접히나」를 묻는다 */
+    get fold() { return +fold.toFixed(3); },
+  };
 }

@@ -771,6 +771,94 @@ console.log('\n[6e] ★★★ **탄두** — 목적이 배 안에 서 있나 (v7
   await S(() => SPACE.setBake(0));
 }
 
+console.log('\n[6f] ★★★ **몰아 붙인다** — 손목·상태창·부호·360도·급가속 (v73)');
+{
+  // ★★ 이 절은 사장님이 스크린샷과 함께 짚으신 여섯 가지를 **한 줄에**
+  //   묶어 둔 것이다. 계통 검사(`space-bfm.js`)는 규칙만 재고, 여섯 중
+  //   넷은 **화면에서만** 참·거짓이 갈린다 — 그래서 여기 있다.
+  await sit();
+  await S(() => {
+    SPACE.setPower('sensor', true);
+    SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 });
+    SPACE.putAim(0, 0); SPACE.putBoost(0);
+  });
+  await settle();
+
+  // ① ★ 손목이 **조종간을 잡으면 접힌다**
+  //   사장님 「q 화면은 조정간을 잡으면 없어지게」 — 전투 중에 손목 화면이
+  //   시야 아래를 먹고 있었다
+  // ★★ **헤드리스 시계는 실제의 1/20** 이다. 접히는 데 게임 시간 0.8초면
+  //   여기서는 25초쯤 걸린다 — 3초만 기다렸다가 「안 접힌다」로 빨개졌었다.
+  //   조건이 참이 될 때까지 기다리지, 정해 놓은 만큼 세지 않는다
+  const w0 = await S(() => SPACE.wrist);
+  await aimAt(0, -7.75, 0, -0.34, 'yoke');
+  await down();
+  const folded = await until(() => !SPACE.wrist.shown, 90, '손목이 접히기');
+  const w1 = await S(() => SPACE.wrist);
+  ok(folded, `① ★★ 조종간을 잡으니 **손목이 사라진다** (접힘 ${w0.fold} → ${w1.fold})`);
+  await up();
+  ok(await until(() => SPACE.wrist.shown, 90, '손목이 돌아오기'),
+    '② 놓으면 **돌아온다** — 접는 것과 지우는 것은 다르다');
+
+  // ③ ★★★ **부호** — 기수를 올리면 표적이 화면에서 **내려가야** 한다.
+  //   사장님 「운전 방향 전환이 모두 반대잔아!」 · v66 에 좌우가 그랬고
+  //   v73 에 위아래가 또 그랬다. 머리로 맞히지 않는다 — **점을 박고 잰다**
+  await S(() => { SPACE.clearSky(); SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }); });
+  await S(() => SPACE.callFoe('fighter', 0, 70));
+  await until(() => !!SPACE.screenOf('fighter'), 30, '표적이 화면에 서기');
+  const p0 = await S(() => SPACE.screenOf('fighter'));
+  await S((y) => { window.__y0 = y; SPACE.putFly({ pitch: 0.25, yaw: 0, roll: 0 }); }, p0?.y ?? 0);
+  const down3 = await until(() => {
+    const s = SPACE.screenOf('fighter');
+    return !!s && s.y < window.__y0 - 0.05;
+  }, 60, '표적이 화면에서 내려가기');
+  const p1 = await S(() => SPACE.screenOf('fighter'));
+  ok(down3,
+    `③ ★★★ 기수를 올리니 표적이 **화면에서 내려간다** (y ${p0?.y} → ${p1?.y}) —`
+    + ' 올라가면 그건 조종간이 거꾸로 물린 것이다');
+
+  // ④ ★★ **아래가 안 막힌다** — 「적이 하단에 나오면 더이상 화면을 아래로
+  //   내릴 수 없는데」. 축에 벽이 있으면 뒤로 돈 적을 영영 못 겨눈다
+  await S(() => SPACE.putFly({ pitch: -3.0, yaw: 0, roll: 0 }));
+  const deep = await S(() => SPACE.fly3);
+  ok(Math.abs(deep.pitch) > 2.5,
+    `④ ★★★ 위아래로 **${(Math.abs(deep.pitch) * 57.3).toFixed(0)}도**까지 넘어간다 — 벽이 없다`);
+  await S(() => SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }));
+
+  // ⑤ ★★★ **급가속이 화면을 바꾸나** — 「빛무리가 쏟아져오거나 속도감이」
+  //   ★ 별은 안 흘린다 (v57 고증). 흐르는 것은 먼지·화각·떨림이다
+  const b0 = await S(() => SPACE.boost);
+  await S((f) => { window.__fov0 = f; SPACE.putBoost(1); }, b0.fov);
+  const wide = await until(() => SPACE.boost.fov > window.__fov0 + 4, 30, '화각이 넓어지기');
+  const b1 = await S(() => SPACE.boost);
+  ok(wide,
+    `⑤ ★★★ 밀어붙이니 **화각이 넓어진다** (${b0.fov}° → ${b1.fov}°) — 속도감의 절반이 여기다`);
+  ok(b1.mult >= 3,
+    `⑥ ★★ 그리고 **${b1.mult}배**로 간다 — 안 빨라지면 그건 화면 효과일 뿐이다`);
+
+  // ══ ⑦⑧ ★★★ **값이 셋인가** — 추진제 · 열 · 자국 ═══════════════════
+  //  하나라도 빠지면 「거의 공짜니 늘 밟는 것이 답」이 되고, 그러면 조작이
+  //  하나 는 것이 아니라 **없어진 것**이다.
+  //  ★★ 여기서는 `putBoost` 를 안 쓴다 — 그건 `k` 만 밀어 놓을 뿐이라
+  //    **추진제를 안 태운다.** 실제로 **R 을 누르고 있어야** 규칙이 돈다.
+  //    검사가 제 손으로 값을 넣어 두고 「값이 든다」를 확인하면 그건
+  //    검사가 아니라 흉내다
+  await S(() => { SPACE.putBoost(0); SPACE.setPower('thrust', true); });
+  const s0 = await S(() => SPACE.chase.sign);
+  const f0 = await S(() => SPACE.supply.fuel);
+  await S((f) => { window.__f0 = f; }, f0);
+  await p.keyboard.down('r');
+  const burned = await until(() => SPACE.supply.fuel < window.__f0 - 0.05, 90, '추진제가 주는 것');
+  const s1 = await S(() => SPACE.chase.sign);
+  const f1 = await S(() => SPACE.supply.fuel);
+  await p.keyboard.up('r');
+  ok(burned, `⑦ ★★ **추진제를 태운다** (${f0.toFixed(1)} → ${f1.toFixed(1)}) —`
+    + ' R 을 실제로 눌러서 잰 값이다');
+  ok(s1 > s0, `⑧ ★★★ 그리고 **자국이 굵어진다** (${s0.toFixed(1)} → ${s1.toFixed(1)}) —`
+    + ' 밝게 타는 것은 멀리서도 보인다. 이게 빠지면 늘 밟는 것이 답이 된다');
+  await S(() => { SPACE.putBoost(0); SPACE.clearSky(); });
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은

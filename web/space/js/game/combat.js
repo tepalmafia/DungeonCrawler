@@ -20,7 +20,8 @@ export function makeCombat() {
     /** 남은 재는 시간 */
     cool: 0,
     /** 레이더 — 켜졌나 · 묶는 중인 시간 · 묶은 표적 id · 놓친 뒤 유예 */
-    radar: { on: false, t: 0, id: null, grace: 0 },
+    /** ★ v73 — `was` 는 지난 프레임의 거리 (줄고 있나를 잰다) · `chasing` 은 그 답 */
+    radar: { on: false, t: 0, id: null, grace: 0, was: null, chasing: false },
     /** 날아가는 미사일들 */
     shots: [],
     /** 센 것 — 검사와 끝 화면이 읽는다 */
@@ -62,8 +63,21 @@ export function stepRadar(c, dt, aimed) {
     return 'break';
   }
 
-  if (!good) { r.t = Math.max(0, r.t - dt * 1.6); return null; }
-  r.t += dt;
+  if (!good) { r.t = Math.max(0, r.t - dt * 1.6); r.was = null; return null; }
+
+  // ══ ★★★ **붙어서 따라가면 빨리 물린다** (v73 · BFM.md §3-①) ═══════
+  //
+  //  ★ 추격 곡선 셋 중 **선도 추격**의 표시가 「거리가 줄어든다」다.
+  //    겨누고 · 가깝고 · 줄어들고 — 셋이 다 참이면 잘 쫓고 있는 것이고,
+  //    그때 묶는 시간이 절반으로 준다.
+  //  ★★ 그러면 락온이 「올려 두고 기다리기」에서 **「쫓아서 해내기」**가
+  //    된다. 기다리는 것은 조작이 아니지만 쫓는 것은 조작이다
+  const closing = r.was !== null ? (r.was - t.dist) / Math.max(dt, 1e-6) : 0;
+  r.was = t.dist;
+  const C = RADAR.chase;
+  const chasing = t.dist <= C.closeIn && closing >= C.closing;
+  r.chasing = chasing;
+  r.t += dt * (chasing ? 1 / C.fast : 1);
   if (r.t >= RADAR.lockFor) { r.id = t.id; r.t = RADAR.lockFor; r.grace = RADAR.holdGrace; return 'lock'; }
   return null;
 }

@@ -78,10 +78,12 @@ console.log('\n[2] ★★ **360도가 정말 한 바퀴 도나**');
   // ★ v69 — **둘이 끝이 없다.** 비틀기와 좌우. 위아래만 끝이 있다:
   //   기수를 위로 끝까지 젖히면 그건 선회가 아니라 공중제비고, 그러면
   //   짐벌이 감당 못 한다 (방이 뒤집힌다)
-  ok(AXES.roll.max === Infinity && AXES.yaw.max === Infinity,
-    '비틀기와 **좌우**는 끝이 없다 — 사방을 다 본다');
-  ok(AXES.pitch.max < 1.6,
-    `위아래(${AXES.pitch.max})만 끝이 있다 — 여기까지 열면 공중제비가 되고 짐벌이 감당 못 한다`);
+  // ★★★ **v73 — 셋 다 끝이 없다.** 사장님 「적이 하단에 나오면 더이상
+  //   화면을 아래로 내릴 수 없는데 **360도 조정이 가능하게**」.
+  //   35도에서 멎으면 **발밑의 적은 영영 못 겨눈다** — 레이더가 6시에
+  //   점을 찍어 주는데 기수를 못 돌리면 보여 주고 못 하게 하는 계기다
+  ok(AXES.roll.max === Infinity && AXES.yaw.max === Infinity && AXES.pitch.max === Infinity,
+    '★★★ **세 축이 다 끝이 없다** — 사방 어디든 기수를 돌린다');
   const fy = makeFlight();
   hold(fy, 4, { yaw: 1 });
   ok((fy.yaw * 180) / Math.PI > 180,
@@ -164,7 +166,7 @@ console.log('\n[6] ★★ **장르가 안 바뀌었나** — 조종석에 매인
   //   NaN 이라 벌이 통째로 사라졌다. **한계를 없앨 때는 그 한계를 값으로
   //   쓰던 자리를 전부 따라가야 한다** — 여기와 `flight.js` 둘이었다.
   //   끝이 없는 축은 「제일 많이 벗어난 자세」가 곧 **반 바퀴(180도)** 다
-  f.pitch = AXES.pitch.max; f.yaw = Math.PI; f.roll = Math.PI;
+  f.pitch = Math.PI; f.yaw = Math.PI; f.roll = Math.PI;
   ok(Math.abs(offCourse(f) - 1) < 0.01, `셋을 다 끝까지 밀면 벗어남 ${offCourse(f).toFixed(2)} — 하나로 합쳐진다`);
   const back = makeFlight();
   back.yaw = Math.PI;

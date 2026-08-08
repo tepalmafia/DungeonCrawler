@@ -166,7 +166,7 @@ console.log('\n[4] ★★ **배의 상태가 안 샌다** — 여기가 이 도�
 console.log('\n[5] 고친 기록 — **최신이 위로** 오고, 화면 밖으로 안 넘친다');
 {
   // fault.js 는 `log.unshift` 로 쌓는다 — **최신이 배열 앞**이다.
-  // world/wrist.js 를 `slice(-n).reverse()` 로 짰다가 여섯이 찬 뒤부터
+  // world/holo.js 를 `slice(-n).reverse()` 로 짰다가 여섯이 찬 뒤부터
   // **제일 오래된 넷**을 보여줬다. 방금 고친 게 안 뜨면 그건 기록이 아니다
   const rows = (log) => log.slice(0, WRIST.logShow);
   const log = [];
