@@ -840,8 +840,9 @@ export function buildCockpit(parent, room, H) {
   const thrLamp = new THREE.MeshBasicMaterial({ color: 0x2a2f36 });
   box(thrLever, 0.15, 0.13, 0.20, DARK, 0, 0.31, 0);             // 손잡이
   box(thrLever, 0.10, 0.04, 0.12, thrLamp, 0, 0.385, 0.02);      // 불
+  // ★ 넉넉하게 — 배가 떨리므로 빠듯하면 누르는 프레임에만 벗어난다
   const thrHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.48, 0.62, 0.66),
+    new THREE.BoxGeometry(0.70, 0.86, 0.90),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   thrHit.position.set(TH.x, TH.y, TH.z);
@@ -868,7 +869,7 @@ export function buildCockpit(parent, room, H) {
   autoLight.name = '자동항법등';
   box(g, 0.09, AU.y - 0.55, 0.09, FRAME, AU.x, (0.55 + AU.y) / 2, AU.z);
   const autoHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.52, 0.56, 0.46),
+    new THREE.BoxGeometry(0.70, 0.80, 0.70),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   autoHit.position.set(AU.x, AU.y, AU.z);

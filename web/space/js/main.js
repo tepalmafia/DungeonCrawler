@@ -1012,7 +1012,15 @@ function interactStep(dt) {
       const b = ship.breakers.find((x) => x.hit === o);
       if (b) { breaker = b; break; }
       const pi = plates.findIndex((x) => x.hit === o);
-      if (pi >= 0) { plate = pi; break; }
+      if (pi >= 0) {
+        // ★★★ **`visible = false` 로는 안 막힌다** (v66). three.js 의
+        //   레이캐스트는 **보이는지를 안 본다** — 화면에서만 사라지고
+        //   손에는 그대로 잡힌다. 「안 보이는데 잡힌다」를 내가 만들어
+        //   놓은 셈이고, 검사가 「항행 중인데 갈래 판이 잡힌다」로 잡았다.
+        //   **고를 것이 있을 때만** 잡히게 여기서 가른다
+        plate = (ship.cock.keyAt(pi) || ship.cock.landAt(pi)) ? pi : -1;
+        break;
+      }
       const pn = pans.find((x) => x.hit === o);
       if (pn) { panel = pn; break; }
       if (o === ship.winch.hit) { onWinch = true; break; }
