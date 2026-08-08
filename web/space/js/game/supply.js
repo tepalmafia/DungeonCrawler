@@ -4,7 +4,7 @@
 //  식량이 줄고, 지나가며 광석이 쌓이고, 윈치를 잡으면 많이 쌓이고,
 //  거점에서 바꾼다. 규칙만 여기 있고 화면·소리는 밖에서 한다.
 // ══════════════════════════════════════════════════════════════════════════
-import { FOOD, PARTS, ORE, SCOOP, WINCH, TRADE, isShaky } from './supply-table.js';
+import { FOOD, PARTS, ORE, MISSILES, SCOOP, WINCH, TRADE, isShaky } from './supply-table.js';
 import { FUEL, burnMult, isDry } from './fuel-table.js';
 
 export function makeSupply() {
@@ -12,6 +12,8 @@ export function makeSupply() {
     food: FOOD.start,
     parts: PARTS.start,
     ore: ORE.start,
+    /** ★★ 미사일 — **제 주머니다** (v69). 부품과 갈라 놓았다 */
+    missiles: MISSILES.start,
     /** ★ 추진제 — **밟는 동안만** 준다 (v62 · fuel-table.js) */
     fuel: FUEL.start,
     /** 이번에 잡고 있는 윈치가 얼마나 끌어왔나 — 「한 통」을 세려고 */
@@ -71,6 +73,32 @@ export function winchRelease(s) { /* 지금은 아무것도 안 한다. 자리�
 
 /** 지금 거래할 수 있나 */
 export function canTrade(s) { return s.ore >= TRADE.ore; }
+
+/**
+ * ★★ **미사일을 살 수 있나** (v69).
+ *   식량보다 비싸다 — 「이번엔 굶고 쏠까」가 결심이 되려면 그래야 한다
+ */
+export function canBuyMissiles(s) {
+  return s.ore >= TRADE.missileOre && s.missiles < MISSILES.max;
+}
+
+/** 미사일을 산다 — 광석을 내고 `MISSILES.perBuy` 발 */
+export function buyMissiles(s) {
+  if (!canBuyMissiles(s)) return false;
+  s.ore -= TRADE.missileOre;
+  s.missiles = Math.min(MISSILES.max, s.missiles + MISSILES.perBuy);
+  return true;
+}
+
+/**
+ * ★ **주워 온다** — 표류선·구조 신호에서. 사는 것보다 많다 (`perSalvage`).
+ *   위험한 데를 뒤진 값이 커야 「가는 것이 진짜 선택」이 된다
+ */
+export function salvageMissiles(s, n = MISSILES.perSalvage) {
+  const before = s.missiles;
+  s.missiles = Math.min(MISSILES.max, s.missiles + n);
+  return s.missiles - before;
+}
 
 /** 거래 한 번 — 광석을 내고 식량·부품·**추진제**를 받는다 (v62) */
 export function trade(s) {

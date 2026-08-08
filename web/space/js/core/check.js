@@ -27,7 +27,11 @@ const GROUPS = [
   // ★★★ v64 — 주포가 없어지고 **조종석 전투**가 됐다 (레이더·락온·미사일)
   ['전투 (조종석)', [
     ['조종석에 앉기', (S) => { S.putGun(true); return '조종석 — 조종간을 잡고 마우스로 겨눕니다'; }],
-    ['광석 60 · 부품 8', (S) => { S.setSupply({ ore: 200, parts: 8 }); return '탄약을 실었습니다 — 탄약이 곧 수리 재료입니다'; }],
+    // ★ v69 — **미사일도 채운다.** 미사일이 제 주머니를 갖게 되면서
+    //   (`supply-table.js MISSILES`) 광석·부품만 채우면 **쏠 것이 없는
+    //   상태**로 점검이 시작된다. 점검 모드가 못 만드는 상황이 생기면
+    //   그건 사장님이 못 보시는 상황이다
+    ['광석 60 · 부품 8 · 미사일 8', (S) => { S.setSupply({ ore: 200, parts: 8, missiles: 8 }); return '광석·부품·미사일을 실었습니다'; }],
     ['★ 적 우주선 부르기', (S) => { const r = S.callRaider(); return `적 우주선 — ${r.dist}m · 맷집 ${r.hp}`; }],
     ['레이더 켜기/끄기', (S) => { const on = S.power.sensor; S.setPower('sensor', !on); return on ? '레이더를 껐습니다 — 묶을 수 없습니다' : '레이더 ON — 자국이 20 오릅니다'; }],
     ['기총 / 열추적 / 유도', (S) => { const n = (S.combat.slot % 3) + 1; S.putWeapon(n); return `${S.combat.name} 로 바꿨습니다`; }],
@@ -70,7 +74,7 @@ const GROUPS = [
     ['박자 넘기기', (S) => S.skipBeat() && '다음 박자로'],
     ['고장 하나', (S) => { S.forceFault(); return '고장이 떴습니다 — 소리로 찾습니다'; }],
     ['열 90', (S) => { S.setHeat(90); return '열 90 — 기관실 밸브로 내립니다'; }],
-    ['보급 가득', (S) => { S.setSupply({ food: 100, parts: 8, ore: 200, fuel: 100 }); return '식량·부품·광석·추진제를 채웠습니다'; }],
+    ['보급 가득', (S) => { S.setSupply({ food: 100, parts: 8, ore: 200, fuel: 100, missiles: 8 }); return '식량·부품·광석·추진제·미사일을 채웠습니다'; }],
     // ★★ v62 — 추진제. 「밟을 것이 없으면 무슨 일이 나나」를 바로 본다
     ['추진제 바닥', (S) => { S.setSupply({ fuel: 0 }); return '추진제 0 — 엔진이 안 걸리고 관성으로만 갑니다'; }],
     // ★★ v62 — 장면 F(감압). 뚫린 방은 진공이고 문이 잠긴다

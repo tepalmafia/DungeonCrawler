@@ -69,10 +69,19 @@ export function stepFlight(f, dt, { atSeat = false, push = {}, manual = false } 
  */
 export function offCourse(f) {
   const TWO = Math.PI * 2;
-  let r = Math.abs(((f.roll % TWO) + TWO) % TWO);
-  if (r > Math.PI) r = TWO - r;               // 뒤집힌 것도 「많이 벗어난」 것
+  /** 한 바퀴로 접는다 — 360도를 돈 것과 0도는 같은 자세다 */
+  const fold = (v) => {
+    let a = Math.abs(((v % TWO) + TWO) % TWO);
+    return a > Math.PI ? TWO - a : a;
+  };
+  const r = fold(f.roll);
   const p = Math.abs(f.pitch) / AXES.pitch.max;
-  const y = Math.abs(f.yaw) / AXES.yaw.max;
+  // ★★★ **v69 — 옆미끄러짐도 접는다.** `max` 를 Infinity 로 열자
+  //   `|yaw| / Infinity` 가 **늘 0** 이 됐다 — 즉 아무리 돌아서도
+  //   「항로에서 안 벗어난 것」이 되어 v55 의 벌이 통째로 죽었다.
+  //   한계를 없앨 때 **그 한계로 나누던 자리**를 같이 안 고치면 이렇게
+  //   조용히 죽는다. 비틀기가 쓰던 접기를 그대로 쓴다
+  const y = fold(f.yaw) / Math.PI;
   const ro = r / Math.PI;
   const w = OFF_WEIGHT;
   const sum = p * w.pitch + y * w.yaw + ro * w.roll;

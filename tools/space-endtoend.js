@@ -227,13 +227,20 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
   // ★★ **v64 부터 쏘는 것은 공짜가 아니다** — 탄약이 곧 수리 재료다
   //   (`combat-table.js` 의 `cost`). 옛 검사는 「부수면 광석이 는다」를
   //   물었는데, 그건 포탑 시절의 규칙이라 **거꾸로** 잰 셈이었다
-  const ore0 = await S(() => SPACE.supply.ore);
+  // ★★★ **v69 에서 파는 것이 바뀌었다.** 기총(실탄·광석)이 **레이저**가
+  //   되면서 값이 광석에서 **열**로 옮겨 갔다 (`WEAPONS.laser.heat`).
+  //   여기서 광석을 재면 부순 파편이 광석을 주므로 **오히려 는다** —
+  //   즉 「공짜가 아니다」를 물으려다 반대로 재게 된다.
+  //   ★ 값이 옮겨 가면 **재는 자리도 옮겨야 한다**
+  const heat0 = await S(() => SPACE.heat);
   await S(() => { SPACE.putWeapon(1); });
   const hp0 = (await S(() => SPACE.combat)).target?.hp ?? null;
   for (let i = 0; i < 6; i++) { await S(() => SPACE.fire()); await p.waitForTimeout(400); }
-  const ore1 = await S(() => SPACE.supply.ore);
+  const heat1 = await S(() => SPACE.heat);
   const c1 = await S(() => SPACE.combat);
-  ok(ore1 < ore0, `⑧ **쏘는 것이 공짜가 아니다** (광석 ${ore0} → ${ore1}) — 탄약이 곧 수리 재료다`);
+  ok(heat1 > heat0,
+    `⑧ **쏘는 것이 공짜가 아니다** (열 ${heat0.toFixed(0)} → ${heat1.toFixed(0)}) —`
+    + ' 레이저는 탄약이 없는 대신 **뜨거워진다.** 쏠수록 못 숨는다');
   ok(hp0 === null || c1.target === null || c1.target.hp < hp0 || c1.target.id !== undefined,
     `⑧-b 맞으면 표적이 상한다 (${hp0} → ${c1.target?.hp ?? '없어짐'})`);
   // ★ 다음 절이 「처음에는 자동 항법이 켜져 있다」로 시작하므로 **되돌려 놓는다**
@@ -643,6 +650,125 @@ console.log('\n[6b] ★ **창밖이 살아 있나** — 별은 박혀 있고 먼
   //   빨갰고, 나는 그걸 **게임 버그로 알고 두 번 고쳤다.**
   //   검사가 검사를 막고 있으면 그 뒤는 아무것도 못 지킨다
   await S(() => SPACE.unpinRegion());
+}
+
+console.log('\n[6c] ★★★ **격추가 보이나** — 적 · 탄 · 레이더 · 상태창 (v69)');
+{
+  // ★★ **여기가 이 판의 전부다.** 사장님 「발사 되는게 안보이잔아?
+  //   적 비행선도 안보이고」 — v64 가 전투를 숫자로만 만들어 두었고,
+  //   계통 검사는 다 초록이었다. **화면에 서는가**는 여기서만 걸린다.
+  await sit();
+  await S(() => { SPACE.setPower('sensor', true); SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }); });
+  await settle();
+
+  // ① 창밖에 **정말 세워지나**
+  await S(() => { SPACE.putAim(0, 0); SPACE.putTarget('raider'); });
+  await p.waitForTimeout(900);
+  const seen = await S(() => SPACE.outside?.targets ?? null);
+  ok(!!seen && seen.n > 0,
+    `① ★★★ 창밖에 **${seen?.n ?? 0}개가 서 있다** — v68 까지 0 이었다 (HUD 글리프만 있었다)`);
+  ok(!!seen && seen.kinds?.some((k) => k.includes('raider')),
+    '② **적 우주선이 그중에 있다** — 「적 비행선도 안보이고」의 답');
+
+  // ③ 쏘면 **뭔가 날아가나**
+  const before = await S(() => SPACE.outside?.shots?.fired ?? 0);
+  await S(() => SPACE.fire());
+  await p.waitForTimeout(200);
+  const after = await S(() => SPACE.outside?.shots ?? null);
+  ok(!!after && after.fired > before,
+    `③ ★★★ 쏘니 **날아가는 것이 생긴다** (${before} → ${after?.fired ?? 0}) — 「발사 되는게 안보이잔아」의 답`);
+
+  // ④ 레이더가 **뒤에 있는 것을 말하나**
+  await S(() => { const t = SPACE.sky.list[0]; if (t) SPACE.putSkyAz?.(t.id, 170); });
+  const blips = await S(() => SPACE.combat?.blips ?? null);
+  ok(Array.isArray(blips) && blips.some((x) => Math.abs(x.relAz) > 120),
+    `④ ★★ 레이더가 **뒤에 있는 것을 찍는다** (${(blips ?? []).length}점) —`
+    + ' HUD 는 26도뿐이라 뒤는 여기 말고 나올 데가 없다');
+
+  // ⑤ **앉으면 상태창이 뜨나** — 사장님 「hud처럼 … 퀘스트 안내창처럼」
+  ok(await S(() => !!SPACE.statusOn),
+    '⑤ ★★ **앉으니 상태창이 켜졌다** — 열·냉각·속도·전력·자국·미사일');
+  await stand();
+  ok(await S(() => !SPACE.statusOn),
+    '⑥ **서면 꺼진다** — 걸어다니는 동안 계기가 따라다니면 안 된다');
+}
+
+console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)');
+{
+  // ★★ 이 절이 이 기획의 심장을 지킨다:
+  //   싸운다 → **맞는다** → 고장이 열린다 → 배를 걸어 고친다 → 다시 싸운다
+  await sit();
+  await S(() => { SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }); SPACE.putAim(0, 0); });
+  await settle();
+
+  // ① 적 다섯 종이 **다 불러진다** — 하나라도 안 서면 그건 없는 것이다
+  const kinds = ['fighter', 'gunship', 'drone', 'turret', 'convoy'];
+  const made = [];
+  for (const k of kinds) made.push(await S((kk) => SPACE.callFoe(kk, 0, 90), k));
+  ok(made.every(Boolean), `① **다섯 종이 다 선다** (${made.filter(Boolean).length}/5)`);
+  await p.waitForTimeout(900);
+  const seen = await S(() => SPACE.outside?.targets ?? null);
+  ok((seen?.n ?? 0) >= 5,
+    `② ★★ 창밖에 **${seen?.n ?? 0}개**가 서 있다 — 다섯 종이 다 그려진다`);
+  const shapes = new Set((seen?.kinds ?? []).map((x) => x.replace('표적:', '')));
+  ok(shapes.size >= 5,
+    `③ 실루엣이 **${shapes.size}가지** — 맷집만 다르면 그건 같은 적의 큰 판·작은 판이다`);
+
+  // ④ ★★★ **쏜다** — 규칙이 탄을 띄우고 화면이 그린다
+  let inc = 0;
+  for (let i = 0; i < 40 && !inc; i++) {
+    await p.waitForTimeout(500);
+    inc = await S(() => SPACE.sky.incoming?.length ?? 0);
+  }
+  ok(inc > 0, `④ ★★★ **적이 쏜다** — 날아오는 탄 ${inc}발. v69 까지 영영 안 쐈다`);
+  const drawn = await S(() => SPACE.outside?.shots?.incoming ?? 0);
+  ok(drawn > 0,
+    `⑤ ★★ 그 탄이 **화면에도 있다** (${drawn}개) — 0.9초의 비행 시간을 뒀는데`
+    + ' 화면이 비어 있으면 그건 없는 시간이다');
+
+  // ⑥ 맞으면 배가 상한다
+  const h0 = await S(() => SPACE.faults.wear.hull);
+  for (let i = 0; i < 40; i++) await p.waitForTimeout(500);
+  const h1 = await S(() => SPACE.faults.wear.hull);
+  ok(h1 > h0, `⑥ ★★★ 맞으니 **선체가 깎인다** (${h0.toFixed(3)} → ${h1.toFixed(3)})`);
+  await S(() => SPACE.clearSky?.());
+}
+
+console.log('\n[6e] ★★★ **탄두** — 목적이 배 안에 서 있나 (v71)');
+{
+  // ★ 기관실 후미 크레이들. 「가장 후미에 핵탄두가 장착된 것」
+  await stand();
+  await S(() => SPACE.put(0, 14.1, Math.PI, -0.14));
+  await p.waitForTimeout(700);
+  ok(await S(() => SPACE.aim) === 'cradle',
+    `① ★★ 기관실에서 **크레이들이 손에 닿는다** (${await S(() => SPACE.aim)})`);
+
+  // ② 다섯 칸이 **불로** 진행도를 말한다 — 글로 안 알려준다
+  const a0 = await S(() => SPACE.headSeen);
+  await S(() => { SPACE.putHeadPart('shell'); SPACE.putHeadPart('booster'); });
+  await p.waitForTimeout(600);
+  const a1 = await S(() => SPACE.headSeen);
+  ok(a1.lit > a0.lit,
+    `② ★★★ 꽂으니 **칸에 불이 들어온다** (${a0.lit} → ${a1.lit}) — 진행도를 글로 안 알려준다`);
+
+  // ③ 뜨거우면 **몸통이 붉어진다**
+  await S(() => SPACE.setBake(95));
+  await p.waitForTimeout(600);
+  const hot = await S(() => SPACE.headSeen);
+  ok(hot.hot > 0.2, `③ ★★ 뜨거우니 **탄두가 달아오른다** (${hot.hot}) — 숫자를 안 보고도 안다`);
+
+  // ④ 한계에 닿으면 **일이 는다** — 죽지 않는다
+  const n0 = await S(() => SPACE.warhead.n);
+  await S(() => SPACE.setBake(100));
+  for (let i = 0; i < 20; i++) await p.waitForTimeout(300);
+  const w2 = await S(() => SPACE.warhead);
+  ok(w2.n < n0 || w2.lost.length > 0,
+    `④ ★★ 열에 **꽂아 둔 것이 하나 죽는다** (${n0} → ${w2.n}) — 죽는 게 아니라 일이 는다`);
+
+  // ⑤ 못 모아도 갈 수 있다
+  ok(await S(() => SPACE.dropHead().key) !== 'full',
+    '⑤ 다 안 모았으면 **못 떨군다** — 그래도 지나간다. 2시간을 쓰고 끝을 못 보는 회차는 없다');
+  await S(() => SPACE.setBake(0));
 }
 
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');

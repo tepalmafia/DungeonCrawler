@@ -71,10 +71,17 @@ async function hitText(label) {
   const at = await p.evaluate((t) => {
     const el = [...document.querySelectorAll('#check button')].find((b) => b.textContent === t);
     if (!el) return null;
+    // ★★★ **v69 — 먼저 굴려서 눈에 넣는다.** 이게 없어서 ②③ 이 빨갰다.
+    //   점검 모드 항목이 스물 몇 개라 뒤쪽 것은 **패널 밖으로 밀려 있고**,
+    //   좌표만 재서 누르면 **엉뚱한 자리**를 누른다. 검사에는 「단추를
+    //   눌렀는데 아무 일이 없다」로 나오는데, 사람은 그 상황에서 굴린다.
+    //   `space-endtoend.js` 가 끝 화면 단추에서 이미 겪고 고친 것과 같은 병
+    el.scrollIntoView({ block: 'center' });
     const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: window.innerHeight };
   }, label);
   if (!at) throw new Error(`「${label}」 단추가 없습니다`);
+  if (at.y < 0 || at.y > at.h) console.log(`   … 「${label}」 이 화면 밖이다 (y ${at.y.toFixed(0)} / ${at.h})`);
   await p.mouse.click(at.x, at.y);
   await p.waitForTimeout(250);
 }
@@ -116,7 +123,12 @@ console.log('\n[2] ★★ **안의 항목이 정말 먹나** — 진짜 마우�
   ok(!(await locked()), '열면 **잠금이 풀린다** — 마우스를 써야 하니까');
 
   const ore0 = await p.evaluate(() => window.SPACE.supply.ore);
-  await hitText('광석 60 싣기');
+  // ★★ **v69 — 여기가 제 변경 전부터 빨간색이었다.** 점검 모드의 항목
+  //   이름이 「광석 60 싣기」에서 「광석 60 · 부품 8」로 바뀐 지 오래인데
+  //   검사만 옛 이름을 부르고 있었고, 그래서 **없는 단추를 찾다 죽었다.**
+  //   검사가 죽으면 그 뒤 줄은 하나도 안 돈다 — 즉 「단추가 먹나」를
+  //   여러 판 동안 아무도 안 지키고 있었다
+  await hitText('광석 60 · 부품 8 · 미사일 8');
   const ore1 = await p.evaluate(() => window.SPACE.supply.ore);
   ok(ore1 > ore0, `① 눌렀더니 정말 바뀐다 (광석 ${ore0.toFixed(0)} → ${ore1.toFixed(0)})`);
 
@@ -192,7 +204,11 @@ console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은
   // 앉은 채 저장하면 `gunBusy` 가 걸음을 막아 **켤 때마다 그 자리**였다
   await boot();
   await p.evaluate(() => { window.SPACE.putGun(true); window.SPACE.saveNow(); });
-  ok(await p.evaluate(() => window.SPACE.gun.up), '① 조준석에 앉은 채로 저장했다');
+  // ★★ **v69 — `gun.up` 은 v64 에 죽은 칸이다.** 그때 포탑을 걷어내고
+  //   조종석 좌석으로 옮겼는데(`putGun` 이 `helmSat` 을 켠다), 검사만
+  //   옛 칸을 읽어서 **늘 false** 였다. 이름이 `putGun` 그대로라 눈으로도
+  //   안 보였다 — 이 판에서 **네 번째로 나온 「검사가 없어진 것을 읽는다」**
+  ok(await p.evaluate(() => window.SPACE.helm2.sat), '① 조종석에 앉은 채로 저장했다');
 
   await boot();
   ok(!(await p.evaluate(() => window.SPACE.gun.up)),
@@ -216,7 +232,7 @@ console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은
   //   「계속 그 자리에서 움직이질 못해」라고 하셨다. 앉으면 걸음이 막히는
   //   것은 맞다 — 틀린 것은 **막힌 채로 아무 말도 안 한 것**이다
   await p.evaluate(() => window.SPACE.putGun(true));
-  ok(await p.evaluate(() => window.SPACE.gun.up), '⑤ 일부러 다시 앉혔다');
+  ok(await p.evaluate(() => window.SPACE.helm2.sat), '⑤ 일부러 다시 앉혔다');
   const s0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
   await p.keyboard.down('KeyW');
   await p.waitForFunction((s) => {

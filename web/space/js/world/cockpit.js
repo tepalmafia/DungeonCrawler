@@ -33,7 +33,13 @@ import {
 } from '../game/view-table.js';
 import { drawFork } from './chart.js';
 import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
+// ★★★ v69 — **격추 게임으로 바뀌었다.** 떠도는 것들과 쏜 것들을 창밖에
+//   세운다 (docs/space/COMBAT.md). v64 가 숫자만 만들고 **보이는 것을
+//   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
+import { buildTargets } from './targets.js';
+import { buildShots } from './shots.js';
 import { DUST } from '../game/sky-table.js';
+import { RADAR } from '../game/combat-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
   color: 0x0a1622, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
@@ -266,6 +272,101 @@ function drawPower(ctx, w, h, s) {
       ctx.fillText(c.off, bx + h * 0.05, y + bh * 0.85);
     }
   });
+}
+
+/**
+ * ★★★ **레이더 — 화면 밖을 보는 유일한 계기** (v69 · docs/space/WAR.md §5-④)
+ *
+ *   사장님: 「**레이더도 만들고. 레이더 감지과 레이더 사운드도** 넣어줘」
+ *          「**직관적으로 적에서 방향을 맞출 수 있도록**」
+ *
+ *   ★★ 왜 필요한가 — HUD 가 **26도**뿐이다 (v66 에서 F-16 Block 60 고증대로
+ *     94도에서 줄였다). 표적은 이제 **사방(±180)** 에 뜬다. 그러면 옆과
+ *     뒤에 있는 것은 **아무 데도 안 나온다** — 「직관적으로 방향을 맞춘다」의
+ *     앞 절반이 통째로 빈다. 조준 보조(지시선·선도 점)는 **이미 어디 있는지
+ *     알 때** 돕는 것이고, 레이더는 **어디 있는지를 알려주는** 것이다.
+ *
+ *   ★ **위에서 내려다본 원**이다. 가운데가 나, **위가 기수.**
+ *     뒤에 있으면 원의 **아래쪽**에 찍힌다 — 그게 「바로 뒤로 선회」의 근거다.
+ *     고도는 안 그린다: 두 축을 한 원에 그리면 둘 다 안 읽힌다.
+ *     위아래는 HUD 가 맡는다 (거기는 각도 1:1 이다)
+ *
+ *   ★★ **두 겹이다** (`combat-table.js PASSIVE`)
+ *     · 원뿔 안(±66도) — 밝은 점. **거리까지** 안다 (반지름이 곧 거리)
+ *     · 원뿔 밖 — **엔진을 켠 것만** 흐린 점. 거리를 모르므로 **테두리**에
+ *       붙여 그린다. 「저쪽에 뭔가 있다, 얼마나 먼지는 모른다」
+ *     죽은 위성과 파편은 원뿔 밖에서 **안 보인다** — 열이 없다.
+ *     그래서 등 뒤의 점 하나가 곧 **「적이다」**가 된다
+ */
+function drawRadar(ctx, w, h, s) {
+  bg(ctx, w, h);
+  label(ctx, w, h, '레이더');
+  const cx = w / 2, cy = h * 0.60, R = Math.min(w * 0.30, h * 0.36);
+
+  // 꺼져 있으면 **아무것도 안 그린다.** 전력 배분이 살아 있다
+  if (!s.radar?.on) {
+    ctx.fillStyle = 'rgba(255,140,90,.75)';
+    ctx.font = `600 ${Math.round(h * 0.11)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('능동 탐지 꺼짐', cx, cy);
+    ctx.textAlign = 'left';
+    return;
+  }
+
+  // ── 원 · 눈금 ────────────────────────────────────────
+  ctx.strokeStyle = DIM;
+  ctx.lineWidth = 1.5;
+  for (const k of [1, 0.66, 0.33]) {
+    ctx.beginPath(); ctx.arc(cx, cy, R * k, 0, Math.PI * 2); ctx.stroke();
+  }
+  // 십자 — 12시(기수) · 6시(꼬리)
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+  ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+  ctx.stroke();
+
+  // ★★ **원뿔을 칠한다** — 「여기까지가 잘 보이는 데」가 그림으로 보여야
+  //   점이 밝은지 흐린지의 뜻이 산다
+  const cone = (RADAR.az * Math.PI) / 180;
+  ctx.fillStyle = 'rgba(95,224,168,.10)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, -Math.PI / 2 - cone, -Math.PI / 2 + cone);
+  ctx.closePath();
+  ctx.fill();
+
+  // 기수 표시 — 작은 세모
+  ctx.fillStyle = FG;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - R - h * 0.05);
+  ctx.lineTo(cx - h * 0.035, cy - R - h * 0.005);
+  ctx.lineTo(cx + h * 0.035, cy - R - h * 0.005);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── 점들 ─────────────────────────────────────────────
+  for (const b of s.radar.blips ?? []) {
+    // ★ 화면 각 = 상대 방위. 0 이 위(기수), 시계 방향
+    const a = (b.relAz * Math.PI) / 180 - Math.PI / 2;
+    const rr = b.level === 'full' ? R * Math.min(1, b.dist / RADAR.range) : R * 0.97;
+    const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+    if (b.level === 'blip') {
+      // 흐린 점 — 거리를 모른다. **테두리에 붙는다**
+      ctx.fillStyle = 'rgba(255,150,90,.55)';
+      ctx.beginPath(); ctx.arc(px, py, h * 0.028, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    const foe = b.foe;
+    ctx.fillStyle = foe ? '#ff7a4a' : '#5fe0a8';
+    ctx.beginPath(); ctx.arc(px, py, h * (foe ? 0.038 : 0.028), 0, Math.PI * 2); ctx.fill();
+    // 묶은 것은 **네모로 감싼다** (TD 상자와 같은 약속)
+    if (b.locked) {
+      const q = h * 0.075;
+      ctx.strokeStyle = '#ffd27a';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(px - q / 2, py - q / 2, q, q);
+    }
+  }
 }
 
 /**
@@ -617,7 +718,12 @@ export function buildCockpit(parent, room, H) {
   // ★ 화면 **넷** — 가운데를 비웠으므로 다섯이 아니다.
   //   밀려난 **자국**은 HUD 로 올렸다 (`world/gunsight.js`) — 자국은 모는
   //   동안 보는 것이라 원래 거기 있어야 했다
-  const DRAWERS = { 0: drawShip, 1: drawPower, 3: drawCourse, 4: drawHeat };
+  // ★★ **v69 — 안쪽 왼쪽 칸이 레이더가 됐다.** 격추 게임에서 「어디에
+  //   있나」보다 자주 보는 계기는 없고, 안쪽 두 칸이 눈에서 제일 가깝다.
+  //   밀려난 **전력 배분**은 없어진 것이 아니라 **앉으면 뜨는 상태창**으로
+  //   올라갔다 (사장님 「기타 다른것들은 hud처럼 … 냉각이나 속도 이런
+  //   것들도 표시」) — 거기가 원래 있어야 할 자리였다
+  const DRAWERS = { 0: drawShip, 1: drawRadar, 3: drawCourse, 4: drawHeat };
   for (let i = 0; i < CONSOLE.length - 1; i++) {
     if (!DRAWERS[i]) continue;
     const a = CONSOLE[i], b = CONSOLE[i + 1];
@@ -703,9 +809,12 @@ export function buildCockpit(parent, room, H) {
   //    안 되는 자리라 **주황 덩어리 넷이 창을 가로막고** 있었다.
   //    같은 폭이라도 가까우면 화면에서 크다 (`atan`). 조종석 안쪽 물건에
   //    악센트를 다는 것은 벽에 다는 것과 완전히 다른 일이다
+  //  ★★ **v69 — 큰 콘솔을 팔걸이로 줄였다.** ±1.45 에 세운 덩어리가
+  //    사장님 화면에서 **계기를 가리고** 있었다. 팔걸이는 좌석에 붙는
+  //    작은 것이라 아무것도 안 가린다
   for (const sx of [-1, 1]) {
-    box(g, 0.62, 0.52, 1.30, DARK, sx * SIDE.x, 0.26, SIDE.z);
-    box(g, 0.66, 0.06, 1.34, PANEL, sx * SIDE.x, 0.55, SIDE.z);
+    box(g, 0.14, 0.10, 0.62, PANEL, sx * SIDE.x, 0.70, SIDE.z);        // 팔걸이 상판
+    box(g, 0.10, 0.30, 0.10, DARK, sx * SIDE.x, 0.53, SIDE.z + 0.22);  // 받침
   }
 
   // ── 좌석 둘 ───────────────────────────────────────────
@@ -841,8 +950,20 @@ export function buildCockpit(parent, room, H) {
   box(thrLever, 0.15, 0.13, 0.20, DARK, 0, 0.31, 0);             // 손잡이
   box(thrLever, 0.10, 0.04, 0.12, thrLamp, 0, 0.385, 0.02);      // 불
   // ★ 넉넉하게 — 배가 떨리므로 빠듯하면 누르는 프레임에만 벗어난다
+  // ★★★ **v69 — 상자를 줄였다. 0.70 × 0.86 × 0.90 이 콘솔을 먹고 있었다.**
+  //
+  //   `space-endtoend.js [0]` 이 「갈래 판을 잡는다 → **추력 레버**」로
+  //   빨개져서 찾았다. 재 보니: 앉은 눈(0, 1.20, −8.30)에서 왼쪽 갈래
+  //   판(−1.25, 0.83, −9.00)으로 쏜 광선이 **z −8.75 를 지날 때 x −0.80 ·
+  //   y 0.96** 인데, 옛 상자는 x −0.97~−0.27 · y 0.49~1.35 · z −8.75~−7.85
+  //   이라 **그 점을 품고 있었다.** 즉 팔걸이 손잡이가 눈과 콘솔 사이를
+  //   가로막아, 조종석에서 항로를 고르는 길이 통째로 막혀 있었다.
+  //
+  //   ★ v66 에 「넉넉하게 잡는다」로 키운 것이 옳았지만 **깊이까지** 키운
+  //     것이 잘못이었다. 손잡이는 **옆구리에 붙어 있다** — 앞뒤로 90cm 나
+  //     뻗을 이유가 없다. 폭·높이는 손이 닿을 만큼 두고 깊이만 뺀다
   const thrHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.70, 0.86, 0.90),
+    new THREE.BoxGeometry(0.34, 0.42, 0.26),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   thrHit.position.set(TH.x, TH.y, TH.z);
@@ -868,8 +989,9 @@ export function buildCockpit(parent, room, H) {
   const autoLight = box(g, 0.17, 0.055, 0.10, autoLamp, AU.x, AU.y + 0.085, AU.z + 0.02);
   autoLight.name = '자동항법등';
   box(g, 0.09, AU.y - 0.55, 0.09, FRAME, AU.x, (0.55 + AU.y) / 2, AU.z);
+  // ★ 추력 레버와 같은 이유로 줄였다 (바로 위 주석)
   const autoHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.70, 0.80, 0.70),
+    new THREE.BoxGeometry(0.34, 0.40, 0.26),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   autoHit.position.set(AU.x, AU.y, AU.z);
@@ -969,6 +1091,8 @@ export function buildOutside(scene, z) {
   //   조종석에 박혀 있어서 **기관실까지 25m 를 걸으면 별자리가 밀렸다**
   const band = buildBand(out);
   const stars = buildStars(out);
+  const targets = buildTargets(out);
+  const shots = buildShots(out);
   const dust = buildDust(out, z);
   const Z_NEAR = z - DUST.near;
   const Z_FAR = z - DUST.far;
@@ -1180,9 +1304,19 @@ export function buildOutside(scene, z) {
     //    자세 제어가 죽은 채로 조종간을 잡을 때 한쪽이 사라진다
     out.rotation.x += (att.pitch - out.rotation.x) * Math.min(1, dt * 3);
     out.rotation.z = driftRoll + att.roll + lane * 0.06;
-    // ★★★ 좌우 — **부호가 반대다.** 배가 오른쪽으로 틀면 창밖은 왼쪽으로
-    //   흐른다. 이 한 줄이 v66 이전에 통째로 없었다
-    out.rotation.y += (-att.yaw - out.rotation.y) * Math.min(1, dt * 3);
+    // ★★★ 좌우. 이 한 줄이 v66 이전에 통째로 없었다.
+    //
+    //  ★★ **v69 — 부호를 뒤집었다.** v66 에서 「배가 오른쪽으로 틀면 창밖은
+    //    왼쪽으로 흐른다」고 적고 `-att.yaw` 를 넣었는데, 사장님이
+    //    「좌우 조정이 반대로 움직이는데?」라고 하셨고 **재 보니 맞았다.**
+    //    창밖 그룹에 표시점을 박고 오른쪽으로 밀어 보니:
+    //
+    //        밀기 전  x  0.000
+    //        오른쪽   x +0.223   ← 같이 오른쪽으로 갔다
+    //
+    //    **글로 쓴 추론이 틀렸다.** 세 축의 부호는 머리로 맞히는 것이
+    //    아니라 화면에 점을 박고 재는 것이다 (`scratchpad/dir.mjs`)
+    out.rotation.y += (att.yaw - out.rotation.y) * Math.min(1, dt * 3);
 
     // ★★ **천구를 눈에 붙인다.** 별은 무한히 멀리 있으므로 배 안에서
     //   어디로 걸어가든 자리가 안 바뀌어야 한다. 예전엔 천구가 조종석
@@ -1352,6 +1486,9 @@ export function buildOutside(scene, z) {
 
   return {
     update, setRegion, roll, setLand, setAttitude,
+    // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
+    //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
+    targets, shots,
     get region() { return regionKey; },
     /** 검사가 「화면이 정말 바뀌었나」를 묻는다 — 고도·발광·땅 */
     get view() {
