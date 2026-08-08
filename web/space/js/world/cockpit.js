@@ -950,8 +950,20 @@ export function buildCockpit(parent, room, H) {
   box(thrLever, 0.15, 0.13, 0.20, DARK, 0, 0.31, 0);             // 손잡이
   box(thrLever, 0.10, 0.04, 0.12, thrLamp, 0, 0.385, 0.02);      // 불
   // ★ 넉넉하게 — 배가 떨리므로 빠듯하면 누르는 프레임에만 벗어난다
+  // ★★★ **v69 — 상자를 줄였다. 0.70 × 0.86 × 0.90 이 콘솔을 먹고 있었다.**
+  //
+  //   `space-endtoend.js [0]` 이 「갈래 판을 잡는다 → **추력 레버**」로
+  //   빨개져서 찾았다. 재 보니: 앉은 눈(0, 1.20, −8.30)에서 왼쪽 갈래
+  //   판(−1.25, 0.83, −9.00)으로 쏜 광선이 **z −8.75 를 지날 때 x −0.80 ·
+  //   y 0.96** 인데, 옛 상자는 x −0.97~−0.27 · y 0.49~1.35 · z −8.75~−7.85
+  //   이라 **그 점을 품고 있었다.** 즉 팔걸이 손잡이가 눈과 콘솔 사이를
+  //   가로막아, 조종석에서 항로를 고르는 길이 통째로 막혀 있었다.
+  //
+  //   ★ v66 에 「넉넉하게 잡는다」로 키운 것이 옳았지만 **깊이까지** 키운
+  //     것이 잘못이었다. 손잡이는 **옆구리에 붙어 있다** — 앞뒤로 90cm 나
+  //     뻗을 이유가 없다. 폭·높이는 손이 닿을 만큼 두고 깊이만 뺀다
   const thrHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.70, 0.86, 0.90),
+    new THREE.BoxGeometry(0.34, 0.42, 0.26),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   thrHit.position.set(TH.x, TH.y, TH.z);
@@ -977,8 +989,9 @@ export function buildCockpit(parent, room, H) {
   const autoLight = box(g, 0.17, 0.055, 0.10, autoLamp, AU.x, AU.y + 0.085, AU.z + 0.02);
   autoLight.name = '자동항법등';
   box(g, 0.09, AU.y - 0.55, 0.09, FRAME, AU.x, (0.55 + AU.y) / 2, AU.z);
+  // ★ 추력 레버와 같은 이유로 줄였다 (바로 위 주석)
   const autoHit = new THREE.Mesh(
-    new THREE.BoxGeometry(0.70, 0.80, 0.70),
+    new THREE.BoxGeometry(0.34, 0.40, 0.26),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   autoHit.position.set(AU.x, AU.y, AU.z);

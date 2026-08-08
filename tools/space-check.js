@@ -204,7 +204,11 @@ console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은
   // 앉은 채 저장하면 `gunBusy` 가 걸음을 막아 **켤 때마다 그 자리**였다
   await boot();
   await p.evaluate(() => { window.SPACE.putGun(true); window.SPACE.saveNow(); });
-  ok(await p.evaluate(() => window.SPACE.gun.up), '① 조준석에 앉은 채로 저장했다');
+  // ★★ **v69 — `gun.up` 은 v64 에 죽은 칸이다.** 그때 포탑을 걷어내고
+  //   조종석 좌석으로 옮겼는데(`putGun` 이 `helmSat` 을 켠다), 검사만
+  //   옛 칸을 읽어서 **늘 false** 였다. 이름이 `putGun` 그대로라 눈으로도
+  //   안 보였다 — 이 판에서 **네 번째로 나온 「검사가 없어진 것을 읽는다」**
+  ok(await p.evaluate(() => window.SPACE.helm2.sat), '① 조종석에 앉은 채로 저장했다');
 
   await boot();
   ok(!(await p.evaluate(() => window.SPACE.gun.up)),
@@ -228,7 +232,7 @@ console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은
   //   「계속 그 자리에서 움직이질 못해」라고 하셨다. 앉으면 걸음이 막히는
   //   것은 맞다 — 틀린 것은 **막힌 채로 아무 말도 안 한 것**이다
   await p.evaluate(() => window.SPACE.putGun(true));
-  ok(await p.evaluate(() => window.SPACE.gun.up), '⑤ 일부러 다시 앉혔다');
+  ok(await p.evaluate(() => window.SPACE.helm2.sat), '⑤ 일부러 다시 앉혔다');
   const s0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
   await p.keyboard.down('KeyW');
   await p.waitForFunction((s) => {
