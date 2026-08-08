@@ -32,6 +32,11 @@ import { MISSIONS, BY_KEY } from '../web/space/js/game/mission-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 
 const WRITE = process.argv.includes('--write');
+import { GAMBITS } from '../web/space/js/game/gambit-table.js';
+
+/** v68 에서 승부수로 지은 것들 */
+const GB_KEYS = new Set(GAMBITS.map((g) => g.key));
+
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
 
@@ -135,12 +140,27 @@ console.log('\n[5] ★★ **모든 장면이 줄기에 달려 있나** — 안 �
   ok(orphan.length === 0,
     orphan.length ? `줄기에 안 달린 장면: ${orphan.join('·')} — 왜 있는지 말할 수 없다면 빼야 한다` : '장면 여덟이 모두 어느 줄기의 칸이다');
 
-  // ★ 고장 19종 — **여기는 다르다.** 고장은 배경이라 다 달릴 필요가 없다.
-  //   다만 **손이 갈 자리(steps)가 없는 것**은 게임에 아예 안 나오므로 센다
-  const withSteps = Object.values(MISSIONS).filter((m) => m.steps).length;
-  const all = Object.keys(MISSIONS).length;
-  console.log(`   손이 가는 고장 ${withSteps}/${all} — 나머지 ${all - withSteps}종은 표에만 있다`);
-  ok(withSteps >= 8, `${withSteps}종이 실제로 나온다 (8 이상)`);
+  // ★★★ **이 셈이 틀려 있었다** (v68 에서 고쳤다).
+  //   `m.steps` 만 세고 있었는데, `fault.js` 의 `open()` 은 **갈래의 `at`
+  //   으로도** 손이 갈 자리를 만든다 (미소운석·원인 모를 열이 그것이다).
+  //   그래서 「8/19」로 나왔지만 실제로는 열이 나오고 있었다 —
+  //   **검사가 적게 세면 「모자라다」고 착각하고 엉뚱한 데를 판다.**
+  //
+  //   그리고 나머지 아홉 중 넷은 v68 에서 **승부수**로 지었고
+  //   (`gambit-table.js` — 고장이 아니라 결심이라 `steps` 를 못 적었다),
+  //   둘은 딴 계통으로 이미 서 있다 (`builtElsewhere`).
+  const list = Object.values(MISSIONS);
+  const playable = list.filter((m) => (m.steps && m.steps.length)
+    || ((m.branches || []).length > 0 && (m.branches || []).every((b) => b.at)));
+  const gambits = list.filter((m) => GB_KEYS.has(m.key));
+  const elsewhere = list.filter((m) => m.builtAs && !GB_KEYS.has(m.key));
+  const live = new Set([...playable, ...gambits, ...elsewhere].map((m) => m.key));
+  const left = list.filter((m) => !live.has(m.key));
+  console.log(`   고장으로 ${playable.length} · 승부수로 ${gambits.length} · 딴 계통으로 ${elsewhere.length}`
+    + ` = **${live.size}/${list.length}**`);
+  if (left.length) console.log(`   아직 표에만: ${left.map((m) => m.name).join(' · ')}`);
+  ok(live.size >= 16,
+    `**${live.size}종이 실제로 나온다** (16 이상) — 표에만 있는 것은 「설계에는 있는데 게임에는 없다」다`);
 }
 
 console.log('\n[6] 아직 안 지은 칸을 **소리 내어 센다**');

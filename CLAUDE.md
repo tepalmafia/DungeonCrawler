@@ -257,6 +257,7 @@ node tools/space-fuel.js         스페이스워 — ★★ 추진제 · 밟는 
 node tools/space-real.js         스페이스워 — ★★ **말이 되나** · 미션과 설정을 통째로 (docs/space/REAL.md)
 node tools/space-sky.js          스페이스워 — ★ 창밖 · **별이 흐르지 않나**(고증) · 행성에 낮과 밤이 있나 (--see 8391)
 node tools/space-view.js         스페이스워 — ★★★ 조종석 시야 · **몇 도가 보이나 · 정면 원뿔이 비었나** (브라우저 없이 · docs/space/VIEW.md)
+node tools/space-gambit.js       스페이스워 — ★★ **승부수** · 쫓길 때의 결심 넷 (docs/space/GAMBIT.md)
 node tools/space-story.js        스페이스워 — ★★ **스토리 그물** · 줄기가 닫히나 · 게임과 안 갈라졌나
 node tools/space-story.js --write   docs/space/STORY.md 를 표에서 **다시 뽑는다** (손으로 안 적는다)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)

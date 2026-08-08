@@ -524,6 +524,36 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★ **승부수** — 쫓길 때의 결심 넷 (v68 · docs/space/GAMBIT.md)
+//
+//  ★ CLAUDE.md: 「계통을 하나 만들면 `space-endtoend.js` 에 한 절을 보탠다.」
+//    계통 검사(`space-gambit.js`)는 **제가 만든 상태**에서 시작하고,
+//    이 검사는 **켠 다음부터 손으로만** 한다. 둘 다 있어야 한다.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[4b] ★★ **승부수** — 이미 있던 손잡이가 새 뜻을 갖나 (v68)');
+{
+  await stand();
+  await S(() => { SPACE.giveOre(60); SPACE.setPower('thrust', false); });
+  const g0 = await S(() => SPACE.putGambit('jettison'));
+  ok(!!g0 && g0.on === 'jettison',
+    `① 「버리기」가 뜬다 — 손은 **${g0?.hand}**(화물 접수구) · 「${g0?.lead}」`);
+  ok(await aimAround(3.4, 6.35, Math.PI, -0.25, 'hatch'),
+    `② **거점에서 거래하던 그 구멍**이 잡힌다 (${await S(() => SPACE.aim)}) — 새 손잡이가 아니다`);
+  const ore0 = (await S(() => SPACE.supply)).ore;
+  await down();
+  const done = await until(() => SPACE.gambit.on === null && SPACE.gambit.took > 0, 90, '결판');
+  await up();
+  const said2 = await said();
+  ok(done, `③ 잡고 있으니 결판이 난다 — 「${said2.trim()}」`);
+  // ★★ **한쪽이 다른 쪽을 부정하면 안 된다.** 광석을 던져 놓고
+  //   「광석이 모자랍니다」가 뜨던 자리다 — 같은 손이 두 뜻을 가질 때의 사고
+  ok(!/모자랍니다|거점에서만/.test(said2),
+    '④ ★ **거래 잔소리가 안 뜬다** — 같은 손잡이가 두 뜻을 가질 때 한쪽이 다른 쪽을 부정하면 안 된다');
+  const ore1 = (await S(() => SPACE.supply)).ore;
+  ok(ore1 < ore0, `⑤ **광석을 통째로 던졌다** (${ore0} → ${ore1}) — 파는 것이 있어야 결심이다`);
+}
+
 console.log('\n[5] 고장 하나를 **찾아서 고칠 수 있나** — 이 게임의 본체');
 {
   await S(() => SPACE.forceFault());
