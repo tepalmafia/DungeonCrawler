@@ -33,6 +33,11 @@ import {
 } from '../game/view-table.js';
 import { drawFork } from './chart.js';
 import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
+// ★★★ v69 — **격추 게임으로 바뀌었다.** 떠도는 것들과 쏜 것들을 창밖에
+//   세운다 (docs/space/COMBAT.md). v64 가 숫자만 만들고 **보이는 것을
+//   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
+import { buildTargets } from './targets.js';
+import { buildShots } from './shots.js';
 import { DUST } from '../game/sky-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
@@ -703,9 +708,12 @@ export function buildCockpit(parent, room, H) {
   //    안 되는 자리라 **주황 덩어리 넷이 창을 가로막고** 있었다.
   //    같은 폭이라도 가까우면 화면에서 크다 (`atan`). 조종석 안쪽 물건에
   //    악센트를 다는 것은 벽에 다는 것과 완전히 다른 일이다
+  //  ★★ **v69 — 큰 콘솔을 팔걸이로 줄였다.** ±1.45 에 세운 덩어리가
+  //    사장님 화면에서 **계기를 가리고** 있었다. 팔걸이는 좌석에 붙는
+  //    작은 것이라 아무것도 안 가린다
   for (const sx of [-1, 1]) {
-    box(g, 0.62, 0.52, 1.30, DARK, sx * SIDE.x, 0.26, SIDE.z);
-    box(g, 0.66, 0.06, 1.34, PANEL, sx * SIDE.x, 0.55, SIDE.z);
+    box(g, 0.14, 0.10, 0.62, PANEL, sx * SIDE.x, 0.70, SIDE.z);        // 팔걸이 상판
+    box(g, 0.10, 0.30, 0.10, DARK, sx * SIDE.x, 0.53, SIDE.z + 0.22);  // 받침
   }
 
   // ── 좌석 둘 ───────────────────────────────────────────
@@ -969,6 +977,8 @@ export function buildOutside(scene, z) {
   //   조종석에 박혀 있어서 **기관실까지 25m 를 걸으면 별자리가 밀렸다**
   const band = buildBand(out);
   const stars = buildStars(out);
+  const targets = buildTargets(out);
+  const shots = buildShots(out);
   const dust = buildDust(out, z);
   const Z_NEAR = z - DUST.near;
   const Z_FAR = z - DUST.far;
@@ -1180,9 +1190,19 @@ export function buildOutside(scene, z) {
     //    자세 제어가 죽은 채로 조종간을 잡을 때 한쪽이 사라진다
     out.rotation.x += (att.pitch - out.rotation.x) * Math.min(1, dt * 3);
     out.rotation.z = driftRoll + att.roll + lane * 0.06;
-    // ★★★ 좌우 — **부호가 반대다.** 배가 오른쪽으로 틀면 창밖은 왼쪽으로
-    //   흐른다. 이 한 줄이 v66 이전에 통째로 없었다
-    out.rotation.y += (-att.yaw - out.rotation.y) * Math.min(1, dt * 3);
+    // ★★★ 좌우. 이 한 줄이 v66 이전에 통째로 없었다.
+    //
+    //  ★★ **v69 — 부호를 뒤집었다.** v66 에서 「배가 오른쪽으로 틀면 창밖은
+    //    왼쪽으로 흐른다」고 적고 `-att.yaw` 를 넣었는데, 사장님이
+    //    「좌우 조정이 반대로 움직이는데?」라고 하셨고 **재 보니 맞았다.**
+    //    창밖 그룹에 표시점을 박고 오른쪽으로 밀어 보니:
+    //
+    //        밀기 전  x  0.000
+    //        오른쪽   x +0.223   ← 같이 오른쪽으로 갔다
+    //
+    //    **글로 쓴 추론이 틀렸다.** 세 축의 부호는 머리로 맞히는 것이
+    //    아니라 화면에 점을 박고 재는 것이다 (`scratchpad/dir.mjs`)
+    out.rotation.y += (att.yaw - out.rotation.y) * Math.min(1, dt * 3);
 
     // ★★ **천구를 눈에 붙인다.** 별은 무한히 멀리 있으므로 배 안에서
     //   어디로 걸어가든 자리가 안 바뀌어야 한다. 예전엔 천구가 조종석
@@ -1352,6 +1372,9 @@ export function buildOutside(scene, z) {
 
   return {
     update, setRegion, roll, setLand, setAttitude,
+    // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
+    //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
+    targets, shots,
     get region() { return regionKey; },
     /** 검사가 「화면이 정말 바뀌었나」를 묻는다 — 고도·발광·땅 */
     get view() {

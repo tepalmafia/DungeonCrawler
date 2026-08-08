@@ -512,6 +512,10 @@ function fireGun() {
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
   banner = `${w.name} 발사`;
   bannerT = 1.4;
+  // ★★★ **v69 — 쏘는 것이 보인다.** v68 까지 여기서 숫자만 줬다 (열이
+  //   오르고 광석이 줄고 hp 가 빠졌다). 화면에서는 아무 일도 안 났고,
+  //   격추 게임에서 그건 **쏘는 맛이 아예 없는 것**이다
+  ship.outside.shots.fire(w.key, aimed ? aimed.t : null);
 }
 
 /** ★★ 날아간 것이 닿았다 — 부수거나 빗나간다 */
@@ -529,6 +533,8 @@ function landShots(dt) {
     }
     t.hp -= d.shot.dmg;
     t.flash = 0.5;
+    // ★ 맞은 자리에서 터진다 — 「맞았나」를 숫자로만 알려주지 않는다
+    ship.outside.shots.pop(shotAt(t.az, t.el, t.dist));
     if (t.hp > 0) { banner = `${TKINDS[t.kind].name}에 맞혔습니다 — 맷집 ${t.hp}`; bannerT = 1.8; continue; }
     // 부쉈다
     sky.list = sky.list.filter((x) => x !== t);
@@ -3405,6 +3411,13 @@ function frame(now) {
   setSkyRegion(sky, ship.outside.region);
   // ★★★ **부딪힌 것을 받아 온다** — 선체 안으로는 못 들어오고, 대신 흔들린다
   takeBumps(stepSky(sky, dt, { moving: route.phase === RPHASE.LEG && !landBusy(land) }) ?? []);
+  // ★★★ **v69 — 규칙이 든 자리를 창밖에 세운다** (사장님 「적 비행선도
+  //   안보이고」). v68 까지 이 목록은 **HUD 캔버스의 초록 글리프**로만
+  //   갔다 — 창밖에는 별과 바위뿐이었고, 격추 게임인데 격추가 안 보였다.
+  // ★ `stepSky` **바로 뒤**에 둔다. 앞에 두면 한 프레임 늦은 자리를
+  //   그리고, 그 한 프레임이 빠르게 스치는 것에서는 어긋남으로 보인다
+  ship.outside.targets.update(sky.list, dt);
+  ship.outside.shots.update(dt);
 
   // ── ★★ 레이더 · 락온 ────────────────────────────────
   //  ★ 레이더를 **새로 안 만든다** — 능동 탐지 차단기가 이미 그것이다.

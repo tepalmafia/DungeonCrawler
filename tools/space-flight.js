@@ -56,9 +56,16 @@ console.log('\n[1] ★★ **세 축이 다 먹나**');
   hold(f, 0.6, { pitch: 1, yaw: 1, roll: 1 });
   ok(f.pitch > 0 && f.yaw > 0 && f.roll > 0,
     `★ **셋을 동시에** 밀 수 있다 — 「${attitudeWord(f)}」`);
-  // 좌우 축은 잔해 피하기와 같은 값이라야 한다 — 안 그러면 축이 둘이 된다
-  ok(Math.abs(AXES.yaw.max - HAZARD.laneMax) < 1e-6,
-    `좌우 끝(${AXES.yaw.max})이 잔해 피하기의 끝(${HAZARD.laneMax})과 **같다** — 축을 둘로 안 만든다`);
+  // ★★★ **v69 에서 이 검사가 뒤집혔다.** 예전에는 「좌우 끝이 잔해
+  //   피하기의 끝과 **같다**」였다 — 축을 둘로 안 만들려는 것이었고 옳았다.
+  //   그런데 v69 에 좌우 한계를 **없앴다** (사장님 「바로 뒤로도 선회」).
+  //   같을 수가 없어졌으므로 **지키려던 것만 남긴다**: 잔해 피하기가
+  //   여전히 **좌우 축을 그대로 쓰는가**. 값이 같은 것은 방법이었고,
+  //   축이 하나인 것이 목적이었다
+  ok(AXES.yaw.max === Infinity,
+    `★ 좌우는 **끝이 없다** — 바로 뒤(180도)로도 기수를 돌린다`);
+  ok(HAZARD.laneMax > 0 && HAZARD.laneMax < AXES.yaw.max,
+    `잔해 피하기(±${HAZARD.laneMax})가 좌우 축 **안에** 있다 — 축을 둘로 안 만든다`);
 }
 
 console.log('\n[2] ★★ **360도가 정말 한 바퀴 도나**');
@@ -68,9 +75,17 @@ console.log('\n[2] ★★ **360도가 정말 한 바퀴 도나**');
   const deg = (f.roll * 180) / Math.PI;
   console.log(`   10초 비트니 ${deg.toFixed(0)}도 (${(deg / 360).toFixed(2)}바퀴)`);
   ok(deg > 360, `★ **한 바퀴를 넘긴다** (${deg.toFixed(0)}도) — 막히면 그건 회전이 아니라 기울기다`);
-  ok(AXES.roll.max === Infinity, '비틀기만 끝이 없다 — 나머지 둘은 끝이 있어야 배가 아니라 팽이가 안 된다');
-  ok(AXES.pitch.max < 1.6 && AXES.yaw.max < 4,
-    `위아래(${AXES.pitch.max}) · 좌우(${AXES.yaw.max})는 끝이 있다`);
+  // ★ v69 — **둘이 끝이 없다.** 비틀기와 좌우. 위아래만 끝이 있다:
+  //   기수를 위로 끝까지 젖히면 그건 선회가 아니라 공중제비고, 그러면
+  //   짐벌이 감당 못 한다 (방이 뒤집힌다)
+  ok(AXES.roll.max === Infinity && AXES.yaw.max === Infinity,
+    '비틀기와 **좌우**는 끝이 없다 — 사방을 다 본다');
+  ok(AXES.pitch.max < 1.6,
+    `위아래(${AXES.pitch.max})만 끝이 있다 — 여기까지 열면 공중제비가 되고 짐벌이 감당 못 한다`);
+  const fy = makeFlight();
+  hold(fy, 4, { yaw: 1 });
+  ok((fy.yaw * 180) / Math.PI > 180,
+    `★★ 좌우로 4초 밀면 ${((fy.yaw * 180) / Math.PI).toFixed(0)}도 — **바로 뒤(180도)를 넘긴다**`);
   // 한 바퀴 돌면 계기가 0 을 다시 가리킨다
   const f2 = makeFlight();
   f2.roll = Math.PI * 2;
@@ -144,8 +159,17 @@ console.log('\n[6] ★★ **장르가 안 바뀌었나** — 조종석에 매인
   console.log(`   ${OFF_WEIGHT.roll < 1 ? `비틀기는 항로에서 덜 벗어난 것으로 친다 (${OFF_WEIGHT.roll})` : ''}`);
   // 축이 셋이어도 「벗어남」은 하나로 합쳐진다 — 벌을 셋 외우게 하지 않는다
   const f = makeFlight();
-  f.pitch = AXES.pitch.max; f.yaw = AXES.yaw.max; f.roll = Math.PI;
+  // ★★ **v69 — 여기가 조용히 NaN 이 됐다.** `AXES.yaw.max` 를 Infinity 로
+  //   열자 `f.yaw = Infinity` 가 됐고, `offCourse` 안의 `Infinity % 2π` 가
+  //   NaN 이라 벌이 통째로 사라졌다. **한계를 없앨 때는 그 한계를 값으로
+  //   쓰던 자리를 전부 따라가야 한다** — 여기와 `flight.js` 둘이었다.
+  //   끝이 없는 축은 「제일 많이 벗어난 자세」가 곧 **반 바퀴(180도)** 다
+  f.pitch = AXES.pitch.max; f.yaw = Math.PI; f.roll = Math.PI;
   ok(Math.abs(offCourse(f) - 1) < 0.01, `셋을 다 끝까지 밀면 벗어남 ${offCourse(f).toFixed(2)} — 하나로 합쳐진다`);
+  const back = makeFlight();
+  back.yaw = Math.PI;
+  ok(offCourse(back) > 0.4,
+    `★★ **뒤로 돌아서면 벗어남이 ${offCourse(back).toFixed(2)}** — 360도가 공짜가 아니다. 돌아선 채로 가면 느려진다`);
   const r = makeFlight();
   r.roll = Math.PI;
   ok(offCourse(r) < 0.4,
