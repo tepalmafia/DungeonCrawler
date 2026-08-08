@@ -92,12 +92,22 @@ const pressUntil = async (cond, tries = 5, sec = 1.2) => {
  *   되어 검사가 아무것도 안 지키게 된다
  */
 const aimAround = async (x, z, yaw, pitch, want) => {
-  for (const dy of [0, 0.12, -0.12, 0.24, -0.24]) {
-    for (const dp of [0, 0.12, -0.12, 0.24, -0.24]) {
-      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 5)) return true;
+  // ★★★ **가장자리가 아니라 한가운데를 잡는다** (v66 · 여기서 다섯 번 빨개졌다).
+  //   처음엔 「맞는 각도가 나오면 바로 멈춘다」였다. 그러면 거의 늘
+  //   **판정 상자의 가장자리**에 서게 되는데, 배는 늘 미세하게 떨리므로
+  //   (`camera.rotation.z = sw * 0.06 + fly3.tiltZ`) 가장자리에서는
+  //   프레임마다 들락날락한다. 그래서 「잡힌다 ✔ → 눌렀더니 아무 일 없음 ✘」
+  //   이 계속 났다. **맞는 각도를 다 모아 가운데로 간다.**
+  const hits = [];
+  for (const dy of [-0.24, -0.12, 0, 0.12, 0.24]) {
+    for (const dp of [-0.24, -0.12, 0, 0.12, 0.24]) {
+      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 4)) hits.push([dy, dp]);
     }
   }
-  return false;
+  if (!hits.length) return false;
+  const my = hits.reduce((a, h) => a + h[0], 0) / hits.length;
+  const mp = hits.reduce((a, h) => a + h[1], 0) / hits.length;
+  return aimAt(x, z, yaw + my, pitch + mp, want, 8);
 };
 const settle = async () => {
   // ★★★ **짐벌이 바로 설 때까지** 기다린다 (v66 · 여기서 세 번 빨개졌다).
