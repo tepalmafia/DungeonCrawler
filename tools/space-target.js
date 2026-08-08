@@ -17,6 +17,7 @@ import {
   makeSky, setRegion, stepSky, shootSky, aimedAt, tolOf, inRange, wantCount, summary,
 } from '../web/space/js/game/target.js';
 import { GUN } from '../web/space/js/game/gun-table.js';
+import { AXES } from '../web/space/js/game/flight-table.js';
 import { REGIONS } from '../web/space/js/game/regions-table.js';
 
 let fail = 0;
@@ -68,9 +69,75 @@ console.log('\n[2] 지나간 것은 **새로 난다** — 하늘이 안 빈다')
     last = now;
     t += DT;
   }
-  console.log(`   4분에 ${spawned}개가 새로 났다 · 지금 ${s.list.length}개`);
-  ok(s.list.length === wantCount(s), `늘 ${wantCount(s)}개가 떠 있다 (잔해밭)`);
+  // ★ v69 — **적 우주선은 `want` 에 안 센다.** 세면 적이 뜰 때마다 주울
+  //   것이 줄어든다. 여기서도 떠도는 것만 세야 「하늘이 안 빈다」를 잰다
+  const drift = s.list.filter((t) => !KINDS[t.kind]?.rams).length;
+  console.log(`   4분에 ${spawned}개가 새로 났다 · 지금 떠도는 것 ${drift}개 · 적 ${s.list.length - drift}척`);
+  ok(drift === wantCount(s), `늘 ${wantCount(s)}개가 떠 있다 (잔해밭)`);
   ok(spawned > 5, '지나간 만큼 새로 난다 — 한 번 쏘고 나면 텅 비지 않는다');
+}
+
+console.log('\n[2b] ★★★ **적 우주선이 저절로, 계속 오나** (v69)');
+{
+  // 사장님 「테스트 차원에서 적우주선 우주 쓰레기 위성등이 나타나도록 해줘. **계속**」
+  // ★★ **부수면서 재야 한다.** 처음엔 안 부수고 10분을 돌렸더니 2척이
+  //   나왔다 — 둘이 뜬 채로 안 죽으니 자리가 안 나서 그 뒤로 영영 안 온
+  //   것이다. 그건 규칙이 틀린 게 아니라 **검사가 안 싸운 것**이다.
+  //   사람은 부순다. 부수는 사람의 하늘을 재야 「계속 오나」가 나온다
+  const s = fresh();
+  let t = 0, most = 0;
+  while (t < 600) {
+    stepSky(s, DT, { moving: true });
+    most = Math.max(most, summary(s).raiders);
+    // 사거리에 들어온 적을 부순다 (사람이 하는 일)
+    s.list = s.list.filter((x) => !(KINDS[x.kind]?.rams && x.dist < 130));
+    t += DT;
+  }
+  const per = s.cameRaiders / 10;
+  console.log(`   10분에 ${s.cameRaiders}척이 저절로 왔다 (분당 ${per.toFixed(1)}) · 한때 제일 많았을 때 ${most}척`);
+  ok(s.cameRaiders >= 5,
+    `★★ **불러야만 오는 것이 아니다** — 10분에 ${s.cameRaiders}척. v68 까지는 장면이 부를 때만 왔다`);
+  ok(per >= 0.4 && per <= 1.6,
+    `분당 ${per.toFixed(1)}척 (0.4~1.6) — 더 잦으면 쉴 틈이 없고, 뜸하면 격추 게임이 아니다`);
+  ok(most <= TARGET.raiderMax,
+    `★ 한 번에 ${TARGET.raiderMax}척을 안 넘는다 (제일 많았을 때 ${most}) — 넘으면 부술 수가 없어 사고가 된다`);
+  // ★ 거점에서는 안 온다 — 사는 일이 벌이 되면 안 된다
+  const q = fresh();
+  let u = 0;
+  while (u < 600) { stepSky(q, DT, { moving: true, quiet: true }); u += DT; }
+  ok(q.cameRaiders === 0, '거점에 대고 있으면 **안 온다** — 사는 일이 벌이 되면 안 된다');
+}
+
+console.log('\n[2c] ★★★ **사방에 있나** — 「바로 뒤로 선회」의 근거 (v69)');
+{
+  const s = fresh();
+  let t = 0;
+  const seen = { front: 0, side: 0, back: 0 };
+  while (t < 900) {
+    stepSky(s, DT, { moving: true });
+    for (const x of s.list) {
+      const a = Math.abs(x.az);
+      if (a < 60) seen.front++; else if (a < 120) seen.side++; else seen.back++;
+    }
+    t += DT;
+  }
+  const tot = seen.front + seen.side + seen.back;
+  console.log(`   앞 ${(seen.front / tot * 100).toFixed(0)}% · 옆 ${(seen.side / tot * 100).toFixed(0)}% · 뒤 ${(seen.back / tot * 100).toFixed(0)}%`);
+  ok(seen.back / tot > 0.15,
+    `★★ **뒤에도 있다** (${(seen.back / tot * 100).toFixed(0)}%) — 뒤가 비어 있으면 360도 선회를 열어 준 뜻이 없다`);
+  ok(seen.front / tot > 0.2, '앞에도 넉넉히 있다 — 늘 돌아야 하면 그건 조종이 아니라 숙제다');
+  // ★★ **감기는가.** 처음엔 「180 근처에 아무것도 없다」로 물었는데
+  //   그건 틀린 물음이었다 — 179.7도에 있는 것은 **정상**이다. 물어야 할
+  //   것은 ① 값이 범위를 안 넘나 ② 이음매를 **넘어 다니나** 둘이다.
+  //   되돌리기(반사)를 쓰면 ②가 0 이 되어 등 뒤에 안 보이는 벽이 생긴다
+  const inRangeAz = s.list.every((x) => x.az >= -180 && x.az <= 180);
+  ok(inRangeAz, '방위가 ±180 을 안 넘는다');
+  const w = fresh();
+  const one = w.list[0];
+  one.az = 179.4; one.vaz = 3.5;
+  for (let i = 0; i < 30; i++) stepSky(w, DT, { moving: false });
+  ok(one.az < 0,
+    `★★ 이음매를 **넘어간다** (179.4도 → ${one.az.toFixed(1)}도) — 되돌리면 거기 안 보이는 벽이 선다`);
 }
 
 console.log('\n[3] 구역마다 다르다 — **어디를 고르는가가 여기에도 닿는다**');
@@ -99,11 +166,20 @@ console.log('\n[4] ★★ **겨누는 것이 일인가** — 대충 쏴서 맞�
   console.log(`   허용 각 — 파편 ${tolOf({ kind: 'junk' }).toFixed(1)}도 · 위성 ${tolOf({ kind: 'sat' }).toFixed(1)}도 · 연료통 ${tolOf({ kind: 'tank' }).toFixed(1)}도`);
   ok(tolOf({ kind: 'sat' }) > tolOf({ kind: 'tank' }), '큰 것이 맞히기 쉽다');
 
-  // ★ **얼마나 돌려야 하나** — 끝에서 끝까지 WASD 로
-  const sweep = (TARGET.azLimit * 2) / GUN.aimRate;
-  console.log(`   왼끝에서 오른끝까지 ${sweep.toFixed(1)}초 (WASD ${GUN.aimRate}도/초)`);
-  ok(sweep >= 3 && sweep <= 12,
-    `${sweep.toFixed(1)}초 (3~12) — 더 빠르면 휘두르는 것이고, 느리면 지나가는 것을 못 따라간다`);
+  // ★★★ **v69 — 이 검사가 재던 것이 없어졌다.**
+  //
+  //   v68 까지 「끝에서 끝까지 WASD 로 몇 초」를 쟀다 (`GUN.aimRate` 26도/초).
+  //   그런데 v64 에 **겨눔이 기수로 옮겨 갔고**(`noseAim()` — 조종간을 밀어
+  //   기수를 돌리는 것이 곧 조준이다), WASD 조준은 그때 죽었다.
+  //   검사만 옛 숫자를 계속 재고 있었다 — 그리고 v69 에 방위가 ±180 이
+  //   되면서 **13.8초**가 나와 그제서야 빨개졌다. 3년치 중 제일 흔한 병이다:
+  //   **검사가 없어진 것을 재고 있으면 조용하다가 엉뚱할 때 운다.**
+  //
+  //   재야 하는 것은 이제 **기수를 얼마나 빨리 돌리나**다
+  const half = Math.PI / AXES.yaw.rate;               // 정면 → 바로 뒤 (라디안/rate)
+  console.log(`   정면에서 **바로 뒤**까지 ${half.toFixed(1)}초 (조종간 ${AXES.yaw.rate} rad/s)`);
+  ok(half >= 2 && half <= 6,
+    `${half.toFixed(1)}초 (2~6) — 더 빠르면 큰 배가 아니고, 느리면 뒤를 잡는 동안 들이받힌다`);
   ok(GUN.aimRate > Math.max(...TARGET.driftAz.map(Math.abs)) * 3,
     `조준(${GUN.aimRate}도/초)이 흐름(${Math.max(...TARGET.driftAz.map(Math.abs))}도/초)보다 훨씬 빠르다 — 따라잡을 수 있다`);
 }

@@ -645,6 +645,47 @@ console.log('\n[6b] ★ **창밖이 살아 있나** — 별은 박혀 있고 먼
   await S(() => SPACE.unpinRegion());
 }
 
+console.log('\n[6c] ★★★ **격추가 보이나** — 적 · 탄 · 레이더 · 상태창 (v69)');
+{
+  // ★★ **여기가 이 판의 전부다.** 사장님 「발사 되는게 안보이잔아?
+  //   적 비행선도 안보이고」 — v64 가 전투를 숫자로만 만들어 두었고,
+  //   계통 검사는 다 초록이었다. **화면에 서는가**는 여기서만 걸린다.
+  await sit();
+  await S(() => { SPACE.setPower('sensor', true); SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }); });
+  await settle();
+
+  // ① 창밖에 **정말 세워지나**
+  await S(() => { SPACE.putAim(0, 0); SPACE.putTarget('raider'); });
+  await p.waitForTimeout(900);
+  const seen = await S(() => SPACE.outside?.targets ?? null);
+  ok(!!seen && seen.n > 0,
+    `① ★★★ 창밖에 **${seen?.n ?? 0}개가 서 있다** — v68 까지 0 이었다 (HUD 글리프만 있었다)`);
+  ok(!!seen && seen.kinds?.some((k) => k.includes('raider')),
+    '② **적 우주선이 그중에 있다** — 「적 비행선도 안보이고」의 답');
+
+  // ③ 쏘면 **뭔가 날아가나**
+  const before = await S(() => SPACE.outside?.shots?.fired ?? 0);
+  await S(() => SPACE.fire());
+  await p.waitForTimeout(200);
+  const after = await S(() => SPACE.outside?.shots ?? null);
+  ok(!!after && after.fired > before,
+    `③ ★★★ 쏘니 **날아가는 것이 생긴다** (${before} → ${after?.fired ?? 0}) — 「발사 되는게 안보이잔아」의 답`);
+
+  // ④ 레이더가 **뒤에 있는 것을 말하나**
+  await S(() => { const t = SPACE.sky.list[0]; if (t) SPACE.putSkyAz?.(t.id, 170); });
+  const blips = await S(() => SPACE.combat?.blips ?? null);
+  ok(Array.isArray(blips) && blips.some((x) => Math.abs(x.relAz) > 120),
+    `④ ★★ 레이더가 **뒤에 있는 것을 찍는다** (${(blips ?? []).length}점) —`
+    + ' HUD 는 26도뿐이라 뒤는 여기 말고 나올 데가 없다');
+
+  // ⑤ **앉으면 상태창이 뜨나** — 사장님 「hud처럼 … 퀘스트 안내창처럼」
+  ok(await S(() => !!SPACE.statusOn),
+    '⑤ ★★ **앉으니 상태창이 켜졌다** — 열·냉각·속도·전력·자국·미사일');
+  await stand();
+  ok(await S(() => !SPACE.statusOn),
+    '⑥ **서면 꺼진다** — 걸어다니는 동안 계기가 따라다니면 안 된다');
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은

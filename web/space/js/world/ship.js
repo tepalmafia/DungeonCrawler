@@ -42,6 +42,7 @@ import { DOOR } from '../game/door-table.js';
 // ★ v64 — 주포(포탑·사다리·조준석)를 걷어냈다. 조준경만 남는다
 import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
+import { buildStatusHud } from './status.js';
 import { DEP, ROOF, HUD as HUDV } from '../game/view-table.js';
 
 const H = 2.7;          // 천장 높이
@@ -1025,6 +1026,19 @@ export function buildShip(scene, camera = null) {
   //   그 어긋남을 **크게 만들어 덮고** 있었다
   sight.mesh.position.set(0, DEP.y + 0.06, DEP.z - HUDV.dist);
   ship.add(sight.mesh);
+
+  // ══ ★★★ **상태창 — 앉으면 뜬다** (v69 · `world/status.js`) ══════════
+  //  사장님 「기타 다른것들은 **hud처럼 조정석에 앉았을때 보이도록** …
+  //          **퀘스트 안내창처럼**」
+  //
+  //  ★ 자리를 **조준경 왼쪽 아래**로 둔다. 겹치면 둘 다 못 읽고, 가운데에
+  //    두면 창을 먹는다 (v65 에 한 번 겪었다 — 조준경이 창을 덮고 있었다).
+  //    왼쪽 아래는 실제 전투기가 연료·무장 상태를 두는 자리이기도 하다
+  const statusHud = buildStatusHud(HUDV.w * 1.15, HUDV.h * 1.05);
+  statusHud.mesh.position.set(
+    -HUDV.w * 1.18, DEP.y - HUDV.h * 0.52, DEP.z - HUDV.dist - 0.01,
+  );
+  ship.add(statusHud.mesh);
   const turret = {
     group: null, sight,
     // ★ 없어진 손잡이들 — `null` 이라야 `main.js` 의 조준 목록에서 걸러진다.
@@ -1037,7 +1051,7 @@ export function buildShip(scene, camera = null) {
   };
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    turret, sight, outerDoor, marks, byBay,
+    turret, sight, statusHud, outerDoor, marks, byBay,
     /**
      * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
      *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —

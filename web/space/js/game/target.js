@@ -12,6 +12,21 @@ import { KINDS, TARGET, HULL, pickKind } from './target-table.js';
 const span = ([a, b], rnd) => a + rnd() * (b - a);
 
 /**
+ * ★★★ **방위의 차이는 빼기가 아니다** (도).
+ *
+ *   v69 에 방위가 한 바퀴(±180)가 되면서, 179도와 −179도가 **2도 차이**인데
+ *   그냥 빼면 358 이 된다. 조준·락온·레이더가 전부 이 값을 쓰므로, 안
+ *   감으면 **기수 바로 뒤에서 조준이 통째로 죽는다** — 게다가 조용히
+ *   죽는다(「저기 있는데 안 잡힌다」). 한 곳에 두고 다 여기를 부른다
+ */
+export function azDiff(a, b) {
+  let d = (a - b) % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+/**
  * 하나 새로 띄운다.
  * @param kind ★ 정해서 띄운다 (적 우주선). 안 주면 무게로 뽑는다
  */
@@ -42,7 +57,7 @@ export function spawnRaider(sky) {
   const t = spawnOne(sky.rnd, sky.next++, 'raider');
   // ★ **앞쪽에서 온다.** 뒤에서 오면 화면에 안 보이는 것이 다가오는 셈이라
   //   「부수거나 부딪힌다」가 선택이 아니라 사고가 된다
-  t.az = (sky.rnd() * 2 - 1) * (TARGET.azLimit * 0.55);
+  t.az = (sky.rnd() * 2 - 1) * TARGET.raiderAz;
   t.el = (sky.rnd() * 2 - 1) * (TARGET.elLimit * 0.5);
   t.dist = TARGET.spawn[1];
   sky.list.push(t);
@@ -54,6 +69,10 @@ export function makeSky(rnd) {
     rnd, list: [], next: 0, killed: 0, shots: 0, region: 'empty',
     /** ★ 이번 회차에 부딪힌 횟수 — 끝 화면과 검사가 읽는다 (v64) */
     grazes: 0, rams: 0,
+    /** ★★ v69 — 다음 적까지 남은 초. 0 이 되면 하나 온다 */
+    nextRaider: span(TARGET.raiderEvery, rnd),
+    /** 저절로 온 적이 몇이나 됐나 — 검사가 「정말 계속 오나」를 묻는다 */
+    cameRaiders: 0,
   };
 }
 
@@ -68,16 +87,37 @@ export const wantCount = (sky) =>
  * 한 걸음. 흘러가고, 지나간 것은 새로 난다.
  * @param moving 배가 나아가고 있나 — 서 있으면 안 다가온다
  */
-export function stepSky(sky, dt, { moving = true } = {}) {
+export function stepSky(sky, dt, { moving = true, quiet = false } = {}) {
   const want = wantCount(sky);
+
+  // ══ ★★★ **적이 저절로 온다** (v69) ═══════════════════════════════
+  //  사장님 「테스트 차원에서 적우주선 … 나타나도록 해줘. **계속**」.
+  //  ★ `quiet` 는 「여기서는 안 온다」 — 성간 공백처럼 아무것도 없는
+  //    구역과, 거점에 대고 있을 때. 거점에서 얻어맞으면 사는 일이 벌이 된다
+  if (!quiet && want > 0) {
+    sky.nextRaider -= dt;
+    if (sky.nextRaider <= 0) {
+      sky.nextRaider = span(TARGET.raiderEvery, sky.rnd);
+      const now = sky.list.filter((t) => KINDS[t.kind]?.rams).length;
+      // ★ 넘치면 **시계만 되감고 안 부른다.** 큐에 쌓아 두면 다 부순
+      //   순간 셋이 한꺼번에 튀어나온다 — 그건 싸움이 아니라 사고다
+      if (now < TARGET.raiderMax) { spawnRaider(sky); sky.cameRaiders++; }
+    }
+  }
+
   /** ★ 이번 걸음에 난 부딪힘 — main.js 가 흔들고 선체를 깎는다 (v64) */
   const bumps = [];
   for (const t of sky.list) {
     const k = KINDS[t.kind];
     t.az += t.vaz * dt;
     t.el += t.vel * dt;
-    // 끝에 닿으면 **되돈다** — 그래야 시야 밖으로 다 새어 나가지 않는다
-    if (Math.abs(t.az) > TARGET.azLimit) { t.az = Math.sign(t.az) * TARGET.azLimit; t.vaz *= -1; }
+    // ★★ v69 — 방위는 **감는다**, 고도는 **되돈다.**
+    //   방위가 한 바퀴(±180)가 되면서 「끝」이 없어졌다. 180 에서 되돌리면
+    //   등 뒤에 **보이지 않는 벽**이 생겨서 적이 거기 붙어 떠는데,
+    //   원래 한 바퀴인 것에 끝을 만든 것이라 말이 안 된다.
+    //   고도는 다르다 — 위아래는 정말로 끝이 있다 (천정과 천저)
+    if (t.az > 180) t.az -= 360;
+    if (t.az < -180) t.az += 360;
     if (Math.abs(t.el) > TARGET.elLimit) { t.el = Math.sign(t.el) * TARGET.elLimit; t.vel *= -1; }
     // ★ 적 우주선은 **저 혼자 다가온다** — 배가 서 있어도 온다
     if (moving) t.dist -= TARGET.closing * dt;
@@ -123,12 +163,18 @@ export function stepSky(sky, dt, { moving = true } = {}) {
 
 /** 지금 겨눈 쪽에 **제일 가까운 것** — 조준경이 강조한다 */
 export function aimedAt(sky, az, el) {
-  let best = null, bestD = 1e9;
+  let best = null, bestD = 1e9, bestRel = 0;
   for (const t of sky.list) {
-    const d = Math.hypot(t.az - az, t.el - el);
-    if (d < bestD) { bestD = d; best = t; }
+    // ★ **감아서 잰다** — 안 그러면 기수 바로 뒤에서 조준이 죽는다
+    const rel = azDiff(t.az, az);
+    const d = Math.hypot(rel, t.el - el);
+    if (d < bestD) { bestD = d; best = t; bestRel = rel; }
   }
-  return best ? { t: best, off: bestD } : null;
+  // ★★ v69 — `relAz`·`relEl` 을 같이 준다. 레이더 원뿔은 **기수 기준**인데
+  //   v68 까지 `inCone(t.az, t.el)` 로 **세상 기준** 값을 넣고 있었다.
+  //   그때는 기수가 ±62 를 못 벗어나 티가 안 났다 — 이제 한 바퀴를 돌므로
+  //   안 고치면 「뒤를 보고 있는데 앞의 것이 원뿔 안이라고 나온다」
+  return best ? { t: best, off: bestD, relAz: bestRel, relEl: best.el - el } : null;
 }
 
 /** 이만큼 벗어나도 맞나 (도) — 큰 것은 넉넉하다 */
@@ -161,6 +207,8 @@ export function summary(sky) {
     killed: sky.killed, shots: sky.shots,
     grazes: sky.grazes, rams: sky.rams,
     raiders: sky.list.filter((t) => KINDS[t.kind]?.rams).length,
+    cameRaiders: sky.cameRaiders,
+    nextRaider: +sky.nextRaider.toFixed(1),
     list: sky.list.map((t) => ({
       id: t.id, kind: t.kind, az: +t.az.toFixed(1), el: +t.el.toFixed(1),
       dist: +t.dist.toFixed(0), hp: t.hp, inRange: inRange(t),

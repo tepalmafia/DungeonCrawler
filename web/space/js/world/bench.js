@@ -21,6 +21,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { WEAR } from '../game/systems-table.js';
+import { drawStatus } from './status.js';
 
 const FG = '#ffc98a';
 const DIM = 'rgba(255,201,138,.38)';
@@ -49,8 +50,20 @@ function draw(ctx, w, h, s) {
   ctx.font = `600 ${f(0.07)}px system-ui, sans-serif`;
   ctx.fillText('진단대 · 무엇이 닳았나', w * 0.04, h * 0.09);
 
+  // ══ ★★★ **배의 상태 — 조종석과 같은 여섯 줄** (v69) ═══════════════
+  //  사장님 「**운전석에 탔을때 외에도 다른 모니터에서 확인**할 수 있도록」.
+  //
+  //  ★ 여기가 그 「다른 모니터」다. 정비실은 **고치는 방**이고, 고치려면
+  //    「지금 열이 몇인가 · 냉각이 도나 · 전력이 어디 가 있나」를 알아야
+  //    한다 — 그걸 보려고 조종석까지 25m 를 걸어갔다 오는 것이 v68 이었다.
+  //
+  //  ★★ **같은 함수를 부른다** (`world/status.js drawStatus`). 여기서
+  //    다시 그리면 두 화면이 반드시 갈라진다 — 이 저장소가 두 번 겪은 것.
+  //    색만 이 방의 호박색으로 입힌다
+  if (s.status) drawStatus(ctx, w * 0.60, h * 0.14, w * 0.36, h * 0.52, s.status, 'bench');
+
   // ── 계통별 마모 — **다음에 무엇이 터지나** ────────────
-  const x0 = w * 0.04, bw = w * 0.5, bh = h * 0.075;
+  const x0 = w * 0.04, bw = w * 0.32, bh = h * 0.075;
   WEAR.keys.forEach((k, i) => {
     const y = h * (0.17 + i * 0.115);
     const v = Math.max(0, Math.min(1, s.wear?.[k] ?? 0));

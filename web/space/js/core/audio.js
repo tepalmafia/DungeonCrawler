@@ -20,7 +20,7 @@
 //    박자가 흔들린다. 급한 게 아니라 **고장 난 것으로 들린다.**
 //    그래서 앞질러 예약한다 (lookahead).
 // ══════════════════════════════════════════════════════════════════════════
-import { MIX, BED, CHASE_SND, HAND, ESCAPE, RATTLE } from '../game/audio-table.js';
+import { MIX, BED, CHASE_SND, HAND, ESCAPE, RATTLE, RADAR_SND } from '../game/audio-table.js';
 
 /** 얼마나 앞질러 예약하나. 프레임이 이보다 늦어도 박자가 안 끊긴다 */
 const LOOKAHEAD = 0.35;
@@ -132,6 +132,7 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
   // ── 예약 커서 ───────────────────────────────────────────
   // 「다음 경보를 언제 울릴까」를 소리 쪽이 들고 있는다. 프레임과 무관하다.
   let nextAlarm = -1, nextPing = -1, nextRatchet = -1, nextRattle = -1;
+  let nextSweep = -1, nextGrowl = -1;
   let muted = false;
   let lastEscape = -99;
 
@@ -193,6 +194,36 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
         nextRattle += lerp(k0, k1, near) * (1 + (jitter() - 0.5) * RATTLE.jitter);
       }
     } else nextRattle = -1;
+
+    // ══ ★★★ 레이더 (v69) ═════════════════════════════════════════
+    //  ① **훑는 소리** — 켜져 있으면 한 바퀴마다 한 번. **일정하다.**
+    //     덜그럭거림과 반대다: 규칙적이라 「정상으로 돌고 있다」로 들리고,
+    //     끊기면 전력이 나간 것을 **화면을 안 보고** 안다
+    if (s.radarOn) {
+      const S = RADAR_SND.sweep;
+      if (nextSweep < at) nextSweep = at;
+      while (nextSweep < until) {
+        tone(chaseBus, S.hz, nextSweep, S.len, S.gain, 'sine', S.hz * 0.55);
+        nextSweep += S.gap;
+      }
+    } else nextSweep = -1;
+
+    //  ② ★★ **탐색기 으르렁** — 열원을 잡으면 으르렁, **물면 높아진다.**
+    //     HUD 가 26도뿐이라 눈이 늘 조준선에 가 있을 수 없다. 귀가 대신 본다.
+    //     이가 촘촘한 소리라 `knock` 을 빠르게 되풀이해 만든다 —
+    //     한 음으로 내면 「삐——」가 되어 경보와 구분이 안 된다
+    const seek = s.seek ?? 0;                 // 0 없음 · 0.5 잡음 · 1 물었다
+    if (seek > 0.02) {
+      const G = RADAR_SND.growl;
+      if (nextGrowl < at) nextGrowl = at;
+      const hz = lerp(G.hz[0], G.hz[1], seek);
+      const rate = lerp(G.rate[0], G.rate[1], seek);
+      const vol = lerp(G.gain[0], G.gain[1], seek);
+      while (nextGrowl < until) {
+        knock(chaseBus, nextGrowl, 0.035, vol, hz, 3.2);
+        nextGrowl += 1 / rate;
+      }
+    } else nextGrowl = -1;
   }
 
   /**

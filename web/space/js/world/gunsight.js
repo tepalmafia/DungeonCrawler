@@ -40,6 +40,22 @@ import { KINDS, TARGET, rangeWord } from '../game/target-table.js';
 import { hudFov } from '../game/view-table.js';
 import { SIGN } from '../game/chase-table.js';
 
+/**
+ * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
+ *   「117도」로는 아무것도 못 정하지만 「뒤쪽」이면 몸이 안다
+ */
+function sideWord(t, aimAz) {
+  let d = (t.az - aimAz) % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  const a = Math.abs(d);
+  const way = d > 0 ? '오른쪽' : '왼쪽';
+  if (a > 140) return '바로 뒤';
+  if (a > 100) return `${way} 뒤`;
+  if (a > 40) return `${way} 옆`;
+  return way;
+}
+
 const FG = '#8fe6c0';
 const DIM = 'rgba(143,230,192,.45)';
 const HOT = '#ff9a5c';
@@ -53,6 +69,17 @@ function glyph(ctx, kind, x, y, r) {
     ctx.beginPath();
     ctx.moveTo(x - r * 1.5, y); ctx.lineTo(x - r * 0.45, y);
     ctx.moveTo(x + r * 0.45, y); ctx.lineTo(x + r * 1.5, y);
+    ctx.stroke();
+  } else if (kind === 'raider') {
+    // ★ v69 — **적 우주선.** v68 까지 이것만 모양이 없어서 파편으로
+    //   그려졌다. 격추 게임에서 「저게 적인가 돌인가」가 안 읽히면
+    //   조준경이 제 일을 안 하는 것이다. 쐐기 — 창밖 실루엣과 같은 모양
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 1.2);
+    ctx.lineTo(x + r * 1.1, y + r * 0.9);
+    ctx.lineTo(x, y + r * 0.4);
+    ctx.lineTo(x - r * 1.1, y + r * 0.9);
+    ctx.closePath();
     ctx.stroke();
   } else if (kind === 'tank') {
     // 연료통 — 길쭉한 통
@@ -109,22 +136,47 @@ function draw(ctx, w, h, s) {
     ctx.beginPath(); ctx.moveTo(w * 0.04, y); ctx.lineTo(w * 0.96, y); ctx.stroke();
   }
 
-  // ── 떠도는 것들 ──────────────────────────────────────────
+  // ══ ★★★ **떠도는 것들 — 기수 기준으로 그린다** (v69) ═══════════════
+  //
+  //  ★★ **v68 까지 세상 기준으로 그리고 있었다.** `x = cx + t.az * sx` —
+  //    그런데 HUD 판은 조종석에 **붙박이**라 화면 한가운데가 곧 기수다.
+  //    즉 기수를 15도 틀면 표적 상자가 진짜 표적에서 **15도 어긋난** 채
+  //    떠 있었다. 기수가 ±62도를 못 벗어나던 v68 까지는 십자선도 같이
+  //    어긋나서 둘이 서로를 가려 줬는데, v69 에 **한 바퀴를 돌게** 되면서
+  //    바로 드러난다. 상자와 실물이 어긋나는 조준경은 없는 것만 못하다.
   const aimAz = s.az ?? 0, aimEl = s.el ?? 0;
   let near = null, nearD = 1e9;
+  // ★★★ **화면 밖의 것도 센다** (v69). 처음엔 화면 안의 것만 `near` 로
+  //   잡았는데, 브라우저로 찍어 보니 표적 넷이 옆에 떠 있는데도 아랫줄이
+  //   **「떠도는 것이 없습니다」**라고 말하고 있었다 — 지시선은 가리키는데
+  //   글은 없다고 하는, 계기 둘이 서로 다른 말을 하는 상태다.
+  //   숫자로는 안 잡힌다: 도구는 캔버스 글씨를 안 읽는다
+  let any = null, anyD = 1e9;
   for (const t of s.list ?? []) {
-    let x = cx + t.az * sx;
-    let y = cy - t.el * sy;
-    // ★ HUD 밖이면 **가장자리에 화살표**로 가리킨다 — 실제 HUD 의
-    //   target locator line. 안 그리면 「레이더에 아무것도 없다」로 읽힌다
+    // ★ **상대 각도.** 감아서 잰다 — 뒤에 있는 것이 반대쪽으로 튀면 안 된다
+    let raz = (t.az - aimAz) % 360;
+    if (raz > 180) raz -= 360;
+    if (raz < -180) raz += 360;
+    const rel = t.el - aimEl;
+    { const dd = Math.hypot(raz, rel); if (dd < anyD) { anyD = dd; any = t; } }
+    let x = cx + raz * sx;
+    let y = cy - rel * sy;
+    // ★★ HUD 밖이면 **표적 지시선(TLL)** — 실제 전투기가 쓰는 것 그대로다.
+    //   조종사는 이 선을 따라 **상자가 나타날 때까지 기수를 끈다.**
+    //   HUD 는 26도뿐인데 표적은 사방에 있으므로, 이게 없으면 옆과 뒤가
+    //   **아무 데도 안 나온다** (사장님 「직관적으로 방향을 맞출 수 있도록」)
     if (x < w * 0.06 || x > w * 0.94 || y < h * 0.08 || y > h * 0.92) {
-      const ex = Math.max(w * 0.06, Math.min(w * 0.94, x));
-      const ey = Math.max(h * 0.08, Math.min(h * 0.92, y));
-      ctx.strokeStyle = t.inRange ? FG : DIM;
-      ctx.lineWidth = Math.max(2, h * 0.008);
+      // 화면 밖 — 중심에서 그쪽으로 뻗는 선을 테두리에 붙여 그린다.
+      //   ★ 길이가 **얼마나 멀리 돌아야 하나**를 말한다: 뒤에 있을수록 길다
+      const ang = Math.atan2(y - cy, x - cx);
+      const R0 = Math.min(w, h) * 0.30, R1 = Math.min(w, h) * 0.44;
+      const away = Math.min(1, Math.hypot(raz, rel) / 180);
+      const foe = KINDS[t.kind]?.rams;
+      ctx.strokeStyle = foe ? HOT : (t.inRange ? FG : DIM);
+      ctx.lineWidth = Math.max(2, h * (foe ? 0.014 : 0.009));
       ctx.beginPath();
-      ctx.moveTo(ex, ey);
-      ctx.lineTo(ex + (x - ex) * 0.06, ey + (y - ey) * 0.06);
+      ctx.moveTo(cx + Math.cos(ang) * R0, cy + Math.sin(ang) * R0);
+      ctx.lineTo(cx + Math.cos(ang) * (R0 + (R1 - R0) * (0.35 + away)), cy + Math.sin(ang) * (R0 + (R1 - R0) * (0.35 + away)));
       ctx.stroke();
       continue;
     }
@@ -133,8 +185,8 @@ function draw(ctx, w, h, s) {
     const r = Math.max(h * 0.035, h * 0.11 * (1 - t.dist / (TARGET.spawn[1] * 1.1)));
     ctx.strokeStyle = far ? 'rgba(143,230,192,.28)' : FG;
     glyph(ctx, t.kind, x, y, r);
-    const d = Math.hypot(t.az - aimAz, t.el - aimEl);
-    if (d < nearD) { nearD = d; near = { t, x, y, r }; }
+    const d = Math.hypot(raz, rel);
+    if (d < nearD) { nearD = d; near = { t, x, y, r, raz, rel }; }
     if (t.hp < (KINDS[t.kind]?.hits ?? 1)) {
       // 한 번 맞은 것 — 금이 갔다
       ctx.strokeStyle = HOT;
@@ -142,8 +194,32 @@ function draw(ctx, w, h, s) {
     }
   }
 
-  // ── 십자선 — **WASD 가 움직이는 것** ─────────────────────
-  const ax = cx + aimAz * sx, ay = cy - aimEl * sy;
+  // ══ ★★★ **선도 점 (LCOS)** — 「여기를 쏴라」 ═══════════════════════
+  //
+  //  탄이 날아가는 데 시간이 걸리므로 **표적이 갈 자리**를 쏴야 한다.
+  //  그걸 글로 알려주지 않는다 — **점 하나**로 말한다. 실제 전투기의
+  //  선도 계산 조준기(LCOS)가 하는 일이고, 조종사는 「점에 십자선을
+  //  얹는다」만 배운다.
+  //
+  //  ★ v68 까지는 선도를 **벌로만** 썼다 (`leadMiss`) — 빠른 표적은
+  //    어디를 겨눠도 안 맞았고, 사람이 할 수 있는 일이 없었다.
+  //    이제 `combat.js fire()` 가 **선도점 기준으로 판정**하므로
+  //    이 점이 곧 진짜 과녁이다
+  if (near && s.lead && near.t.inRange) {
+    const fl = near.t.dist / s.lead.speed;
+    const lx = cx + (near.raz + (near.t.vaz ?? 0) * fl) * sx;
+    const ly = cy - (near.rel + (near.t.vel ?? 0) * fl) * sy;
+    ctx.strokeStyle = HOT;
+    ctx.lineWidth = Math.max(1.6, h * 0.010);
+    ctx.beginPath(); ctx.arc(lx, ly, h * 0.026, 0, Math.PI * 2); ctx.stroke();
+    // 표적에서 점까지 실선 — 「이만큼 앞」이 눈에 보인다
+    ctx.strokeStyle = 'rgba(255,180,120,.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(near.x, near.y); ctx.lineTo(lx, ly); ctx.stroke();
+  }
+
+  // ── 십자선 — **기수가 보는 곳.** 곧 화면 한가운데다 ──────
+  const ax = cx, ay = cy;
   const locked = near && nearD <= (TARGET.aimTol * (KINDS[near.t.kind]?.size ?? 1)) && near.t.inRange;
   ctx.strokeStyle = locked ? HOT : FG;
   ctx.lineWidth = Math.max(1.6, h * 0.012);
@@ -155,16 +231,21 @@ function draw(ctx, w, h, s) {
   ctx.moveTo(ax, ay + g2 * 0.5); ctx.lineTo(ax, ay + g2 * 2);
   ctx.stroke();
   if (locked) {
-    // 물렸다 — 네 귀퉁이가 좁혀진다. **쏘면 맞는다**를 이걸로 안다
+    // 물렸다 — **표적 지시자 상자(TD box)**. 실제 HUD 와 같은 약속이다
     ctx.strokeRect(near.x - near.r * 1.5, near.y - near.r * 1.5, near.r * 3, near.r * 3);
   }
 
   // ── 아래 한 줄 — **숫자로 안 띄운다** ────────────────────
   ctx.fillStyle = locked ? HOT : DIM;
   ctx.font = `700 ${f(0.085)}px system-ui, sans-serif`;
-  const word = !near ? '떠도는 것이 없습니다'
-    : locked ? `${KINDS[near.t.kind].name} — 물렸습니다`
-      : `${KINDS[near.t.kind].name} · ${rangeWord(near.t.dist)}`;
+  // ★ 화면 안에 있으면 그것을, 없으면 **제일 가까운 것이 어느 쪽인지**를
+  //   말한다. 「없습니다」는 하늘이 정말 빌 때만 쓴다
+  const word = near
+    ? (locked ? `${KINDS[near.t.kind].name} — 물렸습니다`
+      : `${KINDS[near.t.kind].name} · ${rangeWord(near.t.dist)}`)
+    : any
+      ? `${KINDS[any.kind].name} — ${sideWord(any, aimAz)}`
+      : '떠도는 것이 없습니다';
   ctx.fillText(word, w * 0.05, h * 0.95);
 
   if (s.cool > 0) {

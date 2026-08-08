@@ -71,10 +71,17 @@ async function hitText(label) {
   const at = await p.evaluate((t) => {
     const el = [...document.querySelectorAll('#check button')].find((b) => b.textContent === t);
     if (!el) return null;
+    // ★★★ **v69 — 먼저 굴려서 눈에 넣는다.** 이게 없어서 ②③ 이 빨갰다.
+    //   점검 모드 항목이 스물 몇 개라 뒤쪽 것은 **패널 밖으로 밀려 있고**,
+    //   좌표만 재서 누르면 **엉뚱한 자리**를 누른다. 검사에는 「단추를
+    //   눌렀는데 아무 일이 없다」로 나오는데, 사람은 그 상황에서 굴린다.
+    //   `space-endtoend.js` 가 끝 화면 단추에서 이미 겪고 고친 것과 같은 병
+    el.scrollIntoView({ block: 'center' });
     const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: window.innerHeight };
   }, label);
   if (!at) throw new Error(`「${label}」 단추가 없습니다`);
+  if (at.y < 0 || at.y > at.h) console.log(`   … 「${label}」 이 화면 밖이다 (y ${at.y.toFixed(0)} / ${at.h})`);
   await p.mouse.click(at.x, at.y);
   await p.waitForTimeout(250);
 }
@@ -116,7 +123,12 @@ console.log('\n[2] ★★ **안의 항목이 정말 먹나** — 진짜 마우�
   ok(!(await locked()), '열면 **잠금이 풀린다** — 마우스를 써야 하니까');
 
   const ore0 = await p.evaluate(() => window.SPACE.supply.ore);
-  await hitText('광석 60 싣기');
+  // ★★ **v69 — 여기가 제 변경 전부터 빨간색이었다.** 점검 모드의 항목
+  //   이름이 「광석 60 싣기」에서 「광석 60 · 부품 8」로 바뀐 지 오래인데
+  //   검사만 옛 이름을 부르고 있었고, 그래서 **없는 단추를 찾다 죽었다.**
+  //   검사가 죽으면 그 뒤 줄은 하나도 안 돈다 — 즉 「단추가 먹나」를
+  //   여러 판 동안 아무도 안 지키고 있었다
+  await hitText('광석 60 · 부품 8 · 미사일 8');
   const ore1 = await p.evaluate(() => window.SPACE.supply.ore);
   ok(ore1 > ore0, `① 눌렀더니 정말 바뀐다 (광석 ${ore0.toFixed(0)} → ${ore1.toFixed(0)})`);
 

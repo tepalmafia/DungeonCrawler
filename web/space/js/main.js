@@ -38,13 +38,14 @@ import {
   regionOf, progress, relieveEscape, legsLeft, missPort, RPHASE,
 } from './game/route.js';
 import { FAULT, BY_KEY } from './game/mission-table.js';
-import { FOOD, WINCH, TRADE, ORE, PARTS } from './game/supply-table.js';
+import { FOOD, WINCH, TRADE, ORE, PARTS, MISSILES } from './game/supply-table.js';
 import { HAZARD } from './game/hazard-table.js';
 import {
   makeHazard, stepHazard, steerShip, newLeg, incoming, warnLeft, clearOf, HPHASE,
 } from './game/hazard.js';
 import {
   makeSupply, stepSupply, winchStep, canTrade, trade, canRepair, spendParts,
+  canBuyMissiles, buyMissiles, salvageMissiles,
   shaky, slipMult, legsLeftOnFood,
 } from './game/supply.js';
 import {
@@ -71,9 +72,17 @@ import { HELM, HELM_SEAT, FLY_VIEW, SIT_LOOK, offWord, hitWord } from './game/he
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord } from './game/combat-table.js';
+import { speedOf as statusSpeed } from './world/status.js';
+// ★★ v69 — 맞은 자리를 **각도·거리에서 3D 좌표로** 옮긴다. `world/shots.js`
+//   와 **같은 식**을 쓴다 — 두 벌로 옮기면 터짐이 표적에서 어긋난다.
+//   ★ 이 줄이 한 번 사라져 있었고, `node --check` 는 통과했다.
+//     브라우저를 띄우자 첫 발에 `shotAt is not defined` 로 나왔다 —
+//     즉 **맞아도 아무것도 안 터지는 상태**였다 (CLAUDE.md 「화면에 보이는
+//     것은 화면으로 확인한다」가 정확히 이걸 말한다)
+import { atOf as shotAt } from './world/shots.js';
 import {
   makeCombat, weaponOf, isLocked, stepRadar, stepShots, stepCool,
-  pickSlot, fire as fireWeapon, forgetLock, summary as cbtSummary,
+  pickSlot, fire as fireWeapon, forgetLock, radarBlips, summary as cbtSummary,
 } from './game/combat.js';
 import { HULL } from './game/target-table.js';
 import { spawnRaider } from './game/target.js';
@@ -165,7 +174,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 68;
+export const VERSION = 69;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -431,6 +440,12 @@ const gun = makeGun();
  *    이미 그것이다. 켜면 보이고, 켜면 보인다 (자국 20).
  */
 const combat = makeCombat();
+/**
+ * ★★ 탐색기 소리의 세기 — 0 없음 · 0.5 잡았다 · 1 물었다 (v69).
+ *   전투 셈은 프레임 뒷쪽에서 돌고 소리는 앞쪽에서 갱신되므로 여기 둔다.
+ *   한 프레임 늦는데, 60분의 1초라 귀로는 못 듣는다
+ */
+let radarSeek = 0;
 /** ★ G 구조 신호 — 2시간에 한 번뿐인 남의 목소리 (7판) */
 const rescue = makeRescue();
 /** ★ E 정전 — 어두우면 소리밖에 없다 (7판) */
@@ -493,10 +508,14 @@ const DEG = 180 / Math.PI;
 const clampA = (v, lim) => Math.max(-lim, Math.min(lim, v));
 /** 지금 기수가 가리키는 곳 (도) — 조준경과 레이더가 같은 값을 쓴다 */
 function noseAim() {
-  return {
-    az: clampA(fly3.yaw * DEG, TARGET.azLimit),
-    el: clampA(fly3.pitch * DEG, TARGET.elLimit),
-  };
+  // ★★ v69 — 방위는 **감는다.** 좌우 한계를 없앴으므로 `fly3.yaw` 가
+  //   끝없이 커진다. 예전처럼 ±62 로 자르면 두 바퀴째부터 기수가 62도에
+  //   붙어 버려서 **돌수록 조준이 안 따라온다** — 자르는 것과 감는 것은
+  //   한계가 있을 때만 같은 말이다
+  let az = (fly3.yaw * DEG) % 360;
+  if (az > 180) az -= 360;
+  if (az < -180) az += 360;
+  return { az, el: clampA(fly3.pitch * DEG, TARGET.elLimit) };
 }
 
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
@@ -506,8 +525,12 @@ function fireGun() {
   const r = fireWeapon(combat, { aimed, supply, rnd: Math.random });
   if (!r.ok) { banner = CBT_WHY[r.why] ?? '지금은 못 쏩니다'; bannerT = 2.4; return; }
   const w = r.weapon;
-  audio?.event(w.key === 'cannon' ? 'caught' : 'latch');
-  heat = Math.min(HEAT.max, heat + GUN.heatPerShot * (w.key === 'cannon' ? 1 : 2));
+  audio?.event(w.key === 'laser' ? 'caught' : 'latch');
+  // ★★★ v69 — **레이저는 열을 판다** (`combat-table.js WEAPONS.laser.heat`).
+  //   탄약이 없는 대신 이쪽이 값이다: 쏠수록 뜨거워지고, 뜨거우면 못 숨고,
+  //   식히려고 라디에이터를 열면 더 훤히 보인다 (v58 열 저장고와 물린다).
+  //   미사일은 열을 덜 낸다 — 대신 재고가 준다
+  heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2));
   // ★ **쏘면 밝아진다** — 총구 섬광과 사출은 숨길 수 없다 (v44 규약)
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
   banner = `${w.name} 발사`;
@@ -770,6 +793,8 @@ let endWhat = null;
 /** 굶어서 손이 떨린 시간 (초). 끝 화면 목록의 한 줄이 된다 */
 let shakyT = 0;
 let trading = 0;          // 접수구를 얼마나 잡고 있었나
+/** ★ 이번에 잡고 있는 동안 식량을 이미 받았나 — 계속 잡으면 미사일까지 간다 */
+let boughtFood = false;
 let partsWarned = false;
 // 손에 물건이 없어 못 고친다고 **한 번만** 말한다. 매 프레임 외치면 소음이다
 let handWarned = false;
@@ -1222,7 +1247,12 @@ function interactStep(dt) {
   if (rev2 === 'took') {
     supply.parts = Math.min(PARTS.max, supply.parts + rescue.got.parts);
     supply.food = Math.min(FOOD.max, supply.food + rescue.got.food);
-    banner = `${RESCUE.took} — 부품 ${rescue.got.parts} · 식량 ${rescue.got.food}`;
+    // ★★ v69 — **미사일도 나온다** (사장님 「미사일은 보급을 받거나 구매」).
+    //   사는 것(2발)보다 많다 — 위험한 데를 뒤진 값이 커야 「가는 것이
+    //   진짜 선택」이 된다 (`space-rescue.js` 가 지키는 것과 같은 줄)
+    const gotM = salvageMissiles(supply);
+    banner = `${RESCUE.took} — 부품 ${rescue.got.parts} · 식량 ${rescue.got.food}`
+      + (gotM ? ` · 미사일 ${gotM}발` : '');
     bannerT = 4.0;
     audio?.event('escaped');
     sceneDone(scenes, 'G');
@@ -1313,16 +1343,41 @@ function interactStep(dt) {
     && !(route.phase === RPHASE.PORT && canTrade(supply))) {
     nag(route.phase === RPHASE.PORT ? '광석이 모자랍니다' : '거점에서만 바꿉니다');
   }
-  if (onHatch && input.hold && route.phase === RPHASE.PORT && canTrade(supply)) {
+  if (onHatch && input.hold && route.phase === RPHASE.PORT
+    && (canTrade(supply) || canBuyMissiles(supply))) {
     trading += dt;
-    if (trading >= TRADE.hold) {
+    // ══ ★★★ **같은 손잡이, 두 번째 뜻** (v69) ═══════════════════════
+    //  사장님 「미사일은 **보급을 받거나 구매**할 수 있도록」.
+    //
+    //  ★ 접수구를 하나 더 안 만든다. 이 배의 규약이 「같은 손잡이가 상황에
+    //    따라 다른 일을 한다」이고, 손이 배울 것이 하나 늘면 그만큼 게임이
+    //    멀어진다. **더 오래 잡고 있으면** 식량 대신 미사일이 온다 —
+    //    같은 자리, 같은 동작, 다른 결과. 그리고 「더 오래」가 곧 「더
+    //    비싸다」의 손맛이 된다
+    if (trading >= TRADE.missileHold && canBuyMissiles(supply)) {
       trading = 0;
-      trade(supply);
-      banner = `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts}`;
-      bannerT = 2.6;
-      audio?.event('fixed');
+      buyMissiles(supply);
+      banner = `광석 ${TRADE.missileOre} → 미사일 ${MISSILES.perBuy}발 (${supply.missiles}/${MISSILES.max})`;
+      bannerT = 2.8;
+      audio?.event('latch');
+    } else if (trading >= TRADE.hold && canTrade(supply)) {
+      // ★ 미사일을 살 수 있으면 **여기서 안 끊는다** — 계속 잡고 있으면
+      //   미사일까지 간다. 끊어 버리면 「더 잡는다」를 배울 길이 없다
+      if (!canBuyMissiles(supply)) {
+        trading = 0;
+        trade(supply);
+        banner = `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts}`;
+        bannerT = 2.6;
+        audio?.event('fixed');
+      } else if (!boughtFood) {
+        boughtFood = true;
+        trade(supply);
+        banner = `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts} — 더 잡으면 미사일`;
+        bannerT = 2.6;
+        audio?.event('fixed');
+      }
     }
-  } else trading = Math.max(0, trading - dt * 1.5);
+  } else { trading = Math.max(0, trading - dt * 1.5); boughtFood = false; }
 
   // ── 점검 패널 — **잡고 있어야 고쳐진다** ────────────────
   // 딸깍이면 「눌렀더니 고쳐졌다」가 되어 진단이 사라진다. 시간이 드는
@@ -2038,6 +2093,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     heat01: Math.max(0, (heat - HEAT.warn) / (HEAT.max - HEAT.warn)),
     turning: turn,
     rattle: hearNear,
+    // ★★ v69 — 레이더 (사장님 「레이더 감지과 레이더 사운드도」).
+    //   `seek` 은 0 없음 · 0.5 잡음 · 1 물었다. **HUD 가 26도뿐이라
+    //   눈이 늘 조준선에 가 있을 수 없다 — 귀가 대신 본다**
+    radarOn: !!power.sensor,
+    seek: radarSeek,
   });
 
   // 경보 — 추격 중에만. 거리가 가까울수록 빨라진다 (PLAN §3-1 글로 안 알려준다)
@@ -2059,10 +2119,27 @@ function systemsStep(dt, valveOpen, regionMult) {
 
   // 정비실 진단대 — **다음에 무엇이 터지나.** 조종석·관측실과 겹치지 않는다
   // ★ 흉터도 여기 뜬다 — **일이 아니라 배의 상태**라 손목이 아니라 진단대다
+  // ★★★ v69 — **배의 상태 여섯 줄**을 한 번 만들어 두 곳에 준다.
+  //   조종석 HUD(앉으면 뜬다)와 정비실 작업대(걸어가서 본다)가 **같은 것**을
+  //   본다 (사장님 「운전석에 탔을때 외에도 다른 모니터에서 확인」).
+  //   여기서 한 번만 짓는다 — 두 곳에서 따로 지으면 반드시 갈라진다
+  const shipStatus = {
+    heat,
+    cooling: valveOpen && power.cool,
+    speed: statusSpeed(CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
+      : (power.thrust ? 1 : LEG.coast))),
+    power,
+    sign: chase.sign,
+    missiles: supply.missiles,
+    weapon: weaponOf(combat).name,
+  };
   ship.bench.update({
     wear: faults.wear, open: openList(faults), fixed: faults.fixed, log: faults.log,
     scars: scarList(scars),
+    status: shipStatus,
   });
+  // ★ 조종석 상태창 — **앉아 있을 때만 켜진다**
+  ship.statusHud.redraw({ ...shipStatus, on: helmSat });
   // 온실 · 에어록 — 계기는 방마다 하나씩, 전부 다른 것을 말한다
   ship.foodGauge.update({
     food: supply.food, ore: supply.ore, parts: supply.parts,
@@ -2088,6 +2165,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     sink: sinkAt({ sink }), sinkWord: SINK_WORD(sink), sinkFull: sinkFull({ sink }),
     hide: hideLeft({ sink }, { thrust: power.thrust, cool: power.cool }),
     region: ship.outside.region, power, chase,
+    // ★★★ v69 — 레이더. **화면 밖을 보는 유일한 계기**다 (HUD 는 26도뿐).
+    //   목록은 `combat.js radarBlips` 한 곳에서만 나온다 — 계기가 직접
+    //   하늘을 훑게 두면 「화면에는 있는데 규칙은 모르는」 표적이 생긴다
+    radar: { on: !!power.sensor, blips: radarBlips(combat, sky.list, aimAz, aimEl) },
     // ★ 자동 항법 등 — 초록이면 자동, 주황이면 수동. 조종석에 들어서는
     //   순간 지금 어느 쪽인지가 보여야 한다
     auto: helm.auto,
@@ -2154,7 +2235,16 @@ window.SPACE = {
    *   **오류는 한 줄도 안 났다.** 검사는 `undefined === undefined` 로
    *   초록을 찍고 있었다. 이름을 겹치면 이렇게 조용히 진다
    */
-  get outside() { return ship.outside.view; },
+  get outside() {
+    // ★★ v69 — **창밖에 정말 서 있나**를 같이 준다 (`space-endtoend.js [6c]`).
+    //   v64 가 전투를 숫자로만 만들고 계통 검사는 다 초록이었던 것이
+    //   여기 구멍이 없어서였다: 「보이나」를 물을 자리가 아예 없었다
+    return {
+      ...ship.outside.view,
+      targets: ship.outside.targets?.seen ?? null,
+      shots: ship.outside.shots?.seen ?? null,
+    };
+  },
   get power() { return { ...power }; },
   setPower(k, v) { if (v && !canTurnOn(power) && !power[k]) return false; power[k] = v; return true; },
   get chase() { return { phase: chase.phase, risk: +chase.risk.toFixed(1), dist: +chase.dist.toFixed(1), sign: +chase.sign.toFixed(1), runs: chase.runs }; },
@@ -2618,6 +2708,19 @@ window.SPACE = {
     t.kind = kind; t.az = aimAz; t.el = aimEl; t.dist = 60; t.hp = 1;
     return { kind: t.kind, az: t.az, el: t.el, dist: t.dist };
   },
+  /**
+   * ★★ v69 — **검사가 표적을 뒤로 보낸다.** 「뒤에 있는 것이 레이더에
+   *   찍히나」를 물으려면 뒤에 하나 세워야 하는데, 흘러서 뒤로 갈 때까지
+   *   기다리면 헤드리스로 몇 분이다 (시계가 실제의 1/20)
+   */
+  putSkyAz(id, az, el = 0) {
+    const t = sky.list.find((x) => x.id === id);
+    if (!t) return null;
+    t.az = az; t.el = el;
+    return { id: t.id, az: t.az, el: t.el, dist: t.dist };
+  },
+  /** ★ v69 — 상태창이 지금 켜져 있나 (앉으면 켜진다) */
+  get statusOn() { return !!ship.statusHud?.mesh?.visible; },
   /** 검사가 흉터를 하나 얹어 본다 */
   giveScar(sys) {
     for (let i = 0; i < 3; i++) noteFix(scars, sys, { [sys]: 1 }, clock / 60);
@@ -2661,6 +2764,10 @@ window.SPACE = {
       locked: isLocked(combat, a?.t ?? null),
       target: a ? { id: a.t.id, kind: a.t.kind, dist: +a.t.dist.toFixed(0), hp: a.t.hp, off: +a.off.toFixed(1) } : null,
       why: a ? null : '겨눈 것이 없습니다',
+      // ★★ v69 — **레이더가 아는 것.** 계기가 그리는 것과 **같은 목록**이다
+      //   (`combat.js radarBlips`). 여기서 따로 만들면 「화면에는 있는데
+      //   검사는 모르는」 점이 생기고, 그건 계기 둘이 갈라진 것이다
+      blips: radarBlips(combat, sky.list, aimAz, aimEl),
     };
   },
   /** ★ 검사가 자동 항법을 되돌려 놓는다 — 절과 절 사이를 깨끗하게 */
@@ -3410,7 +3517,11 @@ function frame(now) {
   // ── ★★ 떠도는 것들 · 적 우주선 ─────────────────────────
   setSkyRegion(sky, ship.outside.region);
   // ★★★ **부딪힌 것을 받아 온다** — 선체 안으로는 못 들어오고, 대신 흔들린다
-  takeBumps(stepSky(sky, dt, { moving: route.phase === RPHASE.LEG && !landBusy(land) }) ?? []);
+  takeBumps(stepSky(sky, dt, {
+    moving: route.phase === RPHASE.LEG && !landBusy(land),
+    // ★ 거점에 대고 있는 동안은 적이 안 온다 — 사는 일이 벌이 되면 안 된다
+    quiet: route.phase === RPHASE.PORT,
+  }) ?? []);
   // ★★★ **v69 — 규칙이 든 자리를 창밖에 세운다** (사장님 「적 비행선도
   //   안보이고」). v68 까지 이 목록은 **HUD 캔버스의 초록 글리프**로만
   //   갔다 — 창밖에는 별과 바위뿐이었고, 격추 게임인데 격추가 안 보였다.
@@ -3428,6 +3539,13 @@ function frame(now) {
   //   통째로 안 떴다.** `node --check` 는 통과한다 — 한 함수가 워낙 길어
   //   눈으로도 안 보였다. 브라우저를 한 번 띄우자 첫 줄에 나왔다
   const radEv = stepRadar(combat, dt, aimedNow);
+  // ★★★ v69 — **탐색기 으르렁**. 잡으면 으르렁, **물면 음이 높아진다**
+  //   (AIM-9 사이드와인더 고증). 눈이 늘 조준선에 가 있을 수 없으므로
+  //   **귀가 대신 본다** — 이게 「직관적으로 방향을 맞춘다」의 절반이다
+  radarSeek = !combat.radar.on ? 0
+    : combat.radar.id !== null ? 1
+      : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range)
+        ? 0.35 + 0.3 * (combat.radar.t / RADAR.lockFor) : 0;
   if (radEv === 'lock') { banner = '묶었습니다'; bannerT = 1.6; audio?.event('latch'); }
   if (radEv === 'break') { banner = '놓쳤습니다'; bannerT = 1.6; }
   stepCool(combat, dt, { atSeat: helmSat });
@@ -3440,6 +3558,10 @@ function frame(now) {
     // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며
     //   화면 한 장이 밀려났고, 자국은 **모는 동안 보는 것**이라 여기가 맞다
     power, sign: chase.sign, contactAt: contactAt(route),
+    // ★★★ v69 — **선도 점**을 찍으려면 지금 고른 무기의 탄속이 필요하다.
+    //   선도가 필요 없는 무기(유도탄·열추적탄)는 `null` 이라 점이 안 뜬다 —
+    //   안 필요한데 뜨면 「이건 뭐지」가 되고, 그건 계기를 배우는 게임이다
+    lead: weaponOf(combat).lead ? { speed: weaponOf(combat).speed } : null,
   });
 
   const dev = stepDrift(drift, dt, steering);

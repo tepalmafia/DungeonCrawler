@@ -23,7 +23,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   RADAR, WEAPONS, WEAPON_LIST, GENRE, WHY,
-  whyNotFire, inEnvelope, hitChance, inCone, coneCoversSky, lockWord,
+  whyNotFire, inEnvelope, hitChance, inCone, coneCoversEl, blindShare,
+  contactLevel, PASSIVE, lockWord,
 } from '../web/space/js/game/combat-table.js';
 import {
   makeCombat, weaponOf, isLocked, stepRadar, stepShots, stepCool, pickSlot, fire, forgetLock,
@@ -31,6 +32,7 @@ import {
 import { KINDS, TARGET, HULL } from '../web/space/js/game/target-table.js';
 import { makeSky, setRegion, stepSky, spawnRaider, summary as skySummary } from '../web/space/js/game/target.js';
 import { SIGN } from '../web/space/js/game/chase-table.js';
+import { MISSILES, TRADE } from '../web/space/js/game/supply-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 import { makeRng } from '../web/space/js/core/rng.js';
 
@@ -38,7 +40,18 @@ let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
 const DT = 1 / 30;
 /** 조준선이 표적을 잡은 모양 */
-const aim = (t, off = 0) => ({ t, off });
+/**
+ * ★★ **v69 — 여기에 `relAz`·`relEl` 이 빠져 있어서 검사 여섯이 빨개졌다.**
+ *
+ *   레이더 원뿔이 **기수 기준**으로 바뀌면서 `stepRadar` 가 `aimed.relAz`
+ *   를 읽는데, 이 손수 만든 `aimed` 에는 그 칸이 없어 `undefined` 가 갔고
+ *   `inCone` 이 늘 false 였다 — **묶는 것이 통째로 죽은 것처럼 보였다.**
+ *   게임은 멀쩡했다: 게임은 `aimedAt()` 이 만들어 준 것을 쓴다.
+ *
+ *   ★ 그래서 여기서도 **게임과 같은 모양**으로 만든다. 검사가 제 손으로
+ *     빚은 가짜를 넣으면, 진짜가 바뀌었을 때 **검사만 옛것으로 남는다**
+ */
+const aim = (t, off = 0) => ({ t, off, relAz: off, relEl: 0 });
 const fakeTarget = (o = {}) => ({ id: 1, kind: 'junk', az: 0, el: 0, dist: 80, vaz: 0, vel: 0, hp: 1, ...o });
 
 console.log('\n조종석 전투 — 레이더 · 락온 · 미사일');
@@ -48,10 +61,24 @@ console.log('\n[1] ★ **레이더가 원뿔인가** — 어디를 보느냐가 
   ok(inCone(0, 0), '정면은 본다');
   ok(!inCone(RADAR.az + 5, 0), `방위 ${RADAR.az}도 밖은 **안 보인다**`);
   ok(!inCone(0, RADAR.el + 5), `고도 ${RADAR.el}도 밖은 안 보인다`);
-  // ★ 화면에 뜨는 범위보다 넓어야 한다 — 좁으면 「보이는데 레이더에 없다」
-  ok(coneCoversSky(),
-    `★★ 레이더 원뿔(${RADAR.az}·${RADAR.el})이 표적이 뜨는 범위(${TARGET.azLimit}·${TARGET.elLimit})를 **덮는다** —`
-    + ' 안 덮으면 「보이는데 레이더에 없는」 것이 생기고 그건 계기가 거짓말하는 것이다');
+  // ★★★ **v69 에서 이 검사가 뒤집혔다.** v68 까지는 「원뿔이 하늘을
+  //   **덮는다**」였고, 표적이 앞쪽 ±62 도에만 뜰 때는 옳았다.
+  //   이제 표적이 사방(±180)에 뜬다 — 덮을 수가 없고 **덮으면 안 된다**:
+  //   덮는 순간 레이더가 전지가 되어 **기수를 돌릴 이유가 사라진다**
+  ok(coneCoversEl(),
+    `고도는 덮는다 (원뿔 ${RADAR.el} ≥ 표적 ${TARGET.elLimit}) — 위아래는 기수로 못 쫓아가므로 여긴 안 비운다`);
+  ok(blindShare() > 0.5,
+    `★★ 방위는 **${(blindShare() * 100).toFixed(0)}% 를 못 본다** (원뿔 ±${RADAR.az} · 하늘 ±180) —`
+    + ' 못 보는 데가 있는 것이 설계다. 다 보이면 기수를 돌릴 이유가 없다');
+  // ★ 다만 **아무것도 모르면** 안 된다 — 등 뒤에서 소리 없이 죽는 것은 사고다
+  const behind = { relAz: 170, relEl: 0, dist: 200 };
+  ok(contactLevel(behind, false) === null, '등 뒤의 **파편**은 안 잡힌다 — 열이 없다');
+  ok(contactLevel(behind, true) === 'blip',
+    '★★ 등 뒤라도 **엔진을 켠 것**은 점으로 잡힌다 — 그러면 뒤의 점 하나가 곧 「적이다」가 된다');
+  ok(contactLevel({ relAz: 0, relEl: 0, dist: 100 }, true) === 'full',
+    '정면 사거리 안은 **다 안다** — 거리까지');
+  ok(PASSIVE.range > RADAR.range,
+    `수동(${PASSIVE.range}m)이 원뿔(${RADAR.range}m)보다 멀다 — 열은 멀리 간다. 대신 **거리를 모른다**`);
   ok(RADAR.range > TARGET.spawn[1],
     `탐지 거리(${RADAR.range})가 표적이 나는 제일 먼 곳(${TARGET.spawn[1]})보다 멀다 — **먼저 본다**`);
 }
@@ -92,15 +119,15 @@ console.log('\n[3] ★★ **무기 셋이 서로를 못 대신하나**');
   const r = WEAPON_LIST.map((w) => [w.rMin, w.rMax]);
   ok(new Set(WEAPON_LIST.map((w) => w.rMax)).size === WEAPON_LIST.length,
     '사거리가 셋 다 다르다 — 같으면 하나만 쓴다');
-  ok(WEAPONS.cannon.rMax < WEAPONS.ir.rMax && WEAPONS.ir.rMax < WEAPONS.arh.rMax,
-    `기총(${WEAPONS.cannon.rMax}) < 열추적(${WEAPONS.ir.rMax}) < 유도(${WEAPONS.arh.rMax}) — 붙을수록 싼 것`);
-  ok(WEAPONS.cannon.dmg < WEAPONS.ir.dmg && WEAPONS.ir.dmg < WEAPONS.arh.dmg,
+  ok(WEAPONS.laser.rMax < WEAPONS.ir.rMax && WEAPONS.ir.rMax < WEAPONS.arh.rMax,
+    `레이저(${WEAPONS.laser.rMax}) < 열추적(${WEAPONS.ir.rMax}) < 유도(${WEAPONS.arh.rMax}) — 붙을수록 싼 것`);
+  ok(WEAPONS.laser.dmg < WEAPONS.ir.dmg && WEAPONS.ir.dmg < WEAPONS.arh.dmg,
     '멀리 가는 것이 더 세다 — 대신 값과 자국이 크다');
   ok(WEAPONS.ir.rMin > 0,
     `★ 열추적의 **최소 사거리**가 ${WEAPONS.ir.rMin}m — 너무 가까우면 신관이 안 선다.`
     + ' 「붙었으면 기총」이라는 갈림이 여기서 생긴다');
-  ok(WEAPONS.cannon.lead && !WEAPONS.ir.lead,
-    '★ 기총만 **선도(lead)** 를 준다 — 탄이 날아가는 동안 표적이 흐른다');
+  ok(WEAPONS.laser.lead && !WEAPONS.ir.lead,
+    '★ 레이저 칸만 **선도점**을 그린다 — 미사일은 저 혼자 쫓아가므로 앞을 안 겨눠도 된다');
   void r;
 }
 
@@ -118,13 +145,13 @@ console.log('\n[4] ★ **발사 봉투** — 너무 멀어도 너무 가까워�
   // 왜 못 쏘는지 말한다
   const say = new Set();
   for (const s of [
-    { weapon: w, supply: { ore: 0, parts: 0 }, target: fakeTarget() },
-    { weapon: w, supply: { parts: 9 }, cool: 2, target: fakeTarget() },
-    { weapon: w, supply: { parts: 9 }, target: null },
-    { weapon: WEAPONS.arh, supply: { parts: 9 }, target: fakeTarget(), radar: true, locked: false },
-    { weapon: WEAPONS.arh, supply: { parts: 9 }, target: fakeTarget(), radar: false },
-    { weapon: w, supply: { parts: 9 }, target: fakeTarget({ dist: 400 }) },
-    { weapon: w, supply: { parts: 9 }, target: fakeTarget({ dist: 5 }) },
+    { weapon: w, supply: { ore: 0, parts: 0, missiles: 0 }, target: fakeTarget() },
+    { weapon: w, supply: { parts: 9, missiles: 9 }, cool: 2, target: fakeTarget() },
+    { weapon: w, supply: { parts: 9, missiles: 9 }, target: null },
+    { weapon: WEAPONS.arh, supply: { parts: 9, missiles: 9 }, target: fakeTarget(), radar: true, locked: false },
+    { weapon: WEAPONS.arh, supply: { parts: 9, missiles: 9 }, target: fakeTarget(), radar: false },
+    { weapon: w, supply: { parts: 9, missiles: 9 }, target: fakeTarget({ dist: 400 }) },
+    { weapon: w, supply: { parts: 9, missiles: 9 }, target: fakeTarget({ dist: 5 }) },
   ]) say.add(whyNotFire(s));
   for (const k of say) console.log(`   「${WHY[k] ?? k}」`);
   ok(say.size >= 6, `왜 못 쏘는지를 ${say.size}가지로 말한다 — 조용히 안 나가면 「고장났다」로 읽힌다`);
@@ -132,11 +159,16 @@ console.log('\n[4] ★ **발사 봉투** — 너무 멀어도 너무 가까워�
 
 console.log('\n[5] ★★★ **제일 센 무기가 제일 밝은가** — 이 판의 축');
 {
-  const c = WEAPONS.cannon, ir = WEAPONS.ir, ar = WEAPONS.arh;
+  const c = WEAPONS.laser, ir = WEAPONS.ir, ar = WEAPONS.arh;
   ok(c.sign < ir.sign && ir.sign < ar.sign,
-    `자국 — 기총 ${c.sign} < 열추적 ${ir.sign} < 유도 ${ar.sign}. **셀수록 밝다**`);
+    `자국 — 레이저 ${c.sign} < 열추적 ${ir.sign} < 유도 ${ar.sign}. **셀수록 밝다**`);
   ok(ar.needLock && !ir.needLock,
     '★★ 유도탄만 **락온이 필요하다** — 그리고 락온은 레이더를 켠 채로 있는 것이다');
+  // ★ v69 — **레이저도 쏘고 잊는다** (즉발이라 유도할 것이 없다).
+  //   여기 검사가 「유도탄만 아니면 된다」였던 탓에, 레이저가 유도탄
+  //   취급을 받는 것을 **못 잡았다** — 브라우저 화면이 잡았다
+  ok(WEAPONS.laser.fireForget,
+    '★ 레이저는 **즉발**이라 락온을 안 붙든다 — 안 그러면 쏘자마자 「유도가 끊겼습니다」가 뜬다');
   ok(!ar.fireForget && ir.fireForget,
     '★★ 열추적은 **쏘고 잊고**, 유도탄은 **끝까지 묶고 있어야** 한다.'
     + ' 즉 유도탄을 쓰는 동안 내내 훤히 보인다');
@@ -148,9 +180,13 @@ console.log('\n[5] ★★★ **제일 센 무기가 제일 밝은가** — 이 �
   const cc = makeCombat(); cc.radar.on = true; cc.slot = 3;
   const t = fakeTarget({ dist: 150 });
   for (let i = 0; i < 200; i++) stepRadar(cc, DT, aim(t, 1));
-  const sup = { ore: 60, parts: 9 };
+  const sup = { ore: 60, parts: 9, missiles: MISSILES.max };
   const f = fire(cc, { aimed: aim(t, 1), supply: sup, rnd: () => 0.1 });
-  ok(f.ok, `유도탄이 나갔다 (부품 ${9 - sup.parts} 씀)`);
+  ok(f.ok, `유도탄이 나갔다 (미사일 ${MISSILES.max - sup.missiles}발 씀)`);
+  // ★★ v69 — **부품은 안 준다.** 미사일이 제 주머니를 쓰는지 여기서 못박는다
+  ok(sup.parts === 9, '★ 부품은 그대로다 — 「고치는 것」과 「쏘는 것」이 다른 주머니다');
+  ok(sup.missiles === MISSILES.max - WEAPONS.arh.cost.missiles,
+    `유도탄이 미사일 ${WEAPONS.arh.cost.missiles}발을 쓴다 — 열추적(${WEAPONS.ir.cost.missiles}발)보다 비싸다`);
   cc.radar.on = false; stepRadar(cc, DT, aim(t, 1));      // 레이더를 껐다
   let out = [];
   for (let i = 0; i < 200 && !out.length; i++) {
@@ -193,8 +229,8 @@ console.log('\n[7] ★ **적 우주선을 부술 수 있나 · 안 부수면 죽
   ok(R.weight === 0,
     '★ **저절로는 안 뜬다** (weight 0) — 장면과 추격이 부른다.'
     + ' 무작위로 튀어나오면 「가는 동안 고친다」가 「가는 동안 싸운다」가 된다');
-  ok(R.hits > WEAPONS.cannon.dmg * 3,
-    `★★ 맷집 ${R.hits} 이라 **기총만으로는 벅차다** (한 발에 ${WEAPONS.cannon.dmg}) —`
+  ok(R.hits > WEAPONS.laser.dmg * 3,
+    `★★ 맷집 ${R.hits} 이라 **레이저만으로는 벅차다** (한 발에 ${WEAPONS.laser.dmg}) —`
     + ' 미사일이 있어야 할 이유가 여기서 처음 생긴다');
   const kills = Math.ceil(R.hits / WEAPONS.arh.dmg);
   ok(kills <= 2, `유도탄 ${kills}발이면 부순다 — 셋 이상이면 부품이 못 견딘다`);
