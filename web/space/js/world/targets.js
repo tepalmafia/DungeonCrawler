@@ -83,6 +83,74 @@ function buildOne(kind) {
     fire.position.z = 2.7;
     fire.name = '엔진불';
     g.add(fire);
+  } else if (kind === 'fighter') {
+    // ★ 요격기 — **작고 날렵하다.** 적 우주선의 축소판이 아니라 다른 실루엣:
+    //   가늘고 길고 날개가 뒤로 젖혀져 있다
+    const hull = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.4, 3), METAL());
+    hull.rotation.x = -Math.PI / 2;
+    g.add(hull);
+    for (const sx of [-1, 1]) {
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.10, 0.8), DARKM());
+      wing.position.set(sx * 1.0, 0, 1.0);
+      wing.rotation.y = sx * 0.6;
+      g.add(wing);
+    }
+    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.3, 6), GLOW(0xffb45c));
+    fire.rotation.x = Math.PI / 2; fire.position.z = 2.0; fire.name = '엔진불';
+    g.add(fire);
+  } else if (kind === 'gunship') {
+    // ★★ 포함 — **덩어리다.** 두껍고 각지고 포탑이 붙어 있다.
+    //   실루엣이 무거워야 「저건 미사일을 써야겠다」가 눈으로 읽힌다
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.8, 5.6), METAL());
+    g.add(hull);
+    for (const sz of [-1.4, 1.4]) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.7, 8), DARKM());
+      t.position.set(0, 1.1, sz);
+      g.add(t);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.8, 6), DARKM());
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 1.1, sz - 1.1);
+      g.add(barrel);
+    }
+    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 8), GLOW(0xff7a3c));
+    fire.rotation.x = Math.PI / 2; fire.position.z = 3.4; fire.name = '엔진불';
+    g.add(fire);
+  } else if (kind === 'drone') {
+    // ★★ 자폭정 — **작고 밝다.** 몸이 탄이라 「빨갛게 달아오른 것」이 온다.
+    //   작아서 늦게 보이는 것이 이 적의 전부이므로 **빛으로** 알린다
+    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), METAL());
+    g.add(body);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), GLOW(0xff3a2a));
+    glow.name = '엔진불';
+    g.add(glow);
+  } else if (kind === 'turret') {
+    // ★ 방공 포대 — **안 움직인다.** 바닥판 + 포신. 떠 있는 것과 달리
+    //   각이 안 변하므로 실루엣이 늘 같다
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.9, 0.8, 8), METAL());
+    g.add(base);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 6), DARKM());
+    head.position.y = 0.8;
+    g.add(head);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3.0, 6), DARKM());
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.8, -1.6);
+    g.add(barrel);
+  } else if (kind === 'convoy') {
+    // ★★★ 보급 호송선 — **크고 둔하고 안 쏜다.** 화물통을 줄줄이 매달았다.
+    //   생김새가 「저건 싸우러 온 게 아니다」를 말해야, 놓쳤을 때 아깝다
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 7.0), METAL());
+    g.add(spine);
+    for (const sz of [-2.0, 0, 2.0]) {
+      for (const sx of [-1, 1]) {
+        const pod = new THREE.Mesh(new THREE.CapsuleGeometry(0.7, 1.6, 3, 8), PANELM());
+        pod.rotation.x = Math.PI / 2;
+        pod.position.set(sx * 1.5, 0, sz);
+        g.add(pod);
+      }
+    }
+    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.4, 8), GLOW(0x9ad4ff));
+    fire.rotation.x = Math.PI / 2; fire.position.z = 4.2; fire.name = '엔진불';
+    g.add(fire);
   } else {
     // 파편 — 부순 금속. 불규칙해야 「부서진 것」으로 읽힌다
     const r = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 0), METAL());
@@ -125,7 +193,11 @@ export function buildTargets(parent) {
       -Math.cos(az) * Math.cos(el) * d,
     );
     // 적은 **이쪽을 본다** — 죽은 것과 갈라지는 두 번째 표시
-    if (t.kind === 'raider') o.lookAt(0, 0, 0);
+    // ★ 살아 있는 것은 **이쪽을 본다** — 죽은 것과 갈라지는 두 번째 표시.
+    //   방공 포대만 빼고 (붙박이라 안 돈다)
+    if (KINDS[t.kind]?.closes !== undefined || KINDS[t.kind]?.shoots) {
+      if (t.kind !== 'turret') o.lookAt(0, 0, 0);
+    }
   };
 
   /** 터짐 — 조각이 튄다. 「맞았나」를 숫자로 안 알려준다 */
@@ -172,7 +244,7 @@ export function buildTargets(parent) {
         }
         place(o, t);
         // 떠 있는 것은 천천히 돈다 — 멈춰 있으면 그림으로 보인다
-        if (t.kind !== 'raider') {
+        if (!KINDS[t.kind]?.shoots && !KINDS[t.kind]?.rams) {
           o.rotation.x += dt * 0.22;
           o.rotation.z += dt * 0.15;
         } else {
@@ -183,7 +255,10 @@ export function buildTargets(parent) {
       // 사라진 것 — **터뜨리고** 치운다
       for (const [id, o] of [...live]) {
         if (seen.has(id)) continue;
-        burst(o.position, o.name === '표적:raider' || o.name === '표적:tank');
+        // ★ v70 — **큰 것이 크게 터진다.** 종류가 다섯으로 늘었으므로
+        //   이름을 손으로 견주지 않고 **표의 크기**로 정한다
+        const kk = o.name.replace('표적:', '');
+        burst(o.position, (KINDS[kk]?.size ?? 1) >= 1.15);
         g.remove(o);
         live.delete(id);
       }

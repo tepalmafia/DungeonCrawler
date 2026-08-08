@@ -207,7 +207,9 @@ console.log('\n[6] ★★★ **밖의 것이 배 안으로 안 들어오나** (�
   stepSky(sky, 0.1, {}); spawnRaider(sky);
   let t = 0, near = 1e9, bumps = 0;
   while (t < 150) {
-    const b = stepSky(sky, DT, { moving: true });
+    // ★ v70 — `stepSky` 가 `{ bumps, hits }` 를 준다. 적이 쏘기 시작하면서
+    //   「부딪힘」 하나만 돌려주던 것이 둘이 됐다
+    const b = stepSky(sky, DT, { moving: true }).bumps;
     bumps += b.length;
     for (const x of sky.list) near = Math.min(near, x.dist);
     t += DT;
@@ -240,7 +242,7 @@ console.log('\n[7] ★ **적 우주선을 부술 수 있나 · 안 부수면 죽
   stepSky(sky, 0.1, {}); spawnRaider(sky);
   let t = 0, hull = 0;
   while (t < 400 && hull < 1) {
-    for (const b of stepSky(sky, DT, { moving: true })) hull += b.ram ? HULL.ram.hull : HULL.graze.hull;
+    for (const b of stepSky(sky, DT, { moving: true }).bumps) hull += b.ram ? HULL.ram.hull : HULL.graze.hull;
     t += DT;
   }
   console.log(`   안 쏘고 두면 ${(t / 60).toFixed(1)}분에 선체가 바닥난다`);

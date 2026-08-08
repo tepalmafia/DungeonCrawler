@@ -274,6 +274,7 @@ node tools/space-view.js         스페이스워 — ★★★ 조종석 시야 
 node tools/space-gambit.js       스페이스워 — ★★ **승부수** · 쫓길 때의 결심 넷 (docs/space/GAMBIT.md)
 node tools/space-story.js        스페이스워 — ★★ **스토리 그물** · 줄기가 닫히나 · 게임과 안 갈라졌나
 node tools/space-story.js --write   docs/space/STORY.md 를 표에서 **다시 뽑는다** (손으로 안 적는다)
+node tools/space-war.js          스페이스워 — ★★★ **긴박한가** · 적이 쏘나 · 맞으면 일이 되나 (v70)
 node tools/space-combat.js       스페이스워 — ★★ 레이더 원뿔 · 락온 · 무기 셋 · **못 보는 뒤가 있나**
 node tools/space-target.js       스페이스워 — ★★ 떠도는 것 · **적이 계속 오나** · **사방에 있나** (v69)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)

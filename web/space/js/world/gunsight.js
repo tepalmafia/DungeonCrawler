@@ -81,6 +81,43 @@ function glyph(ctx, kind, x, y, r) {
     ctx.lineTo(x - r * 1.1, y + r * 0.9);
     ctx.closePath();
     ctx.stroke();
+  } else if (kind === 'fighter') {
+    // 요격기 — 작은 쐐기. 적 우주선과 **같은 방향**이되 작고 가늘다
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r * 0.7, y + r * 0.8);
+    ctx.lineTo(x - r * 0.7, y + r * 0.8);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (kind === 'gunship') {
+    // 포함 — **덩어리.** 두꺼운 네모 + 포탑 둘
+    ctx.strokeRect(x - r * 0.9, y - r * 0.6, r * 1.8, r * 1.2);
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.5, y - r * 0.6); ctx.lineTo(x - r * 0.5, y - r * 1.1);
+    ctx.moveTo(x + r * 0.5, y - r * 0.6); ctx.lineTo(x + r * 0.5, y - r * 1.1);
+    ctx.stroke();
+  } else if (kind === 'drone') {
+    // 자폭정 — **마름모.** 작고 뾰족하다
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 0.9); ctx.lineTo(x + r * 0.7, y);
+    ctx.lineTo(x, y + r * 0.9); ctx.lineTo(x - r * 0.7, y);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (kind === 'turret') {
+    // 방공 포대 — **바닥에 붙은 것.** 반원 + 포신
+    ctx.beginPath();
+    ctx.arc(x, y + r * 0.3, r * 0.8, Math.PI, 0);
+    ctx.moveTo(x - r * 0.9, y + r * 0.3); ctx.lineTo(x + r * 0.9, y + r * 0.3);
+    ctx.moveTo(x, y - r * 0.5); ctx.lineTo(x, y - r * 1.2);
+    ctx.stroke();
+  } else if (kind === 'convoy') {
+    // 호송선 — **길다.** 화물통이 줄줄이
+    ctx.strokeRect(x - r * 1.4, y - r * 0.35, r * 2.8, r * 0.7);
+    ctx.beginPath();
+    for (const k of [-0.7, 0, 0.7]) {
+      ctx.moveTo(x + r * k, y - r * 0.35); ctx.lineTo(x + r * k, y + r * 0.35);
+    }
+    ctx.stroke();
   } else if (kind === 'tank') {
     // 연료통 — 길쭉한 통
     ctx.beginPath();

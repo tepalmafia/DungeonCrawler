@@ -105,10 +105,50 @@ export function buildShots(parent) {
     live.push({ m, kind: 'pop', t: 0, live: 0.35, pop: true });
   }
 
+  /**
+   * ★★★ **적탄이 날아온다** (v70). 사장님 「긴박감있고 긴장감 있고」.
+   *
+   *   ★ **보여야 피한다.** 규칙에 0.9초의 비행 시간을 둔 이유가 이것인데,
+   *     그 0.9초 동안 화면에 아무것도 없으면 그건 없는 시간이다 —
+   *     「피할 수 있었다」와 「그냥 맞았다」가 구별이 안 된다.
+   *
+   *   ★ 우리 탄과 **색이 반대**다. 우리 것은 푸른 계열, 적의 것은
+   *     붉은 계열 — 화면에 둘이 섞여 날 때 어느 쪽이 위험한지가
+   *     글자 없이 읽혀야 한다
+   */
+  function incoming(from, left, total) {
+    const k = 1 - Math.max(0, Math.min(1, left / Math.max(0.01, total)));
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.55 + k * 0.9, 6, 5),
+      fireMat(0xff4a3a),
+    );
+    // 멀리서 가까이 — 자리를 매 프레임 다시 준다 (규칙이 시계를 들고 있다)
+    m.position.copy(from).multiplyScalar(1 - k * 0.92);
+    return m;
+  }
+  /** 지금 날아오는 것들 — 규칙이 준 목록 그대로 다시 그린다 */
+  let inGroup = new THREE.Group();
+  inGroup.name = '적탄';
+  g.add(inGroup);
+
   return {
     group: g,
     fire,
     pop,
+    /**
+     * ★ 규칙이 든 목록을 **통째로 다시 그린다.** 낱낱이 짝을 맞춰
+     *   들고 있으면 「부순 적의 탄이 남는다」 같은 어긋남이 나는데,
+     *   개수가 몇 개뿐이라 다시 그리는 편이 싸고 안 갈라진다
+     */
+    setIncoming(list) {
+      g.remove(inGroup);
+      inGroup = new THREE.Group();
+      inGroup.name = '적탄';
+      for (const s of list ?? []) {
+        inGroup.add(incoming(atOf(s.az, s.el, s.dist), s.t, 0.9));
+      }
+      g.add(inGroup);
+    },
     update(dt) {
       for (let i = live.length - 1; i >= 0; i--) {
         const s = live[i];
@@ -142,6 +182,6 @@ export function buildShots(parent) {
       }
     },
     /** 검사가 「쏘면 정말 뭔가 날아가나」를 묻는다 */
-    get seen() { return { fired, live: live.length }; },
+    get seen() { return { fired, live: live.length, incoming: inGroup.children.length }; },
   };
 }

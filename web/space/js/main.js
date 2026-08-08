@@ -112,7 +112,7 @@ import { TURRET_RISE } from './world/turret.js';
 // ★ 떠도는 것들 — 우주 쓰레기와 죽은 위성 (사장님 요청 · game/target-table.js)
 import { KINDS as TKINDS, TARGET } from './game/target-table.js';
 import {
-  makeSky, setRegion as setSkyRegion, stepSky, shootSky, aimedAt, tolOf, inRange,
+  makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
 } from './game/target.js';
 import { LOCK, WHY as LOCK_WHY, airWord } from './game/airlock-table.js';
@@ -174,7 +174,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 69;
+export const VERSION = 70;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -592,6 +592,49 @@ function takeBumps(list) {
     audio?.event(b.ram ? 'caught' : 'latch');
     banner = b.ram ? '들이받혔습니다 — 선체가 깎였습니다' : `${TKINDS[b.kind]?.name ?? '파편'}이 스쳤습니다`;
     bannerT = b.ram ? 3.0 : 1.6;
+  }
+}
+
+/**
+ * ★★★ **적탄을 맞았다** (v70 · docs/space/WAR.md §5-①)
+ *
+ *   이 함수가 이 기획의 심장이다:
+ *
+ *     싸운다 → **맞는다** → 고장이 열린다 → 배를 걸어 고친다 → 다시 싸운다
+ *
+ *   ★ 이 배가 3년치로 제일 잘하는 것이 **고치는 일**이다. v69 까지 그
+ *     일감은 「배가 낡아서」 났고, 즉 **전투와 아무 상관이 없었다.**
+ *     여기서 두 계통을 잇는다 — 새로 만드는 것이 아니라 **잇는 것**이다.
+ *
+ *   ★★ **어디를 맞았나만 말하고 무엇이 죽었는지는 안 말한다.** 자리는
+ *     몸이 알고(충격·소리), 계통은 **진단으로 찾는다** (덜그럭거림).
+ *     여기서 「냉각 밸브 파손」이라 띄우면 그 순간 진단이 심부름이 된다
+ */
+function takeHits(list) {
+  for (const h of list) {
+    if (h.miss) {
+      // ★ 빗나간 것도 **알려 준다.** 조용하면 「안 쏘는 줄」 안다 —
+      //   피한 것이 피한 것으로 읽혀야 회피가 조작이 된다
+      hitFlash = Math.max(hitFlash, 0.18);
+      continue;
+    }
+    const w = h.where;
+    // ★ 종류마다 한 발의 무게가 다르다 (`KINDS.gunship.punch` 1.8 ·
+    //   `drone.punch` 3.2). 「두껍고 세다」·「몸이 탄이다」의 뒷절반이 여기다
+    const punch = h.punch ?? 1;
+    hitFlash = Math.max(hitFlash, Math.min(1, 0.8 * punch));
+    faults.wear.hull = Math.min(1, faults.wear.hull + w.hull * punch);
+    heat = Math.min(HEAT.max, heat + w.heat * punch);
+    audio?.event('caught');
+    banner = w.what;
+    bannerT = 2.4;
+    // ★★ 세 번에 한 번만 일이 된다 (`FAULT_CHANCE`). 매번이면 회차가
+    //   고장 목록이 되고, 그러면 사람은 싸우는 대신 **안 맞으려고만** 한다
+    if (h.fault && openFault(faults, h.fault)) {
+      banner = `${w.what} — 무언가 잘못됐습니다`;
+      bannerT = 3.2;
+      audio?.event('fault');
+    }
   }
 }
 
@@ -2778,6 +2821,20 @@ window.SPACE = {
   fire() { fireGun(); return cbtSummary(combat); },
   /** ★ 검사·점검 모드가 **적 우주선**을 하나 부른다 */
   callRaider() { const t = spawnRaider(sky); return { id: t.id, dist: +t.dist.toFixed(0), hp: t.hp }; },
+  /** ★ 검사가 절과 절 사이를 깨끗이 한다 — 적을 다 치운다 */
+  clearSky() { sky.list = []; sky.incoming = []; return skySummary(sky); },
+  /**
+   * ★★ v70 — **적 종류를 골라 부른다.** 검사와 점검 모드가 다섯을 나란히
+   *   세워 놓고 「실루엣이 서로 다른가」를 눈으로 본다. 저절로 오기를
+   *   기다리면 한 종류를 보는 데만 몇 분이다
+   */
+  callFoe(kind = 'raider', az = null, dist = null) {
+    const t = spawnFoe(sky, kind);
+    if (!t) return null;
+    if (az !== null) t.az = az;
+    if (dist !== null) t.dist = dist;
+    return { id: t.id, kind: t.kind, az: +t.az.toFixed(1), dist: +t.dist.toFixed(0), hp: t.hp };
+  },
   /** 검사가 사다리를 안 타고 올라간다 */
   /**
    * ★ 검사가 주포에 앉혀 놓는다.
@@ -3517,11 +3574,16 @@ function frame(now) {
   // ── ★★ 떠도는 것들 · 적 우주선 ─────────────────────────
   setSkyRegion(sky, ship.outside.region);
   // ★★★ **부딪힌 것을 받아 온다** — 선체 안으로는 못 들어오고, 대신 흔들린다
-  takeBumps(stepSky(sky, dt, {
+  // ★★ v70 — 적은 **우리를 겨눠야** 쏜다. 기수 방위를 넘긴다
+  setNose(sky, aimAz);
+  const skyEv = stepSky(sky, dt, {
     moving: route.phase === RPHASE.LEG && !landBusy(land),
     // ★ 거점에 대고 있는 동안은 적이 안 온다 — 사는 일이 벌이 되면 안 된다
     quiet: route.phase === RPHASE.PORT,
-  }) ?? []);
+  }) ?? {};
+  takeBumps(skyEv.bumps ?? []);
+  // ★★★ **맞았다** — 이 판의 심장 (v70)
+  takeHits(skyEv.hits ?? []);
   // ★★★ **v69 — 규칙이 든 자리를 창밖에 세운다** (사장님 「적 비행선도
   //   안보이고」). v68 까지 이 목록은 **HUD 캔버스의 초록 글리프**로만
   //   갔다 — 창밖에는 별과 바위뿐이었고, 격추 게임인데 격추가 안 보였다.
@@ -3529,6 +3591,10 @@ function frame(now) {
   //   그리고, 그 한 프레임이 빠르게 스치는 것에서는 어긋남으로 보인다
   ship.outside.targets.update(sky.list, dt);
   ship.outside.shots.update(dt);
+  // ★★★ v70 — **날아오는 적탄.** 규칙에 0.9초의 비행 시간을 뒀는데,
+  //   그 동안 화면이 비어 있으면 그건 없는 시간이다 — 「피할 수 있었다」와
+  //   「그냥 맞았다」가 구별이 안 된다
+  ship.outside.shots.setIncoming(skySummary(sky).incoming);
 
   // ── ★★ 레이더 · 락온 ────────────────────────────────
   //  ★ 레이더를 **새로 안 만든다** — 능동 탐지 차단기가 이미 그것이다.
