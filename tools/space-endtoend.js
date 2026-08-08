@@ -376,7 +376,8 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
     r.traverse((o) => { if (!v && o.type === 'Group' && Math.abs(o.rotation.y) > 0.02) v = +o.rotation.y.toFixed(3); });
     return v;
   });
-  await aimAt(0, -7.75, 0, -0.34, 'yoke');
+  await sit();
+  await aimAround(0, -7.75, 0, -0.55, 'yoke');
   await down();
   for (let i = 0; i < 14; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })));
@@ -468,6 +469,11 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   ok((await S(() => SPACE.land)).view.ground, '⑤ **화면에 땅이 있다**');
 
   // 싣기 — 문을 열어야 한다
+  // ★★ **일어나야 걸어간다.** 앞에서 갈래를 고르려고 앉혔는데(`sit`)
+  //   그대로 두면 몸이 조종석에 붙들려, 에어록 좌표를 넣어도 카메라는
+  //   조종석에 있다 — 「바깥문이 안 잡힌다」로 보이지만 실은 거기 안 갔다
+  await S(() => SPACE.putGun(false));
+  await settle();
   const at = await S(() => SPACE.outerAt);
   await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer');
   await pressUntil(() => SPACE.lock.cycling > 0 || SPACE.lock.open, 5, 1.0);
@@ -492,8 +498,10 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   await press(1.0);
   ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '문 닫기'),
     '⑨ 문을 닫는다');
-  await aimAt(0, -7.75, 0, -0.45, 'yoke');
-  await press(1.0);
+  // ★ 조종간을 잡으려면 **앉아야** 한다 (v66 에서 무릎 사이로 내렸다)
+  await sit();
+  await aimAround(0, -7.75, 0, -0.55, 'yoke');
+  await pressUntil(() => SPACE.land.step === 'up', 5, 1.5);
   ok(await until(() => SPACE.land.step === 'up', 40, '이륙'),
     `⑩ 조종간을 잡으니 뜬다 — 「${await said()}」`);
   // 이륙 분사 12초 + 상승 18초는 헤드리스로 10분이 넘는다 — 끝자락으로 민다
