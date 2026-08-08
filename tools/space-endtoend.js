@@ -139,6 +139,19 @@ const sit = async () => {
   await until(() => SPACE.helm2.k > 0.99 && Math.abs(SPACE.pos.z + 8.30) < 0.06, 30, '좌석에 앉는 것');
   await p.waitForTimeout(600);
 };
+/**
+ * ★★ **일어나고 몸이 다 미끄러질 때까지 기다린다** (v67).
+ *   일어나도 `helmSitK` 가 풀리는 동안 **몸이 좌석 쪽으로 끌려간다**
+ *   (`me.x += (standAt.x - me.x) * k` — 「툭 옮기면 그것도 거짓말이다」).
+ *   실제 브라우저는 1초면 끝나지만 **헤드리스 시계는 실제의 1/20** 이라
+ *   20초다. 그 사이에 딴 방으로 옮겨 놓으면 **조용히 조종석으로 되끌려
+ *   가고**, 검사에는 「바깥문이 안 잡힌다」로 보인다 — 실은 거기 안 갔다
+ */
+const stand = async () => {
+  await S(() => SPACE.putGun(false));
+  await until(() => SPACE.helm2.k < 0.01, 60, '일어나서 자리가 굳기');
+  await p.waitForTimeout(600);
+};
 /** 자리를 옮기고 조준이 **굳을 때까지** 기다린다 */
 const aimAt = async (x, z, yaw, pitch, want, tries = 22) => {
   await S(([a, c, d, e]) => SPACE.put(a, c, d, e), [x, z, yaw, pitch]);
@@ -244,7 +257,7 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //  사람은 거기까지 못 가는 상태를 2026-08-06 에 넷이나 쌓아 뒀다
   // ★ **앉아 있으면 몸이 조종석에 붙들린다.** 앞 절이 못 일어났을 때
   //   여기가 통째로 거짓말을 하게 되므로, 이 절이 제 앞가림을 한다
-  await S(() => SPACE.putGun(false));
+  await stand();
   // ★ 앞 절이 조종간을 세게 밀었다 — 짐벌이 바로 설 때까지 기다린다
   await settle();
   const RACK = { x: 1.3 + 0.55, z: (4.2 + 7.2) / 2 - 0.85 };
@@ -472,7 +485,7 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   // ★★ **일어나야 걸어간다.** 앞에서 갈래를 고르려고 앉혔는데(`sit`)
   //   그대로 두면 몸이 조종석에 붙들려, 에어록 좌표를 넣어도 카메라는
   //   조종석에 있다 — 「바깥문이 안 잡힌다」로 보이지만 실은 거기 안 갔다
-  await S(() => SPACE.putGun(false));
+  await stand();
   await settle();
   const at = await S(() => SPACE.outerAt);
   await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer');
