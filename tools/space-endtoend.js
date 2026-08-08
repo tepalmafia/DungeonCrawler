@@ -94,7 +94,7 @@ const pressUntil = async (cond, tries = 5, sec = 1.2) => {
 const aimAround = async (x, z, yaw, pitch, want) => {
   for (const dy of [0, 0.12, -0.12, 0.24, -0.24]) {
     for (const dp of [0, 0.12, -0.12, 0.24, -0.24]) {
-      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 3)) return true;
+      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 5)) return true;
     }
   }
   return false;
@@ -242,12 +242,15 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
     `⓪ 우주복 걸이가 잡힌다 (${await S(() => SPACE.aim)})`);
   // ★ 잡는 **동안** 조준이 벗어나면 `wearing` 이 초당 1.6 로 되감긴다 —
   //   헤드리스에서는 한 프레임 놓치면 그대로 0 이다. 매 번 다시 겨눈다
-  const RA = await S(() => SPACE.look);
+  // ★ `until` 은 인자를 안 받는다 — 창에 얹어 두고 읽는다
+  await S((v) => { window.__ra = v; }, [RACK.x + 0.80, RACK.z + 0.10,
+    (await S(() => SPACE.look)).yaw, (await S(() => SPACE.look)).pitch]);
   await down();
-  const wearing = await until(([x, z, y, pi]) => {
+  const wearing = await until(() => {
+    const [x, z, y, pi] = window.__ra;
     SPACE.put(x, z, y, pi);
     return SPACE.suit.wearing > 0.3;
-  }, 60, '우주복을 입기 시작', [RACK.x + 0.80, RACK.z + 0.10, RA.yaw, RA.pitch]);
+  }, 60, '우주복을 입기 시작');
   await up();
   ok(wearing, '⓪b 잡고 있으니 **입기 시작한다** — 22초를 붙들고 있어야 한다');
   // ★ 22초는 헤드리스에서 몇 분이다 (게임 시계가 실제의 1/20 로 돈다).
