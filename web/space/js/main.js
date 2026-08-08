@@ -3033,6 +3033,14 @@ function frame(now) {
       chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.dist = 0;
     }
     chase.risk = 0;
+    // ★★★ **창밖을 성간 공백으로 바꾼다** (v66 에서 빠져 있던 것을 찾았다).
+    //   여기서 배너만 띄우고 **하늘은 안 바꾸고 있었다.** 「따라오지
+    //   못하는 곳까지 간다」가 이 게임의 목적 한 줄인데, 정작 도착하면
+    //   **창밖이 그대로**였다 — 말로만 도착한 셈이다.
+    //   `space-endtoend [7] ③` 이 잡았고, 그 검사는 v64 부터 [1] 에서
+    //   죽어 있었으므로 **여기까지 와 본 적이 없었다.**
+    //   검사가 끝까지 도는 것이 왜 중요한지가 이 한 줄이다
+    ship.outside.setRegion('void');
     audio?.event('escaped');
     escapedAt = clock;
     saveNow();          // 여기까지는 저장해 둔다 — 마지막 구간도 8분이다

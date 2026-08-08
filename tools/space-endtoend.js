@@ -469,14 +469,19 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
 
   // 싣기 — 문을 열어야 한다
   const at = await S(() => SPACE.outerAt);
-  await aimAt(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer');
-  await press(1.0);
+  await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer');
+  await pressUntil(() => SPACE.lock.cycling > 0 || SPACE.lock.open, 5, 1.0);
   ok(await until(() => SPACE.lock.open, 200, '바깥문 열기'), '⑥ 땅에서도 바깥문이 열린다');
-  await aimAt(3.4, 5.15, 0, -0.34, 'winch');
+  await aimAround(3.4, 5.15, 0, -0.34, 'winch');
   const s0 = await S(() => SPACE.supply);
-  await S((v) => { window.__o0 = v; }, s0.ore);
+  const wa2 = await S(() => SPACE.look);
+  await S((v) => { window.__o0 = v[0]; window.__wa = v.slice(1); }, [s0.ore, wa2.yaw, wa2.pitch]);
   await down();
-  const got = await until(() => SPACE.supply.ore > window.__o0 + 2, 60, '싣기');
+  // ★ 잡는 동안 조준이 벗어나면 멈춘다 — 매 번 다시 겨눈다
+  const got = await until(() => {
+    SPACE.put(3.4, 5.15, window.__wa[0], window.__wa[1]);
+    return SPACE.supply.ore > window.__o0 + 2;
+  }, 60, '싣기');
   await up();
   ok(got, `⑦ 실린다 (광석 ${s0.ore} → ${(await S(() => SPACE.supply)).ore})`);
   ok((await S(() => SPACE.land)).got.parts >= 0, '⑧ 땅에서는 부품과 식량도 난다');
