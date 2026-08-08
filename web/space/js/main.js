@@ -21,7 +21,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { preload } from './core/assets.js';
 import { Input } from './core/input.js';
 import { makeAudio } from './core/audio.js';
-import { ESCAPE, SHAKE, envelope } from './game/audio-table.js';
+import { ESCAPE, SHAKE, envelope, SILENT } from './game/audio-table.js';
 import { buildShip, inside, roomAt, BLOCKERS, ROOMS } from './world/ship.js';
 import { BODY, HEAT, VALVE, CRUISE, FOCUS } from './game/systems-table.js';
 import { REGION_BY_KEY } from './game/regions-table.js';
@@ -95,7 +95,7 @@ import {
   makeCombat, weaponOf, isLocked, stepRadar, stepShots, stepCool,
   pickSlot, fire as fireWeapon, forgetLock, radarBlips, summary as cbtSummary,
 } from './game/combat.js';
-import { HULL } from './game/target-table.js';
+import { HULL, HITS } from './game/target-table.js';
 import { spawnRaider } from './game/target.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
@@ -185,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 73;
+export const VERSION = 74;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -269,6 +269,18 @@ const input = new Input(canvas);
 // ★ 소리가 안 나는 기계에서도 게임은 돌아야 한다. 통째로 감싼다.
 let audio = null;
 try { audio = makeAudio(); } catch (e) { console.warn('[audio] 소리를 못 켭니다 —', e.message); }
+/**
+ * ★★ v74 — **게임이 정말 그 소리를 부르나**를 엿듣는다 (`SPACE.audioSpy`).
+ *
+ *   소리를 만들어 놓고 **아무도 안 부르는** 것이 이 저장소가 제일 자주 밟는
+ *   함정이다 — 안 나도 화면에 아무 표시가 없어서 조용히 지나간다.
+ *   그래서 「소리가 나나」(파형)와 「게임이 부르나」(여기)를 **따로** 묻는다.
+ */
+let audioSeen = null;
+if (audio) {
+  const raw = audio.event;
+  audio.event = (name, at) => { if (audioSeen) audioSeen.push(name); return raw(name, at); };
+}
 addEventListener('mousedown', () => audio?.resume(), { passive: true });
 // ★ 손목을 들어 올린다 — **누르는 동안**. 다른 손잡이가 전부 「잡고 있는 것」
 //   이라 여기도 같은 규약이다. 놓으면 곁눈 자리로 돌아간다
@@ -543,7 +555,12 @@ function fireGun() {
   const r = fireWeapon(combat, { aimed, supply, rnd: Math.random });
   if (!r.ok) { banner = CBT_WHY[r.why] ?? '지금은 못 쏩니다'; bannerT = 2.4; return; }
   const w = r.weapon;
-  audio?.event(w.key === 'laser' ? 'caught' : 'latch');
+  // ══ ★★★ **쏘는 소리** (v74 · 진공 규칙) ═══════════════════════════
+  //  v73 까지 레이저가 `caught`(잡혔다)를, 미사일이 `latch`(걸렸다)를
+  //  빌려 쓰고 있었다. 즉 **「내가 쐈다」와 「내가 맞았다」가 같은 소리**였고,
+  //  소리로 상황을 알라고 만든 계통에서 그건 제일 나쁜 겹침이다.
+  //  ★ 밖은 조용해도 **내 무기는 들린다** — 선체에 붙어 있으니까
+  audio?.event(w.key === 'laser' ? 'laser' : 'tube');
   // ★★★ v69 — **레이저는 열을 판다** (`combat-table.js WEAPONS.laser.heat`).
   //   탄약이 없는 대신 이쪽이 값이다: 쏠수록 뜨거워지고, 뜨거우면 못 숨고,
   //   식히려고 라디에이터를 열면 더 훤히 보인다 (v58 열 저장고와 물린다).
@@ -624,7 +641,12 @@ function takeBumps(list) {
     hitFlash = Math.max(hitFlash, k.shake);
     faults.wear.hull = Math.min(1, faults.wear.hull + k.hull);
     heat = Math.min(HEAT.max, heat + k.heat);
-    audio?.event(b.ram ? 'caught' : 'latch');
+    // ★★ v74 — **선체에 닿은 것만 들린다** (진공 규칙 · `audio-table.js STRUCT`).
+    //   여기가 그 규칙의 제일 곧은 자리다: 밖에서 떠다니던 것이 **선체에
+    //   닿는 순간** 소리가 생긴다. 닿기 전까지는 아무 소리도 없다.
+    //   ★ `caught`(잡혔다)·`latch`(걸렸다)를 빌려 쓰고 있었다 — 스친 것과
+    //     잡힌 것이 같은 소리면 귀가 아무것도 못 나눈다
+    audio?.event(b.ram ? 'hullRam' : 'hullGraze');
     banner = b.ram ? '들이받혔습니다 — 선체가 깎였습니다' : `${TKINDS[b.kind]?.name ?? '파편'}이 스쳤습니다`;
     bannerT = b.ram ? 3.0 : 1.6;
   }
@@ -660,7 +682,14 @@ function takeHits(list) {
     hitFlash = Math.max(hitFlash, Math.min(1, 0.8 * punch));
     faults.wear.hull = Math.min(1, faults.wear.hull + w.hull * punch);
     heat = Math.min(HEAT.max, heat + w.heat * punch);
-    audio?.event('caught');
+    // ══ ★★★ **맞은 소리** (v74 · 진공 규칙) ═══════════════════════════
+    //  밖에서 터지는 것은 안 들린다. **선체에 닿은 것만** 들린다 —
+    //  공기가 아니라 금속을 타고 들어온 소리다 (구조전달음).
+    //  ★ 그래서 「밖이 조용하면 나는 안 맞았다」가 성립하고, 조종석에서
+    //    앞만 보고 있어도 **옆구리를 맞은 것을 귀로 안다.** 지금까지는
+    //    붉은 번쩍임 하나뿐이라 어디를 맞았는지 화면으로도 몰랐다
+    //  ★★ 세기로 나눈다 — 세게 맞으면 배가 더 낮게, 더 오래 운다
+    audio?.event(punch >= 2 ? 'hullRam' : 'hullHit');
     banner = w.what;
     bannerT = 2.4;
     // ★★ 세 번에 한 번만 일이 된다 (`FAULT_CHANCE`). 매번이면 회차가
@@ -2111,7 +2140,9 @@ function systemsStep(dt, valveOpen, regionMult) {
     banner = '부딪혔습니다';
     bannerT = 2.8;
     hitFlash = 1;
-    audio?.event('caught');
+    // ★ v74 — **들이받은 것도 선체를 타고 온다.** 제일 낮고 제일 오래 운다.
+    //   여기도 `caught`(잡혔다)를 빌려 쓰고 있었다
+    audio?.event('hullRam');
   }
   if (hev === 'pass') audio?.event('fixed');
   // ★ 지대를 다 지났다 — 「창밖이 갑자기 트인다」(§4-2 해소)
@@ -3177,6 +3208,91 @@ window.SPACE = {
    *
    *   돌려주는 것: 추격 동안의 크기 → 뿌리친 뒤 푹 꺼짐 → 되돌아옴.
    */
+  /** ★ v74 — 표가 「안 들린다」고 적어 둔 것들. 검사가 이 목록을 읽는다 */
+  get silentList() { return SILENT; },
+  /**
+   * ★★ v74 — **게임이 정말 그 소리를 부르나**를 엿듣는다.
+   *
+   *   소리를 만들어 놓고 **아무도 안 부르는** 것이 이 저장소가 제일 자주
+   *   밟는 함정이다 — 안 나도 화면에 아무 표시가 없어서 조용히 지나간다.
+   *   그래서 표(났나)와 게임(부르나)을 **따로** 묻는다.
+   *
+   * @param sink 배열을 주면 그때부터 이름을 담는다. null 이면 그만둔다
+   */
+  audioSpy(sink) { audioSeen = Array.isArray(sink) ? sink : null; return !!audioSeen; },
+  /** 검사가 한 방 맞아 본다 — 적을 불러 27초를 기다리지 않으려고 */
+  hitMe(where = 'flank') {
+    const w = HITS.find((h) => h.key === where) ?? HITS[0];
+    takeHits([{ where: w, punch: 1, fault: null }]);
+    return { where: w.key, hull: +faults.wear.hull.toFixed(3) };
+  },
+  /**
+   * ★★★ **소리 하나를 떼어 내 파형으로 잰다** (v74).
+   *
+   *   `auditEscape` 와 **같은 방법**이다 — 게임이 실제로 쓰는
+   *   `core/audio.js` 를 `OfflineAudioContext` 에 태워 크기를 센다.
+   *   검사용으로 따로 짜서 재면 「검사는 통과하는데 게임은 안 나는」
+   *   상태가 생긴다 (`space-audio.js` 머리말).
+   *
+   *   ★ 진공 규칙이 이 구멍으로 검사된다: **밖에서 나는 것은 이름조차
+   *     없어야 하고, 선체를 때린 것은 파형이 서야 한다.**
+   *
+   * @returns { peak, rms, tail } — tail 은 **배가 우는 길이**(초).
+   *   그게 「선체를 타고 왔다」의 정체라 따로 잰다
+   */
+  async auditOne(name, { len = 3, step = 0.05 } = {}) {
+    const sr = 12000;
+    // ══ ★★★ **배경을 빼고 잰다** ═══════════════════════════════════════
+    //
+    //  ★ 처음엔 그냥 한 번 태워서 쟀는데 **소리 다섯이 전부 「2.95초」**로
+    //    나왔다. `makeAudio()` 는 켜지는 순간 배의 웅웅거림을 시작하므로
+    //    3초를 통째로 재면 **재는 것이 늘 배경**이었다 — 「소리가 났다」도
+    //    「셋이 다르다」도 전부 웅웅거림을 두고 한 말이었던 셈이다.
+    //
+    //  ★★ 그래서 **두 번 태워서 뺀다**: 아무 일도 안 일어난 판과 소리를
+    //    한 번 낸 판. 차이가 곧 그 소리다. 배경을 끄는 방법도 있지만,
+    //    그러면 **게임이 실제로 쓰는 것과 다른 상태**를 재게 된다
+    //    (`space-audio.js` 머리말: 검사용으로 따로 짜서 재면 검사는
+    //    통과하는데 게임은 안 나는 상태가 생긴다).
+    const render = async (ev) => {
+      const off = new OfflineAudioContext(1, Math.ceil(sr * len), sr);
+      const a = makeAudio(off);
+      if (ev) a.event(ev, 0.05);
+      const buf = await off.startRendering();
+      const d = buf.getChannelData(0);
+      const n = Math.floor(sr * step);
+      const out = [];
+      for (let i = 0; i + n <= d.length; i += n) {
+        let s = 0;
+        for (let j = 0; j < n; j++) s += d[i + j] * d[i + j];
+        out.push(Math.sqrt(s / n));
+      }
+      return out;
+    };
+    const [base, got] = await Promise.all([render(null), render(name)]);
+    const rms = got.map((v, i) => +Math.max(0, v - (base[i] ?? 0)).toFixed(5));
+    const peak = Math.max(...rms);
+    // ══ ★★ **바닥 잡음을 빼고 나서 우는 길이를 잰다** ═══════════════════
+    //
+    //  ★ 빼기만 해서는 안 됐다. 배경에는 **잡음**(공기 순환)이 섞여 있고
+    //    잡음은 태울 때마다 달라서, 두 판을 빼도 **깨끗한 0 이 안 된다.**
+    //    그 찌꺼기를 「아직 울고 있다」로 세는 바람에 **소리 다섯이 전부
+    //    2.9초**로 나왔다 — 크기는 제대로 갈리는데 길이만 다 같았다.
+    //
+    //  ★★ 그래서 **뒤쪽 20%의 중앙값**을 바닥으로 잡는다. 거기는 어떤
+    //    소리든 이미 끝난 자리라 남은 것은 찌꺼기뿐이고, 그 몇 배를 넘는
+    //    동안만 「울고 있다」로 센다
+    const tailPart = rms.slice(Math.floor(rms.length * 0.8)).slice().sort((a, z) => a - z);
+    const floor = tailPart[Math.floor(tailPart.length / 2)] ?? 0;
+    const gate = Math.max(peak * 0.05, floor * 4, 1e-4);
+    let last = 0;
+    rms.forEach((v, i) => { if (v > gate) last = i; });
+    return {
+      step, peak: +peak.toFixed(5), rms,
+      floor: +floor.toFixed(5),
+      tail: +(last * step).toFixed(2),
+    };
+  },
   async auditEscape({ chaseFor = 3, tail = 2, step = 0.1 } = {}) {
     const sr = 12000;                       // 크기만 재므로 낮춰도 된다 (빠르다)
     const len = chaseFor + ESCAPE.total + tail;
@@ -3366,7 +3482,10 @@ function frame(now) {
       leakOpen = true;
       banner = '기밀 경보 — 어딘가 벽이 뚫렸습니다';
       bannerT = 4.4;
-      audio?.event('caught');
+      // ★★ v74 — **미소운석은 스치는 소리다** (`HULL.graze`). 높고 짧다.
+      //   벽을 뚫은 것은 티끌이지 포탄이 아니므로 배가 크게 안 운다 —
+      //   그런데 **결과는 제일 크다**. 그 어긋남이 이 장면의 무서움이다
+      audio?.event('hullGraze');
     }
   }
   // ★ 두 방을 다 막았으면 장면이 닫힌다. **저절로 안 낫는다**

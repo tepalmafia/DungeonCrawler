@@ -873,6 +873,54 @@ console.log('\n[6f] ★★★ **몰아 붙인다** — 손목·상태창·부호
   await S(() => { SPACE.putBoost(0); SPACE.clearSky(); });
 }
 
+console.log('\n[6g] ★★★ **진공** — 밖은 조용하고, 선체를 때린 것만 들린다 (v74)');
+{
+  // ★★ 사장님 「우주인 점을 감안한 전개인가?」 — 소리만 아무도 정한 적이
+  //   없었다. 여기서 묻는 것은 **게임이 실제로 그 소리를 부르나**다.
+  //   「소리가 나나」(파형)는 `tools/space-sound.js` 가 따로 잰다 —
+  //   만들어 놓고 아무도 안 부르는 것이 이 저장소가 제일 자주 밟는 함정이다.
+  await sit();
+  await S(() => { SPACE.clearSky(); SPACE.putBoost(0); });
+  await settle();
+
+  // ① 맞으면 **선체 소리**를 부른다
+  const onHit = await S(async () => {
+    const seen = [];
+    SPACE.audioSpy(seen);
+    SPACE.hitMe('flank');
+    await new Promise((r) => setTimeout(r, 80));
+    SPACE.audioSpy(null);
+    return seen;
+  });
+  ok(onHit.some((n) => n.startsWith('hull')),
+    `① ★★★ 맞으니 **선체가 운다** (${onHit.join(', ') || '아무 소리도 안 났다'}) —`
+    + ' 진공에서도 고체는 소리를 나른다. 지금까지 피격은 화면으로만 알았다');
+
+  // ② ★★ **쏘는 소리가 맞는 소리와 다르다** — v73 까지 둘 다 `caught` 였다
+  const onFire = await S(async () => {
+    const seen = [];
+    SPACE.putTarget('raider'); SPACE.putAim(0, 0);
+    SPACE.audioSpy(seen);
+    SPACE.fire();
+    await new Promise((r) => setTimeout(r, 80));
+    SPACE.audioSpy(null);
+    return seen;
+  });
+  ok(onFire.includes('laser') || onFire.includes('tube'),
+    `② ★★★ 쏘면 **무기 소리**가 난다 (${onFire.join(', ') || '없다'}) —`
+    + ' v73 까지 `caught`(잡혔다)를 빌려 써서 **쏠 때마다 잡힌 소리**가 났다');
+  ok(!onFire.some((n) => n.startsWith('hull')),
+    '③ ★★ 그런데 **선체 소리는 안 난다** — 내가 쏜 것이 90m 밖에서 터져도'
+    + ' 안 들리는 것이 맞다. 밖이 조용해야 「조용하면 안 맞았다」가 성립한다');
+
+  // ④ 표가 「안 들린다」고 적어 둔 것이 정말 이름조차 없나
+  const silent = await S(() => SPACE.silentList);
+  ok(Array.isArray(silent) && silent.length >= 4,
+    `④ 표에 **안 들리는 것 ${silent?.length ?? 0}가지**가 적혀 있다 —`
+    + ' 안 정해 두면 다음 판에 누가 폭발음을 넣는다');
+  await S(() => SPACE.clearSky());
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은
