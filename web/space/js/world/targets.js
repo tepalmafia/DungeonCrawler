@@ -233,6 +233,20 @@ export function buildTargets(parent) {
       for (const t of list ?? []) {
         seen.add(t.id);
         let o = live.get(t.id);
+        // ══ ★★ **종류가 바뀌면 다시 짓는다** (2026-08-08) ═══════════════
+        //
+        //  `live` 는 **id 로만** 찾고 있었다. 그래서 같은 id 의 `kind` 가
+        //  바뀌어도 실루엣이 **영영 처음 것**이었다 — 「데이터는 요격기인데
+        //  화면은 파편」인 상태가 조용히 성립했다.
+        //
+        //  ★ `space-endtoend [6c]②` 가 이걸 잡았다. 검사가
+        //    `SPACE.putTarget('raider')` 로 종류를 바꿔 놓고 「적 우주선이
+        //    창밖에 있나」를 물었는데 늘 없었다. **구멍이 거짓말을 하고
+        //    있었던 것**이지 창밖이 고장 난 게 아니었다.
+        //
+        //  ★★ 그리고 이건 검사만의 일이 아니다 — 앞으로 어디서든 종류를
+        //    바꾸면 화면이 따라와야 한다. 고칠 자리는 구멍이 아니라 **여기**다
+        if (o && o.name !== `표적:${t.kind}`) { g.remove(o); live.delete(t.id); o = null; }
         if (!o) {
           o = buildOne(t.kind);
           // ★ 크기는 표가 정한다 (`KINDS[kind].size`) — 조준 허용각과 **같은

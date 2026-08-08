@@ -679,7 +679,12 @@ console.log('\n[6c] ★★★ **격추가 보이나** — 적 · 탄 · 레이�
     `③ ★★★ 쏘니 **날아가는 것이 생긴다** (${before} → ${after?.fired ?? 0}) — 「발사 되는게 안보이잔아」의 답`);
 
   // ④ 레이더가 **뒤에 있는 것을 말하나**
-  await S(() => { const t = SPACE.sky.list[0]; if (t) SPACE.putSkyAz?.(t.id, 170); });
+  // ★★ **③ 에서 쏴 죽인 그 표적을 여기서 다시 찾고 있었다.** 그래서
+  //   `sky.list[0]` 이 엉뚱한 파편이 됐고, 파편은 엔진이 없어 원뿔 밖에서
+  //   안 잡힌다 — 「레이더가 뒤를 못 본다」로 빨개졌지만 레이더는 멀쩡했다.
+  //   **절 안에서 앞 줄이 뒤 줄의 재료를 없애면 그건 검사가 아니다**
+  await S(() => { SPACE.clearSky(); SPACE.callFoe('raider', 170, 90); });
+  await until(() => (SPACE.combat?.blips ?? []).length > 0, 30, '레이더에 점이 찍히기');
   const blips = await S(() => SPACE.combat?.blips ?? null);
   ok(Array.isArray(blips) && blips.some((x) => Math.abs(x.relAz) > 120),
     `④ ★★ 레이더가 **뒤에 있는 것을 찍는다** (${(blips ?? []).length}점) —`
@@ -715,11 +720,12 @@ console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)')
     `③ 실루엣이 **${shapes.size}가지** — 맷집만 다르면 그건 같은 적의 큰 판·작은 판이다`);
 
   // ④ ★★★ **쏜다** — 규칙이 탄을 띄우고 화면이 그린다
-  let inc = 0;
-  for (let i = 0; i < 40 && !inc; i++) {
-    await p.waitForTimeout(500);
-    inc = await S(() => SPACE.sky.incoming?.length ?? 0);
-  }
+  // ★★ **20초를 기다리고 「안 쏜다」고 했었다.** 실제로 첫 발까지 27초다 —
+  //   적은 겨눔을 쌓고 나서 쏘고, **헤드리스 시계는 실제의 1/20** 이라
+  //   3.4초짜리 주기가 여기서는 1분이 넘는다. 게임이 아니라 기다림이
+  //   짧았던 것이다. 정해 놓은 만큼 세지 말고 **될 때까지** 기다린다
+  await until(() => (SPACE.sky.incoming?.length ?? 0) > 0, 200, '적탄이 날아오는 것');
+  const inc = await S(() => SPACE.sky.incoming?.length ?? 0);
   ok(inc > 0, `④ ★★★ **적이 쏜다** — 날아오는 탄 ${inc}발. v69 까지 영영 안 쐈다`);
   const drawn = await S(() => SPACE.outside?.shots?.incoming ?? 0);
   ok(drawn > 0,
@@ -758,12 +764,20 @@ console.log('\n[6e] ★★★ **탄두** — 목적이 배 안에 서 있나 (v7
   ok(hot.hot > 0.2, `③ ★★ 뜨거우니 **탄두가 달아오른다** (${hot.hot}) — 숫자를 안 보고도 안다`);
 
   // ④ 한계에 닿으면 **일이 는다** — 죽지 않는다
+  // ★★★ **`setBake(100)` 만 해 놓고 기다리고 있었다.** 탄두는 선체 열이
+  //   62 를 넘을 때만 오르고 아니면 **내려간다**(`BAKE.fall`) — 그래서
+  //   100 으로 밀어 넣어도 다음 프레임에 99.9 가 되어 한계에 **영영 안 닿았다.**
+  //   즉 검사가 만들 수 없는 상황을 기다리고 있었다. 탄두가 데워지는
+  //   이유는 **기관실이 뜨겁기 때문**이므로, 선체 열부터 올려야 맞다
   const n0 = await S(() => SPACE.warhead.n);
-  await S(() => SPACE.setBake(100));
-  for (let i = 0; i < 20; i++) await p.waitForTimeout(300);
+  await S((n) => { window.__n0 = n; }, n0);
+  await S(() => { SPACE.setHeat(88); SPACE.setBake(97); });
+  await until(() => SPACE.warhead.n < window.__n0 || SPACE.warhead.lost.length > 0,
+    120, '열에 재료가 죽는 것');
   const w2 = await S(() => SPACE.warhead);
   ok(w2.n < n0 || w2.lost.length > 0,
     `④ ★★ 열에 **꽂아 둔 것이 하나 죽는다** (${n0} → ${w2.n}) — 죽는 게 아니라 일이 는다`);
+  await S(() => SPACE.setHeat(20));
 
   // ⑤ 못 모아도 갈 수 있다
   ok(await S(() => SPACE.dropHead().key) !== 'full',
