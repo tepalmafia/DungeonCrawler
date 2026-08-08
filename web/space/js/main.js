@@ -72,6 +72,12 @@ import { HELM, HELM_SEAT, FLY_VIEW, SIT_LOOK, offWord, hitWord } from './game/he
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord } from './game/combat-table.js';
+// ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
+import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg } from './game/warhead-table.js';
+import {
+  makeWarhead, pickUp as headPick, holdCradle, stepWarhead, holdArm, drop as headDrop,
+  full as headFull, summary as headSummary,
+} from './game/warhead.js';
 import { speedOf as statusSpeed } from './world/status.js';
 // ★★ v69 — 맞은 자리를 **각도·거리에서 3D 좌표로** 옮긴다. `world/shots.js`
 //   와 **같은 식**을 쓴다 — 두 벌로 옮기면 터짐이 표적에서 어긋난다.
@@ -174,7 +180,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 70;
+export const VERSION = 71;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -441,6 +447,11 @@ const gun = makeGun();
  */
 const combat = makeCombat();
 /**
+ * ★★★ **탄두** (v71) — 이 게임의 목적이 여기 있다.
+ *   기관실 후미 격벽의 크레이들. 재료 다섯을 손으로 들고 가 꽂는다
+ */
+const warhead = makeWarhead();
+/**
  * ★★ 탐색기 소리의 세기 — 0 없음 · 0.5 잡았다 · 1 물었다 (v69).
  *   전투 셈은 프레임 뒷쪽에서 돌고 소리는 앞쪽에서 갱신되므로 여기 둔다.
  *   한 프레임 늦는데, 60분의 1초라 귀로는 못 듣는다
@@ -563,6 +574,23 @@ function landShots(dt) {
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
     forgetLock(combat, t.id);
+    // ══ ★★★ **재료 다섯 중 둘이 여기서 나온다** (v71) ═══════════════
+    //  · 보급 호송선을 부수면 **분열 노심** — 「격추해서 뺏는다」
+    //  · 방어 위성을 부수면 **재돌입체 외피** — 「부수고 회수한다」
+    //  ★ 손에 **들려 준다** — 꽂힌 것이 아니다. 기관실까지 걸어가야 한다.
+    //    그 걸음이 「모아서 붙인다」의 실체다
+    if (t.kind === 'convoy' && !warhead.in.includes('core')) {
+      if (headPick(warhead, 'core')) {
+        banner = '분열 노심을 챙겼습니다 — 기관실 크레이들로';
+        bannerT = 5.0;
+      }
+    }
+    if (t.kind === 'sat' && !warhead.in.includes('shell')) {
+      if (headPick(warhead, 'shell')) {
+        banner = '재돌입체 외피를 챙겼습니다 — 기관실 크레이들로';
+        bannerT = 5.0;
+      }
+    }
     const g = TKINDS[t.kind].gives;
     supply.ore = Math.min(ORE.max, supply.ore + g.ore);
     supply.parts = Math.min(PARTS.max, supply.parts + g.parts);
@@ -643,7 +671,7 @@ function takeHits(list) {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -1074,7 +1102,7 @@ function interactStep(dt) {
   const plates = ship.cock.plates;
   const pans = Object.values(ship.panels);
   const targets = [ship.valve, ...ship.breakers.map((b) => b.hit), ...plates.map((p) => p.hit),
-    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
+    ...pans.map((p) => p.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cradle.hit, ship.cock.yokeHit,
     ...ship.doors.map((d) => d.view.hit), ...carryView.aimTargets,
     // ★ v64 — 주포 손잡이 셋(좌석·발판·손잡이)이 여기 있었다. 걷어냈다
     ship.cock.helmSeatHit,
@@ -1094,6 +1122,8 @@ function interactStep(dt) {
   let onOuter = false, onAuto = false, onThr = false;
   let onCrank = null;
   let onSpot = null;
+  /** ★★ v71 — 탄두 크레이들 (기관실 후미) */
+  let onCradle = false;
   if (near) {
     for (let o = hit.object; o; o = o.parent) {
       if (o === ship.valve) { onValve = true; break; }
@@ -1112,6 +1142,7 @@ function interactStep(dt) {
       const pn = pans.find((x) => x.hit === o);
       if (pn) { panel = pn; break; }
       if (o === ship.winch.hit) { onWinch = true; break; }
+      if (o === ship.cradle.hit) { onCradle = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
       // ★ 좌석 — **앉아 있을 때는 안 잡힌다.** 앉은 채로 좌석이 잡히면
@@ -1147,10 +1178,10 @@ function interactStep(dt) {
   armsFullNow = !!(carry.held && CARRY_KINDS[carry.held]?.both);
   const armsFull = armsFullNow;
   if (armsFull && !onSpot
-    && (onValve || breaker || plate >= 0 || panel || onWinch || onHatch || onYoke || onCrank || onThr)) {
+    && (onValve || breaker || plate >= 0 || panel || onWinch || onHatch || onYoke || onCrank || onThr || onCradle)) {
     nag(`${CARRY_KINDS[carry.held].name}을 안고 있습니다 — 어딘가 붙여 놓으세요`);
     onValve = false; breaker = null; plate = -1; panel = null;
-    onWinch = false; onHatch = false; onYoke = false; onCrank = null; onThr = false;
+    onWinch = false; onHatch = false; onYoke = false; onCrank = null; onThr = false; onCradle = false;
   }
 
   // ★★ **지금 조종석 손잡이가 잡혀 있나** (v66). 이름을 하나씩 적는 대신
@@ -1294,8 +1325,15 @@ function interactStep(dt) {
     //   사는 것(2발)보다 많다 — 위험한 데를 뒤진 값이 커야 「가는 것이
     //   진짜 선택」이 된다 (`space-rescue.js` 가 지키는 것과 같은 줄)
     const gotM = salvageMissiles(supply);
+    // ★★★ v71 — **중성자 개시기가 여기서 나온다** (「뒤진다」).
+    //   표류선을 뒤지는 일이 이미 있으므로 **새 미션을 안 만든다** —
+    //   있던 자리에 뜻을 하나 얹는다 (이 배의 오랜 규약)
+    let gotHead = '';
+    if (!warhead.in.includes('initiator') && headPick(warhead, 'initiator')) {
+      gotHead = ' · **중성자 개시기**';
+    }
     banner = `${RESCUE.took} — 부품 ${rescue.got.parts} · 식량 ${rescue.got.food}`
-      + (gotM ? ` · 미사일 ${gotM}발` : '');
+      + (gotM ? ` · 미사일 ${gotM}발` : '') + gotHead;
     bannerT = 4.0;
     audio?.event('escaped');
     sceneDone(scenes, 'G');
@@ -1364,6 +1402,15 @@ function interactStep(dt) {
       banner = `광석 한 통 — ${supply.loads}통째`;
       bannerT = 2.2;
       audio?.event('latch');
+      // ★★★ v71 — **부스터 가스는 캐서 나온다** (「사거나 채굴」의 「캐는」 쪽).
+      //   내려서 **세 통**을 캐야 나온다 — 오래 서 있어야 하고, 서 있으면
+      //   들킨다. 그 값이 이 재료의 위험이다
+      if (onDirt && supply.loads >= 3 && !warhead.in.includes('booster')
+        && warhead.carrying !== 'booster' && headPick(warhead, 'booster')) {
+        banner = '얼음에서 **부스터 가스**를 뽑았습니다 — 기관실 크레이들로';
+        bannerT = 5.0;
+        audio?.event('fixed');
+      }
     }
     ship.winch.drum.rotation.y -= dt * 2.4;
   }
@@ -1377,6 +1424,46 @@ function interactStep(dt) {
       audio?.event('latch');
     }
     ship.winch.drum.rotation.y -= dt * 3.4;
+  }
+
+  // ══ ★★★ **탄두 크레이들** — 기관실 후미 (v71) ═══════════════════
+  //
+  //  ★ 손에 든 재료가 있으면 **꽂는 자리**고, 다섯이 다 찼으면
+  //    **무장하는 자리**다. 같은 손잡이가 상황에 따라 다른 일을 한다 —
+  //    이 배의 규약이고, 손이 배울 것을 안 늘린다
+  if (onCradle && input.hold) {
+    if (warhead.carrying) {
+      if (holdCradle(warhead, dt, { holding: true }) === 'in') {
+        const p = HEAD_BY[warhead.in[warhead.in.length - 1]];
+        banner = `${p?.name ?? '재료'}를 꽂았습니다 — ${warhead.in.length}/${PARTS5.length}`;
+        bannerT = 3.2;
+        audio?.event('fixed');
+      }
+    } else if (headFull(warhead) && !warhead.armed) {
+      if (holdArm(warhead, dt, { holding: true }) === 'armed') {
+        banner = '탄두가 무장했습니다';
+        bannerT = 4.0;
+        audio?.event('latch');
+      }
+    } else if (!warhead.armed) {
+      nag(`재료가 ${warhead.in.length}/${PARTS5.length} 입니다 — 다 채워야 무장합니다`);
+    }
+  } else {
+    holdCradle(warhead, dt, { holding: false });
+    holdArm(warhead, dt, { holding: false });
+  }
+  // ★★★ **탄두가 데워진다** — 기관실에 둔 값 (`warhead-table.js BAKE`).
+  //   추진을 켜면 이 방이 뜨거워지고, 뜨거우면 탄두가 오른다.
+  //   한계에 닿으면 **꽂아 둔 것이 하나 죽는다** — 죽는 것이 아니라 일이 는다
+  {
+    const hev = stepWarhead(warhead, dt, { heat });
+    if (hev === 'warn') { banner = '탄두가 뜨겁습니다'; bannerT = 3.0; audio?.event('fault'); }
+    if (hev === 'lost') {
+      const g = HEAD_BY[warhead.lost[warhead.lost.length - 1]];
+      banner = `열에 ${g?.name ?? '재료'}가 망가졌습니다 — 다시 구해야 합니다`;
+      bannerT = 4.5;
+      audio?.event('caught');
+    }
   }
 
   // ── 접수구 — 거점에서만. 상인은 얼굴이 없다 (PLAN §1) ──
@@ -1397,7 +1484,18 @@ function interactStep(dt) {
     //    멀어진다. **더 오래 잡고 있으면** 식량 대신 미사일이 온다 —
     //    같은 자리, 같은 동작, 다른 결과. 그리고 「더 오래」가 곧 「더
     //    비싸다」의 손맛이 된다
-    if (trading >= TRADE.missileHold && canBuyMissiles(supply)) {
+    // ★★★ v71 — **폭축 렌즈를 산다** (「사거나 채굴」의 「사는」 쪽).
+    //   제일 오래 잡는다: 제일 비싸고 제일 드문 것이므로 손도 제일 오래 매인다
+    if (trading >= TRADE.missileHold + 5 && route.fork?.region !== 'void'
+      && !warhead.in.includes('lens') && warhead.carrying !== 'lens'
+      && supply.ore >= HEAD_BY.lens.cost) {
+      trading = 0;
+      supply.ore -= HEAD_BY.lens.cost;
+      headPick(warhead, 'lens');
+      banner = `광석 ${HEAD_BY.lens.cost} → 폭축 렌즈 — 기관실 크레이들로`;
+      bannerT = 5.0;
+      audio?.event('fixed');
+    } else if (trading >= TRADE.missileHold && canBuyMissiles(supply)) {
       trading = 0;
       buyMissiles(supply);
       banner = `광석 ${TRADE.missileOre} → 미사일 ${MISSILES.perBuy}발 (${supply.missiles}/${MISSILES.max})`;
@@ -1779,13 +1877,16 @@ function interactStep(dt) {
     : onValve ? 'valve' : (breaker ? breaker.key
     : (plate >= 0 ? `chart${plate}`
       : (panel ? `panel:${panel.room}`
-        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : (onThr ? 'throttle' : null))))))));
+        // ★★ v71 — **탄두 크레이들.** 이름이 없으면 조준점이 안 켜지고,
+        //   안 켜지면 「눌러도 되는지」를 알 길이 없다 (v64 에 이미 밟은 함정)
+        : (onCradle ? 'cradle'
+        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : (onThr ? 'throttle' : null)))))))));
   // ★ 조준점이 **주포와 사다리에서는 안 켜졌다.** 「손이 닿는다」를 알려
   //   주는 유일한 표시인데 빠져 있으면 「눌러도 되는지」를 알 길이 없다
   cross.classList.toggle('on', !!(gbHand && gbHolding) || !!(onOuter || onAuto || onThr || onSuit
     || onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
-    || onYoke || (crankDoor && crankDoor.jammed)
+    || onYoke || onCradle || (crankDoor && crankDoor.jammed)
     || (onSpot && (carry.held ? !atSpot(carry, onSpot) : !!atSpot(carry, onSpot)))));
   return coolOpen;
 }
@@ -2176,6 +2277,8 @@ function systemsStep(dt, valveOpen, regionMult) {
     missiles: supply.missiles,
     weapon: weaponOf(combat).name,
   };
+  // ★★ v71 — 크레이들이 **다섯 칸의 불**과 탄두 온도를 그린다
+  ship.cradle.update(headSummary(warhead));
   ship.bench.update({
     wear: faults.wear, open: openList(faults), fixed: faults.fixed, log: faults.log,
     scars: scarList(scars),
@@ -2607,7 +2710,7 @@ window.SPACE = {
   get aimTargets() {
     const pans = Object.values(ship.panels);
     return [ship.valve, ...ship.breakers.map((x) => x.hit), ...ship.cock.plates.map((x) => x.hit),
-      ...pans.map((x) => x.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cock.yokeHit,
+      ...pans.map((x) => x.hit), ship.winch.hit, ship.tradeHatch.hit, ship.cradle.hit, ship.cock.yokeHit,
       ...ship.doors.map((d) => d.view.hit)];
   },
   get doorsRaw() { return doors.list.map((d) => ({ key: d.key, x: d.x, z: d.z, ry: d.ry })); },
@@ -2821,6 +2924,28 @@ window.SPACE = {
   fire() { fireGun(); return cbtSummary(combat); },
   /** ★ 검사·점검 모드가 **적 우주선**을 하나 부른다 */
   callRaider() { const t = spawnRaider(sky); return { id: t.id, dist: +t.dist.toFixed(0), hp: t.hp }; },
+  /**
+   * ★★★ 탄두 (v71) — 검사와 점검 모드가 **같은 구멍**으로 본다.
+   *   재료 다섯이 어디서 나오는지도 같이 준다 (`warhead-table.js PARTS5`)
+   */
+  get warhead() { return { ...headSummary(warhead), parts: PARTS5 }; },
+  /** ★ 크레이들이 **화면에** 무엇을 그리고 있나 — 「불이 켜졌나」는 여기서만 나온다 */
+  get headSeen() { return ship.cradle?.seen ?? null; },
+  /** 검사가 재료를 손에 쥐어 준다 — 구간 다섯을 다 돌 수는 없다 */
+  giveHeadPart(key) { return headPick(warhead, key); },
+  /** 검사가 곧장 꽂는다 */
+  putHeadPart(key) {
+    if (headPick(warhead, key) || warhead.carrying === key) {
+      warhead.carrying = key;
+      warhead.in.push(key);
+      warhead.carrying = null;
+    }
+    return headSummary(warhead);
+  },
+  /** 검사가 탄두를 데워 본다 */
+  setBake(v) { warhead.bake = v; return headSummary(warhead); },
+  /** 떨군다 — 결말이 나온다 */
+  dropHead() { return headDrop(warhead); },
   /** ★ 검사가 절과 절 사이를 깨끗이 한다 — 적을 다 치운다 */
   clearSky() { sky.list = []; sky.incoming = []; return skySummary(sky); },
   /**

@@ -25,6 +25,7 @@
 //    방을 옮길 때마다 어긋난다. **맞닿은 방에서 자동으로 뽑는다.**
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
+import { ROOMS, ROOM } from '../game/rooms-table.js';
 import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
 import { buildRadio } from './radio.js';
@@ -36,6 +37,7 @@ import {
 import { bay, PANEL_BAY, FIRST_RACK } from '../game/bay-table.js';
 import { buildChart } from './chart.js';
 import { buildBench } from './bench.js';
+import { buildCradle } from './cradle.js';
 import { buildFoodGauge, buildWinch, buildTradeHatch, buildOuterDoor } from './supply-ui.js';
 import { buildDoor } from './door.js';
 import { DOOR } from '../game/door-table.js';
@@ -74,19 +76,14 @@ const WIN = {
 };
 
 /**
- * 방들. **통로가 척추고 곁방이 좌우에 붙는다.**
- * 여기 숫자를 고치면 벽·문구멍·모따기·충돌이 전부 따라온다.
+ * 방들 — **표에서 읽는다** (`game/rooms-table.js`).
+ *
+ * ★★ v71 에 옮겼다. 이 파일은 three 를 쓰므로 `tools/*.js` 가 못 읽는데,
+ *   방 좌표는 **도구도 물어봐야 하는 것**이다 (「기관실이 정말 제일
+ *   뒤인가」). 여기서 그대로 다시 내보내므로 쓰던 곳은 안 고쳐도 된다
  */
-export const ROOMS = [
-  { key: 'cockpit', x0: -3.4, x1: 3.4, z0: -9.0, z1: -3.0, name: '조종석', tone: 'cockpit' },
-  { key: 'spine', x0: -1.3, x1: 1.3, z0: -3.0, z1: 10.0, name: '통로', tone: 'corridor' },
-  { key: 'observ', x0: -5.4, x1: -1.3, z0: -1.2, z1: 2.4, name: '관측실', tone: 'observ' },
-  { key: 'workshop', x0: 1.3, x1: 5.4, z0: -1.2, z1: 2.4, name: '정비실', tone: 'workshop' },
-  { key: 'garden', x0: -5.4, x1: -1.3, z0: 4.2, z1: 7.8, name: '온실', tone: 'garden' },
-  { key: 'airlock', x0: 1.3, x1: 4.3, z0: 4.2, z1: 7.2, name: '에어록', tone: 'airlock' },
-  { key: 'engine', x0: -4.6, x1: 4.6, z0: 10.0, z1: 16.0, name: '기관실', tone: 'engine' },
-];
-const R = Object.fromEntries(ROOMS.map((r) => [r.key, r]));
+export { ROOMS } from '../game/rooms-table.js';
+const R = ROOM;
 
 // ── 충돌 ────────────────────────────────────────────────────
 /**
@@ -1013,6 +1010,13 @@ export function buildShip(scene, camera = null) {
   //     F-16 Block 60 이 25도 × 25도다. 94도짜리는 HUD 가 아니라
   //     **창을 통째로 덮은 초록 격자**이고, 사장님 화면의 그 격자다.
   //     크기·거리는 `view-table.js HUD` 가 정하고 `space-view.js` 가 지킨다
+  // ══ ★★★ **탄두 크레이들 — 기관실 후미 격벽** (v71) ═══════════════
+  //  사장님 「가장 후미에 핵탄두가 장착된 것도 만들어줘. 기관실에
+  //  있으면 되겟지?」 — 기관실이 배의 제일 뒤(z 16)라 맞습니다.
+  //  ★ 방을 안 늘립니다. 그리고 거기가 **열의 심장**이라, 추진을 켤
+  //    때마다 탄두가 데워집니다 (`warhead-table.js BAKE`)
+  const cradle = buildCradle(ship);
+
   const sight = buildSight(HUDV.w, HUDV.h);
   // ★★ **조준경을 조종석 대시에 붙인다** (v64).
   //   예전에는 `buildTurret` 이 붙여 줬다 — 포탑을 걷어내면서 **조준경이
@@ -1051,7 +1055,7 @@ export function buildShip(scene, camera = null) {
   };
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    turret, sight, statusHud, outerDoor, marks, byBay,
+    turret, sight, statusHud, cradle, outerDoor, marks, byBay,
     /**
      * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
      *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —

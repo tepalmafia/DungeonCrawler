@@ -734,6 +734,43 @@ console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)')
   await S(() => SPACE.clearSky?.());
 }
 
+console.log('\n[6e] ★★★ **탄두** — 목적이 배 안에 서 있나 (v71)');
+{
+  // ★ 기관실 후미 크레이들. 「가장 후미에 핵탄두가 장착된 것」
+  await stand();
+  await S(() => SPACE.put(0, 14.1, Math.PI, -0.14));
+  await p.waitForTimeout(700);
+  ok(await S(() => SPACE.aim) === 'cradle',
+    `① ★★ 기관실에서 **크레이들이 손에 닿는다** (${await S(() => SPACE.aim)})`);
+
+  // ② 다섯 칸이 **불로** 진행도를 말한다 — 글로 안 알려준다
+  const a0 = await S(() => SPACE.headSeen);
+  await S(() => { SPACE.putHeadPart('shell'); SPACE.putHeadPart('booster'); });
+  await p.waitForTimeout(600);
+  const a1 = await S(() => SPACE.headSeen);
+  ok(a1.lit > a0.lit,
+    `② ★★★ 꽂으니 **칸에 불이 들어온다** (${a0.lit} → ${a1.lit}) — 진행도를 글로 안 알려준다`);
+
+  // ③ 뜨거우면 **몸통이 붉어진다**
+  await S(() => SPACE.setBake(95));
+  await p.waitForTimeout(600);
+  const hot = await S(() => SPACE.headSeen);
+  ok(hot.hot > 0.2, `③ ★★ 뜨거우니 **탄두가 달아오른다** (${hot.hot}) — 숫자를 안 보고도 안다`);
+
+  // ④ 한계에 닿으면 **일이 는다** — 죽지 않는다
+  const n0 = await S(() => SPACE.warhead.n);
+  await S(() => SPACE.setBake(100));
+  for (let i = 0; i < 20; i++) await p.waitForTimeout(300);
+  const w2 = await S(() => SPACE.warhead);
+  ok(w2.n < n0 || w2.lost.length > 0,
+    `④ ★★ 열에 **꽂아 둔 것이 하나 죽는다** (${n0} → ${w2.n}) — 죽는 게 아니라 일이 는다`);
+
+  // ⑤ 못 모아도 갈 수 있다
+  ok(await S(() => SPACE.dropHead().key) !== 'full',
+    '⑤ 다 안 모았으면 **못 떨군다** — 그래도 지나간다. 2시간을 쓰고 끝을 못 보는 회차는 없다');
+  await S(() => SPACE.setBake(0));
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은
