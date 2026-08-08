@@ -160,7 +160,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 66;
+export const VERSION = 67;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -3033,14 +3033,9 @@ function frame(now) {
       chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.dist = 0;
     }
     chase.risk = 0;
-    // ★★★ **창밖을 성간 공백으로 바꾼다** (v66 에서 빠져 있던 것을 찾았다).
-    //   여기서 배너만 띄우고 **하늘은 안 바꾸고 있었다.** 「따라오지
-    //   못하는 곳까지 간다」가 이 게임의 목적 한 줄인데, 정작 도착하면
-    //   **창밖이 그대로**였다 — 말로만 도착한 셈이다.
-    //   `space-endtoend [7] ③` 이 잡았고, 그 검사는 v64 부터 [1] 에서
-    //   죽어 있었으므로 **여기까지 와 본 적이 없었다.**
-    //   검사가 끝까지 도는 것이 왜 중요한지가 이 한 줄이다
-    ship.outside.setRegion('void');
+    // ★ 창밖은 `regionOf(route)` 가 정한다 — **매 프레임** 되돌리므로
+    //   여기서 한 번 부르면 다음 프레임에 지워진다. 실제로 그렇게
+    //   고쳤다가 검사가 다시 잡았고, 이제 `route.js` 가 말한다
     audio?.event('escaped');
     escapedAt = clock;
     saveNow();          // 여기까지는 저장해 둔다 — 마지막 구간도 8분이다
@@ -3282,6 +3277,17 @@ function frame(now) {
     // 내려앉는 것도 공짜가 아니다 — 착지 충격이 선체에 남는다
     faults.wear.hull = Math.min(1, faults.wear.hull + LAND.touchWear);
     hitFlash = 0.5;
+    // ══ ★★★ **내려앉으면 추진이 꺼진다** (v67 · REAL.md 류의 「말이 되나」) ══
+    //  땅에 앉은 배가 **엔진을 켠 채**로 있었다. 그리고 에어록은
+    //  「추진을 끄고 나서 엽니다」로 막으므로 (`whyNotOpen`), **바깥문이
+    //  영영 안 열렸다** — 내리는 이유가 「싣는 것」인데 실을 수가 없었다.
+    //  뜨는 것도 막힌다 (문을 닫아야 뜨는데 열지도 못했으니).
+    //
+    //  ★ 규칙을 무르게 한 것이 아니다. **켜 놓을 수 없는 상태**를 못박은
+    //    것이다 — 착륙한 배의 주 추진은 꺼져 있다. 검사가
+    //    「땅에서도 바깥문이 열린다 ✘ → 『추진을 끄고 나서 엽니다』」로
+    //    잡았고, 그 뒤 넷이 통째로 이것 때문에 빨갰다
+    power.thrust = false;
   }
   if (lev2 === 'sky') {
     // ★ **뜬 그 순간이 해소다.** 시계가 아니라 사건이 정한다 (scene.js)

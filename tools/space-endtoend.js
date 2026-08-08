@@ -139,6 +139,19 @@ const sit = async () => {
   await until(() => SPACE.helm2.k > 0.99 && Math.abs(SPACE.pos.z + 8.30) < 0.06, 30, '좌석에 앉는 것');
   await p.waitForTimeout(600);
 };
+/**
+ * ★★ **일어나고 몸이 다 미끄러질 때까지 기다린다** (v67).
+ *   일어나도 `helmSitK` 가 풀리는 동안 **몸이 좌석 쪽으로 끌려간다**
+ *   (`me.x += (standAt.x - me.x) * k` — 「툭 옮기면 그것도 거짓말이다」).
+ *   실제 브라우저는 1초면 끝나지만 **헤드리스 시계는 실제의 1/20** 이라
+ *   20초다. 그 사이에 딴 방으로 옮겨 놓으면 **조용히 조종석으로 되끌려
+ *   가고**, 검사에는 「바깥문이 안 잡힌다」로 보인다 — 실은 거기 안 갔다
+ */
+const stand = async () => {
+  await S(() => SPACE.putGun(false));
+  await until(() => SPACE.helm2.k < 0.01, 60, '일어나서 자리가 굳기');
+  await p.waitForTimeout(600);
+};
 /** 자리를 옮기고 조준이 **굳을 때까지** 기다린다 */
 const aimAt = async (x, z, yaw, pitch, want, tries = 22) => {
   await S(([a, c, d, e]) => SPACE.put(a, c, d, e), [x, z, yaw, pitch]);
@@ -244,7 +257,7 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //  사람은 거기까지 못 가는 상태를 2026-08-06 에 넷이나 쌓아 뒀다
   // ★ **앉아 있으면 몸이 조종석에 붙들린다.** 앞 절이 못 일어났을 때
   //   여기가 통째로 거짓말을 하게 되므로, 이 절이 제 앞가림을 한다
-  await S(() => SPACE.putGun(false));
+  await stand();
   // ★ 앞 절이 조종간을 세게 밀었다 — 짐벌이 바로 설 때까지 기다린다
   await settle();
   const RACK = { x: 1.3 + 0.55, z: (4.2 + 7.2) / 2 - 0.85 };
@@ -376,7 +389,8 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
     r.traverse((o) => { if (!v && o.type === 'Group' && Math.abs(o.rotation.y) > 0.02) v = +o.rotation.y.toFixed(3); });
     return v;
   });
-  await aimAt(0, -7.75, 0, -0.34, 'yoke');
+  await sit();
+  await aimAround(0, -7.75, 0, -0.55, 'yoke');
   await down();
   for (let i = 0; i < 14; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })));
@@ -468,6 +482,11 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   ok((await S(() => SPACE.land)).view.ground, '⑤ **화면에 땅이 있다**');
 
   // 싣기 — 문을 열어야 한다
+  // ★★ **일어나야 걸어간다.** 앞에서 갈래를 고르려고 앉혔는데(`sit`)
+  //   그대로 두면 몸이 조종석에 붙들려, 에어록 좌표를 넣어도 카메라는
+  //   조종석에 있다 — 「바깥문이 안 잡힌다」로 보이지만 실은 거기 안 갔다
+  await stand();
+  await settle();
   const at = await S(() => SPACE.outerAt);
   await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer');
   await pressUntil(() => SPACE.lock.cycling > 0 || SPACE.lock.open, 5, 1.0);
@@ -492,8 +511,10 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   await press(1.0);
   ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '문 닫기'),
     '⑨ 문을 닫는다');
-  await aimAt(0, -7.75, 0, -0.45, 'yoke');
-  await press(1.0);
+  // ★ 조종간을 잡으려면 **앉아야** 한다 (v66 에서 무릎 사이로 내렸다)
+  await sit();
+  await aimAround(0, -7.75, 0, -0.55, 'yoke');
+  await pressUntil(() => SPACE.land.step === 'up', 5, 1.5);
   ok(await until(() => SPACE.land.step === 'up', 40, '이륙'),
     `⑩ 조종간을 잡으니 뜬다 — 「${await said()}」`);
   // 이륙 분사 12초 + 상승 18초는 헤드리스로 10분이 넘는다 — 끝자락으로 민다
@@ -585,7 +606,13 @@ console.log('\n[6b] ★ **창밖이 살아 있나** — 별은 박혀 있고 먼
   const v = await S(() => SPACE.outside);
   ok(v.cut < c.cut,
     `④ 성간 공백에서 별이 준다 (${c.cut} → ${v.cut}) — 구역이 창밖으로 읽힌다`);
-  await S(() => SPACE.setRegion('empty', true));
+  // ★★★ **고정을 풀어 놓는다** (v67 에서 찾았다).
+  //   `SPACE.setRegion` 은 **못을 박는다**(`regionPin`) — 검사가 창밖을
+  //   붙들어 놓고 보려고 만든 구멍이다. 그런데 여기서 안 풀어서
+  //   **다음 절이 영원히 「빈 공간」을 봤다.** `[7] ③④⑤` 셋이 그것 때문에
+  //   빨갰고, 나는 그걸 **게임 버그로 알고 두 번 고쳤다.**
+  //   검사가 검사를 막고 있으면 그 뒤는 아무것도 못 지킨다
+  await S(() => SPACE.unpinRegion());
 }
 
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
@@ -605,8 +632,24 @@ console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 �
     '④ **떠도는 것이 없다** — 여기서는 못 번다');
   // ★ 별이 정말 줄어드나. 갈아타기는 프레임마다라 헤드리스에서는 느리다 —
   //   **바라는 값**이 바뀐 것을 보고, 지금 값이 그쪽으로 가고 있는지만 본다
+  // ══ ★★★ **여기가 v58 이전 값을 그대로 묻고 있었다** ═══════════════
+  //  「별을 0.2 아래로 줄이러 간다」였다. 그런데 v58 에서 **고증으로
+  //  뒤집혔다** (`regions-table.js` 의 void 주석):
+  //
+  //    「은하 원반을 벗어나면 **은하수 띠**가 사라지는 것이지 별이 주는
+  //     것이 아니다. 오히려 성간 먼지가 없어서 **더 또렷하다.**」
+  //
+  //  그래서 `void.stars` 는 **0.95** 이고, 「아무것도 없다」는 **띠**가
+  //  맡는다 (`band: 0`). 검사가 낡은 값을 물으니 게임이 맞는데도
+  //  빨갰다 — 오늘 이 종류를 다섯 번 만났다.
+  //  ★ 「띠가 0 이 된다」만 물으면 **아무것도 안 지킨다** — 들어서기 전에도
+  //    0 이라 `(0 → 0)` 이 나왔다. **틀리면 빨개지는 쪽**은 별이다:
+  //    누가 `void.stars` 를 옛 0.16 으로 되돌리면 여기가 잡는다
+  const gone = await until(() => SPACE.land.view.band <= 0.15, 120, '은하수 띠가 사라지기');
   const v0 = await S(() => SPACE.land.view);
-  ok(v0.wantStars <= 0.2, `⑤ 별을 ${v0.wantStars} 로 줄이러 간다 — 「다 보이는데 볼 것이 없다」`);
+  ok(gone && v0.wantStars >= 0.9,
+    `⑤ **별은 ${v0.wantStars} 로 그대로고 은하수 띠가 ${v0.band} 다** —`
+    + ' 원반을 벗어나면 별이 주는 게 아니라 띠가 사라진다 (v58 고증)');
 
   // ★★ 그리고 **도착한다**
   await S(() => SPACE.seekEnd());
