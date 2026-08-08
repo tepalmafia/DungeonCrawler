@@ -32,11 +32,46 @@ const GROUPS = [
     //   상태**로 점검이 시작된다. 점검 모드가 못 만드는 상황이 생기면
     //   그건 사장님이 못 보시는 상황이다
     ['광석 60 · 부품 8 · 미사일 8', (S) => { S.setSupply({ ore: 200, parts: 8, missiles: 8 }); return '광석·부품·미사일을 실었습니다'; }],
-    ['★ 적 우주선 부르기', (S) => { const r = S.callRaider(); return `적 우주선 — ${r.dist}m · 맷집 ${r.hp}`; }],
+    // ══ ★★★ v70 — **적 다섯 종.** 하나씩 불러 봐야 「무엇을 먼저 쏠까」가
+    //   생겼는지 알 수 있다. 저절로 오기를 기다리면 한 종류에 몇 분이다
+    ['★ 요격기 (빠르고 떼로)', (S) => { const r = S.callFoe('fighter', 0, 120); return `요격기 — ${r.dist}m · 맷집 ${r.hp} · 셋이 옵니다`; }],
+    ['★ 포함 (두껍고 세다)', (S) => { const r = S.callFoe('gunship', 0, 120); return `포함 — 맷집 ${r.hp} · 미사일이 필요합니다`; }],
+    ['★ 자폭정 (몸이 탄)', (S) => { const r = S.callFoe('drone', 0, 140); return `자폭정 — ${r.dist}m · 먼저 봐야 합니다`; }],
+    ['★ 방공 포대 (길을 막는다)', (S) => { const r = S.callFoe('turret', -20, 110); return `방공 포대 — 안 움직입니다. 부수거나 돌아갑니다`; }],
+    ['★★ 보급 호송선 (도망간다)', (S) => { const r = S.callFoe('convoy', 15, 130); return `호송선 — 부수면 **분열 노심**이 나옵니다`; }],
+    ['적 우주선 부르기', (S) => { const r = S.callRaider(); return `적 우주선 — ${r.dist}m · 맷집 ${r.hp}`; }],
+    ['하늘 비우기', (S) => { S.clearSky(); return '적과 탄을 다 치웠습니다'; }],
     ['레이더 켜기/끄기', (S) => { const on = S.power.sensor; S.setPower('sensor', !on); return on ? '레이더를 껐습니다 — 묶을 수 없습니다' : '레이더 ON — 자국이 20 오릅니다'; }],
-    ['기총 / 열추적 / 유도', (S) => { const n = (S.combat.slot % 3) + 1; S.putWeapon(n); return `${S.combat.name} 로 바꿨습니다`; }],
+    ['레이저 / 열추적 / 유도', (S) => { const n = (S.combat.slot % 3) + 1; S.putWeapon(n); return `${S.combat.name} 로 바꿨습니다`; }],
     ['한 발 쏘기', (S) => { const r = S.fire(); return `쏨 ${r.fired} · 맞음 ${r.hits} · 부숨 ${r.kills}`; }],
     ['적을 붙인다', (S) => { S.forceContact(); return '추격 — 적 우주선이 같이 뜹니다'; }],
+  ]],
+  // ══ ★★★ v71 — **탄두.** 이 게임의 목적이다. 재료 다섯을 구간
+  //   2·4·6·8·10 에서 만나므로, 안 만들면 **한 시간을 돌려야 하나를 본다**
+  ['★★ 탄두 (기관실 후미)', [
+    ['크레이들 앞으로', (S) => { S.put(0, 14.1, Math.PI, -0.14); return '기관실 후미 — 잡고 있으면 꽂습니다'; }],
+    ['재료 하나 손에', (S) => {
+      const w = S.warhead;
+      const next = w.parts.find((p) => !w.in.includes(p.key));
+      if (!next) return '다섯이 다 찼습니다';
+      S.giveHeadPart(next.key);
+      return `${next.name} — 손에 들었습니다. 기관실로 걸어갑니다`;
+    }],
+    ['재료 하나 바로 꽂기', (S) => {
+      const w = S.warhead;
+      const next = w.parts.find((p) => !w.in.includes(p.key));
+      if (!next) return '다섯이 다 찼습니다';
+      const r = S.putHeadPart(next.key);
+      return `${next.name} 을 꽂았습니다 — ${r.n}/${r.of}`;
+    }],
+    ['★ 다섯을 다 채우기', (S) => {
+      const w = S.warhead;
+      for (const p of w.parts) S.putHeadPart(p.key);
+      return '다섯이 다 찼습니다 — 크레이들을 9초 잡으면 무장합니다';
+    }],
+    ['탄두 데우기 (95)', (S) => { S.setBake(95); return '탄두 95 — 100 에 닿으면 하나가 죽습니다'; }],
+    ['탄두 식히기', (S) => { S.setBake(0); return '탄두를 식혔습니다'; }],
+    ['★ 떨궈 보기 (결말)', (S) => { const e = S.dropHead(); return `${e.name} — ${e.what}`; }],
   ]],
   ['에어록 · 광물 · 구조 신호', [
     // ★ 7판 G — 구간 7 을 안 기다리고 무전을 켠다
