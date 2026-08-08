@@ -98,10 +98,14 @@ const aimAround = async (x, z, yaw, pitch, want) => {
   //   (`camera.rotation.z = sw * 0.06 + fly3.tiltZ`) 가장자리에서는
   //   프레임마다 들락날락한다. 그래서 「잡힌다 ✔ → 눌렀더니 아무 일 없음 ✘」
   //   이 계속 났다. **맞는 각도를 다 모아 가운데로 간다.**
+  // ★ **한가운데가 이미 굳게 잡히면 훑지 않는다** — 25칸을 다 돌면 한 번에
+  //   40초고, 그게 쌓여 브라우저가 먼저 죽었다 (검사가 안 끝나면 아무것도
+  //   못 지킨다). 「두 번 연달아 잡히나」로 굳었는지를 본다
+  if (await aimAt(x, z, yaw, pitch, want, 4) && await aimAt(x, z, yaw, pitch, want, 2)) return true;
   const hits = [];
-  for (const dy of [-0.24, -0.12, 0, 0.12, 0.24]) {
-    for (const dp of [-0.24, -0.12, 0, 0.12, 0.24]) {
-      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 4)) hits.push([dy, dp]);
+  for (const dy of [-0.2, 0, 0.2]) {
+    for (const dp of [-0.2, 0, 0.2]) {
+      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 3)) hits.push([dy, dp]);
     }
   }
   if (!hits.length) return false;
