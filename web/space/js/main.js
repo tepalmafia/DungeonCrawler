@@ -79,6 +79,11 @@ import {
   full as headFull, summary as headSummary,
 } from './game/warhead.js';
 import { speedOf as statusSpeed } from './world/status.js';
+// ★★★ 급가속 (v73) — **따로 하는 조작.** Shift 는 기수를 돌리고, R 은 튀어나간다
+import { BOOST, RUSH } from './game/boost-table.js';
+import {
+  makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
+} from './game/boost.js';
 // ★★ v69 — 맞은 자리를 **각도·거리에서 3D 좌표로** 옮긴다. `world/shots.js`
 //   와 **같은 식**을 쓴다 — 두 벌로 옮기면 터짐이 표적에서 어긋난다.
 //   ★ 이 줄이 한 번 사라져 있었고, `node --check` 는 통과했다.
@@ -180,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 72;
+export const VERSION = 73;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -346,7 +351,7 @@ let cranking = null;      // 지금 크랭크를 잡고 있는 문
 const driftWay = seed.charCodeAt(0) % 2 ? 1 : -1;
 // ── 손목 장치 ────────────────────────────────────────────────
 // **늘 보이는 유일한 계기.** 「지금 할 일」과 「내가 고친 것」만 든다 —
-// 거리·자국·항로·마모는 여전히 방이 갖는다 (world/wrist.js 머리말 참고)
+// 거리·자국·항로·마모는 여전히 방이 갖는다 (world/holo.js 머리말 참고)
 const guide = buildGuide(scene);
 /**
  * 안내선이 지금 어디를 가리키나 — **없으면 선이 안 그려진다.**
@@ -451,6 +456,8 @@ const combat = makeCombat();
  *   기관실 후미 격벽의 크레이들. 재료 다섯을 손으로 들고 가 꽂는다
  */
 const warhead = makeWarhead();
+/** ★★★ 급가속 (v73) — R 을 누르고 있으면 튀어나간다 */
+const boost = makeBoost();
 /**
  * ★★ 탐색기 소리의 세기 — 0 없음 · 0.5 잡았다 · 1 물었다 (v69).
  *   전투 셈은 프레임 뒷쪽에서 돌고 소리는 앞쪽에서 갱신되므로 여기 둔다.
@@ -2048,7 +2055,27 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   `hazard.lane` 은 이제 **거울**이다 — 잔해 피하기·창밖 시차가
   //   그 값을 읽고 있어서, 축을 늘리면서 그 둘을 안 건드리려면
   //   좌우 축을 그대로 흘려보내는 편이 안전하다
-  stepFlight(fly3, dt, { atSeat: steering, push: flyPush, manual: !helm.auto });
+  // ★★★ v73 — **급기동은 Shift.** 어느 축이든 세게 문다 (docs/space/BFM.md §3-②)
+  // ══ ★★★ **급가속** (v73 · R) — 급기동(Shift)과 **따로** ═══════════
+  //  사장님 「급가속 조작은 **따로** 하도록」. 기수를 돌리는 것과
+  //  앞으로 튀어나가는 것은 다른 결심이다 — 하나로 묶으면 고를 것이 없다
+  {
+    const bev = stepBoost(boost, dt, {
+      on: input.keys.has('KeyR') && power.thrust && route.phase === RPHASE.LEG,
+      fuel: supply.fuel,
+    });
+    supply.fuel = Math.max(0, supply.fuel - boost.fuel);
+    heat = Math.min(HEAT.max, heat + boost.heat);
+    if (bev === 'on') { banner = '밀어붙입니다'; bannerT = 1.6; }
+    if (bev === 'dry') { banner = '추진제가 모자라 못 밀어붙입니다'; bannerT = 2.4; }
+  }
+  const burst = steering && (input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+  fly3.burst = burst;
+  stepFlight(fly3, dt, { atSeat: steering, push: flyPush, manual: !helm.auto, burst });
+  // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
+  //   천천히 돌리면 반동휠이 공짜로 하고, 급하게 돌리면 추력기가 태운다.
+  //   360도를 열어 준 값이 여기 있다 — 값이 없으면 조종이 버튼이 된다
+  if (fly3.burned > 0) supply.fuel = Math.max(0, supply.fuel - fly3.burned);
   hazard.lane = Math.max(-HAZARD.laneMax, Math.min(HAZARD.laneMax, fly3.yaw));
   steerShip(hazard, dt, { atSeat: false, push: 0, manual: true });
   // ★ **잔해밭은 이제 아무 구간에나 안 온다.** 배치표가 D 를 놓은 구간
@@ -2135,8 +2162,12 @@ function systemsStep(dt, valveOpen, regionMult) {
   // ★ 열린 바깥문도 자국이다 — 구멍 뚫린 배는 눈에 띈다
   // ★ 이륙 분사도 자국이다 — 행성에서 솟는 불기둥은 숨을 수가 없다
   // ★ 선체 흉터는 **늘 조금 더 굵다** — 안 닫히는 구멍이다
+  // ★★★ v73 — **급가속도 자국이다.** 주엔진을 세게 물면 밝게 타고,
+  //   밝게 타는 것은 멀리서도 보인다 (boost-table.js 값 셋 중 ③).
+  //   추진제·열만 물리고 이걸 빠뜨리면 「공짜에 가까우니 늘 밟는다」가
+  //   되고, 그러면 고를 것이 없어진다 — 값이 셋이라 결심이 된다
   const badSign = (bad.sign + flashSign(gun) + lockSign(lock) + landSign(land)
-    + scarSign(scars)) / SIGN_PER_HEAT;
+    + scarSign(scars) + boostSign(boost)) / SIGN_PER_HEAT;
   const ev = atPort
     ? (chase.phase === PHASE.CALM
       ? (chase.risk = Math.max(0, chase.risk - SIGN.riskFall * dt), null)
@@ -2599,6 +2630,10 @@ window.SPACE = {
     while (root.parent) root = root.parent;
     return {
       ...(wristJob ?? {}), lift: wrist.lift, onScreen: root === scene,
+      // ★★ v73 — 사장님 「q 화면은 **조정간을 잡으면 없어지게**」.
+      //   `fold` 만 내면 「접히는 중」과 「접혔다」가 안 갈린다 — 눈에
+      //   보이나 아니냐를 묻는 것이므로 `shown`(three 의 visible)을 같이 낸다
+      fold: wrist.fold, shown: !!wrist.group?.visible,
       log: faults.log.map((l) => l.reveal), fixed: faults.fixed,
     };
   },
@@ -2929,6 +2964,35 @@ window.SPACE = {
    *   재료 다섯이 어디서 나오는지도 같이 준다 (`warhead-table.js PARTS5`)
    */
   get warhead() { return { ...headSummary(warhead), parts: PARTS5 }; },
+  /** ★★★ 급가속 (v73) — 검사와 점검 모드가 같은 구멍으로 본다 */
+  get boost() { return { ...boostSummary(boost), fov: +camera.fov.toFixed(1) }; },
+  /** 검사가 급가속을 밀어 놓는다 — R 을 헤드리스로 오래 누르지 않으려고 */
+  putBoost(k) { boost.k = Math.max(0, Math.min(1, k)); return boostSummary(boost); },
+  /**
+   * ★★★ **표적이 화면 어디에 찍히나** (v73) — 부호를 재는 유일한 길.
+   *
+   *   「세 축의 부호는 머리로 맞히는 것이 아니라 **화면에 점을 박고 재는
+   *   것**이다」 (v66 에 좌우가 반대였을 때 배운 것). 그때는 그때만 쓰고
+   *   지웠는데, v73 에 **위아래가 또 반대**로 나왔다 — 그러면 이건
+   *   한 번 쓰고 버릴 것이 아니라 **계기**다. 남겨 둔다.
+   *
+   * @returns { x, y } 화면 복판이 (0,0) · 오른쪽 +x · **위쪽 +y**
+   */
+  screenOf(kind = null) {
+    const g = ship.outside.targets?.group;
+    if (!g) return null;
+    // ★★ 처음엔 「첫 번째 표적」을 잡았는데, 하늘에는 **파편이 늘 셋** 떠
+    //   있어서 엉뚱한 것을 재고 있었다 — 값이 안 움직여서 알았다.
+    //   종류를 말할 수 있어야 재는 것이 재려던 것이 된다
+    const want = kind ? `표적:${kind}` : null;
+    const o = want ? g.children.find((c) => c.name === want)
+      : g.children.find((c) => c.name?.startsWith('표적:'));
+    if (!o) return null;
+    const v = new THREE.Vector3();
+    o.getWorldPosition(v);
+    v.project(camera);
+    return { x: +v.x.toFixed(3), y: +v.y.toFixed(3), z: +v.z.toFixed(2) };
+  },
   /** ★ 크레이들이 **화면에** 무엇을 그리고 있나 — 「불이 켜졌나」는 여기서만 나온다 */
   get headSeen() { return ship.cradle?.seen ?? null; },
   /** 검사가 재료를 손에 쥐어 준다 — 구간 다섯을 다 돌 수는 없다 */
@@ -3451,7 +3515,13 @@ function frame(now) {
   // ★ v60 — 선체 자세를 창밖에 넘긴다. **배를 굴리지 않고 밖을 굴린다** —
   //   그게 곧 짐벌이고, 걸어다니는 사람의 충돌이 안 어긋난다
   ship.outside.setAttitude(fly3);
-  ship.outside.update(dt, CRUISE.speed * cruise, hazard.lane, incoming(hazard), camera);
+  // ★★★ v73 — **급가속이 창밖을 몬다.** 먼지가 쏟아지고 길어진다.
+  //   속도(`cruise`)에도 곱한다 — 화면만 빨라지고 실제로 안 빠르면
+  //   그건 속임수고, 이 저장소는 그런 것을 「가는 척하는 화면」이라 부른다
+  ship.outside.update(
+    dt, CRUISE.speed * cruise * boostMult(boost),
+    hazard.lane, incoming(hazard), camera, boost.k,
+  );
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
   // ★ **해도대가 어긋나면 눈금이 밀린다** (chartDrift). 다만 **거짓말인 줄은
@@ -3483,6 +3553,9 @@ function frame(now) {
   } else wantShake = SHAKE.calm;
   // 굶으면 손이 떨린다 — 눈에도 보여야 한다 (PLAN §5-2)
   if (shaky(supply)) wantShake *= FOOD.shakeMult;
+  // ★★★ v73 — **급가속이면 배가 운다.** 주엔진을 세게 물면 그렇다.
+  //   속도감의 나머지 절반: 눈(화각·먼지)만으로는 「빠르다」가 몸에 안 온다
+  if (boost.k > 0.01) wantShake *= 1 + (RUSH.shake - 1) * boost.k;
   // 부딪힌 순간은 크게 한 번 — 「맞았다」가 몸에 남아야 다음엔 앉는다
   hitFlash = Math.max(0, hitFlash - dt * 0.7);
   wantShake += hitFlash * 7;
@@ -3560,7 +3633,11 @@ function frame(now) {
   }
   // ★ 화각 — 읽을 때는 좁히고(45) 몰 때는 넓힌다(94). 둘이 동시에 1 이
   //   될 수 없으므로(`wantFocus` 가 `steering` 을 뺀다) 그냥 더한다
-  const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK + (FLY_VIEW.fov - FOV_WIDE) * flyK;
+  // ★★★ v73 — **급가속이면 화각이 열린다.** 가장자리가 빨리 흘러
+  //   속도로 읽힌다 — 레이싱 게임이 다 쓰는 것이고, 눈이 실제로 그렇게
+  //   느낀다. 「빛무리가 쏟아져오거나 속도감이 느껴지도록」의 절반이 이것
+  const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK
+    + (FLY_VIEW.fov - FOV_WIDE) * flyK + RUSH.fov * boost.k;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (focusK > 0.001) {
     // 보는 쪽으로 몸을 기울인다 — 자리는 그대로고 **눈만** 나아간다
@@ -3825,6 +3902,11 @@ function frame(now) {
   //   손목이 그 자리를 이어받는다 — 다만 **어디인지는 여전히 안 말한다**
   const jd = jammedOne(doors);
   wrist.update({
+    // ★★★ v73 — **조종간을 잡으면 접힌다** (사장님 요청).
+    //   잡은 동안 할 일은 이미 정해져 있다 — 겨누고 쏘는 것이다.
+    //   그 위에 잔소리가 떠 있으면 도움이 아니라 가림막이고,
+    //   왼쪽 아래는 **레이더가 있는 자리**다
+    flying: steering,
     job: wristJob = jobFor({
       doorJammed: !!jd,
       chasing: chase.phase === PHASE.CHASE,

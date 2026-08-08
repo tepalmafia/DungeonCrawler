@@ -1038,9 +1038,19 @@ export function buildShip(scene, camera = null) {
   //  ★ 자리를 **조준경 왼쪽 아래**로 둔다. 겹치면 둘 다 못 읽고, 가운데에
   //    두면 창을 먹는다 (v65 에 한 번 겪었다 — 조준경이 창을 덮고 있었다).
   //    왼쪽 아래는 실제 전투기가 연료·무장 상태를 두는 자리이기도 하다
-  const statusHud = buildStatusHud(HUDV.w * 1.15, HUDV.h * 1.05);
+  //  ★★★ **v73 — 옮기고 줄이고 흐리게 했다.**
+  //    사장님 「**비행선 상태창은 눈에 거슬리니깐 반투명하게, 전투에
+  //    방해되지 않는 곳에 배치**해」.
+  //    v69 자리는 조준선 바로 왼쪽이라 **표적 지시선이 지나가는 데**였다 —
+  //    화면 밖의 적을 가리키는 선을 상태창이 덮고 있었으니 거슬리는 것이
+  //    당연하다. **왼쪽으로 더 밀고 콘솔 윗선까지 내린다.**
+  //    ★ 화면을 찍어 확인한 자리다 (`scratchpad/v73-a-앉음.png`):
+  //      조준선·선도점·표적 지시선이 지나는 복판을 안 건드리고, 아래로는
+  //      레이더 계기가 있는 왼쪽 아래 구석과도 안 겹친다. 홀로그램(할 일)이
+  //      바로 그 구석에 뜨므로 **셋이 서로 안 포갠다**
+  const statusHud = buildStatusHud(HUDV.w * 0.86, HUDV.h * 0.80);
   statusHud.mesh.position.set(
-    -HUDV.w * 1.18, DEP.y - HUDV.h * 0.52, DEP.z - HUDV.dist - 0.01,
+    -HUDV.w * 1.42, DEP.y - HUDV.h * 1.16, DEP.z - HUDV.dist - 0.01,
   );
   ship.add(statusHud.mesh);
   const turret = {

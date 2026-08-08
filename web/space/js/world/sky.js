@@ -18,6 +18,8 @@
 import * as THREE from 'three';
 import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, PLANET, DOME_R, SUN }
   from '../game/sky-table.js';
+// ★ v73 — 급가속의 속도감. **숫자는 표에만** 있으므로 여기서 읽어 온다
+import { RUSH } from '../game/boost-table.js';
 
 /**
  * 같은 하늘을 늘 같게 — **난수도 표처럼 굴린다.**
@@ -277,20 +279,28 @@ export function buildDust(parent, z) {
       uCol: { value: new THREE.Vector3(...DUST.rgb).multiplyScalar(DUST.lum) },
       uNear: { value: zNear }, uFar: { value: zFar },
       uIn: { value: DUST.fadeIn }, uOut: { value: DUST.fadeOut },
+      /** ★ v73 — 급가속이면 알갱이가 굵어진다. 1 = 그대로 (`RUSH.grain`) */
+      uGrain: { value: 1 },
     },
     // ★ 나타나고 사라지는 것을 **셰이더가 한다.** 자바스크립트에서 색을
     //   고치면 매 프레임 130 칸을 다시 올려야 하는데, 그게 예전에 별
     //   900 개로 하던 짓이다 — 그리고 **툭 켜지고 툭 꺼졌다**
     vertexShader: `
       attribute float aSize;
-      uniform float uPix, uNear, uFar, uIn, uOut;
+      uniform float uPix, uNear, uFar, uIn, uOut, uGrain;
       varying float vA;
       void main() {
         float zz = position.z;
         vA = smoothstep(uFar, uFar + uIn, zz) * (1.0 - smoothstep(uNear - uOut, uNear, zz));
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = aSize * uPix * (300.0 / max(1.0, -mv.z));
+        // ★ 급가속이면 알갱이가 커지고 밝아진다 — **쏟아져 오는** 느낌.
+        //   배수는 boost-table.js 의 RUSH.grain 이 정한다 (숫자는 표에만).
+        //   ★ 여기는 **템플릿 문자열 안**이다 — 되따옴표를 한 쌍 적었더니
+        //     그 자리에서 문자열이 끊겨 배가 통째로 안 떴다. 그리고
+        //     node --check 는 그걸 **통과시켰다** (파일 전체는 여전히
+        //     문법에 맞았기 때문이다). 브라우저가 「SPACE 가 없다」로 울었다
+        gl_PointSize = aSize * uPix * uGrain * (300.0 / max(1.0, -mv.z));
       }`,
     fragmentShader: `
       uniform float uFade;
@@ -312,6 +322,27 @@ export function buildDust(parent, z) {
   return {
     points,
     setFade(a) { mat.uniforms.uFade.value = a; points.visible = a > 0.01; },
+    /**
+     * ★★★ **급가속의 줄무늬** (v73 · `boost-table.js RUSH`).
+     *
+     *   사장님 「급가속을 해서 적을 쫓을 때는 **빛무리가 쏟아져오거나
+     *   속도감이 느껴지도록**」.
+     *
+     *   ★★ **별은 안 흘린다.** v57 에 고증으로 못박아 뒀다 — 제일 가까운
+     *     별도 4광년이라 배가 아무리 빨라도 안 흐른다. 여기서 흘리면
+     *     v57 이 통째로 거짓말이 된다.
+     *   ★ 대신 **정말로 흐르는 것**을 늘린다: 먼지는 코앞에 있다.
+     *     길어지는 것은 「노출 시간 동안 움직인 자국」이라 실제로도 그렇다
+     *
+     * @param k 0 보통 · 1 급가속 한창
+     */
+    setRush(k) {
+      const kk = Math.max(0, Math.min(1, k));
+      mat.uniforms.uGrain.value = 1 + (RUSH.grain - 1) * kk;
+      // 밝기도 같이 — 쏟아지는 것은 밝게 보인다
+      mat.uniforms.uCol.value.set(...DUST.rgb)
+        .multiplyScalar(DUST.lum * (1 + (RUSH.glow - 1) * kk));
+    },
     /** @param d 이번 프레임에 몇 유닛 흘렀나 */
     flow(d) {
       const arr = attr.array;

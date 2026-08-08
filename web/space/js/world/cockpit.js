@@ -40,6 +40,7 @@ import { buildTargets } from './targets.js';
 import { buildShots } from './shots.js';
 import { DUST } from '../game/sky-table.js';
 import { RADAR } from '../game/combat-table.js';
+import { RUSH } from '../game/boost-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
   color: 0x0a1622, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
@@ -1288,7 +1289,11 @@ export function buildOutside(scene, z) {
    * @param lane  배가 좌우 어디에 있나 (-1 ~ 1). 창밖이 **반대로** 흐른다
    * @param inc   다가오는 덩어리 { in, lane } 또는 null
    */
-  function update(dt, speed, lane = 0, inc = null, camera = null) {
+  /**
+   * @param rush ★★★ v73 — **급가속** 0~1. 먼지가 쏟아지고 길어진다
+   *             (`boost-table.js RUSH`). ★ 별은 안 흘린다 (v57 고증)
+   */
+  function update(dt, speed, lane = 0, inc = null, camera = null, rush = 0) {
     // 배가 기울면 창밖이 반대로 밀린다 — 그게 「내가 움직였다」로 읽힌다
     out.position.x += (-lane * 3.2 - out.position.x) * Math.min(1, dt * 3);
 
@@ -1302,7 +1307,21 @@ export function buildOutside(scene, z) {
     //    선체만 도는 것 (game/flight-table.js GIMBAL).
     //  ★ `drift`(장면 C)의 굴림과 **더한다.** 둘 중 하나가 덮어쓰면
     //    자세 제어가 죽은 채로 조종간을 잡을 때 한쪽이 사라진다
-    out.rotation.x += (att.pitch - out.rotation.x) * Math.min(1, dt * 3);
+    // ══ ★★★ **부호를 뒤집었다** (v73) ═══════════════════════════════
+    //
+    //  사장님 「**운전 방향 전환이 모두 반대**잔아!」
+    //
+    //  ★ 화면에 점을 박고 쟀다 (`SPACE.screenOf('raider')`):
+    //      pitch +0.25 → 표적이 y −0.079 **→ +0.052** (위로 움직인다)
+    //    즉 **기수가 아래로** 돈 것이다. 그런데 `noseAim()` 은
+    //    `el = +fly3.pitch` 로 세므로 **위를 본다**고 여긴다 —
+    //    창밖과 조준경이 **서로 반대로** 돌고 있었다.
+    //
+    //  ★★ 그래서 표적을 아래로 쫓으면: 밀면 세상은 위로 가고, HUD 상자는
+    //    또 반대로 가서 **어느 쪽으로 밀어야 하는지 몸이 못 배운다.**
+    //    좌우(v66)와 같은 병이고, 같은 방법으로 잡았다 —
+    //    **부호는 머리로 맞히는 것이 아니라 화면에 점을 박고 재는 것이다.**
+    out.rotation.x += (-att.pitch - out.rotation.x) * Math.min(1, dt * 3);
     out.rotation.z = driftRoll + att.roll + lane * 0.06;
     // ★★★ 좌우. 이 한 줄이 v66 이전에 통째로 없었다.
     //
@@ -1398,8 +1417,13 @@ export function buildOutside(scene, z) {
     //   그 값을 쓰고, 안 적으면 예전처럼 `stars` 를 따라간다
     band.setFade(starFade * Math.min(1, (want.band ?? cur.stars) * 1.1));
     band.setTint(cur.tint);
+    // ★ 여기에 `* (1 + rush * 0.9)` 를 얹고 있었다 — 밝기를 **두 군데**서
+    //   올리니 알갱이가 흰 공이 됐다. 밝기는 `RUSH.glow` 한 곳에서만 올린다
     dust.setFade(starFade);
-    dust.flow(d);
+    // ★★★ **먼지가 쏟아진다** — 속도감은 여기서 나온다.
+    //   별을 흘리면 v57 고증이 거짓말이 되므로 **정말 흐르는 것**만 흘린다
+    dust.setRush(rush);
+    dust.flow(d * (1 + rush * (RUSH.dust - 1)));
 
     // 잔해
     const nd = want.debris;
