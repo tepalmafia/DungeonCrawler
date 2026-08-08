@@ -665,8 +665,13 @@ export function buildCockpit(parent, room, H) {
       fk.mesh.position.z = 0.028;
       fk.mesh.visible = false;
       slot.add(fk.mesh);
+      // ★★ **넉넉하게 잡는다.** 배는 늘 미세하게 떨리므로(`sw`) 판정 상자가
+      //   빠듯하면 **누르는 그 프레임에만 벗어나** 있는 일이 난다 —
+      //   그러면 앉은 사람은 「빈 데를 눌렀다」고 보고 일어나 버린다.
+      //   검사가 「눌렀더니 배가 간다 → 『일어납니다』」로 두 번 잡아 줬다.
+      //   **작은 것을 정확히 겨누게 하는 건 어려움이 아니라 짜증이다**
       const hit = new THREE.Mesh(
-        new THREE.BoxGeometry(wid + 0.10, FACE_H + 0.10, 0.26),
+        new THREE.BoxGeometry(wid + 0.34, FACE_H + 0.34, 0.42),
         new THREE.MeshBasicMaterial({ visible: false }),
       );
       hit.position.z = 0.05;
