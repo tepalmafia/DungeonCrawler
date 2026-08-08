@@ -37,6 +37,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { KINDS, TARGET, rangeWord } from '../game/target-table.js';
+import { hudFov } from '../game/view-table.js';
+import { SIGN } from '../game/chase-table.js';
 
 const FG = '#8fe6c0';
 const DIM = 'rgba(143,230,192,.45)';
@@ -84,17 +86,25 @@ function draw(ctx, w, h, s) {
     return;
   }
 
-  // 눈금 — 방위·고도를 화면에 편다
+  // ══ ★★★ **눈금이 실제 각도와 1:1 이다** (v66) ═══════════════════════
+  //  v65 까지 `sx = (w/2) / TARGET.azLimit` 였다 — **화면 폭에 ±60도를
+  //  구겨 넣은** 것이다. 그런데 그 판은 94도를 덮고 있었으므로 눈금과
+  //  실제 하늘이 어긋나 있었고, 「밖을 보면 겨눠져 있다」가 성립할 수 없었다.
+  //  이제 HUD 는 **26도**고, 눈금도 **26도**다 — 표적 상자가 진짜 표적
+  //  위에 얹힌다. 실제 HUD 가 좁은 이유가 이것이다: **좁아야 맞는다.**
+  //  ★ 밖에 있는 것은 **가장자리 화살표**로 가리킨다 (실제 HUD 의
+  //    target locator line 이 하는 일이다)
   const cx = w / 2, cy = h / 2;
-  const sx = (w * 0.5) / TARGET.azLimit;   // 도 → 화소
-  const sy = (h * 0.5) / TARGET.elLimit;
+  const FOVH = hudFov();
+  const sx = (w * 0.5) / (FOVH.h / 2);     // 도 → 화소 (**실제 각도**)
+  const sy = (h * 0.5) / (FOVH.v / 2);
   ctx.strokeStyle = 'rgba(143,230,192,.13)';
   ctx.lineWidth = 1;
-  for (let a = -60; a <= 60; a += 20) {
+  for (let a = -10; a <= 10; a += 5) {
     const x = cx + a * sx;
     ctx.beginPath(); ctx.moveTo(x, h * 0.08); ctx.lineTo(x, h * 0.92); ctx.stroke();
   }
-  for (let e = -30; e <= 30; e += 15) {
+  for (let e = -8; e <= 8; e += 4) {
     const y = cy - e * sy;
     ctx.beginPath(); ctx.moveTo(w * 0.04, y); ctx.lineTo(w * 0.96, y); ctx.stroke();
   }
@@ -103,8 +113,21 @@ function draw(ctx, w, h, s) {
   const aimAz = s.az ?? 0, aimEl = s.el ?? 0;
   let near = null, nearD = 1e9;
   for (const t of s.list ?? []) {
-    const x = cx + (t.az - 0) * sx;
-    const y = cy - (t.el - 0) * sy;
+    let x = cx + t.az * sx;
+    let y = cy - t.el * sy;
+    // ★ HUD 밖이면 **가장자리에 화살표**로 가리킨다 — 실제 HUD 의
+    //   target locator line. 안 그리면 「레이더에 아무것도 없다」로 읽힌다
+    if (x < w * 0.06 || x > w * 0.94 || y < h * 0.08 || y > h * 0.92) {
+      const ex = Math.max(w * 0.06, Math.min(w * 0.94, x));
+      const ey = Math.max(h * 0.08, Math.min(h * 0.92, y));
+      ctx.strokeStyle = t.inRange ? FG : DIM;
+      ctx.lineWidth = Math.max(2, h * 0.008);
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex + (x - ex) * 0.06, ey + (y - ey) * 0.06);
+      ctx.stroke();
+      continue;
+    }
     const far = !t.inRange;
     // 가까울수록 크게 — 거리가 크기로 읽혀야 「기다렸다 쏜다」가 생긴다
     const r = Math.max(h * 0.035, h * 0.11 * (1 - t.dist / (TARGET.spawn[1] * 1.1)));
@@ -165,6 +188,37 @@ function draw(ctx, w, h, s) {
  *     천장과 계기 위에까지 그려진 일이 있다 — 투명한 것은 불투명한 것보다
  *     **나중에** 그려지므로, 깊이 검사를 끄면 앞뒤가 통째로 무너진다
  */
+/**
+ * ★★ **자국** — 계기판이 좁아지면서 화면 한 장이 밀려났다 (v66).
+ *   HUD 로 올린다. **모는 동안 보는 것**이라 원래 여기 있어야 했다:
+ *   왼쪽 아래 구석에 숫자와 막대만. 자리를 많이 안 먹는다
+ */
+function drawSign(ctx, w, h, s) {
+  if (!s.power?.sensor) {
+    ctx.fillStyle = 'rgba(255,154,92,.85)';
+    ctx.font = `600 ${Math.round(h * 0.055)}px system-ui, sans-serif`;
+    ctx.fillText('탐지 꺼짐', w * 0.05, h * 0.95);
+    return;
+  }
+  const at = s.contactAt ?? SIGN.contactAt;
+  const v = Math.max(0, Math.min(1, (s.sign ?? 0) / SIGN.max));
+  const over = (s.sign ?? 0) > at;
+  const bx = w * 0.05, by = h * 0.90, bw = w * 0.20, bh = h * 0.035;
+  ctx.strokeStyle = DIM; ctx.lineWidth = 1;
+  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = over ? HOT : FG;
+  ctx.fillRect(bx, by, bw * v, bh);
+  // 접촉 기준선 — 이 안쪽이면 안 붙는다
+  ctx.strokeStyle = HOT;
+  ctx.beginPath();
+  ctx.moveTo(bx + bw * (at / SIGN.max), by - h * 0.012);
+  ctx.lineTo(bx + bw * (at / SIGN.max), by + bh + h * 0.012);
+  ctx.stroke();
+  ctx.fillStyle = over ? HOT : DIM;
+  ctx.font = `600 ${Math.round(h * 0.05)}px ui-monospace, monospace`;
+  ctx.fillText(`자국 ${Math.round(s.sign ?? 0)}`, bx, by - h * 0.022);
+}
+
 export function buildSight(width = 2.1, height = 1.5) {
   const cv = document.createElement('canvas');
   cv.width = 1024; cv.height = 768;
@@ -185,6 +239,10 @@ export function buildSight(width = 2.1, height = 1.5) {
   mesh.name = 'HUD';
   return {
     mesh,
-    redraw(s) { draw(ctx, cv.width, cv.height, s || {}); tex.needsUpdate = true; },
+    redraw(s) {
+      draw(ctx, cv.width, cv.height, s || {});
+      if (s?.on) drawSign(ctx, cv.width, cv.height, s);
+      tex.needsUpdate = true;
+    },
   };
 }

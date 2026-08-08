@@ -104,11 +104,11 @@ console.log('\n[1] **눈에 보이나** — ★ v61 부터는 **앉아서** 본�
   //   **엉뚱한 것**을 재게 된다. 여기서 묻는 것은 하나다 —
   //   **조종간을 똑바로 보면 조종간이 제일 먼저 걸리나.**
   // 앉은 자리에서, 조종간을 향해 고개를 조금 숙인 자세
-  await stand(0, -7.85, 0, -0.30);
+  await stand(0, -7.75, 0, -0.50);
   const seen = await S(`(() => {
     const T = SPACE.THREE, cam = SPACE.camera;
     const from = cam.getWorldPosition(new T.Vector3());
-    const to = new T.Vector3(0, 0.98, -8.35);   // ★ v61 — DEP 에서 계산된 자리
+    const to = new T.Vector3(0, 0.84, -8.80);   // ★ v66 — DEP 에서 계산된 자리
     const ray = new T.Raycaster(from, to.clone().sub(from).normalize(), 0.05, 6);
     const out = [];
     for (const h of ray.intersectObject(SPACE.shipGroup, true)) {
@@ -130,7 +130,7 @@ console.log('\n[1] **눈에 보이나** — ★ v61 부터는 **앉아서** 본�
   //   좌석 등받이가 가려서 영영 안 걸린다 — 그건 조종간이 나쁜 게 아니라
   //   **서서 잡으려 한 것**이 잘못이다
   for (const pitch of [-0.10, -0.20, -0.30, -0.40, -0.50, -0.60]) {
-    await stand(0, -7.85, 0, pitch);
+    await stand(0, -7.75, 0, pitch);
     const hit = await S(SEE);
     if (hit[0] && isYoke(hit[0].name)) band.push(pitch);
   }
@@ -145,11 +145,11 @@ console.log('\n[2] **겨눈 데만 잡히나** — 통짜 판정 상자가 아�
   ok(got, `가운데를 겨누면 잡힌다 — aim=${await S(() => SPACE.aim)}`);
 
   // 콘솔 왼쪽 끝 — 전에는 여기도 `yoke` 였다 (폭 2.8m 통짜)
-  await stand(-1.9, -7.3, 0, -0.25);
+  await stand(-1.9, -7.75, 0, -0.45);
   const left = await S(() => SPACE.aim);
   ok(left !== 'yoke', `콘솔 왼쪽을 겨누면 안 잡힌다 — aim=${left ?? '없음'}`);
 
-  await stand(1.9, -7.3, 0, -0.25);
+  await stand(1.9, -7.75, 0, -0.45);
   const right = await S(() => SPACE.aim);
   ok(right !== 'yoke', `콘솔 오른쪽을 겨누면 안 잡힌다 — aim=${right ?? '없음'}`);
 
@@ -199,8 +199,8 @@ console.log('\n[4] 앞을 가로지르는 것이 없나 — 조종간은 **가�
     for (const dx of [-0.2, -0.1, 0, 0.1, 0.2]) {
       // ★ v61 — **앉은 눈**에서 쏜다 (helm-table.js HELM_SEAT.eye 1.20).
       //   서 있는 눈(1.62 · z −5.6)에서 재면 좌석 등받이가 늘 먼저 걸린다
-      const from = new T.Vector3(dx, 1.20, -7.85);
-      const to = new T.Vector3(0, 0.98, -8.35);   // ★ v61 — DEP 에서 계산된 자리
+      const from = new T.Vector3(dx, 1.20, -8.30);
+      const to = new T.Vector3(0, 0.84, -8.80);   // ★ v66 — DEP 에서 계산된 자리
       const dir = to.clone().sub(from).normalize();
       const ray = new T.Raycaster(from, dir, 0.05, from.distanceTo(to) - 0.12);
       for (const h of ray.intersectObject(SPACE.shipGroup, true)) {
@@ -226,7 +226,7 @@ console.log('\n[5] ★★★ **잡으면 창이 화면을 채우나** (v63 · �
   //     계기를 읽으려고 만든 것이 모는 것에도 걸려 밖을 더 못 보게 했다.
   //     손잡이를 **읽는 것 / 모는 것**으로 가르는 것이 v63 이 한 일이다.
   await S(() => { SPACE.putHelmSit(true); });
-  await stand(0, -7.85, 0, -0.20);
+  await stand(0, -7.75, 0, -0.45);
   const before = await S(() => ({
     fov: +SPACE.camera.fov.toFixed(1),
     y: +SPACE.camera.getWorldPosition(new SPACE.THREE.Vector3()).y.toFixed(3),
@@ -265,7 +265,7 @@ console.log('\n[5] ★★★ **잡으면 창이 화면을 채우나** (v63 · �
 }
 
 if (SP) {
-  await stand(0, -6.6, 0, -0.20);
+  await stand(0, -7.05, 0, -0.45);
   await p.waitForTimeout(900);
   await p.screenshot({ path: `${SP}/조종간.png` });
   console.log(`\n  (${SP}/조종간.png 저장)`);

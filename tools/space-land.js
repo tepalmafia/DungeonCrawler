@@ -366,7 +366,7 @@ if (see >= 0) {
   console.log('\n[13] ★★ **문을 열어 둔 채로는 못 뜬다** — 조종간을 잡으면 뜬다');
   {
     // 조종간 앞으로. 문은 아직 열려 있다
-    await S(() => { SPACE.put(0, -7.3, 0, -0.2); });
+    await S(() => { SPACE.put(0, -7.75, 0, -0.2); });
     ok(await until(() => SPACE.aim === 'yoke', 25, '조종간 조준'),
       `조종석 조종간을 잡는다 (${await S(() => SPACE.aim)})`);
     await press(2.4);
