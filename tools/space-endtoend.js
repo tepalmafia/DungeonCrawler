@@ -148,7 +148,7 @@ console.log('\n[0] 배가 출발하나 — **★ v66: 조종석에서 고른다*
   //   **이 검사도 같이 옮긴다.** 안 옮기면 검사가 옛 설계를 지키게 된다
   ok((await S(() => SPACE.route)).phase === 'port', '거점에서 시작한다');
   await sit();
-  ok(await aimAround(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']),
+  ok(await aimAround(0, -7.75, 0.9, -0.3, ['chart0', 'chart1']),
     `조종석에서 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
   await press(0.6);
   ok(await until(() => SPACE.route.phase === 'leg', 20, '출발'),
@@ -261,18 +261,23 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   ok((await S(() => SPACE.suit)).canEva, '⓪c 입었다 — 이제 나갈 수 있다');
 
   const at = await S(() => SPACE.outerAt);
-  ok(await aimAt(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer'),
+  ok(await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer'),
     `① 바깥문 손잡이가 잡힌다 (${await S(() => SPACE.aim)})`);
-  await press(1.0);
+  await pressUntil(() => SPACE.lock.cycling > 0 || SPACE.lock.open, 5, 1.0);
   ok(await until(() => SPACE.lock.open, 200, '바깥문 열리기'),
     `② 눌렀더니 열린다 — 「${await said()}」`);
   ok((await S(() => SPACE.lock)).innerLocked, '③ 열려 있는 동안 안쪽 문이 잠긴다 — 갇힌다');
 
-  ok(await aimAt(3.4, 5.15, 0, -0.34, 'winch'), `④ 윈치가 잡힌다 (${await S(() => SPACE.aim)})`);
+  ok(await aimAround(3.4, 5.15, 0, -0.34, 'winch'), `④ 윈치가 잡힌다 (${await S(() => SPACE.aim)})`);
   const o0 = (await S(() => SPACE.supply)).ore;
-  await S((v) => { window.__o0 = v; }, o0);
+  const wa = await S(() => SPACE.look);
+  await S((v) => { window.__o0 = v[0]; window.__wa = v.slice(1); }, [o0, wa.yaw, wa.pitch]);
   await down();
-  const pulled = await until(() => SPACE.supply.ore > window.__o0 + 1, 45, '광석이 끌려오기');
+  // ★ 잡는 **동안** 조준이 벗어나면 윈치가 멈춘다 — 매 번 다시 겨눈다
+  const pulled = await until(() => {
+    SPACE.put(3.4, 5.15, window.__wa[0], window.__wa[1]);
+    return SPACE.supply.ore > window.__o0 + 1;
+  }, 45, '광석이 끌려오기');
   await up();
   ok(pulled, `⑤ 잡고 있으니 광석이 온다 (${o0} → ${(await S(() => SPACE.supply)).ore})`);
   // ★★ 그동안 **우주복 공기가 줄었나** — 안 줄면 진공이 진공이 아니다.
@@ -328,7 +333,7 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
 
   // 자동 항법 스위치로 되돌린다
   await settle();
-  ok(await aimAround(0, -7.75, -0.9, -0.1, 'autopilot'),
+  ok(await aimAround(0, -7.75, -1.2, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
   const backOn = await pressUntil(() => SPACE.helm.auto);
   ok(backOn, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
@@ -373,7 +378,7 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
 
   // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
   await settle();
-  ok(await aimAround(0, -7.75, 0.9, -0.1, 'throttle'),
+  ok(await aimAround(0, -7.75, 1.2, -0.1, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
   const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
   ok(thrOk, `④ 눌렀더니 「${await said()}」`);
@@ -432,7 +437,7 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
 
   // ★ v66 — 「내린다 / 지나친다」도 **조종석 계기 화면**에 뜬다
   await sit();
-  ok(await aimAround(0, -7.75, 0.9, -0.5, ['chart0', 'chart1']), '② 조종석에서 내릴지 고른다');
+  ok(await aimAround(0, -7.75, 0.9, -0.3, ['chart0', 'chart1']), '② 조종석에서 내릴지 고른다');
   await press(0.6);
   ok(await until(() => SPACE.land.step === 'approach', 30, '내려가기 시작'),
     `③ 「내린다」를 누르니 내려간다 — 「${await said()}」`);
