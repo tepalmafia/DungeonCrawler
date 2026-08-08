@@ -61,6 +61,29 @@ const press = async (sec = 2.5) => { await down(); await p.waitForTimeout(sec * 
  *   두 번 빨개졌는데, 게임이 아니라 여기가 급했던 것이다
  */
 /**
+ * ★★ **안 먹으면 한 번 더 누른다** (v66) — 사람이 하는 그것.
+ *
+ *   눌린 순간(`input.takePress`)은 **한 프레임에만** 산다. 그 프레임에
+ *   조준선이 손잡이를 살짝 벗어나 있으면 **누른 것이 그냥 사라진다.**
+ *   실제 브라우저는 초당 60프레임이라 거의 안 나지만, 헤드리스는
+ *   초당 한 프레임이라 절반쯤 먹힌다. 검사에는 이렇게 나온다:
+ *
+ *     ✔ ③ 추력 레버가 잡힌다 (throttle)
+ *     ✘ ④ 눌렀더니 「」
+ *
+ *   **잡히는 것도 맞고 조준도 맞는데 아무 일이 안 난 것**이다.
+ *   사람은 이럴 때 한 번 더 누른다. 검사도 그렇게 한다
+ */
+const pressUntil = async (cond, tries = 5, sec = 1.2) => {
+  for (let i = 0; i < tries; i++) {
+    await press(sec);
+    if (await p.evaluate(cond)) return true;
+    await p.waitForTimeout(600);
+  }
+  return false;
+};
+
+/**
  * ★★ **조금씩 둘러보며 찾는다** (v66).
  *   `aimAt` 은 **딱 한 각도**만 겨눈다. 사람은 손잡이를 찾을 때 고개를
  *   조금씩 움직이는데, 검사만 한 점을 노려보고 「없다」고 한다 —
@@ -217,8 +240,14 @@ console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는
   //   「엉뚱한 데를 본다」는 로그가 똑같이 나온다
   ok(await aimAround(RACK.x + 0.80, RACK.z + 0.10, Math.PI / 2, 0, 'suit'),
     `⓪ 우주복 걸이가 잡힌다 (${await S(() => SPACE.aim)})`);
+  // ★ 잡는 **동안** 조준이 벗어나면 `wearing` 이 초당 1.6 로 되감긴다 —
+  //   헤드리스에서는 한 프레임 놓치면 그대로 0 이다. 매 번 다시 겨눈다
+  const RA = await S(() => SPACE.look);
   await down();
-  const wearing = await until(() => SPACE.suit.wearing > 0.3, 60, '우주복을 입기 시작');
+  const wearing = await until(([x, z, y, pi]) => {
+    SPACE.put(x, z, y, pi);
+    return SPACE.suit.wearing > 0.3;
+  }, 60, '우주복을 입기 시작', [RACK.x + 0.80, RACK.z + 0.10, RA.yaw, RA.pitch]);
   await up();
   ok(wearing, '⓪b 잡고 있으니 **입기 시작한다** — 22초를 붙들고 있어야 한다');
   // ★ 22초는 헤드리스에서 몇 분이다 (게임 시계가 실제의 1/20 로 돈다).
@@ -298,8 +327,8 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
   await settle();
   ok(await aimAround(0, -7.75, -0.9, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
-  await press(2.5);
-  ok((await S(() => SPACE.helm)).auto, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
+  const backOn = await pressUntil(() => SPACE.helm.auto);
+  ok(backOn, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
   ok(await until(() => SPACE.helm.off < 0.05, 60, '항로 복귀'),
     '⑧ **배가 스스로 항로로 돌아온다**');
 }
@@ -343,8 +372,8 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
   await settle();
   ok(await aimAround(0, -7.75, 0.9, -0.1, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
-  await press(2.5);
-  ok(/추력 레버/.test(await said()), `④ 눌렀더니 「${await said()}」`);
+  const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
+  ok(thrOk, `④ 눌렀더니 「${await said()}」`);
 
   // ── ③ 항로 갈래 — 계기 화면이 쪽을 바꾼다 ────────────────
   // ★ 게임은 **거점에서 시작한다** — 갈래는 처음부터 떠 있다.
