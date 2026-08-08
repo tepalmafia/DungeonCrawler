@@ -122,6 +122,11 @@ import {
 import { FUEL, fuelWord, isDry, legsLeftOnFuel } from './game/fuel-table.js';
 import { STEP as LSTEP, LAND, WHY as LAND_WHY, STEP_WORD, tiltWord, bandFor }
   from './game/land-table.js';
+// ★★ 승부수 — **쫓길 때의 결심 넷** (v68 · docs/space/GAMBIT.md).
+//   `mission-table.js` 에 적혀만 있던 넷이다 — 고장이 아니라 **결심**이라
+//   `steps` 를 적을 수 없었고, 그래서 몇 판을 조용히 걸러져 왔다
+import { makeGambit, stepGambit, holdGambit, chaseOver, holdAt, summary as gbSummary } from './game/gambit.js';
+import { GAMBIT, GAMBITS, gambitWord } from './game/gambit-table.js';
 import {
   makeLand, offerPlanet, passPlanet, beginLand, liftOff, stepLand, loadStep,
   canLoad as canLoadLand, loadWhy, onGround as landDown, burning as landBurn,
@@ -160,7 +165,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 67;
+export const VERSION = 68;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -729,8 +734,17 @@ function showEnd() {
 let taught = { walked: 0, turned: 0, flips: 0, fixed: 0, cooled: 0, hazardSeen: 0 };
 let steering = false;     // 조종간을 잡고 있나 (한 프레임 늦게 반영된다 — 아래 참고)
 let steerPush = 0;
+/**
+ * ★★ **승부수가 방금 쓴 손** — 놓을 때까지 그 손의 잔소리를 막는다 (v68).
+ *   결판이 나면 `gambit.on` 이 비므로 **바로 다음 프레임에** 원래 잔소리가
+ *   깨어나 배너를 덮는다 — 광석을 던져 놓고 「광석이 모자랍니다」가 뜬다.
+ *   브라우저로 잡았고, 코드만 봐서는 안 보이는 종류다
+ */
+let gbUsedHand = null;
 /** ★ 세 축 (v60). `steerPush` 는 좌우 하나뿐이었다 — 우주는 삼차원이다 */
 const fly3 = makeFlight();
+/** ★ 승부수 — 쫓길 때의 결심 넷 (v68) */
+const gambit = makeGambit();
 const flyPush = { pitch: 0, yaw: 0, roll: 0 };
 /** 걸으려 하는데 못 걸은 시간 — `GUN.freeAfter` 를 넘으면 저절로 일어난다 */
 let stuckT = 0;
@@ -1068,6 +1082,29 @@ function interactStep(dt) {
   // ★★ **지금 조종석 손잡이가 잡혀 있나** (v66). 이름을 하나씩 적는 대신
   //   묶어 둔다 — 손잡이를 늘릴 때마다 이 줄을 고쳐야 하는 것이 맞다
   const cockGrip = onYoke || onAuto || onThr || plate >= 0;
+
+  // ══ ★★★ **승부수를 잡는다** (v68) — 새 손잡이를 하나도 안 만든다 ══
+  //  이미 있는 넷이 **상황에 따라 다른 일**을 한다. 이 배의 규약이다
+  //  (조종간이 잔해도 피하고 자세도 잡는다 · 윈치가 낚기도 하고 싣기도 한다).
+  //
+  //    버리기       화물 접수구 — 거점에서 거래하던 그 구멍
+  //    끌고 들어가기 조종간     — 잔해 지대 쪽으로 끝까지 튼다
+  //    숨죽이기     통로 차단기 — **셋을 다 내려야** 걸린다
+  //    남의 미끼    윈치       — 우주에서 낚던 그것
+  //
+  //  ★ 손목 장치에 줄을 안 늘렸다. **잡을 수 있는 손잡이가 켜지는 것**으로
+  //    족하다 — 배울 것이 없어야 한다
+  if (!input.hold) gbUsedHand = null;
+  const gbHand = gambit.on?.hand ?? null;
+  const gbHolding = !!input.hold && (
+    (gbHand === 'hatch' && onHatch)
+    || (gbHand === 'yoke' && onYoke)
+    || (gbHand === 'winch' && onWinch)
+    // ★ 차단기는 **셋을 다 내린 채** 아무 차단기나 잡고 있어야 한다 —
+    //   「전부 끄고 지나가기를 기다린다」가 그 모양이다
+    || (gbHand === 'breakers' && !!breaker && !power.thrust && !power.cool && !power.sensor)
+  );
+
   // ★★★ **일어나는 것은 「자리가 굳은 뒤 · 빈 데를 누를 때」다** (v66).
   //
   //   앉는 순간 몸이 좌석으로 **미끄러지는 동안**(`slide`) 조준선이 흔들려
@@ -1233,7 +1270,11 @@ function interactStep(dt) {
   winching = !onDirt
     && onWinch && input.hold && !power.thrust && !bad.noWinch && canHaul(lock);
   // ★ 잡았는데 안 걸리면 **왜인지 말한다.** 조용하면 윈치가 고장난 줄 안다
-  if (onWinch && input.hold && !winching && !loading) {
+  // ★★ **승부수가 그 손을 쓰는 동안은 잔소리를 안 한다** (v68).
+  //   같은 손잡이가 두 뜻을 가지면 한쪽이 **다른 쪽을 부정하는 말**을 한다 —
+  //   광석을 던지는 중인데 「광석이 모자랍니다」가 뜨는 식이다.
+  //   브라우저로 잡았다: 「잡고 있으니 결판이 났다 — 광석이 모자랍니다」
+  if (onWinch && input.hold && !winching && !loading && !gbHolding && gbUsedHand !== 'winch') {
     const w = onDirt ? loadWhy(land, { doorOpen: lock.open }) : haulWhy(lock);
     nag(bad.noWinch ? '에어록이 안 닫혀 못 씁니다'
       : (!onDirt && power.thrust) ? '추진을 끄고 잡습니다'
@@ -1262,7 +1303,8 @@ function interactStep(dt) {
   // ── 접수구 — 거점에서만. 상인은 얼굴이 없다 (PLAN §1) ──
   // ★ 여기도 조용했다 — 거점이 아니거나 광석이 모자라면 잡고 있어도
   //   아무 일이 없었고, 왜인지도 안 말했다
-  if (onHatch && input.hold && !(route.phase === RPHASE.PORT && canTrade(supply))) {
+  if (onHatch && input.hold && !gbHolding && gbUsedHand !== 'hatch'
+    && !(route.phase === RPHASE.PORT && canTrade(supply))) {
     nag(route.phase === RPHASE.PORT ? '광석이 모자랍니다' : '거점에서만 바꿉니다');
   }
   if (onHatch && input.hold && route.phase === RPHASE.PORT && canTrade(supply)) {
@@ -1599,6 +1641,23 @@ function interactStep(dt) {
       bannerT = 2.6;
     }
   }
+  const gbOut = holdGambit(gambit, dt, { holding: gbHolding, leg: route.leg });
+  if (gbOut) {
+    gbUsedHand = gbHand;
+    banner = gbOut.what;
+    bannerT = 4.2;
+    audio?.event(gbOut.good ? 'escaped' : 'deny');
+    const w = gbOut.gain;
+    if (w.dist) chase.dist = Math.min(100, chase.dist + w.dist);
+    if (w.sign !== undefined) chase.sign = w.sign;
+    if (w.hull) faults.wear.hull = Math.min(1, faults.wear.hull + w.hull);
+    if (w.parts) supply.parts = Math.min(PARTS.max, supply.parts + w.parts);
+    if (w.food) supply.food = Math.max(0, Math.min(FOOD.max, supply.food + (gbOut.good ? w.food : -w.food)));
+    if (w.air) suit.air = Math.max(0, suit.air - w.air);
+    // ★ 「버리기」는 **광석을 통째로** 던진다 — 좋은 갈래든 나쁜 갈래든
+    if (gbOut.key === 'jettison') supply.ore = 0;
+  }
+
   gunHeldWas = input.hold;
   // ★★ **계기를 읽는 손잡이인가** (v63). 여기서만 화면을 당긴다 —
   //   조종간·주포는 반대로 **넓히고 든다** (helm-table.js FLY_VIEW)
@@ -1619,7 +1678,7 @@ function interactStep(dt) {
         : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : (onThr ? 'throttle' : null))))))));
   // ★ 조준점이 **주포와 사다리에서는 안 켜졌다.** 「손이 닿는다」를 알려
   //   주는 유일한 표시인데 빠져 있으면 「눌러도 되는지」를 알 길이 없다
-  cross.classList.toggle('on', !!(onOuter || onAuto || onThr || onSuit
+  cross.classList.toggle('on', !!(gbHand && gbHolding) || !!(onOuter || onAuto || onThr || onSuit
     || onValve || breaker || (canPick && plate >= 0) || fixHere
     || (onWinch && !power.thrust) || (onHatch && route.phase === RPHASE.PORT && canTrade(supply))
     || onYoke || (crankDoor && crankDoor.jammed)
@@ -1644,6 +1703,26 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   예고와 여운에는 낸다. 예고 때 고장이 하나 있어야 「마치고 갈까」가 생긴다
   const calm = chase.phase !== PHASE.CHASE && route.phase === RPHASE.LEG
     && allowChore(scenes);
+
+  // ══ ★★ **승부수** — 쫓길 때의 결심 넷 (v68) ═══════════════════════
+  //  ★ 고장과 **안 겹치게** 둔다. 추격 중에는 새 고장이 안 뜬다는 규칙이
+  //    이미 있으므로(`calm`), 승부수는 **그 빈자리**에 들어간다 —
+  //    즉 「할 일이 없는 추격」이 없어진다
+  const chasingNow = chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT;
+  const gev = stepGambit(gambit, dt, {
+    chasing: chasingNow,
+    ore: supply.ore,
+    // 잔해 지대가 **오고 있을 때만** 「끌고 들어가기」가 뜬다
+    hazard: hazard.phase === HPHASE.WARN || hazard.phase === HPHASE.RUN,
+  });
+  if (gev === 'offer') {
+    // ★ **무엇을 하라고 안 적는다.** 실마리만 주고 손잡이가 켜지는 것으로
+    //   말한다 (「글로 안 알려준다」 · PLAN §3-1)
+    banner = gambitWord(gambit.on);
+    bannerT = 4.0;
+    audio?.event('fault');
+  }
+  if (!chasingNow) chaseOver(gambit);
   if (canFire(tutor, 'fault') && stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
     const o = faults.open[faults.open.length - 1];
     // ★ **증상만 말한다.** 어디인지·무엇인지는 안 말한다 (PLAN §3-1)
@@ -2085,6 +2164,15 @@ window.SPACE = {
   },
   /** 지금 조준선에 뭐가 걸리나 — 검사용 */
   get aim() { return aimName; },
+  /** ★★ 승부수 (v68) — 무엇이 떠 있나 · 어느 손인가 · 얼마나 잡았나 */
+  get gambit() { return gbSummary(gambit); },
+  /** 검사가 승부수를 하나 띄워 놓는다 — `putLand`·`putGun` 과 같은 구멍 */
+  putGambit(key) {
+    const g = GAMBITS.find((x) => x.key === key);
+    if (!g) return null;
+    gambit.on = g; gambit.live = GAMBIT.live; gambit.held = 0;
+    return gbSummary(gambit);
+  },
 
   resetChase() { resetChase(chase); },
   /** 거리를 밀어 놓고 「뿌리침·잡힘」이 실제로 나는지 보려고 낸 구멍 */
@@ -3266,6 +3354,9 @@ function frame(now) {
   const lastStep = land.step;
   const lev2 = stepLand(land, dt, {
     hand: steering ? steerPush : 0,
+    // ★ 승부수를 잡고 있으면 **띠가 찬다** — 「잡히는데 안 보인다」를
+    //   안 만들려고 이미 있는 진행 띠를 그대로 쓴다 (새 UI 0)
+    gambit: holdAt(gambit),
     rnd: landRnd,
   });
   if (lastStep !== land.step && STEP_WORD[land.step]) {
