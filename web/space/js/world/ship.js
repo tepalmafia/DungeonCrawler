@@ -704,7 +704,10 @@ export function buildShip(scene, camera = null) {
 
   // ── 기관실 ──────────────────────────────────────────────
   const EZ = ZONE.engine;
-  racks(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.8, engine.z1 - 0.8, 1, EZ.accent, 1, 'engine', onWall);
+  // ★ v76 — 좌현 랙이 **밸브 자리를 비운다.** 안 비우면 랙이 밸브를
+  //   덮어서 「크레이들에 가렸던 것」이 「랙에 가린 것」으로 바뀔 뿐이다
+  racks(ship, 'z', engine.x0 + 0.09, engine.z0 + 0.8, engine.z1 - 0.8, 1, EZ.accent, 1, 'engine',
+    [...onWall, { position: { x: engine.x0 + 0.34, z: 13.8 } }]);
   racks(ship, 'z', engine.x1 - 0.09, engine.z0 + 0.8, engine.z1 - 0.8, -1, EZ.accent, 3, 'engine', onWall);
   // ★ 기관실도 **모서리 통로**로 (REALSHIP.md §1). 여기 난간이 랙 면
   //   0.5m 앞을 가로지르고 있었다 — 벽면을 따라 그었기 때문이다.
@@ -797,12 +800,36 @@ export function buildShip(scene, camera = null) {
     ship.add(up);
   }
 
-  // 냉각 밸브 — 1단계의 유일한 상호작용. **끝까지 돌려야** 열린다
+  // ══ 냉각 밸브 — 1단계의 유일한 상호작용. **끝까지 돌려야** 열린다 ══
+  //
+  //  ★★★ **v76 에 자리를 옮겼다** (2026-08-09 · 사장님 「**미사일 뒤에
+  //    냉각벨브가 있어서 작동을 못해.** 전체적으로 다시 설계해」).
+  //
+  //    v71 에 탄두 크레이들을 기관실 **후미 벽 한가운데**(x 0 · z 15.4)에
+  //    세웠는데, **거기 이미 밸브가 있었다** (x 0 · z 15.70). 중심 거리
+  //    0.10m — 조준선을 어디서 쏘든 크레이들이 먼저 맞았다. 즉 **밸브는
+  //    v71 이래로 한 번도 못 잡았다.** 냉각 계통의 유일한 손잡이가.
+  //
+  //  ★★ 크레이들은 **못 옮긴다** — 「가장 후미에 핵탄두」가 사장님이
+  //    정하신 자리이고, 「추진을 켜면 탄두가 데워진다」가 거기서 나온다
+  //    (WAR.md §3). 그러니 밸브가 간다.
+  //
+  //  ★ 그리고 **옮긴 자리가 오히려 고증에 맞는다.** 이건 라디에이터로
+  //    나가는 배관의 차단 밸브다. 실제 우주선의 열제어 라디에이터는
+  //    **선체 옆면**에 붙는다 (ISS 의 트러스 양쪽처럼). 후미 벽 한가운데는
+  //    애초에 이 물건의 자리가 아니었다 — **좌현 벽**이 맞다.
+  //
+  //  ★ 기관실 점검 패널이 (−4.44, 12.60) 에 있으므로 z 를 1.2m 벌린다.
+  //    `tools/space-reach.js` 가 「35cm 안에 붙은 짝」을 세면서 지킨다
+  const VALVE_AT = { x: engine.x0 + 0.34, z: 13.8 };
   const valve = new THREE.Group();
-  valve.position.set(0, 1.35, engine.z1 - 0.30);
+  valve.position.set(VALVE_AT.x, 1.35, VALVE_AT.z);
+  // 벽에 붙었으므로 **안쪽(+x)을 본다** — 후미 벽에 있을 때는 −z 를 봤다
+  valve.rotation.y = Math.PI / 2;
   ship.add(valve);
+  // 배관은 밸브에서 위로 올라가 라디에이터로 나간다 — 밸브를 따라간다
   const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, H, 12), MAT.pipe);
-  pipe.position.set(0, H / 2, engine.z1 - 0.15);
+  pipe.position.set(engine.x0 + 0.16, H / 2, VALVE_AT.z);
   ship.add(pipe);
   // ★ **조준 판정용 원판.** 밸브만 이게 없어서 **실제 바퀴 모양으로
   //   판정**했다 — 살 사이가 뻥 뚫려 있고, 잡으면 바퀴가 **돌기 시작하니까**
@@ -962,7 +989,9 @@ export function buildShip(scene, camera = null) {
   const marks = {
     chart: { x: R.observ.x0 + 1.7, z: (R.observ.z0 + R.observ.z1) / 2 },
     breaker: { x: spine.x0 + 0.5, z: 3.3 },
-    valve: { x: 0, z: engine.z1 - 0.9 },
+    // ★ v76 — 밸브가 좌현 벽으로 갔다. 안내선이 옛 자리를 가리키면
+    //   그건 「계기가 거짓말을 한다」가 된다
+    valve: { x: engine.x0 + 1.15, z: 13.8 },
     winch: { x: 3.0, z: R.airlock.z0 + 0.7 },
     yoke: { x: 0, z: -7.9 },
   };

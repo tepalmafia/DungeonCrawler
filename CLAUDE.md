@@ -280,6 +280,7 @@ node tools/space-combat.js       스페이스워 — ★★ 레이더 원뿔 · 
 node tools/space-bfm.js          스페이스워 — ★★★ **우주판 공중전** · 360도 · 회전 부하(고증) · 급기동 · **급가속** (v73)
 node tools/space-sound.js        스페이스워 — ★★★ **진공** · 밖은 조용한가 · 선체를 때린 것만 들리나 (v74)
 node tools/space-radar.js        스페이스워 — ★★★ **레이더 고증** · 위아래·접근율·RWR · 「왼쪽/오른쪽」이 없어졌나 (v75)
+node tools/space-reach.js        스페이스워 — ★★★ **손 닿는 것이 정말 닿나** · 누가 누구를 가리나 (v76)
 node tools/space-target.js       스페이스워 — ★★ 떠도는 것 · **적이 계속 오나** · **사방에 있나** (v69)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
