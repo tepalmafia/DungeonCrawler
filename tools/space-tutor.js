@@ -334,7 +334,7 @@ if (see >= 0) {
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
   await p.waitForTimeout(2500);
-  await p.mouse.move(480, 280); await p.mouse.click(480, 280);
+  await p.click('#btn-play').catch(() => p.mouse.click(480, 280));
   await p.evaluate(() => document.getElementById('hint')?.remove());
 
   console.log('\n[8] ★ 일곱 줄이 **화면에 정말 뜨나** — 두 단계씩 열넷');

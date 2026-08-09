@@ -161,7 +161,9 @@ const aimAt = async (x, z, yaw, pitch, want, tries = 22) => {
 };
 
 await S(() => SPACE.clearSave());
-await p.mouse.move(360, 210); await p.mouse.click(360, 210);
+// ★ v78 — 제목 화면에 **단추가 생겼다.** 가운데를 그냥 누르면
+//   「처음부터 다시」를 밟는다. 시작 단추를 눌러야 한다
+await p.click('#btn-play').catch(() => p.mouse.click(360, 210));
 await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
 console.log('\n처음부터 끝까지 되나 — 사장님이 시키신 것 전부');

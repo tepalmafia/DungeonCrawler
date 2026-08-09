@@ -145,7 +145,7 @@ if (see >= 0) {
   await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
   await p.waitForTimeout(1500);
   const S = (fn, a) => p.evaluate(fn, a);
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
   console.log('\n[6] 자리가 **세상에 정말 있나** — 없으면 물건을 영영 못 놓는다');

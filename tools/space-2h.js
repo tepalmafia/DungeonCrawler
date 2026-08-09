@@ -280,7 +280,7 @@ if (see >= 0) {
   await p.waitForTimeout(2000);
   const S = (fn, a) => p.evaluate(fn, a);
   await S(() => SPACE.clearSave());
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
   // ★ **갈래를 고른다.** 거점(PORT)에서는 잔해도 고장도 안 뜬다 — 이걸
   //   빼먹었더니 [9] 가 「구간 5 에서도 안 온다」로 빨개졌고, 원인은

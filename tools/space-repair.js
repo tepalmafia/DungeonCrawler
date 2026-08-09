@@ -115,7 +115,7 @@ if (see >= 0) {
     console.log(`     (${note} 기다리다 지침)`);
     return false;
   };
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
   console.log('\n[5] ★ 손이 **정말 그 모양이 되나** — 표만 넷이면 화면에는 없다');

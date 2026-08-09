@@ -1317,8 +1317,18 @@ function interactStep(dt) {
   //  ★ 놓는 길을 **둘** 둔다. 다시 누르거나, 좌석에서 일어나거나.
   //    하나뿐이면 「어떻게 놓지」에서 막히는 사람이 반드시 생긴다
   if (input.press && !readGrip) {
-    if (yokeHeld) { yokeHeld = false; input.takePress(); banner = '조종간을 놓습니다'; bannerT = 1.2; }
-    else if (onYoke) { yokeHeld = true; input.takePress(); banner = '조종간을 잡습니다'; bannerT = 1.2; }
+    if (yokeHeld) {
+      yokeHeld = false;
+      banner = '조종간을 놓습니다'; bannerT = 1.2;
+      // ★★ **누름을 삼키는 것은 조종간을 겨눴을 때뿐이다.** 딴 손잡이를
+      //   겨눴으면 놓기만 하고 누름은 **그쪽에 넘긴다** — 안 그러면
+      //   조종간을 잡은 채로는 무엇을 누르든 한 번은 헛클릭이 된다.
+      //   (자동 항법 스위치를 누르려다 조종간만 놓아지는 식)
+      if (onYoke) input.takePress();
+    } else if (onYoke) {
+      yokeHeld = true; input.takePress();
+      banner = '조종간을 잡습니다'; bannerT = 1.2;
+    }
   }
   // 좌석에서 일어나면 손도 놓는다 — 「자세는 안 잇는다」와 같은 규약
   if (!helmSat) yokeHeld = false;

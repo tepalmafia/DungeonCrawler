@@ -252,7 +252,7 @@ if (see >= 0) {
   await p.waitForTimeout(2000);
   const S = (fn, a) => p.evaluate(fn, a);
   await S(() => SPACE.clearSave());
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
   await S(() => { const o = SPACE.route.offer; if (o.length) SPACE.pick(o[0]); });
 
