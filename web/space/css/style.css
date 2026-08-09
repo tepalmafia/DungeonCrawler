@@ -59,6 +59,48 @@ html, body {
    여기가 다시 여덟 문단이 되면 그건 가르침이 제 일을 못 하고 있다는 뜻이다 */
 #hint p.key { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(140, 160, 190, .18); }
 
+/* ══ ★★★ 제목 화면 (v78) ═══════════════════════════════════════════════
+   사장님 「팝업창이 불편 … 자꾸 실수로 뜨잔아」 · 「일반적인 게임 시작
+   화면으로 바꿔」. 여태 이 상자는 **안내문 한 장**이었다 — 제목도,
+   시작 단추도, 조작법도 없었다. 보통 게임이 갖는 셋을 갖춘다. */
+#hint { width: min(520px, 90vw); padding: 30px 28px 24px; }
+#hint .title h1 {
+  margin: 0; font-size: 34px; letter-spacing: .18em;
+  color: #dff3ea; font-weight: 800;
+}
+#hint .tag { margin-top: 6px; color: #7d8b9c; font-size: 13px; letter-spacing: .02em; }
+#hint .menu {
+  margin-top: 22px; display: flex; flex-direction: column; gap: 8px;
+  align-items: center; pointer-events: auto;
+}
+#hint .menu button {
+  width: min(280px, 70vw); padding: 11px 14px;
+  background: rgba(20, 26, 34, .9); color: #b9c6d4;
+  border: 1px solid rgba(140, 160, 190, .3); border-radius: 4px;
+  font: inherit; font-size: 14px; letter-spacing: .06em; cursor: pointer;
+}
+#hint .menu button:hover { background: rgba(34, 46, 58, .95); color: #dff3ea; }
+/* ★ **시작**만 크고 초록이다. 셋이 같은 무게면 무엇을 눌러야 하는지
+   여전히 모른다 — 제목 화면의 일은 「여기를 눌러라」를 말하는 것이다 */
+#hint .menu button.big {
+  padding: 14px; font-size: 17px; font-weight: 700;
+  color: #0d1512; background: #6fd8a0; border-color: #6fd8a0;
+}
+#hint .menu button.big:hover { background: #86e8b4; color: #0d1512; }
+/* 조작법은 접어 둔다 — 펴 두면 제목 화면이 설명서가 된다 */
+#hint .keys { margin-top: 18px; pointer-events: auto; text-align: left; }
+#hint .keys summary {
+  cursor: pointer; color: #7d8b9c; font-size: 13px;
+  text-align: center; letter-spacing: .06em;
+}
+#hint .keys .grid {
+  margin-top: 12px; display: grid; grid-template-columns: auto 1fr;
+  gap: 6px 14px; font-size: 12.5px; line-height: 1.5;
+}
+#hint .keys .grid span { color: #6c7a8a; }
+#hint .keys .grid b { color: #b9c6d4; font-weight: 600; }
+#hint .ver { margin-top: 18px; font-size: 12px; color: #5d6b7d; }
+
 /* ★ 안내창·멈춤 화면의 단추 둘.
    부모가 `pointer-events: none` 이라 **여기서만 되살린다** — 나머지 가운데를
    눌러 게임을 켜는 길은 그대로 둔다. `data-ui` 표는 CSS 가 아니라

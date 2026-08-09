@@ -254,18 +254,27 @@ export function buildBand(parent) {
  */
 export function buildDust(parent, z) {
   const rnd = rng(77);
-  const zNear = z - DUST.near, zFar = z - DUST.far;
+  // ══ ★★★ **배를 둘러싼다** (v78 · `sky-table.js DUST.box`) ═══════════
+  //
+  //  ★ v77 까지 먼지는 **창 앞에 깔린 원반 한 장**이었다 (`spread` 반지름
+  //    46 · z 를 −0.5 에서 −150 까지). 기수를 돌리면 그 판에서 눈이
+  //    벗어나고, 그러면 급가속(R)의 속도감이 **통째로 사라졌다** —
+  //    v73 에 속도감을 넷이나 만들어 놓고 **정면을 볼 때만** 살아 있었다.
+  //
+  //  ★★ 이제 한 변 `2·box` 의 **상자**를 채운다. 어느 쪽을 보든 알갱이가
+  //    있고, 뒤로 지나간 것은 앞으로 되돌린다. 고증도 이쪽이 맞다 —
+  //    성간 티끌은 배 주위에 고르게 있지 앞에만 깔려 있지 않다.
+  const R = DUST.box;
   const pos = new Float32Array(DUST.n * 3);
   const siz = new Float32Array(DUST.n);
-  const place = (i, zz) => {
-    const a = rnd() * Math.PI * 2;
-    const rad = Math.sqrt(rnd()) * DUST.spread;
-    pos[i * 3] = Math.cos(a) * rad;
-    pos[i * 3 + 1] = Math.sin(a) * rad * 0.7;
-    pos[i * 3 + 2] = zz;
+  /** @param zz 안 주면 상자 안 아무 데나 (처음 채울 때) */
+  const place = (i, zz = null) => {
+    pos[i * 3] = (rnd() * 2 - 1) * R;
+    pos[i * 3 + 1] = (rnd() * 2 - 1) * R;
+    pos[i * 3 + 2] = zz === null ? (rnd() * 2 - 1) * R : zz;
   };
   for (let i = 0; i < DUST.n; i++) {
-    place(i, zFar + rnd() * (zNear - zFar));
+    place(i);
     siz[i] = DUST.size * (0.7 + rnd() * 0.6);
   }
   const g = new THREE.BufferGeometry();
@@ -277,8 +286,9 @@ export function buildDust(parent, z) {
       uPix: { value: Math.min(2, globalThis.devicePixelRatio || 1) },
       uFade: { value: 1 },
       uCol: { value: new THREE.Vector3(...DUST.rgb).multiplyScalar(DUST.lum) },
-      uNear: { value: zNear }, uFar: { value: zFar },
-      uIn: { value: DUST.fadeIn }, uOut: { value: DUST.fadeOut },
+      // ★ v78 — 상자가 됐으므로 **거리로** 흐려진다. 앞뒤(z)로 재던 것을
+      //   그대로 두면 옆·뒤 알갱이가 통째로 안 보인다
+      uR: { value: R }, uNearFade: { value: DUST.fadeR },
       /** ★ v73 — 급가속이면 알갱이가 굵어진다. 1 = 그대로 (`RUSH.grain`) */
       uGrain: { value: 1 },
     },
@@ -287,11 +297,14 @@ export function buildDust(parent, z) {
     //   900 개로 하던 짓이다 — 그리고 **툭 켜지고 툭 꺼졌다**
     vertexShader: `
       attribute float aSize;
-      uniform float uPix, uNear, uFar, uIn, uOut, uGrain;
+      uniform float uPix, uR, uNearFade, uGrain;
       varying float vA;
       void main() {
-        float zz = position.z;
-        vA = smoothstep(uFar, uFar + uIn, zz) * (1.0 - smoothstep(uNear - uOut, uNear, zz));
+        // ★★ **거리로 흐려진다** (v78). 멀면 사라지고(상자 모서리가 안
+        //   보이게), 코앞이면 흐려진다(알갱이가 선으로 늘어나 보이므로).
+        //   앞뒤로만 재던 옛 식은 **옆과 뒤를 통째로 지웠다**
+        float rr = length(position);
+        vA = smoothstep(uR, uR * 0.62, rr) * smoothstep(0.0, uNearFade, rr);
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
         // ★ 급가속이면 알갱이가 커지고 밝아진다 — **쏟아져 오는** 느낌.
@@ -349,7 +362,10 @@ export function buildDust(parent, z) {
       for (let i = 0; i < DUST.n; i++) {
         const k = i * 3 + 2;
         arr[k] += d;
-        if (arr[k] > zNear) place(i, zFar);
+        // ★ 뒤로 지나간 것은 **앞으로 되돌린다.** x·y 도 새로 뽑아야
+        //   같은 알갱이가 같은 자리를 계속 지나가는 것으로 안 보인다
+        if (arr[k] > R) place(i, -R);
+        else if (arr[k] < -R) place(i, R);
       }
       attr.needsUpdate = true;
     },

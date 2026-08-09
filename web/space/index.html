@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=77">
+<link rel="stylesheet" href="css/style.css?v=78">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -41,32 +41,54 @@
      가렸다. 일곱 가지는 이제 게임 안에서 **하나씩 만나는 순간에** 나온다
      (docs/space/TUTORIAL.md). 여기 다시 문단을 붙이고 싶어지면
      그건 가르침이 제 일을 못 하고 있다는 뜻이지 안내가 모자란 게 아니다. -->
+<!-- ══════════════════════════════════════════════════════════════════
+     ★★★ **제목 화면** — 보통 게임처럼 (v78)
+
+     사장님 「게임 시작 시 팝업창이 불편한데 … **자꾸 실수로 뜨잔아**」
+            「**일반적인 게임 시작 화면으로** 바꿔」
+
+     ★ 여태 이 화면이 **잠금이 풀릴 때마다** 되살아났다 (Esc·알트탭·
+       창 밖 클릭). 제목 화면과 멈춤 화면을 한 물건이 겸하고 있었기
+       때문이다. 이제 **시작 전에 딱 한 번**만 뜨고, 노는 중에 잠금이
+       풀리면 뜨는 것은 **멈춤 화면**이다.
+
+     ★ 그리고 보통 게임이 갖는 것을 갖춘다 — **제목 · 시작 단추 ·
+       조작법.** 여태 「화면을 눌러 시작합니다」 한 줄이었고, 그러면
+       처음 온 사람은 무엇을 하는 게임인지도 모르고 클릭부터 한다
+     ══════════════════════════════════════════════════════════════════ -->
 <div id="hint">
-  <!-- ★ 판본을 띄웁니다 (2026-08-06). 「고쳤다는데 그대로다」가 세 번
-       났는데, 그때 **화면에 무엇이 떠 있는지 알 길이 없었습니다** —
-       브라우저가 옛 파일을 들고 있는 것과 코드가 틀린 것을 구별 못 합니다.
-       한 글자면 끝나는 일을 세 번이나 추측으로 팠습니다. -->
-  <b>스페이스워</b> — 적진을 뚫고 들어간다 <span id="ver"></span>
-  <p>화면을 눌러 시작합니다. 소리가 납니다 — <b>M</b> 으로 끕니다.</p>
-  <!-- ★ 여기 한 줄을 더 붙인 이유. 손목은 **왼쪽 아래에 늘 켜져 있어서**
-       설명 없이도 눈에 들어오지만, 「들어 올릴 수 있다」는 아무 데도 안
-       적혀 있으면 영영 모른다. 가르침 일곱에 여덟째를 보태는 대신
-       (한 번에 하나 · TUTORIAL.md) 여기 한 줄로 끝낸다 -->
-  <p class="key">왼쪽 아래 손목 장치가 <b>지금 할 일</b>을 말합니다 —
-     <b>Q</b> 를 잡으면 눈앞으로 옵니다.</p>
-  <!-- ★ 점검 모드 — 사장님이 「테스트를 할 수가 없잔아」라고 하셔서 냈습니다.
-       만든 것들이 저마다 조건 뒤에 숨어 있어(쫓겨야 쏘고, 구간 3 이라야
-       행성이 뜨고) 켜서 만져 볼 수가 없었습니다. F2 로 아무 상황이나 바로
-       만들어 볼 수 있습니다 — 게임을 고치는 것이 아니라 이미 있는 구멍입니다 -->
-  <p class="key"><b>F2</b> 또는 <b>`</b> — 점검 모드. 아무 상황이나 바로 만들어 봅니다.</p>
-  <!-- ★ 단추 둘 (2026-08-06). 여기까지 **키만** 있었던 것이 문제였습니다:
-       F2 는 노트북에서 Fn 을 같이 눌러야 하는 경우가 많고, 「처음부터」는
-       아예 길이 없어서 켤 때마다 말없이 이어졌습니다. `#hint` 는
-       `pointer-events: none` 이라 단추에만 되살립니다 — 그래야 나머지
-       가운데를 눌러 게임을 켜는 길이 그대로 남습니다. -->
-  <div class="btns" data-ui>
-    <button id="btn-new" type="button">처음부터 다시</button>
-    <button id="btn-check" type="button">점검 모드</button>
+  <div class="title" data-ui>
+    <h1>스페이스워</h1>
+    <p class="tag">적진을 뚫고 들어간다 &middot; 탄두를 채워 가며 &middot; 적 행성에 떨군다</p>
+
+    <div class="menu">
+      <button id="btn-play" type="button" class="big">시작</button>
+      <button id="btn-new" type="button">처음부터 다시</button>
+      <button id="btn-check" type="button">점검 모드</button>
+    </div>
+
+    <!-- ★ 조작법은 **접어 둔다.** 펴 두면 제목 화면이 설명서가 되고,
+         이 게임은 첫 회차가 곧 튜토리얼이다 (TUTORIAL.md). 그래도
+         「어디에 적혀 있나」는 있어야 한다 -->
+    <details class="keys">
+      <summary>조작법</summary>
+      <div class="grid">
+        <span>움직이기</span><b>W A S D</b>
+        <span>달리기</span><b>Shift</b>
+        <span>손 쓰기</span><b>마우스 왼쪽 — 잡고 · 누르고 · 돌린다</b>
+        <span>손목 장치</span><b>Q — 지금 할 일을 말한다</b>
+        <span>조종석에서</span><b>조종간을 잡으면 창이 열린다</b>
+        <span>급기동 · 급가속</span><b>Shift &middot; R</b>
+        <span>멈추기</span><b>Esc</b>
+        <span>소리 끄기</span><b>M</b>
+        <span>점검 모드</span><b>F2 또는 `</b>
+      </div>
+    </details>
+
+    <!-- ★ 판본을 띄웁니다 (2026-08-06). 「고쳤다는데 그대로다」가 세 번
+         났는데, 그때 **화면에 무엇이 떠 있는지 알 길이 없었습니다** —
+         브라우저가 옛 파일을 들고 있는 것과 코드가 틀린 것을 구별 못 합니다 -->
+    <p class="ver">소리가 납니다 &middot; <span id="ver"></span></p>
   </div>
 </div>
 
@@ -118,6 +140,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=77"></script>
+<script type="module" src="js/main.js?v=78"></script>
 </body>
 </html>

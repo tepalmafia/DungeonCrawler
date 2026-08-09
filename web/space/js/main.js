@@ -185,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 77;
+export const VERSION = 78;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -4219,9 +4219,41 @@ addEventListener('mousedown', (e) => {
 //   한 글자면 끝나는 일을 추측으로 파느라 세 번을 태웠습니다
 document.getElementById('ver').textContent = `v${VERSION}`;
 
-// 잠금 안내는 처음 한 번만. 잠기면 사라진다.
-// ★ 멈춰 있을 때는 안 띄운다 — 안내창과 멈춤 화면이 **같은 자리**라 겹친다
-setInterval(() => { hint.hidden = input.locked || paused; }, 200);
+// ══ ★★★ **시작 화면은 딱 한 번** (v78) ═══════════════════════════════
+//
+//  사장님 「게임 시작 시 **팝업창이 불편**한데 새로운 방식으로 고쳐줘.
+//          **자꾸 팝업창이 실수로 뜨잔아**」 · 「**일반적인 게임 시작
+//          화면으로** 바꿔」
+//
+//  ★ 원인은 이 한 줄이었다:
+//        hint.hidden = input.locked || paused;
+//    **포인터 잠금이 풀릴 때마다 시작 화면이 되살아났다** — Esc 도,
+//    알트탭도, 창 밖 클릭도 전부. 2시간짜리를 하는 동안 「스페이스워 —
+//    적진을 뚫고 들어간다」가 수십 번 튀어나온 셈이다.
+//
+//  ★★ 보통 게임은 이렇게 안 한다. **제목 화면은 시작 전에 한 번**이고,
+//    노는 중에 잠금이 풀리면 뜨는 것은 **멈춤 화면**이다. 그 둘은 다른
+//    물건인데 여기서는 하나가 둘을 겸하고 있었다.
+let started = false;
+/** ★ 한 번 시작하면 제목 화면은 **영영 안 돌아온다** */
+function beginOnce() {
+  if (started) return;
+  started = true;
+  hint.hidden = true;
+}
+addEventListener('mousedown', () => { if (input.locked || paused) beginOnce(); });
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) beginOnce(); });
+setInterval(() => {
+  if (started) { hint.hidden = true; return; }
+  hint.hidden = input.locked || paused;
+}, 200);
+// ★★ 그리고 노는 중에 잠금이 풀리면 **멈춤 화면**을 띄운다. 여태 아무것도
+//   안 띄우고 제목만 되살렸으므로, 「어디까지 왔나」도 「저장됐나」도
+//   못 보고 제목만 봤다 — 멈춤 화면이 원래 그 말을 하는 자리다
+document.addEventListener('pointerlockchange', () => {
+  if (wrecked || ended || check.open) return;
+  if (!document.pointerLockElement && started && !paused) showPause(true);
+});
 
 // ── 단추 넷 ─────────────────────────────────────────────────
 // ★ 시작 화면과 멈춤 화면에 **같은 두 개**를 놓는다 (2026-08-06).
@@ -4241,6 +4273,10 @@ setInterval(() => { hint.hidden = input.locked || paused; }, 200);
   });
   // ★ 끝 화면의 것은 **안 물어본다.** 저장은 이미 지워졌고, 물어볼 것이
   //   남아 있지 않다 — 「처음부터 다시는 없다」(§9)
+  // ★ v78 — **시작 단추.** 여태 「화면을 눌러 시작합니다」 한 줄뿐이라
+  //   처음 온 사람은 무엇을 눌러야 하는지도 몰랐다. 누르면 제목 화면이
+  //   닫히고 포인터 잠금을 건다 — 보통 게임이 하는 그대로
+  wire('btn-play', () => { beginOnce(); renderer.domElement.requestPointerLock?.(); });
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
   wire('btn-new3', () => SPACE.newGame());
   // 멈춤 화면에서 열면 **멈춘 채로** 연다 — 점검하다 배가 저 혼자 가면 곤란하다
