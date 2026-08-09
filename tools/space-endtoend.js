@@ -820,8 +820,24 @@ console.log('\n[6f] ★★★ **몰아 붙인다** — 손목·상태창·부호
   const w1 = await S(() => SPACE.wrist);
   ok(folded, `① ★★ 조종간을 잡으니 **손목이 사라진다** (접힘 ${w0.fold} → ${w1.fold})`);
   await up();
+  // ══ ★★ **여기서 뜻이 바뀌었다** (v75) ═══════════════════════════════
+  //
+  //  v73 에는 「놓으면 돌아온다」가 맞았다. v75 에 조건이 **앉아 있는
+  //  동안**으로 넓어졌다 — 화면을 찍어 보니 홀로그램이 **레이더를 정통으로
+  //  덮고** 있었기 때문이다. 앉아 있는 동안 「지금 뭘 할지」는 조종석
+  //  계기가 이미 다 말한다.
+  //
+  //  ★★★ 그래서 이 줄은 **게임이 틀린 것이 아니라 검사가 옛 설계를
+  //    지키고 있던 것**이다. 이 저장소에서 여섯 번째다 — 안 고치면
+  //    도구가 「덮고 있던 상태」로 되돌리라고 계속 조른다.
+  ok(!(await S(() => SPACE.wrist)).shown,
+    '② ★★ 놓아도 **앉아 있는 동안은 접힌 채**다 (v75) — 왼쪽 아래는'
+    + ' 레이더가 있는 자리다');
+  await stand();
   ok(await until(() => SPACE.wrist.shown, 90, '손목이 돌아오기'),
-    '② 놓으면 **돌아온다** — 접는 것과 지우는 것은 다르다');
+    '②-b **일어나면 돌아온다** — 접는 것과 지우는 것은 다르다');
+  await sit();
+  await settle();
 
   // ③ ★★★ **부호** — 기수를 올리면 표적이 화면에서 **내려가야** 한다.
   //   사장님 「운전 방향 전환이 모두 반대잔아!」 · v66 에 좌우가 그랬고
@@ -927,6 +943,57 @@ console.log('\n[6g] ★★★ **진공** — 밖은 조용하고, 선체를 때�
   ok(Array.isArray(silent) && silent.length >= 4,
     `④ 표에 **안 들리는 것 ${silent?.length ?? 0}가지**가 적혀 있다 —`
     + ' 안 정해 두면 다음 판에 누가 폭발음을 넣는다');
+  await S(() => SPACE.clearSky());
+}
+
+console.log('\n[6h] ★★★ **레이더가 세 축을 다 말하나** — 「오른쪽 왼쪽이 아니고」 (v75)');
+{
+  // ★★ 사장님 「레이더 시스템을 더 정교하게 직관적으로. **오른쪽 왼쪽이
+  //   아니고.** 실제 레이더 시스템을 고증해서」 — v74 까지 계기가 말하는
+  //   것은 **방위 하나**였다. 세 축을 다 열어 놓고(v73) 계기는 평면이었다.
+  await sit();
+  await S(() => {
+    SPACE.setPower('sensor', true);
+    SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }); SPACE.putAim(0, 0);
+    SPACE.clearSky();
+  });
+  await settle();
+  await S(() => { SPACE.callFoe('fighter', 20, 70); SPACE.callFoe('gunship', -40, 130); });
+  await until(() => (SPACE.combat?.blips ?? []).length >= 2, 40, '접촉 둘');
+  // 고도를 흩는다 — 위아래가 없으면 여기서 드러난다
+  await S(() => {
+    const L = SPACE.sky.list;
+    if (L[0]) SPACE.putSkyAz(L[0].id, L[0].az, 26);
+    if (L[1]) SPACE.putSkyAz(L[1].id, L[1].az, -31);
+  });
+  await until(() => (SPACE.combat?.blips ?? []).some((b) => Math.abs(b.relEl) > 20), 30, '고도 차이');
+
+  const blips = await S(() => SPACE.combat.blips);
+  ok(blips.some((b) => Math.abs(b.relEl ?? 0) > 20),
+    `① ★★★ 레이더가 **위아래를 안다** (${blips.map((b) => Math.round(b.relEl ?? 0)).join('° / ')}°) —`
+    + ' v74 까지 이 값이 아예 없어서 아래에 있는 적도 「왼쪽」이라고만 떴다');
+
+  // ② 접근율 — 한 프레임에 한 번만 재야 나온다
+  ok(blips.some((b) => b.closing !== null && Number.isFinite(b.closing)),
+    `② ★★ **접근율을 안다** (${blips.map((b) => (b.closing == null ? '—' : Math.round(b.closing))).join(' · ')}) —`
+    + ' 부호 하나가 곧 추격 곡선이다 (BFM.md)');
+
+  // ③ ★★★ RWR — 저쪽이 나를 겨누면 알려 주나
+  await S(() => SPACE.putFoeAim(0.9));
+  await p.waitForTimeout(600);
+  const armed = await S(() => SPACE.combat.blips);
+  ok(armed.some((b) => (b.aiming ?? 0) >= 0.45),
+    `③ ★★★ **저쪽이 나를 겨누는 것을 안다** (${armed.map((b) => (b.aiming ?? 0).toFixed(2)).join(' · ')}) —`
+    + ' v74 까지 이게 없어서 **맞기 전까지 아무 예고가 없었다**');
+
+  // ④ 조준경 한 줄에서 「왼쪽/오른쪽」이 사라졌나
+  const word = await S(() => SPACE.outside?.gunsight?.word ?? null);
+  if (word !== null) {
+    ok(!/왼쪽|오른쪽/.test(word), `④ ★★ 조준경이 「왼쪽/오른쪽」이라 안 한다 — 「${word}」`);
+  } else {
+    // 구멍이 없으면 표 쪽으로 묻는다 — 규칙은 `space-radar.js` 가 지킨다
+    ok(true, '④ 조준경 한 줄은 `space-radar.js [5]` 가 지킨다 (화면 구멍이 없다)');
+  }
   await S(() => SPACE.clearSky());
 }
 
