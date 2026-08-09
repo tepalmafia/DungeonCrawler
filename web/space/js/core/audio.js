@@ -20,7 +20,7 @@
 //    박자가 흔들린다. 급한 게 아니라 **고장 난 것으로 들린다.**
 //    그래서 앞질러 예약한다 (lookahead).
 // ══════════════════════════════════════════════════════════════════════════
-import { MIX, BED, CHASE_SND, HAND, ESCAPE, RATTLE, RADAR_SND } from '../game/audio-table.js';
+import { MIX, BED, CHASE_SND, HAND, ESCAPE, RATTLE, RADAR_SND, STRUCT, MINE } from '../game/audio-table.js';
 
 /** 얼마나 앞질러 예약하나. 프레임이 이보다 늦어도 박자가 안 끊긴다 */
 const LOOKAHEAD = 0.35;
@@ -50,10 +50,26 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
   const noiseBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 2), ctx.sampleRate);
   {
     const d = noiseBuf.getChannelData(0);
+    // ══ ★★ **난수를 씨앗에서 뽑는다** (v74) ═══════════════════════════
+    //
+    //  ★ `Math.random()` 이었다. 귀로는 아무 차이가 없지만 **검사가 못
+    //    잰다** — 소리 하나를 재려면 「아무 일 없는 판」과 「소리를 낸 판」을
+    //    태워서 빼야 하는데, 잡음이 매번 다르면 **빼도 0 이 안 남는다.**
+    //    그 찌꺼기가 배경보다 작은 소리를 통째로 삼켜서, 같은 소리를 두 번
+    //    쟀는데 **0.2초와 2.95초**가 나왔다.
+    //
+    //  ★★ 2초짜리 도는 버퍼라 정해진 잡음이어도 귀는 구별 못 한다.
+    //    「검사가 재려면 시각을 밖에서 받아야 한다」(머리말)와 같은 이유로,
+    //    **잴 수 있게 만드는 것이 소리 자체보다 중요하다**
+    let s = 0x9e3779b9;
+    const rnd = () => {
+      s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0;
+      return s / 4294967296;
+    };
     // 흰 잡음은 「쉬——」 하고 날카롭다. 한 번 눌러 낮은 쪽으로 기울인다
     let prev = 0;
     for (let i = 0; i < d.length; i++) {
-      const w = Math.random() * 2 - 1;
+      const w = rnd() * 2 - 1;
       prev = prev * 0.86 + w * 0.14;
       d[i] = prev * 3.2;
     }
@@ -269,6 +285,24 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
     });
   }
 
+  /**
+   * ★★★ **선체를 타고 오는 소리 하나** (v74 · `audio-table.js STRUCT`).
+   *
+   *   모양은 셋 다 같다 — **때리는 소리 + 배가 우는 소리.**
+   *   다른 것은 「얼마나 낮고 얼마나 오래 우나」뿐이다: 큰 것에 맞을수록
+   *   낮고 길게 운다. 그래야 눈을 안 보고도 스쳤는지 맞았는지 갈린다.
+   *
+   *   ★ 우는 부분(`ring`)이 이 소리의 정체다. 그게 없으면 그냥 딸깍이고,
+   *     딸깍은 **배 안에서 뭘 눌렀을 때** 나는 소리라 헷갈린다
+   */
+  function hull(H, at) {
+    // ① 때린다 — 잡음을 짧게. 낮을수록 큰 것에 맞은 것이다
+    knock(handBus, at, H.len, H.gain, H.hz, 1.1);
+    // ② 배가 운다 — **금속을 타고 퍼지는 것**. 천천히 낮아지며 사라진다
+    tone(handBus, H.ringHz, at + 0.01, H.ring, H.gain * 0.45, 'triangle', H.ringHz * 0.55);
+    tone(handBus, H.ringHz * 0.5, at + 0.02, H.ring * 1.15, H.gain * 0.28, 'sine', H.ringHz * 0.3);
+  }
+
   /** 한 번 나는 소리들. 이름 하나에 물건 하나 */
   function event(name, at = ctx.currentTime) {
     switch (name) {
@@ -315,6 +349,34 @@ export function makeAudio(ctx = new (window.AudioContext || window.webkitAudioCo
         // 고쳐졌다 — **위로 올라가는 짧은 음.** 안도(escape)보다 작고 짧다
         const F = HAND.fixed;
         tone(handBus, F.hz, at, F.len, F.gain, 'sine', F.hz * 1.5);
+        return;
+      }
+      // ══ ★★★ **선체를 타고 오는 소리** (v74 · 진공 규칙) ═══════════════
+      //  밖에서 터지는 것은 안 들린다. **선체에 닿은 것만** 들린다 —
+      //  공기를 타고 온 게 아니라 금속을 타고 들어온 소리다.
+      //  ★ 그래서 모양이 「때린다 + **배가 운다**」 둘이다. 우는 부분이
+      //    없으면 그냥 딸깍 소리라 「어디서 났나」가 안 산다
+      case 'hullGraze': return hull(STRUCT.graze, at);
+      case 'hullHit': return hull(STRUCT.hit, at);
+      case 'hullRam': return hull(STRUCT.ram, at);
+      // ══ ★★ **내가 쏘는 소리** — 무기는 선체에 붙어 있다 ═══════════════
+      //  v73 까지 `caught`(잡혔다)를 빌려 써서 **「쐈다」와 「맞았다」가
+      //  같은 소리**였다. 소리로 상황을 알라는 계통에서 제일 나쁜 겹침이다
+      case 'laser': {
+        const L = MINE.laser;
+        // 캐패시터 방전 — 위에서 뚝 떨어지는 짧은 고음
+        tone(handBus, L.hz, at, L.len, L.gain, 'square', L.hz * 0.25);
+        // 그 뒤에 남는 낮은 울림 — 배가 전력을 한 번에 뱉은 흔적
+        tone(handBus, L.whineHz, at + L.len * 0.5, L.whine, L.gain * 0.45, 'sine', L.whineHz * 0.7);
+        return;
+      }
+      case 'tube': {
+        const T = MINE.tube;
+        // 발사관이 배를 밀친다 — 낮은 쿵
+        knock(handBus, at, T.len, T.gain, T.hz * 3, 1.0);
+        tone(handBus, T.hz, at, T.len, T.gain * 0.7, 'sine', T.hz * 0.55);
+        // 빠지는 가스 — 위로 흩어진다
+        knock(handBus, at + T.len * 0.6, T.hiss, T.gain * 0.30, 2400, 0.5);
         return;
       }
       case 'deny': return tone(handBus, HAND.deny.hz, at, HAND.deny.len, HAND.deny.gain, 'square', HAND.deny.hz * 0.7);
