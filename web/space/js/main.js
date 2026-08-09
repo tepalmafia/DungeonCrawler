@@ -185,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 76;
+export const VERSION = 77;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -3213,6 +3213,19 @@ window.SPACE = {
   callRescue() { hearSignal(rescue); return rescueSummary(rescue); },
   /** ★ E 정전 — 검사와 점검 모드가 읽는다 (7판) */
   get dark() { return darkSummary(dark); },
+  /**
+   * ★★★ v76 — **정전을 만들어 본다.**
+   *
+   *   `tools/space-reach.js` 가 「큰 차단기가 손에 닿나」를 물었을 때
+   *   **어디서도 안 잡힌다**고 나왔다. 가려진 줄 알고 자리를 옮길 뻔했는데,
+   *   재 보니 `onMain = canResetDark(dark)` — **정전일 때만 잡히는 것이
+   *   맞다.** 광선은 닿고 있었고 상황이 아니었을 뿐이다.
+   *
+   *   ★★ 즉 **감사가 상황을 안 만들고 물었다.** 이 저장소에서 같은 병이
+   *     이번 판만 두 번째다 (v74 `setBake` 도 만들 수 없는 상황을
+   *     기다리고 있었다). 그래서 **만들 수 있게** 구멍을 낸다
+   */
+  goDark() { killPower(dark); return darkSummary(dark); },
   /** 전력을 내린다 — 구간 8 을 안 기다리려고 */
   killLights() {
     killPower(dark);

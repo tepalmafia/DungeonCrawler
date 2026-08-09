@@ -107,6 +107,21 @@ const blocked = [];
   });
   for (const s of list) {
     const want = AIM_OF(s.name);
+    // ══ ★★★ **상황을 먼저 만든다** (v76 · 이 검사가 처음에 틀린 자리) ══
+    //
+    //  무전기와 큰 차단기는 **늘 잡히는 물건이 아니다**:
+    //      onRadio = canAnswer(rescue)    — 구조 신호가 올 때만
+    //      onMain  = canResetDark(dark)   — 정전일 때만
+    //  그게 **맞는 설계다.** 아무 때나 잡히면 「지금 할 일」이 흐려진다.
+    //
+    //  ★★ 그런데 검사가 그 상황을 안 만들고 물어서 「어디서도 안 잡힌다」로
+    //    빨개졌다. **가려진 것이 아니라 없는 상황을 물은 것**이다 —
+    //    v74 에 `setBake` 로 이미 한 번 밟은 함정이고 (검사가 만들 수 없는
+    //    상황을 기다렸다), 이번 판만 두 번째다.
+    //
+    //  ★ 그래서 여기서 켠다. **켜고도 안 잡히면 그때가 진짜 가려진 것**이다
+    if (s.name === 'radio') await S(() => SPACE.callRescue());
+    if (s.name === 'mainBreaker') await S(() => SPACE.goDark());
     let got = null; let firstHit = null;
     for (const [x, z, yaw, pitch] of around(s)) {
       await S(([a, c, d, e]) => SPACE.put(a, c, d, e), [x, z, yaw, pitch]);
