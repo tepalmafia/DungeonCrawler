@@ -385,7 +385,7 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
 
   // 자동 항법 스위치로 되돌린다
   await settle();
-  ok(await aimAround(0, -7.75, -1.2, -0.1, 'autopilot'),
+  ok(await aimAround(0, -7.60, -1.2, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
   const backOn = await pressUntil(() => SPACE.helm.auto);
   ok(backOn, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
@@ -432,7 +432,7 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
 
   // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
   await settle();
-  ok(await aimAround(0, -7.75, 1.2, -0.1, 'throttle'),
+  ok(await aimAround(0, -7.60, 1.2, -0.1, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
   const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
   ok(thrOk, `④ 눌렀더니 「${await said()}」`);
