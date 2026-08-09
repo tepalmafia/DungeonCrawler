@@ -68,7 +68,7 @@ import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
-import { HELM, HELM_SEAT, FLY_VIEW, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
+import { HELM, HELM_SEAT, FLY_VIEW, FLY_KEY, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord } from './game/combat-table.js';
@@ -96,6 +96,13 @@ import {
   pickSlot, fire as fireWeapon, forgetLock, radarBlips, summary as cbtSummary,
 } from './game/combat.js';
 import { HULL, HITS } from './game/target-table.js';
+// ══ ★★★ **전투력 · 광학 창** (v79) ═════════════════════════════════════
+//  사장님 「나보다 강한 상대나 많은 적들은 **피하거나 도망**가고 …
+//          흩어진 적이나 **전투력이 낮은 적은 파괴**하면서 진행」
+//          「**상대 우주선의 전투력**도 표시되고 **우리 비행기의 전투력 차이**」
+//          「격추할때마다 **적의 무기나 장갑을 회수**하면서 나도 전투력이 올라가게」
+import { mightOf, lootOf, myMight, oddsOf } from './game/might-table.js';
+import { autoZoom, OPTIC } from './game/optic-table.js';
 import { spawnRaider } from './game/target.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
@@ -185,7 +192,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 78;
+export const VERSION = 79;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -252,7 +259,7 @@ function makeEnvironment(renderer) {
 scene.environment = makeEnvironment(renderer);
 scene.environmentIntensity = 0.75;
 
-const ship = buildShip(scene);
+const ship = buildShip(scene, camera, renderer);
 // ── 옮길 수 있는 물건 ────────────────────────────────────────
 // ★ 벨크로 자리는 **베이 번호**로 찾는다 (game/carry-table.js SPOTS).
 //   좌표를 여기 또 적으면 랙을 옮길 때마다 자리가 허공에 남는다
@@ -284,6 +291,19 @@ if (audio) {
 addEventListener('mousedown', () => audio?.resume(), { passive: true });
 // ★ 손목을 들어 올린다 — **누르는 동안**. 다른 손잡이가 전부 「잡고 있는 것」
 //   이라 여기도 같은 규약이다. 놓으면 곁눈 자리로 돌아간다
+// ══ ★★★ **Z — 광학 창을 화면 가득** (v79 · 조준 포드) ═════════════════
+//  사장님이 주신 참고 화면이 **조준 포드 영상이 화면을 채운 그림**이었다.
+//  ★ 앉아 있을 때만 먹는다. 걸어다니면서 켜지면 앞이 안 보인 채 걷는다
+//  ★★ 그리고 이건 **공짜가 아니다** — 켜 놓는 동안 창밖을 안 본다.
+//    「늘 켜는 게 답이면 선택이 아니다」의 답이 여기서는 이것이다
+let opticBig = false;
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyZ' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!helmSat) { banner = '조종석에 앉아야 광학 창을 엽니다'; bannerT = 2.0; return; }
+  opticBig = !opticBig;
+  banner = opticBig ? '광학 창 — 화면 가득 (Z 로 닫습니다)' : '광학 창을 닫습니다';
+  bannerT = 1.8;
+});
 addEventListener('keydown', (e) => { if (e.code === 'KeyQ') raised = true; });
 addEventListener('keyup', (e) => { if (e.code === 'KeyQ') raised = false; });
 addEventListener('blur', () => { raised = false; });
@@ -600,6 +620,41 @@ function landShots(dt) {
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
     forgetLock(combat, t.id);
+    // ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════
+    //  사장님 「격추할때마다 **적의 무기나 장갑을 회수**하면서 나도
+    //          전투력이 올라가게」
+    //  ★ 여기서 바로 붙인다. 「적의 지원이 오기 전에 회수」라는 사장님의
+    //    큰 그림은 **윈치로 끌어오는 일**이라 다음 판(v80)이다 — 지금은
+    //    부순 자리에서 뜯는 것까지다
+    const was = myPower();
+    const got = lootOf(t.kind);
+    loot.weapon += got.weapon;
+    loot.armor += got.armor;
+    const now = myPower();
+    // ══ ★★★ **격추 화면** — 광학 창이 부서지는 것을 비춘다 ═══════════
+    //  사장님 「**격추시 적 기체가 부서지는 화면**도 보여주고 … 3D 모습으로」
+    //  ★ 잔해의 자리를 **화면 쪽에서** 받는다. 규칙은 방금 목록에서 뺐으므로
+    //    az/el/dist 를 다시 계산하면 「이미 없는 것의 자리」를 짓게 된다
+    if (ship.optic) {
+      // ★ **아직 잔해가 없다.** 잔해는 `targets.update` 가 「목록에서
+      //   사라진 것」을 보고 **다음 프레임에** 만든다. 그래서 여기서
+      //   `lastWreck()` 을 부르면 **지난번 격추의 잔해**를 잡는다 —
+      //   조용히 엉뚱한 데를 비추는 종류의 버그다.
+      //   지금 프레임에는 아직 **살아 있는 몸통**이 있으므로 그 자리를 쓰고,
+      //   다음 프레임부터는 아래 `deadAt` 이 잔해를 따라간다
+      const at = ship.outside.targets.posOf(t.id) ?? shotAt(t.az, t.el, t.dist);
+      ship.optic.killed(at, {
+        name: TKINDS[t.kind]?.name ?? '?',
+        loot: got, myWas: was, myNow: now,
+      });
+    }
+    if (got.weapon || got.armor) {
+      const bits2 = [];
+      if (got.weapon) bits2.push(`무기 ${got.weapon}`);
+      if (got.armor) bits2.push(`장갑 ${got.armor}`);
+      banner = `${TKINDS[t.kind]?.name ?? ''} 격추 — ${bits2.join(' · ')} 회수 · 전투력 ${was} → ${now}`;
+      bannerT = 3.2;
+    }
     // ══ ★★★ **재료 다섯 중 둘이 여기서 나온다** (v71) ═══════════════
     //  · 보급 호송선을 부수면 **분열 노심** — 「격추해서 뺏는다」
     //  · 방어 위성을 부수면 **재돌입체 외피** — 「부수고 회수한다」
@@ -709,7 +764,7 @@ function takeHits(list) {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -884,6 +939,42 @@ const fly3 = makeFlight();
 /** ★ 승부수 — 쫓길 때의 결심 넷 (v68) */
 const gambit = makeGambit();
 const flyPush = { pitch: 0, yaw: 0, roll: 0 };
+
+// ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════════════
+//  사장님 「상대우주선을 **격추할때마다 적의 무기나 장갑을 회수**하면서
+//          **나도 전투력이 올라가게** 설계하시오」
+//
+//  ★ 개수만 센다. 전투력으로 옮기는 식은 `might-table.js` 한 곳에만 있다 —
+//    여기서도 더하면 표가 둘이 되고, 둘이면 갈라진다
+const loot = { weapon: 0, armor: 0 };
+
+/** ★ 지금 내 전투력 — **선체가 깎이면 같이 깎인다** */
+function myPower() {
+  return myMight({
+    weapons: WEAPON_LIST.map((w) => w.key),
+    hull: 1 - (faults.wear.hull ?? 0),
+    loot,
+  });
+}
+
+/** ★ 광학 창이 지금 무엇을 비추나 — **락온한 것 · 없으면 겨눈 것 · 없으면 제일 가까운 적** */
+function opticTarget() {
+  if (combat.radar.on && combat.radar.id != null) {
+    const t = sky.list.find((x) => x.id === combat.radar.id);
+    if (t) return t;
+  }
+  const a = noseAim();
+  const aimed = aimedAt(sky, a.az, a.el);
+  if (aimed?.t) return aimed.t;
+  // ★ 아무것도 안 겨눴으면 **제일 가까운 적**을 본다. 「겨눌 것이 없습니다」로
+  //   비워 두면 이 창은 싸울 때만 사는데, 이 창의 일은 **붙기 전에 정하는 것**이다
+  let best = null;
+  for (const t of sky.list) {
+    if (t.dist > OPTIC.reach) continue;
+    if (!best || t.dist < best.dist) best = t;
+  }
+  return best;
+}
 /** 걸으려 하는데 못 걸은 시간 — `GUN.freeAfter` 를 넘으면 저절로 일어난다 */
 let stuckT = 0;
 /** 마지막 프레임의 실제 부하 — `renderer.info` 는 매 패스 되돌아간다 */
@@ -2401,7 +2492,7 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   HUD 만 「능동 탐지 꺼짐」이 떴다 — 콘솔 판은 멀쩡한데.
   //   **계기 하나에 상태 둘**이면 그게 곧 「표가 둘이면 갈라진다」다
   const cockState = {
-    heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
+    heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock, dt,
     // ★ 열 저장고 (v58) — 「지금 뜨거운가」 옆에 「쌓인 총열」을 나란히 놓는다.
     //   따로 두면 둘의 관계가 안 읽히고, 관계가 안 읽히면 이 계통은
     //   말이 되는 대신 **어려운** 것이 된다
@@ -2434,11 +2525,58 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   두 벌을 만들면 반드시 갈라진다
     offer: route.offer, thrust: power.thrust,
     land: { offered: land.offered, hard: land.hard },
+    // ★★★ v79 — **조종간이 내 손을 그대로 따라간다** (사장님 「조정간
+    //   움직임은 보이고 손을 떼면 **자동으로 센터로**」). v78 까지는
+    //   `lane`(항로 이탈)만 보고 누웠다 — 즉 **미는 것과 눕는 것이 다른
+    //   값**이었고, 그래서 밀어도 굼뜨고 놓아도 눕은 채였다
+    yoke: { held: steering, pitch: flyPush.pitch, yaw: flyPush.yaw, roll: flyPush.roll },
   };
   ship.cock.update(cockState);
   // ★★★ v78 — **레이더도 앉으면 눈앞에 뜬다** (사장님 「hud처럼 나와야지.
   //   앉아있을때는 알 수가 없잔아」). 콘솔 판과 **같은 상태**를 읽는다
   ship.radarHud.redraw({ ...cockState, on: helmSat });
+
+  // ══ ★★★ **광학 창** (v79) ═══════════════════════════════════════════
+  //  사장님 「적을 **거리에 맞게 자동 확대**되고 스크린에는 **거리가 표시**」
+  //         「**상대 우주선의 전투력**도 표시되고 **우리 비행기의 전투력 차이**」
+  //         「**우주쓰레기면 필요한 재료나 음식이 있는지**」
+  //
+  //  ★ 배율은 **손으로 안 돌린다.** 거리는 기계가 아는 값이고, 사람 손은
+  //    이미 조종간·무기·차단기로 차 있다 (`optic-table.js autoZoom`)
+  if (ship.optic) {
+    const ot = opticTarget();
+    const w = weaponOf(combat);
+    // ★ 조종 입력의 세기 — 이것이 곧 **떨림**이다. 많이 밀수록 높은 배율이 안 읽힌다
+    const push = Math.abs(flyPush.pitch) + Math.abs(flyPush.yaw) + Math.abs(flyPush.roll);
+    ship.optic.redraw({
+      on: helmSat,
+      target: ot ? { kind: ot.kind, dist: ot.dist, az: ot.az, el: ot.el } : null,
+      zoom: ot ? autoZoom(ot.kind, ot.dist, w.key) : 1,
+      push,
+      my: myPower(),
+      weapon: w.key,
+      noLock: sky.list.length ? '너무 멉니다' : '떠도는 것이 없습니다',
+      // ★ 되감기 중에는 **잔해를 따라간다** — 부서진 것이 밀려 나가므로
+      //   한 점에 고정하면 곧 빈 우주를 비춘다
+      deadAt: ship.outside.targets.lastWreck(),
+    }, dt);
+    // ★ 앉아 있지 않으면 전체 화면도 닫는다 — 일어나면서 켜 둔 채 걸으면
+    //   앞이 안 보인 채 걷게 된다
+    if (!helmSat) opticBig = false;
+    ship.optic.setBig(opticBig && helmSat, camera.fov);
+    // ══ ★★ **판을 켜면 다른 계기를 끈다** (v79) ═══════════════════════
+    //  ★ 처음엔 큰 판을 **덮어서** 가리려 했다 (`depthTest:false` +
+    //    `renderOrder 900`). 화면을 찍어 보니 상태창과 레이더가 **여전히
+    //    비쳐 보였다** — 합성기의 블룸이 그 글자들을 최종 그림 위에
+    //    다시 얹기 때문이다. 덮는 것으로는 못 이긴다.
+    //  ★★ 그래서 **끈다.** 그게 말도 된다: 조준 포드 화면을 크게 띄우면
+    //    그 자리에 있던 계기는 안 보이는 것이 맞다. 그리고 이것이
+    //    「공짜가 아니다」를 하나 더 만든다 — **켜면 레이더를 못 본다**
+    const other = opticBig && helmSat;
+    if (ship.statusHud?.mesh) ship.statusHud.mesh.visible = !other && helmSat;
+    if (ship.radarHud?.mesh) ship.radarHud.mesh.visible = !other && helmSat;
+    if (ship.sight?.mesh) ship.sight.mesh.visible = !other;
+  }
 }
 
 // 화면 확인용 손잡이. **게임 로직은 이걸 안 쓴다** — 스크린샷을 찍고
@@ -2458,6 +2596,62 @@ window.SPACE = {
    */
   get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering }; },
   putHelmSit(v) { helmSat = !!v; return helmSat; },
+  // ══ ★★★ v79 — **광학 창 · 전투력** (space-optic.js 가 읽는다) ══════
+  get optic() {
+    const ot = opticTarget();
+    const w = weaponOf(combat);
+    return {
+      ...(ship.optic?.seen ?? { on: false }),
+      want: ot ? autoZoom(ot.kind, ot.dist, w.key) : 1,
+      weapon: w.key,
+      kind: ot?.kind ?? null, dist: ot ? Math.round(ot.dist) : null,
+      push: +(Math.abs(flyPush.pitch) + Math.abs(flyPush.yaw) + Math.abs(flyPush.roll)).toFixed(2),
+    };
+  },
+  /** ★ 전투력 — 내 것 · 노획 · 지금 보는 적과 견줌 */
+  get might() {
+    const ot = opticTarget();
+    const mine = myPower();
+    const theirs = ot ? mightOf(ot.kind) : 0;
+    return {
+      mine, loot: { ...loot },
+      theirs, kind: ot?.kind ?? null,
+      odds: ot ? oddsOf(mine, theirs).key : null,
+      word: ot ? oddsOf(mine, theirs).word : null,
+    };
+  },
+  /** 검사가 노획을 밀어 놓는다 — 스무 대를 헤드리스로 잡지 않으려고 */
+  putLoot(w = 0, a = 0) { loot.weapon = w; loot.armor = a; return { ...loot }; },
+  /**
+   * ★★ **적이 앞을 보나** — 코가 이쪽인가 엔진 불이 이쪽인가 (v79).
+   *   v69~v78 내내 `lookAt` 이 +Z 를 돌려세워서 **등을 보인 채** 왔다.
+   *   눈으로만 잡히는 종류라 구멍을 낸다: 엔진 불의 **월드 z** 가
+   *   몸통보다 **멀어야**(더 음수가 아니어야) 코가 이쪽이다
+   */
+  faceOf(id = null) {
+    const g = ship.outside.targets?.group;
+    if (!g) return null;
+    for (const o of g.children) {
+      if (!o.name?.startsWith('표적:')) continue;
+      const fire = o.getObjectByName('엔진불');
+      if (!fire) continue;
+      const fw = fire.getWorldPosition(new THREE.Vector3());
+      const ow = o.getWorldPosition(new THREE.Vector3());
+      // ★ **z 로 견주면 안 된다.** 처음에 `fw.z > ow.z` 로 적었는데,
+      //   표적은 앞(z 음수)에 있으므로 「뒤」가 **더 음수**다 — 부호가
+      //   거꾸로라 제대로 고친 것을 「아직 틀렸다」로 읽었다.
+      //   **원점에서의 거리**로 재면 방향과 상관없이 맞는다:
+      //   불이 몸통보다 **멀면** 코가 이쪽이다
+      return {
+        kind: o.name.replace('표적:', ''),
+        fireBehind: fw.length() > ow.length(),
+        body: +ow.length().toFixed(1), fire: +fw.length().toFixed(1),
+      };
+    }
+    return null;
+  },
+  /** ★ 잔해 — 「격추가 **보이나**」 */
+  get wrecks() { return ship.outside.targets?.seen?.wrecks ?? 0; },
   get heat() { return heat; },
   /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
   get sink() {
@@ -3511,7 +3705,23 @@ function frame(now) {
     //  ★ 잡는 동안 고개가 안 돌아가는 것이 맞다 — 두 손으로 미는 중이다.
     //    놓으면 그대로 돌아온다
     flyPush.yaw = steerPush;
-    flyPush.pitch = Math.max(-1, Math.min(1, -look.dy * 0.03));
+    // ══ ★★★ **위아래를 키보드로도** (v79) ═══════════════════════════
+    //  ★ 사장님 「**상하도 키보드 WS 키로 이동**할 수 있도록해줘.
+    //             마우스로 올리고 내리기에 **너무 느려**」
+    //
+    //  ★★ 맞는 말이고, **왜 느린지도 잰 값이 있다.** 마우스 Y 는
+    //    `look.dy * 0.03` 으로 들어오는데, 한 프레임에 20화소를 그어도
+    //    0.6 이다 — 그리고 마우스는 **책상 끝에서 멈춘다.** 키는 안 멈춘다.
+    //
+    //  ★★★ **둘을 더한다, 고르지 않는다.** 키를 누르는 동안 마우스가 죽으면
+    //    「미세 조준은 마우스, 크게 트는 것은 키」가 안 된다. 실제 조종간도
+    //    트림(키)과 손(스틱)이 더해진다. 그리고 **W 가 위**다 — 걷기의
+    //    W(앞)와 같은 손가락이 「나아가는 쪽」을 가리킨다
+    //
+    //  ★ 걷기와 안 부딪힌다: 조종간을 잡으면 `walk()` 가 안 움직인다
+    //    (`steering` 이 켜져 있는 동안 걸음을 막는다 — 아래 walk 주석)
+    const keyPitch = (input.keys.has('KeyW') ? 1 : 0) - (input.keys.has('KeyS') ? 1 : 0);
+    flyPush.pitch = Math.max(-1, Math.min(1, -look.dy * 0.03 + keyPitch * FLY_KEY.pitch));
     flyPush.roll = (input.keys.has('KeyE') ? 1 : 0) - (input.keys.has('KeyQ') ? 1 : 0);
   } else {
     steerPush = 0;
@@ -4037,7 +4247,10 @@ function frame(now) {
   // ★ `stepSky` **바로 뒤**에 둔다. 앞에 두면 한 프레임 늦은 자리를
   //   그리고, 그 한 프레임이 빠르게 스치는 것에서는 어긋남으로 보인다
   ship.outside.targets.update(sky.list, dt);
-  ship.outside.shots.update(dt);
+  // ★★★ v79 — **탄이 표적을 따라간다.** 안 넘기면 쏜 순간의 자리로 곧게
+  //   날아가고, 규칙은 닿는 순간의 표적으로 판정하므로 **궤적의 끝과
+  //   격추 지점이 어긋난다** (사장님이 보신 것이 이것이다)
+  ship.outside.shots.update(dt, (id) => ship.outside.targets.posOf(id));
   // ★★★ v70 — **날아오는 적탄.** 규칙에 0.9초의 비행 시간을 뒀는데,
   //   그 동안 화면이 비어 있으면 그건 없는 시간이다 — 「피할 수 있었다」와
   //   「그냥 맞았다」가 구별이 안 된다
@@ -4212,6 +4425,10 @@ function frame(now) {
   //   자동 되돌림을 끄고 **직접 되돌린 뒤** 한 프레임을 통째로 센다
   renderer.info.autoReset = false;
   renderer.info.reset();
+  // ★★★ v79 — **광학 창을 먼저 그린다.** 렌더 타깃에 장면을 한 번 더
+  //   그리는 일이라 주 렌더(합성기) **앞**이어야 한다 — 뒤에 두면 판에
+  //   붙는 그림이 늘 **한 프레임 늦고**, 빠르게 도는 중에는 그게 보인다
+  ship.optic?.render(helmSat);
   composer.render();
   lastCost = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };
   requestAnimationFrame(frame);

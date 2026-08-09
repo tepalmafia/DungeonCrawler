@@ -385,7 +385,23 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
 
   // 자동 항법 스위치로 되돌린다
   await settle();
-  ok(await aimAround(0, -7.60, -1.2, -0.1, 'autopilot'),
+  // ══ ★★★ **검사가 엉뚱한 데를 겨누고 있었다** (v79 에 잡았다) ═══════
+  //  v66 부터 이 두 줄이 계속 빨갰다 (「잡힌다 (null)」). 판마다 「게임이
+  //  틀렸나 검사가 틀렸나」를 물었는데, 이번에 **자로 재서** 답이 나왔다.
+  //
+  //  스위치는 `view-table.js SIDE.auto` = (0.62, 0.92, −8.30) 이고
+  //  사람 눈은 (0, 1.62, −7.60) 이다. 그 사이의 각을 그냥 계산하면
+  //
+  //      yaw −0.72 · pitch −0.64   (거리 1.17m)
+  //
+  //  인데 검사는 **yaw −1.20 · pitch −0.10** 을 겨누고 있었다 —
+  //  좌우로 27도, 위아래로 31도 어긋난다. 훑는 폭이 ±0.2 라 **닿을 수가
+  //  없었다.** 게임은 처음부터 멀쩡했고 검사가 헛것을 재고 있었다.
+  //
+  //  ★ 왜 못 봤나 — 「조준 실패」는 **게임의 버그처럼 보인다.** 그래서
+  //    화면 쪽을 세 판이나 뒤졌다. 각도는 **손으로 짐작해 적은 값**이었고,
+  //    자리는 표에 있으므로 **계산해서 적었어야** 했다.
+  ok(await aimAround(0, -7.60, -0.72, -0.64, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
   const backOn = await pressUntil(() => SPACE.helm.auto);
   ok(backOn, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
@@ -432,7 +448,9 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
 
   // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
   await settle();
-  ok(await aimAround(0, -7.60, 1.2, -0.1, 'throttle'),
+  // ★ 자동 항법 스위치와 **좌우 대칭**이다 (SIDE.throttle x −0.62).
+  //   위 [3]⑥ 의 주석에 왜 이 값인지 적어 뒀다
+  ok(await aimAround(0, -7.60, 0.72, -0.64, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
   const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
   ok(thrOk, `④ 눌렀더니 「${await said()}」`);
@@ -1014,6 +1032,56 @@ console.log('\n[6h] ★★★ **레이더가 세 축을 다 말하나** — 「�
     ok(true, '④ 조준경 한 줄은 `space-radar.js [5]` 가 지킨다 (화면 구멍이 없다)');
   }
   await S(() => SPACE.clearSky());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6i] **광학 창 · 전투력** — 보고 정하나 (v79)
+//
+//  사장님 「멀리있는 적을 레이더 말고 **확대**하거나」 · 「**격추시 적
+//  기체가 부서지는 화면**」 · 「**상대 우주선의 전투력**도 표시」.
+//
+//  ★ 계통 검사(`space-optic.js`)는 표를 재고, 여기서는 **사람이 거기까지
+//    가나**를 잰다 — 앉으면 정말 뜨나, 격추하면 정말 되감기가 도나
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6i] ★★ **광학 창** — 앉으면 뜨나 · 격추가 보이나 (v79)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  ok(await S(() => SPACE.optic.on), '① 앉으면 **광학 창이 뜬다**');
+
+  await S(() => { SPACE.putAim(0, 0); SPACE.putTarget('raider'); });
+  await until(() => SPACE.optic.kind === 'raider', 20, '표적 잡기');
+  const o1 = await S(() => SPACE.optic);
+  ok(o1.kind === 'raider' && o1.dist > 0, `② 겨눈 것을 비춘다 (${o1.kind} ${o1.dist}m)`);
+  ok(o1.want > 1, `③ **저절로 당긴다** — ${o1.want}배 (손으로 안 돌린다)`);
+  ok(o1.want <= 12, '④ 무한정은 아니다 — 무기가 한도를 정한다');
+
+  const m1 = await S(() => SPACE.might);
+  ok(m1.mine > 0 && m1.theirs > 0, `⑤ **전투력이 둘 다 나온다** (나 ${m1.mine} · 적 ${m1.theirs})`);
+  ok(!!m1.word, `⑥ 견줌을 한 낱말로 말한다 — 「${m1.word}」`);
+
+  // ★ 적이 **앞을 보나** — v69~v78 내내 등을 돌린 채 왔다 (v79 에 잡았다)
+  const face = await S(() => SPACE.faceOf());
+  ok(face?.fireBehind === true, '⑦ ★ 적이 **코를 이쪽으로** 하고 온다 (엔진 불이 뒤)');
+
+  // ── 격추 ──
+  const was = await S(() => SPACE.might.mine);
+  await S(() => { const t = SPACE.sky.list.find((x) => x.kind === 'raider'); if (t) t.hp = 1; });
+  await S(() => SPACE.fire());
+  ok(await until(() => SPACE.optic.dead > 0, 25, '격추 되감기'),
+    '⑧ ★★ 격추하면 **판이 그 자리를 비춘다** (되감기)');
+  ok(await until(() => SPACE.wrecks > 0, 25, '잔해'),
+    '⑨ ★★ **잔해가 남는다** — 한 프레임에 사라지지 않는다 (부서지는 것이 보인다)');
+  const now = await S(() => SPACE.might.mine);
+  ok(now > was, `⑩ ★★ 격추가 **나를 키운다** — 전투력 ${was} → ${now} (무기·장갑 회수)`);
+
+  // ── 화면 가득 (Z) ──
+  await p.keyboard.press('KeyZ');
+  ok(await until(() => SPACE.optic.big, 15, '전체 화면'),
+    '⑪ **Z 로 화면 가득** — 조준 포드처럼');
+  await p.keyboard.press('KeyZ');
+  ok(await until(() => !SPACE.optic.big, 15, '닫기'), '⑫ 한 번 더 누르면 닫힌다');
+  await S(() => { SPACE.putHelmSit(false); SPACE.clearSky(); });
 }
 
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
