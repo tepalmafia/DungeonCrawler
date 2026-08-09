@@ -185,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 77;
+export const VERSION = 78;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1299,12 +1299,39 @@ function interactStep(dt) {
   //
   //  실제로도 조종간은 **딴 데를 본다고 놓아지지 않는다.** 손이 떨어지는
   //  것은 **놓았을 때**뿐이다. 걸쇠를 하나 둔다
-  if (!input.hold) yokeHeld = false;
-  // ★ **이미 딴 것을 읽고 있으면 조종간을 안 잡는다** (v66). 계기를 읽는
-  //   동안 화면이 당겨지므로(`FOCUS`) 조준선이 살짝 움직이는데, 그때 조종간
-  //   판정 상자에 스치면 **읽던 손이 조종간으로 옮겨 간다.** 놓기 전에는
-  //   손이 안 바뀌어야 한다 — v63 에서 조종간에 걸쇠를 단 것과 같은 이유다
-  else if (onYoke && !readGrip) yokeHeld = true;
+  // ══ ★★★ **v78 — 누르고 있지 않는다. 눌러서 잡고 눌러서 놓는다** ══
+  //
+  //  사장님 「운전석 잡을때 **좌측 마우스를 계속 누르고 있어야 해서
+  //          피로하니깐** 다른 방법으로 바꿔」
+  //
+  //  ★ 맞는 말이다. 조종간은 이 게임에서 **제일 오래 잡고 있는 물건**이다
+  //    — 전투 한 판이 40~90초인데 그동안 버튼을 계속 누르고 있어야 했다.
+  //    다른 손잡이(밸브·크랭크·윈치)는 몇 초짜리라 누르고 있는 것이 맞지만,
+  //    조종간만은 **자세**에 가깝다.
+  //
+  //  ★★ 그래서 **토글**로 바꾼다: 겨누고 한 번 누르면 잡히고, 다시 누르면
+  //    놓는다. 실제 비행기도 조종간을 「쥐는 것」이지 「누르고 있는 것」이
+  //    아니다. 그리고 v63 의 걸쇠(딴 데를 봐도 안 놓아진다)는 그대로 산다 —
+  //    오히려 토글이라야 그 규약이 자연스럽다.
+  //
+  //  ★ 놓는 길을 **둘** 둔다. 다시 누르거나, 좌석에서 일어나거나.
+  //    하나뿐이면 「어떻게 놓지」에서 막히는 사람이 반드시 생긴다
+  if (input.press && !readGrip) {
+    if (yokeHeld) {
+      yokeHeld = false;
+      banner = '조종간을 놓습니다'; bannerT = 1.2;
+      // ★★ **누름을 삼키는 것은 조종간을 겨눴을 때뿐이다.** 딴 손잡이를
+      //   겨눴으면 놓기만 하고 누름은 **그쪽에 넘긴다** — 안 그러면
+      //   조종간을 잡은 채로는 무엇을 누르든 한 번은 헛클릭이 된다.
+      //   (자동 항법 스위치를 누르려다 조종간만 놓아지는 식)
+      if (onYoke) input.takePress();
+    } else if (onYoke) {
+      yokeHeld = true; input.takePress();
+      banner = '조종간을 잡습니다'; bannerT = 1.2;
+    }
+  }
+  // 좌석에서 일어나면 손도 놓는다 — 「자세는 안 잇는다」와 같은 규약
+  if (!helmSat) yokeHeld = false;
   steering = yokeHeld;
   // ★★ **잡는 순간 자동 항법이 꺼진다** (사장님 「수동으로 운전할때는
   //   자동항법 꺼지는 걸로」). 이게 있어야 「내가 몬다」가 성립한다 —
@@ -2350,6 +2377,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   });
   // ★ 조종석 상태창 — **앉아 있을 때만 켜진다**
   ship.statusHud.redraw({ ...shipStatus, on: helmSat });
+  // ★★★ v78 — **레이더도 앉으면 눈앞에 뜬다** (사장님 「hud처럼 나와야지」).
+  //   콘솔 판과 **같은 상태**를 준다 — 두 벌로 만들면 언젠가 갈라진다
   // 온실 · 에어록 — 계기는 방마다 하나씩, 전부 다른 것을 말한다
   ship.foodGauge.update({
     food: supply.food, ore: supply.ore, parts: supply.parts,
@@ -2367,7 +2396,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   ship.tradeHatch.update({ atPort: route.phase === RPHASE.PORT, ore: supply.ore });
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
-  ship.cock.update({
+  // ★★ v78 — **콘솔 판과 레이더 HUD 가 같은 상태를 읽는다.**
+  //   처음에 HUD 에 `shipStatus` 를 넘겼는데 거기엔 `radar` 가 없어서
+  //   HUD 만 「능동 탐지 꺼짐」이 떴다 — 콘솔 판은 멀쩡한데.
+  //   **계기 하나에 상태 둘**이면 그게 곧 「표가 둘이면 갈라진다」다
+  const cockState = {
     heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
     // ★ 열 저장고 (v58) — 「지금 뜨거운가」 옆에 「쌓인 총열」을 나란히 놓는다.
     //   따로 두면 둘의 관계가 안 읽히고, 관계가 안 읽히면 이 계통은
@@ -2401,7 +2434,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   두 벌을 만들면 반드시 갈라진다
     offer: route.offer, thrust: power.thrust,
     land: { offered: land.offered, hard: land.hard },
-  });
+  };
+  ship.cock.update(cockState);
+  // ★★★ v78 — **레이더도 앉으면 눈앞에 뜬다** (사장님 「hud처럼 나와야지.
+  //   앉아있을때는 알 수가 없잔아」). 콘솔 판과 **같은 상태**를 읽는다
+  ship.radarHud.redraw({ ...cockState, on: helmSat });
 }
 
 // 화면 확인용 손잡이. **게임 로직은 이걸 안 쓴다** — 스크린샷을 찍고
@@ -2414,7 +2451,12 @@ window.SPACE = {
   /** 검사가 축을 밀어 놓는다 */
   putFly(a) { Object.assign(fly3, a); return flySummary(fly3); },
   /** ★ 조종석에 앉아 있나 (v61) */
-  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2) }; },
+  /**
+   * ★ v78 — `steering` 이 늘었다. 조종간이 **토글**이 되면서
+   *   「지금 잡고 있나」를 밖에서 물을 길이 필요해졌다 — `up()` 만으로는
+   *   안 놓아지므로 검사가 상태를 보고 한 번 더 눌러야 한다
+   */
+  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering }; },
   putHelmSit(v) { helmSat = !!v; return helmSat; },
   get heat() { return heat; },
   /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
@@ -4219,9 +4261,41 @@ addEventListener('mousedown', (e) => {
 //   한 글자면 끝나는 일을 추측으로 파느라 세 번을 태웠습니다
 document.getElementById('ver').textContent = `v${VERSION}`;
 
-// 잠금 안내는 처음 한 번만. 잠기면 사라진다.
-// ★ 멈춰 있을 때는 안 띄운다 — 안내창과 멈춤 화면이 **같은 자리**라 겹친다
-setInterval(() => { hint.hidden = input.locked || paused; }, 200);
+// ══ ★★★ **시작 화면은 딱 한 번** (v78) ═══════════════════════════════
+//
+//  사장님 「게임 시작 시 **팝업창이 불편**한데 새로운 방식으로 고쳐줘.
+//          **자꾸 팝업창이 실수로 뜨잔아**」 · 「**일반적인 게임 시작
+//          화면으로** 바꿔」
+//
+//  ★ 원인은 이 한 줄이었다:
+//        hint.hidden = input.locked || paused;
+//    **포인터 잠금이 풀릴 때마다 시작 화면이 되살아났다** — Esc 도,
+//    알트탭도, 창 밖 클릭도 전부. 2시간짜리를 하는 동안 「스페이스워 —
+//    적진을 뚫고 들어간다」가 수십 번 튀어나온 셈이다.
+//
+//  ★★ 보통 게임은 이렇게 안 한다. **제목 화면은 시작 전에 한 번**이고,
+//    노는 중에 잠금이 풀리면 뜨는 것은 **멈춤 화면**이다. 그 둘은 다른
+//    물건인데 여기서는 하나가 둘을 겸하고 있었다.
+let started = false;
+/** ★ 한 번 시작하면 제목 화면은 **영영 안 돌아온다** */
+function beginOnce() {
+  if (started) return;
+  started = true;
+  hint.hidden = true;
+}
+addEventListener('mousedown', () => { if (input.locked || paused) beginOnce(); });
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) beginOnce(); });
+setInterval(() => {
+  if (started) { hint.hidden = true; return; }
+  hint.hidden = input.locked || paused;
+}, 200);
+// ★★ 그리고 노는 중에 잠금이 풀리면 **멈춤 화면**을 띄운다. 여태 아무것도
+//   안 띄우고 제목만 되살렸으므로, 「어디까지 왔나」도 「저장됐나」도
+//   못 보고 제목만 봤다 — 멈춤 화면이 원래 그 말을 하는 자리다
+document.addEventListener('pointerlockchange', () => {
+  if (wrecked || ended || check.open) return;
+  if (!document.pointerLockElement && started && !paused) showPause(true);
+});
 
 // ── 단추 넷 ─────────────────────────────────────────────────
 // ★ 시작 화면과 멈춤 화면에 **같은 두 개**를 놓는다 (2026-08-06).
@@ -4241,6 +4315,10 @@ setInterval(() => { hint.hidden = input.locked || paused; }, 200);
   });
   // ★ 끝 화면의 것은 **안 물어본다.** 저장은 이미 지워졌고, 물어볼 것이
   //   남아 있지 않다 — 「처음부터 다시는 없다」(§9)
+  // ★ v78 — **시작 단추.** 여태 「화면을 눌러 시작합니다」 한 줄뿐이라
+  //   처음 온 사람은 무엇을 눌러야 하는지도 몰랐다. 누르면 제목 화면이
+  //   닫히고 포인터 잠금을 건다 — 보통 게임이 하는 그대로
+  wire('btn-play', () => { beginOnce(); renderer.domElement.requestPointerLock?.(); });
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
   wire('btn-new3', () => SPACE.newGame());
   // 멈춤 화면에서 열면 **멈춘 채로** 연다 — 점검하다 배가 저 혼자 가면 곤란하다

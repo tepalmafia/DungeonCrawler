@@ -187,7 +187,7 @@ if (see >= 0) {
   await p.waitForFunction(() => !!globalThis.SPACE, null, { timeout: 60000 });
   const S = (fn, a) => p.evaluate(fn, a);
   await S(() => SPACE.clearSave());
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
   // ══ ★★ **헤드리스 시계는 실제의 1/20 이다** ═══════════════════════

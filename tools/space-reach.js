@@ -44,7 +44,7 @@ let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
 
 await S(() => SPACE.clearSave());
-await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
 await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 await p.waitForTimeout(900);
 

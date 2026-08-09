@@ -29,7 +29,7 @@ import { ROOMS, ROOM } from '../game/rooms-table.js';
 import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
 import { buildRadio } from './radio.js';
-import { buildCockpit, buildOutside, setPlan, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
+import { buildCockpit, buildOutside, setPlan, buildRadarHud, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
 import {
   ZONE, MAT, rackRun, standoff, chamfer, ringFrames, hatch, sign, breakerPanel,
   servicePanel,
@@ -1082,6 +1082,17 @@ export function buildShip(scene, camera = null) {
     -HUDV.w * 1.42, DEP.y - HUDV.h * 1.16, DEP.z - HUDV.dist - 0.01,
   );
   ship.add(statusHud.mesh);
+  // ══ ★★★ **레이더 HUD** — 앉으면 눈앞에 뜬다 (v78) ═══════════════════
+  //  사장님 「레이더가 **hud처럼 나와야지. 앉아있을때는 알 수가 없잔아**」.
+  //  ★ 상태창의 **반대쪽**에 둔다. 둘이 같은 쪽이면 하나가 하나를 가리고,
+  //    가운데는 조준선·선도점·표적 지시선이 지나는 자리라 못 쓴다
+  const radarHud = buildRadarHud(HUDV.w * 0.92, HUDV.h * 0.92);
+  // ★ 화면을 찍어 자리를 잡았다 — 처음 자리는 **콘솔 기둥에 왼쪽 아래가
+  //   물렸다.** 상태창이 왼쪽 위이므로 이쪽은 오른쪽 위로 올려 맞춘다
+  radarHud.mesh.position.set(
+    HUDV.w * 1.52, DEP.y - HUDV.h * 0.72, DEP.z - HUDV.dist - 0.01,
+  );
+  ship.add(radarHud.mesh);
   const turret = {
     group: null, sight,
     // ★ 없어진 손잡이들 — `null` 이라야 `main.js` 의 조준 목록에서 걸러진다.
@@ -1094,7 +1105,7 @@ export function buildShip(scene, camera = null) {
   };
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    turret, sight, statusHud, cradle, outerDoor, marks, byBay,
+    turret, sight, statusHud, radarHud, cradle, outerDoor, marks, byBay,
     /**
      * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
      *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —

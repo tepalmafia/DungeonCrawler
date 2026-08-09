@@ -191,7 +191,7 @@ if (see >= 0) {
   const S = (fn, a) => p.evaluate(fn, a);
   // 남아 있는 저장이 있으면 지우고 **깨끗한 배**로 시작한다
   await S(() => SPACE.clearSave());
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
   console.log('\n[8] ★ 멈춤 화면이 **정말 뜨나** — 그리고 어디까지 왔는지 말하나');

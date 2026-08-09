@@ -54,6 +54,21 @@ const up = () => S(() => window.dispatchEvent(new MouseEvent('mouseup', { button
 /** 사람이 누르는 것 — 헤드리스는 프레임이 성기므로 넉넉히 잡는다 */
 const press = async (sec = 2.5) => { await down(); await p.waitForTimeout(sec * 1000); await up(); };
 /**
+ * ★★★ **조종간을 놓는다** (v78 · 사장님 「계속 누르고 있어야 해서 피로」).
+ *
+ *   조종간이 **토글**이 되면서 `up()` 만으로는 안 놓아진다 — 한 번 더
+ *   눌러야 놓인다. 그리고 **잡고 있으면 창이 화면을 채우므로**(v63)
+ *   콘솔의 다른 손잡이에 손이 안 간다.
+ *
+ *   ★ 그래서 검사 다섯이 「자동 항법 스위치가 안 잡힌다 (null)」로
+ *     빨개졌다. **게임이 아니라 검사가 옛 조작을 쓰고 있었다** —
+ *     조작을 바꾸면 그 조작을 쓰던 검사도 같이 바뀐다
+ */
+const letGoYoke = async () => {
+  if (!(await S(() => SPACE.helm2?.steering ?? false))) return;
+  await down(); await up(); await p.waitForTimeout(400);
+};
+/**
  * ★★ **화면이 움직임을 멈출 때까지 기다린다** (v66).
  *   조종간을 놓으면 화각·눈높이가 되돌아오는 데 시간이 걸리고(`FLY_VIEW.rate`),
  *   그동안 조준선이 흔들린다. 굳기 전에 겨누면 **잡았다고 나온 다음 프레임에
@@ -161,7 +176,9 @@ const aimAt = async (x, z, yaw, pitch, want, tries = 22) => {
 };
 
 await S(() => SPACE.clearSave());
-await p.mouse.move(360, 210); await p.mouse.click(360, 210);
+// ★ v78 — 제목 화면에 **단추가 생겼다.** 가운데를 그냥 누르면
+//   「처음부터 다시」를 밟는다. 시작 단추를 눌러야 한다
+await p.click('#btn-play').catch(() => p.mouse.click(360, 210));
 await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
 console.log('\n처음부터 끝까지 되나 — 사장님이 시키신 것 전부');
@@ -356,6 +373,7 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
   }
   const h1 = await S(() => SPACE.helm);
   await up();
+  await letGoYoke();                    // ★ v78 — 토글이라 한 번 더 눌러야 놓인다
   ok(!h1.auto, `③ **잡으니 자동 항법이 꺼진다** — 「${await said()}」`);
   ok(h1.off > 0.02, `④ 밀었더니 항로를 벗어난다 (${h1.off} · ${h1.word})`);
 
@@ -367,7 +385,7 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
 
   // 자동 항법 스위치로 되돌린다
   await settle();
-  ok(await aimAround(0, -7.75, -1.2, -0.1, 'autopilot'),
+  ok(await aimAround(0, -7.60, -1.2, -0.1, 'autopilot'),
     `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
   const backOn = await pressUntil(() => SPACE.helm.auto);
   ok(backOn, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
@@ -406,6 +424,7 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
   const yawNow = (await S(() => SPACE.fly3)).yaw;
   const sky = await skyYaw();
   await up();
+  await letGoYoke();                    // ★ v78 — 놓아야 콘솔에 손이 간다
   ok(Math.abs(yawNow) > 0.15, `① 밀면 기수가 돈다 (yaw ${yawNow})`);
   ok(Math.abs(sky) > 0.02,
     `② ★★★ **창밖이 실제로 ${sky} rad 돌았다.** v65 까지 이 값이 **늘 0**이었다 —`
@@ -413,7 +432,7 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
 
   // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
   await settle();
-  ok(await aimAround(0, -7.75, 1.2, -0.1, 'throttle'),
+  ok(await aimAround(0, -7.60, 1.2, -0.1, 'throttle'),
     `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
   const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
   ok(thrOk, `④ 눌렀더니 「${await said()}」`);

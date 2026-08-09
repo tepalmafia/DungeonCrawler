@@ -158,7 +158,7 @@ if (see >= 0) {
   await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
   await p.waitForTimeout(2000);
   const S = (fn, a) => p.evaluate(fn, a);
-  await p.mouse.move(320, 190); await p.mouse.click(320, 190);
+  await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
   // 통로 한쪽 끝에 세우고 앞으로 달리게 한다.
