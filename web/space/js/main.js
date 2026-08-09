@@ -2451,7 +2451,12 @@ window.SPACE = {
   /** 검사가 축을 밀어 놓는다 */
   putFly(a) { Object.assign(fly3, a); return flySummary(fly3); },
   /** ★ 조종석에 앉아 있나 (v61) */
-  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2) }; },
+  /**
+   * ★ v78 — `steering` 이 늘었다. 조종간이 **토글**이 되면서
+   *   「지금 잡고 있나」를 밖에서 물을 길이 필요해졌다 — `up()` 만으로는
+   *   안 놓아지므로 검사가 상태를 보고 한 번 더 눌러야 한다
+   */
+  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering }; },
   putHelmSit(v) { helmSat = !!v; return helmSat; },
   get heat() { return heat; },
   /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
