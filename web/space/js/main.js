@@ -1299,12 +1299,29 @@ function interactStep(dt) {
   //
   //  실제로도 조종간은 **딴 데를 본다고 놓아지지 않는다.** 손이 떨어지는
   //  것은 **놓았을 때**뿐이다. 걸쇠를 하나 둔다
-  if (!input.hold) yokeHeld = false;
-  // ★ **이미 딴 것을 읽고 있으면 조종간을 안 잡는다** (v66). 계기를 읽는
-  //   동안 화면이 당겨지므로(`FOCUS`) 조준선이 살짝 움직이는데, 그때 조종간
-  //   판정 상자에 스치면 **읽던 손이 조종간으로 옮겨 간다.** 놓기 전에는
-  //   손이 안 바뀌어야 한다 — v63 에서 조종간에 걸쇠를 단 것과 같은 이유다
-  else if (onYoke && !readGrip) yokeHeld = true;
+  // ══ ★★★ **v78 — 누르고 있지 않는다. 눌러서 잡고 눌러서 놓는다** ══
+  //
+  //  사장님 「운전석 잡을때 **좌측 마우스를 계속 누르고 있어야 해서
+  //          피로하니깐** 다른 방법으로 바꿔」
+  //
+  //  ★ 맞는 말이다. 조종간은 이 게임에서 **제일 오래 잡고 있는 물건**이다
+  //    — 전투 한 판이 40~90초인데 그동안 버튼을 계속 누르고 있어야 했다.
+  //    다른 손잡이(밸브·크랭크·윈치)는 몇 초짜리라 누르고 있는 것이 맞지만,
+  //    조종간만은 **자세**에 가깝다.
+  //
+  //  ★★ 그래서 **토글**로 바꾼다: 겨누고 한 번 누르면 잡히고, 다시 누르면
+  //    놓는다. 실제 비행기도 조종간을 「쥐는 것」이지 「누르고 있는 것」이
+  //    아니다. 그리고 v63 의 걸쇠(딴 데를 봐도 안 놓아진다)는 그대로 산다 —
+  //    오히려 토글이라야 그 규약이 자연스럽다.
+  //
+  //  ★ 놓는 길을 **둘** 둔다. 다시 누르거나, 좌석에서 일어나거나.
+  //    하나뿐이면 「어떻게 놓지」에서 막히는 사람이 반드시 생긴다
+  if (input.press && !readGrip) {
+    if (yokeHeld) { yokeHeld = false; input.takePress(); banner = '조종간을 놓습니다'; bannerT = 1.2; }
+    else if (onYoke) { yokeHeld = true; input.takePress(); banner = '조종간을 잡습니다'; bannerT = 1.2; }
+  }
+  // 좌석에서 일어나면 손도 놓는다 — 「자세는 안 잇는다」와 같은 규약
+  if (!helmSat) yokeHeld = false;
   steering = yokeHeld;
   // ★★ **잡는 순간 자동 항법이 꺼진다** (사장님 「수동으로 운전할때는
   //   자동항법 꺼지는 걸로」). 이게 있어야 「내가 몬다」가 성립한다 —
@@ -2350,6 +2367,8 @@ function systemsStep(dt, valveOpen, regionMult) {
   });
   // ★ 조종석 상태창 — **앉아 있을 때만 켜진다**
   ship.statusHud.redraw({ ...shipStatus, on: helmSat });
+  // ★★★ v78 — **레이더도 앉으면 눈앞에 뜬다** (사장님 「hud처럼 나와야지」).
+  //   콘솔 판과 **같은 상태**를 준다 — 두 벌로 만들면 언젠가 갈라진다
   // 온실 · 에어록 — 계기는 방마다 하나씩, 전부 다른 것을 말한다
   ship.foodGauge.update({
     food: supply.food, ore: supply.ore, parts: supply.parts,
@@ -2367,7 +2386,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   ship.tradeHatch.update({ atPort: route.phase === RPHASE.PORT, ore: supply.ore });
 
   // 조종석 화면들 — 계기는 UI 가 아니라 **콘솔에 박힌 물건**이다
-  ship.cock.update({
+  // ★★ v78 — **콘솔 판과 레이더 HUD 가 같은 상태를 읽는다.**
+  //   처음에 HUD 에 `shipStatus` 를 넘겼는데 거기엔 `radar` 가 없어서
+  //   HUD 만 「능동 탐지 꺼짐」이 떴다 — 콘솔 판은 멀쩡한데.
+  //   **계기 하나에 상태 둘**이면 그게 곧 「표가 둘이면 갈라진다」다
+  const cockState = {
     heat, cooling: valveOpen && power.cool, room: roomAt(me.x, me.z), t: clock,
     // ★ 열 저장고 (v58) — 「지금 뜨거운가」 옆에 「쌓인 총열」을 나란히 놓는다.
     //   따로 두면 둘의 관계가 안 읽히고, 관계가 안 읽히면 이 계통은
@@ -2401,7 +2424,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   두 벌을 만들면 반드시 갈라진다
     offer: route.offer, thrust: power.thrust,
     land: { offered: land.offered, hard: land.hard },
-  });
+  };
+  ship.cock.update(cockState);
+  // ★★★ v78 — **레이더도 앉으면 눈앞에 뜬다** (사장님 「hud처럼 나와야지.
+  //   앉아있을때는 알 수가 없잔아」). 콘솔 판과 **같은 상태**를 읽는다
+  ship.radarHud.redraw({ ...cockState, on: helmSat });
 }
 
 // 화면 확인용 손잡이. **게임 로직은 이걸 안 쓴다** — 스크린샷을 찍고

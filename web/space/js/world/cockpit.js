@@ -1685,3 +1685,52 @@ export function buildOutside(scene, z) {
     },
   };
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ **레이더 HUD** — 앉으면 눈앞에 뜬다 (v78)
+//
+//  사장님 「레이더가 **hud처럼 나와야지. 앉아있을때는 알 수가 없잔아.**
+//          직관적으로 바꿔」
+//
+//  ★ 맞는 말이다. 레이더는 **콘솔에 박힌 판**이라 보려면 고개를 숙여야
+//    하는데, 조종석에 앉으면 시선이 창으로 올라간다 (v63). 즉 **싸우는
+//    동안에는 레이더를 볼 수가 없었다** — 화면 밖을 보는 유일한 계기인데.
+//
+//  ★★ 콘솔의 판은 **그대로 둔다.** 그건 배에 실제로 달린 계기이고,
+//    서서 들여다보는 자리다. HUD 는 **앉았을 때의 같은 계기**다 —
+//    상태창(v69)이 이미 그 규약으로 서 있으므로 새 문법이 아니다.
+//
+//  ★ 그리는 것은 `drawRadar` **한 곳**이다. 두 벌로 그리면 언젠가
+//    한쪽만 고쳐지고, 그때 어긋남은 화면으로 원인을 못 찾는다
+// ══════════════════════════════════════════════════════════════════════════
+export function buildRadarHud(w, h) {
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w * 900);
+  cv.height = Math.round(h * 900);
+  const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, depthTest: false,
+      // ★ 상태창과 **같은 불투명도**. 둘이 다르면 하나가 더 급해 보인다
+      opacity: 0.52,
+    }),
+  );
+  mesh.renderOrder = 941;
+  mesh.visible = false;
+  return {
+    mesh,
+    redraw(s) {
+      // ★ 앉아 있을 때만. 걸어다니는 동안 계기가 따라다니면 안 된다
+      mesh.visible = !!s.on;
+      if (!s.on) return;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      drawRadar(ctx, cv.width, cv.height, s);
+      tex.needsUpdate = true;
+    },
+  };
+}
