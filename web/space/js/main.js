@@ -185,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 75;
+export const VERSION = 76;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -3063,6 +3063,54 @@ window.SPACE = {
     const list = id === null ? sky.list : sky.list.filter((t) => t.id === id);
     for (const t of list) if (TKINDS[t.kind]?.shoots) t.aim = ENEMY_FIRE.every * k;
     return list.length;
+  },
+  /**
+   * ★★★ **손 닿는 것 전부와 그 자리** (v76 · `tools/space-reach.js`).
+   *
+   *   사장님 「**미사일 뒤에 냉각벨브가 있어서 작동을 못해.** 전체적으로
+   *   다시 설계해」 — 재 보니 **밸브를 어디서도 못 잡았다.** v71 에 탄두
+   *   크레이들을 기관실 후미 벽 한가운데 세웠는데, **거기 이미 밸브가
+   *   있었다** (밸브 z 15.70 · 크레이들 z 15.40 · 둘 다 x 0).
+   *
+   *   ★★ 그리고 **아무 검사도 안 울었다.** `space-endtoend [6e]①` 은
+   *     오히려 「크레이들이 손에 닿는다」로 **가린 쪽을 확인**하고 있었다.
+   *     자리를 코드에 흩어 놓으면 이런 일이 조용히 난다 — 그래서 자리를
+   *     **밖으로 낸다.** 도구가 「누가 누구를 가리나」를 잰다.
+   *
+   * @returns [{ name, x, y, z, r }] — r 은 판정 상자의 대략 반지름
+   */
+  get handSpots() {
+    const out = [];
+    const v = new THREE.Vector3();
+    const box = new THREE.Box3();
+    const add = (name, o) => {
+      if (!o) return;
+      o.getWorldPosition(v);
+      box.setFromObject(o);
+      const s = box.getSize(new THREE.Vector3());
+      out.push({
+        name,
+        x: +v.x.toFixed(2), y: +v.y.toFixed(2), z: +v.z.toFixed(2),
+        r: +(Math.max(s.x, s.z) / 2).toFixed(2),
+      });
+    };
+    add('valve', ship.valve);
+    add('cradle', ship.cradle.hit);
+    add('winch', ship.winch.hit);
+    add('tradeHatch', ship.tradeHatch.hit);
+    add('outerDoor', ship.outerDoor.hit);
+    add('radio', ship.radio.hit);
+    add('mainBreaker', ship.mainBreaker.hit);
+    add('suitRack', ship.suitRack?.hit);
+    add('yoke', ship.cock.yokeHit);
+    add('helmseat', ship.cock.helmSeatHit);
+    add('autopilot', ship.cock.autoHit);
+    add('throttle', ship.cock.thrHit);
+    ship.breakers.forEach((b, i) => add(`breaker${i}`, b.hit));
+    ship.cock.plates.forEach((p, i) => add(`chart${i}`, p.hit));
+    Object.entries(ship.panels).forEach(([k, p]) => add(`panel:${k}`, p.hit));
+    ship.doors.forEach((d, i) => add(`crank${i}`, d.view.hit));
+    return out;
   },
   /** ★ 검사가 절과 절 사이를 깨끗이 한다 — 적을 다 치운다 */
   clearSky() { sky.list = []; sky.incoming = []; return skySummary(sky); },
