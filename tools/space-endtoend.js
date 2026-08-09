@@ -930,6 +930,57 @@ console.log('\n[6g] ★★★ **진공** — 밖은 조용하고, 선체를 때�
   await S(() => SPACE.clearSky());
 }
 
+console.log('\n[6h] ★★★ **레이더가 세 축을 다 말하나** — 「오른쪽 왼쪽이 아니고」 (v75)');
+{
+  // ★★ 사장님 「레이더 시스템을 더 정교하게 직관적으로. **오른쪽 왼쪽이
+  //   아니고.** 실제 레이더 시스템을 고증해서」 — v74 까지 계기가 말하는
+  //   것은 **방위 하나**였다. 세 축을 다 열어 놓고(v73) 계기는 평면이었다.
+  await sit();
+  await S(() => {
+    SPACE.setPower('sensor', true);
+    SPACE.putFly({ pitch: 0, yaw: 0, roll: 0 }); SPACE.putAim(0, 0);
+    SPACE.clearSky();
+  });
+  await settle();
+  await S(() => { SPACE.callFoe('fighter', 20, 70); SPACE.callFoe('gunship', -40, 130); });
+  await until(() => (SPACE.combat?.blips ?? []).length >= 2, 40, '접촉 둘');
+  // 고도를 흩는다 — 위아래가 없으면 여기서 드러난다
+  await S(() => {
+    const L = SPACE.sky.list;
+    if (L[0]) SPACE.putSkyAz(L[0].id, L[0].az, 26);
+    if (L[1]) SPACE.putSkyAz(L[1].id, L[1].az, -31);
+  });
+  await until(() => (SPACE.combat?.blips ?? []).some((b) => Math.abs(b.relEl) > 20), 30, '고도 차이');
+
+  const blips = await S(() => SPACE.combat.blips);
+  ok(blips.some((b) => Math.abs(b.relEl ?? 0) > 20),
+    `① ★★★ 레이더가 **위아래를 안다** (${blips.map((b) => Math.round(b.relEl ?? 0)).join('° / ')}°) —`
+    + ' v74 까지 이 값이 아예 없어서 아래에 있는 적도 「왼쪽」이라고만 떴다');
+
+  // ② 접근율 — 한 프레임에 한 번만 재야 나온다
+  ok(blips.some((b) => b.closing !== null && Number.isFinite(b.closing)),
+    `② ★★ **접근율을 안다** (${blips.map((b) => (b.closing == null ? '—' : Math.round(b.closing))).join(' · ')}) —`
+    + ' 부호 하나가 곧 추격 곡선이다 (BFM.md)');
+
+  // ③ ★★★ RWR — 저쪽이 나를 겨누면 알려 주나
+  await S(() => SPACE.putFoeAim(0.9));
+  await p.waitForTimeout(600);
+  const armed = await S(() => SPACE.combat.blips);
+  ok(armed.some((b) => (b.aiming ?? 0) >= 0.45),
+    `③ ★★★ **저쪽이 나를 겨누는 것을 안다** (${armed.map((b) => (b.aiming ?? 0).toFixed(2)).join(' · ')}) —`
+    + ' v74 까지 이게 없어서 **맞기 전까지 아무 예고가 없었다**');
+
+  // ④ 조준경 한 줄에서 「왼쪽/오른쪽」이 사라졌나
+  const word = await S(() => SPACE.outside?.gunsight?.word ?? null);
+  if (word !== null) {
+    ok(!/왼쪽|오른쪽/.test(word), `④ ★★ 조준경이 「왼쪽/오른쪽」이라 안 한다 — 「${word}」`);
+  } else {
+    // 구멍이 없으면 표 쪽으로 묻는다 — 규칙은 `space-radar.js` 가 지킨다
+    ok(true, '④ 조준경 한 줄은 `space-radar.js [5]` 가 지킨다 (화면 구멍이 없다)');
+  }
+  await S(() => SPACE.clearSky());
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은

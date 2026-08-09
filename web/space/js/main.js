@@ -121,7 +121,7 @@ import {
 } from './game/gun.js';
 import { TURRET_RISE } from './world/turret.js';
 // ★ 떠도는 것들 — 우주 쓰레기와 죽은 위성 (사장님 요청 · game/target-table.js)
-import { KINDS as TKINDS, TARGET } from './game/target-table.js';
+import { KINDS as TKINDS, TARGET, ENEMY_FIRE } from './game/target-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
@@ -185,7 +185,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 74;
+export const VERSION = 75;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -463,6 +463,8 @@ const gun = makeGun();
  *    이미 그것이다. 켜면 보이고, 켜면 보인다 (자국 20).
  */
 const combat = makeCombat();
+/** ★ v75 — 이번 프레임에 레이더가 본 것. 계기와 점검 구멍이 **같은 값**을 읽는다 */
+let radarSeen = [];
 /**
  * ★★★ **탄두** (v71) — 이 게임의 목적이 여기 있다.
  *   기관실 후미 격벽의 크레이들. 재료 다섯을 손으로 들고 가 꽂는다
@@ -2376,7 +2378,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★★★ v69 — 레이더. **화면 밖을 보는 유일한 계기**다 (HUD 는 26도뿐).
     //   목록은 `combat.js radarBlips` 한 곳에서만 나온다 — 계기가 직접
     //   하늘을 훑게 두면 「화면에는 있는데 규칙은 모르는」 표적이 생긴다
-    radar: { on: !!power.sensor, blips: radarBlips(combat, sky.list, aimAz, aimEl) },
+    // ★★ v75 — **한 프레임에 한 번만 잰다.** `radarBlips` 가 접근율을
+    //   내려면 지난 거리를 기억해야 하는데(`radar.seen`), 두 번 부르면
+    //   두 번째는 dt 가 지난 뒤라 **접근율이 늘 0** 이 된다.
+    //   그래서 여기서 한 번 재고 점검 구멍은 **그 값을 읽는다**
+    radar: { on: !!power.sensor, blips: radarSeen = radarBlips(combat, sky.list, aimAz, aimEl, dt), clock },
     // ★ 자동 항법 등 — 초록이면 자동, 주황이면 수동. 조종석에 들어서는
     //   순간 지금 어느 쪽인지가 보여야 한다
     auto: helm.auto,
@@ -2979,7 +2985,9 @@ window.SPACE = {
       // ★★ v69 — **레이더가 아는 것.** 계기가 그리는 것과 **같은 목록**이다
       //   (`combat.js radarBlips`). 여기서 따로 만들면 「화면에는 있는데
       //   검사는 모르는」 점이 생기고, 그건 계기 둘이 갈라진 것이다
-      blips: radarBlips(combat, sky.list, aimAz, aimEl),
+      // ★ v75 — **다시 재지 않는다.** 여기서 또 부르면 접근율이 0 이 되고,
+      //   그러면 검사가 「접근율이 안 나온다」로 빨개진다 — 게임은 멀쩡한데
+      blips: radarSeen,
     };
   },
   /** ★ 검사가 자동 항법을 되돌려 놓는다 — 절과 절 사이를 깨끗하게 */
@@ -3041,6 +3049,21 @@ window.SPACE = {
   setBake(v) { warhead.bake = v; return headSummary(warhead); },
   /** 떨군다 — 결말이 나온다 */
   dropHead() { return headDrop(warhead); },
+  /**
+   * ★★ v75 — **적이 나를 겨누게 해 본다** (RWR 검사용).
+   *
+   *   적은 겨눔을 쌓고 나서 쏘는데(`ENEMY_FIRE.every` 3.4초), 헤드리스
+   *   시계가 실제의 1/20 이라 **한 발을 보려면 27초**다. 그동안 화면이
+   *   맞는지 못 본다 — v74 에 「검사가 만들 수 없는 상황을 기다리고
+   *   있었다」로 한 번 데었으므로 구멍을 낸다.
+   *
+   * @param k 0~1 — 얼마나 겨눴나 (1 이면 곧 쏜다)
+   */
+  putFoeAim(k = 1, id = null) {
+    const list = id === null ? sky.list : sky.list.filter((t) => t.id === id);
+    for (const t of list) if (TKINDS[t.kind]?.shoots) t.aim = ENEMY_FIRE.every * k;
+    return list.length;
+  },
   /** ★ 검사가 절과 절 사이를 깨끗이 한다 — 적을 다 치운다 */
   clearSky() { sky.list = []; sky.incoming = []; return skySummary(sky); },
   /**
@@ -4025,7 +4048,12 @@ function frame(now) {
     //   잡은 동안 할 일은 이미 정해져 있다 — 겨누고 쏘는 것이다.
     //   그 위에 잔소리가 떠 있으면 도움이 아니라 가림막이고,
     //   왼쪽 아래는 **레이더가 있는 자리**다
-    flying: steering,
+    // ★★★ v75 — **앉으면 접힌다** (조종간을 안 잡았어도).
+    //   화면을 찍어 보니 홀로그램이 **레이더를 정통으로 덮고** 있었다 —
+    //   v73 에 「왼쪽 아래는 레이더가 있는 자리다」라고 적어 놓고 정작
+    //   접히는 조건을 **잡았을 때**로만 뒀다. 앉아 있는 동안 「지금 뭘
+    //   할지」는 조종석 계기가 이미 다 말한다
+    flying: steering || helmSat,
     job: wristJob = jobFor({
       doorJammed: !!jd,
       chasing: chase.phase === PHASE.CHASE,

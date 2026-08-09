@@ -40,6 +40,12 @@ import { buildTargets } from './targets.js';
 import { buildShots } from './shots.js';
 import { DUST } from '../game/sky-table.js';
 import { RADAR } from '../game/combat-table.js';
+// ★ v75 — 데이터 블록이 표적 이름을 부른다 (「요격기」 · 「포함」)
+import { KINDS } from '../game/target-table.js';
+// ★★★ v75 — 레이더 계기가 고증한 값을 읽는다 (숫자와 규약은 표에만)
+import {
+  SYMBOL, RINGS, RWR, rwrLevel, elWord, vcWord, bearing,
+} from '../game/radar-table.js';
 import { RUSH } from '../game/boost-table.js';
 
 const GLASS = new THREE.MeshBasicMaterial({
@@ -299,28 +305,56 @@ function drawPower(ctx, w, h, s) {
  *     죽은 위성과 파편은 원뿔 밖에서 **안 보인다** — 열이 없다.
  *     그래서 등 뒤의 점 하나가 곧 **「적이다」**가 된다
  */
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ **레이더 계기** — 실제 레이더를 고증해서 다시 (v75)
+//
+//  사장님 「레이더 시스템을 더 **정교하게 직관적으로**. **오른쪽 왼쪽이
+//          아니고.** 실제 레이더 시스템을 고증해서」
+//
+//  ★ v74 까지 이 계기가 말하는 것은 **방위 하나**였다. 세 축을 다 열어
+//    놓고(v73 · 360도) 계기는 평면 하나였던 셈이라, 적이 아래에 있으면
+//    「왼쪽」이라고만 떴다 — 어디로 기수를 돌릴지 알 수가 없었다.
+//
+//  ★★ 고증한 것 다섯을 넣는다 (`game/radar-table.js` 머리말):
+//      ① 고리마다 **거리 숫자**
+//      ② 점 옆에 **상대 고도** — PPI 에 못 담는 축이라 실제로도 숫자다
+//      ③ 점 옆에 **접근율** — 부호 하나가 곧 추격 곡선이다
+//      ④ **심볼로 상태를 나눈다** — 색만으로 나누면 어두울 때 죽는다
+//      ⑤ ★★★ **RWR** — 저쪽이 나를 겨누면 그쪽에 경고가 뜬다
+// ══════════════════════════════════════════════════════════════════════════
+/** ★ v75 — 숫자를 적어 주는 접촉 수. 넷을 넘으면 글자가 겹쳐 하나도 안 읽힌다 */
+const RADAR_READ_MAX = 4;
+
 function drawRadar(ctx, w, h, s) {
   bg(ctx, w, h);
   label(ctx, w, h, '레이더');
-  const cx = w / 2, cy = h * 0.60, R = Math.min(w * 0.30, h * 0.36);
+  // ★★ v75 — **키웠다.** 화면을 찍어 보니 숫자 둘이 서로 겹쳐 못 읽었다.
+  //   정교하게 만들려고 적은 숫자가 안 읽히면 그건 정교한 것이 아니다
+  const cx = w / 2, cy = h * 0.54, R = Math.min(w * 0.36, h * 0.40);
+  const f = (k) => Math.round(h * k);
 
   // 꺼져 있으면 **아무것도 안 그린다.** 전력 배분이 살아 있다
   if (!s.radar?.on) {
     ctx.fillStyle = 'rgba(255,140,90,.75)';
-    ctx.font = `600 ${Math.round(h * 0.11)}px system-ui, sans-serif`;
+    ctx.font = `600 ${f(0.11)}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.fillText('능동 탐지 꺼짐', cx, cy);
     ctx.textAlign = 'left';
     return;
   }
 
-  // ── 원 · 눈금 ────────────────────────────────────────
+  // ── 고리 · 눈금 ──────────────────────────────────────
+  // ★ ① **고리마다 거리를 적는다** (고증). 안 적으면 「가운데에 가깝다」
+  //   까지만 알고 몇 미터인지 모른다 — 실제 스코프는 반드시 적는다
   ctx.strokeStyle = DIM;
   ctx.lineWidth = 1.5;
-  for (const k of [1, 0.66, 0.33]) {
+  ctx.font = `600 ${f(0.052)}px ui-monospace, monospace`;
+  ctx.textAlign = 'left';
+  for (const k of RINGS) {
     ctx.beginPath(); ctx.arc(cx, cy, R * k, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(143,230,192,.42)';
+    ctx.fillText(`${Math.round(RADAR.range * k)}`, cx + 3, cy - R * k - 2);
   }
-  // 십자 — 12시(기수) · 6시(꼬리)
   ctx.beginPath();
   ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
   ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
@@ -339,34 +373,145 @@ function drawRadar(ctx, w, h, s) {
   // 기수 표시 — 작은 세모
   ctx.fillStyle = FG;
   ctx.beginPath();
-  ctx.moveTo(cx, cy - R - h * 0.05);
-  ctx.lineTo(cx - h * 0.035, cy - R - h * 0.005);
-  ctx.lineTo(cx + h * 0.035, cy - R - h * 0.005);
+  ctx.moveTo(cx, cy - R - f(0.05));
+  ctx.lineTo(cx - f(0.035), cy - R - f(0.005));
+  ctx.lineTo(cx + f(0.035), cy - R - f(0.005));
   ctx.closePath();
   ctx.fill();
 
   // ── 점들 ─────────────────────────────────────────────
-  for (const b of s.radar.blips ?? []) {
+  const blips = s.radar.blips ?? [];
+  // ══ ★★ **디클러터** — 숫자는 몇 개만 적는다 ═══════════════════════
+  //
+  //  ★ 화면을 찍어 보니 접촉 여섯에 숫자를 다 적으니 **서로 겹쳐서 하나도
+  //    안 읽혔다.** 정교하게 만들려고 적은 숫자가 안 읽히면 그건 정교한
+  //    것이 아니라 그냥 지저분한 것이다.
+  //  ★★ 실제 스코프도 그래서 **디클러터**를 한다 — 전부 적지 않고
+  //    가까운 것·물린 것부터 적는다. 「우선순위 표적」이라는 말이 그것이다.
+  const readable = new Set(
+    blips
+      .filter((b) => b.level === 'full')
+      .sort((x, y) => (y.locked ? 1 : 0) - (x.locked ? 1 : 0) || x.dist - y.dist)
+      .slice(0, RADAR_READ_MAX)
+      .map((b) => b.id),
+  );
+  for (const b of blips) {
     // ★ 화면 각 = 상대 방위. 0 이 위(기수), 시계 방향
     const a = (b.relAz * Math.PI) / 180 - Math.PI / 2;
     const rr = b.level === 'full' ? R * Math.min(1, b.dist / RADAR.range) : R * 0.97;
     const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+
+    // ★ ④ **심볼로 나눈다.** 원뿔 밖(수색)은 **빈 고리** — 「있는 줄만
+    //   안다」가 모양으로 보인다. 채워 그리면 아는 것처럼 보인다
     if (b.level === 'blip') {
-      // 흐린 점 — 거리를 모른다. **테두리에 붙는다**
-      ctx.fillStyle = 'rgba(255,150,90,.55)';
-      ctx.beginPath(); ctx.arc(px, py, h * 0.028, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = SYMBOL.search.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, f(SYMBOL.search.size), 0, Math.PI * 2); ctx.stroke();
       continue;
     }
-    const foe = b.foe;
-    ctx.fillStyle = foe ? '#ff7a4a' : '#5fe0a8';
-    ctx.beginPath(); ctx.arc(px, py, h * (foe ? 0.038 : 0.028), 0, Math.PI * 2); ctx.fill();
-    // 묶은 것은 **네모로 감싼다** (TD 상자와 같은 약속)
-    if (b.locked) {
-      const q = h * 0.075;
-      ctx.strokeStyle = '#ffd27a';
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(px - q / 2, py - q / 2, q, q);
+    const sym = b.foe ? SYMBOL.foe : SYMBOL.track;
+    ctx.fillStyle = sym.color;
+    ctx.beginPath(); ctx.arc(px, py, f(sym.size), 0, Math.PI * 2); ctx.fill();
+
+    // ★★★ ②③ **점 옆에 두 줄** — 여기가 「오른쪽 왼쪽이 아니고」의 답이다.
+    //   고도는 PPI 에 담을 수 없는 축이라 숫자로 내고, 접근율은 실제
+    //   스코프가 늘 적는 값이다. 둘 다 **원뿔 안일 때만** — 원뿔 밖에서
+    //   거리를 아는 척하면 그건 레이더가 아니라 전지(全知)다
+    // ★★★ **점 옆에는 고도 하나만** — 여기가 「오른쪽 왼쪽이 아니고」의 답이다.
+    //   PPI 는 세로축이 거리라 고도를 담을 데가 없으므로 숫자로 낸다.
+    //   ★ 접근율까지 점 옆에 적었더니 **글자 둘이 서로 겹쳐 하나도 안
+    //     읽혔다** (화면을 찍어서 알았다). 자세한 것은 아래 **데이터 블록**이
+    //     맡는다 — 실제 스코프가 우선순위 표적 하나에 그렇게 한다
+    const el = readable.has(b.id) ? elWord(b.relEl) : null;
+    if (el) {
+      ctx.font = `700 ${f(0.055)}px ui-monospace, monospace`;
+      ctx.textAlign = px > cx ? 'left' : 'right';
+      ctx.fillStyle = 'rgba(220,245,235,.92)';
+      ctx.fillText(el, px + (px > cx ? f(0.05) : -f(0.05)), py + f(0.02));
+      ctx.textAlign = 'left';
     }
+
+    // 물린 것은 **마름모로 감싼다** — 네모(TD 상자)와 갈라 둔다
+    if (b.locked) {
+      const q = f(SYMBOL.lock.size);
+      ctx.strokeStyle = SYMBOL.lock.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(px, py - q); ctx.lineTo(px + q, py);
+      ctx.lineTo(px, py + q); ctx.lineTo(px - q, py);
+      ctx.closePath(); ctx.stroke();
+    }
+  }
+
+  // ══ ★★ **데이터 블록** — 우선순위 표적 하나를 자세히 ════════════════
+  //
+  //  실제 사격통제 스코프는 **물린 표적 하나**에만 상세를 적는다
+  //  (종류 · 방위 · 고도 · 거리 · 접근율). 전부 적으면 겹쳐서 하나도
+  //  안 읽히기 때문이다 — 화면을 찍어 그걸 그대로 겪었다.
+  //  ★ 물린 것이 없으면 **제일 가까운 것**을 쓴다. 빈 칸으로 두면
+  //    계기가 절반만 사는 것이고, 대개 제일 가까운 것이 제일 급하다
+  const prime = blips.filter((x) => x.level === 'full')
+    .sort((x, y) => (y.locked ? 1 : 0) - (x.locked ? 1 : 0) || x.dist - y.dist)[0];
+  if (prime) {
+    ctx.font = `700 ${f(0.062)}px ui-monospace, monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = prime.locked ? SYMBOL.lock.color : 'rgba(143,230,192,.72)';
+    const nm = KINDS[prime.kind]?.name ?? '표적';
+    ctx.fillText(`${prime.locked ? '◆' : '·'} ${nm}`, w * 0.04, h * 0.90);
+    ctx.fillStyle = 'rgba(220,245,235,.86)';
+    const vc = vcWord(prime.closing);
+    ctx.fillText(
+      `방위 ${bearing(prime.relAz)}  ${elWord(prime.relEl) ?? '수평'}  ${Math.round(prime.dist)}m${vc ? `  ${vc}` : ''}`,
+      w * 0.04, h * 0.965,
+    );
+  }
+
+  // ── ★★★ ⑤ RWR — **저쪽이 나를 겨눈다** ───────────────────────────
+  //  실제 전투기의 레이더 경고 수신기다. v74 까지 이게 없어서 **맞기
+  //  전까지 아무 예고가 없었다** — 적은 겨눔을 쌓고 나서 쏘는데
+  //  (`target.js` 의 `t.aim`) 그 시간이 화면에 하나도 안 나왔다.
+  //  ★ 다만 알려 주는 것은 **방위뿐**이다. 피하는 것은 여전히 손이고,
+  //    「알고도 못 피한다」가 있어야 긴박하다
+  //  ★★ 처음엔 **원 바깥에** 쐐기를 세웠다. 이 계기는 가로로 넓고 세로가
+  //    짧아서 원 위아래로는 **자리가 없다** — 화면을 찍으니 쐐기가 판
+  //    밖으로 나가 하나도 안 보였다. 그래서 **접촉 바로 옆**에 붙인다.
+  //    실제 RWR 은 별개 화면이지만, 계기가 하나뿐인 배에서는 「이 놈이
+  //    나를 겨눈다」를 **그 점에 붙여 두는 것**이 더 곧다
+  let worst = 0;
+  for (const b of blips) {
+    const lv = rwrLevel(b.aiming ?? 0);
+    if (!lv) continue;
+    worst = Math.max(worst, b.aiming);
+    const now = s.radar.clock ?? 0;
+    // ★ `s.clock` 이라고 썼다가 **깜빡임이 영영 멈춰 있었다** — 시계를
+    //   `s.radar.clock` 에 담아 놓고 한 칸 위에서 읽었다. 값이 늘
+    //   undefined → 0 이라 `sin(0)=0`, 즉 경고가 한 번도 안 켜졌다
+    const on = lv === 'hot'
+      ? (Math.sin(now * RWR.blink * 2.2) > -0.2)
+      : (Math.sin(now * RWR.blink) > 0);
+    if (!on) continue;
+    const a = (b.relAz * Math.PI) / 180 - Math.PI / 2;
+    const rr = b.level === 'full' ? R * Math.min(1, b.dist / RADAR.range) : R * 0.97;
+    const px = cx + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+    // 점을 **감싸는 붉은 고리** + 바깥을 가리키는 쐐기
+    ctx.strokeStyle = SYMBOL.threat.color;
+    ctx.lineWidth = lv === 'hot' ? 3 : 2;
+    ctx.beginPath(); ctx.arc(px, py, f(SYMBOL.threat.size), 0, Math.PI * 2); ctx.stroke();
+    const q = f(SYMBOL.threat.size);
+    ctx.fillStyle = SYMBOL.threat.color;
+    ctx.beginPath();
+    ctx.moveTo(px + Math.cos(a) * q * 2.0, py + Math.sin(a) * q * 2.0);
+    ctx.lineTo(px + Math.cos(a - 0.6) * q * 1.1, py + Math.sin(a - 0.6) * q * 1.1);
+    ctx.lineTo(px + Math.cos(a + 0.6) * q * 1.1, py + Math.sin(a + 0.6) * q * 1.1);
+    ctx.closePath(); ctx.fill();
+  }
+  if (worst >= RWR.from) {
+    ctx.fillStyle = worst >= RWR.hot ? SYMBOL.threat.color : 'rgba(255,150,90,.85)';
+    // ★ 데이터 블록과 **안 겹치는 자리**로 — 둘 다 아래에 두면 서로 먹는다
+    ctx.font = `800 ${f(0.072)}px system-ui, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(worst >= RWR.hot ? '피조준 — 쏜다' : '피조준', w * 0.96, h * 0.26);
+    ctx.textAlign = 'left';
   }
 }
 

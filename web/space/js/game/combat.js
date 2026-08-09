@@ -10,7 +10,7 @@
 import {
   RADAR, WEAPONS, WEAPON_LIST, whyNotFire, hitChance, inCone, contactLevel,
 } from './combat-table.js';
-import { KINDS } from './target-table.js';
+import { KINDS, ENEMY_FIRE } from './target-table.js';
 import { azDiff } from './target.js';
 
 export function makeCombat() {
@@ -21,7 +21,13 @@ export function makeCombat() {
     cool: 0,
     /** 레이더 — 켜졌나 · 묶는 중인 시간 · 묶은 표적 id · 놓친 뒤 유예 */
     /** ★ v73 — `was` 는 지난 프레임의 거리 (줄고 있나를 잰다) · `chasing` 은 그 답 */
-    radar: { on: false, t: 0, id: null, grace: 0, was: null, chasing: false },
+    /**
+     * ★★ v75 — `seen` 은 **표적마다** 지난 거리를 들고 있다.
+     *   v73 은 **묶은 것 하나**만 접근율을 쟀다 — 그래서 계기가
+     *   「저기 뭔가 다가온다」를 말할 수가 없었다. 실제 스코프는
+     *   **모든 접촉**에 접근율을 적는다 (`radar-table.js` 고증 ②)
+     */
+    radar: { on: false, t: 0, id: null, grace: 0, was: null, chasing: false, seen: new Map() },
     /** 날아가는 미사일들 */
     shots: [],
     /** 센 것 — 검사와 끝 화면이 읽는다 */
@@ -93,21 +99,49 @@ export function stepRadar(c, dt, aimed) {
  * @param noseAz 기수가 보는 방위 (도)
  * @returns [{ id, relAz, dist, level, foe, locked }]
  */
-export function radarBlips(c, list, noseAz, noseEl = 0) {
-  if (!c.radar.on) return [];
+export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0) {
+  if (!c.radar.on) { c.radar.seen.clear(); return []; }
   const out = [];
+  const alive = new Set();
   for (const t of list ?? []) {
     const rel = { relAz: azDiff(t.az, noseAz), relEl: t.el - noseEl, dist: t.dist };
     // ★ **엔진을 켠 것만** 원뿔 밖에서 잡힌다 — 파편과 죽은 위성은 열이 없다
     const hot = !!KINDS[t.kind]?.closes;
     const level = contactLevel(rel, hot);
     if (!level) continue;
+    alive.add(t.id);
+
+    // ══ ★★ **접근율** (v75 · 고증 ②) ═══════════════════════════════
+    //  실제 스코프가 표적 옆에 반드시 적는 숫자다. 거리보다 중요하다 —
+    //  **부호 하나가 곧 추격 곡선**이다 (BFM.md): 줄면 선도 추격,
+    //  그대로면 순수 추격, 늘면 지연 추격이다.
+    //  ★ v73 은 **묶은 것 하나**만 쟀다. 계기가 「저기 뭔가 다가온다」를
+    //    말하려면 접촉 전부에 있어야 한다
+    const was = c.radar.seen.get(t.id);
+    const closing = (was !== undefined && dt > 1e-6) ? (was - t.dist) / dt : null;
+    c.radar.seen.set(t.id, t.dist);
+
     out.push({
       id: t.id, relAz: rel.relAz, dist: t.dist, level,
+      // ★★★ **위아래** — 여기가 「오른쪽 왼쪽이 아니고」의 답이다.
+      //   PPI 는 세로축이 거리라 고도를 담을 데가 없다. 실제 레이더가
+      //   그러듯 **점 옆에 숫자로** 낸다 (`radar-table.js elWord`)
+      relEl: rel.relEl,
+      closing,
       foe: !!KINDS[t.kind]?.rams,
       locked: c.radar.id === t.id,
+      kind: t.kind,
+      /**
+       * ★★ **저쪽이 나를 겨누고 있나** 0~1 — RWR 이 이걸 그린다.
+       *   적은 겨눔을 쌓고 나서 쏘는데(`target.js` 의 `t.aim`), v74 까지
+       *   그 시간이 **화면에 하나도 안 나왔다.** 그래서 피격은 늘 예고가
+       *   없었다. 실제 조종사가 제일 먼저 보는 계기가 이것이다
+       */
+      aiming: Math.max(0, Math.min(1, (t.aim ?? 0) / Math.max(1e-6, ENEMY_FIRE.every))),
     });
   }
+  // 사라진 것은 기억에서 지운다 — 안 지우면 id 가 돌아왔을 때 엉뚱한 값이 나온다
+  for (const id of [...c.radar.seen.keys()]) if (!alive.has(id)) c.radar.seen.delete(id);
   return out;
 }
 

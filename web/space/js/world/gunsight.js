@@ -39,21 +39,31 @@ import * as THREE from 'three';
 import { KINDS, TARGET, rangeWord } from '../game/target-table.js';
 import { hudFov } from '../game/view-table.js';
 import { SIGN } from '../game/chase-table.js';
+// ★★★ v75 — 「왼쪽/오른쪽」을 **방위 + 고도**로 (사장님 요청 · 고증)
+import { callOut } from '../game/radar-table.js';
+import { azDiff } from '../game/target.js';
 
 /**
  * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
  *   「117도」로는 아무것도 못 정하지만 「뒤쪽」이면 몸이 안다
  */
-function sideWord(t, aimAz) {
-  let d = (t.az - aimAz) % 360;
-  if (d > 180) d -= 360;
-  if (d < -180) d += 360;
-  const a = Math.abs(d);
-  const way = d > 0 ? '오른쪽' : '왼쪽';
-  if (a > 140) return '바로 뒤';
-  if (a > 100) return `${way} 뒤`;
-  if (a > 40) return `${way} 옆`;
-  return way;
+/**
+ * ★★★ **어디에 있나** — v75 에 「왼쪽/오른쪽」에서 바뀌었다.
+ *
+ *   사장님 「**오른쪽 왼쪽이 아니고.** 실제 레이더 시스템을 고증해서」.
+ *
+ *   ★ 옛 판은 「왼쪽 옆」·「바로 뒤」처럼 **말**만 했다. 세 축이 다 열린
+ *     뒤로는(v73 · 360도) 그걸로 부족하다 — **위아래가 통째로 빠져서**
+ *     아래에 있는 적도 「왼쪽」이라고만 떴고, 그러면 어디로 얼마나
+ *     돌려야 하는지 알 수가 없다.
+ *
+ *   ★★ **도는 방향은 글자, 얼마나는 숫자**로 나눈다: 「좌 146° · 아래 22°」
+ *     숫자만 주면 어느 쪽으로 도는 것이 가까운지 한 번 더 생각해야 하고,
+ *     글자만 주면 지금까지의 문제 그대로다. 실제 관제·편대 호출이
+ *     방위와 고도를 같이 부르는 것과 같은 이유다.
+ */
+function sideWord(t, aimAz, aimEl = 0) {
+  return callOut(KINDS[t.kind]?.name ?? '표적', azDiff(t.az, aimAz), t.el - aimEl);
 }
 
 const FG = '#8fe6c0';
@@ -281,7 +291,7 @@ function draw(ctx, w, h, s) {
     ? (locked ? `${KINDS[near.t.kind].name} — 물렸습니다`
       : `${KINDS[near.t.kind].name} · ${rangeWord(near.t.dist)}`)
     : any
-      ? `${KINDS[any.kind].name} — ${sideWord(any, aimAz)}`
+      ? sideWord(any, aimAz, aimEl)
       : '떠도는 것이 없습니다';
   ctx.fillText(word, w * 0.05, h * 0.95);
 
