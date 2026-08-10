@@ -225,8 +225,14 @@ function draw(ctx, w, h, s) {
     if (raz < -180) raz += 360;
     const rel = t.el - aimEl;
     { const dd = Math.hypot(raz, rel); if (dd < anyD) { anyD = dd; any = t; } }
-    let x = cx + pxH(raz);
-    let y = cy - pxV(rel);
+    // ★★★ v95 — **롤만큼 돌려서 찍는다** (판이 아니라 표식이 돈다).
+    //   하늘은 도는데 판은 수평이므로, 여기서 한 번 돌려야 표식이
+    //   실제 적 위에 얹힌다. 글씨·눈금은 안 돌아서 그대로 읽힌다
+    const rr = s.roll ?? 0;
+    const cr = Math.cos(rr), sr = Math.sin(rr);
+    const px0 = pxH(raz), py0 = pxV(rel);
+    let x = cx + (px0 * cr - py0 * sr);
+    let y = cy - (px0 * sr + py0 * cr);
     // ★★ HUD 밖이면 **표적 지시선(TLL)** — 실제 전투기가 쓰는 것 그대로다.
     //   조종사는 이 선을 따라 **상자가 나타날 때까지 기수를 끈다.**
     //   HUD 는 26도뿐인데 표적은 사방에 있으므로, 이게 없으면 옆과 뒤가
