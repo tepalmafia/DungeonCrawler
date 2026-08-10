@@ -191,6 +191,12 @@ function draw(ctx, w, h, s) {
   /** 좌우 몇 도 → 판 위 몇 화소. 90도 밖은 뒤라 `tan` 이 뒤집힌다 — 막는다 */
   const pxH = (d) => (Math.abs(d) >= 80 ? Math.sign(d) * w : (w * 0.5) * Math.tan(d * RAD) / TANH);
   const pxV = (d) => (Math.abs(d) >= 80 ? Math.sign(d) * h : (h * 0.5) * Math.tan(d * RAD) / TANV);
+  // ★★★ v95 — **롤만큼 돌려서 찍는다** (판이 아니라 표식이 돈다).
+  //   하늘은 도는데 판은 수평이므로, 여기서 한 번 돌려야 표식이 실제 적
+  //   위에 얹힌다. 글씨·눈금은 안 돌아서 그대로 읽힌다.
+  //   ★ v97 — 반복문 안에 있던 것을 **위로 올렸다** — 락온 원도 같은 것을
+  //     쓰는데 거기서는 없는 이름이라 터졌다 (`node --check` 는 통과한다)
+  const cr = Math.cos(s.roll ?? 0), sr = Math.sin(s.roll ?? 0);
   ctx.strokeStyle = 'rgba(143,230,192,.13)';
   ctx.lineWidth = 1;
   for (let a = -10; a <= 10; a += 5) {
@@ -225,11 +231,6 @@ function draw(ctx, w, h, s) {
     if (raz < -180) raz += 360;
     const rel = t.el - aimEl;
     { const dd = Math.hypot(raz, rel); if (dd < anyD) { anyD = dd; any = t; } }
-    // ★★★ v95 — **롤만큼 돌려서 찍는다** (판이 아니라 표식이 돈다).
-    //   하늘은 도는데 판은 수평이므로, 여기서 한 번 돌려야 표식이
-    //   실제 적 위에 얹힌다. 글씨·눈금은 안 돌아서 그대로 읽힌다
-    const rr = s.roll ?? 0;
-    const cr = Math.cos(rr), sr = Math.sin(rr);
     const px0 = pxH(raz), py0 = pxV(rel);
     let x = cx + (px0 * cr - py0 * sr);
     let y = cy - (px0 * sr + py0 * cr);
@@ -305,6 +306,19 @@ function draw(ctx, w, h, s) {
 
   // ── 십자선 — **기수가 보는 곳.** 곧 화면 한가운데다 ──────
   const ax = cx, ay = cy;
+  // ══ ★★★ v97 — **락온 원은 표적 위에 얹힌다** ═══════════════════════
+  //  사장님 「락온이 되면 … **약간 느리게 타겟이 따라갈 수는 있지만
+  //          지금은 위치가 완전 다르잔아**」
+  //  ★ 여태 원이 `cx, cy` 에 못박혀 있었다 — 즉 **묶었다는 것이 화면에
+  //    아무 데도 안 나왔다.** 실제 HUD 의 표적 지시자는 표적 위에 있다.
+  //  ★★ 자리는 `combat.js` 가 **쫓아가며** 준다 (`RADAR.slew`) —
+  //    여기서 다시 계산하지 않는다 (자리를 아는 곳은 하나다 · frame.js 규약)
+  let lx0 = cx, ly0 = cy;
+  if (s.lockAt) {
+    const p0 = pxH(s.lockAt.az), q0 = pxV(s.lockAt.el);
+    lx0 = cx + (p0 * cr - q0 * sr);
+    ly0 = cy - (p0 * sr + q0 * cr);
+  }
   const locked = near && nearD <= (TARGET.aimTol * (KINDS[near.t.kind]?.size ?? 1)) && near.t.inRange;
   ctx.strokeStyle = locked ? HOT : FG;
   ctx.lineWidth = Math.max(1.6, h * 0.012);
@@ -333,14 +347,14 @@ function draw(ctx, w, h, s) {
     ctx.strokeStyle = locked ? HOT : 'rgba(143,230,192,.30)';
     ctx.lineWidth = Math.max(1.2, h * 0.006);
     ctx.setLineDash(locked ? [] : [h * 0.03, h * 0.03]);
-    ctx.beginPath(); ctx.arc(ax, ay, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(lx0, ly0, rr, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
     // ★ 물리는 중이면 **호가 차오른다** — 「얼마나 더 붙들고 있어야 하나」
     if (!locked && (s.lockK ?? 0) > 0.02) {
       ctx.strokeStyle = WARN;
       ctx.lineWidth = Math.max(2, h * 0.011);
       ctx.beginPath();
-      ctx.arc(ax, ay, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * s.lockK);
+      ctx.arc(lx0, ly0, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * s.lockK);
       ctx.stroke();
     }
   }
