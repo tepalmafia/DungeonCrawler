@@ -196,7 +196,11 @@ export const WAYS = {
     what: '거리는 넉넉하다. 감는 동안 **못 나아간다**',
   },
   bot: {
-    key: 'bot', name: '회수 로봇', kb: 'KeyT',
+    // ★★ v85 — **T 에서 B 로 옮겼다.** T 는 이 장르에서 **표적 지정**의
+    //   자리다 (Elite · Star Citizen · Freelancer). 회수는 몇 초에 한 번
+    //   쓰지만 표적 지정은 **싸우는 내내** 쓰므로, 부딪히면 자주 쓰는
+    //   쪽이 정석 자리를 갖는 것이 맞다. B 는 bot 의 머리글자다
+    key: 'bot', name: '회수 로봇', kb: 'KeyB',
     reach: 160, speed: null, fixed: 12.0, holds: false, sign: 4,
     what: '**안 묶인다** — 대신 느리다',
   },

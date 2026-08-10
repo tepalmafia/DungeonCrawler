@@ -456,6 +456,9 @@ export function summary(sky) {
     region: sky.region, want: wantCount(sky), n: sky.list.length,
     killed: sky.killed, shots: sky.shots,
     grazes: sky.grazes, rams: sky.rams,
+    // ★ v85 — **기수가 어디를 보나.** 검사가 「위아래 조준이 34도를 넘나」를
+    //   물으려면 이 둘이 밖으로 나와야 한다
+    noseAz: +(sky.noseAz ?? 0).toFixed(1), noseEl: +(sky.noseEl ?? 0).toFixed(1),
     raiders: sky.list.filter((t) => (KINDS[t.kind]?.weight ?? 0) === 0).length,
     cameRaiders: sky.cameRaiders,
     nextRaider: +sky.nextRaider.toFixed(1),

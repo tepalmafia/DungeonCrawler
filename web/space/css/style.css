@@ -53,6 +53,41 @@ body.flying #view { cursor: none; }
   background: rgba(160, 230, 190, .9);
 }
 
+/* ★★★ v85 — 지정한 표적. 화면 안이면 상자, 밖이면 화살표 */
+#pick {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 0; height: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+#pick .box {
+  position: absolute; left: 0; top: 0;
+  width: 54px; height: 54px; margin: -27px 0 0 -27px;
+  border: 2px solid #ffd166;
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(255, 209, 102, .5);
+  /* 네 귀퉁이만 — 가운데를 안 가린다 */
+  clip-path: polygon(0 0, 34% 0, 34% 8%, 8% 8%, 8% 34%, 0 34%,
+                     0 100%, 34% 100%, 34% 92%, 8% 92%, 8% 66%, 0 66%,
+                     100% 100%, 66% 100%, 66% 92%, 92% 92%, 92% 66%, 100% 66%,
+                     100% 0, 66% 0, 66% 8%, 92% 8%, 92% 34%, 100% 34%);
+}
+#pick.off .box {
+  width: 0; height: 0; margin: -13px 0 0 -11px;
+  border: 13px solid transparent;
+  border-left: 22px solid #ffd166;
+  border-radius: 0; box-shadow: none; clip-path: none;
+}
+#pick .tag {
+  position: absolute; left: 0; top: 0;
+  transform: translate(-50%, 36px);
+  white-space: nowrap;
+  font: 700 13px/1 system-ui, sans-serif;
+  color: #ffe9b8;
+  text-shadow: 0 0 8px rgba(0, 0, 0, .95), 0 1px 2px #000;
+}
+
 /* ★★★ v84 — 회피 지시. **가운데를 안 덮는다** — 빼야 할 쪽에 뜬다 */
 #evade {
   position: fixed;
