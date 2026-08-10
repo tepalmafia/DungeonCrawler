@@ -9,7 +9,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
-  DODGE, evadeGain, evadeDir, ENGAGE,
+  DODGE, evadeGain, evadeDir, ENGAGE, PARTS, partOf, FLEE,
 } from './target-table.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
@@ -98,6 +98,20 @@ export function spawnRaider(sky) {
  */
 function stepEngage(t, k, dt, rnd) {
   const so = k.standoff;
+  // ══ ★★★ v86 — **엔진이 깨지면 못 움직인다** ═══════════════════════
+  //  ★ 사장님 「엔진을 정확히 타격하거나 핵심 시설을 타격해야 그나마
+  //    빨리 승리」. 그 값이 여기다 — 엔진을 깨면 **못 도망가고 못 온다.**
+  //    그래서 「엔진부터 깰까」가 결심이 된다
+  if (t.dead?.move) return;
+  // ══ ★★★ v86 — **맞으면 도망간다** (사장님 「더 버티던지 도망가던지」) ══
+  //  ★ 큰 것만. 자폭정은 몸이 탄이라 안 뺀다. 그리고 **엔진이 살아
+  //    있어야** 뺀다 — 안 그러면 「깎아 놓으면 다 도망가서 못 잡는」
+  //    게임이 된다. 여기가 부위와 도망을 잇는 자리다
+  if ((k.hits ?? 1) >= FLEE.big && t.hp / (k.hits ?? 1) <= FLEE.at) {
+    t.fleeing = true;
+    t.dist += Math.abs(k.closes ?? 6) * ENGAGE.breakMult * dt;
+    return;
+  }
   if (!so) { t.dist -= k.closes * dt; return; }
   if (!t.eng) t.eng = { phase: 'in', held: 0, holdFor: span(ENGAGE.hold, rnd), way: rnd() < 0.5 ? -1 : 1 };
   const e = t.eng;
@@ -278,6 +292,8 @@ export function stepSky(sky, dt, {
   //    곧 회피**가 된다. 도는 것이 조준이면서 동시에 방어다
   for (const t of sky.list) {
     if (!KINDS[t.kind]?.shoots) continue;
+    // ★★ v86 — **무기를 깨면 안 쏜다.** 부위를 노리는 값의 절반이 여기다
+    if (t.dead?.shoot) { t.aim = 0; continue; }
     // 우리를 겨누고 있나 — 적은 기수를 우리 쪽으로 돌려야 쏜다
     const onUs = Math.abs(azDiff(t.az, sky.noseAz ?? 0)) <= ENEMY_FIRE.aimCone;
     if (!onUs) { t.aim = 0; continue; }
@@ -411,6 +427,41 @@ export function aimingSoon(sky) {
   return null;
 }
 
+/**
+ * ★★ **내가 저쪽 뒤에 있나** 0~1 (v86).
+ *
+ *   ★ 표적은 늘 이쪽을 보게 그려진다(`targets.js lookAt`). 그래서 「뒤」를
+ *     방향으로 잴 수가 없다 — 대신 **무엇을 하고 있나**로 잰다:
+ *       · 이탈 중이거나 도망 중 → 꽁무니를 보인다 → **엔진이 나온다**
+ *       · 사거리 밖에서 다가오는 중 → 기수를 들이민다 → **무기가 나온다**
+ *   ★★ 그러면 「도망가는 놈을 쫓아가 쏘면 엔진이 깨진다」가 성립하고,
+ *     그건 사장님이 말씀하신 「도망가던지」와 맞물린다
+ */
+export function behindOf(t) {
+  const k = KINDS[t.kind];
+  if (t.fleeing || t.eng?.phase === 'out') return 1;
+  if (k?.standoff && t.dist > k.standoff[1]) return 0;
+  return 0.4;
+}
+
+/**
+ * ★★★ **맞았다 — 어느 부위인가** (v86).
+ *
+ * @returns { part, dmg, killed } — `dmg` 는 부위 배수가 곱해진 값
+ */
+export function hitPart(t, { off = 0, tol = 6, dmg = 1, rnd = Math.random } = {}) {
+  const part = partOf(off, tol, behindOf(t), rnd);
+  const real = dmg * part.mult;
+  t.hp -= real;
+  // ★ 부위가 깨지는 것은 **그 부위를 맞혔을 때만.** 선체를 아무리 때려도
+  //   엔진이 안 죽는다 — 그래야 「어디를 겨눌까」가 남는다
+  if (part.kills) {
+    t.dead = t.dead ?? {};
+    t.dead[part.kills] = true;
+  }
+  return { part, dmg: +real.toFixed(2), killed: t.hp <= 0 };
+}
+
 /** 지금 겨눈 쪽에 **제일 가까운 것** — 조준경이 강조한다 */
 export function aimedAt(sky, az, el) {
   let best = null, bestD = 1e9, bestRel = 0;
@@ -475,7 +526,9 @@ export function summary(sky) {
     tookHits: sky.tookHits, dodged: sky.dodged, evaded: sky.evaded,
     list: sky.list.map((t) => ({
       id: t.id, kind: t.kind, az: +t.az.toFixed(1), el: +t.el.toFixed(1),
-      dist: +t.dist.toFixed(0), hp: t.hp, inRange: inRange(t),
+      dist: +t.dist.toFixed(0), hp: +t.hp.toFixed(1), inRange: inRange(t),
+      // ★ v86 — 부위가 깨졌나 · 도망 중인가 (화면과 검사가 읽는다)
+      dead: t.dead ? { ...t.dead } : null, fleeing: !!t.fleeing,
       vaz: +t.vaz.toFixed(2), vel: +t.vel.toFixed(2),
     })),
   };

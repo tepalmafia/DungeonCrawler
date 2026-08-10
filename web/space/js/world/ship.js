@@ -1116,7 +1116,9 @@ export function buildShip(scene, camera = null, renderer = null) {
   //  ★★ 배(`ship`)와 손을 숨기고 그린다 — 감지기는 선체 **밖**에 달렸고,
   //    안 숨기면 판이 조종석 벽을 비추거나 **판이 판을 비춘다**
   const optic = renderer
-    ? buildOptic(renderer, scene, [ship], HUDV.w * 1.12, HUDV.h * 1.04)
+    // ★ v86 — 당겨 보는 동안 **참 크기**로 그리게 한다 (`targets.setTrueScale`)
+    ? buildOptic(renderer, scene, [ship], HUDV.w * 1.12, HUDV.h * 1.04,
+      (on) => outside.targets.setTrueScale(on))
     : null;
   if (optic) {
     optic.mesh.position.set(

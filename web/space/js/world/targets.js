@@ -197,6 +197,12 @@ function buildOne(kind) {
  * @param parent 창밖 그룹 — **여기 매달아야 배를 틀 때 같이 흐른다**
  * @returns { update(list, dt), burst(t) }
  */
+/**
+ * ★★★ v86 — **참 크기로 그리나** (광학 창이 켠다).
+ *   맨눈은 부풀린 실루엣, 당겨 보면 진짜 모양 (`place()` 주석)
+ */
+let trueScale = false;
+
 export function buildTargets(parent) {
   const g = new THREE.Group();
   g.name = '떠도는것들';
@@ -248,7 +254,20 @@ export function buildTargets(parent) {
     //    이미 100m 스케일로 접어 놨고, 그 접힘의 뒷값을 여기서 치른다
     const base = (KINDS[t.kind]?.size ?? 1) * 1.6;
     const deg = 2 * Math.atan(base / 2 / Math.max(1, d)) / DEG;
-    const up = Math.min(SEEN.maxUp, Math.max(1, SEEN.minDeg / Math.max(1e-3, deg)));
+    // ══ ★★★ v86 — **당겨 보면 부풀림을 끈다** ═══════════════════════
+    //
+    //  ★ 사장님 「적 비행기도 **실루엣만 나오는게 아니라 확대된 화면은
+    //    모양이 정확히** 나올 수 있도록」
+    //
+    //  ★★ 부풀림(`SEEN`)은 **맨눈**을 위한 것이다 — 260m 를 보는 레이더에
+    //    비해 눈이 90m 까지만 형태를 알아서, 「레이더는 잡았는데 창밖은
+    //    비어 있다」를 막으려고 v79 에 깔았다. 그런데 광학 창은 **당겨
+    //    보는 물건**이라 거기서도 부풀리면 **커진 실루엣**이 될 뿐이다.
+    //    당기는 뜻이 「제대로 본다」인데 제대로 못 보는 셈이다.
+    //  ★★★ 그래서 광학 창이 그리는 동안에는 **참 크기**로 둔다 —
+    //    맨눈은 그대로 실루엣, 당기면 진짜 모양. 둘 다 산다
+    const up = trueScale ? 1
+      : Math.min(SEEN.maxUp, Math.max(1, SEEN.minDeg / Math.max(1e-3, deg)));
     o.scale.setScalar(base * up);
     // 적은 **이쪽을 본다** — 죽은 것과 갈라지는 두 번째 표시
     // ★ 살아 있는 것은 **이쪽을 본다** — 죽은 것과 갈라지는 두 번째 표시.
@@ -303,6 +322,11 @@ export function buildTargets(parent) {
     /**
      * @param list `SPACE.sky.list` 와 같은 것 — { id, kind, az, el, dist, hp }
      */
+    /**
+     * ★★★ v86 — **당겨 보는 동안만 참 크기.** 광학 창이 켜고 끈다.
+     *   ★ 이 한 줄이 「확대된 화면은 모양이 정확히」의 실체다
+     */
+    setTrueScale(on) { trueScale = !!on; },
     update(list, dt) {
       clock += dt;
       const seen = new Set();

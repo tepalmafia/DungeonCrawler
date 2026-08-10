@@ -119,7 +119,7 @@ import {
   makeSalvage, dropPack, stepSalvage, fireNet, thrustHeld, callWarn,
   summary as salvSummary, WHY as SALV_WHY,
 } from './game/salvage.js';
-import { spawnRaider, threatNow, aimingSoon, azDiff } from './game/target.js';
+import { spawnRaider, threatNow, aimingSoon, azDiff, hitPart, behindOf } from './game/target.js';
 // ★★★ v84 — **등대.** 말하는 구멍을 하나로 모은다
 import { LINES as AI_LINES, sideWord, VOICE } from './game/ai-table.js';
 import { makeAI, say, hush, stepAI, nowSaying, summary as aiSummary } from './game/ai.js';
@@ -216,7 +216,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 85;
+export const VERSION = 86;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -769,11 +769,25 @@ function landShots(dt) {
       say(ai, d.shot.lost ? '유도가 끊겼습니다' : '빗나갔습니다', 'tell');
       continue;
     }
-    t.hp -= d.shot.dmg;
+    // ══ ★★★ v86 — **어디를 맞혔나** (`target-table.js PARTS`) ═════════
+    //  ★ 사장님 「**각 부위별로** 타격 시 더 버티던지 도망가던지 …
+    //    **엔진을 정확히 타격하거나 핵심 시설을 타격해야 그나마 빨리 승리**」
+    //  ★★ 한가운데를 정확히 겨눌수록 **핵심**, 도망가는 놈을 쫓아 쏘면
+    //    **엔진**, 정면으로 맞붙으면 **무기**가 나온다. 그냥 때리면 선체다
+    const wpn = WEAPONS[d.shot.weapon] ?? WEAPONS.laser;
+    const hp = hitPart(t, { off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg });
     t.flash = 0.5;
     // ★ 맞은 자리에서 터진다 — 「맞았나」를 숫자로만 알려주지 않는다
     ship.outside.shots.pop(shotAt(t.az, t.el, t.dist));
-    if (t.hp > 0) { say(ai, `${TKINDS[t.kind].name}에 맞혔습니다 — 맷집 ${t.hp}`, 'tell'); continue; }
+    if (t.hp > 0) {
+      // ★ **어디를 맞혔는지 말한다.** 안 말하면 「부위」가 있는 줄을 모르고,
+      //   모르면 겨누지 않는다 — 규칙이 있는데 화면에 없으면 없는 것과 같다
+      const dead = hp.part.kills === 'move' ? ' · 엔진 정지'
+        : hp.part.kills === 'shoot' ? ' · 무기 파괴' : '';
+      say(ai, `${TKINDS[t.kind].name} ${hp.part.name} 명중${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
+        hp.part.key === 'core' || dead ? 'warn' : 'tell');
+      continue;
+    }
     // 부쉈다
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
@@ -1197,6 +1211,8 @@ let lastCost = { calls: 0, tris: 0 };
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 /** ★★★ v84 — 지금 급기동(Shift) 중인가. **회피가 이걸 읽는다** */
 let burstNow = false;
+/** ★ v86 — Space 는 **누른 순간** 한 번만 먹는다 (추력은 켜고 끄는 물건이다) */
+let thrustHeldKey = false;
 /** ★★★ v84 — 지금 나를 맞힐 탄 하나 (화살표·경고가 읽는다) */
 let threat = null;
 let winching = false;     // 지금 윈치를 잡고 있나
@@ -1389,7 +1405,24 @@ function walk(dt) {
   // ★ 앉아 있으면 안 걷는다. 다만 **걸으려 하면 일어난다** — v52 에서
   //   주포 좌석에 갇혔던 것과 같은 함정을 안 판다
   if (helmSat) {
-    if (f !== 0 || r !== 0) { helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    // ══ ★★★ v86 — **앉아서 W 를 누르면 일어나 버렸다** ═══════════════
+    //
+    //  ★ 사장님이 세 판에 걸쳐 「상하 조정이 안 된다」고 하셨고, 재 보니
+    //    **상태가 셋인데 W/S 의 뜻이 셋 다 달랐다**:
+    //
+    //      걷는 중            W/S = 걷기
+    //      앉음(조종간 안 잡음) W/S = **일어난다**   ← 여기
+    //      조종간 잡음         W/S = 추력 (v80)
+    //
+    //    즉 **위아래는 어느 상태에서도 W/S 가 아니었다.** 마우스 세로
+    //    하나뿐이었는데 그건 손이 제일 짧게 움직이는 축이다.
+    //
+    //  ★★ 이제 **앉아 있으면 W/S 는 기수 위아래**다. 일어나는 것은
+    //    **X** 하나로 모았다 (v85) — 나가는 길이 하나라야 안 헷갈린다.
+    //  ★ A/D 는 그대로 「일어난다」로 둔다: 옆으로 비키려는 몸짓이고,
+    //    v52 에 좌석에 갇혔던 함정을 다시 파지 않는다
+    if (f !== 0) { flyPush.pitch = f; }
+    if (r !== 0) { helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
     return;
   }
   // ★ v64 — 여기 있던 **주포 좌석 미끄러짐과 자동 일어나기**를 걷어냈다.
@@ -2184,8 +2217,19 @@ function interactStep(dt) {
   //   `gripping` 은 이제 「조종석에 앉아 조종간을 잡고 있나」다 —
   //   그게 곧 전투 자세이므로 `steering` 과 같은 값이 된다
   gripping = steering;
-  // 쏘는 것은 **Space** — 잡는 손과 쏘는 손이 같으면 겨누다 말고 쏘게 된다
-  const firePressed = input.keys.has('Space');
+  // ══ ★★★ v86 — **쏘는 것은 마우스 왼쪽이다** ═══════════════════════
+  //
+  //  ★ 여기가 `input.keys.has('Space')` 였다 — **쏘기가 Space** 였다.
+  //    그런데 F1 도움말에는 「쏘기 · 마우스 왼쪽」이라고 적혀 있었다.
+  //    **화면이 거짓말을 하고 있었다.** 사장님이 「쏘기가 좌클릭이라
+  //    조종간에서 나오는 거랑 겹친다」고 하신 것도 도움말을 보고 하신
+  //    말씀이었고, 실제로는 좌클릭이 **아무것도 안 쐈다.**
+  //  ★★ 이 저장소의 규약 그대로다: 「고쳐 놓고 안내를 안 고치면 안 고친
+  //    것과 같다」 — 이번엔 **반대로** 안내가 맞고 코드가 틀렸다.
+  //    사람이 읽는 쪽에 맞춘다.
+  //  ★ 겹침은 이미 풀렸다 (v85): 잡기는 조종간을 **겨눴을 때만**,
+  //    놓기는 **X**. 그래서 잡은 뒤의 좌클릭은 오직 쏘기다
+  const firePressed = steering && input.hold;
   // ══ ★★★ **무기 고르기 1 · 2 · 3** (v64) ═════════════════════
   //  ★ 조종석에 앉아 있을 때만 먹는다 — 걷다가 눌러도 아무 일이 없어야
   //    「이 키가 뭐지」가 안 생긴다. 그리고 **바뀌면 말한다**
@@ -2443,7 +2487,14 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   **급기동을 써야 피해진다.** 값은 이미 있다: 추진제를 크게 태운다
   burstNow = burst;
   fly3.burst = burst;
-  stepFlight(fly3, dt, { atSeat: steering, push: flyPush, manual: !helm.auto, burst });
+  // ══ ★★★ v86 — **앉으면 몬다** ═══════════════════════════════════════
+  //  ★ `atSeat: steering` 이었다 — **조종간을 잡아야만** 기수가 돌았다.
+  //    그런데 앉는 목적이 모는 것이다. 이 한 글자 때문에 「앉았는데
+  //    아무것도 안 움직인다」가 났고, 그 위에 「W 를 누르면 일어난다」가
+  //    겹쳐서 **위아래가 어느 쪽으로도 안 됐다.**
+  //  ★★ 조종간을 잡는 것은 이제 **창이 열리고 화면이 커지는 것**의 뜻이지
+  //    「조종을 켜는 스위치」가 아니다
+  stepFlight(fly3, dt, { atSeat: steering || helmSat, push: flyPush, manual: !helm.auto, burst });
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
   //   천천히 돌리면 반동휠이 공짜로 하고, 급하게 돌리면 추력기가 태운다.
   //   360도를 열어 준 값이 여기 있다 — 값이 없으면 조종이 버튼이 된다
@@ -4015,8 +4066,20 @@ function frame(now) {
     //  W/S 는 이 장르에서 **추력**의 자리다.
     //  ★ 누르는 동안이 아니라 **누른 순간** 한 번 — 이 배의 추력은
     //    차단기·레버라 켜고 끄는 물건이다 (`space-helm.js` 규약)
-    if (input.keys.has('KeyW') && !power.thrust) setThrustKey(true);
-    if (input.keys.has('KeyS') && power.thrust) setThrustKey(false);
+    // ══ ★★★ v86 — **W/S 가 상하다** (사장님 「**키보드 WS로 상하 조정**
+    //  되게 하라고」 · 「왜 조정석으로 상하 방향 조정이 안되냐고」) ═══════
+    //
+    //  ★ v80 에 W/S 를 **추력**으로 옮겼다 — 마우스+키보드 비행 시뮬의
+    //    정석이 그렇기 때문이었다. 그런데 이 배는 **마우스가 조준이자
+    //    조종**이라 위아래를 마우스로만 하면 손목이 짧게 움직여야 하고,
+    //    사장님이 세 판에 걸쳐 「상하가 안 된다」고 하셨다.
+    //    **정석보다 사장님 손이 먼저다.**
+    //  ★★ 추력은 **Space** 로 간다 — 비어 있고, 비행 게임에서 흔한 자리다.
+    //    ★ 마우스 위아래는 **그대로 산다** — 둘 다 먹는다
+    const kUp = (input.keys.has('KeyW') ? 1 : 0) - (input.keys.has('KeyS') ? 1 : 0);
+    if (kUp !== 0) flyPush.pitch = kUp;
+    if (input.keys.has('Space')) { if (!thrustHeldKey) { setThrustKey(!power.thrust); thrustHeldKey = true; } }
+    else thrustHeldKey = false;
   } else {
     steerPush = 0;
     // ★ 놓으면 **스틱도 가운데로 돌아간다** — 안 그러면 다시 잡는 순간

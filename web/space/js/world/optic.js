@@ -47,7 +47,11 @@ export function atOf(az, el, dist) {
  * @param hide      그릴 때 숨길 것들 (배 · 손 …) — 배열
  * @param w,h       판의 실제 크기 (m)
  */
-export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24) {
+/**
+ * @param onScale ★ v86 — 당겨 보는 동안 **참 크기로 그리게** 하는 손잡이
+ *   (`world/targets.js setTrueScale`). 없으면 예전 그대로
+ */
+export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale = null) {
   const g = new THREE.Group();
   g.name = '광학창';
 
@@ -163,13 +167,19 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24) {
     const was = hide.map((o) => o && o.visible);
     for (const o of hide) if (o) o.visible = false;
     const oldT = renderer.getRenderTarget();
-    cam.fov = fovOf(shown);
+    // ══ ★★★ v86 — **당겨 보는 동안은 참 크기** ═══════════════════════
+    //  ★ 사장님 「적 비행기도 실루엣만 나오는게 아니라 **확대된 화면은
+    //    모양이 정확히** 나올 수 있도록」.
+    //    맨눈은 각지름 바닥(v79 `SEEN`)으로 부풀린 실루엣이지만, 당겨 보는
+    //    창에서까지 부풀리면 **커진 실루엣**일 뿐이라 당기는 뜻이 없어진다
+    onScale?.(true);
     cam.updateProjectionMatrix();
     cam.lookAt(cam.parent ? cam.parent.localToWorld(aim.clone()) : aim);
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(scene, cam);
     renderer.setRenderTarget(oldT);
+    onScale?.(false);
     hide.forEach((o, i) => { if (o) o.visible = was[i]; });
   }
 
