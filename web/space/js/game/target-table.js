@@ -398,8 +398,26 @@ export function pickKind(rnd) {
   return all[0];
 }
 
-/** 사람에게 보이는 한 줄 — **숫자로 안 띄운다** */
-export function rangeWord(dist) {
+/**
+ * 사람에게 보이는 한 줄.
+ *
+ * ★★★ **v81 — 「멀다」가 아니라 「얼마나 더」를 말한다.**
+ *
+ *   사장님 「**124m가 멀다고 나오는데?? 앞으로 다가가는 키는 뭐야?**」
+ *
+ *   ★ 두 가지가 틀려 있었다:
+ *     ① **지금 든 무기와 상관없이** 말했다. 124m 는 레이저(90m)로는
+ *        못 쏘고 유도탄(240m)으로는 쏜다 — 그런데 둘 다 「멀다」였다
+ *     ② **얼마나 다가가야 하는지**를 안 말했다. 「멀다」는 상태이지
+ *        **할 일**이 아니다. 계기는 할 일을 말해야 한다
+ *
+ * @param wMax 지금 든 무기의 최대 사거리 (m). 안 주면 옛날처럼 말한다
+ */
+export function rangeWord(dist, wMax = null) {
+  if (wMax) {
+    if (dist <= wMax) return '쏠 수 있습니다';
+    return `${Math.round(dist - wMax)}m 더 — 추력 W`;
+  }
   if (dist > TARGET.range) return '사거리 밖';
   if (dist > TARGET.range * 0.6) return '멀다';
   if (dist > TARGET.gone * 2.2) return '사거리 안';

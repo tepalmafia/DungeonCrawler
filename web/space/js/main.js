@@ -103,6 +103,13 @@ import { HULL, HITS } from './game/target-table.js';
 //          「격추할때마다 **적의 무기나 장갑을 회수**하면서 나도 전투력이 올라가게」
 import { mightOf, lootOf, myMight, oddsOf } from './game/might-table.js';
 import { autoZoom, OPTIC } from './game/optic-table.js';
+// ══ ★★★ **회수** (v81) — 사장님 「파괴하고 **적의 지원이 오기전에** …
+//   회수하고」 · 「조종석에서 **그물**이나 기타 회수 장비를 쏘아 회수」
+import { NET, PACK, CALL, packWord, callIn } from './game/salvage-table.js';
+import {
+  makeSalvage, dropPack, stepSalvage, fireNet, thrustHeld, callWarn,
+  summary as salvSummary, WHY as SALV_WHY,
+} from './game/salvage.js';
 import { spawnRaider } from './game/target.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
@@ -192,7 +199,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 80;
+export const VERSION = 81;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -297,6 +304,19 @@ addEventListener('mousedown', () => audio?.resume(), { passive: true });
 //  ★★ 그리고 이건 **공짜가 아니다** — 켜 놓는 동안 창밖을 안 본다.
 //    「늘 켜는 게 답이면 선택이 아니다」의 답이 여기서는 이것이다
 let opticBig = false;
+// ══ ★★★ **G — 그물** (v81 · 사장님 「조종석에서 그물이나 기타 회수
+//   장비를 쏘아 회수」) ══════════════════════════════════════════════
+//  ★ 왜 못 쏘는지도 말한다 — 조용히 안 나가면 「고장」으로 읽힌다 (v64 규약)
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyG' || e.metaKey || e.ctrlKey || e.altKey) return;
+  const a = noseAim();
+  const r = fireNet(salvage, { az: a.az, el: a.el, seated: helmSat });
+  if (!r.ok) { banner = SALV_WHY[r.why] ?? '지금은 못 씁니다'; bannerT = 2.2; return; }
+  chase.sign = Math.min(100, chase.sign + NET.sign);   // 사출은 숨길 수 없다 (v44 규약)
+  banner = `그물 — ${TKINDS[r.pack.kind]?.name ?? ''} 잔해를 감습니다`;
+  bannerT = 2.0;
+  audio?.event('tube');
+});
 addEventListener('keydown', (e) => {
   if (e.code !== 'KeyZ' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (!helmSat) { banner = '조종석에 앉아야 광학 창을 엽니다'; bannerT = 2.0; return; }
@@ -620,67 +640,39 @@ function landShots(dt) {
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
     forgetLock(combat, t.id);
-    // ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════
-    //  사장님 「격추할때마다 **적의 무기나 장갑을 회수**하면서 나도
-    //          전투력이 올라가게」
-    //  ★ 여기서 바로 붙인다. 「적의 지원이 오기 전에 회수」라는 사장님의
-    //    큰 그림은 **윈치로 끌어오는 일**이라 다음 판(v80)이다 — 지금은
-    //    부순 자리에서 뜯는 것까지다
-    const was = myPower();
-    const got = lootOf(t.kind);
-    loot.weapon += got.weapon;
-    loot.armor += got.armor;
-    const now = myPower();
-    // ══ ★★★ **격추 화면** — 광학 창이 부서지는 것을 비춘다 ═══════════
-    //  사장님 「**격추시 적 기체가 부서지는 화면**도 보여주고 … 3D 모습으로」
-    //  ★ 잔해의 자리를 **화면 쪽에서** 받는다. 규칙은 방금 목록에서 뺐으므로
-    //    az/el/dist 를 다시 계산하면 「이미 없는 것의 자리」를 짓게 된다
+    // ══ ★★★ **부순 것과 얻는 것 사이에 일이 하나 있다** (v81) ═══════
+    //
+    //  ★ 사장님 「파괴하고 **적의 지원이 오기전에** 파괴된 적기의 무기나
+    //    텔레포트 아크에너지, 핵탄두 재료 등을 **회수**하고」
+    //
+    //  ★★ v79~v80 은 격추하면 **저절로** 다 들어왔다 — 노획도, 보급도,
+    //    탄두 재료도. 편했지만 기획과 다르고, 그 하나가 빠지면 이것들이
+    //    같이 없어진다:
+    //      · 부수는 것이 **늘 이득**이 된다 → 고를 것이 없다
+    //      · 「지나친다」가 성립하지 않는다 → 「뚫는다」가 「청소」가 된다
+    //
+    //  ★★★ 이제 **꾸러미가 떨어지고**, 그물로 끌어와야 들어온다.
+    //    그리고 부순 순간 **지원이 호출된다** (`salvage-table.js CALL`)
+    const part = (t.kind === 'convoy' && !warhead.in.includes('core')) ? 'core'
+      : (t.kind === 'sat' && !warhead.in.includes('shell')) ? 'shell' : null;
+    const pk = dropPack(salvage, t, part);
+    const inS = callIn(t.kind);
+    // ══ **격추 화면** — 광학 창이 부서지는 것을 비춘다 (v79) ═══════════
+    //  ★ **아직 잔해가 없다.** 잔해는 `targets.update` 가 「목록에서 사라진
+    //    것」을 보고 **다음 프레임에** 만든다 — 여기서 `lastWreck()` 을
+    //    부르면 **지난번 격추**를 잡는다. 지금 프레임에는 아직 살아 있는
+    //    몸통이 있으므로 그 자리를 쓴다
     if (ship.optic) {
-      // ★ **아직 잔해가 없다.** 잔해는 `targets.update` 가 「목록에서
-      //   사라진 것」을 보고 **다음 프레임에** 만든다. 그래서 여기서
-      //   `lastWreck()` 을 부르면 **지난번 격추의 잔해**를 잡는다 —
-      //   조용히 엉뚱한 데를 비추는 종류의 버그다.
-      //   지금 프레임에는 아직 **살아 있는 몸통**이 있으므로 그 자리를 쓰고,
-      //   다음 프레임부터는 아래 `deadAt` 이 잔해를 따라간다
       const at = ship.outside.targets.posOf(t.id) ?? shotAt(t.az, t.el, t.dist);
       ship.optic.killed(at, {
         name: TKINDS[t.kind]?.name ?? '?',
-        loot: got, myWas: was, myNow: now,
+        loot: null, myWas: myPower(), myNow: null,
+        drop: pk ? packWord(pk.has, pk.part) : null,
       });
     }
-    if (got.weapon || got.armor) {
-      const bits2 = [];
-      if (got.weapon) bits2.push(`무기 ${got.weapon}`);
-      if (got.armor) bits2.push(`장갑 ${got.armor}`);
-      banner = `${TKINDS[t.kind]?.name ?? ''} 격추 — ${bits2.join(' · ')} 회수 · 전투력 ${was} → ${now}`;
-      bannerT = 3.2;
-    }
-    // ══ ★★★ **재료 다섯 중 둘이 여기서 나온다** (v71) ═══════════════
-    //  · 보급 호송선을 부수면 **분열 노심** — 「격추해서 뺏는다」
-    //  · 방어 위성을 부수면 **재돌입체 외피** — 「부수고 회수한다」
-    //  ★ 손에 **들려 준다** — 꽂힌 것이 아니다. 기관실까지 걸어가야 한다.
-    //    그 걸음이 「모아서 붙인다」의 실체다
-    if (t.kind === 'convoy' && !warhead.in.includes('core')) {
-      if (headPick(warhead, 'core')) {
-        banner = '분열 노심을 챙겼습니다 — 기관실 크레이들로';
-        bannerT = 5.0;
-      }
-    }
-    if (t.kind === 'sat' && !warhead.in.includes('shell')) {
-      if (headPick(warhead, 'shell')) {
-        banner = '재돌입체 외피를 챙겼습니다 — 기관실 크레이들로';
-        bannerT = 5.0;
-      }
-    }
-    const g = TKINDS[t.kind].gives;
-    supply.ore = Math.min(ORE.max, supply.ore + g.ore);
-    supply.parts = Math.min(PARTS.max, supply.parts + g.parts);
-    supply.food = Math.min(FOOD.max, supply.food + g.food);
-    const bits = [`광석 ${g.ore}`];
-    if (g.parts) bits.push(`부품 ${g.parts}`);
-    if (g.food) bits.push(`식량 ${g.food}`);
-    banner = `${TKINDS[t.kind].name}을 부쉈습니다 — ${bits.join(' · ')}`;
-    bannerT = 3.2;
+    banner = `${TKINDS[t.kind]?.name ?? ''} 격추 — 잔해가 남았습니다 · 지원 ${Math.round(inS)}초`;
+    bannerT = 3.4;
+    audio?.event('latch');
     audio?.event('fixed');
   }
 }
@@ -764,7 +756,7 @@ function takeHits(list) {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot, salvage,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -948,6 +940,8 @@ const flyPush = { pitch: 0, yaw: 0, roll: 0 };
  *   비행 시뮬의 relative mouse 가 하는 일이고, v79 의 「너무 느려」의 답이다
  */
 const stick = { x: 0, y: 0 };
+/** ★ 급가속이 왜 안 되는지 말한 뒤 잠깐 쉰다 — 매 프레임 외치면 배너가 굳는다 */
+let rushSaid = 0;
 
 /**
  * ★ W/S 로 추력을 켜고 끈다 (v80 · 정석). 차단기와 **같은 길**을 쓴다 —
@@ -971,6 +965,37 @@ function setThrustKey(on) {
 //  ★ 개수만 센다. 전투력으로 옮기는 식은 `might-table.js` 한 곳에만 있다 —
 //    여기서도 더하면 표가 둘이 되고, 둘이면 갈라진다
 const loot = { weapon: 0, armor: 0 };
+
+/** ★★★ v81 — **회수.** 부순 자리에 남는 꾸러미 · 그물 · 지원 도착 시계 */
+const salvage = makeSalvage();
+
+/**
+ * ★★★ **회수했다** (v81) — 격추 순간에 흩어져 있던 것들이 **여기 한 곳**으로
+ *   모인다: 노획(전투력) · 보급(광석·부품·식량) · 탄두 재료.
+ *
+ *   ★ v79~v80 은 이 셋이 `landShots` 안에 따로 흩어져 있었고 전부
+ *     **격추 즉시**였다. 한 꾸러미로 묶으니 「무엇을 줍고 무엇을 버릴지」가
+ *     한 물건에 대한 **한 번의 결정**이 된다
+ */
+function takeSalvage(p) {
+  const was = myPower();
+  loot.weapon += p.has.weapon ?? 0;
+  loot.armor += p.has.armor ?? 0;
+  supply.ore = Math.min(ORE.max, supply.ore + (p.has.ore ?? 0));
+  supply.parts = Math.min(PARTS.max, supply.parts + (p.has.parts ?? 0));
+  supply.food = Math.min(FOOD.max, supply.food + (p.has.food ?? 0));
+  const now = myPower();
+  let extra = '';
+  // ★ 탄두 재료는 **손에 들려 준다** — 꽂힌 것이 아니다. 기관실까지
+  //   걸어가야 하고, 그 걸음이 「모아서 붙인다」의 실체다 (v71)
+  if (p.part && headPick(warhead, p.part)) {
+    extra = p.part === 'core' ? ' · ★ 분열 노심 — 기관실 크레이들로'
+      : ' · ★ 재돌입체 외피 — 기관실 크레이들로';
+  }
+  banner = `회수 — ${packWord(p.has, null)}${now > was ? ` · 전투력 ${was} → ${now}` : ''}${extra}`;
+  bannerT = 4.0;
+  audio?.event('fixed');
+}
 
 /** ★ 지금 내 전투력 — **선체가 깎이면 같이 깎인다** */
 function myPower() {
@@ -2233,8 +2258,22 @@ function systemsStep(dt, valveOpen, regionMult) {
   //  사장님 「급가속 조작은 **따로** 하도록」. 기수를 돌리는 것과
   //  앞으로 튀어나가는 것은 다른 결심이다 — 하나로 묶으면 고를 것이 없다
   {
+    // ══ ★★ **왜 안 되는지 말한다** (v81) ═══════════════════════════
+    //  ★ 사장님 「**급 가속은 작동하는 중이야?**」 — 물으셨다는 것 자체가
+    //    답이다. R 은 조건 셋을 다 만족해야 먹는데(추력 · 구간 중 · 추진제)
+    //    안 먹을 때 **아무 말도 안 했다.** 이 저장소의 규약이 있다:
+    //    「조용히 안 나가면 그건 고장으로 읽힌다」 (v64 · `combat-table.js WHY`)
+    const wantRush = input.keys.has('KeyR');
+    const rushOk = power.thrust && route.phase === RPHASE.LEG;
+    if (wantRush && !rushOk && rushSaid <= 0) {
+      banner = !power.thrust ? '급가속 — 추력을 먼저 켜십시오 (W)'
+        : '급가속 — 거점에서는 안 됩니다. 항로에 오르십시오';
+      bannerT = 2.2;
+      rushSaid = 2.5;
+    }
+    if (rushSaid > 0) rushSaid -= dt;
     const bev = stepBoost(boost, dt, {
-      on: input.keys.has('KeyR') && power.thrust && route.phase === RPHASE.LEG,
+      on: wantRush && rushOk,
       fuel: supply.fuel,
     });
     supply.fuel = Math.max(0, supply.fuel - boost.fuel);
@@ -2683,6 +2722,18 @@ window.SPACE = {
       };
     }
     return null;
+  },
+  // ══ ★★★ v81 — **회수** (space-salvage.js · endtoend 가 읽는다) ══════
+  get salvage() { return { ...salvSummary(salvage), seen: ship.outside.salvage?.seen ?? null }; },
+  /** 검사가 그물을 쏜다 — G 를 헤드리스로 누르면 프레임을 탄다 */
+  fireNet() {
+    const a = noseAim();
+    return fireNet(salvage, { az: a.az, el: a.el, seated: helmSat });
+  },
+  /** 검사가 꾸러미를 하나 떨군다 */
+  putPack(kind = 'raider', dist = 60) {
+    const t = { kind, az: aimAz, el: aimEl, dist };
+    return dropPack(salvage, t, null);
   },
   /** ★ 잔해 — 「격추가 **보이나**」 */
   get wrecks() { return ship.outside.targets?.seen?.wrecks ?? 0; },
@@ -4008,7 +4059,12 @@ function frame(now) {
   // 창밖을 흘려보내고, 배가 미세하게 떤다. 둘 다 없으면 **정지 화면**이다.
   // ★ 거점에 서 있거나 추진이 꺼져 있으면 **느리게 흐른다** — 창밖이
   //   항로와 어긋나면 「가는 척하는 화면」이 된다
-  const cruise = route.phase === RPHASE.PORT ? 0.25 : (power.thrust ? 1 : LEG.coast);
+  // ★★★ v81 — **감는 동안은 못 나아간다.** 줄에 매여 있으므로 말이 되고,
+  //   그게 그물의 값이다: **주우려면 도망칠 수 없다.** 「지원이 오기
+  //   전에」가 무서운 이유가 이 한 줄이다 (`salvage-table.js NET.holdsThrust`)
+  const tied = thrustHeld(salvage);
+  const cruise = route.phase === RPHASE.PORT ? 0.25
+    : ((power.thrust && !tied) ? 1 : LEG.coast);
   // ★★ **착륙이 화면을 몬다** — 고도 하나가 별 흐름·하늘색·발광·지면을 다 정한다.
   //   `update` 보다 **먼저** 넣는다. 나중에 넣으면 이번 프레임은 옛 고도로
   //   그려지고, 그 한 프레임이 마디가 바뀌는 순간마다 툭 끊겨 보인다
@@ -4285,8 +4341,32 @@ function frame(now) {
     moving: route.phase === RPHASE.LEG && !landBusy(land),
     // ★ 거점에 대고 있는 동안은 적이 안 온다 — 사는 일이 벌이 되면 안 된다
     quiet: route.phase === RPHASE.PORT,
+    // ★★★ v81 — **급가속이 정말 다가가게** 한다. v80 까지 R 은 화면만
+    //   바꿨다 (먼지·화각·흔들림) — 다가오는 속도는 손도 안 댔으므로
+    //   「눌러도 안 빨라진다」가 맞았다
+    close: 1 + (RUSH.close - 1) * (boost.k ?? 0),
   }) ?? {};
   takeBumps(skyEv.bumps ?? []);
+  // ══ ★★★ **회수 한 걸음** (v81) — 꾸러미가 흩어지고 그물이 감기고
+  //   지원이 다가온다. `stepSky` 바로 뒤여야 꾸러미가 **같은 프레임의**
+  //   거리로 흐른다 (한 프레임 어긋나면 그물이 늘 조금 빗나간다)
+  {
+    const sv = stepSalvage(salvage, dt, {
+      moving: route.phase === RPHASE.LEG && !landBusy(land),
+    });
+    if (sv.landed) takeSalvage(sv.landed);
+    for (const f of sv.faded) {
+      banner = `${TKINDS[f.kind]?.name ?? ''} 잔해가 흩어졌습니다`;
+      bannerT = 2.2;
+    }
+    // ★★ **지원이 왔다** — 새 시계를 안 만들고 적이 오는 시계를 당긴다
+    if (sv.called) {
+      sky.nextRaider = 0;
+      banner = '적의 지원이 도착했습니다';
+      bannerT = 2.6;
+      audio?.event('caught');
+    }
+  }
   // ★★★ **맞았다** — 이 판의 심장 (v70)
   takeHits(skyEv.hits ?? []);
   // ★★★ **v69 — 규칙이 든 자리를 창밖에 세운다** (사장님 「적 비행선도
@@ -4299,6 +4379,8 @@ function frame(now) {
   //   날아가고, 규칙은 닿는 순간의 표적으로 판정하므로 **궤적의 끝과
   //   격추 지점이 어긋난다** (사장님이 보신 것이 이것이다)
   ship.outside.shots.update(dt, (id) => ship.outside.targets.posOf(id));
+  // ★★★ v81 — 꾸러미·그물·줄을 창밖에 세운다. 규칙이 든 목록 그대로 그린다
+  ship.outside.salvage.update(salvSummary(salvage), dt);
   // ★★★ v70 — **날아오는 적탄.** 규칙에 0.9초의 비행 시간을 뒀는데,
   //   그 동안 화면이 비어 있으면 그건 없는 시간이다 — 「피할 수 있었다」와
   //   「그냥 맞았다」가 구별이 안 된다
@@ -4336,6 +4418,9 @@ function frame(now) {
     //   선도가 필요 없는 무기(유도탄·열추적탄)는 `null` 이라 점이 안 뜬다 —
     //   안 필요한데 뜨면 「이건 뭐지」가 되고, 그건 계기를 배우는 게임이다
     lead: weaponOf(combat).lead ? { speed: weaponOf(combat).speed } : null,
+    // ★★★ v81 — **지금 든 무기의 사거리.** 없으면 조준경이 「멀다」라고만
+    //   하고, 그건 상태이지 **할 일**이 아니다 (`target-table.js rangeWord`)
+    wMax: weaponOf(combat).rMax,
   });
 
   const dev = stepDrift(drift, dt, steering);

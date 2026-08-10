@@ -38,6 +38,7 @@ import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
 //   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
 import { buildTargets } from './targets.js';
 import { buildShots } from './shots.js';
+import { buildSalvage } from './salvage.js';
 import { DUST } from '../game/sky-table.js';
 import { RADAR } from '../game/combat-table.js';
 // ★ v75 — 데이터 블록이 표적 이름을 부른다 (「요격기」 · 「포함」)
@@ -1313,6 +1314,8 @@ export function buildOutside(scene, z) {
   const stars = buildStars(out);
   const targets = buildTargets(out);
   const shots = buildShots(out);
+  // ★★★ v81 — **회수.** 꾸러미·그물·줄. 창밖 그룹이라 배를 틀면 같이 흐른다
+  const salvage = buildSalvage(out);
   const dust = buildDust(out, z);
   const Z_NEAR = z - DUST.near;
   const Z_FAR = z - DUST.far;
@@ -1731,7 +1734,7 @@ export function buildOutside(scene, z) {
     update, setRegion, roll, setLand, setAttitude,
     // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
     //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
-    targets, shots,
+    targets, shots, salvage,
     /** ★ v79 — 광학 창의 카메라가 여기 매달린다. 표적 좌표가 이 그룹 기준이라
      *   다른 데 매달면 배를 틀 때마다 좌표를 두 번 옮기게 된다 */
     group: out,

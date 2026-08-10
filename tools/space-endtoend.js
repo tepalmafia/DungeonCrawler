@@ -1091,6 +1091,34 @@ console.log('\n[6i] ★★ **광학 창** — 앉으면 뜨나 · 격추가 보�
   await S(() => { SPACE.putHelmSit(false); SPACE.clearSky(); });
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6j] **회수** — 부순 것과 얻는 것 사이에 일이 하나 있나 (v81)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6j] ★★ **회수** — 꾸러미 · 그물 · 지원 시계 (v81)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  await S(() => { SPACE.putAim(0, 0); });
+  const pk = await S(() => SPACE.putPack('raider', 60));
+  ok(!!pk, '① 부수면 그 자리에 **꾸러미**가 남는다');
+  const sv0 = await S(() => SPACE.salvage);
+  ok(sv0.call > 0, `② ★ **지원 시계가 돈다** (${sv0.call}초)`);
+  ok(await until(() => SPACE.salvage.seen?.packs > 0, 30, '꾸러미'),
+    '③ ★★ **창밖에 정말 보인다** — 규칙에만 있는 것이 아니다');
+  ok((await S(() => SPACE.fireNet())).ok, '④ 겨누고 G 를 누르면 그물이 나간다');
+  ok(await until(() => SPACE.salvage.seen?.net === true, 30, '그물'),
+    '⑤ ★★ 그물과 줄이 창밖에 보인다');
+  ok(await until(() => SPACE.salvage.reeling === true, 40, '감기'), '⑥ 감기 시작한다');
+  ok(await S(() => SPACE.salvage.thrustHeld),
+    '⑦ ★★ **감는 동안 추진이 묶인다** — 주우려면 도망칠 수 없다');
+  const was = await S(() => SPACE.might.mine);
+  ok(await until(() => SPACE.salvage.got > 0, 90, '회수'), '⑧ ★★ 끝까지 감으면 들어온다');
+  const now = await S(() => SPACE.might.mine);
+  ok(now > was, `⑨ ★★ 회수가 **나를 키운다** — 전투력 ${was} → ${now}`);
+  ok(!(await S(() => SPACE.salvage.thrustHeld)), '⑩ 다 감으면 다시 나아갈 수 있다');
+  await S(() => SPACE.clearSky());
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은
