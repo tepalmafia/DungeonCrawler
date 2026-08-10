@@ -224,7 +224,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 94;
+export const VERSION = 95;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -3799,10 +3799,15 @@ window.SPACE = {
     //   그림(`gunsight.js`)이 하는 것과 **같은 식**이라야 잰 것이 된다
     const F = hudFov();
     // ★ 그림과 **같은 식**(tan)이라야 잰 것이 된다 — v91
+    // ★ v95 — 그림과 **같은 식**이라야 잰 것이 된다: 판은 수평이고
+    //   표식만 롤만큼 돈다 (`gunsight.js` 와 짝)
     const R = Math.PI / 180;
+    const ux = (HUDV.w / 2) * Math.tan(raz * R) / Math.tan((F.h / 2) * R);
+    const uy = (HUDV.h / 2) * Math.tan(rel * R) / Math.tan((F.v / 2) * R);
+    const rr = ship.outside.skyRoll ?? 0;
     const mark = toPx(m.localToWorld(new THREE.Vector3(
-      (HUDV.w / 2) * Math.tan(raz * R) / Math.tan((F.h / 2) * R),
-      (HUDV.h / 2) * Math.tan(rel * R) / Math.tan((F.v / 2) * R),
+      ux * Math.cos(rr) - uy * Math.sin(rr),
+      ux * Math.sin(rr) + uy * Math.cos(rr),
       0,
     )));
     return {
@@ -5163,10 +5168,22 @@ function frame(now) {
   landShots(dt);
 
   // 조준경 — **앉아 있을 때만 켜진다.** 늘 켜 두면 「지금 겨누는 중인가」가 안 읽힌다
-  // ★★★ v91 — **HUD 를 하늘과 같이 굴린다** (`outside.skyRoll`).
-  //   안 굴리면 배를 기울일수록 표식이 적에게서 원을 그리며 벗어난다
-  if (ship.sight?.mesh) ship.sight.mesh.rotation.z = ship.outside.skyRoll;
+  // ══ ★★★ v95 — **판은 안 굴린다. 판 안의 표식만 굴린다** ═══════════
+  //
+  //  사장님 「**왜 락온하는 원이 대각선으로 글씨가 써있는데?**」
+  //
+  //  ★ v91 에 「하늘만 돌고 HUD 는 안 돈다」를 고치면서 **판 전체**를
+  //    굴렸다 (`mesh.rotation.z = skyRoll`). 표식은 맞아 들어갔는데
+  //    **글씨와 눈금까지 같이 돌았다** — 조종석은 짐벌로 수평을 지키므로
+  //    사람 눈은 안 도는데 글씨만 도는, 읽을 수 없는 상태가 됐다.
+  //  ★★ 고칠 자리는 **그리는 쪽**이다: 판은 수평으로 두고, 표적의
+  //    (좌우·위아래)를 롤만큼 **2차원으로 돌려서** 찍는다. 그러면
+  //    표식은 하늘을 따라가고 글씨는 똑바로 선다 — 실제 HUD 의
+  //    수평의(horizon line)만 도는 것과 같은 규약이다
+  if (ship.sight?.mesh) ship.sight.mesh.rotation.z = 0;
   ship.sight.redraw({
+    // ★ v95 — 그리는 쪽에 롤을 넘긴다 (판이 아니라 **표식**이 돈다)
+    roll: ship.outside.skyRoll,
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,
     // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며
