@@ -172,6 +172,14 @@ export function nearness(f, room, dist) {
 }
 
 /** 고쳐지기 전까지 배에 무슨 일이 나나 */
+/**
+ * ★★★ **여기는 진공이 안 된다** (v82).
+ *   · `spine` — 방 일곱을 잇는 **유일한 길**
+ *   · `airlock` — **우주복 걸이가 있는 방** (`world/ship.js`)
+ *   둘 중 하나가 막히면 사람이 아무 데도 못 간다
+ */
+export const NO_VACUUM = ['spine', 'airlock'];
+
 export function effectsOf(f) {
   // ★ **고장 하나가 계통 하나를 배신한다.** 방마다 다른 것을 망가뜨리는 것이
   //   이 표의 규칙이다 — 기관실은 열, 통로는 차단기, 관측실은 해도대,
@@ -200,7 +208,21 @@ export function effectsOf(f) {
     if (o.effect.doorWild) out.doorWild = true;         // 문이 제멋대로 여닫힌다
     if (o.effect.air) {
       // ★ **아직 안 막은 걸음의 방만** 진공이다 (v62)
-      for (const s of o.steps.slice(o.step)) if (s.at && !out.vacuum.includes(s.at)) out.vacuum.push(s.at);
+      for (const s of o.steps.slice(o.step)) {
+        // ══ ★★★ **막다른 길을 안 만든다** (v82) ═══════════════════════
+        //  사장님 「우주복을 입어야한다고 방에 들어갈 수 없는데?
+        //          **게임 진행이 안되**」 — 두 군데가 그랬다:
+        //
+        //    · **에어록** — 우주복 걸이가 거기 있다. 우주복을 가지러
+        //      우주복이 필요하다
+        //    · **통로** — 방 일곱을 잇는 유일한 길. 막히면 배가 통째로 잠긴다
+        //
+        //  ★ 표(`mission-table.js`)에서 그 갈래를 뺐지만 **여기서도 막는다.**
+        //    표는 사람이 고치는 것이고, 언젠가 누가 다시 넣는다.
+        //    「갇히면 그건 긴장이 아니라 사고다」는 **규칙이어야** 한다
+        if (NO_VACUUM.includes(s.at)) continue;
+        if (s.at && !out.vacuum.includes(s.at)) out.vacuum.push(s.at);
+      }
     }
   }
   return out;

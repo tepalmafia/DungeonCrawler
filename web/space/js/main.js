@@ -199,7 +199,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 81;
+export const VERSION = 82;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -303,6 +303,39 @@ addEventListener('mousedown', () => audio?.resume(), { passive: true });
 //  ★ 앉아 있을 때만 먹는다. 걸어다니면서 켜지면 앞이 안 보인 채 걷는다
 //  ★★ 그리고 이건 **공짜가 아니다** — 켜 놓는 동안 창밖을 안 본다.
 //    「늘 켜는 게 답이면 선택이 아니다」의 답이 여기서는 이것이다
+// ══ ★★★ **F1 도움말** (v82) ══════════════════════════════════════════
+//  ★ 사장님 「**도움말을 f1에 만들어줘**」 · 「**전투 도움말을 따로**」
+//  ★★ 두 쪽으로 가른다 — 조작과 전투를 한 장에 쌓으면 스무 줄이 되고,
+//    스무 줄은 안 읽힌다. **지금 막힌 쪽만** 펴 보면 된다.
+//  ★★★ 열면 **게임이 멈춘다.** 읽는 동안 얻어맞으면 그건 도움말이 아니다
+const helpBox = document.getElementById('help');
+let helpOpen = false;
+function showHelp(on, page = null) {
+  helpOpen = !!on;
+  if (helpBox) helpBox.hidden = !helpOpen;
+  if (page) helpPage(page);
+  // ★★ **시계를 멈춘다.** 읽는 동안 얻어맞으면 그건 도움말이 아니라 함정이다.
+  //   멈춤 화면(`showPause`)은 **안 띄운다** — 화면 둘이 겹치면 둘 다 안 읽힌다
+  paused = helpOpen;
+  if (helpOpen) document.exitPointerLock?.();
+}
+function helpPage(which) {
+  const on = which === 'fight';
+  document.getElementById('help-basic')?.toggleAttribute('hidden', on);
+  document.getElementById('help-fight')?.toggleAttribute('hidden', !on);
+  document.getElementById('tab-basic')?.classList.toggle('on', !on);
+  document.getElementById('tab-fight')?.classList.toggle('on', on);
+}
+document.getElementById('tab-basic')?.addEventListener('click', () => helpPage('basic'));
+document.getElementById('tab-fight')?.addEventListener('click', () => helpPage('fight'));
+helpBox?.addEventListener('click', (e) => { if (e.target === helpBox) showHelp(false); });
+addEventListener('keydown', (e) => {
+  // ★ F1 은 브라우저 도움말이라 **막아야** 한다 — 안 막으면 우리 것이
+  //   뜨는 동시에 브라우저 창이 열린다
+  if (e.code === 'F1') { e.preventDefault(); showHelp(!helpOpen); return; }
+  if (e.code === 'Escape' && helpOpen) { e.preventDefault(); showHelp(false); }
+});
+
 let opticBig = false;
 // ══ ★★★ **G — 그물** (v81 · 사장님 「조종석에서 그물이나 기타 회수
 //   장비를 쏘아 회수」) ══════════════════════════════════════════════
@@ -2264,10 +2297,12 @@ function systemsStep(dt, valveOpen, regionMult) {
     //    안 먹을 때 **아무 말도 안 했다.** 이 저장소의 규약이 있다:
     //    「조용히 안 나가면 그건 고장으로 읽힌다」 (v64 · `combat-table.js WHY`)
     const wantRush = input.keys.has('KeyR');
-    const rushOk = power.thrust && route.phase === RPHASE.LEG;
+    // ★★ v82 — **항로 조건을 뺐다.** 「항로는 자동항법에만」 (사장님).
+    //   급가속은 **엔진 일**이지 항법 일이 아니다 — 거점에 대고 있어도
+    //   밟으면 나가야 한다
+    const rushOk = power.thrust;
     if (wantRush && !rushOk && rushSaid <= 0) {
-      banner = !power.thrust ? '급가속 — 추력을 먼저 켜십시오 (W)'
-        : '급가속 — 거점에서는 안 됩니다. 항로에 오르십시오';
+      banner = '급가속 — 추력을 먼저 켜십시오 (W)';
       bannerT = 2.2;
       rushSaid = 2.5;
     }
@@ -3252,6 +3287,21 @@ window.SPACE = {
    *   찍히나」를 물으려면 뒤에 하나 세워야 하는데, 흘러서 뒤로 갈 때까지
    *   기다리면 헤드리스로 몇 분이다 (시계가 실제의 1/20)
    */
+  /**
+   * ★★★ **거리를 밀어 놓는다** (v82).
+   *   `SPACE.sky` 는 `skySummary` 가 만든 **복사본**이라 거기 대고
+   *   `t.dist = 200` 을 해도 아무 일도 안 난다. v81 의 급가속 검사가
+   *   그걸 모르고 복사본을 고치고 있었고, 그래서 「200 에서 시작」이라고
+   *   적어 놓고 실제로는 **그 자리 그대로**를 재고 있었다.
+   *   ★ 살아 있는 것을 만지는 구멍은 **따로 낸다** — 읽는 구멍과 쓰는
+   *     구멍을 같은 이름으로 두면 이런 착각이 또 난다
+   */
+  putSkyDist(id, d) {
+    const t = sky.list.find((x) => x.id === id);
+    if (!t) return null;
+    t.dist = d;
+    return { id: t.id, dist: t.dist };
+  },
   putSkyAz(id, az, el = 0) {
     const t = sky.list.find((x) => x.id === id);
     if (!t) return null;
@@ -4338,7 +4388,20 @@ function frame(now) {
   // ★★ v70 — 적은 **우리를 겨눠야** 쏜다. 기수 방위를 넘긴다
   setNose(sky, aimAz);
   const skyEv = stepSky(sky, dt, {
-    moving: route.phase === RPHASE.LEG && !landBusy(land),
+    // ══ ★★★ **항로는 자동항법에만 영향을 준다** (v82) ═══════════════
+    //
+    //  ★ 사장님 「**항로 설정이 안되면 운전할 수 없잔아.** 이것도 고쳐.
+    //    항로는 **자동항법에만** 영향을 주도록」
+    //
+    //  ★★ 맞는 말이고, 이것이 v81 에서 「거점에서는 아무것도 안 움직인다」로
+    //    드러났던 것의 뿌리다. 여태 조건이 `route.phase === LEG` 였다 —
+    //    즉 **항로를 안 고르면 우주가 통째로 멈췄다.** 추력을 켜도, 급가속을
+    //    해도, 기수를 돌려도 아무것도 안 다가왔다.
+    //
+    //  ★★★ 항로는 **어디로 가는가**이지 **가고 있는가**가 아니다.
+    //    가고 있는가는 **추력**이 정한다. 구간이 나아가는 것(자동항법의
+    //    일)만 `phase` 가 정하면 된다 — 그게 사장님 말씀 그대로다
+    moving: power.thrust && !landBusy(land),
     // ★ 거점에 대고 있는 동안은 적이 안 온다 — 사는 일이 벌이 되면 안 된다
     quiet: route.phase === RPHASE.PORT,
     // ★★★ v81 — **급가속이 정말 다가가게** 한다. v80 까지 R 은 화면만
@@ -4352,7 +4415,8 @@ function frame(now) {
   //   거리로 흐른다 (한 프레임 어긋나면 그물이 늘 조금 빗나간다)
   {
     const sv = stepSalvage(salvage, dt, {
-      moving: route.phase === RPHASE.LEG && !landBusy(land),
+      // ★ v82 — 창밖과 **같은 자**를 쓴다 (항로가 아니라 추력)
+      moving: power.thrust && !landBusy(land),
     });
     if (sv.landed) takeSalvage(sv.landed);
     for (const f of sv.faded) {
@@ -4421,6 +4485,9 @@ function frame(now) {
     // ★★★ v81 — **지금 든 무기의 사거리.** 없으면 조준경이 「멀다」라고만
     //   하고, 그건 상태이지 **할 일**이 아니다 (`target-table.js rangeWord`)
     wMax: weaponOf(combat).rMax,
+    // ★ v82 — **락온이 얼마나 찼나** (0~1). 조준경이 호로 그린다 —
+    //   「원 안에 얼마나 더 붙들고 있어야 하나」가 눈에 보여야 한다
+    lockK: Math.max(0, Math.min(1, combat.radar.t / RADAR.lockFor)),
   });
 
   const dev = stepDrift(drift, dt, steering);

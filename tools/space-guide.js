@@ -117,7 +117,9 @@ console.log('\n[5] 가르침 글과 **같은 방**을 가리킨다 — 글은 �
 {
   const roomOf = (p) => ROOMS.find((r) => p.x >= r.x0 && p.x <= r.x1 && p.z >= r.z0 && p.z <= r.z1)?.name;
   const MARKS = {
-    chart: { x: -3.7, z: 0.6 }, breaker: { x: -0.8, z: 3.3 },
+    // ★ v82 — 항로 안내선이 **조종석**을 가리킨다 (v66 에 갈래 판이
+    //   콘솔로 왔는데 안내선만 관측실에 남아 있었다)
+    chart: { x: 0, z: -7.6 }, breaker: { x: -0.8, z: 3.3 },
     valve: { x: 0, z: 15.1 }, yoke: { x: 0, z: -8.35 }, winch: { x: 3.0, z: 4.9 },
   };
   for (const [key, mark] of Object.entries(AIMS)) {
