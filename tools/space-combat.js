@@ -30,7 +30,7 @@ import {
   makeCombat, weaponOf, isLocked, stepRadar, stepShots, stepCool, pickSlot, fire, forgetLock,
 } from '../web/space/js/game/combat.js';
 import { KINDS, TARGET, HULL } from '../web/space/js/game/target-table.js';
-import { makeSky, setRegion, stepSky, spawnRaider, summary as skySummary } from '../web/space/js/game/target.js';
+import { makeSky, setRegion, stepSky, spawnRaider, spawnFoe, setNose, summary as skySummary } from '../web/space/js/game/target.js';
 import { SIGN } from '../web/space/js/game/chase-table.js';
 import { MISSILES, TRADE } from '../web/space/js/game/supply-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
@@ -185,8 +185,19 @@ console.log('\n[5] ★★★ **제일 센 무기가 제일 밝은가** — 이 �
   ok(f.ok, `유도탄이 나갔다 (미사일 ${MISSILES.max - sup.missiles}발 씀)`);
   // ★★ v69 — **부품은 안 준다.** 미사일이 제 주머니를 쓰는지 여기서 못박는다
   ok(sup.parts === 9, '★ 부품은 그대로다 — 「고치는 것」과 「쏘는 것」이 다른 주머니다');
-  ok(sup.missiles === MISSILES.max - WEAPONS.arh.cost.missiles,
-    `유도탄이 미사일 ${WEAPONS.arh.cost.missiles}발을 쓴다 — 열추적(${WEAPONS.ir.cost.missiles}발)보다 비싸다`);
+  // ══ ★★★ v84 — **시험 동안 무한이다** (사장님 「테스트 해야하니깐 모든
+  //  발사체는 모두 무한으로」 · `supply-table.js MISSILES.infinite`) ══════
+  //  ★ 검사가 **소리 내어 말하게** 둔다. 조용히 건너뛰면 시험이 끝난 뒤에도
+  //    무한인 채로 남고, 그러면 「이번엔 굶고 쏠까」라는 결심이 영영 없어진
+  //    것을 아무도 모른다. 이 저장소가 제일 무서워하는 모양이 그것이다
+  ok(WEAPONS.arh.cost.missiles > WEAPONS.ir.cost.missiles,
+    `유도탄이 미사일 ${WEAPONS.arh.cost.missiles}발을 쓴다 — 열추적(${WEAPONS.ir.cost.missiles}발)보다 비싸다 (표)`);
+  if (MISSILES.infinite) {
+    console.log('   ⚠ **시험 설정: 미사일 무한** (`MISSILES.infinite`) — 재고가 안 줍니다.'
+      + ' 시험이 끝나면 그 한 줄을 false 로 되돌립니다');
+  } else {
+    ok(sup.missiles === MISSILES.max - WEAPONS.arh.cost.missiles, '쏘면 재고가 준다');
+  }
   cc.radar.on = false; stepRadar(cc, DT, aim(t, 1));      // 레이더를 껐다
   let out = [];
   for (let i = 0; i < 200 && !out.length; i++) {
@@ -204,7 +215,13 @@ console.log('\n[6] ★★★ **밖의 것이 배 안으로 안 들어오나** (�
     + ' 처음에 14 로 뒀다가 18 에서 목록에서 빠져 **닿는 것이 하나도 없었다.**'
     + ' 바닥을 깔았는데 그 위에 뚜껑이 있었던 셈이다');
   const sky = makeSky(makeRng('HULL')); setRegion(sky, 'debris');
-  stepSky(sky, 0.1, {}); spawnRaider(sky);
+  // ══ ★★★ v84 — **들이받는 것은 자폭정뿐이다** ═══════════════════════
+  //  ★ 사장님 「적 비행기가 **왜 다가 와서 나에게 충돌**하는데?」
+  //    v83 까지 적 우주선·요격기·포함이 전부 `rams` 라 **다섯 중 넷이
+  //    같은 짓**을 했다. 이제 넷은 사거리를 잡고 싸우고, 몸이 탄인
+  //    자폭정만 들어온다 — 그러니 「선체 안으로 못 들어온다」도
+  //    **자폭정으로** 재야 맞다
+  stepSky(sky, 0.1, {}); spawnFoe(sky, 'drone');
   let t = 0, near = 1e9, bumps = 0;
   while (t < 150) {
     // ★ v70 — `stepSky` 가 `{ bumps, hits }` 를 준다. 적이 쏘기 시작하면서
@@ -241,8 +258,18 @@ console.log('\n[7] ★ **적 우주선을 부술 수 있나 · 안 부수면 죽
   const sky = makeSky(makeRng('RAID')); setRegion(sky, 'empty');
   stepSky(sky, 0.1, {}); spawnRaider(sky);
   let t = 0, hull = 0;
-  while (t < 400 && hull < 1) {
-    for (const b of stepSky(sky, DT, { moving: true }).bumps) hull += b.ram ? HULL.ram.hull : HULL.graze.hull;
+  while (t < 900 && hull < 1) {
+    // ══ ★★★ v84 — **들이받힘이 아니라 얻어맞음으로 잰다** ═══════════
+    //  ★ v83 까지 이 줄은 `bumps` 만 봤다 — 적이 곧장 들어와 박았으니
+    //    그게 유일한 벌이었다. 이제 사거리를 잡고 **쏘므로**, 「안 부수면
+    //    죽나」는 **탄**으로 재야 한다. 그리고 그 편이 원래 맞다
+    //  ★ 싸우는 사람은 적 쪽을 보고 있다 — 안 그러면 저쪽 사격 각이
+    //    죽어서 「가만히 딴 데 보면 안 맞는다」를 재게 된다
+    const foe = sky.list.find((x) => KINDS[x.kind]?.shoots);
+    if (foe) setNose(sky, foe.az, foe.el);
+    const ev = stepSky(sky, DT, { moving: true });
+    for (const h of ev.hits ?? []) if (!h.miss) hull += h.where.hull * (h.punch ?? 1);
+    for (const b of ev.bumps ?? []) hull += b.ram ? HULL.ram.hull : HULL.graze.hull;
     t += DT;
   }
   console.log(`   안 쏘고 두면 ${(t / 60).toFixed(1)}분에 선체가 바닥난다`);

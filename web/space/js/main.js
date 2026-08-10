@@ -116,9 +116,17 @@ import {
   makeSalvage, dropPack, stepSalvage, fireNet, thrustHeld, callWarn,
   summary as salvSummary, WHY as SALV_WHY,
 } from './game/salvage.js';
-import { spawnRaider } from './game/target.js';
+import { spawnRaider, threatNow, aimingSoon } from './game/target.js';
+// ★★★ v84 — **등대.** 말하는 구멍을 하나로 모은다
+import { LINES as AI_LINES, sideWord, VOICE } from './game/ai-table.js';
+import { makeAI, say, hush, stepAI, nowSaying, summary as aiSummary } from './game/ai.js';
+// ★★★ v84 — **느려지는 시간** (발사 사출 · 회피). 배율은 한 곳에서만 정한다
+import { SLOW, slowsOnLaunch } from './game/slow-table.js';
+import {
+  makeSlow, askSlow, dropSlow, stepSlow, slowNow, summary as slowSummary,
+} from './game/slow.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
-import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
+import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
@@ -141,7 +149,7 @@ import {
 } from './game/gun.js';
 import { TURRET_RISE } from './world/turret.js';
 // ★ 떠도는 것들 — 우주 쓰레기와 죽은 위성 (사장님 요청 · game/target-table.js)
-import { KINDS as TKINDS, TARGET, ENEMY_FIRE } from './game/target-table.js';
+import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/target-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
@@ -205,12 +213,19 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 83;
+export const VERSION = 84;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
 const hint = document.getElementById('hint');
 const hud = document.getElementById('hud');
+/** ★★★ v84 — 슬로우일 때 가장자리가 물든다. **가운데는 비운다** */
+const slowFx = document.getElementById('slow');
+/** ★★★ v84 — 회피 지시 — **빼야 할 쪽에** 뜬다 */
+const evBox = document.getElementById('evade');
+const evTip = evBox?.querySelector('.tip');
+const evSay = evBox?.querySelector('.say');
+const evBar = evBox?.querySelector('.bar u');
 const lesson = document.getElementById('lesson');
 const pauseBox = document.getElementById('pause');
 // ★ 게임 오버 — 이 게임의 유일한 끝 (행성 충돌 · 수동 조작 중에만)
@@ -360,26 +375,23 @@ for (const w of Object.values(WAYS)) {
     const a = noseAim();
     const r = fireNet(salvage, { az: a.az, el: a.el, seated: helmSat, way: w.key });
     if (!r.ok) {
-      banner = r.why === 'far'
+      say(ai, r.why === 'far'
         ? `${w.name} — ${w.reach}m 안이어야 합니다 (다가가십시오)`
-        : (SALV_WHY[r.why] ?? '지금은 못 씁니다');
-      bannerT = 2.2;
+        : (SALV_WHY[r.why] ?? '지금은 못 씁니다'), 'tell');
       return;
     }
     chase.sign = Math.min(100, chase.sign + w.sign);   // 사출은 숨길 수 없다 (v44)
     const sec = timeOf(w.key, r.pack.dist);
-    banner = `${w.name} — ${TKINDS[r.pack.kind]?.name ?? ''} 잔해 · ${sec}초`
-      + (w.holds ? ' (감는 동안 못 나아갑니다)' : ' (묶이지 않습니다)');
-    bannerT = 2.4;
+    say(ai, `${w.name} — ${TKINDS[r.pack.kind]?.name ?? ''} 잔해 · ${sec}초`
+      + (w.holds ? ' (감는 동안 못 나아갑니다)' : ' (묶이지 않습니다)'), 'tell');
     audio?.event('tube');
   });
 }
 addEventListener('keydown', (e) => {
   if (e.code !== 'KeyZ' || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (!helmSat) { banner = '조종석에 앉아야 광학 창을 엽니다'; bannerT = 2.0; return; }
+  if (!helmSat) { say(ai, '조종석에 앉아야 광학 창을 엽니다', 'tell'); return; }
   opticBig = !opticBig;
-  banner = opticBig ? '광학 창 — 화면 가득 (Z 로 닫습니다)' : '광학 창을 닫습니다';
-  bannerT = 1.8;
+  say(ai, opticBig ? '광학 창 — 화면 가득 (Z 로 닫습니다)' : '광학 창을 닫습니다', 'tell');
 });
 addEventListener('keydown', (e) => { if (e.code === 'KeyQ') raised = true; });
 addEventListener('keyup', (e) => { if (e.code === 'KeyQ') raised = false; });
@@ -389,8 +401,7 @@ addEventListener('keydown', (e) => {
   // M — 음소거. 소리가 있는 게임에 끄는 방법이 없으면 그건 결함이다
   if (e.code !== 'KeyM' || e.metaKey || e.ctrlKey || e.altKey || !audio) return;
   audio.setMuted(!audio.muted);
-  banner = audio.muted ? '소리 꺼짐 (M)' : '소리 켜짐 (M)';
-  bannerT = 1.4;
+  say(ai, audio.muted ? '소리 꺼짐 (M)' : '소리 켜짐 (M)', 'tell');
 });
 
 // ── 상태 ────────────────────────────────────────────────────
@@ -616,8 +627,7 @@ const scars = makeScars();
 /** 흉터가 하나 생겼다 — **무엇이 달라지는지까지** 말한다 (고장과 다르다) */
 function sayScar(key) {
   if (!key) return;
-  banner = SCARS[key].lead;
-  bannerT = 5.0;
+  say(ai, SCARS[key].lead, 'tell');
   audio?.event('caught');
   hitFlash = 0.6;
 }
@@ -652,7 +662,7 @@ function fireGun() {
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
   const r = fireWeapon(combat, { aimed, supply, rnd: Math.random });
-  if (!r.ok) { banner = CBT_WHY[r.why] ?? '지금은 못 쏩니다'; bannerT = 2.4; return; }
+  if (!r.ok) { say(ai, CBT_WHY[r.why] ?? '지금은 못 쏩니다', 'tell'); return; }
   const w = r.weapon;
   // ══ ★★★ **쏘는 소리** (v74 · 진공 규칙) ═══════════════════════════
   //  v73 까지 레이저가 `caught`(잡혔다)를, 미사일이 `latch`(걸렸다)를
@@ -667,12 +677,19 @@ function fireGun() {
   heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2));
   // ★ **쏘면 밝아진다** — 총구 섬광과 사출은 숨길 수 없다 (v44 규약)
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
-  banner = `${w.name} 발사`;
-  bannerT = 1.4;
+  say(ai, `${w.name} 발사`, 'tell');
   // ★★★ **v69 — 쏘는 것이 보인다.** v68 까지 여기서 숫자만 줬다 (열이
   //   오르고 광석이 줄고 hp 가 빠졌다). 화면에서는 아무 일도 안 났고,
   //   격추 게임에서 그건 **쏘는 맛이 아예 없는 것**이다
   ship.outside.shots.fire(w.key, aimed ? aimed.t : null);
+  // ══ ★★★ v84 — **사출되는 동안 시간이 느려진다** ═══════════════════
+  //  ★ 사장님 「순간적으로 슬로우 모션으로 발사되어 **점점 가속화**」.
+  //  ★★ 슬로우 길이가 **사출 구간과 같다** (`SLOW.launch.sec` =
+  //    `LAUNCH.ejectSec`). 그래서 **시간이 돌아오는 순간 불이 붙는다** —
+  //    둘이 한 동작으로 읽히는 것이 이 계통의 요점이다.
+  //  ★ 레이저는 안 건다 — 즉발인 것을 느리게 날리면 v57 의 고증이
+  //    거짓말이 된다. 레이저의 몫은 총구 섬광이다 (`world/shots.js`)
+  if (slowsOnLaunch(w.key)) askSlow(slowmo, 'launch');
 }
 
 /** ★★ 날아간 것이 닿았다 — 부수거나 빗나간다 */
@@ -684,15 +701,14 @@ function landShots(dt) {
   for (const d of done) {
     const t = d.target;
     if (!d.hit || !t) {
-      banner = d.shot.lost ? '유도가 끊겼습니다' : '빗나갔습니다';
-      bannerT = 1.8;
+      say(ai, d.shot.lost ? '유도가 끊겼습니다' : '빗나갔습니다', 'tell');
       continue;
     }
     t.hp -= d.shot.dmg;
     t.flash = 0.5;
     // ★ 맞은 자리에서 터진다 — 「맞았나」를 숫자로만 알려주지 않는다
     ship.outside.shots.pop(shotAt(t.az, t.el, t.dist));
-    if (t.hp > 0) { banner = `${TKINDS[t.kind].name}에 맞혔습니다 — 맷집 ${t.hp}`; bannerT = 1.8; continue; }
+    if (t.hp > 0) { say(ai, `${TKINDS[t.kind].name}에 맞혔습니다 — 맷집 ${t.hp}`, 'tell'); continue; }
     // 부쉈다
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
@@ -727,8 +743,7 @@ function landShots(dt) {
         drop: pk ? packWord(pk.has, pk.part) : null,
       });
     }
-    banner = `${TKINDS[t.kind]?.name ?? ''} 격추 — 잔해가 남았습니다 · 지원 ${Math.round(inS)}초`;
-    bannerT = 3.4;
+    say(ai, `${TKINDS[t.kind]?.name ?? ''} 격추 — 잔해가 남았습니다 · 지원 ${Math.round(inS)}초`, 'warn');
     audio?.event('latch');
     audio?.event('fixed');
   }
@@ -753,8 +768,7 @@ function takeBumps(list) {
     //   ★ `caught`(잡혔다)·`latch`(걸렸다)를 빌려 쓰고 있었다 — 스친 것과
     //     잡힌 것이 같은 소리면 귀가 아무것도 못 나눈다
     audio?.event(b.ram ? 'hullRam' : 'hullGraze');
-    banner = b.ram ? '들이받혔습니다 — 선체가 깎였습니다' : `${TKINDS[b.kind]?.name ?? '파편'}이 스쳤습니다`;
-    bannerT = b.ram ? 3.0 : 1.6;
+    say(ai, b.ram ? '들이받혔습니다 — 선체가 깎였습니다' : `${TKINDS[b.kind]?.name ?? '파편'}이 스쳤습니다`, 'alarm');
   }
 }
 
@@ -779,6 +793,17 @@ function takeHits(list) {
       // ★ 빗나간 것도 **알려 준다.** 조용하면 「안 쏘는 줄」 안다 —
       //   피한 것이 피한 것으로 읽혀야 회피가 조작이 된다
       hitFlash = Math.max(hitFlash, 0.18);
+      // ══ ★★★ v84 — **「빗나갔다」와 「피했다」를 가른다** ═══════════
+      //  ★ v83 까지 둘이 같은 칸이었다. 주사위가 빗나간 것을 「피했다」로
+      //    세면, 사람은 **손을 안 써도 피한 것**이 되고 그러면 회피가
+      //    영영 조작이 안 된다. 해낸 것은 해냈다고 말해 줘야 한다
+      if (h.evaded) {
+        say(ai, AI_LINES.evaded, 'alarm');
+        audio?.event('click');
+        // 다 뺐으면 슬로우를 곧 놓는다 — 끝난 일에 시간이 붙어 있으면
+        // 그건 늘어짐이지 긴장이 아니다
+        dropSlow(slowmo, 'evade');
+      }
       continue;
     }
     const w = h.where;
@@ -796,13 +821,11 @@ function takeHits(list) {
     //    붉은 번쩍임 하나뿐이라 어디를 맞았는지 화면으로도 몰랐다
     //  ★★ 세기로 나눈다 — 세게 맞으면 배가 더 낮게, 더 오래 운다
     audio?.event(punch >= 2 ? 'hullRam' : 'hullHit');
-    banner = w.what;
-    bannerT = 2.4;
+    say(ai, w.what, 'tell');
     // ★★ 세 번에 한 번만 일이 된다 (`FAULT_CHANCE`). 매번이면 회차가
     //   고장 목록이 되고, 그러면 사람은 싸우는 대신 **안 맞으려고만** 한다
     if (h.fault && openFault(faults, h.fault)) {
-      banner = `${w.what} — 무언가 잘못됐습니다`;
-      bannerT = 3.2;
+      say(ai, `${w.what} — 무언가 잘못됐습니다`, 'tell');
       audio?.event('fault');
     }
   }
@@ -1006,13 +1029,11 @@ let rushSaid = 0;
  */
 function setThrustKey(on) {
   if (on && !canTurnOn(power) && !power.thrust) {
-    banner = '전력이 모자랍니다 — 다른 것을 끄십시오';
-    bannerT = 2.0;
+    say(ai, '전력이 모자랍니다 — 다른 것을 끄십시오', 'warn');
     return;
   }
   power.thrust = on;
-  banner = on ? '추력 — 켬' : '추력 — 끔';
-  bannerT = 1.4;
+  say(ai, on ? '추력 — 켬' : '추력 — 끔', 'tell');
 }
 
 // ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════════════
@@ -1025,6 +1046,13 @@ const loot = { weapon: 0, armor: 0 };
 
 /** ★★★ v81 — **회수.** 부순 자리에 남는 꾸러미 · 그물 · 지원 도착 시계 */
 const salvage = makeSalvage();
+
+/**
+ * ★★★ v84 — **느려지는 시간.** 발사(사출)와 회피가 부른다.
+ *   ★ 둘이 각자 `dt` 를 곱하면 0.45×0.45 = 0.20 이라 화면이 멈춘다.
+ *     `slow.js` 가 **제일 느린 하나만** 쓰고 바닥으로 막는다
+ */
+const slowmo = makeSlow();
 
 /**
  * ★★★ v83 — **화물칸.** 아이템에는 **무게**가 있으므로 「이걸 실을까
@@ -1066,8 +1094,7 @@ function takeSalvage(p) {
   }
   const missed = Object.keys(r.missed).length
     ? ` · ★ 자리가 없어 못 실음 (${cargoWord(r.missed)})` : '';
-  banner = `회수 — ${cargoWord(r.took)}${now > was ? ` · 전투력 ${was} → ${now}` : ''}${extra}${missed}`;
-  bannerT = 4.0;
+  say(ai, `회수 — ${cargoWord(r.took)}${now > was ? ` · 전투력 ${was} → ${now}` : ''}${extra}${missed}`, 'tell');
   audio?.event('fixed');
 }
 
@@ -1103,6 +1130,10 @@ let stuckT = 0;
 /** 마지막 프레임의 실제 부하 — `renderer.info` 는 매 패스 되돌아간다 */
 let lastCost = { calls: 0, tris: 0 };
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
+/** ★★★ v84 — 지금 급기동(Shift) 중인가. **회피가 이걸 읽는다** */
+let burstNow = false;
+/** ★★★ v84 — 지금 나를 맞힐 탄 하나 (화살표·경고가 읽는다) */
+let threat = null;
 let winching = false;     // 지금 윈치를 잡고 있나
 let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다른 일
 let liftHeldWas = false;  // 이륙은 제 셈을 갖는다 (눌린 순간을 두 곳에서 본다)
@@ -1154,7 +1185,22 @@ let readGrip = false;
 let leakOpen = false;
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
 let flash = 0;            // 경보 깜빡임
-let banner = '';          // 화면 한복판에 잠깐 뜨는 글자
+/**
+ * ══ ★★★ v84 — **등대.** 이 배가 말하는 **유일한 구멍** ═══════════════
+ *
+ *  ★ 사장님 「**우주선 내에 ai를 도입**해서 … 튜토리얼, 도움말, 조언,
+ *    경고 … **하지만 최종 결정은 플레이어가**」
+ *
+ *  ★★ 새로 얹지 않고 **모았다.** v83 까지 이 파일에 `banner = …;
+ *    bannerT = …;` 가 **112곳** 흩어져 있었다 — 아무나 아무 때나
+ *    덮어썼고, 셋이 한꺼번에 오면 **마지막 하나**만 남았다 (그게 제일
+ *    안 급한 것일 수도 있었다). 이제 전부 `say(ai, …)` 하나로 들어오고,
+ *    **급한 것이 덜 급한 것을 밀어낸다.**
+ *
+ *  ★★★ **등대는 길을 비출 뿐 배를 몰지 않는다.** 조종·발사·회수를
+ *    이 계통이 부르지 않는다 — `tools/space-ai.js` 가 그걸 센다
+ */
+const ai = makeAI();
 /**
  * **잡았는데 안 먹을 때 왜인지 말한다** — 되풀이하지 않고.
  *
@@ -1171,10 +1217,9 @@ let nagAt = -99, nagWas = '';
 function nag(text) {
   if (text === nagWas && clock - nagAt < 4) return;
   nagWas = text; nagAt = clock;
-  banner = text; bannerT = 2.2;
+  say(ai, text, 'tell');
   audio?.event('deny');
 }
-let bannerT = 0;
 // 뿌리친 시각. **떨림과 소리가 같은 시계를 본다** — 따로 세면 어긋난다
 let escapedAt = -99;
 let shakeMul = SHAKE.calm;
@@ -1279,7 +1324,7 @@ function walk(dt) {
   // ★ 앉아 있으면 안 걷는다. 다만 **걸으려 하면 일어난다** — v52 에서
   //   주포 좌석에 갇혔던 것과 같은 함정을 안 판다
   if (helmSat) {
-    if (f !== 0 || r !== 0) { helmSat = false; banner = '조종석에서 일어납니다'; bannerT = 1.8; }
+    if (f !== 0 || r !== 0) { helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
     return;
   }
   // ★ v64 — 여기 있던 **주포 좌석 미끄러짐과 자동 일어나기**를 걷어냈다.
@@ -1332,7 +1377,7 @@ function walk(dt) {
  */
 function stumble() {
   if (!moveBump(move)) return;
-  banner = '부딪혔습니다'; bannerT = 1.4;
+  say(ai, '부딪혔습니다', 'alarm');
   audio?.event('deny');
   // 두 손으로 안고 있던 것을 놓친다 — 제자리(정비실)로 돌아간다
   if (carry.held) {
@@ -1486,10 +1531,10 @@ function interactStep(dt) {
   // ── 떼기 · 붙이기 ───────────────────────────────────────
   const carried = carryStep(carry, onSpot, input.hold, dt);
   if (carried === 'pulled') {
-    banner = `${CARRY_KINDS[carry.held].name}을 떼어 냈습니다`; bannerT = 2.0;
+    say(ai, `${CARRY_KINDS[carry.held].name}을 떼어 냈습니다`, 'tell');
     audio?.event('fixed');
   } else if (carried === 'stuck') {
-    banner = '붙였습니다'; bannerT = 1.6;
+    say(ai, '붙였습니다', 'tell');
     audio?.event('fixed');
   }
   // 거점에 서 있을 때만 눌린다 — 항행 중에는 판이 「항행 중」만 띄운다.
@@ -1533,7 +1578,7 @@ function interactStep(dt) {
   if (input.press && !readGrip) {
     if (yokeHeld) {
       yokeHeld = false;
-      banner = '조종간을 놓습니다'; bannerT = 1.2;
+      say(ai, '조종간을 놓습니다', 'tell');
       // ★★ **누름을 삼키는 것은 조종간을 겨눴을 때뿐이다.** 딴 손잡이를
       //   겨눴으면 놓기만 하고 누름은 **그쪽에 넘긴다** — 안 그러면
       //   조종간을 잡은 채로는 무엇을 누르든 한 번은 헛클릭이 된다.
@@ -1541,7 +1586,7 @@ function interactStep(dt) {
       if (onYoke) input.takePress();
     } else if (onYoke) {
       yokeHeld = true; input.takePress();
-      banner = '조종간을 잡습니다'; bannerT = 1.2;
+      say(ai, '조종간을 잡습니다', 'tell');
     }
   }
   // 좌석에서 일어나면 손도 놓는다 — 「자세는 안 잇는다」와 같은 규약
@@ -1552,16 +1597,14 @@ function interactStep(dt) {
   //   전에는 놓으면 배가 저절로 항로로 돌아와서 **한 일이 아무 자국도
   //   안 남았다.** 그게 「조정석을 잡아도 운전이 안 되잔아」의 실체다
   if (steering && takeHelm(helm)) {
-    banner = '수동 조종 — 자동 항법이 꺼졌습니다';
-    bannerT = 3.0;
+    say(ai, '수동 조종 — 자동 항법이 꺼졌습니다', 'tell');
     audio?.event('latch');
   }
   // ★ 다시 켜는 것은 **조종간이 아니라 옆의 스위치**다. 같은 손잡이가
   //   껐다 켰다 하면 지금 어느 쪽인지를 모른다
   if (onAuto && input.hold && !autoHeldWas) {
     if (engageAuto(helm)) {
-      banner = '자동 항법 — 항로로 돌아갑니다';
-      bannerT = 3.0;
+      say(ai, '자동 항법 — 항로로 돌아갑니다', 'tell');
       audio?.event('fixed');
     } else nag('이미 자동 항법입니다');
   }
@@ -1596,7 +1639,7 @@ function interactStep(dt) {
   //   나가고 **진행만 멈춘다** — 껐다 켜며 벌을 피하는 길을 막는다
   const answering = onRadio && input.hold;
   const rev2 = stepRescue(rescue, dt, answering, { outerOpen: lock.open });
-  if (rev2 === 'answered') { banner = RESCUE.near; bannerT = 4.5; audio?.event('fault'); }
+  if (rev2 === 'answered') { say(ai, RESCUE.near, 'tell'); audio?.event('fault'); }
   if (rev2 === 'took') {
     supply.parts = Math.min(PARTS.max, supply.parts + rescue.got.parts);
     supply.food = Math.min(FOOD.max, supply.food + rescue.got.food);
@@ -1611,18 +1654,17 @@ function interactStep(dt) {
     if (!warhead.in.includes('initiator') && headPick(warhead, 'initiator')) {
       gotHead = ' · **중성자 개시기**';
     }
-    banner = `${RESCUE.took} — 부품 ${rescue.got.parts} · 식량 ${rescue.got.food}`
-      + (gotM ? ` · 미사일 ${gotM}발` : '') + gotHead;
-    bannerT = 4.0;
+    say(ai, `${RESCUE.took} — 부품 ${rescue.got.parts} · 식량 ${rescue.got.food}`
+      + (gotM ? ` · 미사일 ${gotM}발` : '') + gotHead, 'tell');
     audio?.event('escaped');
     sceneDone(scenes, 'G');
   }
-  if (rev2 === 'left') { banner = RESCUE.left; bannerT = 3.5; sceneDone(scenes, 'G'); }
+  if (rev2 === 'left') { say(ai, RESCUE.left, 'tell'); sceneDone(scenes, 'G'); }
 
   // ── ★★ 주 차단기 — **어둠 속에서 올린다** (E 정전 · 7판) ──────
   const dev = stepDark(dark, dt, onMain && input.hold);
   if (dev === 'back') {
-    banner = DARK.back; bannerT = 4.5;
+    say(ai, DARK.back, 'tell');
     audio?.event('escaped');
     sceneDone(scenes, 'E');
   }
@@ -1634,10 +1676,9 @@ function interactStep(dt) {
   const wearing = onSuit && input.hold;
   const wev = stepWear(suit, dt, { hold: wearing });
   if (wev === 'wore') {
-    banner = '우주복을 입었습니다 — 손이 둔합니다';
-    bannerT = 3.2; audio?.event('latch');
+    say(ai, '우주복을 입었습니다 — 손이 둔합니다', 'alarm'); audio?.event('latch');
   }
-  if (wev === 'doffed') { banner = '우주복을 벗었습니다'; bannerT = 2.2; audio?.event('click'); }
+  if (wev === 'doffed') { say(ai, '우주복을 벗었습니다', 'alarm'); audio?.event('click'); }
   ship.suitRack?.setWorn(suit.on);
 
   // ★★ **지금 진공에 있나** — 두 자리다.
@@ -1649,16 +1690,14 @@ function interactStep(dt) {
   vacNow = inVac;
   const sev = stepSuit(suit, dt, { vacuum: inVac });
   if (sev === 'low') {
-    banner = `우주복 공기가 얼마 없습니다 — ${(suit.air / 60).toFixed(1)}분`;
-    bannerT = 3.6; audio?.event('fault');
+    say(ai, `우주복 공기가 얼마 없습니다 — ${(suit.air / 60).toFixed(1)}분`, 'alarm'); audio?.event('fault');
   }
   if (sev === 'out') {
     // ★ **죽이지 않는다.** 배가 억지로 끌어들이고 문을 닫는다 —
     //   벌은 늘 기다림이다 (기밀 상실 · 정전 · 끼인 문과 같은 규약)
     lock.open = false; lock.opening = false; lock.cycling = 0;
     lock.lockout = LOCK.lockout;
-    banner = '공기가 바닥났습니다 — 배가 문을 닫았습니다';
-    bannerT = 4.2; hitFlash = 1; audio?.event('caught');
+    say(ai, '공기가 바닥났습니다 — 배가 문을 닫았습니다', 'alarm'); hitFlash = 1; audio?.event('caught');
   }
 
   const onDirt = landDown(land);
@@ -1678,16 +1717,14 @@ function interactStep(dt) {
   }
   if (winching) {
     if (winchStep(supply, dt) === 'load') {
-      banner = `광석 한 통 — ${supply.loads}통째`;
-      bannerT = 2.2;
+      say(ai, `광석 한 통 — ${supply.loads}통째`, 'tell');
       audio?.event('latch');
       // ★★★ v71 — **부스터 가스는 캐서 나온다** (「사거나 채굴」의 「캐는」 쪽).
       //   내려서 **세 통**을 캐야 나온다 — 오래 서 있어야 하고, 서 있으면
       //   들킨다. 그 값이 이 재료의 위험이다
       if (onDirt && supply.loads >= 3 && !warhead.in.includes('booster')
         && warhead.carrying !== 'booster' && headPick(warhead, 'booster')) {
-        banner = '얼음에서 **부스터 가스**를 뽑았습니다 — 기관실 크레이들로';
-        bannerT = 5.0;
+        say(ai, '얼음에서 **부스터 가스**를 뽑았습니다 — 기관실 크레이들로', 'tell');
         audio?.event('fixed');
       }
     }
@@ -1699,7 +1736,7 @@ function interactStep(dt) {
     supply.food = Math.min(FOOD.max, supply.food + g.food);
     if (g.parts) {
       supply.parts = Math.min(PARTS.max, supply.parts + g.parts);
-      banner = `부품 ${g.parts}개를 실었습니다`; bannerT = 2.0;
+      say(ai, `부품 ${g.parts}개를 실었습니다`, 'tell');
       audio?.event('latch');
     }
     ship.winch.drum.rotation.y -= dt * 3.4;
@@ -1714,14 +1751,12 @@ function interactStep(dt) {
     if (warhead.carrying) {
       if (holdCradle(warhead, dt, { holding: true }) === 'in') {
         const p = HEAD_BY[warhead.in[warhead.in.length - 1]];
-        banner = `${p?.name ?? '재료'}를 꽂았습니다 — ${warhead.in.length}/${PARTS5.length}`;
-        bannerT = 3.2;
+        say(ai, `${p?.name ?? '재료'}를 꽂았습니다 — ${warhead.in.length}/${PARTS5.length}`, 'tell');
         audio?.event('fixed');
       }
     } else if (headFull(warhead) && !warhead.armed) {
       if (holdArm(warhead, dt, { holding: true }) === 'armed') {
-        banner = '탄두가 무장했습니다';
-        bannerT = 4.0;
+        say(ai, '탄두가 무장했습니다', 'tell');
         audio?.event('latch');
       }
     } else if (!warhead.armed) {
@@ -1736,11 +1771,10 @@ function interactStep(dt) {
   //   한계에 닿으면 **꽂아 둔 것이 하나 죽는다** — 죽는 것이 아니라 일이 는다
   {
     const hev = stepWarhead(warhead, dt, { heat });
-    if (hev === 'warn') { banner = '탄두가 뜨겁습니다'; bannerT = 3.0; audio?.event('fault'); }
+    if (hev === 'warn') { say(ai, '탄두가 뜨겁습니다', 'tell'); audio?.event('fault'); }
     if (hev === 'lost') {
       const g = HEAD_BY[warhead.lost[warhead.lost.length - 1]];
-      banner = `열에 ${g?.name ?? '재료'}가 망가졌습니다 — 다시 구해야 합니다`;
-      bannerT = 4.5;
+      say(ai, `열에 ${g?.name ?? '재료'}가 망가졌습니다 — 다시 구해야 합니다`, 'tell');
       audio?.event('caught');
     }
   }
@@ -1771,14 +1805,12 @@ function interactStep(dt) {
       trading = 0;
       supply.ore -= HEAD_BY.lens.cost;
       headPick(warhead, 'lens');
-      banner = `광석 ${HEAD_BY.lens.cost} → 폭축 렌즈 — 기관실 크레이들로`;
-      bannerT = 5.0;
+      say(ai, `광석 ${HEAD_BY.lens.cost} → 폭축 렌즈 — 기관실 크레이들로`, 'tell');
       audio?.event('fixed');
     } else if (trading >= TRADE.missileHold && canBuyMissiles(supply)) {
       trading = 0;
       buyMissiles(supply);
-      banner = `광석 ${TRADE.missileOre} → 미사일 ${MISSILES.perBuy}발 (${supply.missiles}/${MISSILES.max})`;
-      bannerT = 2.8;
+      say(ai, `광석 ${TRADE.missileOre} → 미사일 ${MISSILES.perBuy}발 (${supply.missiles}/${MISSILES.max})`, 'tell');
       audio?.event('latch');
     } else if (trading >= TRADE.hold && canTrade(supply)) {
       // ★ 미사일을 살 수 있으면 **여기서 안 끊는다** — 계속 잡고 있으면
@@ -1786,14 +1818,12 @@ function interactStep(dt) {
       if (!canBuyMissiles(supply)) {
         trading = 0;
         trade(supply);
-        banner = `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts}`;
-        bannerT = 2.6;
+        say(ai, `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts}`, 'tell');
         audio?.event('fixed');
       } else if (!boughtFood) {
         boughtFood = true;
         trade(supply);
-        banner = `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts} — 더 잡으면 미사일`;
-        bannerT = 2.6;
+        say(ai, `광석 ${TRADE.ore} → 식량 ${TRADE.food} · 부품 ${TRADE.parts} — 더 잡으면 미사일`, 'tell');
         audio?.event('fixed');
       }
     }
@@ -1810,8 +1840,7 @@ function interactStep(dt) {
   const shortParts = !!fixHere && lastStep && !canRepair(supply, needParts);
   if (shortParts && input.hold && !partsWarned) {
     partsWarned = true;
-    banner = `부품이 없습니다 — 거점 접수구에서 바꿉니다`;
-    bannerT = 2.6;
+    say(ai, `부품이 없습니다 — 거점 접수구에서 바꿉니다`, 'warn');
     audio?.event('deny');
   }
   if (!input.hold) partsWarned = false;
@@ -1850,7 +1879,7 @@ function interactStep(dt) {
     if (now !== repairAct) {
       repairAct = now;
       // **말로도 나온다.** 손만 바뀌면 뭘 하는 중인지 모른다
-      banner = repairPose.what; bannerT = 1.4;
+      say(ai, repairPose.what, 'tell');
       audio?.event('latch');
     }
     if (ev === 'step') {
@@ -1860,8 +1889,7 @@ function interactStep(dt) {
         nag('손이 비어야 챙깁니다 — 들고 있는 것을 붙여 놓으세요');
       }
       const nx = fixHere.steps[fixHere.step];
-      banner = nx?.what ? `${nx.what} — ${ROOM_NAME[nx.at] ?? nx.at}` : '한 군데 더 있습니다';
-      bannerT = 2.6;
+      say(ai, nx?.what ? `${nx.what} — ${ROOM_NAME[nx.at] ?? nx.at}` : '한 군데 더 있습니다', 'tell');
       audio?.event('latch');
     }
     if (ev === 'fixed') {
@@ -1870,8 +1898,7 @@ function interactStep(dt) {
       if (plan) takeCarry(carry, plan.kind);
       spendParts(supply, needParts);
       // ★ **여기서야 원인을 말해 준다.** 고치기 전에 말하면 진단이 사라진다
-      banner = fixHere.reveal;
-      bannerT = 3.4;
+      say(ai, fixHere.reveal, 'tell');
       audio?.event('fixed');
       // ★★ **마모를 덜기 전에** 센다 — clear() 가 WEAR.relief 를 빼므로
       //   뒤에 세면 방금 혹사한 것이 멀쩡한 것으로 읽힌다
@@ -1929,8 +1956,7 @@ function interactStep(dt) {
     coolOpen = !coolOpen;
     if (coolOpen) taught.cooled++;
     audio?.event('latch');
-    banner = coolOpen ? '냉각 밸브 — 열림' : '냉각 밸브 — 잠금';
-    bannerT = 2.0;
+    say(ai, coolOpen ? '냉각 밸브 — 열림' : '냉각 밸브 — 잠금', 'tell');
   }
 
   // ★ 열을 **0.6초마다 한 점씩** 40초치 담아 둔다. 매 프레임 담으면 그래프가
@@ -1949,20 +1975,19 @@ function interactStep(dt) {
     // ★★ **발견 → 결심.** 판 0 이 「내린다」, 판 1 이 「지나친다」다
     if (plate === 0) {
       if (beginLand(land, { chase: chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT })) {
-        banner = STEP_WORD[LSTEP.APPROACH]; bannerT = 3.0;
+        say(ai, STEP_WORD[LSTEP.APPROACH], 'tell');
         audio?.event('latch');
       } else nag(LAND_WHY[land.blocked] ?? '지금은 못 내립니다');
     } else {
       passPlanet(land);
       sceneDone(scenes, 'B');
-      banner = '지나칩니다'; bannerT = 2.0;
+      say(ai, '지나칩니다', 'tell');
       audio?.event('click');
     }
   } else if (plate >= 0 && pressed) {
     if (canPick && chooseFork(route, ship.cock.keyAt(plate))) {
       ship.outside.setRegion(regionOf(route));
-      banner = `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`;
-      bannerT = 2.4;
+      say(ai, `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`, 'tell');
       audio?.event('latch');
     } else {
       // ★ 거절음만 났다. 소리는 「안 된다」까지고 **왜**를 못 말한다
@@ -1976,25 +2001,24 @@ function interactStep(dt) {
     //  ★ 규칙은 차단기 때와 **똑같이** 둔다 — 추진제가 마르면 안 걸리고,
     //    전력이 모자라면 못 켠다. 자리만 옮긴 것이지 규칙을 바꾼 게 아니다
     if (!power.thrust && isDry(supply.fuel)) {
-      banner = fuelWord(supply.fuel); bannerT = 2.6; audio?.event('deny');
+      say(ai, fuelWord(supply.fuel), 'tell'); audio?.event('deny');
     } else if (power.thrust) {
       power.thrust = false; wearFlip(faults); taught.flips++;
-      banner = '추력 레버를 당깁니다 — 관성으로 갑니다'; bannerT = 1.8;
+      say(ai, '추력 레버를 당깁니다 — 관성으로 갑니다', 'tell');
       audio?.event('click');
     } else if (canTurnOn(power)) {
       power.thrust = true; wearFlip(faults); taught.flips++;
-      banner = '추력 레버를 밉니다'; bannerT = 1.6;
+      say(ai, '추력 레버를 밉니다', 'tell');
       audio?.event('click');
     } else {
-      banner = '전력이 모자랍니다'; bannerT = 1.6; audio?.event('deny');
+      say(ai, '전력이 모자랍니다', 'warn'); audio?.event('deny');
     }
   } else if (breaker && pressed) {
     // ★★ **추진제가 바닥나면 추진이 안 걸린다** (v62 · fuel-table.js).
     //   죽지는 않는다 — 구간은 coast(0.45) 로 계속 나아가고, 그동안
     //   압박이 진짜 시간으로 쌓인다. 벌은 「끝」이 아니라 **기다림**이다
     if (breaker.key === 'thrust' && !power.thrust && isDry(supply.fuel)) {
-      banner = fuelWord(supply.fuel);
-      bannerT = 2.6;
+      say(ai, fuelWord(supply.fuel), 'tell');
       audio?.event('deny');
     } else if (power[breaker.key]) { power[breaker.key] = false; wearFlip(faults); taught.flips++; audio?.event('click'); }
     else if (canTurnOn(power)) { power[breaker.key] = true; wearFlip(faults); taught.flips++; audio?.event('click'); }
@@ -2005,8 +2029,7 @@ function interactStep(dt) {
       //   「눌렸는데 안 먹었다」가 되어 고장으로 읽힌다
       // ★ v58 이후로는 여기 안 온다 (POWER_MAX 가 3 이라 늘 켜진다).
       //   지우지 않는 이유: 정전(E)처럼 회로가 죽는 상황이 앞으로 또 생긴다
-      banner = '전력이 모자랍니다';
-      bannerT = 1.6;
+      say(ai, '전력이 모자랍니다', 'warn');
       audio?.event('deny');
     }
   }
@@ -2022,8 +2045,7 @@ function interactStep(dt) {
       if (on.length) {
         const c = on[Math.floor(Math.random() * on.length)];
         power[c.key] = false;
-        banner = `${c.name} 차단기가 내려갔습니다`;
-        bannerT = 2.0;
+        say(ai, `${c.name} 차단기가 내려갔습니다`, 'tell');
         audio?.event('deny');
       }
     }
@@ -2064,8 +2086,7 @@ function interactStep(dt) {
     //   그래서 앉아도 시선이 그대로라 조종간을 손으로 더듬어 찾아야 했다.
     //   재 보니 조종간은 34도 아래에 있다 (`SIT_LOOK`)
     me.pitch = SIT_LOOK;
-    banner = '조종석에 앉습니다 — 조종간을 잡으면 창이 열립니다';
-    bannerT = 1.8;
+    say(ai, '조종석에 앉습니다 — 조종간을 잡으면 창이 열립니다', 'tell');
     audio?.event('click');
   } else if (helmSat && gunPressed && !steering && !cockGrip && !aimName && helmSitK > 0.995) {
     // ★ 일어나는 것은 **아무것도 안 잡힌 데를 누를 때**다. 손잡이를 누르면
@@ -2083,8 +2104,7 @@ function interactStep(dt) {
     //  없어 보이는 말이다. 손잡이를 하나 늘릴 때마다 여기 이름을 하나씩
     //  더 적는 방식이었으면 다음 판에 또 밟는다. **잡힌 것이 있나**로 묻는다
     helmSat = false;
-    banner = '일어납니다';
-    bannerT = 1.6;
+    say(ai, '일어납니다', 'tell');
     audio?.event('click');
   }
 
@@ -2102,8 +2122,7 @@ function interactStep(dt) {
     if (!helmSat || !input.keys.has(`Digit${w.slot}`)) continue;
     if (combat.slot === w.slot) continue;
     pickSlot(combat, w.slot);
-    banner = `${w.name} — ${w.what}`;
-    bannerT = 2.6;
+    say(ai, `${w.name} — ${w.what}`, 'tell');
     audio?.event('click');
   }
   // ★★★ v64 — **조종석에 앉아 있으면 쏜다.** 포탑에 올라갈 필요가 없다
@@ -2113,20 +2132,17 @@ function interactStep(dt) {
   // ── ★ 바깥문 — 누르는 순간 돌기 시작한다 ──────────────
   if (onOuter && gunPressed) {
     if (cycleLock(lock, { thrust: power.thrust })) {
-      banner = lock.opening ? '바깥문을 엽니다' : '바깥문을 닫습니다';
-      bannerT = 2.0;
+      say(ai, lock.opening ? '바깥문을 엽니다' : '바깥문을 닫습니다', 'tell');
       audio?.event('latch');
     } else {
       // ★ **조용히 안 열리면 「고장」으로 읽힌다** — 이 저장소가 네 번 겪었다
-      banner = LOCK_WHY[lock.blocked] ?? '지금은 안 열립니다';
-      bannerT = 2.6;
+      say(ai, LOCK_WHY[lock.blocked] ?? '지금은 안 열립니다', 'tell');
     }
   }
   const gbOut = holdGambit(gambit, dt, { holding: gbHolding, leg: route.leg });
   if (gbOut) {
     gbUsedHand = gbHand;
-    banner = gbOut.what;
-    bannerT = 4.2;
+    say(ai, gbOut.what, 'tell');
     audio?.event(gbOut.good ? 'escaped' : 'deny');
     const w = gbOut.gain;
     if (w.dist) chase.dist = Math.min(100, chase.dist + w.dist);
@@ -2202,16 +2218,14 @@ function systemsStep(dt, valveOpen, regionMult) {
   if (gev === 'offer') {
     // ★ **무엇을 하라고 안 적는다.** 실마리만 주고 손잡이가 켜지는 것으로
     //   말한다 (「글로 안 알려준다」 · PLAN §3-1)
-    banner = gambitWord(gambit.on);
-    bannerT = 4.0;
+    say(ai, gambitWord(gambit.on), 'tell');
     audio?.event('fault');
   }
   if (!chasingNow) chaseOver(gambit);
   if (canFire(tutor, 'fault') && stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
     const o = faults.open[faults.open.length - 1];
     // ★ **증상만 말한다.** 어디인지·무엇인지는 안 말한다 (PLAN §3-1)
-    banner = o.lead;
-    bannerT = 3.6;
+    say(ai, o.lead, 'tell');
     audio?.event('fault');
   }
   // ── 문 — **가까이 가면 열리고 지나가면 닫힌다** ───────
@@ -2251,13 +2265,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     if (e.what === 'jam') {
       // ★ **어느 문인지 안 말한다.** 「무언가 잘못됐다」까지다 (PLAN §3-1) —
       //   고장과 같은 규약이고, 배가 좁으니 걸어 보면 곧 안다
-      banner = '어딘가 문이 안 열립니다';
-      bannerT = 3.4;
+      say(ai, '어딘가 문이 안 열립니다', 'tell');
       audio?.event('fault');
     }
     if (e.what === 'freed') {
-      banner = `${e.door.name} 문이 열렸습니다`;
-      bannerT = 2.4;
+      say(ai, `${e.door.name} 문이 열렸습니다`, 'tell');
       audio?.event('fixed');
     }
   }
@@ -2284,17 +2296,15 @@ function systemsStep(dt, valveOpen, regionMult) {
     region: ship.outside.region,
   });
   if (sup === 'hungry') {
-    banner = '손이 떨립니다 — 식량이 모자랍니다';
-    bannerT = 3.2;
+    say(ai, '손이 떨립니다 — 식량이 모자랍니다', 'warn');
     audio?.event('fault');
   }
-  if (sup === 'lowFuel') { banner = fuelWord(supply.fuel); bannerT = 3.2; audio?.event('fault'); }
+  if (sup === 'lowFuel') { say(ai, fuelWord(supply.fuel), 'tell'); audio?.event('fault'); }
   if (sup === 'dry') {
     // ★ 바닥나면 **차단기가 저절로 내려간다.** 「켜 놨는데 안 간다」는
     //   계기가 거짓말하는 것이고, 이 배에서 제일 하면 안 되는 일이다
     power.thrust = false;
-    banner = '추진제가 바닥났습니다 — 엔진이 꺼집니다';
-    bannerT = 4.2;
+    say(ai, '추진제가 바닥났습니다 — 엔진이 꺼집니다', 'alarm');
     audio?.event('deny');
   }
   // ★ **굶은 시간을 센다.** 끝 화면 목록의 한 줄이 된다 (PLAN2H §9).
@@ -2343,8 +2353,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   밟으면 나가야 한다
     const rushOk = power.thrust;
     if (wantRush && !rushOk && rushSaid <= 0) {
-      banner = '급가속 — 추력을 먼저 켜십시오 (W)';
-      bannerT = 2.2;
+      say(ai, '급가속 — 추력을 먼저 켜십시오 (W)', 'tell');
       rushSaid = 2.5;
     }
     if (rushSaid > 0) rushSaid -= dt;
@@ -2354,10 +2363,14 @@ function systemsStep(dt, valveOpen, regionMult) {
     });
     supply.fuel = Math.max(0, supply.fuel - boost.fuel);
     heat = Math.min(HEAT.max, heat + boost.heat);
-    if (bev === 'on') { banner = '밀어붙입니다'; bannerT = 1.6; }
-    if (bev === 'dry') { banner = '추진제가 모자라 못 밀어붙입니다'; bannerT = 2.4; }
+    if (bev === 'on') { say(ai, '밀어붙입니다', 'tell'); }
+    if (bev === 'dry') { say(ai, '추진제가 모자라 못 밀어붙입니다', 'warn'); }
   }
   const burst = steering && (input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+  // ★★★ v84 — **회피가 이 값을 읽는다.** 급기동을 안 쓰면 0.9초에
+  //   `DODGE.need` 를 못 채운다 (조종간만으로는 0.9 < 1.0) — 즉
+  //   **급기동을 써야 피해진다.** 값은 이미 있다: 추진제를 크게 태운다
+  burstNow = burst;
   fly3.burst = burst;
   stepFlight(fly3, dt, { atSeat: steering, push: flyPush, manual: !helm.auto, burst });
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
@@ -2386,18 +2399,16 @@ function systemsStep(dt, valveOpen, regionMult) {
     taught.hazardSeen++;
     // ★ **어느 방에 있든** 알아야 한다. 기관실에서 모르고 있다가 맞으면
     //   「정비하러 가는 것 자체가 벌」이 된다 (FLYING.md §1-2)
-    banner = `전방에 잔해 — ${warnLeft(hazard).toFixed(0)}초`;
-    bannerT = 4.0;
+    say(ai, `전방에 잔해 — ${warnLeft(hazard).toFixed(0)}초`, 'tell');
     audio?.event('fault');
   }
-  if (hev === 'enter') { banner = '들어갑니다 — 조종석'; bannerT = 2.6; }
+  if (hev === 'enter') { say(ai, '들어갑니다 — 조종석', 'tell'); }
   if (hev === 'hit') {
     // 죽지 않는다. **대신 일이 는다** (PLAN §4-4)
     faults.wear.hull = Math.min(1, faults.wear.hull + HAZARD.hit.hull);
     heat = Math.min(HEAT.max, heat + HAZARD.hit.heat);
     if (HAZARD.hit.fault) { faults.next = 0; stepFaults(faults, 0.001, { calm: true, leg: route.leg }); }
-    banner = '부딪혔습니다';
-    bannerT = 2.8;
+    say(ai, '부딪혔습니다', 'alarm');
     hitFlash = 1;
     // ★ v74 — **들이받은 것도 선체를 타고 온다.** 제일 낮고 제일 오래 운다.
     //   여기도 `caught`(잡혔다)를 빌려 쓰고 있었다
@@ -2492,8 +2503,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     chase.risk = Math.min(100, riskWas + WINCH.riskRise * dt);
   }
   if (ev === 'contact') {
-    banner = '접촉 — 무언가 따라붙었습니다';
-    bannerT = 2.6;
+    say(ai, '접촉 — 무언가 따라붙었습니다', 'tell');
     // ══ ★★★ **쫓아오는 것이 창밖에 보인다** (v64) ═══════════════
     //  v47~v63 동안 추격자는 **계기의 숫자로만** 있었다 — 그래서
     //  「겨눈다」가 성립하지 않았고 주포는 「쫓길 때 누르는 버튼」이었다.
@@ -2502,7 +2512,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     if (!sky.list.some((t) => TKINDS[t.kind]?.rams)) spawnRaider(sky);
   }
   if (ev === 'escaped') {
-    banner = '뿌리쳤습니다'; bannerT = 3.2; escapedAt = clock;
+    say(ai, '뿌리쳤습니다', 'tell'); escapedAt = clock;
     // ★ 항로에도 남긴다. 이게 없으면 「뿌리쳐도 아무것도 안 쌓인다」가
     //   그대로 남는다 (docs/space/GAP.md §1-1)
     relieveEscape(route);
@@ -2515,8 +2525,7 @@ function systemsStep(dt, valveOpen, regionMult) {
   //   v21 까지는 배너 한 줄이 전부였고, 그 뒤로 게임이 위협 없는 빈 상자가
   //   됐다 — 사장님이 「아무것도 못하고 그냥 끝나는데」라고 하신 게 이것이다
   if (ev === 'caught') {
-    banner = '잡혔습니다 — 배를 뒤집니다';
-    bannerT = CAUGHT.hold;
+    say(ai, '잡혔습니다 — 배를 뒤집니다', 'alarm');
     hitFlash = 1;
     supply.ore = Math.max(0, supply.ore * (1 - CAUGHT.ore));
     faults.wear.hull = Math.min(1, faults.wear.hull + CAUGHT.hull);
@@ -2527,8 +2536,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     }
   }
   if (ev === 'released') {
-    banner = '놓아줬습니다 — 실려 있던 것이 없습니다';
-    bannerT = 3.6;
+    say(ai, '놓아줬습니다 — 실려 있던 것이 없습니다', 'warn');
     escapedAt = clock;      // 조용해지는 3초는 여기서도 온다. 안도는 안도다
     sceneDone(scenes, 'A');  // 놓아준 것도 끝난 것이다
   }
@@ -3361,6 +3369,14 @@ window.SPACE = {
   },
   /** ★ v69 — 상태창이 지금 켜져 있나 (앉으면 켜진다) */
   get statusOn() { return !!ship.statusHud?.mesh?.visible; },
+  /** ★★★ v84 — **느려지는 시간.** 검사가 배율과 예산을 읽는다 */
+  get slow() { return slowSummary(slowmo); },
+  /** ★★★ v84 — **등대.** 말하는 몫 · 침묵 · 「어디가 잘못됐나」를 말했나 */
+  get ai() { return aiSummary(ai); },
+  aiSay(text, rank = 'tell') { return say(ai, text, rank); },
+  /** ★★★ v84 — 지금 나를 맞힐 탄과 **빼야 할 쪽** */
+  get threat() { return threat; },
+  askSlow(who, sec = null) { return askSlow(slowmo, who, sec); },
   /** 검사가 흉터를 하나 얹어 본다 */
   giveScar(sys) {
     for (let i = 0; i < 3; i++) noteFix(scars, sys, { [sys]: 1 }, clock / 60);
@@ -3847,8 +3863,7 @@ window.SPACE = {
 {
   const back = loadOnce();
   if (back) {
-    banner = `이어합니다 — ${back.text}`;
-    bannerT = 4.0;
+    say(ai, `이어합니다 — ${back.text}`, 'tell');
     console.log(`[저장] 이어합니다 — ${back.text}`);
     // ★ 시작 안내가 「눌러 **시작**합니다」라고 말하고 있으면 거짓말이다.
     //   이미 62분을 온 사람에게 시작이라고 하면 「저장이 안 됐나」로 읽힌다
@@ -3872,7 +3887,16 @@ function frame(now) {
   last = now;
   // ★ **멈추면 시간도 멈춘다.** dt 를 0 으로 두면 아래 전부가 그대로
   //   얼어붙는다 — 계통마다 「멈췄나」를 묻게 하면 반드시 하나를 빠뜨린다
-  const dt = paused ? 0 : dt0;
+  //
+  // ══ ★★★ v84 — **슬로우도 같은 자리에서 건다** ═══════════════════════
+  //  멈춤을 `dt = 0` 한 줄로 둔 것과 **똑같은 이유**다: 계통마다 「지금
+  //  느린가」를 묻게 하면 반드시 하나를 빠뜨리고, 빠뜨린 그 하나만
+  //  제 속도로 돌아 화면이 어긋난다. 여기 한 줄을 통과시키면 아래가
+  //  전부 같이 느려진다.
+  //  ★ `slowK` 는 **화면·소리**가 읽는다 (가장자리 물듦 · 낮아지는 소리)
+  const slowed = stepSlow(slowmo, paused ? 0 : dt0);
+  const slowK = slowed.k;
+  const dt = paused ? 0 : slowed.dt;
   clock += dt;
 
   // ★ 멈췄으면 **쌓인 마우스도 버린다.** `takeLook()` 은 지난 움직임을
@@ -3960,13 +3984,13 @@ function frame(now) {
   //   대응 박자에 무전기가 살아난다. 예고 때는 「조난 신호를 받았습니다」만
   //   뜬다 — 예고가 예고이려면 준비할 시간이 있어야 한다 (B·C 와 같은 규약)
   if (sev === 'act' && sceneOpen(scenes, 'G') && hearSignal(rescue)) {
-    banner = RESCUE.heard; bannerT = 5.0;
+    say(ai, RESCUE.heard, 'tell');
     audio?.event('fault');
   }
   // ★ 대응 시계가 다 됐는데 아직 응답 안 했으면 **지나친 것이다.**
   //   조용히 영원히 기다리면 장면이 안 끝나고, 안 끝나는 장면은 멈춘 게임이다
   if (scenes.overdue && scenes.keys.includes('G') && !rescueDone(rescue)) {
-    if (passSignal(rescue)) { banner = RESCUE.passed; bannerT = 3.0; }
+    if (passSignal(rescue)) { say(ai, RESCUE.passed, 'tell'); }
     sceneDone(scenes, 'G');
   }
 
@@ -3978,14 +4002,14 @@ function frame(now) {
     //   (재 봤다 — 132초에 100), 추진이 꺼져 구간도 안 나아간다.
     //   시계는 새로 안 만들었다 — 이미 있었다 (blackout-table.js)
     for (const k of Object.keys(power)) power[k] = false;
-    banner = DARK.hit; bannerT = 5.5;
+    say(ai, DARK.hit, 'tell');
     audio?.event('fault');
   }
   // ★ 대응 시계가 다 됐는데 아직 안 올렸으면 **저절로 돌아온다.**
   //   장면이 안 끝나면 배가 영영 어둡고, 그건 긴장이 아니라 멈춘 게임이다
   if (scenes.overdue && scenes.keys.includes('E') && !darkDone(dark)) {
     dark.step = DSTEP.BACK;
-    banner = DARK.back; bannerT = 3.0;
+    say(ai, DARK.back, 'tell');
     sceneDone(scenes, 'E');
   }
 
@@ -4001,8 +4025,7 @@ function frame(now) {
     //   「애초에 안 열렸다」와 구별이 안 돼서, 못 연 판에서 **혼자
     //   저절로 낫는다.** 조용히 낫는 고장은 고장이 아니다
     drift.needsFix = !!openFault(faults, 'attitude');
-    banner = forever ? '자세 제어가 나갔습니다 — 예비가 없습니다' : '자세 제어가 나갔습니다';
-    bannerT = 4.0;
+    say(ai, forever ? '자세 제어가 나갔습니다 — 예비가 없습니다' : '자세 제어가 나갔습니다', 'warn');
     audio?.event('caught');
   }
   // ── ★★ F — 감압. **방이 진공이 된다** (v62 · 마지막 장면) ────
@@ -4016,8 +4039,7 @@ function frame(now) {
       //   안 그러면 「다 고쳤나」와 「애초에 안 열렸나」가 구별이 안 돼서
       //   못 연 판에서 **혼자 저절로 낫는다**
       leakOpen = true;
-      banner = '기밀 경보 — 어딘가 벽이 뚫렸습니다';
-      bannerT = 4.4;
+      say(ai, '기밀 경보 — 어딘가 벽이 뚫렸습니다', 'warn');
       // ★★ v74 — **미소운석은 스치는 소리다** (`HULL.graze`). 높고 짧다.
       //   벽을 뚫은 것은 티끌이지 포탄이 아니므로 배가 크게 안 운다 —
       //   그런데 **결과는 제일 크다**. 그 어긋남이 이 장면의 무서움이다
@@ -4037,7 +4059,7 @@ function frame(now) {
   if (sev === 'act-end') {
     if (scenes.keys.includes('A') && (chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT)) {
       chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.risk = 0; chase.dist = 0;
-      banner = '더는 안 보입니다'; bannerT = 3.0;
+      say(ai, '더는 안 보입니다', 'tell');
       audio?.event('escaped'); escapedAt = clock;
       relieveEscape(route);
     }
@@ -4067,7 +4089,7 @@ function frame(now) {
       faults.next = 0;
       if (stepFaults(faults, 0.001, { calm: true, leg: route.leg }) === 'spawn') {
         const o = faults.open[faults.open.length - 1];
-        banner = o.lead; bannerT = 3.6;
+        say(ai, o.lead, 'tell');
         audio?.event('fault');
       }
     }
@@ -4076,7 +4098,7 @@ function frame(now) {
   if (sev === 'warn') {
     // ★ **무엇이 오는지만 말한다. 어디가 잘못됐나는 안 가르친다** (PLAN §3-1)
     const lead = leadOf(scenes);
-    if (lead) { banner = lead; bannerT = 4.0; audio?.event('fault'); }
+    if (lead) { say(ai, lead, 'tell'); audio?.event('fault'); }
   }
 
   // ★ 벗어난 만큼 **느리게** 나아간다 (helm-table.js legMult)
@@ -4094,8 +4116,7 @@ function frame(now) {
     // ★ 규칙은 route.js 가 갖는다 — 밖에서 `t` 만 만지면 leg 가 하나
     //   앞선 채로 남아서 「구간 7/12 인데 실제로는 6번째」가 된다
     missPort(route);
-    banner = '거점을 지나쳤습니다 — 항로로 돌아옵니다';
-    bannerT = 3.4;
+    say(ai, '거점을 지나쳤습니다 — 항로로 돌아옵니다', 'tell');
     audio?.event('caught');
   } else if (rev === 'arrive' || rev === 'end') {
     newLeg(hazard);
@@ -4107,8 +4128,7 @@ function frame(now) {
     // ★ **여기서 저장한다.** 거점은 원래 숨 쉬는 자리이고, 12구간이면
     //   12번이다. 초마다 저장하면 「죽기 직전으로 되돌리기」가 된다
     if (SAVE.onLeg) saveNow();
-    banner = `거점 — 남은 ${legsLeft(route)}`;
-    bannerT = 3.0;
+    say(ai, `거점 — 남은 ${legsLeft(route)}`, 'tell');
     audio?.event('escaped');       // 거점은 뿌리친 것과 같은 안도다
     escapedAt = clock;
     // ★ **소리가 거짓말을 하고 있었다.** 도착할 때 「뿌리쳤다」 소리를
@@ -4120,15 +4140,13 @@ function frame(now) {
   }
   if (rev === 'overrun') {
     // 그물이 닫혔다 — 자국이 얼마든 붙는다 (route-table.js PRESS 참고)
-    banner = '따라잡혔습니다 — 그물이 닫혔습니다';
-    bannerT = 3.0;
+    say(ai, '따라잡혔습니다 — 그물이 닫혔습니다', 'tell');
     if (chase.phase === PHASE.CALM) chase.risk = 200;
   }
   // ★★ **성간 공백에 들어섰다** (8판 · `void-table.js`). 거점을 안 거치고
   //   바로 마지막 구간으로 들어온다 — 고를 것도 살 것도 없다
   if (rev === 'void') {
-    banner = VOID.enter;
-    bannerT = VOID.enterFor;
+    say(ai, VOID.enter, 'tell');
     // 쫓아오던 것이 있으면 **여기서 떨어진다.** 「따라오지 못하는 곳」이
     // 이름값을 하려면 붙어 있던 것도 놓쳐야 한다
     if (chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT) {
@@ -4143,8 +4161,7 @@ function frame(now) {
     saveNow();          // 여기까지는 저장해 둔다 — 마지막 구간도 8분이다
   }
   if (rev === 'end') {
-    banner = '더는 따라오지 못합니다';
-    bannerT = 6.0;
+    say(ai, '더는 따라오지 못합니다', 'tell');
     audio?.event('escaped');
     escapedAt = clock;
     // ★ **끝났으면 저장을 지운다.** 안 지우면 다음에 켤 때 「끝난 배」로
@@ -4342,10 +4359,9 @@ function frame(now) {
   const mev = stepHelm(helm, dt, steering ? steerPush : 0, hazard.phase === HPHASE.RUN, {
     region: ship.outside.region, thrust: power.thrust,
   });
-  if (mev === 'home') { banner = '항로로 돌아왔습니다'; bannerT = 2.4; }
+  if (mev === 'home') { say(ai, '항로로 돌아왔습니다', 'tell'); }
   if (mev === 'warn') {
-    banner = hitWord(helm.near) ?? '중력원에 끌려갑니다';
-    bannerT = 4.0;
+    say(ai, hitWord(helm.near) ?? '중력원에 끌려갑니다', 'tell');
     audio?.event('fault');
   }
   if (mev === 'wreck') wreck();
@@ -4363,15 +4379,14 @@ function frame(now) {
     outsideAir: LAND.airHolds && landDown(land),
     suited: canEva(suit),
   });
-  if (lev === 'open') { banner = '바깥문이 열렸습니다'; bannerT = 2.4; }
-  if (lev === 'shut') { banner = '바깥문이 닫혔습니다'; bannerT = 2.0; }
+  if (lev === 'open') { say(ai, '바깥문이 열렸습니다', 'tell'); }
+  if (lev === 'shut') { say(ai, '바깥문이 닫혔습니다', 'tell'); }
   if (lev === 'blown') {
     // ★ **벌이 숫자가 아니라 기다림이다.** 45초 동안 못 연다.
     // ★ v62 부터 이건 「우주복 없이 진공에 서 있었다」일 때만 온다 —
     //   그래서 말도 바뀐다. 「기밀 상실」은 사고를 뜻하는데, 사고인 것은
     //   문이 아니라 **사람**이다
-    banner = `우주복 없이 진공에 있었습니다 — 배가 문을 닫았습니다`;
-    bannerT = 3.6;
+    say(ai, `우주복 없이 진공에 있었습니다 — 배가 문을 닫았습니다`, 'alarm');
     hitFlash = 1;
     audio?.event('caught');
   }
@@ -4392,8 +4407,7 @@ function frame(now) {
     rnd: landRnd,
   });
   if (lastStep !== land.step && STEP_WORD[land.step]) {
-    banner = STEP_WORD[land.step];
-    bannerT = land.step === LSTEP.ENTRY ? 4.0 : 3.0;
+    say(ai, STEP_WORD[land.step], 'tell');
     audio?.event(land.step === LSTEP.LANDED ? 'fixed' : 'latch');
   }
   if (lev2 === 'touch') {
@@ -4415,8 +4429,7 @@ function frame(now) {
   if (lev2 === 'sky') {
     // ★ **뜬 그 순간이 해소다.** 시계가 아니라 사건이 정한다 (scene.js)
     sceneDone(scenes, 'B');
-    banner = `실어 온 것 — 광석 ${Math.round(land.got.ore)} · 부품 ${land.got.parts}`;
-    bannerT = 4.0;
+    say(ai, `실어 온 것 — 광석 ${Math.round(land.got.ore)} · 부품 ${land.got.parts}`, 'tell');
   }
   // 진입 중에 띠를 벗어나 있으면 **선체가 탄다** — 벌이 숫자가 아니라 일이다
   if (land.step === LSTEP.ENTRY && Math.abs(land.tilt) > bandFor(land.hard)) {
@@ -4437,8 +4450,40 @@ function frame(now) {
   setSkyRegion(sky, ship.outside.region);
   // ★★★ **부딪힌 것을 받아 온다** — 선체 안으로는 못 들어오고, 대신 흔들린다
   // ★★ v70 — 적은 **우리를 겨눠야** 쏜다. 기수 방위를 넘긴다
-  setNose(sky, aimAz);
+  setNose(sky, aimAz, aimEl);
+  // ══ ★★★ v84 — **옆으로 뺀 만큼** (회피) ═══════════════════════════
+  //  ★ `flyPush` 는 조종간 편향이고, 급기동(Shift)이 배수를 곱한다.
+  //    조종간만으로는 0.9초에 `DODGE.need` 를 못 채운다 — 그래서
+  //    **급기동을 써야 피해지고**, 급기동은 추진제를 태운다.
+  //    새 자원을 안 만들고 이미 있는 저울에 얹은 자리다
+  //  ★ 축을 az·el 로 맞춘다: 요는 그대로, 피치는 부호가 반대다
+  //    (화면 위로 밀면 기수가 든다 = el 이 는다)
+  const evMult = burstNow ? RCS.burst.mult : 1;
+  const evade = steering
+    ? { x: flyPush.yaw * evMult, y: flyPush.pitch * evMult }
+    : null;
+  // ══ ★★★ **회피 기동을 하면 슬로우로 전환된다** (사장님 말씀 그대로) ══
+  //  ★ **손이 먼저 움직여야 걸린다.** 저절로 느려지면 그건 상이지 조작이
+  //    아니고, 「자동으로 느려지는 게임」이 된다. 급기동을 누른 그 순간
+  //    시간이 늘어나고, 그 안에서 조종간을 미는 것은 여전히 손이 한다
+  //  ★ **맞을 탄이 있을 때만.** 빗나갈 탄에까지 걸면 그건 거짓말이고,
+  //    그러면 회차 예산도 순식간에 마른다
+  {
+    const th = threatNow(sky, flyPush.yaw, flyPush.pitch);
+    if (th && burstNow) askSlow(slowmo, 'evade', th.t / SLOW.evade.scale + 0.25);
+    // ══ ★★★ **등대가 말한다 — 그리고 말만 한다** ═════════════════════
+    //  ★ 조종간은 손이 잡는다. 등대는 **어느 쪽인지**까지다.
+    //    「최종 결정은 플레이어가」가 이 두 줄에 걸려 있다
+    if (th) say(ai, AI_LINES.evade(evadeWord(th.dir)), 'alarm');
+    else {
+      // 아직 안 쐈다 — **겨누는 동안** 알린다 (쏘고 알리면 늦다)
+      const soon = steering ? aimingSoon(sky) : null;
+      if (soon) say(ai, AI_LINES.aiming(sideWord(soon.relAz)), 'warn');
+    }
+    threat = th;
+  }
   const skyEv = stepSky(sky, dt, {
+    evade,
     // ══ ★★★ **항로는 자동항법에만 영향을 준다** (v82) ═══════════════
     //
     //  ★ 사장님 「**항로 설정이 안되면 운전할 수 없잔아.** 이것도 고쳐.
@@ -4472,14 +4517,12 @@ function frame(now) {
     stepCargo(cargo, dt);
     if (sv.landed) takeSalvage(sv.landed);
     for (const f of sv.faded) {
-      banner = `${TKINDS[f.kind]?.name ?? ''} 잔해가 흩어졌습니다`;
-      bannerT = 2.2;
+      say(ai, `${TKINDS[f.kind]?.name ?? ''} 잔해가 흩어졌습니다`, 'warn');
     }
     // ★★ **지원이 왔다** — 새 시계를 안 만들고 적이 오는 시계를 당긴다
     if (sv.called) {
       sky.nextRaider = 0;
-      banner = '적의 지원이 도착했습니다';
-      bannerT = 2.6;
+      say(ai, '적의 지원이 도착했습니다', 'warn');
       audio?.event('caught');
     }
   }
@@ -4518,8 +4561,8 @@ function frame(now) {
     : combat.radar.id !== null ? 1
       : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range)
         ? 0.35 + 0.3 * (combat.radar.t / RADAR.lockFor) : 0;
-  if (radEv === 'lock') { banner = '묶었습니다'; bannerT = 1.6; audio?.event('latch'); }
-  if (radEv === 'break') { banner = '놓쳤습니다'; bannerT = 1.6; }
+  if (radEv === 'lock') { say(ai, '묶었습니다', 'tell'); audio?.event('latch'); }
+  if (radEv === 'break') { say(ai, '놓쳤습니다', 'tell'); }
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
 
@@ -4549,8 +4592,7 @@ function frame(now) {
     // 죽지 않는다. **대신 일이 는다** — 잔해에 부딪힌 것과 같은 규약
     faults.wear.hull = Math.min(1, faults.wear.hull + DRIFT.hit.hull);
     heat = Math.min(HEAT.max, heat + DRIFT.hit.heat);
-    banner = '무언가에 스쳤습니다';
-    bannerT = 2.4;
+    say(ai, '무언가에 스쳤습니다', 'tell');
     hitFlash = 1;
     audio?.event('caught');
   }
@@ -4562,7 +4604,7 @@ function frame(now) {
   if (drift.dead && drift.needsFix && !faults.open.some((o) => o.key === 'attitude')) {
     drift.needsFix = false;
     if (driftFixed(drift)) {
-      banner = '자세가 잡혔습니다'; bannerT = 2.6; audio?.event('fixed');
+      say(ai, '자세가 잡혔습니다', 'tell'); audio?.event('fixed');
       sceneDone(scenes, 'C');
     }
   }
@@ -4571,9 +4613,43 @@ function frame(now) {
   // ★ 멈춤 화면이 떠 있으면 안 띄운다 — 안 그러면 매 프레임 다시 켜져서
   //   showPause() 가 접어 놓은 것이 되살아난다. 「접는 곳」과 「켜는 곳」이
   //   다르면 켜는 쪽이 이긴다
-  if (bannerT > 0 && !paused) {
-    bannerT -= dt;
-    hud.textContent = banner;
+  // ★★ **느려진 것이 눈에 보여야 한다.** 배율만 바꾸면 사람은
+  //   「버벅인다」로 읽는다 — 느린 것과 끊긴 것은 화면이 갈라 준다.
+  //   ★ `dt` 가 아니라 **실시간**으로 물든다 (느릴 때 천천히 물들면
+  //     물드는 것 자체가 안 보인다)
+  if (slowFx) {
+    slowFx.style.opacity = slowK < 0.995
+      ? String(Math.min(0.92, (1 - slowK) * 1.55)) : '0';
+  }
+
+  // ══ ★★★ v84 — **어느 쪽으로 빼야 하는가** ═══════════════════════════
+  //  ★ 화살표를 **가운데가 아니라 그쪽에** 놓는다. 가운데에 두고 방향만
+  //    돌리면 눈이 「돌아간 삼각형」을 읽어야 하는데, 급할 때 사람은
+  //    모양을 안 읽고 **자리**를 본다
+  //  ★ 막대가 없으면 회피가 먹고 있는지 알 수가 없고, 그러면 v83 까지처럼
+  //    또 「주사위」로 읽힌다 — 되먹임이 있어야 조작이다
+  if (evBox) {
+    const show = !!threat && steering && !paused;
+    evBox.hidden = !show;
+    if (show) {
+      const d = threat.dir;
+      const R = 132;
+      const deg = Math.atan2(-d.y, d.x) * 180 / Math.PI;
+      evTip.style.transform = `translate(${(d.x * R).toFixed(0)}px, ${(-d.y * R).toFixed(0)}px) rotate(${deg.toFixed(0)}deg)`;
+      evSay.textContent = `${evadeWord(d)} — 급기동(Shift)`;
+      evSay.style.transform = `translate(calc(-50% + ${(d.x * R).toFixed(0)}px), ${(-d.y * R + 74).toFixed(0)}px)`;
+      evBar.style.width = `${Math.round(threat.k * 100)}%`;
+    }
+  }
+
+  // ── ★★★ 등대가 하는 말 — **한 번에 하나** ──────────────────
+  //  ★ 실시간이 아니라 게임 시간으로 삭는다 — 슬로우 중에는 글자도
+  //    천천히 머문다. 안 그러면 「느려졌는데 글자만 휙 지나간다」
+  if (!paused) stepAI(ai, dt);
+  const saying = nowSaying(ai);
+  if (saying && !paused) {
+    hud.textContent = saying.line;
+    hud.dataset.rank = saying.rank;
     hud.hidden = false;
   } else hud.hidden = true;
 

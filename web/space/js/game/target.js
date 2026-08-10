@@ -9,6 +9,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
+  DODGE, evadeGain, evadeDir, ENGAGE,
 } from './target-table.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
@@ -89,17 +90,60 @@ export function spawnRaider(sky) {
   return t;
 }
 
+/**
+ * ★★★ **적 하나의 교전 한 걸음** (v84) — 접근 · 유지 · 이탈 · 재접근.
+ *
+ *   ★ `standoff` 가 없는 것은 예전 그대로다: **자폭정**(몸이 탄이라
+ *     끝까지 들어온다)과 **호송선**(`closes` 가 음수라 멀어진다)
+ */
+function stepEngage(t, k, dt, rnd) {
+  const so = k.standoff;
+  if (!so) { t.dist -= k.closes * dt; return; }
+  if (!t.eng) t.eng = { phase: 'in', held: 0, holdFor: span(ENGAGE.hold, rnd), way: rnd() < 0.5 ? -1 : 1 };
+  const e = t.eng;
+  if (e.phase === 'out') {
+    // ★ 이탈 — **붙을 때보다 빠르게** 뺀다. 실제로도 이탈이 더 급하다
+    t.dist += k.closes * ENGAGE.breakMult * dt;
+    if (t.dist >= ENGAGE.breakTo) {
+      e.phase = 'in'; e.held = 0;
+      e.holdFor = span(ENGAGE.hold, rnd);
+      e.az0 = undefined;
+      // ★ 돌아올 때 **도는 쪽을 바꾼다** — 매번 같은 쪽이면 버릇이 된다
+      e.way = rnd() < 0.5 ? -1 : 1;
+    }
+    return;
+  }
+  if (t.dist > so[1]) { t.dist -= k.closes * dt; e.held = 0; return; }
+  // 너무 붙었으면 물러선다 (내가 밀고 들어가면 저쪽이 자리를 다시 잡는다)
+  if (t.dist < so[0]) t.dist += k.closes * 0.7 * dt;
+  // ══ ★★ 자리를 지키며 **좌우로 흔든다** ═══════════════════════════
+  //  ★ 처음엔 한쪽으로 **돌게** 했다(초당 8도). 그러면 5초 만에 제
+  //    사격 각(±38도) 밖으로 저절로 나가서 **아무것도 안 하는데 안
+  //    맞는** 상태가 된다 — 「옆으로 빼면 안 맞는다」를 적이 대신 해
+  //    주는 꼴이라 v84 의 회피가 통째로 헐거워진다.
+  //  ★★ 실제 교전도 그렇다: 사격 위치에 든 기체는 **한 바퀴 돌지 않고**
+  //    표적을 조준선에 물고 흔든다. 그래서 **되돌아오는 흔들림**이다 —
+  //    탄이 오는 방위는 매번 다르되, 싸움에서 이탈하지는 않는다
+  if (e.az0 === undefined) e.az0 = t.az;
+  e.ph = (e.ph ?? 0) + ENGAGE.weaveRate * dt;
+  t.az = e.az0 + Math.sin(e.ph) * ENGAGE.weave * e.way;
+  e.held += dt;
+  if (e.held >= e.holdFor) { e.phase = 'out'; e.held = 0; }
+}
+
 export function makeSky(rnd) {
   return {
     rnd, list: [], next: 0, killed: 0, shots: 0, region: 'empty',
     /** ★ 이번 회차에 부딪힌 횟수 — 끝 화면과 검사가 읽는다 (v64) */
-    grazes: 0, rams: 0, noseAz: 0,
+    grazes: 0, rams: 0, noseAz: 0, noseEl: 0,
     /** ★★ v69 — 다음 적까지 남은 초. 0 이 되면 하나 온다 */
     nextRaider: span(TARGET.raiderEvery, rnd),
     /** ★★★ v70 — **날아오는 적탄.** 맞기 전에 피할 시간이 있다 */
     incoming: [],
     /** 이번 회차에 몇 대 맞았나 — 끝 화면과 검사가 읽는다 */
     tookHits: 0, dodged: 0,
+    /** ★★★ v84 — **손으로 피한 것.** `dodged`(주사위가 빗나간 것)와 **다른 칸**이다 */
+    evaded: 0,
     /** 저절로 온 적이 몇이나 됐나 — 검사가 「정말 계속 오나」를 묻는다 */
     cameRaiders: 0,
     /** ★★ v70 — 지금 오고 있는 물결. 남은 수와 다음 것까지의 초 */
@@ -123,13 +167,19 @@ export const wantCount = (sky) =>
  *   「겨눈다」는 **우리 기수와 견주는 것**이 아니라 저쪽에서 본 우리 자리다.
  *   여기서는 우리 방위를 기준점으로만 쓴다 — 옆으로 빠지면 사격 각이 죽는다
  */
-export function setNose(sky, az) { sky.noseAz = az; }
+export function setNose(sky, az, el = 0) { sky.noseAz = az; sky.noseEl = el; }
 
 /**
  * @param close 다가오는 속도의 배수 — **급가속이 여기로 온다** (v81).
  *   1 이 평소다. 이 값이 없으면 R 을 눌러도 표적이 더 빨리 안 온다
  */
-export function stepSky(sky, dt, { moving = true, quiet = false, close = 1 } = {}) {
+/**
+ * @param evade 지금 **옆으로 밀고 있는 양** `{ x, y }` (조종간 편향 × 급기동
+ *   배수 · az·el 축). v84 — 이것이 없으면 명중이 **주사위**다
+ */
+export function stepSky(sky, dt, {
+  moving = true, quiet = false, close = 1, evade = null,
+} = {}) {
   const want = wantCount(sky);
 
   // ══ ★★★ **적이 저절로 온다** (v69) ═══════════════════════════════
@@ -187,7 +237,11 @@ export function stepSky(sky, dt, { moving = true, quiet = false, close = 1 } = {
     // ★★★ v81 — **급가속이 여기에 먹는다.** v80 까지 이 줄에 배수가
     //   없어서 「R 을 눌러도 안 빨라지는」 상태였다 (`boost-table.js RUSH.close`)
     if (moving) t.dist -= TARGET.closing * close * dt;
-    if (k?.closes) t.dist -= k.closes * dt;
+    // ══ ★★★ v84 — **다가와서 박지 않는다** (`ENGAGE`) ═══════════════
+    //  ★ v83 까지 `t.dist -= k.closes * dt` 한 줄이었다 — 즉 **다섯 중
+    //    넷이 선체에 닿을 때까지 곧장 들어왔다.** 「지금 붙을까 뺄까」를
+    //    물으려면 저쪽도 거리를 골라야 한다
+    if (k?.closes) stepEngage(t, k, dt, sky.rnd);
     if (t.flash > 0) t.flash = Math.max(0, t.flash - dt);
     if (t.bump > 0) t.bump = Math.max(0, t.bump - dt);
 
@@ -250,17 +304,37 @@ export function stepSky(sky, dt, { moving = true, quiet = false, close = 1 } = {
       t: ENEMY_FIRE.fly,
       pk: enemyHitChance(t.dist),
       roll: sky.rnd(),
+      /** ★★★ v84 — **여태 옆으로 뺀 양.** `DODGE.need` 를 넘기면 빗나간다 */
+      dodge: 0,
+      /** 이 탄이 맞을 것인가 — **주사위는 쏘는 순간 이미 던져졌다.**
+       *  ★ 화면이 이걸 읽어서 **맞을 것에만** 경고와 화살표를 낸다.
+       *    빗나갈 탄에까지 경고하면 그건 거짓말이고, 한 번 거짓말한
+       *    계기는 그 뒤로 안 믿는다 (이 배의 오랜 규약) */
+      willHit: sky.rnd() <= enemyHitChance(t.dist),
     });
   }
   // 날아오는 것들이 닿는다
   for (let i = sky.incoming.length - 1; i >= 0; i--) {
     const s = sky.incoming[i];
     s.t -= dt;
+    // ══ ★★★ v84 — **옆으로 뺀 만큼 쌓인다** ═══════════════════════════
+    //  ★ 정면으로 파고들거나 뒤로 물러나는 것은 회피가 아니다 (빔 기동).
+    //    `evade` 는 이미 급기동 배수가 곱해져서 온다 (`main.js`)
+    if (evade) {
+      const relAz = azDiff(s.az, sky.noseAz ?? 0);
+      const relEl = s.el - (sky.noseEl ?? 0);
+      s.dodge += evadeGain(relAz, relEl, evade.x ?? 0, evade.y ?? 0) * dt;
+    }
     if (s.t > 0) continue;
     sky.incoming.splice(i, 1);
     // ★★ **쏜 놈이 이미 부서졌으면 그 탄도 없던 일이다.** 안 그러면
     //   격추한 다음 순간에 죽은 적한테 맞는 일이 나고, 그건 말이 안 된다
     if (!sky.list.some((x) => x.id === s.from)) continue;
+    // ══ ★★★ v84 — **주사위 더하기 손** ═══════════════════════════════
+    //  ★ 「빗나갔다」와 「피했다」를 **이름부터 가른다.** v83 까지 둘이
+    //    같은 칸(`dodged`)이었고, 그래서 「피할 시간을 줬다」는 말이
+    //    실제로는 「주사위를 늦게 굴렸다」였다
+    if (s.dodge >= DODGE.need) { sky.evaded++; hits.push({ miss: true, evaded: true }); continue; }
     if (s.roll > s.pk) { sky.dodged++; hits.push({ miss: true }); continue; }
     sky.tookHits++;
     const where = pickHit(sky.rnd);
@@ -292,6 +366,49 @@ export function stepSky(sky, dt, { moving = true, quiet = false, close = 1 } = {
     sky.list = sky.list.filter((t) => !cut.includes(t));
   }
   return { bumps, hits };
+}
+
+/**
+ * ★★★ **지금 나를 맞힐 탄** (v84) — 화면과 AI 가 같은 것을 읽는다.
+ *
+ *   ★ **맞을 것만** 돌려준다. 빗나갈 탄에까지 경고와 화살표를 내면 그건
+ *     거짓말이고, 한 번 거짓말한 계기는 그 뒤로 안 믿는다.
+ *   ★ 이미 다 뺀 것도 안 돌려준다 — 「피했다」가 화면에서 곧 사라져야
+ *     「해냈다」가 된다
+ *
+ * @param sx/sy 지금 조종간 편향 — 화살표가 **시작한 방향을 안 뒤집게** 쓴다
+ */
+export function threatNow(sky, sx = 0, sy = 0) {
+  let best = null;
+  for (const s of sky.incoming) {
+    if (!s.willHit || s.dodge >= DODGE.need) continue;
+    if (!best || s.t < best.t) best = s;
+  }
+  if (!best) return null;
+  const relAz = azDiff(best.az, sky.noseAz ?? 0);
+  const relEl = best.el - (sky.noseEl ?? 0);
+  return {
+    id: best.id, t: +best.t.toFixed(2), relAz, relEl,
+    dodge: best.dodge, need: DODGE.need,
+    /** 0~1 — 얼마나 뺐나. 화면이 막대로 그린다 */
+    k: Math.max(0, Math.min(1, best.dodge / DODGE.need)),
+    dir: evadeDir(relAz, relEl, sx, sy),
+  };
+}
+
+/**
+ * ★★ **곧 쏜다** (v84) — 겨눔이 `DODGE.warnAt` 을 넘긴 적.
+ *   ★ 쏘고 나서 알리면 늦다. 적은 `ENEMY_FIRE.every` 초 동안 겨누고
+ *     나서 쏘므로, 그 끝자락에 한 번 말해 주면 **0.9초 앞선다**
+ */
+export function aimingSoon(sky) {
+  for (const t of sky.list) {
+    if (!KINDS[t.kind]?.shoots) continue;
+    if ((t.aim ?? 0) < DODGE.warnAt) continue;
+    if (t.dist > ENEMY_FIRE.range) continue;
+    return { id: t.id, kind: t.kind, relAz: azDiff(t.az, sky.noseAz ?? 0), dist: t.dist };
+  }
+  return null;
 }
 
 /** 지금 겨눈 쪽에 **제일 가까운 것** — 조준경이 강조한다 */
@@ -347,8 +464,12 @@ export function summary(sky) {
     incoming: sky.incoming.map((s) => ({
       id: s.id, az: +s.az.toFixed(1), el: +s.el.toFixed(1),
       dist: +s.dist.toFixed(0), t: +s.t.toFixed(2),
+      // ★★★ v84 — **맞을 것인가 · 얼마나 뺐나.** 화면이 이 둘을 읽어
+      //   「맞을 것에만」 경고와 화살표를 낸다
+      willHit: !!s.willHit, dodge: +(s.dodge ?? 0).toFixed(2),
+      need: DODGE.need,
     })),
-    tookHits: sky.tookHits, dodged: sky.dodged,
+    tookHits: sky.tookHits, dodged: sky.dodged, evaded: sky.evaded,
     list: sky.list.map((t) => ({
       id: t.id, kind: t.kind, az: +t.az.toFixed(1), el: +t.el.toFixed(1),
       dist: +t.dist.toFixed(0), hp: t.hp, inRange: inRange(t),

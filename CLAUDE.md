@@ -285,6 +285,8 @@ node tools/space-target.js       스페이스워 — ★★ 떠도는 것 · **�
 node tools/space-optic.js        스페이스워 — ★★★ **광학 창 · 전투력** · 당겨서 보나 · 격추가 보이나 · 「강하면 피한다」가 서나 (v79)
 node tools/space-salvage.js      스페이스워 — ★★★ **회수** · 부수면 저절로 들어오나 · 지원 시계가 도나 · 다 못 줍나 (v81)
 node tools/space-cargo.js        스페이스워 — ★★★ **화물 · 아이템 열여섯** · 다 못 싣나 · 회수 셋이 다른가 · 목록이 남나 (v83)
+node tools/space-slow.js         스페이스워 — ★★★ **느려지는 시간** · 사출→점화→가속 · 겹쳐도 안 멈추나 · 회차 예산 (v84)
+node tools/space-ai.js           스페이스워 — ★★★ **등대** · 말하는 넷이 하나로 모였나 · 조용한 때가 있나 · 배를 안 모나 (v84)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)

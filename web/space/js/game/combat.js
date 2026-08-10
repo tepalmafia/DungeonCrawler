@@ -12,6 +12,8 @@ import {
 } from './combat-table.js';
 import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
 import { azDiff } from './target.js';
+import { flyTime } from './slow-table.js';
+import { MISSILES } from './supply-table.js';
 
 export function makeCombat() {
   return {
@@ -171,9 +173,12 @@ export function fire(c, { aimed, supply, rnd = Math.random }) {
   // 값을 치른다.
   // ★★ v69 — 미사일은 **제 주머니**를 쓴다 (`supply-table.js MISSILES`).
   //   레이저는 여기서 아무것도 안 낸다 — 대신 `main.js` 가 **열**을 더한다
-  supply.ore = Math.max(0, (supply.ore ?? 0) - (w.cost.ore ?? 0));
-  supply.parts = Math.max(0, (supply.parts ?? 0) - (w.cost.parts ?? 0));
-  supply.missiles = Math.max(0, (supply.missiles ?? 0) - (w.cost.missiles ?? 0));
+  // ★ v84 — **시험 동안 안 닳는다** (`supply-table.js MISSILES.infinite`)
+  if (!MISSILES.infinite) {
+    supply.ore = Math.max(0, (supply.ore ?? 0) - (w.cost.ore ?? 0));
+    supply.parts = Math.max(0, (supply.parts ?? 0) - (w.cost.parts ?? 0));
+    supply.missiles = Math.max(0, (supply.missiles ?? 0) - (w.cost.missiles ?? 0));
+  }
   c.cool = w.reload;
   c.fired++;
 
@@ -188,7 +193,17 @@ export function fire(c, { aimed, supply, rnd = Math.random }) {
   //    거기서 얼마나 벗어났는지로 판정한다. HUD 가 그 자리에 **점**을
   //    찍어 주므로(`world/gunsight.js`), 「점에 십자선을 얹어라」가
   //    글 없이 전해진다 — 실제 전투기의 LCOS 가 정확히 이 일을 한다
-  const flight = t.dist / w.speed;
+  // ══ ★★★ v84 — **사출 → 점화 → 가속** (`slow-table.js LAUNCH`) ══════
+  //
+  //  ★ `dist / speed` 였다. 그러면 **화면은 사출하고 규칙은 순항**이라
+  //    둘이 갈라진다 — v79 에 사장님이 「미사일이 날아가는 궤적과 적이
+  //    격추되는 지점이 다르게 보인다」고 하신 그 병과 **같은 병**이다.
+  //    같은 함수를 둘이 쓴다
+  //
+  //  ★★ 그리고 이건 **난이도를 바꾼다**: 비행이 0.6초쯤 길어지므로
+  //    유도탄은 락온을 그만큼 더 붙들어야 한다. 그 값이 `lagOf` 이고
+  //    `tools/space-slow.js` 가 0.8초를 넘는지 본다
+  const flight = flyTime(t.dist, w.speed);
   const leadAz = w.lead ? t.vaz * flight : 0;
   const leadEl = w.lead ? t.vel * flight : 0;
   // 겨눠야 하는 자리는 표적이 아니라 **선도점**이다
