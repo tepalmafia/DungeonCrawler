@@ -24,6 +24,13 @@ export class Input {
      *     동안만 스틱을 놓고 **고개만** 돌리는 것이 제일 가깝다
      */
     this.look = false;
+    /** ★★★ v94 — **마우스 오른쪽 = 보조 무기** (Elite · Star Citizen ·
+     *   Everspace 2 셋 다 그렇다). v90 에 둘러보기로 썼다가 옮겼다 —
+     *   둘러보기는 **C** 로 간다 */
+    this.alt = false;
+    /** ★ 휠 클릭 = 표적 묶기 (Everspace 2 정석) */
+    this.mid = false;
+    this.midPress = false;
     // ★ **Shift 로 뛴다** (game/move-table.js). 누르고 있는 동안만이라
     //   `keys` 와 달리 코드가 아니라 상태로 둔다 — 창을 나갔다 오면
     //   `blur` 가 꺼 준다
@@ -44,7 +51,7 @@ export class Input {
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.run = false;
     });
     // 창 밖으로 나가면 눌린 키가 눌린 채로 남는다 — 「저절로 걸어간다」의 원인
-    addEventListener('blur', () => { this.keys.clear(); this.hold = false; this.look = false; this.run = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.hold = false; this.look = false; this.alt = false; this.mid = false; this.run = false; });
 
     // ★ 캔버스가 아니라 **창 전체**에서 받는다.
     //   캔버스에만 걸었더니, 위에 덮인 안내 창을 누른 사람은 게임을 못 켰다.
@@ -63,20 +70,24 @@ export class Input {
     addEventListener('mousedown', (e) => {
       if (e.target?.closest?.('[data-ui]')) return;
       if (e.button === 0) { this.hold = true; this.press = true; }
-      if (e.button === 2) this.look = true;
+      if (e.button === 2) this.alt = true;              // ★ v94 — 보조 무기
+      // ★ 둘러보기는 **C** 로 옮겼다 (아래 keydown). 오른쪽 단추는
+      //   Elite · Star Citizen · Everspace 2 셋 다 **보조 무기**다
+      if (e.button === 1) { this.mid = true; this.midPress = true; }  // ★ 표적
       // 잠금이 막 풀린 직후에 다시 걸면 브라우저가 거절한다. 조용히 넘긴다
       if (!this.locked) canvas.requestPointerLock?.()?.catch?.(() => {});
     });
     addEventListener('mouseup', (e) => {
       if (e.button === 0) this.hold = false;
-      if (e.button === 2) this.look = false;
+      if (e.button === 2) this.alt = false;
+      if (e.button === 1) this.mid = false;
     });
     // ★ 오른쪽 단추의 기본 차림표를 막는다 — 안 막으면 둘러볼 때마다 뜬다
     addEventListener('contextmenu', (e) => { if (this.locked) e.preventDefault(); });
 
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
-      if (!this.locked) { this.keys.clear(); this.hold = false; this.look = false; }
+      if (!this.locked) { this.keys.clear(); this.hold = false; this.look = false; this.alt = false; this.mid = false; }
     });
     addEventListener('mousemove', (e) => {
       if (!this.locked) return;
@@ -106,6 +117,7 @@ export class Input {
   takePress() {
     const p = this.press;
     this.press = false;
+    this.midPress = false;
     return p;
   }
 
