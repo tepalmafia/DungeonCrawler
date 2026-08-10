@@ -22,7 +22,7 @@
 //    것인데 눈은 아니다), 대기 테두리를 두 번 잘못 잡았다(후광 → 안 보임).
 //    그래서 아래 [7] 은 **화면 없이는 못 여는 자리**다.
 // ══════════════════════════════════════════════════════════════════════════
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, PLANET, DOME_R, SUN }
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN }
   from '../web/space/js/game/sky-table.js';
 import { REGIONS, REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 
@@ -163,6 +163,24 @@ console.log('\n[6] ★ **은하수** — 띠가 띠로 보이나');
     `별의 ${(MILKYWAY.crowd * 100).toFixed(0)}% 를 띠 쪽으로 몬다 — 1 이면 띠 바깥이 텅 빈다`);
 }
 
+console.log('\n[6b] ★★★ **속도감** — 줄이 「얼마나 빨리 가나」를 따라오나 (v88)');
+{
+  // 게임이 쓰는 흐름 속도 그대로 (systems-table CRUISE.speed 26 · route LEG.coast 0.45
+  // · boost-table BOOST.mult 3.4 · RUSH.dust 7.5)
+  const rows = [['정박', 6.5], ['미끄러짐', 11.7], ['추진 켬', 26], ['급가속', 663]];
+  for (const [n, v] of rows) console.log(`   ${n.padEnd(8)} ${String(v).padStart(5)} u/s → 줄 ${streakLen(v)}`);
+  ok(streakLen(6.5) === 0,
+    '★★ **대고 있으면 줄이 없다** — 사장님이 물으신 「정지한 상태인지」의 답이 이 한 줄이다');
+  ok(streakLen(26) > streakLen(11.7) * 1.5,
+    `★ 밟으면(${streakLen(26)}) 미끄러질 때(${streakLen(11.7)})보다 눈에 띄게 길다 — 추력 켬/끔이 화면에 나온다`);
+  ok(streakLen(663) > streakLen(26) * 2.5,
+    `★ 급가속(${streakLen(663)})은 또 딴판 — R 이 공짜로 안 느껴지려면 화면이 달라져야 한다`);
+  ok(streakLen(663) === STREAK.len, '제일 빠를 때가 곧 `len` — 그 위로는 안 자란다');
+  // ★★★ **줄이 급가속에만 켜지면 안 된다** — v87 이 그랬고, 그러면
+  //   R 을 안 누른 99%의 시간이 통째로 v73 이전과 같다
+  ok(streakLen(11.7) > 0, '★★★ **미끄러지는 동안에도 줄이 있다** — 없으면 「가고 있다」가 안 보인다');
+}
+
 console.log('');
 console.log(fail ? `✘ ${fail} 군데` : '✔ 표는 전부 통과');
 console.log('\n  ※ 여기까지는 **표**다. 「별이 정말 안 흐르나」는 게임이 답한다 — `--see`');
@@ -250,7 +268,14 @@ if (see >= 0) {
       console.log(`   ${k.padEnd(7)} 별 ${String(v.cut).padStart(5)}개 · 은하수 ${v.band}`);
     }
     const [, e] = rows[0], [, n] = rows[1], [, v] = rows[2];
-    ok(e.cut > n.cut && n.cut > v.cut, '빈 공간 > 성운 > 성간 공백 순으로 별이 준다');
+    // ★★★ **여기가 v58 이후로 계속 틀린 채 조용했다** (v88 에 잡았다).
+    //   원래 「빈 공간 > 성운 > 성간 공백」이었는데, v58 이 성간 공백의
+    //   뜻을 뒤집었다 — **먼지가 없어 별이 오히려 또렷하다.** 위 [4] 는
+    //   그때 같이 고쳤는데 **여기는 안 고쳤고**, `--see` 를 줘야만 도는
+    //   자리라 몇 판을 빨간 줄 하나 없이 지나갔다.
+    //   → **검사도 「표가 둘」의 두 곳이다.** 뜻을 바꾸면 검사도 같이 센다
+    ok(e.cut > n.cut && v.cut > n.cut,
+      '성운이 제일 어둡다 — 빈 공간·성간 공백 둘 다 성운보다 별이 많다 (성운은 먼지가 별을 먹는다)');
     ok(v.band < n.band && n.band < e.band,
       '★ 은하수도 같이 흐려진다 — 성간 공백에 띠가 남아 있으면 「아무것도 없는 곳」이 안 된다');
     await S(() => SPACE.setRegion('empty', true));
@@ -265,6 +290,56 @@ if (see >= 0) {
     ok(g.starFade < 0.05, '★ 내려앉으면 별이 사라진다 — 갈색 하늘에 별이 총총하면 그건 착륙이 아니다');
     ok(g.ground === true, '땅이 보인다');
     await S(() => SPACE.putLand('none', 0));
+  }
+
+  console.log('\n[11] ★★★ **줄이 정말 화면에 보이나** — 유리가 먹고 있었다 (v88)');
+  {
+    // ★★ **여기가 이 판에서 제일 비싸게 배운 자리다.** 줄을 만들어 놓고
+    //   길이·밝기·개수를 다 올렸는데 화면이 그대로였다. 세계 좌표 길이는
+    //   맞았고 (`streakLen`), 화면 화소 길이도 맞았고 (`streakPx.med`),
+    //   `renderer.info.render.lines` 도 760 이 찍혔다 — **그리고 있는데
+    //   안 보였다.** 캐노피 유리(`MeshBasicMaterial` 은 `transparent` 라도
+    //   `depthWrite` 가 기본 참)가 깊이를 적어 뒤에 오는 먼지를 잘랐다.
+    //   그래서 **「길이」와 「화소」를 따로 묻는다** — 하나만 물으면
+    //   또 「값은 맞는데 화면은 그대로」로 몇 시간을 태운다
+    await S(() => { SPACE.putHelmSit(true); SPACE.setRegion('empty', true); });
+    const at = async (fn) => { await S(fn); await p.waitForTimeout(800); return S(() => SPACE.outside); };
+    // ★ **여기서 한 번 헛짚었다.** 처음엔 첫 줄을 「정박」이라 적었는데
+    //   [7] 이 이미 항로를 골라 놔서 실제로는 **미끄러지는 중**이었다.
+    //   「정박이면 줄이 0」은 표 검사([6b])가 맡고, 화면은 **셋의 차이**를 본다
+    const stop = await at(() => { SPACE.putBoost(0); SPACE.setPower('thrust', false); });
+    const run = await at(() => { SPACE.putBoost(0); SPACE.setPower('thrust', true); });
+    const fast = await at(() => { SPACE.setPower('thrust', true); SPACE.putBoost(1); });
+    for (const [n, v] of [['추진 끔', stop], ['추진 켬', run], ['급가속', fast]]) {
+      console.log(`   ${n.padEnd(8)} 줄 ${String(v.streakLen).padStart(5)}`
+        + ` · 화면에 ${String(v.streakPx?.on ?? 0).padStart(3)}개 · 가운데 ${v.streakPx?.med ?? 0}화소`);
+    }
+    ok(typeof run.streakPx?.on === 'number',
+      '줄의 **화소 길이가 숫자로 온다** — 없으면 아래 셋은 묻지도 못한 것이다');
+    ok(run.streakLen > stop.streakLen * 1.4 && (run.streakPx?.med ?? 0) > (stop.streakPx?.med ?? 0),
+      `★★ **추력 켬/끔이 화면에 나온다** (${stop.streakLen} → ${run.streakLen}) —`
+      + ' 전에는 계기의 글자로만 알 수 있었다');
+    ok((run.streakPx?.over8 ?? 0) > 10,
+      `★★★ 밟으면 8화소 넘는 줄이 ${run.streakPx?.over8 ?? 0}개 — **유리가 안 먹는다.**`
+      + ' 여기가 0 이면 `renderOrder` 가 다시 유리 뒤로 밀린 것이다');
+    ok((fast.streakPx?.on ?? 0) >= (run.streakPx?.on ?? 0),
+      '급가속이 밟기보다 줄이 안 적다');
+    await S(() => SPACE.putBoost(0));
+  }
+
+  console.log('\n[12] ★★ **밟는 순간 눈이 뒤로 밀리나** — 느껴지는 것은 속도가 아니라 가속이다');
+  {
+    await S(() => { SPACE.putHelmSit(true); SPACE.setPower('thrust', false); });
+    await p.waitForTimeout(500);
+    const before = await S(() => SPACE.fly);
+    await S(() => SPACE.setPower('thrust', true));
+    const got = await S(() => SPACE.fly);
+    console.log(`   추력 켜기 전 ${before.kick} → 켠 직후 ${got.kick}`);
+    ok(typeof got.kick === 'number', '밀림이 숫자로 온다');
+    ok(got.kick > before.kick, '★★ 추력을 켜면 **밀림이 생긴다**');
+    await p.waitForTimeout(1600);
+    const after = await S(() => SPACE.fly);
+    ok(after.kick === 0, `★ 그리고 **되돌아온다** (${after.kick}) — 안 되돌아오면 그건 밀림이 아니라 자리 옮김이다`);
   }
 
   if (errs.length) { console.log('\n  ✘ 콘솔 오류:'); errs.slice(0, 5).forEach((e) => console.log('    ' + e)); fail += errs.length; }
