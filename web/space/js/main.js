@@ -216,7 +216,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 89;
+export const VERSION = 90;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -2228,6 +2228,23 @@ function interactStep(dt) {
     //  ★ 그래서 `SIT_LOOK`(앉으면 34도 숙인다)을 안 쓴다. 처음부터 창을
     //    보고 있어야 하고, 계기를 볼 때만 고개를 숙이면 된다
     yokeHeld = true;
+    // ══ ★★★ v90 — **앉으면 고개를 창으로 돌려 준다** ═══════════════════
+    //
+    //  사장님 「왜 **핸들하고 계기판이 아래에 나오지? 전투에 방해되잔아**」
+    //  (화면을 보내 주셨는데 아래 절반이 콘솔이었다).
+    //
+    //  ★ 재 보고서야 알았다. 좌석은 **발치에 있으므로 앉으려면 30도쯤
+    //    숙여야** 하는데, v89 가 `SIT_LOOK`(앉으면 34도 숙인다)과
+    //    `aimAt`(잡으면 들어 준다)을 **둘 다 걷어냈다.** 그래서 앉은 뒤에도
+    //    **숙인 채로 굳었고**, 앉아 있는 동안 마우스는 조종간이라
+    //    (v78 스틱) **고개를 다시 들 방법이 없었다.**
+    //  ★★ 즉 v89 는 「내리는 규칙」과 「올리는 규칙」을 같이 지웠는데,
+    //    **좌석이 발치에 있는 한 내려다보는 것은 규칙이 아니라 사실**이다.
+    //    그래서 올리는 쪽만 되살린다 — 단, `aimAt` 처럼 **바닥을 까는 것이
+    //    아니라 앉는 순간 한 번**이다. 그래야 나중에 계기를 내려다볼 수 있다.
+    //  ★ 어디를 보게 하나: 창의 한복판 = 수평. 기수 방향이 곧 조준이므로
+    //    수평이 아니면 앉자마자 배가 틀어져 보인다
+    me.pitch = 0;
     say(ai, '조종간을 잡았습니다 — 계기는 오른쪽 단추, 나갈 때는 X', 'tell');
     audio?.event('click');
     // ══ ★★ v88 — **내리는 길은 X 하나다** (그리고 그렇게 적는다) ══════
@@ -3635,6 +3652,102 @@ window.SPACE = {
   get boost() { return { ...boostSummary(boost), fov: +camera.fov.toFixed(1) }; },
   /** 검사가 급가속을 밀어 놓는다 — R 을 헤드리스로 오래 누르지 않으려고 */
   putBoost(k) { boost.k = Math.max(0, Math.min(1, k)); return boostSummary(boost); },
+  /**
+   * ★★★ v90 — **화면의 몇 %를 배가 막고 있나.**
+   *
+   *   사장님 「**왜 핸들하고 계기판이 아래에 나오지? 전투에 방해되잔아**」.
+   *
+   *   ★★ `space-view.js` 는 이때 **전부 ✔ 였고 「창이 화면의 92%」**라고
+   *     찍고 있었다. 그런데 화면은 아래 절반이 콘솔이었다 — 그 도구가
+   *     재는 것은 **유리 구멍의 각도**이지 **그 앞에 선 물건**이 아니다.
+   *     「창이 크다」와 「밖이 보인다」는 다른 말인데 같은 값으로 읽고 있었다.
+   *
+   *   ★ 그래서 **눈에서 광선을 격자로 쏴서** 가까운 것(배 안)에 맞는 칸을
+   *     센다. 이건 화면을 찍어 보는 것과 같은 것을 숫자로 만드는 일이다
+   *
+   * @returns 막힌 비율 · **아래에서 몇 %가 막혔나** · 화면 복판 가로줄의 막힘
+   */
+  /** ★ 화면 아래쪽 다섯 점이 **무엇에** 막히나 — 이름·부모·높이까지 */
+  blockedAt(ys = [-0.35, -0.5, -0.65, -0.8, -0.95], xs = [-0.5, 0, 0.5]) {
+    const ray = new THREE.Raycaster();
+    const v = new THREE.Vector2();
+    const out = [];
+    const seeThru = (o) => {
+      const m = o.material; const one = Array.isArray(m) ? m[0] : m;
+      if (!one || one.visible === false) return true;
+      return !!(one.transparent && (one.opacity ?? 1) < 0.6);
+    };
+    for (const y of ys) for (const x of xs) {
+      v.set(x, y);
+      ray.setFromCamera(v, camera);
+      const h = ray.intersectObject(ship.group, true)
+        .find((q) => q.distance > 0.02 && q.object.visible && !seeThru(q.object));
+      if (!h) { out.push({ x, y, hit: null }); continue; }
+      const chain = [];
+      for (let o = h.object; o; o = o.parent) chain.push(o.name || o.type);
+      const wp = new THREE.Vector3(); h.object.getWorldPosition(wp);
+      const g = h.object.geometry;
+      out.push({ x, y, d: +h.distance.toFixed(2),
+        at: [+h.point.x.toFixed(2), +h.point.y.toFixed(2), +h.point.z.toFixed(2)],
+        obj: [+wp.x.toFixed(2), +wp.y.toFixed(2), +wp.z.toFixed(2)],
+        geo: g?.type, par: g?.parameters ? Object.entries(g.parameters).slice(0, 4) : null,
+        mat: (Array.isArray(h.object.material) ? h.object.material[0] : h.object.material)?.color?.getHexString?.(),
+        chain: chain.slice(0, 5) });
+    }
+    return out;
+  },
+  blocked(cols = 33, rows = 21, near = 4) {
+    const ray = new THREE.Raycaster();
+    const v = new THREE.Vector2();
+    let hit = 0, n = 0;
+    /** 세로 칸마다 몇 개나 막혔나 — 위에서 아래로 */
+    const byRow = [];
+    // ★★ **무엇이 막는지도 센다.** 「아래가 막혔다」까지는 숫자로 나오는데
+    //   **무엇을 내려야 하는지**는 안 나온다 — 그러면 또 짐작으로 값을 만진다
+    const who = {};
+    for (let r = 0; r < rows; r++) {
+      let rowHit = 0;
+      for (let c = 0; c < cols; c++) {
+        v.set((c / (cols - 1)) * 2 - 1, 1 - (r / (rows - 1)) * 2);
+        ray.setFromCamera(v, camera);
+        const hits = ray.intersectObject(ship.group, true);
+        // ★★ **유리는 막은 것이 아니다.** 처음에 안 걸렀더니 스물한 줄이
+        //   전부 1.00 으로 나왔다 — 캐노피가 눈에서 0.88m 라 어느 쪽을
+        //   봐도 먼저 맞는다. 「보이나」를 재는데 창을 막힘으로 세면
+        //   답이 늘 「다 막혔다」다
+        // ★★★ **안 보이는 것은 막은 것이 아니다.** 처음에 이걸 안 걸러서
+        //   「화면 아래 29%가 막혔다」가 나왔는데, 범인이 조종간의 **조준
+        //   판정 상자**(0.86 × 0.56 · `visible: false` 인 재질)였다.
+        //   눈에 안 보이는 상자를 「가림막」이라 부르고 값을 만질 뻔했다 —
+        //   **재는 것이 화면과 다르면 그 숫자로 고치면 안 된다**
+        const seeThru = (o) => {
+          const m = o.material;
+          const one = Array.isArray(m) ? m[0] : m;
+          if (!one || one.visible === false) return true;
+          return !!(one.transparent && (one.opacity ?? 1) < 0.6);
+        };
+        const first = hits.find((h) => h.distance > 0.02 && h.object.visible && !seeThru(h.object));
+        if (first && first.distance < near) {
+          hit++; rowHit++;
+          let nm = first.object.name;
+          for (let o = first.object; o && !nm; o = o.parent) nm = o.name;
+          who[nm || '(이름 없음)'] = (who[nm || '(이름 없음)'] ?? 0) + 1;
+        }
+        n++;
+      }
+      byRow.push(+(rowHit / cols).toFixed(2));
+    }
+    // 아래에서부터 **연달아 막힌** 줄이 몇 개인가 — 이게 「아래가 먹혔다」다
+    let solid = 0;
+    for (let r = rows - 1; r >= 0; r--) { if (byRow[r] > 0.6) solid++; else break; }
+    return {
+      all: +(hit / n).toFixed(3),
+      bottom: +(solid / rows).toFixed(3),
+      mid: byRow[(rows - 1) >> 1],
+      byRow,
+      who: Object.entries(who).sort((a, c) => c[1] - a[1]).slice(0, 8),
+    };
+  },
   /**
    * ★★★ **표적이 화면 어디에 찍히나** (v73) — 부호를 재는 유일한 길.
    *

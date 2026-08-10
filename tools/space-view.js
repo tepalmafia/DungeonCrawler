@@ -193,4 +193,77 @@ console.log('');
 console.log(fail ? `✘ ${fail} 군데` : '✔ 전부 통과');
 console.log('\n  ※ **「넓어 보이나」는 여기서 안 나온다.** 여기서 나오는 것은');
 console.log('     「몇 도가 보이나 · 화면의 몇 % 인가 · 정면이 비었나」뿐이다.');
-process.exit(fail ? 1 : 0);
+// ★ v90 — **여기서 끝내면 아래 [7] 이 영영 안 돈다.** `--see` 면 이어 간다
+if (!process.argv.includes('--see')) process.exit(fail ? 1 : 0);
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v90 — **여기까지는 「유리 구멍」이다. 「화면」은 아래에서 묻는다**
+//
+//    node tools/space-view.js --see 8391
+//
+//  ★ 사장님 「왜 **핸들하고 계기판이 아래에 나오지? 전투에 방해되잔아**」.
+//    그때 위의 [1]~[6] 은 **전부 ✔ 였고 「창이 화면의 92%」**라고 찍고
+//    있었다. 이 도구가 재는 것은 **유리가 뚫린 각도**이지 **그 앞에 선
+//    물건**이 아니다 — 「창이 크다」와 「밖이 보인다」는 다른 말인데
+//    같은 값으로 읽고 있었다.
+//
+//  ★★ 그래서 **눈에서 광선을 격자로 쏴서** 배에 맞는 칸을 센다
+//    (`SPACE.blocked()`). 화면을 찍어 보는 것과 같은 것을 숫자로 만든 것이다.
+//
+//  ★★★ 만들면서 한 번 크게 틀렸다: **안 보이는 조준 판정 상자**
+//    (조종간의 0.86 × 0.56 · `visible: false` 인 재질)를 막힘으로 세어
+//    「아래 29%가 막혔다」가 나왔다. 그 숫자로 값을 만질 뻔했다 —
+//    **재는 것이 화면과 다르면 그 숫자로 고치면 안 된다.**
+// ══════════════════════════════════════════════════════════════════════════
+const seeV = process.argv.indexOf('--see');
+if (seeV >= 0) {
+  const PORT = process.argv[seeV + 1] || '8391';
+  let chrome = null;
+  for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs']) {
+    try { ({ chromium: chrome } = await import(m)); break; } catch { /* 다음 것 */ }
+  }
+  if (!chrome) { console.error('playwright 가 없습니다.'); process.exit(2); }
+  const br = await chrome.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+  try {
+    const pg = await br.newPage({ viewport: { width: 900, height: 560 } });
+    const errs = []; pg.on('pageerror', (e) => errs.push(e.message));
+    await pg.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'domcontentloaded' });
+    await pg.waitForFunction(() => !!globalThis.SPACE, null, { timeout: 60000 });
+    const S = (f, a) => pg.evaluate(f, a);
+    await S(() => SPACE.clearSave());
+    await pg.click('#btn-play').catch(() => {});
+    await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
+
+    console.log('\n[7] ★★★ **화면의 몇 %를 배가 막나** — 유리가 아니라 그려진 것');
+    {
+      // ★★ **사람이 앉는 대로 앉힌다.** `putGun` 으로 앉히면 시선이 0 이라
+      //   늘 창을 보게 되는데, 실제로는 **좌석을 내려다보며 눌러야** 앉는다.
+      //   사장님 화면이 아래가 콘솔이었던 것이 정확히 그 차이였다
+      await S(() => SPACE.put(0, -7.10, 0, -0.55));
+      await pg.waitForTimeout(400);
+      await S(() => window.dispatchEvent(new MouseEvent('mousedown', { button: 0 })));
+      await pg.waitForTimeout(250);
+      await S(() => window.dispatchEvent(new MouseEvent('mouseup', { button: 0 })));
+      for (let i = 0; i < 40; i++) { if (await S(() => SPACE.helm2.k) > 0.99) break; await pg.waitForTimeout(200); }
+      await pg.waitForTimeout(700);
+      const v = await S(() => SPACE.blocked());
+      console.log(`   막힌 칸 ${(v.all * 100).toFixed(1)}% · 아래로 연달아 ${(v.bottom * 100).toFixed(1)}%`);
+      console.log(`   무엇이  ${v.who.map(([n, c]) => `${n} ${c}`).join(' · ')}`);
+      ok(typeof v.all === 'number', '막힌 비율이 숫자로 온다 — 없으면 아래는 묻지도 못한 것이다');
+      ok(await S(() => Math.abs(SPACE.look.pitch) < 0.12),
+        '★★★ **앉으면 고개가 창으로 온다** — 좌석은 발치에 있어 숙이고 앉는데,'
+        + ' 그 숙임이 남으면 **앉는 내내 아래를 본다** (사장님 화면이 그랬다)');
+      ok(v.bottom <= 0.22,
+        `★★ 아래로 연달아 막힌 것이 ${(v.bottom * 100).toFixed(0)}% (22% 이하) —`
+        + ' 실제 전투기도 차양이 아래를 먹지만 그건 5분의 1쯤이다');
+      ok(v.all <= 0.32,
+        `★ 화면의 ${(v.all * 100).toFixed(0)}% 가 배다 (32% 이하)`);
+      ok(!v.who.some(([n]) => n === '조종간'),
+        '★★★ **조종간이 화면을 안 먹는다** — 실제 중앙 조종간은 무릎 사이라 눈에 거의 안 들어온다');
+    }
+    if (errs.length) { console.log('\n  ✘ 콘솔 오류:'); errs.slice(0, 3).forEach((e) => console.log('    ' + e)); fail += errs.length; }
+  } finally { await br.close(); }
+  console.log('');
+  console.log(fail ? `✘ ${fail} 군데` : '✔ 전부 통과');
+  process.exit(fail ? 1 : 0);
+}
