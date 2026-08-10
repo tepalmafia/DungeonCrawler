@@ -13,6 +13,7 @@ import {
 import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
 import { azDiff } from './target.js';
 import { flyTime } from './slow-table.js';
+import { MISSILES } from './supply-table.js';
 
 export function makeCombat() {
   return {
@@ -172,9 +173,12 @@ export function fire(c, { aimed, supply, rnd = Math.random }) {
   // 값을 치른다.
   // ★★ v69 — 미사일은 **제 주머니**를 쓴다 (`supply-table.js MISSILES`).
   //   레이저는 여기서 아무것도 안 낸다 — 대신 `main.js` 가 **열**을 더한다
-  supply.ore = Math.max(0, (supply.ore ?? 0) - (w.cost.ore ?? 0));
-  supply.parts = Math.max(0, (supply.parts ?? 0) - (w.cost.parts ?? 0));
-  supply.missiles = Math.max(0, (supply.missiles ?? 0) - (w.cost.missiles ?? 0));
+  // ★ v84 — **시험 동안 안 닳는다** (`supply-table.js MISSILES.infinite`)
+  if (!MISSILES.infinite) {
+    supply.ore = Math.max(0, (supply.ore ?? 0) - (w.cost.ore ?? 0));
+    supply.parts = Math.max(0, (supply.parts ?? 0) - (w.cost.parts ?? 0));
+    supply.missiles = Math.max(0, (supply.missiles ?? 0) - (w.cost.missiles ?? 0));
+  }
   c.cool = w.reload;
   c.fired++;
 

@@ -9,7 +9,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
-  DODGE, evadeGain, evadeDir,
+  DODGE, evadeGain, evadeDir, ENGAGE,
 } from './target-table.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
@@ -88,6 +88,47 @@ export function spawnRaider(sky) {
   t.dist = TARGET.spawn[1];
   sky.list.push(t);
   return t;
+}
+
+/**
+ * ★★★ **적 하나의 교전 한 걸음** (v84) — 접근 · 유지 · 이탈 · 재접근.
+ *
+ *   ★ `standoff` 가 없는 것은 예전 그대로다: **자폭정**(몸이 탄이라
+ *     끝까지 들어온다)과 **호송선**(`closes` 가 음수라 멀어진다)
+ */
+function stepEngage(t, k, dt, rnd) {
+  const so = k.standoff;
+  if (!so) { t.dist -= k.closes * dt; return; }
+  if (!t.eng) t.eng = { phase: 'in', held: 0, holdFor: span(ENGAGE.hold, rnd), way: rnd() < 0.5 ? -1 : 1 };
+  const e = t.eng;
+  if (e.phase === 'out') {
+    // ★ 이탈 — **붙을 때보다 빠르게** 뺀다. 실제로도 이탈이 더 급하다
+    t.dist += k.closes * ENGAGE.breakMult * dt;
+    if (t.dist >= ENGAGE.breakTo) {
+      e.phase = 'in'; e.held = 0;
+      e.holdFor = span(ENGAGE.hold, rnd);
+      e.az0 = undefined;
+      // ★ 돌아올 때 **도는 쪽을 바꾼다** — 매번 같은 쪽이면 버릇이 된다
+      e.way = rnd() < 0.5 ? -1 : 1;
+    }
+    return;
+  }
+  if (t.dist > so[1]) { t.dist -= k.closes * dt; e.held = 0; return; }
+  // 너무 붙었으면 물러선다 (내가 밀고 들어가면 저쪽이 자리를 다시 잡는다)
+  if (t.dist < so[0]) t.dist += k.closes * 0.7 * dt;
+  // ══ ★★ 자리를 지키며 **좌우로 흔든다** ═══════════════════════════
+  //  ★ 처음엔 한쪽으로 **돌게** 했다(초당 8도). 그러면 5초 만에 제
+  //    사격 각(±38도) 밖으로 저절로 나가서 **아무것도 안 하는데 안
+  //    맞는** 상태가 된다 — 「옆으로 빼면 안 맞는다」를 적이 대신 해
+  //    주는 꼴이라 v84 의 회피가 통째로 헐거워진다.
+  //  ★★ 실제 교전도 그렇다: 사격 위치에 든 기체는 **한 바퀴 돌지 않고**
+  //    표적을 조준선에 물고 흔든다. 그래서 **되돌아오는 흔들림**이다 —
+  //    탄이 오는 방위는 매번 다르되, 싸움에서 이탈하지는 않는다
+  if (e.az0 === undefined) e.az0 = t.az;
+  e.ph = (e.ph ?? 0) + ENGAGE.weaveRate * dt;
+  t.az = e.az0 + Math.sin(e.ph) * ENGAGE.weave * e.way;
+  e.held += dt;
+  if (e.held >= e.holdFor) { e.phase = 'out'; e.held = 0; }
 }
 
 export function makeSky(rnd) {
@@ -196,7 +237,11 @@ export function stepSky(sky, dt, {
     // ★★★ v81 — **급가속이 여기에 먹는다.** v80 까지 이 줄에 배수가
     //   없어서 「R 을 눌러도 안 빨라지는」 상태였다 (`boost-table.js RUSH.close`)
     if (moving) t.dist -= TARGET.closing * close * dt;
-    if (k?.closes) t.dist -= k.closes * dt;
+    // ══ ★★★ v84 — **다가와서 박지 않는다** (`ENGAGE`) ═══════════════
+    //  ★ v83 까지 `t.dist -= k.closes * dt` 한 줄이었다 — 즉 **다섯 중
+    //    넷이 선체에 닿을 때까지 곧장 들어왔다.** 「지금 붙을까 뺄까」를
+    //    물으려면 저쪽도 거리를 골라야 한다
+    if (k?.closes) stepEngage(t, k, dt, sky.rnd);
     if (t.flash > 0) t.flash = Math.max(0, t.flash - dt);
     if (t.bump > 0) t.bump = Math.max(0, t.bump - dt);
 

@@ -12,7 +12,7 @@
 //      ③ **무엇을 쏠까가 생기나** — 나오는 것이 달라야 고를 이유가 있다
 //      ④ **쏘는 것이 남는 장사인가** — 탄약이 곧 수리 재료다
 // ══════════════════════════════════════════════════════════════════════════
-import { KINDS, TARGET, pickKind, rangeWord } from '../web/space/js/game/target-table.js';
+import { KINDS, TARGET, pickKind, rangeWord, isFoe } from '../web/space/js/game/target-table.js';
 import {
   makeSky, setRegion, stepSky, shootSky, aimedAt, tolOf, inRange, wantCount, summary,
 } from '../web/space/js/game/target.js';
@@ -71,7 +71,13 @@ console.log('\n[2] 지나간 것은 **새로 난다** — 하늘이 안 빈다')
   }
   // ★ v69 — **적 우주선은 `want` 에 안 센다.** 세면 적이 뜰 때마다 주울
   //   것이 줄어든다. 여기서도 떠도는 것만 세야 「하늘이 안 빈다」를 잰다
-  const drift = s.list.filter((t) => !KINDS[t.kind]?.rams).length;
+  // ★★★ v84 — **낡은 잣대였다.** `!rams` 로 「떠도는 것」을 셌는데,
+  //   v84 에 적이 **들이받기를 그만두고 사거리를 잡자**(사장님 「왜 다가
+  //   와서 충돌하는데?」) 적 우주선·요격기·포함이 전부 **파편으로 세어졌다.**
+  //   ★ v80 에 레이더에서 **똑같은 병**을 잡고 `isFoe` 를 만들어 뒀는데,
+  //     검사 쪽에는 손으로 적은 잣대가 그대로 남아 있었다. 표를 두 곳에
+  //     적으면 갈라진다 — 검사도 그 「두 곳」이다
+  const drift = s.list.filter((t) => !isFoe(t.kind)).length;
   console.log(`   4분에 ${spawned}개가 새로 났다 · 지금 떠도는 것 ${drift}개 · 적 ${s.list.length - drift}척`);
   ok(drift === wantCount(s), `늘 ${wantCount(s)}개가 떠 있다 (잔해밭)`);
   ok(spawned > 5, '지나간 만큼 새로 난다 — 한 번 쏘고 나면 텅 비지 않는다');
@@ -90,7 +96,8 @@ console.log('\n[2b] ★★★ **적 우주선이 저절로, 계속 오나** (v69
     stepSky(s, DT, { moving: true });
     most = Math.max(most, summary(s).raiders);
     // 사거리에 들어온 적을 부순다 (사람이 하는 일)
-    s.list = s.list.filter((x) => !(KINDS[x.kind]?.rams && x.dist < 130));
+    // ★ 같은 이유로 여기도 `rams` → `isFoe` (v84)
+    s.list = s.list.filter((x) => !(isFoe(x.kind) && x.dist < 130));
     t += DT;
   }
   const per = s.cameRaiders / 10;

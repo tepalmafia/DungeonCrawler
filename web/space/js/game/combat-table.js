@@ -48,6 +48,7 @@
 //  ★ three.js 를 안 쓴다 — tools/space-combat.js 가 브라우저 없이 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
 import { TARGET } from './target-table.js';
+import { MISSILES } from './supply-table.js';
 
 /**
  * 레이더 — **켜면 보이고, 켜면 보인다.**
@@ -269,9 +270,11 @@ export function whyNotFire(s = {}) {
   //   따로 만들어서 재고를 관리할 수 있도록」). v68 까지 부품을 썼는데,
   //   그러면 「고치는 것」과 「쏘는 것」이 한 주머니라 벌이 하나뿐이었다 —
   //   미사일을 아끼는 이유와 수리를 아끼는 이유가 같은 것이 되어 버린다
-  if ((w.cost.ore ?? 0) > (sup.ore ?? 0)
-    || (w.cost.parts ?? 0) > (sup.parts ?? 0)
-    || (w.cost.missiles ?? 0) > (sup.missiles ?? 0)) return 'ammo';
+  // ★ v84 — 시험 동안은 **재고로 안 막는다** (`MISSILES.infinite`)
+  if (!MISSILES.infinite
+    && ((w.cost.ore ?? 0) > (sup.ore ?? 0)
+      || (w.cost.parts ?? 0) > (sup.parts ?? 0)
+      || (w.cost.missiles ?? 0) > (sup.missiles ?? 0))) return 'ammo';
   if ((s.cool ?? 0) > 0) return 'reload';
   if (!s.target) return 'none';
   if (w.needLock && !s.radar) return 'radar';
