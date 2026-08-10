@@ -8,7 +8,7 @@
 //  ★ three.js 를 안 쓴다 — tools/space-combat.js 가 브라우저 없이 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
 import {
-  RADAR, WEAPONS, WEAPON_LIST, whyNotFire, hitChance, inCone, contactLevel,
+  RADAR, WEAPONS, WEAPON_LIST, whyNotFire, hitChance, inCone, contactLevel, PICK,
 } from './combat-table.js';
 import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
 import { azDiff } from './target.js';
@@ -36,6 +36,8 @@ export function makeCombat() {
     fired: 0, hits: 0, kills: 0, misses: 0,
     /** 조종석에 매인 시간 (초) — 장르 안전핀 */
     seat: 0,
+    /** ★★★ v85 — **지정한 표적** (T · Tab). 락온과 **다른 것**이다 */
+    pick: null,
   };
 }
 
@@ -149,6 +151,53 @@ export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0) {
   for (const id of [...c.radar.seen.keys()]) if (!alive.has(id)) c.radar.seen.delete(id);
   return out;
 }
+
+/**
+ * ══ ★★★ **표적 지정** — 키 하나로 제일 가까운 적 (v85) ═══════════════
+ *
+ *  ★ 사장님 「목표물을 타겟할 수가 없잔아! … **가장 직관적인 시스템**을」
+ *
+ *  ★★ 이 장르가 거의 예외 없이 쓰는 것을 그대로 가져온다: **T 로 제일
+ *    가까운 적 · Tab 으로 다음 것.** 조준선으로 찾아내라고 하지 않는다 —
+ *    하늘은 사방(±180)이고 적은 작다.
+ *
+ *  ★★★ 그런데 **지정은 락온이 아니다.** 지정은 「저놈을 본다」이고,
+ *    묶는 것은 여전히 **조준선에 2.6초 올려 두는 손의 일**이다.
+ *    지정이 락온까지 해 주면 유도탄이 버튼 하나가 되고, 그러면
+ *    「최종 결정은 플레이어가」(v84)가 무너진다
+ *
+ * @param list  `sky.list`
+ * @param next  true 면 **지금 것 다음**을 고른다 (Tab)
+ * @returns 고른 표적 (없으면 null)
+ */
+export function pickTarget(c, list, noseAz = 0, noseEl = 0, next = false) {
+  const foes = (list ?? [])
+    .filter((t) => isFoe(t.kind) && t.dist <= PICK.range)
+    // ★ 가까운 것 먼저 · 같은 거리면 **정면 쪽**이 먼저
+    .map((t) => {
+      const off = Math.hypot(azDiff(t.az, noseAz), t.el - noseEl);
+      return { t, score: t.dist + off * PICK.front * 4 };
+    })
+    .sort((a, b) => a.score - b.score)
+    .map((x) => x.t);
+  if (!foes.length) { c.pick = null; return null; }
+  if (!next || c.pick === null) { c.pick = foes[0].id; return foes[0]; }
+  const i = foes.findIndex((t) => t.id === c.pick);
+  const pickd = foes[(i + 1) % foes.length];
+  c.pick = pickd.id;
+  return pickd;
+}
+
+/** 지금 지정한 것 (없거나 부서졌으면 null) */
+export function picked(c, list) {
+  if (c.pick === null) return null;
+  const t = (list ?? []).find((x) => x.id === c.pick) ?? null;
+  if (!t) c.pick = null;
+  return t;
+}
+
+/** 지정을 놓는다 */
+export const dropPick = (c) => { c.pick = null; };
 
 /** 묶은 표적이 사라졌다 (부서졌다) — 락온도 같이 놓는다 */
 export function forgetLock(c, id) {

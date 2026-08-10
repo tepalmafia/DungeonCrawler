@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=84">
+<link rel="stylesheet" href="css/style.css?v=85">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -38,6 +38,15 @@
      ★ 화살표가 **가운데가 아니라 그쪽에** 뜬다 — 눈이 거기로 간다.
      ★ 막대는 「얼마나 뺐나」다. 다 차면 빗나간다 — 이게 없으면
        회피가 먹고 있는지 알 수가 없고, 그러면 또 주사위로 읽힌다 -->
+<!-- ★★★ v85 — **지정한 표적이 어디 있나.**
+     사장님 「목표물을 타겟할 수가 없잔아!」
+     ★ 화면 안이면 **상자**, 밖이면 **화살표 + 몇 도 돌려야 하는지**.
+       지정해 놓고 못 찾으면 지정이 아무 일도 안 한 것이다 -->
+<div id="pick" hidden>
+  <b class="box"></b>
+  <span class="tag"></span>
+</div>
+
 <div id="evade" hidden>
   <b class="tip"></b>
   <span class="say"></span>
@@ -130,7 +139,14 @@
        스무 줄은 안 읽힌다. **지금 막힌 쪽만** 펴 보면 된다.
      ★ 열면 게임이 **멈춘다** — 읽는 동안 얻어맞으면 그건 도움말이 아니다
      ══════════════════════════════════════════════════════════════════ -->
-<div id="help" hidden>
+<!-- ★★★ v85 — **`data-ui` 가 없어서 탭이 안 눌렸다** (사장님 「도움말에
+     전투 항목이 클릭이 안되」).
+     `core/input.js` 는 `data-ui` 가 붙은 것 위에서 누른 것만 「게임의
+     클릭이 아니다」로 친다. 안 붙어 있으면 누르는 순간 **포인터 잠금이
+     다시 걸려** 커서가 사라지고 그 클릭이 게임으로 샌다 —
+     2026-08-06 에 점검 모드에서 똑같이 겪은 것(「f2 눌러서 안에 항목을
+     눌러도 아무것도 변한게 없다고!!」)이고, **도움말에는 안 붙였다** -->
+<div id="help" data-ui hidden>
   <div class="sheet">
     <div class="tabs">
       <button id="tab-basic" class="on">조작</button>
@@ -170,6 +186,7 @@
       </div>
       <h3>쏜다</h3>
       <div class="grid">
+        <span>표적 지정</span><b><b>T</b> 제일 가까운 적 &middot; <b>Tab</b> 다음 것 &mdash; <b>찾아 줄 뿐, 묶는 것은 손이 한다</b></b>
         <span>무기 고르기</span><b>1 레이저 · 2 열추적탄 · 3 유도탄</b>
         <span>쏘기</span><b>마우스 왼쪽</b>
         <span>쏠 수 있나</span><b>표적 둘레가 <span class="ok">초록</span>이면 사거리 안, <span class="no">회색</span>이면 밖. 아랫줄이 <b>「몇 m 더」</b>를 말한다</b>
@@ -180,7 +197,7 @@
       <h3>부순 뒤 &mdash; 여기가 이 게임의 값이다</h3>
       <div class="grid">
         <span>잔해</span><b>부순 자리에 <b>꾸러미</b>가 남는다. 안 주우면 <b>흩어진다</b></b>
-        <span>회수 셋</span><b><b>F</b> 도킹 팔 25m&middot;1.2초 &middot; <b>G</b> 그물 80m &middot; <b>T</b> 로봇 160m&middot;<b>안 묶인다</b></b>
+        <span>회수 셋</span><b><b>F</b> 도킹 팔 25m&middot;1.2초 &middot; <b>G</b> 그물 80m &middot; <b>B</b> 로봇 160m&middot;<b>안 묶인다</b></b>
         <span>화물칸</span><b>100 짐. <b>탄두 재료 다섯이면 꽉 찬다</b> &mdash; 목적에 가까울수록 못 싣는다</b>
         <span>지원</span><b>부수면 <b>적의 지원이 온다.</b> 센 것을 부술수록 빨리 온다</b>
         <span>그래서</span><b><b>다 줍지는 못한다.</b> 무엇을 줍고 무엇을 버릴지가 이 게임이다</b>
@@ -231,6 +248,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=84"></script>
+<script type="module" src="js/main.js?v=85"></script>
 </body>
 </html>

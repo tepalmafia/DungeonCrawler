@@ -71,7 +71,7 @@ import { DRIFT } from './game/drift-table.js';
 import { HELM, HELM_SEAT, FLY_VIEW, STICK, deflect, YOKE, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
-import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord } from './game/combat-table.js';
+import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord, PICK } from './game/combat-table.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
 import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg } from './game/warhead-table.js';
 import {
@@ -93,6 +93,7 @@ import {
 import { atOf as shotAt } from './world/shots.js';
 import {
   makeCombat, weaponOf, isLocked, stepRadar, stepShots, stepCool,
+  pickTarget, picked, dropPick,
   pickSlot, fire as fireWeapon, forgetLock, radarBlips, summary as cbtSummary,
 } from './game/combat.js';
 import { HULL, HITS } from './game/target-table.js';
@@ -116,7 +117,7 @@ import {
   makeSalvage, dropPack, stepSalvage, fireNet, thrustHeld, callWarn,
   summary as salvSummary, WHY as SALV_WHY,
 } from './game/salvage.js';
-import { spawnRaider, threatNow, aimingSoon } from './game/target.js';
+import { spawnRaider, threatNow, aimingSoon, azDiff } from './game/target.js';
 // ★★★ v84 — **등대.** 말하는 구멍을 하나로 모은다
 import { LINES as AI_LINES, sideWord, VOICE } from './game/ai-table.js';
 import { makeAI, say, hush, stepAI, nowSaying, summary as aiSummary } from './game/ai.js';
@@ -213,7 +214,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 84;
+export const VERSION = 85;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -226,6 +227,10 @@ const evBox = document.getElementById('evade');
 const evTip = evBox?.querySelector('.tip');
 const evSay = evBox?.querySelector('.say');
 const evBar = evBox?.querySelector('.bar u');
+/** ★★★ v85 — 지정한 표적이 어디 있나 */
+const pkBox = document.getElementById('pick');
+const pkTip = pkBox?.querySelector('.box');
+const pkTag = pkBox?.querySelector('.tag');
 const lesson = document.getElementById('lesson');
 const pauseBox = document.getElementById('pause');
 // ★ 게임 오버 — 이 게임의 유일한 끝 (행성 충돌 · 수동 조작 중에만)
@@ -353,6 +358,19 @@ helpBox?.addEventListener('click', (e) => { if (e.target === helpBox) showHelp(f
 addEventListener('keydown', (e) => {
   // ★ F1 은 브라우저 도움말이라 **막아야** 한다 — 안 막으면 우리 것이
   //   뜨는 동시에 브라우저 창이 열린다
+  // ══ ★★★ v85 — **표적 지정** (사장님 「목표물을 타겟할 수가 없잔아!」) ══
+  //  ★ 이 장르의 정석 그대로다: **T 제일 가까운 적 · Tab 다음 것.**
+  //    (Elite · Star Citizen · Freelancer 가 다 T 다)
+  //  ★★ 지정은 **락온이 아니다** — 찾아 줄 뿐이고, 묶는 것은 여전히
+  //    조준선에 2.6초 올려 두는 손의 일이다 (`combat.js pickTarget` 주석)
+  if (!helpOpen && !paused && (e.code === 'KeyT' || e.code === 'Tab')) {
+    e.preventDefault();
+    const a = noseAim();
+    const t = pickTarget(combat, sky.list, a.az, a.el, e.code === 'Tab');
+    say(ai, t ? `표적 — ${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m` : '겨눌 적이 없습니다', 'tell');
+    audio?.event(t ? 'click' : 'deny');
+    return;
+  }
   if (e.code === 'F1') { e.preventDefault(); showHelp(!helpOpen); return; }
   if (e.code === 'Escape' && helpOpen) { e.preventDefault(); showHelp(false); }
 });
@@ -651,10 +669,42 @@ function noseAim() {
   //   끝없이 커진다. 예전처럼 ±62 로 자르면 두 바퀴째부터 기수가 62도에
   //   붙어 버려서 **돌수록 조준이 안 따라온다** — 자르는 것과 감는 것은
   //   한계가 있을 때만 같은 말이다
-  let az = (fly3.yaw * DEG) % 360;
-  if (az > 180) az -= 360;
-  if (az < -180) az += 360;
-  return { az, el: clampA(fly3.pitch * DEG, TARGET.elLimit) };
+  // ══ ★★★ v85 — **위아래도 감는다** (사장님 「왜 상하로 조정이 안되냐고!!」
+  //  「목표물을 타겟할 수가 없잔아!」) ═══════════════════════════════════
+  //
+  //  ★ 여기 `clampA(fly3.pitch * DEG, TARGET.elLimit)` 이 있었다 —
+  //    **조준 고도를 ±34도에서 잘랐다.** 그런데 v73 에 기수의 위아래
+  //    한계(`AXES.pitch.max`)는 **없앴다.** 즉:
+  //
+  //      기수는 계속 돈다 → 창밖도 계속 돈다 → **조준만 34도에서 멎는다**
+  //
+  //    그래서 34도를 넘기면 **조준선과 실제 겨눈 곳이 갈라지고**, 표적을
+  //    한복판에 올려도 안 잡힌다. 「상하 조정이 안 된다」와 「타겟할 수가
+  //    없다」가 **한 줄에서 나온 같은 병**이다.
+  //
+  //  ★★ v69 에 좌우에서 **똑같은 일**을 했었다 (「자르는 것과 감는 것은
+  //    한계가 있을 때만 같은 말이다」). 위아래만 못 고쳤다 — 한계를
+  //    없애면서 딸린 값을 안 고치는, 이 저장소가 제일 자주 밟는 함정이다.
+  //
+  //  ★★★ 그냥 자르기를 빼면 안 된다. 고도가 90도를 넘으면 **뒤로 넘어간
+  //    것**이라 방위가 180도 돌아간다 — 구면 좌표의 규칙이고, 안 지키면
+  //    머리 위를 넘기는 순간 좌우가 뒤집힌다
+  return aimOf(fly3.pitch * DEG, fly3.yaw * DEG);
+}
+
+/**
+ * ★★★ **기수의 각도를 조준의 방위·고도로** (v85).
+ *
+ *   피치가 ±90 도를 넘으면 **뒤로 넘어간 것**이다: 고도는 되꺾이고
+ *   방위는 반 바퀴 돈다. 그래야 머리 위를 넘겨도 좌우가 안 뒤집힌다
+ */
+function aimOf(pitchDeg, yawDeg) {
+  const wrap = (d) => ((d + 180) % 360 + 360) % 360 - 180;
+  let el = wrap(pitchDeg);
+  let az = yawDeg;
+  if (el > 90) { el = 180 - el; az += 180; }
+  else if (el < -90) { el = -180 - el; az += 180; }
+  return { az: wrap(az), el };
 }
 
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
@@ -4628,6 +4678,32 @@ function frame(now) {
   //    모양을 안 읽고 **자리**를 본다
   //  ★ 막대가 없으면 회피가 먹고 있는지 알 수가 없고, 그러면 v83 까지처럼
   //    또 「주사위」로 읽힌다 — 되먹임이 있어야 조작이다
+  // ══ ★★★ v85 — **지정한 표적이 어디 있나** ═══════════════════════════
+  //  ★ 화면 안이면 **상자**, 밖이면 **화살표**. 지정해 놓고 못 찾으면
+  //    지정이 아무 일도 안 한 것이다 — 「규칙이 있는데 화면에 안 보이면
+  //    없는 것과 같다」
+  if (pkBox) {
+    const t = steering && !paused ? picked(combat, sky.list) : null;
+    pkBox.hidden = !t;
+    if (t) {
+      const a = noseAim();
+      const dAz = azDiff(t.az, a.az);
+      const dEl = t.el - a.el;
+      const off = Math.hypot(dAz, dEl);
+      const out = off > PICK.offScreen;
+      pkBox.classList.toggle('off', out);
+      // 화면 안이면 각도를 그대로 화소로 (HUD 가 26도를 덮는다), 밖이면 가장자리에
+      const k = out ? 210 / Math.max(1e-3, off) : (innerHeight * 0.5) / 26;
+      const x = dAz * k, y = -dEl * k;
+      const deg = out ? Math.atan2(y, x) * 180 / Math.PI : 0;
+      pkTip.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) rotate(${deg.toFixed(0)}deg)`;
+      pkTag.style.transform = `translate(calc(-50% + ${x.toFixed(0)}px), ${(y + 34).toFixed(0)}px)`;
+      pkTag.textContent = out
+        ? `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m — ${Math.round(off)}° 돌리십시오`
+        : `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m`;
+    }
+  }
+
   if (evBox) {
     const show = !!threat && steering && !paused;
     evBox.hidden = !show;
