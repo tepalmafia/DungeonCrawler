@@ -177,8 +177,20 @@ function draw(ctx, w, h, s) {
   //    target locator line 이 하는 일이다)
   const cx = w / 2, cy = h / 2;
   const FOVH = hudFov();
-  const sx = (w * 0.5) / (FOVH.h / 2);     // 도 → 화소 (**실제 각도**)
+  // ══ ★★★ v91 — **도를 화소에 곧바로 비례시키면 안 된다** ═══════════
+  //  판은 눈앞의 **평면**이라 각 θ 는 `tan θ` 자리에 찍힌다. 비례로 놓으면
+  //  가운데는 맞고 **가장자리로 갈수록 벌어진다** — 화소로 재니 9도에서
+  //  3.8화소였다 (사장님 「락온은 왼쪽인데 적은 우측 상단」의 마지막 조각).
+  //  ★ `sx`·`sy` 는 **눈금선**이 쓴다 (거기서는 비례가 오히려 읽기 쉽다).
+  //    표적을 놓는 것은 아래 `pxH`·`pxV` — **tan** 이다
+  const sx = (w * 0.5) / (FOVH.h / 2);
   const sy = (h * 0.5) / (FOVH.v / 2);
+  const RAD = Math.PI / 180;
+  const TANH = Math.tan((FOVH.h / 2) * RAD);
+  const TANV = Math.tan((FOVH.v / 2) * RAD);
+  /** 좌우 몇 도 → 판 위 몇 화소. 90도 밖은 뒤라 `tan` 이 뒤집힌다 — 막는다 */
+  const pxH = (d) => (Math.abs(d) >= 80 ? Math.sign(d) * w : (w * 0.5) * Math.tan(d * RAD) / TANH);
+  const pxV = (d) => (Math.abs(d) >= 80 ? Math.sign(d) * h : (h * 0.5) * Math.tan(d * RAD) / TANV);
   ctx.strokeStyle = 'rgba(143,230,192,.13)';
   ctx.lineWidth = 1;
   for (let a = -10; a <= 10; a += 5) {
@@ -213,8 +225,8 @@ function draw(ctx, w, h, s) {
     if (raz < -180) raz += 360;
     const rel = t.el - aimEl;
     { const dd = Math.hypot(raz, rel); if (dd < anyD) { anyD = dd; any = t; } }
-    let x = cx + raz * sx;
-    let y = cy - rel * sy;
+    let x = cx + pxH(raz);
+    let y = cy - pxV(rel);
     // ★★ HUD 밖이면 **표적 지시선(TLL)** — 실제 전투기가 쓰는 것 그대로다.
     //   조종사는 이 선을 따라 **상자가 나타날 때까지 기수를 끈다.**
     //   HUD 는 26도뿐인데 표적은 사방에 있으므로, 이게 없으면 옆과 뒤가

@@ -261,6 +261,34 @@ if (seeV >= 0) {
       ok(!v.who.some(([n]) => n === '조종간'),
         '★★★ **조종간이 화면을 안 먹는다** — 실제 중앙 조종간은 무릎 사이라 눈에 거의 안 들어온다');
     }
+    console.log('\n[8] ★★★ **HUD 표식이 진짜 적 위에 얹히나** (v91)');
+    {
+      //  사장님 「**왜 락온은 왼쪽인데 적은 우측 상단에 있지?**」 ·
+      //          「레이더에 적의 위치가 나타나는데 **타겟팅해도 적이 안잡히잔아**」
+      //  ★ 두 말씀이 **같은 버그**였다. 표식에 맞추면 적은 딴 데 있으므로
+      //    락온 원뿔(9도) 가장자리에서 붙었다 떨어졌다 한다.
+      //  ★★ **롤을 걸고 잰다** — 안 걸면 0도만 재게 되고, 실제로 v91 이전에는
+      //    0도에서만 맞고 **기울일수록 원을 그리며 벗어났다**
+      await S(() => { SPACE.setRegion('empty', true); SPACE.setPower('sensor', true); SPACE.putAuto(false); });
+      const t = await S(() => SPACE.callRaider());
+      await S((id) => SPACE.putSkyAz(id, 9, 5), t.id);
+      await S((id) => SPACE.putSkyDist(id, 90), t.id);
+      await pg.waitForTimeout(600);
+      let worst = 0;
+      for (const roll of [0, 15, 30, 45]) {
+        await S((r) => SPACE.putFly({ roll: r * Math.PI / 180 }), roll);
+        await pg.waitForTimeout(450);
+        const d = await S(() => SPACE.hudGap('raider'));
+        const g = Math.hypot(d.gap?.x ?? 99, d.gap?.y ?? 99);
+        worst = Math.max(worst, g);
+        console.log(`   롤 ${String(roll).padStart(3)}도 — 적 ${d.foe?.x},${d.foe?.y} · 표식 ${d.mark?.x},${d.mark?.y} → ${g.toFixed(1)}화소`);
+      }
+      ok(worst < 900 * 0.02,
+        `★★★ 제일 벌어졌을 때 **${worst.toFixed(1)}화소** (화면 폭의 2% 미만) —`
+        + ' v90 은 롤 45도에서 36화소였다 (하늘만 돌고 HUD 는 안 돌아서)');
+      await S(() => SPACE.putFly({ roll: 0 }));
+    }
+
     if (errs.length) { console.log('\n  ✘ 콘솔 오류:'); errs.slice(0, 3).forEach((e) => console.log('    ' + e)); fail += errs.length; }
   } finally { await br.close(); }
   console.log('');

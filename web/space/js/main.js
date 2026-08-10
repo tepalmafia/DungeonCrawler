@@ -83,6 +83,8 @@ import {
 import { speedOf as statusSpeed } from './world/status.js';
 // ★★★ 급가속 (v73) — **따로 하는 조작.** Shift 는 기수를 돌리고, R 은 튀어나간다
 import { BOOST, RUSH, KICK } from './game/boost-table.js';
+// ★ v91 — HUD 판의 크기·거리와 **그림이 쓰는 각**. 둘이 갈라지면 표식이 어긋난다
+import { HUD as HUDV, hudFov } from './game/view-table.js';
 import {
   makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
 } from './game/boost.js';
@@ -216,7 +218,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 90;
+export const VERSION = 91;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -3667,6 +3669,66 @@ window.SPACE = {
    *
    * @returns 막힌 비율 · **아래에서 몇 %가 막혔나** · 화면 복판 가로줄의 막힘
    */
+  /**
+   * ★★★ v91 — **HUD 표식과 진짜 표적이 화면에서 몇 화소 어긋나나.**
+   *
+   *   사장님 「**왜 락온은 왼쪽인데 적은 우측 상단에 있지?**」
+   *
+   *   ★ 「부호는 머리로 맞히는 것이 아니라 화면에 점을 박고 재는 것」
+   *     (v66·v73). 여기서는 **점 둘**을 박는다 — 3D 로 그린 적과,
+   *     HUD 가 그린 표식. 둘이 같은 자리라야 조준경이다
+   */
+  hudGap(kind = null) {
+    const g = ship.outside.targets?.group;
+    const m = ship.sight?.mesh;
+    if (!g || !m) return null;
+    // ★ 이름이 아니라 **창밖 목록의 차례**로 찾는다 — 이름은 종류라
+    //   같은 종류가 둘이면 엉뚱한 것을 잰다 (v73 에 그랬다)
+    const t = kind ? sky.list.find((x) => x.kind === kind) : sky.list[0];
+    if (!t) return { why: '그런 표적이 없다' };
+    const o = g.children[sky.list.indexOf(t)];
+    if (!o || !o.visible) return { why: '그 표적이 화면에 안 서 있다' };
+    const W = globalThis.innerWidth, H = globalThis.innerHeight;
+    const toPx = (v3) => {
+      const q = v3.clone().project(camera);
+      return { x: +((q.x * 0.5 + 0.5) * W).toFixed(1), y: +((0.5 - q.y * 0.5) * H).toFixed(1) };
+    };
+    const wp = new THREE.Vector3(); o.getWorldPosition(wp);
+    const foe = toPx(wp);
+    // HUD 판의 네 귀퉁이 → 화면 사각형. **판이 화면에서 얼마나 큰가**가
+    // 곧 「도 → 화소」의 진짜 값이다 (그림이 쓰는 값과 견준다)
+    m.updateMatrixWorld();
+    const hw = HUDV.w / 2, hh = HUDV.h / 2;
+    const c0 = toPx(m.localToWorld(new THREE.Vector3(-hw, -hh, 0)));
+    const c1 = toPx(m.localToWorld(new THREE.Vector3(hw, hh, 0)));
+    const mid = { x: (c0.x + c1.x) / 2, y: (c0.y + c1.y) / 2 };
+    // 그림이 쓰는 각 (`hudFov`) 로 표식이 놓이는 자리
+    const a = noseAim();
+    const raz = ((t.az - a.az) % 360 + 540) % 360 - 180;
+    const rel = t.el - a.el;
+    // ★★ **판의 제 좌표로 놓는다.** 처음엔 화면 x·y 로 놓았는데, v91 에서
+    //   판이 하늘을 따라 굴게 되자 **판의 가로축이 화면 가로축이 아니게**
+    //   됐다 — 그 상태로 재면 고쳐 놓고도 어긋난 것으로 나온다.
+    //   그림(`gunsight.js`)이 하는 것과 **같은 식**이라야 잰 것이 된다
+    const F = hudFov();
+    // ★ 그림과 **같은 식**(tan)이라야 잰 것이 된다 — v91
+    const R = Math.PI / 180;
+    const mark = toPx(m.localToWorld(new THREE.Vector3(
+      (HUDV.w / 2) * Math.tan(raz * R) / Math.tan((F.h / 2) * R),
+      (HUDV.h / 2) * Math.tan(rel * R) / Math.tan((F.v / 2) * R),
+      0,
+    )));
+    return {
+      foe, mark, mid,
+      gap: { x: +(mark.x - foe.x).toFixed(1), y: +(mark.y - foe.y).toFixed(1) },
+      rel: { az: +raz.toFixed(2), el: +rel.toFixed(2) },
+      plate: { w: +(c1.x - c0.x).toFixed(1), h: +(c0.y - c1.y).toFixed(1) },
+      // 판이 화면에서 실제로 덮는 각 vs 그림이 쓰는 각 — **여기가 갈라지면 어긋난다**
+      fovDrawn: F,
+      eyeToPlate: +(camera.position.z - m.position.z).toFixed(3),
+      plateDist: HUDV.dist,
+    };
+  },
   /** ★ 화면 아래쪽 다섯 점이 **무엇에** 막히나 — 이름·부모·높이까지 */
   blockedAt(ys = [-0.35, -0.5, -0.65, -0.8, -0.95], xs = [-0.5, 0, 0.5]) {
     const ray = new THREE.Raycaster();
@@ -4944,6 +5006,9 @@ function frame(now) {
   landShots(dt);
 
   // 조준경 — **앉아 있을 때만 켜진다.** 늘 켜 두면 「지금 겨누는 중인가」가 안 읽힌다
+  // ★★★ v91 — **HUD 를 하늘과 같이 굴린다** (`outside.skyRoll`).
+  //   안 굴리면 배를 기울일수록 표식이 적에게서 원을 그리며 벗어난다
+  if (ship.sight?.mesh) ship.sight.mesh.rotation.z = ship.outside.skyRoll;
   ship.sight.redraw({
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,

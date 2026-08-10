@@ -47,6 +47,8 @@ import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
 import { buildStatusHud } from './status.js';
 import { DEP, ROOF, HUD as HUDV } from '../game/view-table.js';
+// ★★★ v91 — HUD 는 **잡은 눈** 앞에 놓아야 한다 (아래 참조). 그 눈의 자리를 읽는다
+import { FLY_VIEW } from '../game/helm-table.js';
 
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
@@ -1067,7 +1069,33 @@ export function buildShip(scene, camera = null, renderer = null) {
   // ★★ **앉은 눈높이에 놓는다.** HUD 는 DEP 에 맞춰져 있어야 표적 위에
   //   얹힌다 — v65 는 눈이 30cm 뜨는데 HUD 는 고정이라 어긋나 있었고,
   //   그 어긋남을 **크게 만들어 덮고** 있었다
-  sight.mesh.position.set(0, DEP.y + 0.06, DEP.z - HUDV.dist);
+  // ══ ★★★ v91 — **DEP 가 아니라 「잡은 눈」 앞이다** ═══════════════════
+  //
+  //  사장님 「**왜 락온은 왼쪽인데 적은 우측 상단에 있지?**」 ·
+  //          「레이더에 적의 위치가 나타나는데, **타겟팅해도 적이 안잡히잔아**」
+  //
+  //  ★ 두 말씀이 **같은 버그**였다. 화소로 쟀더니(`SPACE.hudGap()`):
+  //      적(3D)  (496.7, 259.4)
+  //      HUD 표식 (507.2, 269.7)   → **오른쪽 10.5 · 아래 10.3 화소**
+  //    표식에 맞추면 적은 딴 데 있으므로 **락온이 영영 안 걸린다.**
+  //
+  //  ★★ 원인 둘, 둘 다 **판은 붙박이인데 눈이 움직여서**다:
+  //    ① **거리** — 조종간을 잡으면 눈이 `FLY_VIEW.lean`(0.16m) 앞으로
+  //       나온다. 그래서 눈→판이 0.65 가 아니라 **0.49m** 다. 그런데
+  //       그림은 `hudFov`(=0.65 로 낸 26도)로 각을 놓으므로 **21% 더 벌어진다**
+  //    ② **높이** — 눈은 `FLY_VIEW.rise`(0.10m) 뜨는데 판은 DEP+0.06 에
+  //       있어, 판 복판이 화면 복판보다 **19화소 아래**에 온다
+  //
+  //  ★★★ 그래서 **판을 눈에 맞춰 옮긴다.** 값을 손보는 것이 아니라
+  //    「HUD 는 눈에서 `HUD.dist` 앞, 눈높이」라는 **한 문장으로** 만든다 —
+  //    v65 가 어긋남을 **HUD 를 크게 만들어 덮었던** 것과 반대 방향이다.
+  //    ★ 안 잡았을 때는 눈이 DEP 에 있으므로 판이 살짝 위에 보이는데,
+  //      그건 실제 조종석도 그렇다 (HUD 는 DEP 기준으로 맞춰져 있다)
+  sight.mesh.position.set(
+    0,
+    DEP.y + FLY_VIEW.rise,
+    (DEP.z - FLY_VIEW.lean) - HUDV.dist,
+  );
   ship.add(sight.mesh);
 
   // ══ ★★★ **상태창 — 앉으면 뜬다** (v69 · `world/status.js`) ══════════
