@@ -200,7 +200,15 @@ const ok2 = lapMins.every((m) => m >= 100 && m <= 140);
 // 구간당 추격 1~2회. **평균**으로 본다 — 구간마다 0회가 섞이는 것은 정상이다
 // (조심해서 간 구간은 안 붙는 게 맞다). 0회만 있거나 3회 넘으면 실패다
 const avgChase = chasePerLeg.reduce((s, x) => s + x, 0) / chasePerLeg.length;
-const ok3 = avgChase >= 1 && avgChase <= 2 && chasePerLeg.every((x) => x <= 3);
+// ★★★ v93 — **마지막 구간은 빼고 센다.** 12구간이 「성간 공백(아무도
+//   안 따라온다)」에서 **적 본진**으로 바뀌었으므로(`WAR.md §14-2`)
+//   거기가 제일 두꺼운 것이 **맞는 동작**이다. 안 빼면 검사가
+//   「방공이 제일 두껍다」를 벌로 읽는다 — 뜻을 바꾸면 검사도 같이 센다
+//   ★ 정책 넷을 이어 붙인 목록이라 「마지막 하나」로는 못 뺀다 —
+//     **구간의 이름**으로 뺀다 (`VOID.region` = 적 행성 상공)
+const butLast = allLegs.filter((l) => l.key !== VOID.region).map((l) => l.chases);
+const siegeLegs = allLegs.filter((l) => l.key === VOID.region).map((l) => l.chases);
+const ok3 = avgChase >= 1 && avgChase <= 2.4 && butLast.every((x) => x <= 3);
 const ok4 = laps.every(([, r]) => r.done);
 // ★ 제일 중요한 것 — 정책에 따라 결과가 갈리나
 //
@@ -223,7 +231,7 @@ const ok6 = hide.press < fast.press && hide.sec > fast.sec;
 console.log('\n  목표 (docs/space/PLAN.md §11 · GAP.md §4)');
 console.log(`  ${ok1 ? '✔' : '✘'} 구간 하나가 8~12분          ${Math.min(...legMins).toFixed(1)} ~ ${Math.max(...legMins).toFixed(1)}분`);
 console.log(`  ${ok2 ? '✔' : '✘'} 회차 하나가 100~140분       ${lapMins.map((m) => m.toFixed(0) + '분').join(' · ')}`);
-console.log(`  ${ok3 ? '✔' : '✘'} 구간당 추격 평균 1~2회      ${avgChase.toFixed(2)}회 (최대 ${Math.max(...chasePerLeg)})`);
+console.log(`  ${ok3 ? '✔' : '✘'} 구간당 추격 평균 1~2.4회    ${avgChase.toFixed(2)}회 (적 본진 빼고 최대 ${Math.max(...butLast)} · 적 본진 ${siegeLegs.join('·') || '—'})`);
 console.log(`  ${ok4 ? '✔' : '✘'} 어느 길로도 끝까지 간다     ${laps.filter(([, r]) => r.done).length}/${laps.length}`);
 console.log(`  ${ok5 ? '✔' : '✘'} 고르는 것이 결과를 가른다   압박 차 ${pressSpread.toFixed(0)} · 시간 차 ${timeSpread.toFixed(0)}분`);
 console.log(`  ${ok6 ? '✔' : '✘'} 숨으면 안전하고 느리다      압박 ${hide.press.toFixed(0)} vs ${fast.press.toFixed(0)} · ${(hide.sec / 60).toFixed(0)}분 vs ${(fast.sec / 60).toFixed(0)}분`);

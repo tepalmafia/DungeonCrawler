@@ -62,8 +62,10 @@ export function stepRadar(c, dt, aimed) {
 
   // 이미 묶었나
   if (r.id !== null) {
+    // ★★★ v94 — **묶은 뒤에는 넓게 잡는다** (`RADAR.holdCone`).
+    //   묶는 각과 유지하는 각이 같으면 적이 기동하는 순간 풀린다
     const still = t && t.id === r.id && t.dist <= RADAR.breakRange
-      && aimed.off <= RADAR.lockCone && inCone(aimed.relAz, aimed.relEl);
+      && aimed.off <= RADAR.holdCone;
     if (still) { r.grace = RADAR.holdGrace; return null; }
     // ★ **잠깐 벗어난 것으로는 안 깨진다.** 0 으로 두면 손이 한 번 떨릴 때마다
     //   깨져서 묶는 것이 벌이 된다 — 실제 레이더도 짧은 이탈은 외삽한다

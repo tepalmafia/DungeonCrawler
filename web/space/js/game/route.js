@@ -52,7 +52,9 @@ export function makeRoute(seed = 'SPACE1') {
  *   8판이 만든 「다 보이는데 볼 것이 없다」가 통째로 안 났다
  */
 export function regionOf(rt) {
-  if (isVoid(rt.leg) && rt.phase === RPHASE.LEG) return 'void';
+  // ★ v93 — **표가 말하게 한다.** 여기 `'void'` 를 손으로 적어 뒀더니
+  //   구역을 갈아치울 때 한 곳이 남았다 (`VOID.region` 과 갈라짐)
+  if (isVoid(rt.leg) && rt.phase === RPHASE.LEG) return VOID.region;
   return (rt.fork || forkOf('empty')).region;
 }
 
