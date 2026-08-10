@@ -13,6 +13,17 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.hold = false;        // 마우스 왼쪽을 잡고 있나
+    /**
+     * ★★★ v88 — **마우스 오른쪽 = 둘러보기.**
+     *
+     *   조종석에 앉으면 마우스가 **조종간**이 된다 (v78 스틱). 그러면
+     *   시선이 정면에 못박히고, 재 보니 **조종석에서 아무것도 조준선에
+     *   안 걸렸다** — 갈래 판·추력 레버·자동 항법 전부. 즉 **앉으면
+     *   배를 출발시킬 수가 없었다.**
+     *   ★ 실제 전투기 조종사도 계기를 볼 때는 고개를 돌린다. 누르고 있는
+     *     동안만 스틱을 놓고 **고개만** 돌리는 것이 제일 가깝다
+     */
+    this.look = false;
     // ★ **Shift 로 뛴다** (game/move-table.js). 누르고 있는 동안만이라
     //   `keys` 와 달리 코드가 아니라 상태로 둔다 — 창을 나갔다 오면
     //   `blur` 가 꺼 준다
@@ -33,7 +44,7 @@ export class Input {
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.run = false;
     });
     // 창 밖으로 나가면 눌린 키가 눌린 채로 남는다 — 「저절로 걸어간다」의 원인
-    addEventListener('blur', () => { this.keys.clear(); this.hold = false; this.run = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.hold = false; this.look = false; this.run = false; });
 
     // ★ 캔버스가 아니라 **창 전체**에서 받는다.
     //   캔버스에만 걸었더니, 위에 덮인 안내 창을 누른 사람은 게임을 못 켰다.
@@ -52,14 +63,20 @@ export class Input {
     addEventListener('mousedown', (e) => {
       if (e.target?.closest?.('[data-ui]')) return;
       if (e.button === 0) { this.hold = true; this.press = true; }
+      if (e.button === 2) this.look = true;
       // 잠금이 막 풀린 직후에 다시 걸면 브라우저가 거절한다. 조용히 넘긴다
       if (!this.locked) canvas.requestPointerLock?.()?.catch?.(() => {});
     });
-    addEventListener('mouseup', (e) => { if (e.button === 0) this.hold = false; });
+    addEventListener('mouseup', (e) => {
+      if (e.button === 0) this.hold = false;
+      if (e.button === 2) this.look = false;
+    });
+    // ★ 오른쪽 단추의 기본 차림표를 막는다 — 안 막으면 둘러볼 때마다 뜬다
+    addEventListener('contextmenu', (e) => { if (this.locked) e.preventDefault(); });
 
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
-      if (!this.locked) { this.keys.clear(); this.hold = false; }
+      if (!this.locked) { this.keys.clear(); this.hold = false; this.look = false; }
     });
     addEventListener('mousemove', (e) => {
       if (!this.locked) return;
