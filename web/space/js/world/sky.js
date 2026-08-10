@@ -16,7 +16,7 @@
 //     장면의 조명 목록에 아무것도 안 보태면 실내로 샐 길이 없다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, PLANET, DOME_R, SUN }
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN }
   from '../game/sky-table.js';
 // ★ v73 — 급가속의 속도감. **숫자는 표에만** 있으므로 여기서 읽어 온다
 import { RUSH } from '../game/boost-table.js';
@@ -281,6 +281,28 @@ export function buildDust(parent, z) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
 
+  // ══ ★★★ v87 — **빛줄기.** 급가속 중에는 티끌이 점에서 **줄**이 된다 ══
+  //  ★ 재 보니 흐르는 속도는 이미 7.5배였는데 **점이라 안 읽혔다** —
+  //    점은 자리만 바뀌지 모양이 안 바뀐다. 「노출 시간 동안의 자국」은
+  //    실제로 선으로 남으므로 **없는 것을 그리는 게 아니다** (`STREAK`)
+  const sp = new Float32Array(DUST.n * 6);
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+  const smat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(...DUST.rgb),
+    transparent: true, opacity: 0, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const streak = new THREE.LineSegments(sg, smat);
+  streak.frustumCulled = false;
+  streak.visible = false;
+  // ★★★ v88 — **캐노피 유리가 먼지를 먹고 있었다.** 아래 `points` 와 같은
+  //   이유이고, 자세한 것은 거기 적었다. 별(−10) 다음, 배 안의 모든 것보다 먼저
+  streak.renderOrder = -9;
+  parent.add(streak);
+  /** 지금 줄 길이 (m) — `setRush` 가 정하고 `flow` 가 그린다 */
+  let sLen = 0;
+
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uPix: { value: Math.min(2, globalThis.devicePixelRatio || 1) },
@@ -329,11 +351,64 @@ export function buildDust(parent, z) {
   });
   const points = new THREE.Points(g, mat);
   points.frustumCulled = false;
+  // ══ ★★★ v88 — **여기가 「속도감이 안 느껴진다」의 뿌리였다** ═══════════
+  //
+  //  사장님 「**정지한 상태인지 이동중인지 속도감이 안느껴지잔아**」.
+  //  v87 에 줄무늬를 만들어 놓고 화면을 찍었더니 **급가속에만 보이고
+  //  등속에는 한 줄도 안 보였다.** 길이를 올려도, 밝기를 올려도, 개수를
+  //  세 배로 해도 그대로였다 — 그때 「세기 문제가 아니라 코드가 안 도는
+  //  것」(POSTMORTEM §4)을 떠올리고 `depthTest` 를 꺼 봤더니 **화면이
+  //  줄로 뒤덮였다.** 그리는 것은 되고 있었고 **뭔가가 가리고 있었다.**
+  //
+  //  ★ 범인은 **캐노피 유리**(`cockpit.js GLASS`)다. `MeshBasicMaterial` 은
+  //    `transparent: true` 라도 **`depthWrite` 가 기본 참**이라, 반투명한
+  //    유리가 깊이를 적어 놓고 **뒤에 그려지는 먼지를 통째로 잘라냈다.**
+  //    별이 멀쩡했던 것은 순전히 `renderOrder = -10` 덕이었고 —
+  //    즉 **v57 이 별에만 우연히 붙여 둔 처방**이었다.
+  //
+  //  ★★ 그래서 먼지도 같은 자리로 옮긴다. 선체(불투명)는 여전히 먼저
+  //    그려지므로 **벽은 그대로 가린다** — 고쳐진 것은 유리 하나다.
+  points.renderOrder = -9;
   parent.add(points);
   const attr = g.attributes.position;
 
   return {
     points,
+    /** ★ v87 — 「줄이 정말 켜졌나」를 화면 없이 묻는 자리. **없으면 못 묻는다** */
+    get streak() { return { on: streak.visible, len: +sLen.toFixed(2) }; },
+    /**
+     * ★★★ v88 — **「길이 30」이 화면에서 몇 화소인가.**
+     *
+     *   길이를 30 으로 올려 놓고 화면을 찍었더니 **주 화면엔 거의 안
+     *   보이는데 광학 창(4배 확대)에만 보였다.** 즉 줄은 있었고 **각이
+     *   작았을** 뿐이다 — 세계 좌표 길이는 「보이나」의 답이 아니다.
+     *   그래서 **화소로 잰다.** 이 구멍이 없었으면 또 눈으로 우겼을 것이다.
+     *
+     * @returns 화면에 걸린 줄 개수 · 화소 길이(가운데값·최대) · 8화소 넘는 것
+     */
+    streakPx(camera, w, h) {
+      if (!streak.visible || !camera) return { on: 0, med: 0, max: 0, over8: 0 };
+      const a = sg.attributes.position.array;
+      const v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+      streak.updateMatrixWorld();
+      camera.updateMatrixWorld();
+      const inv = (c) => Math.abs(c.x) < 1 && Math.abs(c.y) < 1 && c.z > -1 && c.z < 1;
+      const lens = [];
+      for (let i = 0; i < DUST.n; i++) {
+        const k = i * 6;
+        v1.set(a[k], a[k + 1], a[k + 2]).applyMatrix4(streak.matrixWorld).project(camera);
+        v2.set(a[k + 3], a[k + 4], a[k + 5]).applyMatrix4(streak.matrixWorld).project(camera);
+        if (!inv(v1) && !inv(v2)) continue;
+        lens.push(Math.hypot((v1.x - v2.x) * w / 2, (v1.y - v2.y) * h / 2));
+      }
+      lens.sort((x, y) => y - x);
+      return {
+        on: lens.length,
+        med: +(lens[Math.floor(lens.length / 2)] ?? 0).toFixed(1),
+        max: +(lens[0] ?? 0).toFixed(1),
+        over8: lens.filter((v) => v > 8).length,
+      };
+    },
     setFade(a) { mat.uniforms.uFade.value = a; points.visible = a > 0.01; },
     /**
      * ★★★ **급가속의 줄무늬** (v73 · `boost-table.js RUSH`).
@@ -347,10 +422,20 @@ export function buildDust(parent, z) {
      *   ★ 대신 **정말로 흐르는 것**을 늘린다: 먼지는 코앞에 있다.
      *     길어지는 것은 「노출 시간 동안 움직인 자국」이라 실제로도 그렇다
      *
-     * @param k 0 보통 · 1 급가속 한창
+     * @param k   0 보통 · 1 급가속 한창 (알갱이 밝기·굵기가 이걸 읽는다)
+     * @param mps ★ v88 — **지금 실제로 초당 몇 유닛 흐르나.** 줄은 이쪽이
+     *            켠다. `k` 로 켜면 R 을 안 누른 동안은 v73 이전과 같아서,
+     *            사장님이 물으신 「정지인지 이동중인지」가 그대로 남는다
      */
-    setRush(k) {
+    setRush(k, mps = 0) {
       const kk = Math.max(0, Math.min(1, k));
+      // ★★★ v88 — **줄이 속도를 따라 자란다.** 대고 있으면(정박 6.5) 0 이라
+      //   아예 안 그려지고, 미끄러지는 중(11.7)과 밟는 중(26)이 배로 다르다
+      sLen = streakLen(mps);
+      const on = sLen > 0.01;
+      streak.visible = on;
+      // 밝기도 길이를 따라간다 — 짧은 자국은 옅다 (노출이 짧으니까)
+      smat.opacity = on ? STREAK.lum * Math.min(1, sLen / STREAK.len + 0.4) : 0;
       mat.uniforms.uGrain.value = 1 + (RUSH.grain - 1) * kk;
       // 밝기도 같이 — 쏟아지는 것은 밝게 보인다
       mat.uniforms.uCol.value.set(...DUST.rgb)
@@ -368,6 +453,16 @@ export function buildDust(parent, z) {
         else if (arr[k] < -R) place(i, R);
       }
       attr.needsUpdate = true;
+      // ★ 줄은 **알갱이가 지나온 쪽으로** 뻗는다. 먼지는 z 가 커지는 쪽으로
+      //   흐르므로(`arr[k] += d`) 자국은 **작은 z 쪽**, 즉 `-sLen` 이다
+      if (streak.visible) {
+        for (let i = 0; i < DUST.n; i++) {
+          const a = i * 6, b = i * 3;
+          sp[a] = arr[b]; sp[a + 1] = arr[b + 1]; sp[a + 2] = arr[b + 2];
+          sp[a + 3] = arr[b]; sp[a + 4] = arr[b + 1]; sp[a + 5] = arr[b + 2] - sLen;
+        }
+        sg.attributes.position.needsUpdate = true;
+      }
     },
   };
 }

@@ -1372,6 +1372,8 @@ export function buildOutside(scene, z) {
   scene.background = bg;
   const cur = { fog: new THREE.Color(0x05070d), near: 70, far: 340, stars: 1, tint: new THREE.Color(0.86, 0.89, 1) };
   let want = REGIONS[0];
+  /** ★ v88 — 마지막으로 받은 눈. `view` 가 「줄이 화면에서 몇 화소인가」를 잰다 */
+  let camRef = null;
   let regionKey = REGIONS[0].key;
 
   /** @param instant 검사용 — 색 갈아타기를 건너뛴다. 게임은 안 쓴다 */
@@ -1516,6 +1518,7 @@ export function buildOutside(scene, z) {
    *             (`boost-table.js RUSH`). ★ 별은 안 흘린다 (v57 고증)
    */
   function update(dt, speed, lane = 0, inc = null, camera = null, rush = 0) {
+    camRef = camera;                          // ★ v88 — `view` 가 화소를 재려면 눈이 있어야 한다
     // 배가 기울면 창밖이 반대로 밀린다 — 그게 「내가 움직였다」로 읽힌다
     out.position.x += (-lane * 3.2 - out.position.x) * Math.min(1, dt * 3);
 
@@ -1662,8 +1665,13 @@ export function buildOutside(scene, z) {
     dust.setFade(starFade);
     // ★★★ **먼지가 쏟아진다** — 속도감은 여기서 나온다.
     //   별을 흘리면 v57 고증이 거짓말이 되므로 **정말 흐르는 것**만 흘린다
-    dust.setRush(rush);
-    dust.flow(d * (1 + rush * (RUSH.dust - 1)));
+    // ★★★ v88 — **줄은 `rush` 가 아니라 「정말 얼마나 흐르나」가 켠다.**
+    //   급가속은 이 값을 올릴 뿐이라 저절로 따라온다 — 축이 하나다.
+    //   v87 에 `rush` 로 켰다가 화면을 찍고 잡았다: R 을 안 누르면
+    //   **등속 화면이 한 톨도 안 바뀌어** 있었다 (사장님이 물으신 그 상태)
+    const fd = d * (1 + rush * (RUSH.dust - 1));
+    dust.setRush(rush, fd / Math.max(dt, 1e-4));
+    dust.flow(fd);
 
     // 잔해
     const nd = want.debris;
@@ -1770,6 +1778,11 @@ export function buildOutside(scene, z) {
         //   `dust0` 은 첫 먼지의 z — **변해야 한다.** 둘을 나란히 놓는다
         star0: +stars.points.geometry.attributes.position.array[2].toFixed(3),
         dust0: +dust.points.geometry.attributes.position.array[2].toFixed(3),
+        // ★★★ v87 — **속도감은 점이 아니라 줄이 만든다.** 「급가속할 때만
+        //   줄이 켜지나」를 여기서 묻는다 — 등속에 줄이 있으면 거짓말이다
+        streak: dust.streak.on, streakLen: dust.streak.len,
+        // ★★★ 세계 좌표 길이는 「보이나」의 답이 **아니다** — 화소로도 잰다
+        streakPx: dust.streakPx(camRef, globalThis.innerWidth, globalThis.innerHeight),
         // 천구가 눈을 따라온 만큼. 걸어가면 이게 따라 움직여야 별이 안 밀린다
         domeZ: +stars.points.position.z.toFixed(2),
         band: +band.mesh.material.uniforms.uFade.value.toFixed(3),

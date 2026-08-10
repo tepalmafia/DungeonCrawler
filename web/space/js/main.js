@@ -82,7 +82,7 @@ import {
 } from './game/warhead.js';
 import { speedOf as statusSpeed } from './world/status.js';
 // ★★★ 급가속 (v73) — **따로 하는 조작.** Shift 는 기수를 돌리고, R 은 튀어나간다
-import { BOOST, RUSH } from './game/boost-table.js';
+import { BOOST, RUSH, KICK } from './game/boost-table.js';
 import {
   makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
 } from './game/boost.js';
@@ -216,7 +216,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 87;
+export const VERSION = 88;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1113,6 +1113,12 @@ function setThrustKey(on) {
   }
   power.thrust = on;
   say(ai, on ? '추력 — 켬' : '추력 — 끔', 'tell');
+  // ★★ v88 — **밀림은 여기서 안 준다.** 처음엔 여기 한 줄이었는데,
+  //   추력을 켜는 길은 이 함수만이 아니다 (점검 모드 · 차단기 · 이어하기).
+  //   검사가 `SPACE.setPower('thrust', true)` 로 켜니 밀림이 0 이었고,
+  //   게임에서는 나는데 검사에서는 안 나는 상태였다. 「들어가는 길을
+  //   하나만 만들지 않는다」와 같은 병이라 **한 곳에서 지켜보게** 옮겼다
+  //   (아래 `thrustWas`)
 }
 
 // ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════════════
@@ -1213,6 +1219,15 @@ let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 let burstNow = false;
 /** ★ v86 — Space 는 **누른 순간** 한 번만 먹는다 (추력은 켜고 끄는 물건이다) */
 let thrustHeldKey = false;
+/**
+ * ★★★ v87 — **밟는 순간 눈이 뒤로 밀린다** (`boost-table.js KICK`).
+ *   ★ 우주에서 등속은 아무 느낌이 없다 (고증). 느껴지는 것은 **가속**뿐이고
+ *     그건 몸이 눌리는 것이다 — 그래서 「빠른가」가 아니라 **「밟고 있나」**를
+ *     그린다. 여태 추력을 켜도 아무 느낌이 없어 계기로만 알 수 있었다
+ */
+let kickT = 0;
+/** ★ v88 — 지난 프레임에 추력이 켜져 있었나. 꺼짐→켜짐만 밀림을 준다 */
+let thrustWas = false;
 /** ★★★ v84 — 지금 나를 맞힐 탄 하나 (화살표·경고가 읽는다) */
 let threat = null;
 let winching = false;     // 지금 윈치를 잡고 있나
@@ -2478,7 +2493,9 @@ function systemsStep(dt, valveOpen, regionMult) {
     });
     supply.fuel = Math.max(0, supply.fuel - boost.fuel);
     heat = Math.min(HEAT.max, heat + boost.heat);
-    if (bev === 'on') { say(ai, '밀어붙입니다', 'tell'); }
+    // ★★★ v87 — 급가속을 **밟는 순간** 눈이 뒤로 밀린다. 추력 켬(0.35배)
+    //   보다 세게 — 주엔진을 배로 태우는 것이므로 몸이 더 눌린다
+    if (bev === 'on') { say(ai, '밀어붙입니다', 'tell'); kickT = KICK.kickFor; }
     if (bev === 'dry') { say(ai, '추진제가 모자라 못 밀어붙입니다', 'warn'); }
   }
   const burst = steering && (input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
@@ -3108,6 +3125,11 @@ window.SPACE = {
       push: +steerPush.toFixed(2), warn: +warnLeft(hazard).toFixed(1),
       incoming: n ? { in: +n.in.toFixed(1), lane: +n.lane.toFixed(2), left: n.left } : null,
       hits: hazard.hits, dodged: hazard.dodged, seat: +hazard.seat.toFixed(1),
+      // ★★★ v88 — **밟는 순간의 밀림**(`KICK`). 「눈이 정말 뒤로 갔나」를
+      //   화면 없이 묻는 자리다. 눈 자리도 같이 준다 — 값이 없으면
+      //   `0 === 0` 으로 **초록을 찍는다** (v57 에 그러다 놓쳤다)
+      kick: +kickT.toFixed(3),
+      eye: { y: +camera.position.y.toFixed(3), z: +camera.position.z.toFixed(3) },
     };
   },
   /** 검사가 기다리지 않고 위험 지대를 부른다 */
@@ -4371,6 +4393,13 @@ function frame(now) {
   if (boost.k > 0.01) wantShake *= 1 + (RUSH.shake - 1) * boost.k;
   // 부딪힌 순간은 크게 한 번 — 「맞았다」가 몸에 남아야 다음엔 앉는다
   hitFlash = Math.max(0, hitFlash - dt * 0.7);
+  // ══ ★★ v88 — **추력이 꺼짐→켜짐으로 넘어가는 순간을 여기서 잡는다** ══
+  //  어느 길로 켰든(단축키 · 점검 모드 · 이어하기) 한 곳을 지나므로
+  //  「게임에서는 나는데 검사에서는 안 난다」가 안 생긴다
+  if (power.thrust && !thrustWas) kickT = KICK.kickFor * KICK.thrust;
+  thrustWas = power.thrust;
+  // ★ v87 — 밟은 밀림이 되돌아온다 (`KICK`)
+  if (kickT > 0) kickT = Math.max(0, kickT - dt);
   wantShake += hitFlash * 7;
   // 보상 구간에서는 표가 정한 모양을 **그대로** 쓴다 (따라가면 뭉개진다).
   // 그 밖에서는 부드럽게 따라간다 — 추격이 붙는 순간 화면이 튀지 않게.
@@ -4481,6 +4510,14 @@ function frame(now) {
     // 숙인 고개를 **`aimAt` 까지** 끌어올린다 (수평보다 조금 위 = 창의 한복판)
     const want = Math.max(me.pitch, FLY_VIEW.aimAt);
     camera.rotation.x += (want - me.pitch) * flyK;
+    // ══ ★★★ v87 — **밟는 순간 눈이 뒤로 밀린다** ═══════════════════
+    //  ★ 관성이다. 배가 앞으로 튀어 나가면 사람은 좌석에 눌린다 —
+    //    화면에서는 **눈이 뒤로** 가는 것으로 보인다. 짧고 되돌아온다
+    if (kickT > 0) {
+      const k = kickT / KICK.kickFor;
+      camera.position.x += yawS * KICK.kick * k;
+      camera.position.z += yawC * KICK.kick * k;
+    }
   }
 
   const valveOpen = interactStep(dt);
