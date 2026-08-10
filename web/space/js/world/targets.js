@@ -22,6 +22,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { SEEN, WRECK, KINDS } from '../game/target-table.js';
+// ★★★ v85 — 사장님이 주신 그림이 있으면 그것을 세운다 (없으면 아래 코드 도형)
+import { modelFor, engineAt } from '../core/models.js';
 
 const DEG = Math.PI / 180;
 
@@ -40,6 +42,32 @@ const GLOW = (hex) => new THREE.MeshBasicMaterial({ color: hex });
 function buildOne(kind) {
   const g = new THREE.Group();
   g.name = `표적:${kind}`;
+  // ══ ★★★ v85 — **그림이 들어와 있으면 그것을 쓴다** ═══════════════════
+  //
+  //  ★ 사장님 「이렇게 게임을 더 퀄러티 있게 **에셋도 입히고**」.
+  //    `assets/models/<열쇠>.glb` 를 떨어뜨리면 아래 코드 도형 대신 이게
+  //    선다. **없으면 지금 그대로** — 하나도 없는 상태가 기본이다.
+  //
+  //  ★★ 크기는 여기서 안 정한다. `place()` 가 `size * 1.6` 을 곱하므로
+  //    로더가 **미리 나눠서** 준다 (`models.js modelFor`). 그래야
+  //    「크기는 표가 정한다」가 그대로 산다
+  const base = (KINDS[kind]?.size ?? 1) * 1.6;
+  const art = modelFor(kind, base);
+  if (art) {
+    g.add(art);
+    // ★ 엔진 불은 **코드가 붙인다** — 살아 있는 것의 표시라 깜빡여야 하고,
+    //   그건 그림이 못 한다. `engine` 노드가 있으면 그 자리, 없으면 꽁무니
+    if (KINDS[kind]?.closes !== undefined) {
+      const at = engineAt(kind, base);
+      const fire = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.3, 8), GLOW(0xff7a3c));
+      fire.rotation.x = Math.PI / 2;
+      if (at) fire.position.copy(at);
+      else fire.position.z = 1.1;
+      fire.name = '엔진불';
+      g.add(fire);
+    }
+    return g;
+  }
   if (kind === 'sat') {
     // 죽은 위성 — 몸통 + 태양전지판 둘
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 2.2), METAL());

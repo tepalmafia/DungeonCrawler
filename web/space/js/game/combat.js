@@ -12,7 +12,7 @@ import {
 } from './combat-table.js';
 import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
 import { azDiff } from './target.js';
-import { flyTime } from './slow-table.js';
+import { flyTime, slowsOnLaunch } from './slow-table.js';
 import { MISSILES } from './supply-table.js';
 
 export function makeCombat() {
@@ -252,7 +252,16 @@ export function fire(c, { aimed, supply, rnd = Math.random }) {
   //  ★★ 그리고 이건 **난이도를 바꾼다**: 비행이 0.6초쯤 길어지므로
   //    유도탄은 락온을 그만큼 더 붙들어야 한다. 그 값이 `lagOf` 이고
   //    `tools/space-slow.js` 가 0.8초를 넘는지 본다
-  const flight = flyTime(t.dist, w.speed);
+  // ★★★ **즉발에는 사출을 안 씌운다** (v85 · 사장님 「발사체가 적이나
+  //   물체로 시각적으로 날아가야하는데 **엉뚱한 곳에서 터지는데??**」)
+  //
+  //  ★ v84 에 이 줄을 무기 **전부**에 걸었다. 그런데 레이저는 즉발이라
+  //    화면은 **한 줄기 빛을 0.12초 긋고 끝**인데, 규칙은 사출(0.3초)+
+  //    가속을 씌워 **0.51초**를 기다렸다. 그 사이 표적이 움직이니
+  //    **빛이 지나간 자리와 터지는 자리가 갈라졌다.**
+  //  ★★ v79 에 고쳤던 바로 그 병(「궤적의 끝과 격추 지점이 다르다」)을
+  //    **사출을 넣으면서 되살린 것**이다. 사출이 있는 것에만 씌운다
+  const flight = slowsOnLaunch(w.key) ? flyTime(t.dist, w.speed) : t.dist / w.speed;
   const leadAz = w.lead ? t.vaz * flight : 0;
   const leadEl = w.lead ? t.vel * flight : 0;
   // 겨눠야 하는 자리는 표적이 아니라 **선도점**이다
