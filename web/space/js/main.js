@@ -105,7 +105,13 @@ import { mightOf, lootOf, myMight, oddsOf } from './game/might-table.js';
 import { autoZoom, OPTIC } from './game/optic-table.js';
 // ══ ★★★ **회수** (v81) — 사장님 「파괴하고 **적의 지원이 오기전에** …
 //   회수하고」 · 「조종석에서 **그물**이나 기타 회수 장비를 쏘아 회수」
-import { NET, PACK, CALL, packWord, callIn } from './game/salvage-table.js';
+import { NET, PACK, CALL, packWord, callIn, WAYS, timeOf } from './game/salvage-table.js';
+// ══ ★★★ **화물 · 아이템 열여섯** (v83 · docs/space/ITEMS.md) ═══════════
+import { HOLD, holdWord, nameOf as itemName } from './game/cargo-table.js';
+import {
+  makeCargo, put as cargoPut, useOf, stepCargo, word as cargoWord,
+  summary as cargoSummary, used as cargoUsed, left as cargoLeft,
+} from './game/cargo.js';
 import {
   makeSalvage, dropPack, stepSalvage, fireNet, thrustHeld, callWarn,
   summary as salvSummary, WHY as SALV_WHY,
@@ -149,7 +155,7 @@ import {
 // ★★ 우주복 — **진공에 사람이 그냥 서 있었다** (v62 · REAL.md §2-C)
 import { SUIT, suitWord } from './game/suit-table.js';
 import {
-  makeSuit, stepWear, stepSuit, canEva,
+  makeSuit, stepWear, stepSuit, canEva, refill as refillSuit,
   handMult as suitHand, moveMult as suitMove, summary as suitSummary,
 } from './game/suit.js';
 // ★★ 추진제 — **10분 시계를 맞는 물건으로 옮겼다** (v62 · REAL.md §2-D)
@@ -199,7 +205,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 82;
+export const VERSION = 83;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -340,16 +346,34 @@ let opticBig = false;
 // ══ ★★★ **G — 그물** (v81 · 사장님 「조종석에서 그물이나 기타 회수
 //   장비를 쏘아 회수」) ══════════════════════════════════════════════
 //  ★ 왜 못 쏘는지도 말한다 — 조용히 안 나가면 「고장」으로 읽힌다 (v64 규약)
-addEventListener('keydown', (e) => {
-  if (e.code !== 'KeyG' || e.metaKey || e.ctrlKey || e.altKey) return;
-  const a = noseAim();
-  const r = fireNet(salvage, { az: a.az, el: a.el, seated: helmSat });
-  if (!r.ok) { banner = SALV_WHY[r.why] ?? '지금은 못 씁니다'; bannerT = 2.2; return; }
-  chase.sign = Math.min(100, chase.sign + NET.sign);   // 사출은 숨길 수 없다 (v44 규약)
-  banner = `그물 — ${TKINDS[r.pack.kind]?.name ?? ''} 잔해를 감습니다`;
-  bannerT = 2.0;
-  audio?.event('tube');
-});
+// ══ ★★★ **회수 셋 — F 도킹 팔 · G 그물 · T 로봇** (v83) ═══════════════
+//  사장님 「회수를 누르면 **도킹을 하던지 로봇을 보내던지**」.
+//  ★ 그물 하나만 있으면 「주우려면 도망 못 친다」가 늘 같은 무게라
+//    결심이 하나뿐이다. 셋이면 **거리 · 빠르기 · 묶임**을 저울질하게 된다:
+//      팔  25m · 1.2초 · 묶인다   — 바짝 붙어야 한다 (들이받힐 자리)
+//      그물 80m · 거리비례 · 묶인다
+//      로봇 160m · 12초 · **안 묶인다** — 대신 느리다
+//  ★ 왜 못 쓰는지도 말한다 (v64 규약)
+for (const w of Object.values(WAYS)) {
+  addEventListener('keydown', (e) => {
+    if (e.code !== w.kb || e.metaKey || e.ctrlKey || e.altKey) return;
+    const a = noseAim();
+    const r = fireNet(salvage, { az: a.az, el: a.el, seated: helmSat, way: w.key });
+    if (!r.ok) {
+      banner = r.why === 'far'
+        ? `${w.name} — ${w.reach}m 안이어야 합니다 (다가가십시오)`
+        : (SALV_WHY[r.why] ?? '지금은 못 씁니다');
+      bannerT = 2.2;
+      return;
+    }
+    chase.sign = Math.min(100, chase.sign + w.sign);   // 사출은 숨길 수 없다 (v44)
+    const sec = timeOf(w.key, r.pack.dist);
+    banner = `${w.name} — ${TKINDS[r.pack.kind]?.name ?? ''} 잔해 · ${sec}초`
+      + (w.holds ? ' (감는 동안 못 나아갑니다)' : ' (묶이지 않습니다)');
+    bannerT = 2.4;
+    audio?.event('tube');
+  });
+}
 addEventListener('keydown', (e) => {
   if (e.code !== 'KeyZ' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (!helmSat) { banner = '조종석에 앉아야 광학 창을 엽니다'; bannerT = 2.0; return; }
@@ -789,7 +813,7 @@ function takeHits(list) {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot, salvage,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot, salvage, cargo,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -1003,6 +1027,13 @@ const loot = { weapon: 0, armor: 0 };
 const salvage = makeSalvage();
 
 /**
+ * ★★★ v83 — **화물칸.** 아이템에는 **무게**가 있으므로 「이걸 실을까
+ *   저걸 실을까」가 생긴다. 탄두 재료 다섯이 화물칸을 꽉 채우도록
+ *   숫자를 맞춰 뒀다 (`cargo-table.js HOLD`)
+ */
+const cargo = makeCargo();
+
+/**
  * ★★★ **회수했다** (v81) — 격추 순간에 흩어져 있던 것들이 **여기 한 곳**으로
  *   모인다: 노획(전투력) · 보급(광석·부품·식량) · 탄두 재료.
  *
@@ -1012,20 +1043,30 @@ const salvage = makeSalvage();
  */
 function takeSalvage(p) {
   const was = myPower();
-  loot.weapon += p.has.weapon ?? 0;
-  loot.armor += p.has.armor ?? 0;
-  supply.ore = Math.min(ORE.max, supply.ore + (p.has.ore ?? 0));
-  supply.parts = Math.min(PARTS.max, supply.parts + (p.has.parts ?? 0));
-  supply.food = Math.min(FOOD.max, supply.food + (p.has.food ?? 0));
+  // ══ ★★★ v83 — **아이템으로 싣는다** ═══════════════════════════════
+  //  꾸러미가 든 것은 이제 덩어리가 아니라 **아이템**이다. 화물칸에는
+  //  **무게 한도**가 있으므로 다 못 실을 수 있다 — 그게 「무엇을 줍고
+  //  무엇을 버릴지」의 두 번째 층이다 (`docs/space/ITEMS.md §4`)
+  const r = cargoPut(cargo, p.has);
+  // 실은 것만 배의 계통으로 들어간다 (`cargo-table.js ITEMS[k].use`)
+  const u = useOf(r.took);
+  if (u.food) supply.food = Math.min(FOOD.max, supply.food + u.food);
+  if (u.parts) supply.parts = Math.min(PARTS.max, supply.parts + u.parts);
+  if (u.ore) supply.ore = Math.min(ORE.max, supply.ore + u.ore);
+  if (u.lootWeapon) loot.weapon += u.lootWeapon;
+  if (u.lootArmor) loot.armor += u.lootArmor;
+  if (u.suitAir) refillSuit(suit, u.suitAir);
+  if (u.sink) sink = Math.max(0, sink + u.sink);
   const now = myPower();
   let extra = '';
-  // ★ 탄두 재료는 **손에 들려 준다** — 꽂힌 것이 아니다. 기관실까지
-  //   걸어가야 하고, 그 걸음이 「모아서 붙인다」의 실체다 (v71)
+  // ★ 탄두 재료는 **손에 들려 준다** — 꽂힌 것이 아니다 (v71)
   if (p.part && headPick(warhead, p.part)) {
     extra = p.part === 'core' ? ' · ★ 분열 노심 — 기관실 크레이들로'
       : ' · ★ 재돌입체 외피 — 기관실 크레이들로';
   }
-  banner = `회수 — ${packWord(p.has, null)}${now > was ? ` · 전투력 ${was} → ${now}` : ''}${extra}`;
+  const missed = Object.keys(r.missed).length
+    ? ` · ★ 자리가 없어 못 실음 (${cargoWord(r.missed)})` : '';
+  banner = `회수 — ${cargoWord(r.took)}${now > was ? ` · 전투력 ${was} → ${now}` : ''}${extra}${missed}`;
   bannerT = 4.0;
   audio?.event('fixed');
 }
@@ -2556,6 +2597,9 @@ function systemsStep(dt, valveOpen, regionMult) {
     sign: chase.sign,
     missiles: supply.missiles,
     weapon: weaponOf(combat).name,
+    // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
+    //   획득 아이템이 … 조정석 화면에서 획득 리스트를」)
+    cargo: cargoSummary(cargo),
   };
   // ★★ v71 — 크레이들이 **다섯 칸의 불**과 탄두 온도를 그린다
   ship.cradle.update(headSummary(warhead));
@@ -2760,6 +2804,13 @@ window.SPACE = {
   },
   // ══ ★★★ v81 — **회수** (space-salvage.js · endtoend 가 읽는다) ══════
   get salvage() { return { ...salvSummary(salvage), seen: ship.outside.salvage?.seen ?? null }; },
+  // ══ ★★★ v83 — **화물칸 · 들어온 목록** (space-cargo.js · endtoend) ══
+  get cargo() { return { ...cargoSummary(cargo), word: holdWord(cargoUsed(cargo)) }; },
+  /** 검사가 회수 방법을 골라 쓴다 */
+  grab(way = 'net') {
+    const a = noseAim();
+    return fireNet(salvage, { az: a.az, el: a.el, seated: helmSat, way });
+  },
   /** 검사가 그물을 쏜다 — G 를 헤드리스로 누르면 프레임을 탄다 */
   fireNet() {
     const a = noseAim();
@@ -4418,6 +4469,7 @@ function frame(now) {
       // ★ v82 — 창밖과 **같은 자**를 쓴다 (항로가 아니라 추력)
       moving: power.thrust && !landBusy(land),
     });
+    stepCargo(cargo, dt);
     if (sv.landed) takeSalvage(sv.landed);
     for (const f of sv.faded) {
       banner = `${TKINDS[f.kind]?.name ?? ''} 잔해가 흩어졌습니다`;

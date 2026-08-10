@@ -177,6 +177,12 @@ export const FIELDS = {
    *   그건 저장으로 벌을 지우는 요령이고, `faults.open` 에서 이미 밟았습니다
    */
   salvage: ['packs', 'next', 'net', 'cool', 'call', 'got', 'lost'],
+  /**
+   * ★★★ v83 — **화물칸.** 실어 놓은 것이 안 이어지면 2시간 동안 모은 것이
+   *   저장 한 번에 사라집니다. `log`(들어온 목록)는 **안 담습니다** —
+   *   그건 「방금 무엇이 들어왔나」라 이어할 때 남아 있으면 거짓말입니다
+   */
+  cargo: ['items', 'took', 'missed'],
   /** 사람이 서 있던 자리 */
   me: ['x', 'z', 'yaw', 'pitch'],
 };
