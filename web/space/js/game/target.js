@@ -125,7 +125,11 @@ export const wantCount = (sky) =>
  */
 export function setNose(sky, az) { sky.noseAz = az; }
 
-export function stepSky(sky, dt, { moving = true, quiet = false } = {}) {
+/**
+ * @param close 다가오는 속도의 배수 — **급가속이 여기로 온다** (v81).
+ *   1 이 평소다. 이 값이 없으면 R 을 눌러도 표적이 더 빨리 안 온다
+ */
+export function stepSky(sky, dt, { moving = true, quiet = false, close = 1 } = {}) {
   const want = wantCount(sky);
 
   // ══ ★★★ **적이 저절로 온다** (v69) ═══════════════════════════════
@@ -180,7 +184,9 @@ export function stepSky(sky, dt, { moving = true, quiet = false } = {}) {
     if (t.az < -180) t.az += 360;
     if (Math.abs(t.el) > TARGET.elLimit) { t.el = Math.sign(t.el) * TARGET.elLimit; t.vel *= -1; }
     // ★ 적 우주선은 **저 혼자 다가온다** — 배가 서 있어도 온다
-    if (moving) t.dist -= TARGET.closing * dt;
+    // ★★★ v81 — **급가속이 여기에 먹는다.** v80 까지 이 줄에 배수가
+    //   없어서 「R 을 눌러도 안 빨라지는」 상태였다 (`boost-table.js RUSH.close`)
+    if (moving) t.dist -= TARGET.closing * close * dt;
     if (k?.closes) t.dist -= k.closes * dt;
     if (t.flash > 0) t.flash = Math.max(0, t.flash - dt);
     if (t.bump > 0) t.bump = Math.max(0, t.bump - dt);

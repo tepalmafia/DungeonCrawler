@@ -289,7 +289,7 @@ function draw(ctx, w, h, s) {
   //   말한다. 「없습니다」는 하늘이 정말 빌 때만 쓴다
   const word = near
     ? (locked ? `${KINDS[near.t.kind].name} — 물렸습니다`
-      : `${KINDS[near.t.kind].name} · ${rangeWord(near.t.dist)}`)
+      : `${KINDS[near.t.kind].name} · ${rangeWord(near.t.dist, s.wMax ?? null)}`)
     : any
       ? sideWord(any, aimAz, aimEl)
       : '떠도는 것이 없습니다';
