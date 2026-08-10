@@ -216,7 +216,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 86;
+export const VERSION = 87;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -4414,8 +4414,14 @@ function frame(now) {
   //     모는 손잡이 (조종간·주포)            → **넓히고 든다** (FLY_VIEW)
   const wantFocus = (!steering && !gripping && readGrip) ? 1 : 0;
   focusK += (wantFocus - focusK) * Math.min(1, dt * FOCUS.rate);
-  // ★★ 모는 눈 — 잡고 있는 동안 창이 화면을 채운다
-  const wantFly = (steering || gripping) ? 1 : 0;
+  // ══ ★★★ v87 — **앉으면 창이 열린다** ═══════════════════════════════
+  //  ★ `steering || gripping` 이었다 — **조종간을 잡아야만** 눈이 올라갔다.
+  //    그런데 v86 에 「앉으면 몬다」로 바꿨으므로 짝이 안 맞았다:
+  //    앉아서 기수는 도는데 **눈은 계기 아래**라, 200m 앞의 적이
+  //    **좌석 등받이에 가려** 안 보였다 (화면으로 잡았다).
+  //  ★★ 「모는 자세」와 「보는 눈」은 **같은 스위치**라야 한다 —
+  //    둘로 두면 반드시 한쪽만 켜진 상태가 생긴다
+  const wantFly = (steering || gripping || helmSat) ? 1 : 0;
   flyK += (wantFly - flyK) * Math.min(1, dt * FLY_VIEW.rate);
 
   // ══ ★★ **조종간을 잡으면 앉는다** (v61) ═══════════════════════════
