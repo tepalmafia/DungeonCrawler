@@ -24,7 +24,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   makeEye, seen, mark, wrap, firstOnPath, nearestToAim,
-  LOCK, makeLock, stepLock, lagOf,
+  LOCK, makeLock, stepLock, lagOf, relOf, pointOf,
 } from '../web/space/js/game/frame.js';
 
 let bad = 0;
@@ -180,6 +180,65 @@ head('[5] ★★★ **락온** — 묶기 · 유지 · 놓기가 다른가 · �
   ok(e3 !== 'break', `★ ${LOCK.holdCone}도 밖에서도 **${LOCK.grace}초는 외삽한다**`);
   while (g < LOCK.grace + 0.4 && e3 !== 'break') { e3 = stepLock(L, DT, null, find, eye); g += DT; }
   ok(e3 === 'break' && L.id === null, '★ 오래 벗어나면 **놓는다**');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  [6] ★★★ **두 입구가 갈라지지 않나** (v98 — 게임에 갈아 끼우면서)
+//
+//  ★ 이 저장소의 표(`target.js`)는 자리를 **각+거리**로 적는다. 그래서
+//    `frame.js` 에 입구가 둘이 됐다 — 자리로 묻는 `seen()` 과 각으로 묻는
+//    `relOf()`. **입구가 둘이면 반드시 갈라진다**가 이 파일의 전제이므로,
+//    여기서 그 둘이 **같은 것인지**를 못박아 둔다.
+//
+//  ★★ v98 에 실제로 갈라뜨릴 뻔했다: `relOf` 를 처음엔 「빼기」로 썼는데
+//    (`az−yaw`, `el−pitch`), 카메라가 요→피치 순서로 돌기 때문에 **기수를
+//    들면 방위까지 밀린다.** 정면에서만 맞고 옆으로 갈수록 벌어지는,
+//    **제일 안 잡히는 종류**의 어긋남이었다. 이 절이 그때 울었다
+// ══════════════════════════════════════════════════════════════════════════
+{
+  head('[6] 각으로 묻든 자리로 묻든 — **같은 답인가**');
+  // 정면만 보면 안 잡힌다 (빼기도 정면에서는 맞는다). **기수를 들고 옆을 본다**
+  const EYES = [
+    { yaw: 0, pitch: 0, roll: 0 },
+    { yaw: 35, pitch: 0, roll: 0 },
+    { yaw: 0, pitch: 22, roll: 0 },
+    { yaw: -140, pitch: -18, roll: 12 },
+    { yaw: 170, pitch: 30, roll: 0 },
+  ];
+  const TS = [
+    { az: 0, el: 0, dist: 100 }, { az: 40, el: 25, dist: 80 },
+    { az: -120, el: -30, dist: 210 }, { az: 179, el: 12, dist: 60 },
+    { az: 62, el: -40, dist: 150 },
+  ];
+  let worst = 0, worstD = 0;
+  for (const eye of EYES) {
+    for (const t of TS) {
+      const a = relOf(t, eye);                 // 각으로 물었다
+      const b = seen(pointOf(t), eye);         // 자리로 물었다
+      worst = Math.max(worst, Math.abs(wrap(a.az - b.az)), Math.abs(a.el - b.el), Math.abs(a.off - b.off));
+      worstD = Math.max(worstD, Math.abs(a.dist - b.dist));
+    }
+  }
+  ok(worst < 1e-9, `★★★ 각으로 묻든 자리로 묻든 **같은 답** (제일 벌어진 것 ${worst.toExponential(1)}도)`);
+  ok(worstD < 1e-9, `★ 거리도 같다 (${worstD.toExponential(1)}m)`);
+
+  // ★★ **빼기로는 안 맞는다**를 같이 못박는다 — 이 절이 왜 있는지가 여기다.
+  //   이게 ✔ 여야 「그냥 빼도 되잖아」로 다음에 또 안 돌아간다
+  const eye = { yaw: 0, pitch: 25, roll: 0 };
+  const t = { az: 60, el: 20, dist: 100 };
+  const naive = Math.hypot(wrap(t.az - eye.yaw), t.el - eye.pitch);
+  const real = seen(pointOf(t), eye).off;
+  ok(Math.abs(naive - real) > 3,
+    `★★ 그냥 빼면 ${naive.toFixed(1)}도, 제대로 재면 ${real.toFixed(1)}도 —`
+    + ' **기수를 들면 갈라진다.** 정면에서만 맞는 셈은 제일 안 잡힌다');
+
+  // 표적을 놓는 자리(3D)와 재는 자리가 같은 함수인가 — v98 에 `targets.js`
+  // 가 갖고 있던 식을 `pointOf` 로 옮겼다. 반대로 풀어서 돌아오나 본다
+  const p = pointOf({ az: 47, el: -19, dist: 133 });
+  const back = seen(p, makeEye());
+  ok(Math.abs(wrap(back.az - 47)) < 1e-9 && Math.abs(back.el + 19) < 1e-9
+    && Math.abs(back.dist - 133) < 1e-9,
+  '★★ 3D 에 놓은 자리를 다시 재면 **표에 적힌 그 각**이 나온다 (창밖 == 계기)');
 }
 
 console.log(bad ? `\n✘ ${bad} 개가 안 맞습니다` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

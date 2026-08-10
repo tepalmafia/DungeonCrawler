@@ -24,6 +24,8 @@ import * as THREE from 'three';
 import { SEEN, WRECK, KINDS } from '../game/target-table.js';
 // ★★★ v85 — 사장님이 주신 그림이 있으면 그것을 세운다 (없으면 아래 코드 도형)
 import { modelFor, engineAt } from '../core/models.js';
+// ★★★ v98 — 자리를 아는 곳 하나 (블록아웃). 각+거리 → 자리도 거기서 편다
+import { pointOf } from '../game/frame.js';
 
 const DEG = Math.PI / 180;
 
@@ -319,13 +321,14 @@ export function buildTargets(parent) {
    *   기수가 −z 이므로 방위각은 그 둘레의 회전이다
    */
   const place = (o, t) => {
-    const az = t.az * DEG, el = t.el * DEG;
     const d = t.dist;
-    o.position.set(
-      Math.sin(az) * Math.cos(el) * d,
-      Math.sin(el) * d,
-      -Math.cos(az) * Math.cos(el) * d,
-    );
+    // ★★★ v98 — **이 식을 여기서 안 쓴다** (`game/frame.js pointOf`).
+    //   조준·레이더·HUD 가 각을 재는 데 쓰는 것과 **같은 함수**로 놓아야
+    //   「창밖의 저것」과 「계기의 저것」이 같은 자리가 된다. v97 까지
+    //   식은 똑같이 생겼지만 **두 파일에 따로** 있었다 — 그런 것은 한쪽만
+    //   고쳐도 아무도 안 울고, 그게 이 저장소가 세 판을 태운 방식이다
+    const p = pointOf(t);
+    o.position.set(p.x, p.y, p.z);
     // ══ ★★★ **멀어도 점이 되지 않는다** (v79 · `target-table.js SEEN`) ══
     //
     //  ★ 사장님 「적을 **육안으로 식별할 수 있는 거리가 너무 짧잔아**」.

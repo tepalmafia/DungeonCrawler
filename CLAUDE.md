@@ -290,11 +290,23 @@ node tools/space-ai.js           스페이스워 — ★★★ **등대** · 말
 node tools/space-parts.js        스페이스워 — ★★★ **부위·내구·도망** · 겨누면 빨리 끝나나 · 엔진을 깨면 못 도망가나 (v86)
 node tools/space-model.js        스페이스워 — ★★★ **3D 그림 받는 자리** · 넣으면 정말 물리나 (--write 로 규격서 갱신)
 node tools/space-block.js        스페이스워 — ★★★ **전투 블록아웃** · 거리·락온·일관성 (game/frame.js 뼈대만)
+node tools/space-align.js        스페이스워 — ★★★ **창밖의 저것 == 계기의 저것인가** (진짜 카메라 · 진짜 메시)
 node tools/space-drop.js         스페이스워 — ★★★ **투하** · 마디 넷 · 결말 셋 · 이탈이 결심인가 (v93)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
-                                 (walk·chase·skin·audio·yoke·bay·guard·endtoend 는 serve.py 를 먼저 띄운다)
+                                 (walk·chase·skin·audio·yoke·bay·guard·align·endtoend 는 serve.py 를 먼저 띄운다)
+
+★★★ **한쪽만 읽는 검사는 「둘이 같나」를 못 묻는다** (2026-08-10 · v98).
+  전투의 어긋남을 **네 판**(v91·v93·v95·v98) 연달아 고쳤는데 **네 번 다
+  사장님이 화면을 보시고** 잡으셨다. 도구는 넷 다 초록이었다 — 도구가
+  규칙(`aimedAt`·`radarBlips`)만 읽을 수 있었고 **3D 쪽은 못 읽었기**
+  때문이다. 한쪽만 읽으면 「규칙이 맞나」는 물어도 **「둘이 같나」는 못 묻는다.**
+  `space-align.js` 가 그 자리다: **진짜 카메라와 진짜 메시**를 규칙과 나란히 놓는다.
+
+  ★ 그리고 **정면만 보면 안 잡힌다.** 틀린 셈도 기수가 정면일 때는 맞는다 —
+    v98 에 「그냥 빼기」가 정확히 그랬다 (정면 0도, 들면 5도). **기수를
+    틀고·들고·뒤집어 놓고** 재야 갈라지는 것이 보인다.
 
 ★ **계통을 하나 만들면 `space-endtoend.js` 에 한 절을 보탠다.** 계통마다
   제 검사는 다 ✔ 인데 **사람은 거기까지 못 가는** 상태를 2026-08-06 에

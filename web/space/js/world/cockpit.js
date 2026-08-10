@@ -1304,6 +1304,20 @@ export function buildCockpit(parent, room, H) {
  */
 export function buildOutside(scene, z) {
   const out = new THREE.Group();
+  // ══ ★★★ v98 — **도는 차례가 틀려 있었다** (three 의 기본 XYZ) ═══════
+  //
+  //  ★ 기본값 `XYZ` 는 행렬이 `Rx·Ry·Rz` 라서 **롤이 제일 먼저** 먹는다.
+  //    즉 배가 기울 때 **세상의 z 축**을 도는 셈이고, 그건 「기수를 축으로
+  //    도는 것」이 아니다. 조종석에서 보면 표적이 **옆으로 미끄러진다.**
+  //
+  //  ★★ 규칙(`frame.js`)은 요 → 피치로 재고, 롤은 **표식만** 돌린다
+  //    (v95). 그 둘이 맞으려면 창밖도 **요 → 피치 → 롤** 이어야 한다 —
+  //    즉 `ZXY` (`Rz·Rx·Ry`, 벡터에는 Ry 부터 먹는다).
+  //
+  //  ★★★ 재서 확정했다 (`SPACE.align()`): 시차를 없앤 뒤에도 **기울었을
+  //    때만** 4~5도가 남았다. 안 기울면 0.00 도였다 — 「가끔 어긋난다」의
+  //    마지막 조각이 이 한 줄이다
+  out.rotation.order = 'ZXY';
   scene.add(out);
 
   // ── 별 · 은하수 · 먼지 ──────────────────────────────────
@@ -1336,9 +1350,27 @@ export function buildOutside(scene, z) {
   //    떠도는 것·쏜 것·회수물의 원점을 **조종석 눈(DEP)**으로 옮기면,
   //    `az/el/dist` 가 「눈에서 본 각과 거리」라는 **한 뜻**이 된다.
   //    별·먼지는 그대로 둔다 — 저건 무한히 멀어서 시차가 없다 (v57 고증).
-  for (const grp of [targets.group, shots.group, salvage.group]) {
-    if (grp) grp.position.set(DEP.x, DEP.y, DEP.z);
-  }
+  //  ══ ★★★ v98 — **한 번 놓고 마는 것으로는 모자랐다** ═══════════════
+  //
+  //   ★ v93 에 여기서 `grp.position.set(DEP…)` 를 했다. 가만히 있을 때는
+  //     맞았다 — 그런데 **이 그룹은 `out` 안에 있고 `out` 은 배가 돌 때
+  //     같이 돈다.** 즉 눈까지의 8.5m 짜리 팔이 **배와 함께 휘둘린다.**
+  //     기수를 틀면 원점이 눈에서 **7m 까지 벌어졌다** (`SPACE.align()`
+  //     으로 쟀다: 0.19m → 0.06도, 6.9m → **5.7도**).
+  //
+  //   ★★ 그래서 v93 은 「가만히 있으면 맞고 돌리면 어긋나는」 반쪽짜리
+  //     고침이었다. 사장님이 「**아직 레이저랑 방향 전환이랑 다르게
+  //     움직이잔아**」라고 하신 것이 이 남은 절반이다.
+  //
+  //   ★★★ 고치는 법은 이미 이 파일 안에 있었다 — **천구가 하던 그대로**다
+  //     (아래 `DOME`): 매 프레임 카메라 자리를 `out` 안쪽 좌표로 옮겨
+  //     거기에 원점을 둔다. 그러면 배가 아무리 돌아도 원점은 **눈에
+  //     붙어 있다.** 별은 무한히 멀어서 시차가 없고, 표적은 100m 라
+  //     시차가 있으니 **더더욱** 이래야 했다.
+  //   ★ 여기 한 번 놓는 것은 **첫 프레임용**으로만 남긴다 (`update` 전에
+  //     한 프레임 그려지는 일이 있다)
+  const EYEG = [targets.group, shots.group, salvage.group].filter(Boolean);
+  for (const grp of EYEG) grp.position.set(DEP.x, DEP.y, DEP.z);
   const dust = buildDust(out, z);
   const Z_NEAR = z - DUST.near;
   const Z_FAR = z - DUST.far;
@@ -1627,6 +1659,11 @@ export function buildOutside(scene, z) {
       out.worldToLocal(DOME);
       stars.points.position.copy(DOME);
       band.mesh.position.copy(DOME);
+      // ★★★ v98 — **떠도는 것·쏜 것·회수물도 눈에 붙인다** (위 주석).
+      //   천구와 **같은 한 줄**이다. 별은 시차가 없어서 붙였고, 이것들은
+      //   시차가 **있어서** 붙인다 — 표의 `az/el/dist` 가 「눈에서 본
+      //   각과 거리」라는 한 뜻이 되려면 원점이 눈이어야 한다
+      for (const grp of EYEG) grp.position.copy(DOME);
     }
 
     // 다가오는 덩어리 — 남은 시간이 곧 거리다.
