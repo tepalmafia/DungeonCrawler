@@ -10,7 +10,7 @@
 import {
   RADAR, WEAPONS, WEAPON_LIST, whyNotFire, hitChance, inCone, contactLevel,
 } from './combat-table.js';
-import { KINDS, ENEMY_FIRE } from './target-table.js';
+import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
 import { azDiff } from './target.js';
 
 export function makeCombat() {
@@ -128,7 +128,10 @@ export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0) {
       //   그러듯 **점 옆에 숫자로** 낸다 (`radar-table.js elWord`)
       relEl: rel.relEl,
       closing,
-      foe: !!KINDS[t.kind]?.rams,
+      // ★★★ v80 — **「들이받나」가 아니라 「적인가」다.** 방공 포대와
+      //   보급 호송선은 안 들이받지만 적이고, v79 까지 이 한 줄 때문에
+      //   **파편과 같은 초록 점**으로 떴다 (`target-table.js isFoe`)
+      foe: isFoe(t.kind),
       locked: c.radar.id === t.id,
       kind: t.kind,
       /**
