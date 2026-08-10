@@ -224,7 +224,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 95;
+export const VERSION = 97;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -5184,6 +5184,10 @@ function frame(now) {
   ship.sight.redraw({
     // ★ v95 — 그리는 쪽에 롤을 넘긴다 (판이 아니라 **표식**이 돈다)
     roll: ship.outside.skyRoll,
+    // ★★★ v97 — **묶은 표식이 가리키는 자리.** 화면 복판이 아니라
+    //   표적 위에 얹힌다 (사장님 「락온 위치가 완전 다르잔아」)
+    lockAt: combat.radar.id !== null
+      ? { az: combat.radar.atAz, el: combat.radar.atEl } : null,
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,
     // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며

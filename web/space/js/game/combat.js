@@ -29,7 +29,9 @@ export function makeCombat() {
      *   「저기 뭔가 다가온다」를 말할 수가 없었다. 실제 스코프는
      *   **모든 접촉**에 접근율을 적는다 (`radar-table.js` 고증 ②)
      */
-    radar: { on: false, t: 0, id: null, grace: 0, was: null, chasing: false, seen: new Map() },
+    // ★ v97 — `atAz/atEl` 은 **표식이 지금 가리키는 자리** (기수 기준 도).
+    //   표적을 쫓아간다 (`RADAR.slew`) — 즉각 안 붙는다
+    radar: { on: false, t: 0, id: null, grace: 0, was: null, chasing: false, seen: new Map(), atAz: 0, atEl: 0 },
     /** 날아가는 미사일들 */
     shots: [],
     /** 센 것 — 검사와 끝 화면이 읽는다 */
@@ -52,7 +54,7 @@ export const isLocked = (c, t) => !!(c.radar.on && c.radar.id !== null && t && t
  */
 export function stepRadar(c, dt, aimed) {
   const r = c.radar;
-  if (!r.on) { r.t = 0; r.id = null; r.grace = 0; return null; }
+  if (!r.on) { r.t = 0; r.id = null; r.grace = 0; r.atAz = 0; r.atEl = 0; return null; }
 
   const t = aimed?.t ?? null;
   const good = !!t
@@ -66,7 +68,16 @@ export function stepRadar(c, dt, aimed) {
     //   묶는 각과 유지하는 각이 같으면 적이 기동하는 순간 풀린다
     const still = t && t.id === r.id && t.dist <= RADAR.breakRange
       && aimed.off <= RADAR.holdCone;
-    if (still) { r.grace = RADAR.holdGrace; return null; }
+    if (still) {
+      r.grace = RADAR.holdGrace;
+      // ★★★ v97 — **표식이 표적을 쫓아간다** (`RADAR.slew` · frame.js 블록아웃).
+      //   즉각 붙이면 계기가 아니라 자석이고, 안 붙이면 「위치가 완전 다르다」다
+      const step = RADAR.slew * dt;
+      const dAz = ((aimed.relAz - r.atAz) % 360 + 540) % 360 - 180;
+      r.atAz += Math.max(-step, Math.min(step, dAz));
+      r.atEl += Math.max(-step, Math.min(step, aimed.relEl - r.atEl));
+      return null;
+    }
     // ★ **잠깐 벗어난 것으로는 안 깨진다.** 0 으로 두면 손이 한 번 떨릴 때마다
     //   깨져서 묶는 것이 벌이 된다 — 실제 레이더도 짧은 이탈은 외삽한다
     r.grace -= dt;
