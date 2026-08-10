@@ -66,7 +66,13 @@ const press = async (sec = 2.5) => { await down(); await p.waitForTimeout(sec * 
  */
 const letGoYoke = async () => {
   if (!(await S(() => SPACE.helm2?.steering ?? false))) return;
-  await down(); await up(); await p.waitForTimeout(400);
+  // ★★★ v88 — **X 다.** v78~v87 은 조종간을 한 번 더 눌러 놓았는데,
+  //   v88 에서 **앉는 것이 곧 잡는 것**이 되면서 조종간은 조준선에 아예
+  //   안 걸린다 (쥔 것을 또 겨눌 일이 없다). 여기를 안 고쳤더니 놓지도
+  //   못한 채 「놓아도 그대로 가나」를 재고 있었다 — **검사가 없어진
+  //   동작을 하고 있었다.** 이 저장소가 반복해서 밟는 함정이다
+  await p.keyboard.press('KeyX');
+  await p.waitForTimeout(400);
 };
 /**
  * ★★ **화면이 움직임을 멈출 때까지 기다린다** (v66).
@@ -192,8 +198,16 @@ console.log('\n[0] 배가 출발하나 — **★ v66: 조종석에서 고른다*
   //   **이 검사도 같이 옮긴다.** 안 옮기면 검사가 옛 설계를 지키게 된다
   ok((await S(() => SPACE.route)).phase === 'port', '거점에서 시작한다');
   await sit();
-  ok(await aimAround(0, -7.75, 0.9, -0.3, ['chart0', 'chart1']),
+  // ★★★ v88 — 각을 **재서** 고쳤다 (`(0.9, −0.3)` 은 아무것도 안 걸렸다).
+  //   앉은 자리에서 갈래 판은 **오른쪽 63도 · 아래 40도**에 있다.
+  //   그리고 게임에서는 마우스 오른쪽(둘러보기)으로 그리 고개를 돌린다 —
+  //   앉으면 마우스가 조종간이라 시선이 정면에 못박히기 때문이다
+  ok(await aimAround(0, -7.75, 1.1, -0.7, ['chart0', 'chart1']),
     `조종석에서 갈래 판을 잡는다 (${await S(() => SPACE.aim)})`);
+  // ★★ **누르기 직전에 한 번 더 본다.** 갈래 판 옆이 추력 레버라,
+  //   가운데를 잡아도 떨림 한 번에 이웃이 걸린다 — 그러면 「눌렀더니
+  //   추력 레버를 밉니다」가 나온다 (실제로 났다). 걸린 것을 확인하고 누른다
+  await until(() => String(SPACE.aim ?? '').startsWith('chart'), 20, '갈래 판이 굳는 것');
   await press(0.6);
   ok(await until(() => SPACE.route.phase === 'leg', 20, '출발'),
     `눌렀더니 배가 간다 — 「${await said()}」`);
@@ -224,8 +238,11 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
   ok(camY < 1.62, `③ **눈이 내려간다** (${camY.toFixed(2)}) — 밖으로 올라가는 것이 아니다`);
 
   // ② **조준은 기수가 한다** — 조종간을 밀면 겨눔이 따라 움직인다
-  ok(await aimAt(0, -7.75, 0, -0.55, 'yoke'),
-    `④ 앉아 앞을 보면 조종간이 잡힌다 (${await S(() => SPACE.aim)}) — v64 부터 **조종간이 곧 조준**이다`);
+  // ★★★ v88 — 겨눠서 잡는 단계가 **없어졌다.** 앉으면 잡혀 있다
+  ok((await S(() => SPACE.helm2)).steering,
+    `④ 앉으면 **곧바로 잡혀 있다** — 겨눠서 잡는 단계가 없다 (v88)`);
+  ok(!(await S(() => SPACE.helm2)).hands,
+    `④-b ★ 잡고 있으면 **손이 안 보인다** (사장님 「손은 안보이게 해주고」)`);
   const a0 = await S(() => SPACE.sky);
   await down();
   for (let i = 0; i < 12; i++) {
@@ -263,12 +280,11 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
   // ★ 다음 절이 「처음에는 자동 항법이 켜져 있다」로 시작하므로 **되돌려 놓는다**
   await S(() => SPACE.putAuto?.(true));
 
-  // ④ 일어난다 — **아무 손잡이도 안 잡힌 데를** 누른다
-  // ★ **위를 본다.** 뒤를 보면 조종석 문 크랭크가 잡혀서 「빈 데」가 아니다 —
-  //   그러면 v66 의 걸쇠(`emptyAimT`)가 일부러 안 일어나게 막는다. 맞는 동작이다
-  await S(() => SPACE.put(0, -7.75, 0, 0.9));
+  // ④ 일어난다 — ★★ v88 **X 로 나온다.** 「빈 데를 누르면 일어난다」는
+  //   없앴다: 앉기=잡기가 되면서 빈 데를 누르는 것이 **쏘기**가 됐고,
+  //   누를 때마다 일어나던 것이 사장님이 고치라고 하신 그 증상이다
   await settle();
-  await press(2.5);
+  await p.keyboard.press('KeyX');
   ok(await until(() => !SPACE.helm2.sat, 30, '일어나기'), '⑨ 일어난다 — **왕복이 닫힌다**');
 }
 
@@ -362,10 +378,11 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
   await settle();
   await S(() => SPACE.putAuto(true));
   ok((await S(() => SPACE.helm)).auto, '① 처음에는 자동 항법이 켜져 있다');
-  // ★★ **앉아서** 잡는다 (v66). 서서 겨누면 좌석이 먼저 잡히는 것이 맞다 —
-  //   앉는 것과 잡는 것은 다른 동작이다
+  // ★★★ v88 — **앉는 것이 곧 잡는 것이다** (사장님 「앉자마자 조정간이
+  //   바로 잡히도록」). v66~v87 은 앉기와 잡기가 다른 동작이었고, 그
+  //   사이 상태에서 좌클릭이 좌석에 걸려 **누를 때마다 일어났다**
   await sit();
-  ok(await aimAt(0, -7.75, 0, -0.34, 'yoke'), `② 조종간이 잡힌다 (${await S(() => SPACE.aim)})`);
+  ok((await S(() => SPACE.helm2)).steering, `② 앉으니 **곧바로 잡혀 있다**`);
   await down();
   for (let i = 0; i < 22; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 90, movementY: 0 })));
@@ -380,8 +397,13 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
   // ★★ 여기가 「운전이 안 된다」의 핵심 — **놓아도 안 돌아와야** 한다
   await p.waitForTimeout(6000);
   const h2 = await S(() => SPACE.helm);
-  ok(Math.abs(h2.off - h1.off) < 0.02,
-    `⑤ **놓아도 그대로 간다** (${h1.off} → ${h2.off}) — 수동이면 되돌리는 것도 내 손이다`);
+  // ★★ v88 — **「그대로」가 아니라 「안 돌아온다」로 묻는다.**
+  //   묻고 싶은 것은 처음부터 「손을 떼면 배가 저절로 항로로 돌아오나」였다.
+  //   ±0.02 라는 좁은 창은 **놓는 순간 스틱이 0 이 되던 시절**의 값인데,
+  //   v78(민 자리에 머문다)·v88(X 로 놓는다) 을 거치며 배가 놓은 뒤에도
+  //   조금 더 돈다 — 그건 관성이고 **맞는 동작**이다. 값이 아니라 방향을 본다
+  ok(h2.off >= h1.off - 0.02,
+    `⑤ **놓아도 안 돌아온다** (${h1.off} → ${h2.off}) — 수동이면 되돌리는 것도 내 손이다`);
 
   // 자동 항법 스위치로 되돌린다
   await settle();

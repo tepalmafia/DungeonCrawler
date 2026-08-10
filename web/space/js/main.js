@@ -216,7 +216,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 88;
+export const VERSION = 89;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -382,8 +382,11 @@ addEventListener('keydown', (e) => {
   //    키를 둘로 두면 「어느 걸 눌러야 나가지」가 또 생긴다
   if (!helpOpen && !paused && e.code === 'KeyX') {
     e.preventDefault();
-    if (yokeHeld) { yokeHeld = false; say(ai, '조종간을 놓습니다', 'tell'); }
-    else if (helmSat) { helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    // ★★ v88 — **한 번에 나온다.** v85 는 「놓기 → 일어나기」 두 단계였는데,
+    //   v88 에서 앉는 것과 잡는 것이 한 상태가 됐으므로 나오는 것도 하나다.
+    //   두 단계로 두면 「놓았는데 안 나가진다」가 생긴다 — 없앤 상태를
+    //   나가는 길에서만 되살리는 꼴이다
+    if (helmSat) { yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
     return;
   }
   if (e.code === 'F1') { e.preventDefault(); showHelp(!helpOpen); return; }
@@ -1436,8 +1439,11 @@ function walk(dt) {
     //    **X** 하나로 모았다 (v85) — 나가는 길이 하나라야 안 헷갈린다.
     //  ★ A/D 는 그대로 「일어난다」로 둔다: 옆으로 비키려는 몸짓이고,
     //    v52 에 좌석에 갇혔던 함정을 다시 파지 않는다
+    // ★ v88 — A/D 로 **일어나던 것을 걷어냈다.** 앉으면 늘 조종간을 잡고
+    //   있으므로 `flyPush` 는 위쪽 블록이 통째로 만든다 (W/S 위아래 ·
+    //   A/D 좌우). 여기 남겨 두면 **같은 키가 상태마다 뜻이 다른 것**이
+    //   그대로 남는다 — 이번 판이 없애려는 바로 그 병이다
     if (f !== 0) { flyPush.pitch = f; }
-    if (r !== 0) { helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
     return;
   }
   // ★ v64 — 여기 있던 **주포 좌석 미끄러짐과 자동 일어나기**를 걷어냈다.
@@ -1555,8 +1561,11 @@ function interactStep(dt) {
       if (o === ship.cradle.hit) { onCradle = true; break; }
       if (o === ship.tradeHatch.hit) { onHatch = true; break; }
       if (o === ship.cock.yokeHit) { onYoke = true; break; }
-      // ★ 좌석 — **앉아 있을 때는 안 잡힌다.** 앉은 채로 좌석이 잡히면
-      //   조종간을 잡으려다 일어나게 된다 (주포 좌석에서 이미 밟은 함정)
+      // ★ 좌석 — **앉아 있을 때는 안 잡힌다.**
+      //   ★★ v88 에 「내리는 손잡이로 쓰자」며 `true` 로 바꿔 봤다가
+      //     되돌렸다. **앉으면 좌석이 몸 아래에 있어 앞으로 쏜 광선이
+      //     닿지를 않는다** — 각도를 25칸 훑어도 한 번도 안 걸렸다.
+      //     못 닿는 곳에 길을 내 놓고 「길이 둘」이라 적는 것이 제일 나쁘다
       if (o === ship.cock.helmSeatHit) { onHelmSeat = !helmSat; break; }
       if (o === ship.cock.autoHit) { onAuto = true; break; }
       if (o === ship.cock.thrHit) { onThr = true; break; }
@@ -2200,14 +2209,36 @@ function interactStep(dt) {
   //    앉은 채로 앞을 보면 손잡이, 아래를 보면 좌석이 잡힌다
   if (onHelmSeat && gunPressed) {
     helmSat = true;
-    // ★★ **앉으면 시선이 조종간 쪽으로 내려간다** (v63).
-    //   `HELM_SEAT.pitch` 가 표에 있었는데 **아무도 안 읽고 있었다** —
-    //   그래서 앉아도 시선이 그대로라 조종간을 손으로 더듬어 찾아야 했다.
-    //   재 보니 조종간은 34도 아래에 있다 (`SIT_LOOK`)
-    me.pitch = SIT_LOOK;
-    say(ai, '조종석에 앉습니다 — 조종간을 잡으면 창이 열립니다', 'tell');
+    // ══ ★★★ v88 — **앉는 것이 곧 잡는 것이다** ═══════════════════════
+    //
+    //  사장님 「**앉자마자 조정간이 바로 잡히도록** 해줘. … 지금은 앉아서
+    //          조정간 잡을려니 **계속 일어나게 된다**」
+    //
+    //  ★ 맞는 말이고, 왜 그랬는지도 분명하다. v63 은 앉으면 시선을 34도
+    //    **내려** 조종간을 보여 줬는데(`SIT_LOOK`), v87 이 앉으면 고개를
+    //    **들어** 창을 보여 주게 바꿨다. 두 규칙이 정면으로 부딪혀 조종간이
+    //    시선 밖으로 나갔고, 그 자리에 있던 것이 하필 **좌석**이라
+    //    누를 때마다 일어났다. 「한 손잡이가 두 일을 하면 부딪힌다」의
+    //    또 다른 얼굴이다.
+    //
+    //  ★★ 그래서 **상태를 하나 없앤다.** 여태 조종석에 상태가 둘이었다 —
+    //    「앉았는데 안 잡음」과 「앉아서 잡음」. 앞의 것은 **아무 일도 안
+    //    하는 상태**였고, 조작표에서 키 여덟 개의 뜻이 갈리는 원인이었다.
+    //    이제 조종석은 **한 상태**다: 앉으면 잡고 있다.
+    //  ★ 그래서 `SIT_LOOK`(앉으면 34도 숙인다)을 안 쓴다. 처음부터 창을
+    //    보고 있어야 하고, 계기를 볼 때만 고개를 숙이면 된다
+    yokeHeld = true;
+    say(ai, '조종간을 잡았습니다 — 계기는 오른쪽 단추, 나갈 때는 X', 'tell');
     audio?.event('click');
-  } else if (helmSat && gunPressed && !steering && !cockGrip && !aimName && helmSitK > 0.995) {
+    // ══ ★★ v88 — **내리는 길은 X 하나다** (그리고 그렇게 적는다) ══════
+    //  이 가지는 원래 「아무것도 안 잡힌 데를 누르면 일어난다」였다.
+    //  v88 에서 앉기=잡기가 되면서 **그 자리가 「쏜다」**가 됐으므로 없앤다 —
+    //  누를 때마다 일어나던 것이 사장님이 고치라고 하신 바로 그 증상이다.
+    //  ★ 「들어가는 길을 하나만 만들지 않는다」와 어긋나 보이지만, 여기서는
+    //    **닿지 않는 두 번째 길을 적어 두는 것**이 더 나쁘다 (좌석은 몸
+    //    아래라 조준선이 안 닿고, 빈 곳 클릭은 이제 발사다). 대신 **앉는
+    //    순간 등대가 「나갈 때는 X」라고 말하고**, F1 에도 그렇게 적었다
+  } else if (false) {
     // ★ 일어나는 것은 **아무것도 안 잡힌 데를 누를 때**다. 손잡이를 누르면
     //   그건 잡는 것이지 일어나는 것이 아니다 — 한 손잡이가 두 일을 하면 부딪힌다
     //
@@ -2222,6 +2253,7 @@ function interactStep(dt) {
     //  「눌렀더니 자동 항법이 꺼졌습니다」만 뜬다 — 원인과 아무 상관도
     //  없어 보이는 말이다. 손잡이를 하나 늘릴 때마다 여기 이름을 하나씩
     //  더 적는 방식이었으면 다음 판에 또 밟는다. **잡힌 것이 있나**로 묻는다
+    yokeHeld = false;
     helmSat = false;
     say(ai, '일어납니다', 'tell');
     audio?.event('click');
@@ -2244,7 +2276,13 @@ function interactStep(dt) {
   //    사람이 읽는 쪽에 맞춘다.
   //  ★ 겹침은 이미 풀렸다 (v85): 잡기는 조종간을 **겨눴을 때만**,
   //    놓기는 **X**. 그래서 잡은 뒤의 좌클릭은 오직 쏘기다
-  const firePressed = steering && input.hold;
+  // ══ ★★★ v88 — **조준선에 뭐가 걸려 있으면 안 쏜다** ═══════════════
+  //  v88 에서 앉는 것이 곧 잡는 것이 되자, 좌클릭이 **늘 발사**가 됐다 —
+  //  그러면 앉은 채로 **항로 갈래 판·추력 레버·자동 항법을 못 누른다.**
+  //  v66 이 그것들을 조종석으로 옮겨 놓았으므로 이건 배가 안 떠나는 것과
+  //  같은 말이다. **「잡힌 것이 있나」로 가른다** — 위 일어나기가 이미
+  //  쓰는 규칙이고, 실제 조종간도 계기를 누르는 손과 방아쇠가 다르다
+  const firePressed = steering && input.hold && !aimName;
   // ══ ★★★ **무기 고르기 1 · 2 · 3** (v64) ═════════════════════
   //  ★ 조종석에 앉아 있을 때만 먹는다 — 걷다가 눌러도 아무 일이 없어야
   //    「이 키가 뭐지」가 안 생긴다. 그리고 **바뀌면 말한다**
@@ -2305,7 +2343,11 @@ function interactStep(dt) {
         // ★★ v71 — **탄두 크레이들.** 이름이 없으면 조준점이 안 켜지고,
         //   안 켜지면 「눌러도 되는지」를 알 길이 없다 (v64 에 이미 밟은 함정)
         : (onCradle ? 'cradle'
-        : (onWinch ? 'winch' : (onHatch ? 'hatch' : (onYoke ? 'yoke' : (onAuto ? 'autopilot' : (onThr ? 'throttle' : null)))))))));
+        // ★★★ v88 — **이미 쥔 것은 조준선에 안 잡힌다.** 앉는 것이 곧
+        //   잡는 것이 되면서 조종간이 늘 조준선에 걸렸는데, 그러면
+        //   ① 손이 다시 뜨고 ② 「계기를 겨누면 안 쏜다」에 걸려
+        //   **한 발도 안 나간다.** 쥐고 있는 물건을 또 겨눌 일은 없다
+        : (onWinch ? 'winch' : (onHatch ? 'hatch' : ((onYoke && !steering) ? 'yoke' : (onAuto ? 'autopilot' : (onThr ? 'throttle' : null)))))))));
   // ★ 조준점이 **주포와 사다리에서는 안 켜졌다.** 「손이 닿는다」를 알려
   //   주는 유일한 표시인데 빠져 있으면 「눌러도 되는지」를 알 길이 없다
   cross.classList.toggle('on', !!(gbHand && gbHolding) || !!(onOuter || onAuto || onThr || onSuit
@@ -2883,7 +2925,9 @@ window.SPACE = {
    *   「지금 잡고 있나」를 밖에서 물을 길이 필요해졌다 — `up()` 만으로는
    *   안 놓아지므로 검사가 상태를 보고 한 번 더 눌러야 한다
    */
-  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering }; },
+  // ★ v88 — `hands` 를 같이 준다. 「손이 안 보이나」는 화면에만 있던 것이라
+  //   검사가 물을 자리가 없었다 (사장님이 두 판에 걸쳐 말씀하신 것이다)
+  get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering, hands: !!hands.group.visible }; },
   /**
    * ★★ v80 — **가상 조종간의 자리** (`space-helm.js` · endtoend 가 읽는다).
    *   기수 각도로 미루어 재면 헤드리스 시계(실제의 1/20) 때문에 값이
@@ -3726,9 +3770,15 @@ window.SPACE = {
    */
   putGun(up) {
     helmSat = !!up;
+    // ★★ v88 — **앉는 것이 곧 잡는 것이다.** 여기서 `yokeHeld` 를 같이
+    //   안 켜면 검사만 「앉았는데 안 잡은」 상태를 만들 수 있고, 그건
+    //   게임에 이제 없는 상태다 — 검사가 없는 것을 재게 된다
+    yokeHeld = !!up;
     const at = up ? HELM_SEAT.seatAt : HELM_SEAT.standAt;
     me.x = at.x; me.z = at.z;
-    me.pitch = up ? SIT_LOOK : 0;
+    // ★ 앉으면 시선을 **안 내린다** (v88) — 앉는 것이 곧 잡는 것이므로
+    //   처음부터 창을 본다
+    me.pitch = 0;
     return { ...gunSummary(gun), movedTo: 'helm' };
   },
   /** 검사가 쏜다 — **게임과 같은 길로** (fireGun 이 배너·열·거리를 다 한다) */
@@ -4052,7 +4102,18 @@ function frame(now) {
   // ★ 조종간을 잡고 있으면 마우스가 **시선이 아니라 배**를 움직인다.
   //   `steering` 은 지난 프레임의 판정이라 한 프레임 늦는다 — 조준은
   //   interactStep 에서 나오고 그건 이 아래에서 돈다. 16ms 라 안 느껴진다.
-  if (steering) {
+  // ══ ★★★ v88 — **마우스 오른쪽을 누르고 있으면 고개만 돌린다** ═══════
+  //
+  //  ★ 앉으면 마우스가 조종간이 되므로 시선이 정면에 못박힌다. 재 보니
+  //    조종석에서 **아무것도 조준선에 안 걸렸다** — 갈래 판(항로) · 추력
+  //    레버 · 자동 항법 전부. 즉 **앉으면 배를 출발시킬 수가 없었다.**
+  //    `space-endtoend [0]` 이 「갈래 판을 잡는다 (null)」로 우는 것이 이것이고,
+  //    v88 에서 앉기=잡기가 되면서 「일어나서 누르면 된다」도 없어졌다.
+  //  ★★ 그래서 **누르고 있는 동안만** 스틱을 놓고 고개를 돌린다.
+  //    새 상태를 안 만든다 — 손을 떼면 곧바로 조종간이다. 실제 조종사도
+  //    계기를 볼 때 고개를 돌리지 조종간을 놓지 않는다
+  const freeLook = steering && input.look;
+  if (steering && !freeLook) {
     // ══ ★★★ **가상 조종간** — 마우스+키보드 비행 시뮬의 정석 (v80) ══
     //
     //  ★ 사장님 「마우스와 키보드로 비행 전투 시뮬레이션에서는 **어떤
@@ -4100,14 +4161,26 @@ function frame(now) {
     //    ★ 마우스 위아래는 **그대로 산다** — 둘 다 먹는다
     const kUp = (input.keys.has('KeyW') ? 1 : 0) - (input.keys.has('KeyS') ? 1 : 0);
     if (kUp !== 0) flyPush.pitch = kUp;
+    // ★★★ v88 — **A/D 는 좌우다.** 여태 「일어난다」였다 (v52 에 좌석에
+    //   갇힌 적이 있어 비상구로 둔 것). 그런데 v88 에서 앉는 것이 곧 잡는
+    //   것이 되고 나가는 길이 **X 와 좌석 다시 누르기 둘**로 분명해졌으므로,
+    //   비상구를 여기 겹쳐 둘 이유가 없어졌다. 그리고 W/S 만 키가 있고
+    //   A/D 가 없으면 **왼손이 반쪽**이라 「적을 쫓을 수가 없다」가 된다
+    const kSide = (input.keys.has('KeyD') ? 1 : 0) - (input.keys.has('KeyA') ? 1 : 0);
+    if (kSide !== 0) { flyPush.yaw = kSide; steerPush = kSide; }
     if (input.keys.has('Space')) { if (!thrustHeldKey) { setThrustKey(!power.thrust); thrustHeldKey = true; } }
     else thrustHeldKey = false;
   } else {
     steerPush = 0;
-    // ★ 놓으면 **스틱도 가운데로 돌아간다** — 안 그러면 다시 잡는 순간
-    //   지난번에 밀어 둔 만큼이 그대로 먹는다
-    stick.x = 0; stick.y = 0;
-    flyPush.pitch = 0; flyPush.yaw = 0; flyPush.roll = 0;
+    // ★★ v88 — **둘러보는 동안에는 스틱을 안 지운다.** 지우면 손을 떼는
+    //   순간 배가 홱 펴져서, 계기를 한 번 볼 때마다 항로가 틀어진다.
+    //   ★ 키(W/S/A/D)는 그대로 먹는다 — 고개와 손은 다른 것이다
+    if (!freeLook) {
+      // ★ 놓으면 **스틱도 가운데로 돌아간다** — 안 그러면 다시 잡는 순간
+      //   지난번에 밀어 둔 만큼이 그대로 먹는다
+      stick.x = 0; stick.y = 0;
+      flyPush.pitch = 0; flyPush.yaw = 0; flyPush.roll = 0;
+    }
     me.yaw -= look.dx * 0.0022;
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
     // 얼마나 둘러봤나 — 조종간을 잡고 있을 때는 안 센다. 그건 배를 민 것이다
@@ -4507,9 +4580,21 @@ function frame(now) {
     camera.position.y += FLY_VIEW.rise * flyK;
     camera.position.x -= yawS * lean;
     camera.position.z -= yawC * lean;
-    // 숙인 고개를 **`aimAt` 까지** 끌어올린다 (수평보다 조금 위 = 창의 한복판)
-    const want = Math.max(me.pitch, FLY_VIEW.aimAt);
-    camera.rotation.x += (want - me.pitch) * flyK;
+    // ══ ★★★ v88 — **고개를 들어 주던 것을 통째로 걷어냈다** ═══════════
+    //
+    //  v63 이 `aimAt` 을 넣은 이유는 하나였다: **앉으면 시선을 34도
+    //  내렸으므로**(`SIT_LOOK`) 조종간을 잡는 순간 그걸 되들어 줘야 창이
+    //  보였다. 그런데 v88 에서 **앉을 때 안 내린다** — 앉는 것이 곧 잡는
+    //  것이라 처음부터 창을 본다. 되들 숙임이 없다.
+    //
+    //  ★★ 그런데 이 줄은 **되드는 것이 아니라 바닥을 까는 것**이었다
+    //  (`Math.max(me.pitch, aimAt)`). 그래서 앉아 있는 동안 시선이
+    //  **수평 위 6도 밑으로 못 내려갔고**, 재 보니 조종석에서
+    //  **아무것도 조준선에 안 걸렸다** — 갈래 판·추력 레버·자동 항법·좌석
+    //  전부. 즉 **배가 출발을 못 했다** (`space-endtoend [0]`).
+    //  v87 이 이 줄을 `helmSat` 에 물리면서 조용히 생긴 일이고,
+    //  v88 에서 스위치만 갈랐다가 앉기=잡기가 되자 **그대로 돌아왔다.**
+    //  → 「낡은 처방을 스위치만 바꿔 살려 두면 같은 병이 난다.」 지운다
     // ══ ★★★ v87 — **밟는 순간 눈이 뒤로 밀린다** ═══════════════════
     //  ★ 관성이다. 배가 앞으로 튀어 나가면 사람은 좌석에 눌린다 —
     //    화면에서는 **눈이 뒤로** 가는 것으로 보인다. 짧고 되돌아온다
@@ -4950,7 +5035,13 @@ function frame(now) {
   //    (갈래 판 · 자동 항법 · 추력 레버). 안 보이면 그것들이 「눌리는지」를
   //    알 수가 없다: 「손이 곧 상태창」(PLAN §5-2)이 조종석에서만 죽으면
   //    그건 규약을 깨는 것이다
-  hands.group.visible = !helmSat || !!aimName || input.hold;
+  //  ★★★ v88 — **조종간을 잡고 있으면 안 보인다** (사장님 「손은 안보이게
+  //    해주고, 조정간 잡을때」). 앞의 규약(잡으면 보인다)과 안 부딪힌다 —
+  //    **조종간을 쥔 손은 이미 조종간 위**에 있고 눈앞에 뜰 이유가 없다.
+  //    갈래 판·레버를 겨눌 때는 `aimName` 이 있으므로 그대로 보인다
+  //  ★ 조종간 자신은 이미 `aimName` 에서 빠진다 (잡고 있으면 안 잡힌다) —
+  //    그래서 여기서 따로 거를 것이 없다
+  hands.group.visible = !helmSat || !!aimName || (!steering && input.hold);
   hands.update({
     reach: aimName ? 1 : 0,
     grip: aimName && input.hold ? 1 : 0,
