@@ -260,6 +260,15 @@ if (seeV >= 0) {
         `★ 화면의 ${(v.all * 100).toFixed(0)}% 가 배다 (32% 이하)`);
       ok(!v.who.some(([n]) => n === '조종간'),
         '★★★ **조종간이 화면을 안 먹는다** — 실제 중앙 조종간은 무릎 사이라 눈에 거의 안 들어온다');
+      // ★★★ v92 — **하늘 위에 겹치는 것은 HUD 하나다.**
+      //   실제 전투기가 그렇고(나머지는 눈썹 차양 아래 MFD), 무엇보다
+      //   v91 까지 **광학창이 눈보다 위**에 떠서 화면 칸 35개를 먹고 있었다
+      const skyBand = v.byRow.slice(0, Math.floor(v.byRow.length * 0.6));
+      const worstBand = Math.max(...skyBand);
+      console.log(`   하늘 띠(위 60%) 제일 막힌 줄 ${(worstBand * 100).toFixed(0)}%`);
+      ok(worstBand <= 0.2,
+        `★★★ **하늘 띠에 HUD 말고 아무것도 없다** (제일 막힌 줄 ${(worstBand * 100).toFixed(0)}% · 20% 이하) —`
+        + ' v91 까지 광학창이 눈보다 위에 떠 있었다');
     }
     console.log('\n[8] ★★★ **HUD 표식이 진짜 적 위에 얹히나** (v91)');
     {
