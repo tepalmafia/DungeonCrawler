@@ -41,6 +41,7 @@ import { hudFov } from '../game/view-table.js';
 import { SIGN } from '../game/chase-table.js';
 // ★★★ v75 — 「왼쪽/오른쪽」을 **방위 + 고도**로 (사장님 요청 · 고증)
 import { callOut } from '../game/radar-table.js';
+import { RADAR } from '../game/combat-table.js';
 import { azDiff } from '../game/target.js';
 
 /**
@@ -69,6 +70,12 @@ function sideWord(t, aimAz, aimEl = 0) {
 const FG = '#8fe6c0';
 const DIM = 'rgba(143,230,192,.45)';
 const HOT = '#ff9a5c';
+// ══ ★★ v82 — **쏠 수 있나를 색으로** (사장님 「색깔로 구분하던가」) ══
+const SHOOT = '#7fe6a8';                 // 사거리 안 — 초록
+const FAR = 'rgba(180,190,200,.45)';     // 사거리 밖 — 흐린 회색
+const WARN = '#ffcf6a';
+/** 락온 원의 반지름 (도) — 규칙과 **같은 값**을 쓴다 (`RADAR.lockCone`) */
+const LOCK_CONE = RADAR.lockCone;
 
 /** 종류마다 다른 모양 — **무엇을 쏘는지가 보여야 고를 이유가 생긴다** */
 function glyph(ctx, kind, x, y, r) {
@@ -234,6 +241,19 @@ function draw(ctx, w, h, s) {
     glyph(ctx, t.kind, x, y, r);
     const d = Math.hypot(raz, rel);
     if (d < nearD) { nearD = d; near = { t, x, y, r, raz, rel }; }
+    // ══ ★★ **쏠 수 있나를 색으로** (v82) ═══════════════════════════
+    //  ★ 사장님 「**거리가 멀어서 공격이 안되는 것을 직관적으로** 알 수
+    //    잇게 하는 방법은? **색깔로 구분**하던가」
+    //  ★★ 지금 든 무기의 사거리로 가른다 — 무기를 바꾸면 **색이 바뀐다.**
+    //    그게 「무기를 왜 셋이나 두었나」를 눈으로 말해 준다
+    if (s.wMax) {
+      const canHit = t.dist <= s.wMax;
+      ctx.strokeStyle = canHit ? SHOOT : FAR;
+      ctx.lineWidth = Math.max(1.4, h * 0.007);
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.25, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (t.hp < (KINDS[t.kind]?.hits ?? 1)) {
       // 한 번 맞은 것 — 금이 갔다
       ctx.strokeStyle = HOT;
@@ -277,6 +297,35 @@ function draw(ctx, w, h, s) {
   ctx.moveTo(ax, ay - g2 * 2); ctx.lineTo(ax, ay - g2 * 0.5);
   ctx.moveTo(ax, ay + g2 * 0.5); ctx.lineTo(ax, ay + g2 * 2);
   ctx.stroke();
+  // ══ ★★★ **락온 원을 보이게 한다** (v82) ═══════════════════════════
+  //
+  //  ★ 사장님 「**강제 락온**을 시키는 방법은 재미가 있나? **특정 원 안에
+  //    들어오면 락온** 시키고 발사하는?」
+  //
+  //  ★★ **규칙은 v64 부터 이미 그것이다** — `RADAR.lockCone` 9도 안에
+  //    `RADAR.lockFor` 2.6초를 두면 저절로 물린다. 그런데 **그 원이 화면에
+  //    없었다.** 규칙이 있는데 안 보이면 없는 것과 같다 — 이 저장소가
+  //    레이더 심볼로 방금 겪은 그것이다 (v80).
+  //
+  //  ★ 그리고 **발사는 손이 한다.** 저절로 쏘면 겨눌 이유가 없어지고,
+  //    그러면 이 게임의 손이 통째로 없어진다. **잡는 것은 레이더,
+  //    맞히는 것은 손** — v79 부터의 규약이다
+  {
+    const rr = LOCK_CONE * sx;
+    ctx.strokeStyle = locked ? HOT : 'rgba(143,230,192,.30)';
+    ctx.lineWidth = Math.max(1.2, h * 0.006);
+    ctx.setLineDash(locked ? [] : [h * 0.03, h * 0.03]);
+    ctx.beginPath(); ctx.arc(ax, ay, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    // ★ 물리는 중이면 **호가 차오른다** — 「얼마나 더 붙들고 있어야 하나」
+    if (!locked && (s.lockK ?? 0) > 0.02) {
+      ctx.strokeStyle = WARN;
+      ctx.lineWidth = Math.max(2, h * 0.011);
+      ctx.beginPath();
+      ctx.arc(ax, ay, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * s.lockK);
+      ctx.stroke();
+    }
+  }
   if (locked) {
     // 물렸다 — **표적 지시자 상자(TD box)**. 실제 HUD 와 같은 약속이다
     ctx.strokeRect(near.x - near.r * 1.5, near.y - near.r * 1.5, near.r * 3, near.r * 3);
