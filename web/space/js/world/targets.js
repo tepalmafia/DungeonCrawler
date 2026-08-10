@@ -28,10 +28,87 @@ import { modelFor, engineAt } from '../core/models.js';
 const DEG = Math.PI / 180;
 
 /** 금속 — 어둡고 거칠다. 우주에는 빛이 하나뿐이라 대비가 세다 */
-const METAL = () => new THREE.MeshStandardMaterial({ color: 0x6a6f78, roughness: 0.72, metalness: 0.62 });
-const DARKM = () => new THREE.MeshStandardMaterial({ color: 0x2f343c, roughness: 0.9, metalness: 0.3 });
-const PANELM = () => new THREE.MeshStandardMaterial({ color: 0x25406b, roughness: 0.35, metalness: 0.55 });
+// ★★★ v87 — **자체발광을 조금.** 밖에 등이 없어 이게 없으면 새까맣다.
+//   파편(`rockMat`)에 v57 에 넣어 둔 것과 같은 방법인데 **적에는 안 넣어**
+//   두었다 — 그래서 「계기는 잡았는데 창밖은 비어 있다」가 났다
+// ══ ★★★ v87 — **자체발광을 준다** ═════════════════════════════════════
+//  ★ 밖에는 등이 하나도 없다 (이 배의 등은 전부 방 안을 비추는 5~11m 점광).
+//    그래서 적이 **별빛보다 어두운 구멍**이었다 — 60m 정면에 세우고 화면을
+//    찍으니 HUD 상자 안이 **비어 있었다.**
+//  ★★ 파편(`rockMat`)에는 v57 에 같은 것을 넣어 뒀는데 **적에는 안 넣었다.**
+//    「저기 뭐가 떠 있다」로 읽히는 최소한만 준다 — 대낮처럼 밝히면
+//    우주가 아니게 된다
+const METAL = () => new THREE.MeshStandardMaterial({
+  color: 0x6a6f78, roughness: 0.72, metalness: 0.62,
+  emissive: 0x38414f, emissiveIntensity: 0.85,
+});
+const DARKM = () => new THREE.MeshStandardMaterial({
+  color: 0x2f343c, roughness: 0.9, metalness: 0.3,
+  emissive: 0x232a35, emissiveIntensity: 0.8,
+});
+const PANELM = () => new THREE.MeshStandardMaterial({
+  color: 0x25406b, roughness: 0.35, metalness: 0.55,
+  emissive: 0x152944, emissiveIntensity: 0.7,
+});
 const GLOW = (hex) => new THREE.MeshBasicMaterial({ color: hex });
+
+/**
+ * ══ ★★★ v87 — **어둠 속에서 안 보였다** ═══════════════════════════════
+ *
+ *  ★ 사장님 「왜 **레이저를 쫓아서 적을 찾는데 타겟이 안보이는거지**??
+ *    근본적인 문제를 찾아봐」
+ *
+ *  ★★ 화면을 찍어 재 봤다. 60m 정면에 적을 세우니 —
+ *    HUD 상자 · 조준원 · 「물었습니다」 · 광학 창 · 전투력이 **전부**
+ *    떠 있는데 **상자 안이 비어 있었다.**
+ *
+ *    밖에는 **조명이 하나도 없다.** 이 배의 등은 전부 방 안을 비추는
+ *    점광(5~11m)이고, 30~220m 밖의 적에는 약한 환경광만 닿는다.
+ *    게다가 배경이 **은하수**라 오히려 배경이 더 밝다 — 적은 별빛보다
+ *    **어두운 구멍**이었다. 파편(`rockMat`)에는 v57 에 자체발광을
+ *    넣어 뒀는데 **적에는 안 넣었다.**
+ *
+ *  ★★★ 그런데 「그냥 밝게」는 답이 아니다. 우주에서 물체가 보이는 길은
+ *    셋뿐이고, 셋 다 이 게임에 이미 자리가 있다:
+ *
+ *      ① **햇빛 받는 면** — 한쪽만 밝고 반대는 새까맣다 (대기가 없다)
+ *      ② **제 엔진 불** — 이미 있다
+ *      ③ **항법등** — 실제 항공기·선박이 다는 것. 어둠에서 「저기 있다」를
+ *         만드는 유일한 것이고, **규약이 있다**:
+ *         **좌현 빨강 · 우현 초록 · 후미 흰색**
+ *
+ *  ★★★ ③ 이 이 판의 답이다. 보이게 하면서 **동시에 「어느 쪽을 향하고
+ *    있나」를 눈으로 알려 준다** — 빨강이 보이면 저쪽의 왼쪽을 보고 있는
+ *    것이고, 그건 곧 **뒤를 잡았나**의 단서다 (v86 부위와 그대로 물린다)
+ */
+const NAV = {
+  /** 좌현 빨강 · 우현 초록 · 후미 흰색 (실제 규약) */
+  port: 0xff2a1e, star: 0x22ff5a, tail: 0xffffff,
+  /** 등 하나의 크기 (몸 길이 대비) */
+  size: 0.10,
+  /** 깜빡임 (초) — 안 깜빡이면 별과 구별이 안 된다 */
+  blink: 1.15,
+};
+
+/**
+ * ★★ **항법등을 단다** — 살아 있는 것에만 (파편·위성은 죽은 것이다).
+ *   ★ `MeshBasicMaterial` 이라 **조명을 안 받는다** — 밖에 등이 없어도
+ *     제 힘으로 보인다. 그게 항법등의 정의다
+ */
+function navLights(g, span = 1) {
+  const mk = (hex, x, z) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(NAV.size * span, 6, 5), GLOW(hex));
+    m.position.set(x, 0, z);
+    m.name = '항법등';
+    g.add(m);
+    return m;
+  };
+  return [
+    mk(NAV.port, -span * 0.5, 0),
+    mk(NAV.star, span * 0.5, 0),
+    mk(NAV.tail, 0, span * 0.55),
+  ];
+}
 
 /**
  * ★★ 넷을 **HUD 글리프와 같은 모양**으로 만든다.
@@ -187,6 +264,16 @@ function buildOne(kind) {
     const chip = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 0.7), DARKM());
     chip.rotation.set(0.4, 0.8, 0.3);
     g.add(chip);
+  }
+  // ══ ★★★ v87 — **살아 있는 것에 항법등을 단다** ═══════════════════════
+  //  ★ 파편·위성·연료통은 **죽은 것**이라 안 단다 — 등이 켜져 있나가
+  //    「살아 있나」의 첫 표시가 된다 (엔진 불과 같은 규약)
+  //  ★★ 좌현 빨강 · 우현 초록 · 후미 흰색 — **실제 규약 그대로**다.
+  //    보이게 하면서 동시에 **어느 쪽을 향하고 있나**를 알려 준다:
+  //    빨강이 보이면 저쪽의 왼쪽을 보고 있는 것이고, 그건 v86 의
+  //    「뒤를 잡으면 엔진이 나온다」와 그대로 물린다
+  if (KINDS[kind]?.closes !== undefined || KINDS[kind]?.shoots) {
+    g.userData.nav = navLights(g, (KINDS[kind]?.size ?? 1) * 1.5);
   }
   return g;
 }
@@ -364,6 +451,14 @@ export function buildTargets(parent) {
         } else {
           const fire = o.getObjectByName('엔진불');
           if (fire) fire.scale.setScalar(0.8 + Math.sin(clock * 14) * 0.25);
+          // ★ v87 — 항법등이 **깜빡인다.** 안 깜빡이면 별과 구별이 안 된다
+          const nav = o.userData.nav;
+          if (nav) {
+            const on = (clock % NAV.blink) < NAV.blink * 0.62;
+            for (const L of nav) L.visible = on;
+            // 후미등은 **늘 켜져 있다** (실제 규약)
+            if (nav[2]) nav[2].visible = true;
+          }
         }
       }
       // 사라진 것 — **터뜨리고** 잔해로 넘긴다
