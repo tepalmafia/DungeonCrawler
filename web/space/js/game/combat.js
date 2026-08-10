@@ -11,7 +11,11 @@ import {
   RADAR, WEAPONS, WEAPON_LIST, whyNotFire, hitChance, inCone, contactLevel, PICK,
 } from './combat-table.js';
 import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
-import { azDiff } from './target.js';
+// ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
+//   레이더가 제 방식으로 다시 재면, 화면이 그리는 자리와 갈라진다 —
+//   그게 사장님이 「**레이더와 실제 우주에 보이는 물체의 일관성**」이라고
+//   말씀하신 바로 그 자리다
+import { wrap, relOf } from './frame.js';
 import { flyTime, slowsOnLaunch } from './slow-table.js';
 import { MISSILES } from './supply-table.js';
 
@@ -73,7 +77,7 @@ export function stepRadar(c, dt, aimed) {
       // ★★★ v97 — **표식이 표적을 쫓아간다** (`RADAR.slew` · frame.js 블록아웃).
       //   즉각 붙이면 계기가 아니라 자석이고, 안 붙이면 「위치가 완전 다르다」다
       const step = RADAR.slew * dt;
-      const dAz = ((aimed.relAz - r.atAz) % 360 + 540) % 360 - 180;
+      const dAz = wrap(aimed.relAz - r.atAz);
       r.atAz += Math.max(-step, Math.min(step, dAz));
       r.atEl += Math.max(-step, Math.min(step, aimed.relEl - r.atEl));
       return null;
@@ -120,8 +124,13 @@ export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0) {
   if (!c.radar.on) { c.radar.seen.clear(); return []; }
   const out = [];
   const alive = new Set();
+  const eye = { yaw: noseAz, pitch: noseEl };
   for (const t of list ?? []) {
-    const rel = { relAz: azDiff(t.az, noseAz), relEl: t.el - noseEl, dist: t.dist };
+    // ★★★ v98 — **조준선이 쓰는 것과 같은 함수**로 잰다 (`frame.js relOf`).
+    //   v97 까지 여기서 직접 뺐고, 조준은 `aimedAt` 이 따로 뺐다 — 값이
+    //   같아 보여도 **두 곳이면 반드시 갈라진다**. 한 곳에서 나와야 한다
+    const r = relOf(t, eye);
+    const rel = { relAz: r.az, relEl: r.el, dist: r.dist };
     // ★ **엔진을 켠 것만** 원뿔 밖에서 잡힌다 — 파편과 죽은 위성은 열이 없다
     const hot = !!KINDS[t.kind]?.closes;
     const level = contactLevel(rel, hot);
@@ -188,7 +197,8 @@ export function pickTarget(c, list, noseAz = 0, noseEl = 0, next = false) {
     .filter((t) => isFoe(t.kind) && t.dist <= PICK.range)
     // ★ 가까운 것 먼저 · 같은 거리면 **정면 쪽**이 먼저
     .map((t) => {
-      const off = Math.hypot(azDiff(t.az, noseAz), t.el - noseEl);
+      // ★ v98 — 「정면 쪽」도 `frame.js` 가 잰 벗어난 각을 쓴다
+      const off = relOf(t, { yaw: noseAz, pitch: noseEl }).off;
       return { t, score: t.dist + off * PICK.front * 4 };
     })
     .sort((a, b) => a.score - b.score)

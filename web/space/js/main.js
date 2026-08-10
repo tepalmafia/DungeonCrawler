@@ -165,6 +165,9 @@ import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
 } from './game/target.js';
+// ★★★ v98 — **자리를 아는 곳 하나** (블록아웃). `SPACE.align()` 이 이것과
+//   진짜 카메라를 나란히 놓아 「창밖 == 계기」를 숫자로 만든다
+import { relOf } from './game/frame.js';
 import { LOCK, WHY as LOCK_WHY, airWord } from './game/airlock-table.js';
 import {
   makeLock, cycle as cycleLock, stepLock, canHaul, haulWhy,
@@ -224,7 +227,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 97;
+export const VERSION = 98;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -666,6 +669,11 @@ const dark = makeDark();
 // ★★ **포탑이 겨누는 쪽** — 방위·고도(도). WASD 가 여기를 움직인다.
 //   사람이 보는 쪽과 **따로** 논다 — 그게 「실내에서 원격으로 돌린다」다
 let aimAz = 0, aimEl = 0;
+/**
+ * ★★★ v98 — **기수가 머리 위를 넘어갔나** (`aimOf`). 넘어가면 배가
+ *   뒤집힌 것이라 **표식도 반 바퀴 돌아야** 실물에 얹힌다
+ */
+let noseOver = false;
 /** 떠도는 것들 — 창밖에 실제로 있고, 조준경이 그린다 */
 const sky = makeSky(makeRng(`${seed}-SKY`));
 
@@ -757,9 +765,23 @@ function aimOf(pitchDeg, yawDeg) {
   const wrap = (d) => ((d + 180) % 360 + 360) % 360 - 180;
   let el = wrap(pitchDeg);
   let az = yawDeg;
-  if (el > 90) { el = 180 - el; az += 180; }
-  else if (el < -90) { el = -180 - el; az += 180; }
-  return { az: wrap(az), el };
+  let over = false;
+  if (el > 90) { el = 180 - el; az += 180; over = true; }
+  else if (el < -90) { el = -180 - el; az += 180; over = true; }
+  // ══ ★★★ v98 — **넘어간 것을 화면에도 말해야 한다** ═══════════════════
+  //
+  //  ★ 여기서 방위를 180도 돌리고 고도를 되꺾는 것은 **배가 뒤집혔다**는
+  //    뜻이다. 그런데 v97 까지 그 사실이 **여기서 끝났다** — HUD 는 롤을
+  //    `skyRoll`(자세 제어가 낸 기울기)에서만 받으므로, 머리 위를 넘긴
+  //    순간 **표식이 통째로 180도 헛돌았다.**
+  //
+  //  ★★ `SPACE.align()` 으로 잡았다: 다섯 자세 중 넷은 「HUD 롤 == 필요한
+  //    롤」이 소수점까지 같은데, 넘어간 한 자세만 **−6.9도 vs 173.1도**
+  //    였다 (정확히 180 차이). 「가끔 위치가 완전 다르다」의 마지막 조각이다.
+  //
+  //  ★ 벗어난 각(`off`)은 롤과 상관이 없어서 **조준·락온은 멀쩡했다.**
+  //    그래서 여태 「맞기는 맞는데 상자가 엉뚱한 데 있다」로만 보였다
+  return { az: wrap(az), el, over };
 }
 
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
@@ -3626,6 +3648,96 @@ window.SPACE = {
       nearest: a ? { kind: a.t.kind, off: +a.off.toFixed(1), dist: +a.t.dist.toFixed(0) } : null,
     };
   },
+  /**
+   * ══ ★★★ v98 — **창밖의 저것과 계기의 저것이 같은 자리인가** ═══════════
+   *
+   *  ★ 사장님 「**화면에 보이는 물체와 레이더 표적이 나오는걸 왜 동일하게
+   *    못 맞추는거지?**」 — 이 한 줄이 그 물음을 **숫자로** 만든 것이다.
+   *
+   *  ★★ 여태 이걸 못 물었다. 규칙 쪽(`aimedAt`·`radarBlips`)은 도구가
+   *    읽을 수 있었지만 **3D 쪽은 못 읽었다** — 그래서 「둘이 같나」를
+   *    물을 수가 없었고, 어긋난 것은 늘 사장님이 화면을 보시고 잡으셨다
+   *    (v91 · v93 · v95 가 전부 그랬다).
+   *
+   *  ★★★ 여기는 **진짜 카메라와 진짜 메시**를 쓴다. 규칙이 준 각과
+   *    카메라에서 실제로 보이는 각을 나란히 놓는다 — 어긋나면 그 수가
+   *    곧 「상자와 실물 사이의 도(度)」다.
+   *
+   *  ★ 롤은 빼고 잰다: 판은 수평이고 **표식만** 돈다 (v95). 롤까지 넣어
+   *    비교하면 안 어긋난 것도 어긋난 것처럼 나온다
+   */
+  align() {
+    const T = ship.outside?.targets;
+    if (!T?.posOf) return null;
+    camera.updateMatrixWorld(true);
+    T.group.updateMatrixWorld(true);
+    // ★ HUD 가 쓰는 것과 **같은 롤**을 쓴다 — 다른 것을 쓰면 검사가
+    //   화면과 다른 것을 재게 되고, 그건 v90 에 이미 한 번 밟은 함정이다
+    const roll = (ship.outside.skyRoll ?? 0) + (noseOver ? Math.PI : 0);
+    const cr = Math.cos(-roll), sr = Math.sin(-roll);
+    const v = new THREE.Vector3();
+    const rows = [];
+    for (const t of sky.list) {
+      const p = T.posOf(t.id);
+      if (!p) continue;                       // 아직 안 세워졌다
+      v.copy(p);
+      T.group.localToWorld(v);
+      camera.worldToLocal(v);
+      // 판이 기운 만큼 되돌린다 — 표식만 도는 것이 규약이다
+      const x = v.x * cr - v.y * sr, y = v.x * sr + v.y * cr, z = v.z;
+      const dist = Math.hypot(x, y, z);
+      const saw = {
+        az: Math.atan2(x, -z) * 180 / Math.PI,
+        el: Math.atan2(y, Math.hypot(x, z)) * 180 / Math.PI,
+        dist,
+      };
+      const rule = relOf(t, { yaw: aimAz, pitch: aimEl });
+      const dAz = ((saw.az - rule.az + 180) % 360 + 360) % 360 - 180;
+      // ★★ **기수에서 벗어난 각은 롤과 상관이 없다.** 이 둘이 같은데
+      //   az/el 만 다르면 그건 어긋난 것이 아니라 **판이 기운 것**이다 —
+      //   둘을 안 가르면 멀쩡한 것을 고치려 들게 된다 (v95 에 그랬다)
+      const sawOff = Math.atan2(Math.hypot(x, y), -z) * 180 / Math.PI;
+      // ★★★ **표식을 몇 도 돌려야 실물에 얹히나** — HUD 가 쓰는 롤이
+      //   정말 이 값인지 견줄 수 있어야 한다. `dOff` 가 0 인데 az/el 이
+      //   다르면 남은 것은 이것 하나뿐이다
+      const D = Math.PI / 180;
+      const ruleAng = Math.atan2(Math.sin(rule.el * D),
+        Math.sin(rule.az * D) * Math.cos(rule.el * D));
+      const sawAng = Math.atan2(v.y, v.x);
+      const need = ((sawAng - ruleAng) * 180 / Math.PI + 540) % 360 - 180;
+      rows.push({
+        needRoll: +need.toFixed(1),
+        id: t.id, kind: t.kind,
+        rule: { az: +rule.az.toFixed(2), el: +rule.el.toFixed(2), dist: +rule.dist.toFixed(1), off: +rule.off.toFixed(2) },
+        saw: { az: +saw.az.toFixed(2), el: +saw.el.toFixed(2), dist: +saw.dist.toFixed(1), off: +sawOff.toFixed(2) },
+        /** ★ 이 숫자가 곧 「상자와 실물 사이의 도」다 */
+        off: +Math.hypot(dAz, saw.el - rule.el).toFixed(2),
+        /** ★★ 롤을 뺀 어긋남 — 이것이 0 이 아니면 **정말로** 갈라진 것이다 */
+        dOff: +(sawOff - rule.off).toFixed(2),
+        dDist: +(saw.dist - rule.dist).toFixed(1),
+      });
+    }
+    return {
+      n: rows.length,
+      worst: +Math.max(0, ...rows.map((r) => r.off)).toFixed(2),
+      /** ★★★ 검사는 **이것**을 본다 — 롤은 표식이 도는 것으로 이미 맞춘다 */
+      worstOff: +Math.max(0, ...rows.map((r) => Math.abs(r.dOff))).toFixed(2),
+      /** ★★★ HUD 가 표식을 돌려야 하는 각 — `roll` 과 달라지면 상자가 헛돈다 */
+      needRoll: rows.length ? rows[0].needRoll : 0,
+      roll: +(roll * 180 / Math.PI).toFixed(1),
+      camRoll: +(camera.rotation.z * 180 / Math.PI).toFixed(1),
+      /**
+       * ★★★ **눈과 원점 사이가 몇 m 인가** — v93 의 시차가 **남아 있나**.
+       *   0 이 아니면 그 거리만큼 가까운 것이 어긋난다. 130m 짜리에
+       *   3m 면 1.3도, 그게 곧 「상자 옆에 실물」이다
+       */
+      gap: (() => {
+        const g = new THREE.Vector3(); T.group.getWorldPosition(g);
+        return +g.distanceTo(camera.getWorldPosition(new THREE.Vector3())).toFixed(2);
+      })(),
+      rows,
+    };
+  },
   /** 검사가 겨눔을 밀어 놓는다 — WASD 를 헤드리스로 오래 누르지 않으려고 */
   putAim(az, el) { aimAz = az; aimEl = el; return { az: aimAz, el: aimEl }; },
   /** 검사가 떠도는 것 하나를 조준선 앞에 놓는다 */
@@ -5033,7 +5145,7 @@ function frame(now) {
   //    실제 전투기의 기총이 기수 고정인 것과 같다. 겨눔을 따로 두면
   //    「배는 저쪽을 보는데 총은 이쪽」이 되고, 그건 계기가 둘인 것이다
   const nose = noseAim();
-  aimAz = nose.az; aimEl = nose.el;
+  aimAz = nose.az; aimEl = nose.el; noseOver = !!nose.over;
 
   // ── ★★ 떠도는 것들 · 적 우주선 ─────────────────────────
   setSkyRegion(sky, ship.outside.region);
@@ -5183,7 +5295,10 @@ function frame(now) {
   if (ship.sight?.mesh) ship.sight.mesh.rotation.z = 0;
   ship.sight.redraw({
     // ★ v95 — 그리는 쪽에 롤을 넘긴다 (판이 아니라 **표식**이 돈다)
-    roll: ship.outside.skyRoll,
+    // ★★★ v98 — **머리 위를 넘기면 반 바퀴를 보탠다** (`aimOf` 주석).
+    //   넘어간 것은 배가 뒤집힌 것이고, 뒤집히면 표식도 뒤집혀야 한다.
+    //   이 한 항이 없어서 넘긴 자세에서만 상자가 정확히 180도 헛돌았다
+    roll: ship.outside.skyRoll + (noseOver ? Math.PI : 0),
     // ★★★ v97 — **묶은 표식이 가리키는 자리.** 화면 복판이 아니라
     //   표적 위에 얹힌다 (사장님 「락온 위치가 완전 다르잔아」)
     lockAt: combat.radar.id !== null

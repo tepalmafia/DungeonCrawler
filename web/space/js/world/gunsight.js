@@ -42,6 +42,10 @@ import { SIGN } from '../game/chase-table.js';
 // ★★★ v75 — 「왼쪽/오른쪽」을 **방위 + 고도**로 (사장님 요청 · 고증)
 import { callOut } from '../game/radar-table.js';
 import { RADAR } from '../game/combat-table.js';
+// ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
+//   HUD 가 제 방식으로 재면 「상자는 여기, 진짜는 저기」가 난다 —
+//   v68·v93·v95 가 전부 그 병이었다
+import { relOf } from '../game/frame.js';
 import { azDiff } from '../game/target.js';
 
 /**
@@ -224,13 +228,14 @@ function draw(ctx, w, h, s) {
   //   글은 없다고 하는, 계기 둘이 서로 다른 말을 하는 상태다.
   //   숫자로는 안 잡힌다: 도구는 캔버스 글씨를 안 읽는다
   let any = null, anyD = 1e9;
+  const eye = { yaw: aimAz, pitch: aimEl };
   for (const t of s.list ?? []) {
-    // ★ **상대 각도.** 감아서 잰다 — 뒤에 있는 것이 반대쪽으로 튀면 안 된다
-    let raz = (t.az - aimAz) % 360;
-    if (raz > 180) raz -= 360;
-    if (raz < -180) raz += 360;
-    const rel = t.el - aimEl;
-    { const dd = Math.hypot(raz, rel); if (dd < anyD) { anyD = dd; any = t; } }
+    // ★★★ v98 — **상대 각도를 여기서 안 센다.** 조준(`aimedAt`)·레이더
+    //   (`radarBlips`)와 **같은 함수**가 준 값을 그린다. v97 까지 세 곳이
+    //   각자 뺐고, 그래서 「상자는 여기인데 잡히는 것은 저기」가 났다
+    const r0 = relOf(t, eye);
+    const raz = r0.az, rel = r0.el;
+    { const dd = r0.off; if (dd < anyD) { anyD = dd; any = t; } }
     const px0 = pxH(raz), py0 = pxV(rel);
     let x = cx + (px0 * cr - py0 * sr);
     let y = cy - (px0 * sr + py0 * cr);
@@ -243,7 +248,7 @@ function draw(ctx, w, h, s) {
       //   ★ 길이가 **얼마나 멀리 돌아야 하나**를 말한다: 뒤에 있을수록 길다
       const ang = Math.atan2(y - cy, x - cx);
       const R0 = Math.min(w, h) * 0.30, R1 = Math.min(w, h) * 0.44;
-      const away = Math.min(1, Math.hypot(raz, rel) / 180);
+      const away = Math.min(1, r0.off / 180);
       const foe = KINDS[t.kind]?.rams;
       ctx.strokeStyle = foe ? HOT : (t.inRange ? FG : DIM);
       ctx.lineWidth = Math.max(2, h * (foe ? 0.014 : 0.009));
@@ -258,7 +263,7 @@ function draw(ctx, w, h, s) {
     const r = Math.max(h * 0.035, h * 0.11 * (1 - t.dist / (TARGET.spawn[1] * 1.1)));
     ctx.strokeStyle = far ? 'rgba(143,230,192,.28)' : FG;
     glyph(ctx, t.kind, x, y, r);
-    const d = Math.hypot(raz, rel);
+    const d = r0.off;
     if (d < nearD) { nearD = d; near = { t, x, y, r, raz, rel }; }
     // ══ ★★ **쏠 수 있나를 색으로** (v82) ═══════════════════════════
     //  ★ 사장님 「**거리가 멀어서 공격이 안되는 것을 직관적으로** 알 수
@@ -293,8 +298,21 @@ function draw(ctx, w, h, s) {
   //    이 점이 곧 진짜 과녁이다
   if (near && s.lead && near.t.inRange) {
     const fl = near.t.dist / s.lead.speed;
-    const lx = cx + (near.raz + (near.t.vaz ?? 0) * fl) * sx;
-    const ly = cy - (near.rel + (near.t.vel ?? 0) * fl) * sy;
+    // ══ ★★★ v98 — **점과 상자가 같은 자로 찍힌다** ═══════════════════
+    //
+    //  ★ v97 까지 이 두 줄만 `* sx` · `* sy` 였다 — 즉 **선도점은 도에
+    //    정비례(선형)로, 표적 상자는 tan 으로** 찍고 있었다. 그리고
+    //    선도점만 **롤을 안 돌았다.**
+    //  ★★ 그래서 「점에 십자선을 얹어라」가 화면 가장자리와 기울어진
+    //    하늘에서 **거짓말**이 됐다: 판정은 선도점 기준인데(`combat.js
+    //    fire()`) 눈에 보이는 점은 다른 자리였다. 같은 두 줄이 v91 에
+    //    HUD 를, v95 에 락온 원을 틀리게 했던 그 자리다 — **찍는 자는
+    //    하나여야 한다**
+    const lraz = near.raz + (near.t.vaz ?? 0) * fl;
+    const lrel = near.rel + (near.t.vel ?? 0) * fl;
+    const lp = pxH(lraz), lq = pxV(lrel);
+    const lx = cx + (lp * cr - lq * sr);
+    const ly = cy - (lp * sr + lq * cr);
     ctx.strokeStyle = HOT;
     ctx.lineWidth = Math.max(1.6, h * 0.010);
     ctx.beginPath(); ctx.arc(lx, ly, h * 0.026, 0, Math.PI * 2); ctx.stroke();

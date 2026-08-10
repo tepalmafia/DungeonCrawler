@@ -11,6 +11,9 @@ import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
   DODGE, evadeGain, evadeDir, ENGAGE, PARTS, partOf, FLEE,
 } from './target-table.js';
+// ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
+//   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
+import { wrap, relOf } from './frame.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
 
@@ -20,14 +23,13 @@ const span = ([a, b], rnd) => a + rnd() * (b - a);
  *   v69 에 방위가 한 바퀴(±180)가 되면서, 179도와 −179도가 **2도 차이**인데
  *   그냥 빼면 358 이 된다. 조준·락온·레이더가 전부 이 값을 쓰므로, 안
  *   감으면 **기수 바로 뒤에서 조준이 통째로 죽는다** — 게다가 조용히
- *   죽는다(「저기 있는데 안 잡힌다」). 한 곳에 두고 다 여기를 부른다
+ *   죽는다(「저기 있는데 안 잡힌다」).
+ *
+ *   ★ v98 — 셈은 `frame.js wrap()` 으로 옮겼다. 이름은 남긴다: 부르는
+ *     곳이 열 군데가 넘고, **이름을 바꾸는 것은 갈아 끼우는 것이 아니라
+ *     흔드는 것**이다. 셈이 한 곳에 있으면 이름은 둘이어도 안 갈라진다
  */
-export function azDiff(a, b) {
-  let d = (a - b) % 360;
-  if (d > 180) d -= 360;
-  if (d < -180) d += 360;
-  return d;
-}
+export const azDiff = (a, b) => wrap(a - b);
 
 /**
  * 하나 새로 띄운다.
@@ -337,9 +339,9 @@ export function stepSky(sky, dt, {
     //  ★ 정면으로 파고들거나 뒤로 물러나는 것은 회피가 아니다 (빔 기동).
     //    `evade` 는 이미 급기동 배수가 곱해져서 온다 (`main.js`)
     if (evade) {
-      const relAz = azDiff(s.az, sky.noseAz ?? 0);
-      const relEl = s.el - (sky.noseEl ?? 0);
-      s.dodge += evadeGain(relAz, relEl, evade.x ?? 0, evade.y ?? 0) * dt;
+      // ★ v98 — 기수 기준으로 옮기는 일도 `frame.js` 가 한다
+      const r = relOf(s, { yaw: sky.noseAz ?? 0, pitch: sky.noseEl ?? 0 });
+      s.dodge += evadeGain(r.az, r.el, evade.x ?? 0, evade.y ?? 0) * dt;
     }
     if (s.t > 0) continue;
     sky.incoming.splice(i, 1);
@@ -401,8 +403,8 @@ export function threatNow(sky, sx = 0, sy = 0) {
     if (!best || s.t < best.t) best = s;
   }
   if (!best) return null;
-  const relAz = azDiff(best.az, sky.noseAz ?? 0);
-  const relEl = best.el - (sky.noseEl ?? 0);
+  const r = relOf(best, { yaw: sky.noseAz ?? 0, pitch: sky.noseEl ?? 0 });
+  const relAz = r.az, relEl = r.el;
   return {
     id: best.id, t: +best.t.toFixed(2), relAz, relEl,
     dodge: best.dodge, need: DODGE.need,
@@ -462,7 +464,14 @@ export function hitPart(t, { off = 0, tol = 6, dmg = 1, rnd = Math.random } = {}
   return { part, dmg: +real.toFixed(2), killed: t.hp <= 0 };
 }
 
-/** 지금 겨눈 쪽에 **제일 가까운 것** — 조준경이 강조한다 */
+/**
+ * 지금 겨눈 쪽에 **제일 가까운 것** — 조준경이 강조한다.
+ *
+ * ★★★ v98 — 재는 일은 **한 줄도 여기서 안 한다.** `relOf()` 가 준
+ *   `az·el·off·behind` 를 읽기만 한다. 그러면 레이더·HUD·3D 가 쓰는 값과
+ *   **같은 함수에서 나온 같은 값**이라, v93 의 「보이는 데는 저기인데
+ *   잡히는 것은 여기」가 원리적으로 못 생긴다
+ */
 export function aimedAt(sky, az, el) {
   // ══ ★★★ v94 — **탄이 지나가는 길에 있는 것이 맞는다** ═══════════════
   //
@@ -480,26 +489,26 @@ export function aimedAt(sky, az, el) {
   //    ② 그중 **제일 가까운 것**이 맞는다
   //    ③ 아무것도 안 걸리면 예전처럼 제일 가운데 있는 것을 준다
   //       (조준 보조·광학이 그걸 읽으므로 없애면 안 된다)
-  let best = null, bestD = 1e9, bestRel = 0;
-  let onPath = null, onPathDist = 1e9, onPathRel = 0, onPathOff = 0;
+  const eye = { yaw: az, pitch: el };
+  let best = null, bestS = null;
+  let onPath = null, onPathS = null;
   for (const t of sky.list) {
-    // ★ **감아서 잰다** — 안 그러면 기수 바로 뒤에서 조준이 죽는다
-    const rel = azDiff(t.az, az);
-    const d = Math.hypot(rel, t.el - el);
-    if (d < bestD) { bestD = d; best = t; bestRel = rel; }
+    // ★ 감기·벗어난 각·뒤인지 — **셋 다 여기서 안 센다** (`frame.js`)
+    const r = relOf(t, eye);
+    if (!bestS || r.off < bestS.off) { bestS = r; best = t; }
     // ★ 뒤에 있는 것은 길이 아니다 (90도 넘으면 탄이 그리로 안 간다)
-    if (d <= tolOf(t) && Math.abs(rel) < 90 && t.dist < onPathDist) {
-      onPathDist = t.dist; onPath = t; onPathRel = rel; onPathOff = d;
+    if (r.off <= tolOf(t) && !r.behind && (!onPathS || t.dist < onPath.dist)) {
+      onPath = t; onPathS = r;
     }
   }
   if (onPath) {
-    return { t: onPath, off: onPathOff, relAz: onPathRel, relEl: onPath.el - el, onPath: true };
+    return { t: onPath, off: onPathS.off, relAz: onPathS.az, relEl: onPathS.el, onPath: true };
   }
   // ★★ v69 — `relAz`·`relEl` 을 같이 준다. 레이더 원뿔은 **기수 기준**인데
   //   v68 까지 `inCone(t.az, t.el)` 로 **세상 기준** 값을 넣고 있었다.
   //   그때는 기수가 ±62 를 못 벗어나 티가 안 났다 — 이제 한 바퀴를 돌므로
   //   안 고치면 「뒤를 보고 있는데 앞의 것이 원뿔 안이라고 나온다」
-  return best ? { t: best, off: bestD, relAz: bestRel, relEl: best.el - el } : null;
+  return best ? { t: best, off: bestS.off, relAz: bestS.az, relEl: bestS.el } : null;
 }
 
 /** 이만큼 벗어나도 맞나 (도) — 큰 것은 넉넉하다 */
