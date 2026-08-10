@@ -224,7 +224,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 93;
+export const VERSION = 94;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1281,7 +1281,9 @@ let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다�
 let liftHeldWas = false;  // 이륙은 제 셈을 갖는다 (눌린 순간을 두 곳에서 본다)
 let autoHeldWas = false;  // 자동 항법 스위치도 제 셈을 갖는다
 let gripping = false;     // ★ 조준 손잡이를 잡고 있나 — WASD 가 포탑을 돌린다
-let fireHeldWas = false;  // 쏘는 것도 제 셈을 갖는다 (Space)
+let fireHeldWas = false;  // 쏘는 것도 제 셈을 갖는다 (마우스 왼쪽)
+/** ★ v94 — **오른쪽 단추(보조 무기)**를 지난 프레임에 누르고 있었나 */
+let altFireWas = false;
 let wrecked = false;      // ★ 행성을 박았다 — 이 게임의 유일한 끝
 /** ★ 도착했다 — 끝 화면을 한 번만 띄우려고 (8판 · PLAN2H §9) */
 let ended = false;
@@ -2343,6 +2345,40 @@ function interactStep(dt) {
   //  같은 말이다. **「잡힌 것이 있나」로 가른다** — 위 일어나기가 이미
   //  쓰는 규칙이고, 실제 조종간도 계기를 누르는 손과 방아쇠가 다르다
   const firePressed = steering && input.hold && !aimName;
+  // ══ ★★★ v94 — **오른쪽 단추 = 보조 무기 · 휠 클릭 = 표적** ═══════════
+  //
+  //  사장님 「**다른 비행시뮬레이션 게임을 찾아서 벤치마크해서 그대로 적용**」
+  //
+  //  ★ 셋을 찾아 견줬다 (2026-08-10):
+  //      Elite Dangerous  마우스 피치+요 · Q/E 롤 · 좌클릭 주 · **우클릭 보조**
+  //      Star Citizen     마우스 피치+요 · Q/E 롤 · **T 조준선 · Tab 순환**
+  //      Everspace 2      좌클릭 주 · **우클릭 보조** · **휠 클릭 락온** · Shift 부스터
+  //    → **우클릭 보조 무기**가 3/3, **휠 클릭 표적**이 Everspace 2 정석이다.
+  //  ★★ 우리는 우클릭이 **둘러보기**였다 (v90 에 내가 붙인 것). 옮긴다 —
+  //    벤치마크가 셋 다 같은 자리를 쓰면 그건 관습이고, 관습을 어기면
+  //    **처음 잡는 사람이 반드시 헤맨다.** 둘러보기는 **C** 로 간다.
+  //
+  //  ══ ★ 벤치마크와 **일부러 다르게 둔 둘** — 적어 둔다 ═══════════════
+  //    ① **W/S 가 추력이 아니라 기수 위아래**다. 정석은 W/S 추력인데,
+  //       사장님이 v86 에 「**키보드 WS로 상하 조정되게 하라고**」 세 판에
+  //       걸쳐 말씀하셨다. **사장님 손이 정석보다 먼저다.** 추력은 Space.
+  //    ② **급기동(Shift)과 급가속(R)이 따로**다. 정석은 Shift 하나인데,
+  //       사장님이 v73 에 「**급가속 조작은 따로** 하도록」이라고 하셨다.
+  //       기수를 돌리는 것과 앞으로 튀어나가는 것은 다른 결심이기도 하다.
+  //    → 벤치마크는 **모르고 다른 것**과 **알고 다른 것**을 갈라 놓으려고
+  //      한다. 위 둘은 알고 다른 것이다.
+  //  ★ 무기 고르기(1·2·3)는 그대로 둔다 — 우클릭은 **지금 고른 유도탄**을
+  //    쏜다. 그래야 손이 숫자열까지 안 간다
+  const altPressed = steering && input.alt && !aimName;
+  if (helmSat && altPressed && !altFireWas) {
+    // ★ 레이저(1번)를 들고 있으면 **유도탄으로 바꿔서** 쏜다 —
+    //   「보조 무기」의 뜻이 그것이다
+    if (weaponOf(combat).key === 'laser') pickSlot(combat, 3);
+    fireGun();
+  }
+  altFireWas = altPressed;
+  // ★ 휠 클릭 — **조준선 안의 것을 묶는다** (T 와 같은 일 · 손이 안 옮겨간다)
+  if (helmSat && input.midPress) pickTarget(combat, sky.list, aimAz, aimEl, false);
   // ══ ★★★ **무기 고르기 1 · 2 · 3** (v64) ═════════════════════
   //  ★ 조종석에 앉아 있을 때만 먹는다 — 걷다가 눌러도 아무 일이 없어야
   //    「이 키가 뭐지」가 안 생긴다. 그리고 **바뀌면 말한다**
@@ -4362,7 +4398,10 @@ function frame(now) {
   //  ★★ 그래서 **누르고 있는 동안만** 스틱을 놓고 고개를 돌린다.
   //    새 상태를 안 만든다 — 손을 떼면 곧바로 조종간이다. 실제 조종사도
   //    계기를 볼 때 고개를 돌리지 조종간을 놓지 않는다
-  const freeLook = steering && input.look;
+  // ★★★ v94 — **둘러보기는 C** (벤치마크: 오른쪽 단추는 셋 다 보조 무기다).
+  //   v90 에 오른쪽 단추로 냈던 것을 옮긴다 — 실제 시뮬의 free-look 도
+  //   보통 따로 난 키이지 발사 단추가 아니다
+  const freeLook = steering && input.keys.has('KeyC');
   if (steering && !freeLook) {
     // ══ ★★★ **가상 조종간** — 마우스+키보드 비행 시뮬의 정석 (v80) ══
     //
