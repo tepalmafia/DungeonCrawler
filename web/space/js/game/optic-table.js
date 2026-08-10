@@ -223,6 +223,10 @@ export function readOut(kind) {
   if (g.ore) has.push(`광석 ${g.ore}`);
   if (g.parts) has.push(`부품 ${g.parts}`);
   if (g.food) has.push(`식량 ${g.food}`);
+  // ★★★ v99 — **아크 전지를 맨 앞에 적는다.** 이 줄이 「요격기가 더
+  //   귀찮은데 왜 포함을 먼저 깨나」의 답이고, 안 적으면 그 갈래가
+  //   **눈에 안 보인다** — 규칙에만 있고 화면에 없는 것은 없는 것이다
+  if (g.arc) has.unshift(`★ 아크 전지 ${g.arc}`);
   const loot = lootOf(kind);
   return {
     name: k.name,

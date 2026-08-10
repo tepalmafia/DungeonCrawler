@@ -1141,6 +1141,44 @@ console.log('\n[6j] ★★ **회수** — 꾸러미 · 그물 · 지원 시계 (
   await S(() => SPACE.clearSky());
 }
 
+console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져나갈 길이 있나 (v99)');
+{
+  // ★ 여태 견줌은 「절망 — **아크를 채우고 빠진다**」고 말해 왔는데,
+  //   v98 까지 그 아크가 게임에 **없었다.** 여기가 그 말이 참이 되는 자리다
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  await S(() => { SPACE.setPower('thrust', true); });
+
+  // ① 전지가 없으면 — **왜 안 되는지 말한다**
+  const no = await S(() => SPACE.jump());
+  ok(!no.ok && no.why === 'cells', `① 전지가 없으면 **까닭을 말한다** (${no.why})`);
+  ok((await S(() => SPACE.ai.line)) !== null, '② 조용히 안 된 것이 아니라 **말이 떴다**');
+
+  // ③ 전지를 싣고 구간 한복판에 선다
+  await S(() => { SPACE.putArc(8); SPACE.putLegT(120); });
+  const b0 = await S(() => ({ t: SPACE.route.t, need: SPACE.route.need, sink: SPACE.sink.at }));
+  const go = await S(() => SPACE.jump());
+  ok(go.ok, '③ 전지가 있으면 **걸린다**');
+  ok((await S(() => SPACE.arc)).cells === 8 - go.cells,
+    `④ ★★ **전지를 지금 태운다** (8 → ${8 - go.cells}) — 다 재고 태우면 무르기가 공짜다`);
+
+  // ⑤ 재는 동안 열이 저장고로 간다
+  await until(() => SPACE.sink.at > b0.sink + 0.005, 60, '열');
+  ok((await S(() => SPACE.sink.at)) > b0.sink,
+    '⑤ ★★ 재는 동안 **열이 저장고에 쌓인다** — 뛴 값을 도착지에서 치른다');
+
+  // ⑥ 다 재면 뛰고, 도착하면 구간을 건너뛰어 있다
+  await S(() => SPACE.putCharge());
+  ok(await until(() => SPACE.arc.jumps > 0, 220, '도약'), '⑥ 다 재면 **뛴다**');
+  const a1 = await S(() => ({ t: SPACE.route.t, arc: SPACE.arc }));
+  ok(a1.t > b0.t + b0.need * 0.3,
+    `⑦ ★★★ **구간을 건너뛰었다** (${b0.t.toFixed(0)} → ${a1.t.toFixed(0)}초)`
+    + ' — 그만큼의 적도 재료도 못 만난다. 이것이 이 계통의 값이다');
+  ok(a1.arc.cool > 0, `⑧ ★ 대기가 걸린다 (${a1.arc.cool}초) — 연달아 뛰어 구간을 통째로 못 넘긴다`);
+  const again = await S(() => SPACE.jump());
+  ok(!again.ok && again.why === 'cool', '⑨ ★ 바로 또 누르면 **왜 안 되는지 말한다**');
+}
+
 console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
 {
   // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은

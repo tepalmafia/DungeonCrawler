@@ -113,8 +113,17 @@ import { autoZoom, OPTIC } from './game/optic-table.js';
 import { NET, PACK, CALL, packWord, callIn, WAYS, timeOf } from './game/salvage-table.js';
 // ══ ★★★ **화물 · 아이템 열여섯** (v83 · docs/space/ITEMS.md) ═══════════
 import { HOLD, holdWord, nameOf as itemName } from './game/cargo-table.js';
+// ══ ★★★ v99 — **아크 도약** (`docs/space/ARC.md` · `tools/space-arc.js`) ══
+//  ★ 사장님 「미구현 구현해」. 표에만 있고 게임에 없던 마지막 하나다 —
+//    그런데 견줌은 「절망」일 때 「아크를 채우고 빠진다」고 **말하고**
+//    있었다. 없는 것을 하라고 말하는 계기를 없앤다
+import { PHASE as APHASE, ARC, WHY as ARC_WHY, SAY as ARC_SAY, whyNotJump } from './game/arc-table.js';
 import {
-  makeCargo, put as cargoPut, useOf, stepCargo, word as cargoWord,
+  makeArc, beginCharge, stopCharge, stepArc as stepArcS, heatOf as arcHeat,
+  burstHeat as arcBurst, chargeK, charging, jumping, summary as arcSummary,
+} from './game/arc.js';
+import {
+  makeCargo, put as cargoPut, useOf, stepCargo, word as cargoWord, take as cargoTake,
   summary as cargoSummary, used as cargoUsed, left as cargoLeft,
 } from './game/cargo.js';
 import {
@@ -227,7 +236,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 98;
+export const VERSION = 99;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -402,6 +411,31 @@ addEventListener('keydown', (e) => {
   //    ★★ 이 저장소가 v79→v85 에 좌클릭으로 똑같이 겪었다: **두 판이
   //      각자 맞았고 겹치는 것을 아무도 안 봤다.** 키를 새로 붙일 때는
   //      `grep -oE "'Key[A-Z]'"` 로 **쓰이는 것을 먼저 센다**
+  // ══ ★★★ v99 — **J · 아크 도약** ═════════════════════════════════════
+  //
+  //  ★ 키를 붙이기 전에 **먼저 셌다** (v93 에 B 로 부딪히고 적어 둔 규약).
+  //    쓰이는 것이 A C D E M Q R S T V W X Z · B F G · Shift Space Tab 이라
+  //    J 가 비어 있었다. 마침 **이 장르의 도약 키**다 (Elite 의 프레임 시프트).
+  //
+  //  ★★ **누르면 재기 시작 · 다시 누르면 내린다.** 누르고 있는 것이
+  //    아니다 — 26초를 누르고 있으라고 하면 그 동안 조종을 못 한다.
+  //    「재면서 버틴다」가 이 계통의 전부인데 그걸 없애는 셈이 된다
+  if (!helpOpen && !paused && e.code === 'KeyJ') {
+    e.preventDefault();
+    if (charging(arcS)) { stopCharge(arcS); say(ai, ARC_SAY.stop, 'tell'); return; }
+    const have = cargo.items.arc ?? 0;
+    const r = beginCharge(arcS, {
+      cells: have, sinkAt: sinkAt({ sink }), power: !!power.thrust,
+      landed: land.step !== LSTEP.NONE,
+    });
+    if (!r.ok) { say(ai, ARC_WHY[r.why], 'warn'); return; }
+    // ★★ **전지는 지금 태운다.** 다 재고 나서 태우면 중간에 그만뒀을 때
+    //   공짜가 되고, 그러면 「일단 걸어 두기」가 늘 정답이 된다
+    cargoTake(cargo, 'arc', ARC.cells);
+    say(ai, ARC_SAY.charge, 'alarm');
+    audio?.event('tube');
+    return;
+  }
   if (!helpOpen && !paused && e.code === 'KeyV') {
     e.preventDefault();
     if (dropS.phase === DPHASE.WINDOW && !warhead.armed) say(ai, DSAY.armFirst, 'warn');
@@ -654,6 +688,8 @@ let radarSeen = [];
 const warhead = makeWarhead();
 /** ★★★ v93 — 투하 장면 (마지막 구간) */
 const dropS = makeDrop();
+/** ★★★ v99 — 아크 도약. 전지는 화물칸에서 태우고, 열은 저장고로 간다 */
+const arcS = makeArc();
 /** ★★★ 급가속 (v73) — R 을 누르고 있으면 튀어나간다 */
 const boost = makeBoost();
 /**
@@ -782,6 +818,21 @@ function aimOf(pitchDeg, yawDeg) {
   //  ★ 벗어난 각(`off`)은 롤과 상관이 없어서 **조준·락온은 멀쩡했다.**
   //    그래서 여태 「맞기는 맞는데 상자가 엉뚱한 데 있다」로만 보였다
   return { az: wrap(az), el, over };
+}
+
+/**
+ * ★ 지금 도약이 왜 안 되나 — 계기와 검사가 **같은 것**을 읽는다.
+ *   화면에서 따로 판정하면 「단추는 빨간데 눌러 보면 되는」 상태가 난다
+ */
+function whyNotJumpNow() {
+  return whyNotJump({
+    cells: cargo.items.arc ?? 0,
+    sinkAt: sinkAt({ sink }),
+    power: !!power.thrust,
+    cool: arcS.cool,
+    phase: arcS.phase,
+    landed: land.step !== LSTEP.NONE,
+  });
 }
 
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
@@ -978,6 +1029,8 @@ function takeHits(list) {
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
   route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot, salvage, cargo,
+  // ★ v99 — 아크 도약. `save-table.js FIELDS.arc` 가 칸을 고른다
+  arc: arcS,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -1116,6 +1169,11 @@ function showEnd() {
     dropAway: Math.round(dropS.away),
     dropHurt: dropS.hurt,
     missed: dropS.missed,
+    // ★★★ v99 — **몇 번 뛰었고 얼마를 건너뛰었나.** 끝 화면은 점수가
+    //   아니라 **목록**이다 (PLAN2H §9) — 「살아서 왔지만 이만큼을
+    //   지나쳤다」가 한 줄로 남아야 도약이 공짜가 아니었음이 읽힌다
+    jumps: arcS.jumps,
+    skipped: Math.round(arcS.skipped),
   };
   endWhat = w;
   endBox.querySelector('b').textContent = END.title;
@@ -2891,7 +2949,7 @@ function systemsStep(dt, valveOpen, regionMult) {
 
   // 정비실 진단대 — **다음에 무엇이 터지나.** 조종석·관측실과 겹치지 않는다
   // ★ 흉터도 여기 뜬다 — **일이 아니라 배의 상태**라 손목이 아니라 진단대다
-  // ★★★ v69 — **배의 상태 여섯 줄**을 한 번 만들어 두 곳에 준다.
+  // ★★★ v69 — **배의 상태 여섯 줄**(v99 부터 일곱)을 한 번 만들어 두 곳에 준다.
   //   조종석 HUD(앉으면 뜬다)와 정비실 작업대(걸어가서 본다)가 **같은 것**을
   //   본다 (사장님 「운전석에 탔을때 외에도 다른 모니터에서 확인」).
   //   여기서 한 번만 짓는다 — 두 곳에서 따로 지으면 반드시 갈라진다
@@ -2907,6 +2965,15 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
     //   획득 아이템이 … 조정석 화면에서 획득 리스트를」)
     cargo: cargoSummary(cargo),
+    // ══ ★★★ v99 — **아크 도약** (일곱째 줄) ═══════════════════════════
+    //  ★ 여기에 안 넣고 있었다. `SPACE.arc` 는 8 을 말하는데 계기는
+    //    「전지 0/6」을 그리고 있었고, **화면을 찍어서 잡았다** —
+    //    규칙 쪽 검사는 전부 초록이었다 (계기 글씨를 못 읽으므로).
+    //    「화면에 보이는 것은 화면으로 확인한다」가 또 한 번 맞았다
+    arc: {
+      ...arcSummary(arcS),
+      cells: cargo.items.arc ?? 0, need: ARC.cells, blocked: whyNotJumpNow(),
+    },
   };
   // ★★ v71 — 크레이들이 **다섯 칸의 불**과 탄두 온도를 그린다
   ship.cradle.update(headSummary(warhead));
@@ -3124,6 +3191,33 @@ window.SPACE = {
   // ══ ★★★ v81 — **회수** (space-salvage.js · endtoend 가 읽는다) ══════
   get salvage() { return { ...salvSummary(salvage), seen: ship.outside.salvage?.seen ?? null }; },
   // ══ ★★★ v83 — **화물칸 · 들어온 목록** (space-cargo.js · endtoend) ══
+  /** ★★★ v99 — 아크 도약. 검사(`space-arc.js`)와 점검 모드가 읽는다 */
+  get arc() {
+    return {
+      ...arcSummary(arcS),
+      /** 지금 실려 있는 전지 · 한 번에 드는 수 */
+      cells: cargo.items.arc ?? 0, need: ARC.cells,
+      /** 왜 지금 못 뛰나 (없으면 null) — 화면이 이 한 줄을 쓴다 */
+      blocked: whyNotJumpNow(),
+    };
+  },
+  /** 검사가 전지를 실어 놓는다 — 회차를 다 돌지 않으려고 */
+  putArc(n = ARC.cells) { cargoPut(cargo, { arc: n }); return cargo.items.arc ?? 0; },
+  /** 검사가 J 를 누른 것과 같게 — 헤드리스에서 키가 안 먹는 자리가 있다 */
+  jump() {
+    const have = cargo.items.arc ?? 0;
+    const r = beginCharge(arcS, {
+      cells: have, sinkAt: sinkAt({ sink }), power: !!power.thrust,
+      landed: land.step !== LSTEP.NONE,
+    });
+    if (r.ok) cargoTake(cargo, 'arc', ARC.cells);
+    return r;
+  },
+  /** 검사가 축전기를 다 채워 놓는다 — 26초를 헤드리스로 안 센다 */
+  // ★ 기본값이 `charge − 0.2` 였는데, 헤드리스 시계가 실제의 **1/20** 이라
+  //   0.2 게임초를 채우는 데 실제 4초가 든다 — 검사가 기다리다 지쳤다.
+  //   거의 끝까지 밀어 놓는다 (한 프레임이면 넘어간다)
+  putCharge(t = ARC.charge - 0.01) { if (charging(arcS)) arcS.t = t; return arcSummary(arcS); },
   get cargo() { return { ...cargoSummary(cargo), word: holdWord(cargoUsed(cargo)) }; },
   /** 검사가 회수 방법을 골라 쓴다 */
   grab(way = 'net') {
@@ -3615,6 +3709,9 @@ window.SPACE = {
     return {
       phase: route.phase, leg: route.leg, press: +route.press.toFixed(1),
       progress: +progress(route).toFixed(3), fork: route.fork?.key ?? null,
+      // ★ v99 — 구간 시계. 아크 도약이 **이것을 앞으로 민다**(건너뛴다).
+      //   `progress` 만으로는 「얼마나 건너뛰었나」를 초로 못 잰다
+      t: +route.t.toFixed(1), need: +(route.need ?? 0).toFixed(1),
       offer: route.offer.map((o) => o.key), left: legsLeft(route),
       contactAt: +contactAt(route).toFixed(1), blind: isBlind(route),
     };
@@ -4309,6 +4406,12 @@ window.SPACE = {
   pick(key) { const ok = chooseFork(route, key); if (ok) ship.outside.setRegion(regionOf(route)); return ok; },
   /** 구간을 끝까지 밀어 놓는다 — 거점 도착을 실제로 내 보려고 */
   skipLeg() { route.t = route.need; },
+  /**
+   * ★ v99 — 구간 **한복판**에 세워 놓는다.
+   *   `seekLegEnd` 는 끝에 세우므로 **건너뛰기를 잴 수가 없다** (앞으로
+   *   밀어도 need 에서 잘린다). 아크 도약을 재려면 가운데가 필요하다
+   */
+  putLegT(t = 0) { route.t = Math.max(0, Math.min(route.need, t)); return { t: route.t, need: route.need }; },
   setPress(v) { route.press = v; },
   /** 소리가 켜졌나 · 지금 얼마나 떠나 — 검사와 손보기용 */
   get audio() {
@@ -4826,6 +4929,41 @@ function frame(now) {
       audio?.event('hit');
     }
     if (ev === 'over') { clearRaw(); showEnd(); }
+  }
+
+  // ══ ★★★ v99 — **아크 도약** (재기 → 뛰기 → 도착) ═══════════════════
+  //
+  //  ★ 견줌이 「절망」일 때 「아크를 채우고 빠진다」고 말해 왔다
+  //    (`might-table.js ODDS`). v98 까지 그 말이 **거짓말**이었다.
+  //
+  //  ★★ 값은 넷이고 **셋을 여기서 치른다** — 열(저장고) · 시간(무방비) ·
+  //    건너뛴 자리. 전지는 누를 때 이미 태웠다
+  {
+    // ★ 재는 동안 열이 **저장고로** 간다 — 선체가 아니다. 라디에이터를
+    //   열어야 우주로 나가므로, 도착하면 잠깐 눈에 띈다 (v58 규약)
+    sink = Math.min(SINK.max, sink + arcHeat(arcS, dt));
+    const aev = stepArcS(arcS, dt, { sinkAt: sinkAt({ sink }), legSec: route.need || LEG.seconds });
+    if (aev === 'jump') {
+      sink = Math.min(SINK.max, sink + arcBurst());
+      say(ai, ARC_SAY.jump, 'alarm');
+      audio?.event('boost');
+    }
+    if (aev === 'abort') { say(ai, ARC_WHY.sink, 'warn'); }
+    if (aev === 'land') {
+      // ══ ★★★ **건너뛴다** — 구간 시계를 앞으로 민다 ═══════════════
+      //  ★ 구간을 **건너뛰지 않는다.** 시계만 민다 — 구간을 통째로
+      //    넘기면 12구간이 6구간이 되고, 장면 배치(`scene-table.js`)가
+      //    통째로 어긋난다. 여기가 제일 부수기 쉬운 자리였다
+      route.t = Math.min(route.need, route.t + (route.need || LEG.seconds) * ARC.skip);
+      // ★★ 건너뛴 자리에 있던 것들은 **없던 일이 된다.** 그래야
+      //   「살았지만 못 채웠다」가 성립한다 — 이 계통의 심장이다
+      sky.list = sky.list.filter((t) => !TKINDS[t.kind]?.shoots && !TKINDS[t.kind]?.rams);
+      sky.incoming.length = 0;
+      say(ai, ARC_SAY.land, 'alarm');
+      // ★ 손해를 **말해 준다.** 안 말하면 손해인 줄 모르고 습관이 된다
+      setTimeout(() => say(ai, ARC_SAY.cost, 'tell'), 2200);
+      audio?.event('escaped');
+    }
   }
 
   if (rev === 'end') {

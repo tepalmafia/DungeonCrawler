@@ -21,6 +21,8 @@ export function endList(w) {
   const safe = {
     minutes: 0, legs: 0, runs: 0, fixed: 0, trips: 0, hits: 0, shakyMin: 0,
     scars: [], open: [], food: 0, parts: 0, ore: 0,
+    // ★ v99 — 아크 도약. 없으면 0 이라 그 줄이 안 뜬다 (`ending-table.js`)
+    jumps: 0, skipped: 0,
     ...w,
   };
   return GROUPS.map((g) => ({
