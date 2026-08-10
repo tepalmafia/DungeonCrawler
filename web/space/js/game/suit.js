@@ -79,6 +79,16 @@ export function stepSuit(s, dt, { vacuum = false } = {}) {
 }
 
 /** ★ 진공에 나가도 되나 — 이 한 줄이 우주복이 하는 일 전부다 */
+/**
+ * ★★★ v83 — **공기를 채운다** (산소 탱크 · 흡수통을 회수하면).
+ *   사장님 기획의 「숨」 갈래가 배에 닿는 자리다 (`docs/space/ITEMS.md`).
+ *   ★ 위로는 못 넘긴다 — 탱크를 스무 개 실어도 우주복은 한 벌이다
+ */
+export function refill(s, sec) {
+  s.air = Math.min(SUIT.air, s.air + Math.max(0, sec || 0));
+  return s.air;
+}
+
 export const canEva = (s) => s.on && s.air > 0;
 
 /** 손이 얼마나 더딘가 — 굶주림과 **곱해진다** (둘 다면 정말 못 한다) */

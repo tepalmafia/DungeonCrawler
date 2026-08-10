@@ -7,7 +7,7 @@
 //
 //  ★ three.js 를 안 쓴다.
 // ══════════════════════════════════════════════════════════════════════════
-import { NET, PACK, CALL, packOf, callIn, inReach, reelTime, WHY } from './salvage-table.js';
+import { NET, PACK, CALL, packOf, callIn, inReach, reelTime, WHY, WAYS, timeOf } from './salvage-table.js';
 import { azDiff } from './target.js';
 
 export function makeSalvage() {
@@ -88,7 +88,8 @@ export function stepSalvage(s, dt, { moving = true } = {}) {
       s.net.t -= dt;
       if (s.net.t <= 0) {
         s.net.phase = 'reel';
-        s.net.t = reelTime(p.dist);
+        // ★ v83 — **방법이 시간을 정한다** (팔 1.2초 · 그물 거리비례 · 로봇 12초)
+        s.net.t = s.net.sec ?? reelTime(p.dist);
         s.net.total = s.net.t;
       }
     } else {
@@ -126,20 +127,32 @@ export function aimedPack(s, az, el, tol = 26) {
  * ★★ **쏜다** — 왜 못 쏘는지도 말한다 (v64 규약).
  * @returns { ok, why?, pack? }
  */
-export function fireNet(s, { az, el, seated = true } = {}) {
+export function fireNet(s, { az, el, seated = true, way = 'net' } = {}) {
   if (!seated) return { ok: false, why: 'seat' };
   if (s.net) return { ok: false, why: 'busy' };
   if (s.cool > 0) return { ok: false, why: 'cool' };
   const p = aimedPack(s, az, el);
   if (!p) return { ok: false, why: 'none' };
-  if (!inReach(p.dist)) return { ok: false, why: 'far' };
-  s.net = { pack: p.id, phase: 'out', t: p.dist / NET.outSpeed, total: 0 };
-  return { ok: true, pack: p };
+  // ══ ★★★ v83 — **방법이 셋이다** (사장님 「도킹을 하던지 로봇을 보내던지」)
+  //  그물 하나만 있으면 「주우려면 도망 못 친다」가 늘 같은 무게라
+  //  결심이 하나뿐이다. 셋이면 **거리 · 빠르기 · 묶임**을 저울질하게 된다
+  const w = WAYS[way] ?? WAYS.net;
+  const sec = timeOf(w.key, p.dist);
+  if (sec === null) return { ok: false, why: 'far', way: w };
+  s.net = {
+    pack: p.id, phase: 'out', t: p.dist / NET.outSpeed, total: 0,
+    way: w.key, sec,
+  };
+  return { ok: true, pack: p, way: w };
 }
 
 /** 지금 감고 있나 — **추진이 묶인다** (`NET.holdsThrust`) */
 export const reeling = (s) => !!(s.net && s.net.phase === 'reel');
-export const thrustHeld = (s) => NET.holdsThrust && reeling(s);
+/**
+ * ★★★ **추진이 묶이나 — 방법이 정한다** (v83).
+ *   팔과 그물은 묶고, **로봇은 안 묶는다.** 그것이 로봇을 느리게 둔 값이다
+ */
+export const thrustHeld = (s) => reeling(s) && (WAYS[s.net?.way]?.holds ?? NET.holdsThrust);
 
 /** 지원이 곧 오나 — 경보 */
 export const callWarn = (s) => s.call > 0 && s.call <= CALL.warn;
@@ -152,7 +165,7 @@ export function summary(s) {
       az: +p.az.toFixed(1), el: +p.el.toFixed(1), dist: +p.dist.toFixed(0),
       t: +p.t.toFixed(1), part: p.part ?? null, has: { ...p.has },
     })),
-    net: s.net ? { pack: s.net.pack, phase: s.net.phase, t: +s.net.t.toFixed(2) } : null,
+    net: s.net ? { pack: s.net.pack, phase: s.net.phase, t: +s.net.t.toFixed(2), way: s.net.way ?? 'net' } : null,
     cool: +s.cool.toFixed(2),
     call: +s.call.toFixed(1), warn: callWarn(s),
     reeling: reeling(s), thrustHeld: thrustHeld(s),

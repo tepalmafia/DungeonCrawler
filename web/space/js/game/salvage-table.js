@@ -44,6 +44,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { KINDS } from './target-table.js';
 import { mightOf, lootOf } from './might-table.js';
+import { WAYS, timeOf, nameOf } from './cargo-table.js';
 
 export const NET = {
   /**
@@ -125,20 +126,42 @@ export function packOf(kind) {
   if (!k) return null;
   const g = k.gives ?? {};
   const l = lootOf(kind);
-  return {
-    weapon: l.weapon, armor: l.armor,
-    ore: g.ore ?? 0, parts: g.parts ?? 0, food: g.food ?? 0,
-  };
+  // ══ ★★★ v83 — **덩어리가 아니라 아이템으로 나온다** ═══════════════
+  //
+  //  v81 은 { weapon, armor, ore, parts, food } 덩어리였다. 덩어리는
+  //  **고를 것을 안 만든다** — 광석 30 과 40 사이에는 결심이 없다.
+  //  이제 `cargo-table.js` 의 아이템으로 나오고, **아이템에는 무게가**
+  //  있으므로 「이걸 실을까 저걸 실을까」가 생긴다 (`docs/space/ITEMS.md`).
+  //
+  //  ★ 어느 아이템으로 바꾸나 — **덩어리가 이미 정한 값을 옮긴다.**
+  //    새 숫자를 손으로 안 적는다 (표가 둘이면 갈라진다)
+  const out = {};
+  const add = (key, n) => { if (n > 0) out[key] = (out[key] ?? 0) + n; };
+  add('weapon', l.weapon);
+  add('armor', l.armor);
+  // 광석 22 가 한 덩이 (`cargo-table.js ITEMS.ore.use.ore`)
+  add('ore', Math.round((g.ore ?? 0) / 22));
+  // 부품은 **넷으로 갈라진다** — 화물의 36.4% 가 정비용이라는 값이 근거다.
+  // 큰 것 하나(ORU 3)를 먼저 채우고 나머지를 잔챙이로
+  const parts = g.parts ?? 0;
+  add('oru', Math.floor(parts / 3));
+  const rest = parts % 3;
+  add('seal', rest >= 1 ? 1 : 0);
+  add('wire', rest >= 2 ? 1 : 0);
+  // 식량 26 이 한 팩 · 나머지는 비상 배급(9)
+  const food = g.food ?? 0;
+  add('meal', Math.floor(food / 26));
+  add('ration', food % 26 >= 9 ? 1 : 0);
+  // ★ 쏘는 적에게서는 **흡수통**이 하나 더 나온다 — 사람이 탔던 배다
+  if (k.shoots) add('scrub', 1);
+  return out;
 }
 
 /** 사람이 읽는 한 줄 — 광학 창과 배너가 같은 것을 쓴다 */
 export function packWord(has, part = null) {
-  const bits = [];
-  if (has.weapon) bits.push(`무기 ${has.weapon}`);
-  if (has.armor) bits.push(`장갑 ${has.armor}`);
-  if (has.ore) bits.push(`광석 ${has.ore}`);
-  if (has.parts) bits.push(`부품 ${has.parts}`);
-  if (has.food) bits.push(`식량 ${has.food}`);
+  const bits = Object.entries(has ?? {})
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => (n > 1 ? `${nameOf(k)} ×${n}` : nameOf(k)));
   if (part) bits.unshift('★ 탄두 재료');
   return bits.length ? bits.join(' · ') : '쓸 것이 없습니다';
 }
@@ -148,6 +171,15 @@ export const inReach = (dist) => dist <= NET.reach;
 
 /** 이만큼 떨어진 것을 감는 데 걸리는 시간 (초) */
 export const reelTime = (dist) => +(dist / NET.reelSpeed).toFixed(2);
+
+/**
+ * ★★★ **회수 방법 셋** (v83 · 사장님 「도킹을 하던지 로봇을 보내던지」).
+ *   표는 `cargo-table.js WAYS` 가 든다 — 여기서는 그것을 그대로 쓴다
+ */
+export { WAYS, timeOf };
+
+/** 이 거리에 **닿는 방법들** — 화면이 「지금 무엇을 쓸 수 있나」를 말한다 */
+export const waysFor = (dist) => Object.values(WAYS).filter((w) => dist <= w.reach);
 
 /** 왜 못 쏘나 — **조용히 안 나가면 「고장」으로 읽힌다** (v64 규약) */
 export const WHY = {

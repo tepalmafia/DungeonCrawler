@@ -52,7 +52,11 @@ head('[1] 부수면 **저절로 들어오지 않는다** — 꾸러미가 남는
   const has = packOf('raider');
   const l = lootOf('raider');
   ok(has.weapon === l.weapon && has.armor === l.armor, '노획(전투력)이 꾸러미에 들어 있다');
-  ok(has.ore === KINDS.raider.gives.ore, '보급도 같은 꾸러미에 들어 있다 — 셋으로 흩어져 있던 것을 묶었다');
+  // ★ v83 — 꾸러미가 **덩어리에서 아이템으로** 바뀌었다. 광석 30 이
+  //   「광석 ×1」이 된다 (한 덩이 22). 덩어리는 고를 것을 안 만든다
+  ok((has.ore ?? 0) > 0, '보급도 같은 꾸러미에 들어 있다 — 셋으로 흩어져 있던 것을 묶었다');
+  ok((has.seal ?? 0) + (has.wire ?? 0) + (has.oru ?? 0) > 0,
+    '★ **부품이 넷으로 갈라져** 들어 있다 (화물의 36.4% 가 정비용이라는 값이 근거)');
   console.log(`      적 우주선 꾸러미 — ${packWord(has, null)}`);
   ok(s.got === 0, '아직 하나도 안 얻었다');
 }

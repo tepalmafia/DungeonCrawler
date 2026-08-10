@@ -174,6 +174,39 @@ export function drawStatus(ctx, x, y, w, h, s, theme = 'hud') {
  *   `world/gunsight.js` 와 같은 규약: 배경을 안 칠하고 가산 혼합으로
  *   얹는다. 그래야 「창 앞의 검은 판」이 안 된다 (v65 에 한 번 겪었다).
  */
+/**
+ * ★★★ **들어온 목록** — 사장님 「**실시간으로** 획득 아이템이 … q 스크린이나
+ *   조정석에선 조정석 화면에서 **획득 리스트**를 보여줄 수 있도록」 (v83)
+ *
+ *   ★ 배너 한 줄로는 안 된다. 배너는 **하나씩 덮어쓰므로** 세 개가 한꺼번에
+ *     들어오면 마지막 하나만 보인다. 목록이라야 「무엇 무엇이 들어왔나」가 남는다.
+ *   ★ 오래된 줄은 **흐려지다 사라진다** — 지운 자국이 남으면 그건 기록이지
+ *     실시간이 아니다
+ */
+function drawTook(ctx, W, H, s) {
+  const log = s.cargo?.log ?? [];
+  if (!log.length) return;
+  const f = (k) => Math.round(H * k);
+  const x = W * 0.05;
+  let y = H * 0.30;
+  ctx.textAlign = 'left';
+  ctx.font = `700 ${f(0.048)}px system-ui, sans-serif`;
+  ctx.fillStyle = 'rgba(143,230,192,.55)';
+  ctx.fillText(`화물 ${s.cargo.used}/${s.cargo.hold}`, x, y);
+  y += f(0.062);
+  for (const l of log.slice(0, 5)) {
+    // 남은 시간에 따라 흐려진다
+    const k = Math.max(0.18, Math.min(1, l.t / 8));
+    const got = l.n > 0;
+    ctx.font = `700 ${f(0.052)}px system-ui, sans-serif`;
+    ctx.fillStyle = got ? `rgba(127,230,168,${k})` : `rgba(255,138,114,${k})`;
+    ctx.fillText(`${got ? '+' : '−'}${Math.abs(l.n)}`, x, y);
+    ctx.fillStyle = `rgba(219,238,230,${k})`;
+    ctx.fillText(l.name, x + f(0.075), y);
+    y += f(0.058);
+  }
+}
+
 export function buildStatusHud(w, h) {
   const cv = document.createElement('canvas');
   cv.width = Math.round(w * 900);
@@ -202,6 +235,7 @@ export function buildStatusHud(w, h) {
       if (!s.on) return;
       ctx.clearRect(0, 0, cv.width, cv.height);
       drawStatus(ctx, cv.width * 0.04, cv.height * 0.04, cv.width * 0.92, cv.height * 0.92, s, 'hud');
+      drawTook(ctx, cv.width, cv.height, s);
       tex.needsUpdate = true;
     },
   };
