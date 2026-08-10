@@ -19,6 +19,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { preload } from './core/assets.js';
+// ★★★ v85 — **사장님이 주신 3D 그림.** 없으면 코드 도형 그대로 (`core/models.js`)
+import { loadModels, modelLog } from './core/models.js';
 import { Input } from './core/input.js';
 import { makeAudio } from './core/audio.js';
 import { ESCAPE, SHAKE, envelope, SILENT } from './game/audio-table.js';
@@ -265,6 +267,9 @@ scene.add(camera);
 // 그림 통로를 **게임 로직보다 먼저** 연다 (docs/POSTMORTEM.md §2 0단계).
 // 한 장도 없어도 정상으로 끝나고, 배는 민무늬로 선다.
 await preload();
+// ★★★ v85 — **3D 그림을 먼저 불러온다.** 배를 세우기 전에 와야 표적이
+//   그림으로 선다. 하나도 없으면 아무 일도 안 일어난다 (그게 기본 상태다)
+await loadModels();
 
 // ★ 환경맵 — **금속이 검게 나오지 않게 하는 것.**
 //   반응로를 세웠더니 새까만 덩어리로 나왔다. 조명이 모자란 게 아니라,
@@ -369,6 +374,16 @@ addEventListener('keydown', (e) => {
     const t = pickTarget(combat, sky.list, a.az, a.el, e.code === 'Tab');
     say(ai, t ? `표적 — ${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m` : '겨눌 적이 없습니다', 'tell');
     audio?.event(t ? 'click' : 'deny');
+    return;
+  }
+  // ══ ★★★ v85 — **X 로 나온다** (사장님 「쏘기가 … 조정간에서 나오는거랑
+  //  키가 중복이야. **다른 키를 눌러서** 조정석에서 나오도록」) ══════════
+  //  ★ 한 키로 **두 단계**를 나온다: 잡고 있으면 놓고, 놓았으면 일어난다.
+  //    키를 둘로 두면 「어느 걸 눌러야 나가지」가 또 생긴다
+  if (!helpOpen && !paused && e.code === 'KeyX') {
+    e.preventDefault();
+    if (yokeHeld) { yokeHeld = false; say(ai, '조종간을 놓습니다', 'tell'); }
+    else if (helmSat) { helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
     return;
   }
   if (e.code === 'F1') { e.preventDefault(); showHelp(!helpOpen); return; }
@@ -1625,19 +1640,25 @@ function interactStep(dt) {
   //
   //  ★ 놓는 길을 **둘** 둔다. 다시 누르거나, 좌석에서 일어나거나.
   //    하나뿐이면 「어떻게 놓지」에서 막히는 사람이 반드시 생긴다
-  if (input.press && !readGrip) {
-    if (yokeHeld) {
-      yokeHeld = false;
-      say(ai, '조종간을 놓습니다', 'tell');
-      // ★★ **누름을 삼키는 것은 조종간을 겨눴을 때뿐이다.** 딴 손잡이를
-      //   겨눴으면 놓기만 하고 누름은 **그쪽에 넘긴다** — 안 그러면
-      //   조종간을 잡은 채로는 무엇을 누르든 한 번은 헛클릭이 된다.
-      //   (자동 항법 스위치를 누르려다 조종간만 놓아지는 식)
-      if (onYoke) input.takePress();
-    } else if (onYoke) {
-      yokeHeld = true; input.takePress();
-      say(ai, '조종간을 잡습니다', 'tell');
-    }
+  // ══ ★★★ v85 — **좌클릭이 쏘기와 겹쳤다** ═══════════════════════════
+  //
+  //  ★ 사장님 「쏘기가 마우스 왼쪽으로 **조정간에서 나오는거랑 키가
+  //    중복**이야. **다른 키를 눌러서** 조정석에서 나오도록 해줘야지」
+  //
+  //  ★★ 맞다. v78 에 조종간을 **토글**로 바꾸면서(「계속 누르고 있어야
+  //    해서 피로하다」) 좌클릭이 「잡는다/놓는다」가 됐는데, v79 에
+  //    **좌클릭이 발사**가 됐다. 두 판이 각자 맞았고 **겹치는 것을
+  //    아무도 안 봤다** — 그래서 쏠 때마다 조종간이 놓아진다.
+  //
+  //  ★★★ 그래서 **잡는 것만 좌클릭**이고, **놓는 것은 X** 다:
+  //      · 안 잡았을 때 좌클릭 → 잡는다 (겨눠야 한다. 쏠 일이 없다)
+  //      · 잡았을 때 좌클릭   → **쏜다** (놓지 않는다)
+  //      · X                  → 놓는다 · 한 번 더 누르면 **일어난다**
+  //    실제 조종간도 「쥔 채로 방아쇠를 당기는」 물건이지, 방아쇠를
+  //    당기면 손이 떨어지는 물건이 아니다
+  if (input.press && !readGrip && !yokeHeld && onYoke) {
+    yokeHeld = true; input.takePress();
+    say(ai, '조종간을 잡습니다 — 놓을 때는 X', 'teach');
   }
   // 좌석에서 일어나면 손도 놓는다 — 「자세는 안 잇는다」와 같은 규약
   if (!helmSat) yokeHeld = false;
@@ -3419,6 +3440,8 @@ window.SPACE = {
   },
   /** ★ v69 — 상태창이 지금 켜져 있나 (앉으면 켜진다) */
   get statusOn() { return !!ship.statusHud?.mesh?.visible; },
+  /** ★★★ v85 — **3D 그림이 들어왔나** — 「넣었는데 아무 일도 안 난다」를 막는다 */
+  get models() { return modelLog(); },
   /** ★★★ v84 — **느려지는 시간.** 검사가 배율과 예산을 읽는다 */
   get slow() { return slowSummary(slowmo); },
   /** ★★★ v84 — **등대.** 말하는 몫 · 침묵 · 「어디가 잘못됐나」를 말했나 */
@@ -4812,6 +4835,16 @@ function frame(now) {
   //   밸브가 저 혼자 돌아갔다 — 무엇이 그걸 돌리는지 화면에 없었다.
   //   그리고 **굶으면 떨린다** — 체력바를 안 만드는 대신 손이 말한다
   //   (PLAN §5-2). 그 설계가 처음으로 화면에 나온 자리다
+  // ══ ★★★ v85 — **앉으면 손이 안 보인다** (사장님 「조정석 탑승시 손이
+  //  안보이도록 해줘」) ═══════════════════════════════════════════════
+  //  ★ 맞는 말이다. 조종석에 앉으면 눈이 계기 위로 올라가고 창이 열리는데
+  //    (v63), 그 화면에 **떠 있는 손**이 같이 뜨면 창을 가린다. 그리고
+  //    실제로도 앉은 사람의 손은 **조종간 위**에 있지 눈앞에 없다.
+  //  ★★ **잡을 때는 다시 보인다** — 조종석에도 손으로 하는 것들이 있다
+  //    (갈래 판 · 자동 항법 · 추력 레버). 안 보이면 그것들이 「눌리는지」를
+  //    알 수가 없다: 「손이 곧 상태창」(PLAN §5-2)이 조종석에서만 죽으면
+  //    그건 규약을 깨는 것이다
+  hands.group.visible = !helmSat || !!aimName || input.hold;
   hands.update({
     reach: aimName ? 1 : 0,
     grip: aimName && input.hold ? 1 : 0,
