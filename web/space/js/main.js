@@ -75,7 +75,7 @@ import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord, PICK } from './game/combat-table.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
-import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg } from './game/warhead-table.js';
+import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg, endingOf } from './game/warhead-table.js';
 import {
   makeWarhead, pickUp as headPick, holdCradle, stepWarhead, holdArm, drop as headDrop,
   full as headFull, summary as headSummary,
@@ -135,6 +135,12 @@ import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
+// ★★★ v93 — **떨군다.** 목적 한 줄의 세 번째가 여기 있다 (`WAR.md §6`)
+import { PHASE as DPHASE, DROP, SAY as DSAY } from './game/drop-table.js';
+import {
+  makeDrop, stepDrop, pull as dropPull, canDrop, windowLeft, blastIn,
+  summary as dropSummary,
+} from './game/drop.js';
 import { RESCUE, RSTEP, RESCUE_WORD } from './game/rescue-table.js';
 import { DARK, DSTEP } from './game/blackout-table.js';
 import {
@@ -218,7 +224,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 92;
+export const VERSION = 93;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -382,6 +388,33 @@ addEventListener('keydown', (e) => {
   //  키가 중복이야. **다른 키를 눌러서** 조정석에서 나오도록」) ══════════
   //  ★ 한 키로 **두 단계**를 나온다: 잡고 있으면 놓고, 놓았으면 일어난다.
   //    키를 둘로 두면 「어느 걸 눌러야 나가지」가 또 생긴다
+  // ══ ★★★ v93 — **B 로 떨군다** ═══════════════════════════════════════
+  //  ★ 창이 열려 있고 **무장했을 때만** 먹는다. 아무 때나 먹으면
+  //    「기관실까지 언제 갔다 오나」가 결심이 아니게 된다.
+  //  ★★ 안 먹을 때 **왜 안 되는지 말한다** — 조용히 안 되는 것이
+  //    이 저장소가 네 번 밟은 함정이다 (「고장」으로 읽힌다)
+  //  ★ **B 가 아니라 V 다.** 표(`drop-table.js SAY`)에 「B」라고 적어 놓고
+  //    붙이려다 잡았다 — B 는 이미 **로봇 회수**(`cargo-table.js WAYS.bot`)다.
+  //    두 벌 다 돌아서 「떨구려다 로봇을 쏘는」 상태가 될 뻔했다.
+  //    ★★ 이 저장소가 v79→v85 에 좌클릭으로 똑같이 겪었다: **두 판이
+  //      각자 맞았고 겹치는 것을 아무도 안 봤다.** 키를 새로 붙일 때는
+  //      `grep -oE "'Key[A-Z]'"` 로 **쓰이는 것을 먼저 센다**
+  if (!helpOpen && !paused && e.code === 'KeyV') {
+    e.preventDefault();
+    if (dropS.phase === DPHASE.WINDOW && !warhead.armed) say(ai, DSAY.armFirst, 'warn');
+    else if (dropS.phase !== DPHASE.WINDOW) say(ai, '지금은 투하 창이 아닙니다', 'tell');
+    else if (dropPull(dropS, { armed: warhead.armed, filled: warhead.in.length })) {
+      headDrop(warhead);
+      // ★★★ **창밖으로 떨어지는 것이 보인다** (WAR.md §6-3).
+      //   새 계통을 안 만든다 — 이미 있는 발사체 계통으로 쏜다.
+      //   「보이는 것을 안 만들어서」 v64 가 통째로 숫자 게임이 됐던
+      //   자리라, 여기만은 반드시 화면에 나와야 한다
+      ship.outside.shots.fire('arh', null);
+      say(ai, DSAY.dropped, 'alarm');
+      audio?.event('tube');
+    }
+    return;
+  }
   if (!helpOpen && !paused && e.code === 'KeyX') {
     e.preventDefault();
     // ★★ v88 — **한 번에 나온다.** v85 는 「놓기 → 일어나기」 두 단계였는데,
@@ -616,6 +649,8 @@ let radarSeen = [];
  *   기관실 후미 격벽의 크레이들. 재료 다섯을 손으로 들고 가 꽂는다
  */
 const warhead = makeWarhead();
+/** ★★★ v93 — 투하 장면 (마지막 구간) */
+const dropS = makeDrop();
 /** ★★★ 급가속 (v73) — R 을 누르고 있으면 튀어나간다 */
 const boost = makeBoost();
 /**
@@ -1053,6 +1088,12 @@ function showEnd() {
     scars: scarList(scars).map((s) => s.name),
     open: openList(faults).map((f) => f.name),
     food: supply.food, parts: supply.parts, ore: supply.ore,
+    // ★★★ v93 — **결말.** 이게 없으면 2시간이 「도착했다」로 끝난다
+    ending: endingOf(warhead.in.length),
+    filled: warhead.in.length,
+    dropAway: Math.round(dropS.away),
+    dropHurt: dropS.hurt,
+    missed: dropS.missed,
   };
   endWhat = w;
   endBox.querySelector('b').textContent = END.title;
@@ -2946,6 +2987,16 @@ window.SPACE = {
    */
   // ★ v88 — `hands` 를 같이 준다. 「손이 안 보이나」는 화면에만 있던 것이라
   //   검사가 물을 자리가 없었다 (사장님이 두 판에 걸쳐 말씀하신 것이다)
+  /** ★★★ v93 — **투하** (`space-drop.js` · endtoend 가 읽는다) */
+  get drop() { return { ...dropSummary(dropS), armed: warhead.armed, filled: warhead.in.length }; },
+  /** 검사가 마디를 밀어 놓는다 — 마지막 구간까지 2시간을 안 걷게 */
+  putDrop(phase, t = 0) { dropS.phase = phase; dropS.t = t; return dropSummary(dropS); },
+  /** 검사가 떨군다 — **게임과 같은 길로** */
+  pullDrop() {
+    const okk = dropPull(dropS, { armed: warhead.armed, filled: warhead.in.length });
+    if (okk) { headDrop(warhead); ship.outside.shots.fire('arh', null); }
+    return { ok: okk, ...dropSummary(dropS) };
+  },
   get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering, hands: !!hands.group.visible }; },
   /**
    * ★★ v80 — **가상 조종간의 자리** (`space-helm.js` · endtoend 가 읽는다).
@@ -3723,7 +3774,20 @@ window.SPACE = {
       gap: { x: +(mark.x - foe.x).toFixed(1), y: +(mark.y - foe.y).toFixed(1) },
       rel: { az: +raz.toFixed(2), el: +rel.toFixed(2) },
       plate: { w: +(c1.x - c0.x).toFixed(1), h: +(c0.y - c1.y).toFixed(1) },
-      // 판이 화면에서 실제로 덮는 각 vs 그림이 쓰는 각 — **여기가 갈라지면 어긋난다**
+      // ★★★ v94 — **그려진 물체가 몇 도에 있나** vs **표가 아는 각**.
+      //   둘이 다르면 「보이는 것」과 「레이더가 아는 것」이 갈라진 것이다
+      drawnAt: (() => {
+        const v = wp.clone();
+        // 눈 기준 · 기수 기준으로 각을 되뽑는다
+        const inv = camera.matrixWorldInverse.clone();
+        const local = v.applyMatrix4(inv);
+        return {
+          az: +(Math.atan2(local.x, -local.z) * 180 / Math.PI).toFixed(2),
+          el: +(Math.atan2(local.y, Math.hypot(local.x, local.z)) * 180 / Math.PI).toFixed(2),
+          dist: +local.length().toFixed(1),
+        };
+      })(),
+      tableAt: { az: +t.az.toFixed(2), el: +t.el.toFixed(2), dist: +t.dist.toFixed(1) },
       fovDrawn: F,
       eyeToPlate: +(camera.position.z - m.position.z).toFixed(3),
       plateDist: HUDV.dist,
@@ -3839,6 +3903,17 @@ window.SPACE = {
   get headSeen() { return ship.cradle?.seen ?? null; },
   /** 검사가 재료를 손에 쥐어 준다 — 구간 다섯을 다 돌 수는 없다 */
   giveHeadPart(key) { return headPick(warhead, key); },
+  /** ★ v93 — 검사가 다섯을 다 꽂아 놓는다. 2시간을 걷지 않으려고 */
+  fillHead(n = PARTS5.length) {
+    warhead.in = PARTS5.slice(0, n).map((p) => p.key);
+    warhead.carrying = null;
+    return headSummary(warhead);
+  },
+  /** ★ 검사가 무장한다 — **게임과 같은 길로** (`holdArm` 을 9초 잡는다) */
+  armHead() {
+    for (let i = 0; i < 400 && !warhead.armed; i++) holdArm(warhead, 0.05, { holding: true });
+    return headSummary(warhead);
+  },
   /** 검사가 곧장 꽂는다 */
   putHeadPart(key) {
     if (headPick(warhead, key) || warhead.carrying === key) {
@@ -4566,6 +4641,37 @@ function frame(now) {
     escapedAt = clock;
     saveNow();          // 여기까지는 저장해 둔다 — 마지막 구간도 8분이다
   }
+  // ══ ★★★ v93 — **떨군다** (`drop.js` · WAR.md §6) ═══════════════════
+  //  목적 한 줄의 세 번째다. 마지막 구간에 들어서면 시계가 혼자 가고,
+  //  사람이 정하는 것은 **떨구느냐**와 **벌리느냐** 둘뿐이다
+  {
+    const at = isVoid(route.leg) && route.phase === RPHASE.LEG;
+    const ev = stepDrop(dropS, dt, {
+      at,
+      armed: warhead.armed,
+      // ★ 이탈 거리는 **진짜 배 속도**로 채운다 — 화면만 빨라지고 실제로
+      //   안 빠르면 그건 「가는 척하는 화면」이다 (v88 규약)
+      speed: CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
+        : ((power.thrust && !thrustHeld(salvage)) ? 1 : LEG.coast)) * boostMult(boost),
+    });
+    if (ev === 'run') { say(ai, DSAY.run, 'alarm'); audio?.event('alarm'); }
+    if (ev === 'window') {
+      say(ai, warhead.armed ? DSAY.window : DSAY.armFirst, 'alarm');
+      audio?.event('latch');
+    }
+    if (ev === 'late') { say(ai, DSAY.late, 'alarm'); }
+    if (ev === 'blast') {
+      // ★★ 못 벌렸으면 **상한다. 안 죽인다** — 벌은 죽음이 아니라 일이 는다
+      if (dropS.hurt > 0) {
+        hitFlash = Math.max(hitFlash, 1);
+        say(ai, DSAY.close, 'alarm');
+      }
+      say(ai, dropS.filled >= 5 ? DSAY.blast : DSAY.dud, 'alarm');
+      audio?.event('hit');
+    }
+    if (ev === 'over') { clearRaw(); showEnd(); }
+  }
+
   if (rev === 'end') {
     say(ai, '더는 따라오지 못합니다', 'tell');
     audio?.event('escaped');
@@ -4992,7 +5098,19 @@ function frame(now) {
   // ★ 이름을 `rev` 로 썼다가 **같은 함수 안의 항로 `rev` 와 부딪혀 게임이
   //   통째로 안 떴다.** `node --check` 는 통과한다 — 한 함수가 워낙 길어
   //   눈으로도 안 보였다. 브라우저를 한 번 띄우자 첫 줄에 나왔다
-  const radEv = stepRadar(combat, dt, aimedNow);
+  // ★★★ v94 — **묶여 있으면 그 표적의 각을 준다.** 여태 「제일 가운데
+  //   있는 것」만 넘겼으므로, 적이 조금만 비켜도 **다른 것이 aimed 가 되어**
+  //   `t.id === r.id` 가 깨지고 락온이 풀렸다. 실제 레이더는 물면
+  //   **그것을 따라간다** — 조준선이 아니라 표적을 본다
+  let radarAimed = aimedNow;
+  if (combat.radar.id !== null) {
+    const lt = sky.list.find((x) => x.id === combat.radar.id);
+    if (lt) {
+      const rel = azDiff(lt.az, aimAz);
+      radarAimed = { t: lt, off: Math.hypot(rel, lt.el - aimEl), relAz: rel, relEl: lt.el - aimEl };
+    }
+  }
+  const radEv = stepRadar(combat, dt, radarAimed);
   // ★★★ v69 — **탐색기 으르렁**. 잡으면 으르렁, **물면 음이 높아진다**
   //   (AIM-9 사이드와인더 고증). 눈이 늘 조준선에 가 있을 수 없으므로
   //   **귀가 대신 본다** — 이게 「직관적으로 방향을 맞춘다」의 절반이다

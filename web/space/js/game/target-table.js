@@ -444,7 +444,10 @@ export const TARGET = {
   //   성운을 1 로 둔 것과 대비된다: 성운은 「안 보인다」라서 적고,
   //   성간 공백은 「없다」라서 0 이다. 여기서 벌 수 없는 것이 그 구간의
   //   규칙이다 (`void-table.js`)
-  byRegion: { empty: 3, nebula: 1, debris: 7, planet: 4, void: 0 },
+  // ★★★ v93 — **`siege` 를 보탰다.** 마지막 구간이 「성간 공백(0개)」에서
+  //   **적 본진**으로 바뀌었으므로(`WAR.md §14-2`) 여기가 제일 두꺼워야 한다.
+  //   `void` 는 갈래에서 안 나오지만 표에 남긴다 — 이어하기 저장이 읽는다
+  byRegion: { empty: 3, nebula: 1, debris: 7, planet: 4, void: 0, siege: 8 },
 
   /**
    * ★ **얼마나 멀리 있나** (m). 사거리 밖은 조준경에 뜨지만 안 맞는다 —

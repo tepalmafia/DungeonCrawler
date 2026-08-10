@@ -464,12 +464,36 @@ export function hitPart(t, { off = 0, tol = 6, dmg = 1, rnd = Math.random } = {}
 
 /** 지금 겨눈 쪽에 **제일 가까운 것** — 조준경이 강조한다 */
 export function aimedAt(sky, az, el) {
+  // ══ ★★★ v94 — **탄이 지나가는 길에 있는 것이 맞는다** ═══════════════
+  //
+  //  사장님 「적 비행선 말고도 **물체가 앞을 가로막고 있으면 미사일 궤적에
+  //          있다면 격추해야지**」 · 「미사일이 발사되는 경로에 물체가
+  //          있으면 **이 물체가 맞아야지**」
+  //
+  //  ★ 맞는 말이고, 여태 그게 아니었다. 여기는 **각도만** 보고 제일
+  //    가운데 있는 하나를 골랐다 — 그래서 **코앞의 바위를 지나 뒤의 적을
+  //    맞히는** 일이 났다. 탄은 직선으로 가므로 **먼저 만나는 것**이 맞는다.
+  //
+  //  ★★ 그래서 두 걸음으로 나눈다:
+  //    ① 조준선의 **제 굵기 안**(`tolOf`)에 든 것을 다 모은다 — 그게
+  //       「궤적에 있다」의 뜻이다
+  //    ② 그중 **제일 가까운 것**이 맞는다
+  //    ③ 아무것도 안 걸리면 예전처럼 제일 가운데 있는 것을 준다
+  //       (조준 보조·광학이 그걸 읽으므로 없애면 안 된다)
   let best = null, bestD = 1e9, bestRel = 0;
+  let onPath = null, onPathDist = 1e9, onPathRel = 0, onPathOff = 0;
   for (const t of sky.list) {
     // ★ **감아서 잰다** — 안 그러면 기수 바로 뒤에서 조준이 죽는다
     const rel = azDiff(t.az, az);
     const d = Math.hypot(rel, t.el - el);
     if (d < bestD) { bestD = d; best = t; bestRel = rel; }
+    // ★ 뒤에 있는 것은 길이 아니다 (90도 넘으면 탄이 그리로 안 간다)
+    if (d <= tolOf(t) && Math.abs(rel) < 90 && t.dist < onPathDist) {
+      onPathDist = t.dist; onPath = t; onPathRel = rel; onPathOff = d;
+    }
+  }
+  if (onPath) {
+    return { t: onPath, off: onPathOff, relAz: onPathRel, relEl: onPath.el - el, onPath: true };
   }
   // ★★ v69 — `relAz`·`relEl` 을 같이 준다. 레이더 원뿔은 **기수 기준**인데
   //   v68 까지 `inCone(t.az, t.el)` 로 **세상 기준** 값을 넣고 있었다.
