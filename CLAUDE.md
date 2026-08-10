@@ -289,6 +289,8 @@ node tools/space-slow.js         스페이스워 — ★★★ **느려지는 �
 node tools/space-ai.js           스페이스워 — ★★★ **등대** · 말하는 넷이 하나로 모였나 · 조용한 때가 있나 · 배를 안 모나 (v84)
 node tools/space-parts.js        스페이스워 — ★★★ **부위·내구·도망** · 겨누면 빨리 끝나나 · 엔진을 깨면 못 도망가나 (v86)
 node tools/space-model.js        스페이스워 — ★★★ **3D 그림 받는 자리** · 넣으면 정말 물리나 (--write 로 규격서 갱신)
+node tools/space-block.js        스페이스워 — ★★★ **전투 블록아웃** · 거리·락온·일관성 (game/frame.js 뼈대만)
+node tools/space-drop.js         스페이스워 — ★★★ **투하** · 마디 넷 · 결말 셋 · 이탈이 결심인가 (v93)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
