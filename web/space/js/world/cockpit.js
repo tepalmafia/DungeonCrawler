@@ -26,7 +26,7 @@ import * as THREE from 'three';
 import { REGIONS, REGION_BLEND } from '../game/regions-table.js';
 import { CIRCUITS, SIGN } from '../game/chase-table.js';
 import { STEP, LAND } from '../game/land-table.js';
-import { HELM_SEAT, YOKE_AT } from '../game/helm-table.js';
+import { HELM_SEAT, YOKE_AT, YOKE } from '../game/helm-table.js';
 import {
   CANOPY, CONSOLE_PTS, GLASS_Y, BROW_Y, browAt, browSeg,
   FACE_H, SHELF_H, PANEL_GAP, PANEL_DIST, DEP, SIDE, ROOF, STRUCTS,
@@ -1171,9 +1171,24 @@ export function buildCockpit(parent, room, H) {
   /** 매 프레임 화면을 다시 그린다 — 여섯 장이라 비싸지 않다 */
   function update(state) {
     for (const s of screens) s.redraw(state);
-    // 조종간이 기운 만큼 눕는다 — **먹고 있다는 것이 눈에 보여야** 한다
-    const tilt = (state.lane ?? 0) * 0.5;
-    for (const y of yokes) y.rotation.z = -tilt;
+    // ══ ★★★ **조종간이 내 손을 따라간다 · 놓으면 가운데로** (v79) ══
+    //  사장님 「**조정간 움직임은 보이고 손을 떼면 자동으로 센터로 돌아오도록**」
+    //
+    //  ★ v78 까지 `state.lane`(항로에서 벗어난 정도)만 보고 누웠다.
+    //    미는 것과 눕는 것이 **다른 값**이었으므로, 밀어도 굼뜨게 조금
+    //    눕고 놓아도 항로가 안 돌아오면 눕은 채로 있었다.
+    //    조종간은 계기가 아니라 **내 손**이다.
+    //
+    //  ★★ 놓으면 **스스로 돌아온다.** 실제 조종간의 센터링 스프링이 하는
+    //    일이고, 없으면 「지금 밀고 있나」가 손에서 안 읽힌다
+    const yk = state.yoke ?? null;
+    const wantZ = yk?.held ? -(yk.yaw ?? 0) * YOKE.tilt : 0;
+    const wantX = yk?.held ? (yk.pitch ?? 0) * YOKE.pitchTilt : 0;
+    const k = Math.min(1, (state.dt ?? 0.016) * YOKE.back);
+    for (const y of yokes) {
+      y.rotation.z += (wantZ - y.rotation.z) * k;
+      y.rotation.x += (wantX - y.rotation.x) * k;
+    }
     // ★ 자동 항법 등 — **초록이면 자동, 주황이면 수동.** 지금 어느 쪽인지를
     //   조종석에 들어서는 순간 알아야 한다
     setAuto(state.auto !== false);
@@ -1658,6 +1673,9 @@ export function buildOutside(scene, z) {
     // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
     //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
     targets, shots,
+    /** ★ v79 — 광학 창의 카메라가 여기 매달린다. 표적 좌표가 이 그룹 기준이라
+     *   다른 데 매달면 배를 틀 때마다 좌표를 두 번 옮기게 된다 */
+    group: out,
     get region() { return regionKey; },
     /** 검사가 「화면이 정말 바뀌었나」를 묻는다 — 고도·발광·땅 */
     get view() {

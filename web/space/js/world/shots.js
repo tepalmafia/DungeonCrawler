@@ -56,6 +56,9 @@ export function buildShots(parent) {
   function fire(kind, to = null) {
     fired++;
     const dst = to ? atOf(to.az, to.el, to.dist) : atOf(0, 0, 300);
+    // ★★★ **어느 표적을 쫓는지 기억한다** (v79). 아래 `update` 가 매 프레임
+    //   그 표적의 **지금 자리**로 종점을 고쳐 잡는다 — 이유는 update 주석에
+    const chase = to?.id ?? null;
     if (kind === 'laser') {
       // ★ **즉발이다.** 미사일처럼 날아가면 그건 레이저가 아니다 —
       //   기수에서 표적까지 **한 줄기**를 그어 놓고 곧 지운다
@@ -88,7 +91,7 @@ export function buildShots(parent) {
     g.add(s);
     live.push({
       m: s, kind, t: 0, live: 4.0,
-      from: MUZZLE.clone(), to: dst,
+      from: MUZZLE.clone(), to: dst, chase,
       // ★ 열추적탄은 **휜다** — 쏘고 잊는 대신 곧게 안 간다.
       //   유도탄은 곧다 — 묶고 있어야 하는 대신 정확하다
       wobble: kind === 'ir' ? 1 : 0,
@@ -149,10 +152,35 @@ export function buildShots(parent) {
       }
       g.add(inGroup);
     },
-    update(dt) {
+    /**
+     * ★★★ **날아가는 것이 표적을 따라간다** (v79).
+     *
+     *   ★ 사장님 「현재 **미사일이 날아가는 궤적과 적이 격추되는 지점이
+     *     다르게 보이니**」 — 맞는 말이고, 원인은 여기였다.
+     *
+     *   v78 까지 탄은 **쏜 순간의 자리**로 곧게 날아갔다 (`to` 를 그때
+     *   한 번 계산했다). 그런데 규칙(`combat.js stepShots`)은 **닿는 순간의
+     *   표적**으로 맞고 안 맞고를 가른다. 표적은 그동안 흐르고 다가오므로
+     *   (`target.js` 의 vaz·vel·closes) 둘이 **다른 자리**가 된다:
+     *
+     *     탄은 「거기 있던 자리」에서 터지고, 적은 「지금 있는 자리」에서
+     *     부서진다. 사장님이 보신 것이 정확히 이것이다.
+     *
+     *   ★★ 유도탄이 유도탄인 이유가 이것이므로, 고침도 **말이 되는 쪽**이다:
+     *     탄이 표적을 **쫓는다.** 그러면 궤적의 끝과 격추 지점이 **같은
+     *     자리일 수밖에 없다** — 맞춰 놓는 것이 아니라 구조상 같아진다.
+     *
+     *   @param posOf (id) => Vector3|null — 지금 그 표적이 어디 있나
+     */
+    update(dt, posOf = null) {
       for (let i = live.length - 1; i >= 0; i--) {
         const s = live[i];
         s.t += dt;
+        // ★ 쫓는다. 표적이 사라졌으면(이미 부서졌으면) 마지막 자리로 간다
+        if (s.chase != null && posOf) {
+          const now = posOf(s.chase);
+          if (now) s.to.copy(now);
+        }
         if (s.beam) {
           // 번쩍하고 사라진다
           s.m.material.opacity = 0.9 * (1 - s.t / s.live);

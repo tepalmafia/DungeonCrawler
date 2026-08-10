@@ -30,6 +30,7 @@ import { surface } from '../core/assets.js';
 import { CIRCUITS } from '../game/chase-table.js';
 import { buildRadio } from './radio.js';
 import { buildCockpit, buildOutside, setPlan, buildRadarHud, CANOPY, CONSOLE_PTS, SEATS } from './cockpit.js';
+import { buildOptic } from './optic.js';
 import {
   ZONE, MAT, rackRun, standoff, chamfer, ringFrames, hatch, sign, breakerPanel,
   servicePanel,
@@ -367,7 +368,7 @@ function racks(parent, axis, fixed, from, to, facing, tint, seed, room = null, a
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-export function buildShip(scene, camera = null) {
+export function buildShip(scene, camera = null, renderer = null) {
   let chart = null;
   let bench = null;
   let foodGauge = null, winch = null, tradeHatch = null, radio = null, suitRack = null;
@@ -1093,6 +1094,33 @@ export function buildShip(scene, camera = null) {
     HUDV.w * 1.52, DEP.y - HUDV.h * 0.72, DEP.z - HUDV.dist - 0.01,
   );
   ship.add(radarHud.mesh);
+
+  // ══ ★★★ **광학 창** — 당겨 보고, 부서지는 것을 본다 (v79) ═══════════
+  //  사장님 「멀리있는 적을 레이더 말고 **확대**하거나 …」
+  //         「**격추시 적 기체가 부서지는 화면**도 … **화면 상단이나
+  //           시야에 방해되지 않는 곳에**」
+  //
+  //  ★ 자리를 **왼쪽 위**로 둔다. 오른쪽 위는 레이더, 왼쪽 아래는 상태창,
+  //    오른쪽 아래는 홀로그램, 가운데는 조준선·지시선이 지나는 자리다 —
+  //    비어 있는 구석이 **왼쪽 위 하나뿐**이다. (사장님이 「화면 상단」이라
+  //    하신 것과도 맞는다)
+  //  ★★ 배(`ship`)와 손을 숨기고 그린다 — 감지기는 선체 **밖**에 달렸고,
+  //    안 숨기면 판이 조종석 벽을 비추거나 **판이 판을 비춘다**
+  const optic = renderer
+    ? buildOptic(renderer, scene, [ship], HUDV.w * 1.12, HUDV.h * 1.04)
+    : null;
+  if (optic) {
+    optic.mesh.position.set(
+      -HUDV.w * 1.46, DEP.y + HUDV.h * 0.86, DEP.z - HUDV.dist - 0.01,
+    );
+    ship.add(optic.mesh);
+    // ★ 카메라는 **창밖 그룹**에 매단다 — 표적 좌표가 그 그룹 기준이다
+    optic.attachTo(outside.group ?? outside.out ?? scene);
+    // ★★ 전체 화면 판은 **눈**에 매단다 (조준 포드 화면). 배에 매달면
+    //   고개를 돌릴 때 판이 같이 안 돈다 — 화면 붙박이가 아니게 된다
+    if (camera) optic.attachBig(camera);
+  }
+
   const turret = {
     group: null, sight,
     // ★ 없어진 손잡이들 — `null` 이라야 `main.js` 의 조준 목록에서 걸러진다.
@@ -1105,7 +1133,7 @@ export function buildShip(scene, camera = null) {
   };
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
-    turret, sight, statusHud, radarHud, cradle, outerDoor, marks, byBay,
+    turret, sight, statusHud, radarHud, optic, cradle, outerDoor, marks, byBay,
     /**
      * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
      *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —

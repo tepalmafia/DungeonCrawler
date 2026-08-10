@@ -21,7 +21,7 @@
 //    때까지의 임시**다 — 그림이 오면 통째로 걷어낸다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
-import { KINDS } from '../game/target-table.js';
+import { SEEN, WRECK, KINDS } from '../game/target-table.js';
 
 const DEG = Math.PI / 180;
 
@@ -178,6 +178,19 @@ export function buildTargets(parent) {
   const live = new Map();
   /** 터진 조각들 */
   const bits = [];
+  // ══ ★★★ **잔해 — 격추가 보인다** (v79) ═══════════════════════════
+  //
+  //  ★ 사장님 「**격추시 적 기체가 부서지는 화면**도 보여주고 … 3D 모습으로」
+  //
+  //  ★★ v78 까지 격추는 **한 프레임짜리**였다: 규칙이 목록에서 빼면 여기서
+  //    조각을 튀기고 몸통을 **그 자리에서 지웠다.** 즉 「부서졌다」가 아니라
+  //    **「없어졌다」**였다. 조각 여덟 개가 0.35초 튀는 것이 전부였고,
+  //    그 사이 몸통은 이미 사라진 뒤라 **무엇이 부서졌는지 안 보인다.**
+  //
+  //  ★★★ 이제 몸통이 **남는다.** 제어를 잃고 돌면서 밀려나고, 불이 붙고,
+  //    조각이 떨어져 나간 뒤에 스러진다. 광학 창이 이 잔해를 비춘다 —
+  //    그러니 이것은 「격추 영상」이 아니라 **진짜 그 자리에서 도는 3D** 다
+  const wrecks = [];
 
   /**
    * ★★ **각도와 거리를 자리로 바꾼다.** 표가 도(度)로 적어 두었으므로
@@ -192,11 +205,46 @@ export function buildTargets(parent) {
       Math.sin(el) * d,
       -Math.cos(az) * Math.cos(el) * d,
     );
+    // ══ ★★★ **멀어도 점이 되지 않는다** (v79 · `target-table.js SEEN`) ══
+    //
+    //  ★ 사장님 「적을 **육안으로 식별할 수 있는 거리가 너무 짧잔아**」.
+    //    재 보니 요격기가 90m 에서 0.92°(8픽셀), 260m 에서 0.32°(3픽셀)였다.
+    //    레이더는 260m 를 보는데 **눈은 90m 까지만** 형태를 알았다 —
+    //    「레이더는 잡았다는데 창밖은 비어 있다」가 그것이다.
+    //
+    //  ★★ 각지름에 **바닥**을 깐다. 멀어져도 그 아래로는 안 줄어드므로
+    //    **점이 아니라 실루엣**으로 남는다. 크기로 거리를 읽는 대신
+    //    **모양으로 종류를 읽게** 된다 — 거리는 레이더가 숫자로 말한다.
+    //
+    //  ★ 일부러 접는 것이다 (실제로는 멀면 점이다). 이 게임은 교전 거리를
+    //    이미 100m 스케일로 접어 놨고, 그 접힘의 뒷값을 여기서 치른다
+    const base = (KINDS[t.kind]?.size ?? 1) * 1.6;
+    const deg = 2 * Math.atan(base / 2 / Math.max(1, d)) / DEG;
+    const up = Math.min(SEEN.maxUp, Math.max(1, SEEN.minDeg / Math.max(1e-3, deg)));
+    o.scale.setScalar(base * up);
     // 적은 **이쪽을 본다** — 죽은 것과 갈라지는 두 번째 표시
     // ★ 살아 있는 것은 **이쪽을 본다** — 죽은 것과 갈라지는 두 번째 표시.
     //   방공 포대만 빼고 (붙박이라 안 돈다)
     if (KINDS[t.kind]?.closes !== undefined || KINDS[t.kind]?.shoots) {
-      if (t.kind !== 'turret') o.lookAt(0, 0, 0);
+      if (t.kind !== 'turret') {
+        o.lookAt(0, 0, 0);
+        // ══ ★★★ **적이 뒤로 날아오고 있었다** (v79 · 화면으로 잡았다) ══
+        //
+        //  three 의 `Object3D.lookAt` 은 **+Z 를** 바라보는 점으로 돌린다
+        //  (카메라만 −Z 다 — 소스에서 `isCamera` 로 갈린다). 그런데 이
+        //  파일의 몸통들은 전부 **코가 −z** 를 보게 지어져 있다
+        //  (`buildOne` 의 「코가 앞(-z)을 본다」). 그래서 v69 부터 지금까지
+        //  **모든 적이 등을 돌린 채 다가오고 있었다.**
+        //
+        //  ★★ 그리고 그게 「안 보인다」의 한 조각이었다: 이쪽을 향한 것이
+        //    실루엣이 아니라 **엔진 불꽃 원뿔의 밑면**이라, 화면에는
+        //    주황색 팔각형 한 덩어리로 떴다. 종류가 다섯이든 여덟이든
+        //    **전부 같은 주황 덩어리**로 보인 것이다.
+        //
+        //  ★ 검사는 이걸 못 잡는다 — 「창밖에 요격기가 있나」는 ✔ 였다.
+        //    **화면을 찍어서** 나왔다 (CLAUDE.md 포스트모템 §3)
+        o.rotateY(Math.PI);
+      }
     }
   };
 
@@ -266,15 +314,50 @@ export function buildTargets(parent) {
           if (fire) fire.scale.setScalar(0.8 + Math.sin(clock * 14) * 0.25);
         }
       }
-      // 사라진 것 — **터뜨리고** 치운다
+      // 사라진 것 — **터뜨리고** 잔해로 넘긴다
       for (const [id, o] of [...live]) {
         if (seen.has(id)) continue;
         // ★ v70 — **큰 것이 크게 터진다.** 종류가 다섯으로 늘었으므로
         //   이름을 손으로 견주지 않고 **표의 크기**로 정한다
         const kk = o.name.replace('표적:', '');
-        burst(o.position, (KINDS[kk]?.size ?? 1) >= 1.15);
-        g.remove(o);
+        const big = (KINDS[kk]?.size ?? 1) >= 1.15;
+        burst(o.position, big);
         live.delete(id);
+        // ★★ **몸통을 안 지운다** — 제어를 잃고 돌면서 스러진다
+        wrecks.push({
+          m: o, kind: kk, t: 0,
+          live: big ? WRECK.big : WRECK.small,
+          spin: new THREE.Vector3(
+            (Math.random() - 0.5) * WRECK.spin,
+            (Math.random() - 0.5) * WRECK.spin,
+            (Math.random() - 0.5) * WRECK.spin,
+          ),
+          v: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
+            .normalize().multiplyScalar(WRECK.push * (0.5 + Math.random())),
+          // 두 번째 폭발이 **조금 늦게** 온다 — 한 번에 다 터지면 「터졌다」가
+          // 순간이고, 늦은 하나가 있어야 「부서지는 중」이 된다
+          again: WRECK.again,
+        });
+      }
+      // ── 잔해 ────────────────────────────────────────────
+      for (let i = wrecks.length - 1; i >= 0; i--) {
+        const wk = wrecks[i];
+        wk.t += dt;
+        wk.m.position.addScaledVector(wk.v, dt);
+        wk.m.rotation.x += wk.spin.x * dt;
+        wk.m.rotation.y += wk.spin.y * dt;
+        wk.m.rotation.z += wk.spin.z * dt;
+        // 엔진 불은 **꺼진다** — 죽은 것과 산 것을 가르는 표시
+        const fire = wk.m.getObjectByName('엔진불');
+        if (fire) fire.scale.setScalar(Math.max(0.01, 1 - wk.t * 3));
+        if (wk.again > 0) {
+          wk.again -= dt;
+          if (wk.again <= 0) burst(wk.m.position, false);
+        }
+        const k = 1 - wk.t / wk.live;
+        // 끝에 가서 **쪼그라들며** 사라진다. 그냥 지우면 「없어졌다」로 돌아간다
+        if (k < 0.3) wk.m.scale.multiplyScalar(Math.max(0.86, 1 - dt * 2.6));
+        if (wk.t >= wk.live) { g.remove(wk.m); wrecks.splice(i, 1); }
       }
       // 조각들
       for (let i = bits.length - 1; i >= 0; i--) {
@@ -287,9 +370,28 @@ export function buildTargets(parent) {
         if (b.t >= b.live) { g.remove(b.m); bits.splice(i, 1); }
       }
     },
+    /**
+     * ★★ **가장 늦게 생긴 잔해의 자리** — 광학 창이 여기를 비춘다.
+     *   자리를 여기서 주는 이유: 잔해는 규칙에 없는 물건이라 (규칙은 이미
+     *   지웠다) **화면만 아는 값**이다. 밖에서 좌표를 다시 계산하면
+     *   두 벌이 되고, 두 벌은 반드시 갈라진다
+     */
+    lastWreck() {
+      const wk = wrecks[wrecks.length - 1];
+      return wk ? wk.m.position.clone() : null;
+    },
+    /** 지금 이 id 의 물건이 어디 있나 — 날아가는 탄이 따라간다 */
+    posOf(id) {
+      const o = live.get(id);
+      return o ? o.position.clone() : null;
+    },
     /** 검사가 「창밖에 정말 있나」를 묻는다 */
     get seen() {
-      return { n: live.size, kinds: [...live.values()].map((o) => o.name), bits: bits.length };
+      return {
+        n: live.size, kinds: [...live.values()].map((o) => o.name), bits: bits.length,
+        // ★ v79 — 검사가 「격추가 **보이나**」를 물으려면 잔해가 세어져야 한다
+        wrecks: wrecks.length,
+      };
     },
   };
 }
