@@ -105,7 +105,12 @@ export function drawStatus(ctx, x, y, w, h, s, theme = 'hud') {
   ctx.stroke();
 
   const bh = h * 0.086;
-  const top = y + h * 0.19, gap = h * 0.135;
+  // ★★ v99 — 줄이 여섯에서 **일곱**이 되면서 간격을 좁혔다.
+  //   0.135 그대로 두면 일곱째가 `0.19 + 0.135×6 = 1.0` 이라 **판 밖**이다 —
+  //   그리고 캔버스는 넘쳐도 조용하다. 「창이 화면 밖에 그려지고 있었다」를
+  //   코드로는 못 찾는다는 것이 이 저장소의 오랜 교훈이라, 여기는 **셈으로**
+  //   확인한다: 0.19 + 0.113×6 + 0.086 = 0.954 — 아래에 여백이 남는다
+  const top = y + h * 0.19, gap = h * 0.113;
   let i = 0;
   const at = () => top + gap * (i++);
 
@@ -166,7 +171,46 @@ export function drawStatus(ctx, x, y, w, h, s, theme = 'hud') {
       ctx.fillText(s.weapon, x + w * 0.20 + MISSILES.max * (bw2 + gp) + w * 0.02, yy + bh * 0.85);
     }
   }
+
+  // ══ ★★★ ⑦ v99 — **아크 도약** ═══════════════════════════════════════
+  //
+  //  ★ 여섯 줄을 일곱으로 늘렸다. 이 배의 규약은 「방을 안 늘린다」이지
+  //    「줄을 안 늘린다」가 아니고, 이 줄은 **없으면 계통이 안 보인다** —
+  //    26초를 재는 동안 볼 것이 없으면 그건 「아무 일도 안 일어나는 26초」다.
+  //
+  //  ★★ **재는 중이 아니면 전지 수만** 적는다. 늘 막대가 있으면 「지금
+  //    재는 중인가」가 안 읽힌다 — 미사일 줄과 같은 규약이다
+  {
+    const yy = at();
+    const a = s.arc ?? null;
+    const ing = a && a.phase === 'charge';
+    ctx.fillStyle = ing ? T.hot : T.dim;
+    ctx.font = `600 ${Math.round(bh * 0.82)}px system-ui, sans-serif`;
+    ctx.fillText('도약', x, yy + bh * 0.85);
+    if (ing) {
+      // 재는 중 — 막대가 찬다. **다 차면 뛴다**는 것이 눈에 보여야 한다
+      row(ctx, T, x, yy, w, bh, '', clamp01(a.k ?? 0), `${Math.ceil((1 - (a.k ?? 0)) * 26)}초`, true);
+    } else {
+      // ★ 못 뛰면 **왜 못 뛰는지**를 적는다. 회색 막대만 있으면 「고장」으로
+      //   읽힌다 — 이 배의 오랜 규약이다 (`combat-table.js whyNotFire`)
+      const n = a?.cells ?? 0;
+      const need = a?.need ?? 6;
+      ctx.fillStyle = n >= need ? T.fg : 'rgba(140,140,140,.45)';
+      ctx.font = `700 ${Math.round(bh * 0.78)}px system-ui, sans-serif`;
+      ctx.fillText(`전지 ${n}/${need}`, x + w * 0.20, yy + bh * 0.85);
+      if (a?.blocked && a.blocked !== 'cells') {
+        ctx.fillStyle = 'rgba(140,140,140,.45)';
+        ctx.font = `600 ${Math.round(bh * 0.66)}px system-ui, sans-serif`;
+        ctx.fillText(ARC_SHORT[a.blocked] ?? '', x + w * 0.20 + w * 0.30, yy + bh * 0.85);
+      }
+    }
+  }
 }
+
+/** ★ 상태창은 좁다 — 긴 문장 대신 **넉 자**로 (`arc-table.js WHY` 의 짧은 판) */
+const ARC_SHORT = {
+  sink: '열 참', power: '전력 없음', cool: '식는 중', land: '착륙 중', busy: '재는 중',
+};
 
 /**
  * ★ 조종석 HUD 판 하나 — **앉으면 켜지고 서면 꺼진다.**
