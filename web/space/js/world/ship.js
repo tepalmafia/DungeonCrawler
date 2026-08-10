@@ -50,6 +50,17 @@ import { DEP, ROOF, HUD as HUDV } from '../game/view-table.js';
 // ★★★ v91 — HUD 는 **잡은 눈** 앞에 놓아야 한다 (아래 참조). 그 눈의 자리를 읽는다
 import { FLY_VIEW } from '../game/helm-table.js';
 
+/**
+ * ★★★ v92 — **계기 셋이 앉는 높이** (앉은 눈에서 아래로 몇 m).
+ *
+ *   화면을 격자로 쏴서 재 보니(`SPACE.blocked()`) 앉으면 배가 화면의
+ *   24.8% 를 먹는데, 그중 **광학창 35칸**이 **눈보다 위**에 떠 있었다.
+ *   실제 전투기에서 **하늘 위에 겹치는 것은 HUD 하나**이고 나머지는
+ *   눈썹 차양 **아래** MFD 다. 셋을 이 높이 한 줄에 세운다.
+ *   ★ 더 올리면 하늘을 먹고, 더 내리면 무릎 가림판 뒤로 숨는다
+ */
+const MFD_Y = 0.30;
+
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
 // ★ 문 반폭은 **표가 갖는다.** 여기 따로 적으면 문짝과 문구멍이 갈라지고,
@@ -1116,8 +1127,11 @@ export function buildShip(scene, camera = null, renderer = null) {
   //      레이더 계기가 있는 왼쪽 아래 구석과도 안 겹친다. 홀로그램(할 일)이
   //      바로 그 구석에 뜨므로 **셋이 서로 안 포갠다**
   const statusHud = buildStatusHud(HUDV.w * 0.86, HUDV.h * 0.80);
+  // ★★ v92 — **셋을 계기판에 가로로 나란히** (왼쪽 상태 · 가운데 광학 ·
+  //   오른쪽 레이더). 실제 전투기의 MFD 셋이 그 배치이고, 무엇보다
+  //   **하늘을 안 먹는다** — 높이를 하나로 맞춰야 줄이 선다
   statusHud.mesh.position.set(
-    -HUDV.w * 1.42, DEP.y - HUDV.h * 1.16, DEP.z - HUDV.dist - 0.01,
+    -HUDV.w * 1.42, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
   );
   ship.add(statusHud.mesh);
   // ══ ★★★ **레이더 HUD** — 앉으면 눈앞에 뜬다 (v78) ═══════════════════
@@ -1128,7 +1142,7 @@ export function buildShip(scene, camera = null, renderer = null) {
   // ★ 화면을 찍어 자리를 잡았다 — 처음 자리는 **콘솔 기둥에 왼쪽 아래가
   //   물렸다.** 상태창이 왼쪽 위이므로 이쪽은 오른쪽 위로 올려 맞춘다
   radarHud.mesh.position.set(
-    HUDV.w * 1.52, DEP.y - HUDV.h * 0.72, DEP.z - HUDV.dist - 0.01,
+    HUDV.w * 1.52, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
   );
   ship.add(radarHud.mesh);
 
@@ -1149,8 +1163,22 @@ export function buildShip(scene, camera = null, renderer = null) {
       (on) => outside.targets.setTrueScale(on))
     : null;
   if (optic) {
+    // ══ ★★★ v92 — **하늘에서 내려 계기판 위로** ═══════════════════════
+    //
+    //  사장님 「**전투에 방해되잔아**」. v90 이 아래(콘솔)를 치웠고, 화면을
+    //  격자로 쏴서 재 보니(`SPACE.blocked()`) 남은 것은 **하늘 한복판**이었다:
+    //  앉으면 배가 화면의 24.8% 를 먹는데 그중 **광학창이 35칸**이었다.
+    //  자리가 `DEP.y + HUDV.h*0.86` = **눈보다 위**였다 — 창의 왼쪽 위.
+    //
+    //  ★ 고증도 같은 쪽이다. 실제 전투기에서 **하늘 위에 겹치는 것은 HUD
+    //    하나**이고, 조준 포드 영상은 **MFD**(눈썹 차양 아래 계기판)다.
+    //  ★★ 그리고 이 창의 일이 **「붙기 전에 정하는 것」**(v79)이므로
+    //    내려도 죽지 않는다 — 정할 때는 기동 중이 아니라 잠깐 내려다볼 수
+    //    있고, 붙은 뒤에 크게 봐야 하면 **Z 로 전체 화면**이 그대로 있다.
+    //  ★ 눈썹 차양(그 자리에서 눈 아래 약 21도) **밑**에 놓는다. 위로
+    //    올리면 다시 하늘을 먹고, 더 내리면 무릎 가림판 뒤로 숨는다
     optic.mesh.position.set(
-      -HUDV.w * 1.46, DEP.y + HUDV.h * 0.86, DEP.z - HUDV.dist - 0.01,
+      0, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
     );
     ship.add(optic.mesh);
     // ★ 카메라는 **창밖 그룹**에 매단다 — 표적 좌표가 그 그룹 기준이다
