@@ -53,6 +53,70 @@ body.flying #view { cursor: none; }
   background: rgba(160, 230, 190, .9);
 }
 
+/* ★★★ v84 — 회피 지시. **가운데를 안 덮는다** — 빼야 할 쪽에 뜬다 */
+#evade {
+  position: fixed;
+  left: 50%; top: 50%;
+  width: 0; height: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+#evade .tip {
+  position: absolute;
+  left: 0; top: 0;
+  width: 0; height: 0;
+  margin: -15px 0 0 -13px;
+  border-top: 15px solid transparent;
+  border-bottom: 15px solid transparent;
+  border-left: 26px solid #ff5a44;
+  filter: drop-shadow(0 0 8px rgba(255, 90, 68, .85));
+  animation: evadeBeat .42s steps(2, end) infinite;
+}
+@keyframes evadeBeat { 50% { opacity: .35; } }
+#evade .say {
+  position: absolute;
+  left: 0; top: 0;
+  transform: translate(-50%, 86px);
+  white-space: nowrap;
+  font: 700 17px/1 system-ui, sans-serif;
+  color: #ffd7ce;
+  text-shadow: 0 0 10px rgba(255, 90, 68, .9), 0 1px 2px #000;
+}
+/* 얼마나 뺐나 — 다 차면 빗나간다 */
+#evade .bar {
+  position: absolute;
+  left: 0; top: 0;
+  transform: translate(-60px, 108px);
+  display: block;
+  width: 120px; height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .16);
+  overflow: hidden;
+}
+#evade .bar u {
+  display: block;
+  width: 0; height: 100%;
+  background: #ffd166;
+  transition: width .06s linear;
+}
+
+/* ★★★ v84 — 슬로우. **가운데는 비운다** — 볼 것을 가리면 안 된다
+   (급가속 알갱이를 키웠다가 쫓던 적을 가린 v73 의 실수와 같은 자리).
+   가장자리만 물들고, 안쪽은 그대로 보인다. */
+#slow {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(0, 0, 0, 0) 42%,
+      rgba(120, 190, 255, .13) 78%,
+      rgba(90, 150, 230, .30) 100%);
+  box-shadow: inset 0 0 220px rgba(120, 190, 255, .22);
+  transition: opacity .1s linear;
+}
+
 /* ★ pointer-events: none 이 **없어서 게임을 못 켰다.**
    이 창이 화면 한가운데를 덮고 있는데, 시작하려면 캔버스를 눌러야 한다.
    사람은 당연히 글이 적힌 가운데를 누르고, 그러면 이 창이 클릭을 먹어서

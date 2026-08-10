@@ -16,6 +16,7 @@
 //  ★ 창밖 그룹에 매단다 — 배를 틀면 같이 흐른다 (`targets.js` 와 같은 이유)
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
+import { flownAt, speedAt, lit, LAUNCH } from '../game/slow-table.js';
 
 const DEG = Math.PI / 180;
 /** 기수 — 탄이 나가는 자리. 조종석 유리 조금 앞 */
@@ -70,9 +71,13 @@ export function buildShots(parent) {
       m.rotateX(Math.PI / 2);
       g.add(m);
       live.push({ m, kind, t: 0, live: 0.12, beam: true });
+      // ★ 레이저의 몫 — **슬로우 대신 임펙트** (v84)
+      muzzle(0x9cf0ff, 0.7);
       return;
     }
-    // 미사일 둘 — **몸통 + 꼬리 불**
+    // ══ ★★★ v84 — **미사일 · 사출되어 나가고 점화되어 멀어진다** ═══════
+    //  몸통 + **꼬리 불** + 배기. 불은 **처음엔 꺼져 있다** (사출 중) —
+    //  그 대비가 「밀려 나갔다가 붙었다」를 글자 없이 알려 준다
     const s = new THREE.Group();
     const body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.22, 1.1, 3, 6),
@@ -86,18 +91,50 @@ export function buildShots(parent) {
     );
     flame.rotation.x = -Math.PI / 2;
     flame.position.z = 1.1;
+    // ★★ **사출 중에는 불이 없다.** 가스로 밀려 나가는 동안은 모터가
+    //   안 켜져 있다 — 관 안에서 켜면 제 배를 태운다 (진공이면 더욱)
+    flame.visible = false;
     s.add(flame);
+    // ★ 배기 자국 — 점화 뒤에만. 진공이라 **금방 흩어진다** (짧다)
+    const trail = new THREE.Mesh(
+      new THREE.ConeGeometry(0.14, 5.0, 5, 1, true),
+      fireMat(kind === 'ir' ? 0xff7a2a : 0x4aa8ff),
+    );
+    trail.material.opacity = 0.42;
+    trail.rotation.x = -Math.PI / 2;
+    trail.position.z = 3.2;
+    trail.visible = false;
+    s.add(trail);
     s.position.copy(MUZZLE);
     g.add(s);
     live.push({
-      m: s, kind, t: 0, live: 4.0,
+      m: s, kind, t: 0, live: 6.0,
       from: MUZZLE.clone(), to: dst, chase,
       // ★ 열추적탄은 **휜다** — 쏘고 잊는 대신 곧게 안 간다.
       //   유도탄은 곧다 — 묶고 있어야 하는 대신 정확하다
       wobble: kind === 'ir' ? 1 : 0,
+      // ★ **순항** 속도다. 지금 속도는 `speedAt` 이 정한다 (사출 14 → 순항)
       speed: kind === 'ir' ? 95 : 140,
-      flame,
+      flame, trail,
     });
+    // ★★ **사출 섬광** — 관에서 밀려 나오는 그 순간. 미사일이 아직 느려서
+    //   눈앞에 있으므로, 이 빛이 없으면 「어디서 나왔는지」가 안 보인다
+    muzzle(kind === 'ir' ? 0xffc890 : 0x9cd8ff, 0.9);
+  }
+
+  /**
+   * ★★ **총구 섬광** — 쏘는 순간 기수 앞이 번쩍한다.
+   *
+   *   ★ 레이저는 즉발이라 **슬로우가 안 걸린다** (`slow-table.js`).
+   *     빛을 느리게 날리면 v57 이후의 고증이 거짓말이 된다. 대신
+   *     이 섬광으로 갚는다 — 「쐈다」가 몸으로 느껴져야 한다
+   */
+  function muzzle(hex, big = 1) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1.1 * big, 7, 5), fireMat(hex));
+    m.position.copy(MUZZLE);
+    m.position.z += 1.2;
+    g.add(m);
+    live.push({ m, kind: 'flash', t: 0, live: 0.16, pop: true });
   }
 
   /** 터짐 — 맞은 자리에서 (`targets.js` 의 것과 나란히 쓴다) */
@@ -191,15 +228,32 @@ export function buildShots(parent) {
         } else {
           const dir = s.to.clone().sub(s.from);
           const total = dir.length();
-          const gone = Math.min(1, (s.t * s.speed) / Math.max(1, total));
+          // ══ ★★★ v84 — **사출 → 점화 → 가속** (`slow-table.js flownAt`) ══
+          //  `s.t * s.speed` 였다 — 처음부터 순항 속도라 「점점 가속화」가
+          //  없었고, 무엇보다 **규칙(`combat.js`)이 쓰는 비행 시간과 달랐다.**
+          //  이제 규칙과 화면이 **같은 함수**를 쓴다
+          const gone = Math.min(1, flownAt(s.t, s.speed) / Math.max(1, total));
           s.m.position.copy(s.from).addScaledVector(dir, gone);
           if (s.wobble) {
-            // 휜다 — 옆으로 흔들리며 간다
-            s.m.position.x += Math.sin(s.t * 9) * 3.2 * (1 - gone);
-            s.m.position.y += Math.cos(s.t * 7) * 2.4 * (1 - gone);
+            // 휜다 — 옆으로 흔들리며 간다.
+            // ★ 사출 중에는 안 휜다 — 아직 조종면이 안 산다 (불이 없다)
+            const w = lit(s.t) ? 1 : 0;
+            s.m.position.x += Math.sin(s.t * 9) * 3.2 * (1 - gone) * w;
+            s.m.position.y += Math.cos(s.t * 7) * 2.4 * (1 - gone) * w;
           }
           s.m.lookAt(s.to);
-          if (s.flame) s.flame.scale.setScalar(0.7 + Math.random() * 0.5);
+          // ★★ **불은 점화 뒤에만.** 그리고 **속도만큼 길어진다** —
+          //   부스트가 도는 동안 꼬리가 자라는 것이 「가속」으로 읽힌다
+          if (s.flame) {
+            const on = lit(s.t);
+            s.flame.visible = on;
+            if (s.trail) s.trail.visible = on;
+            if (on) {
+              const k = speedAt(s.t, s.speed) / Math.max(1, s.speed);   // 0.15 → 1
+              s.flame.scale.set(0.8 + Math.random() * 0.3, 0.5 + k * 1.6, 0.8 + Math.random() * 0.3);
+              if (s.trail) s.trail.scale.setScalar(0.4 + k * 0.9);
+            }
+          }
           if (gone >= 1) {
             pop(s.m.position);
             g.remove(s.m); live.splice(i, 1);

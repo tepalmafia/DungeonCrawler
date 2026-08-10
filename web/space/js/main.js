@@ -116,9 +116,14 @@ import {
   makeSalvage, dropPack, stepSalvage, fireNet, thrustHeld, callWarn,
   summary as salvSummary, WHY as SALV_WHY,
 } from './game/salvage.js';
-import { spawnRaider } from './game/target.js';
+import { spawnRaider, threatNow, aimingSoon } from './game/target.js';
+// ★★★ v84 — **느려지는 시간** (발사 사출 · 회피). 배율은 한 곳에서만 정한다
+import { SLOW, slowsOnLaunch } from './game/slow-table.js';
+import {
+  makeSlow, askSlow, dropSlow, stepSlow, slowNow, summary as slowSummary,
+} from './game/slow.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
-import { AXES, attitudeWord, rollDeg } from './game/flight-table.js';
+import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
@@ -141,7 +146,7 @@ import {
 } from './game/gun.js';
 import { TURRET_RISE } from './world/turret.js';
 // ★ 떠도는 것들 — 우주 쓰레기와 죽은 위성 (사장님 요청 · game/target-table.js)
-import { KINDS as TKINDS, TARGET, ENEMY_FIRE } from './game/target-table.js';
+import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/target-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
@@ -205,12 +210,19 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 83;
+export const VERSION = 84;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
 const hint = document.getElementById('hint');
 const hud = document.getElementById('hud');
+/** ★★★ v84 — 슬로우일 때 가장자리가 물든다. **가운데는 비운다** */
+const slowFx = document.getElementById('slow');
+/** ★★★ v84 — 회피 지시 — **빼야 할 쪽에** 뜬다 */
+const evBox = document.getElementById('evade');
+const evTip = evBox?.querySelector('.tip');
+const evSay = evBox?.querySelector('.say');
+const evBar = evBox?.querySelector('.bar u');
 const lesson = document.getElementById('lesson');
 const pauseBox = document.getElementById('pause');
 // ★ 게임 오버 — 이 게임의 유일한 끝 (행성 충돌 · 수동 조작 중에만)
@@ -673,6 +685,14 @@ function fireGun() {
   //   오르고 광석이 줄고 hp 가 빠졌다). 화면에서는 아무 일도 안 났고,
   //   격추 게임에서 그건 **쏘는 맛이 아예 없는 것**이다
   ship.outside.shots.fire(w.key, aimed ? aimed.t : null);
+  // ══ ★★★ v84 — **사출되는 동안 시간이 느려진다** ═══════════════════
+  //  ★ 사장님 「순간적으로 슬로우 모션으로 발사되어 **점점 가속화**」.
+  //  ★★ 슬로우 길이가 **사출 구간과 같다** (`SLOW.launch.sec` =
+  //    `LAUNCH.ejectSec`). 그래서 **시간이 돌아오는 순간 불이 붙는다** —
+  //    둘이 한 동작으로 읽히는 것이 이 계통의 요점이다.
+  //  ★ 레이저는 안 건다 — 즉발인 것을 느리게 날리면 v57 의 고증이
+  //    거짓말이 된다. 레이저의 몫은 총구 섬광이다 (`world/shots.js`)
+  if (slowsOnLaunch(w.key)) askSlow(slowmo, 'launch');
 }
 
 /** ★★ 날아간 것이 닿았다 — 부수거나 빗나간다 */
@@ -779,6 +799,18 @@ function takeHits(list) {
       // ★ 빗나간 것도 **알려 준다.** 조용하면 「안 쏘는 줄」 안다 —
       //   피한 것이 피한 것으로 읽혀야 회피가 조작이 된다
       hitFlash = Math.max(hitFlash, 0.18);
+      // ══ ★★★ v84 — **「빗나갔다」와 「피했다」를 가른다** ═══════════
+      //  ★ v83 까지 둘이 같은 칸이었다. 주사위가 빗나간 것을 「피했다」로
+      //    세면, 사람은 **손을 안 써도 피한 것**이 되고 그러면 회피가
+      //    영영 조작이 안 된다. 해낸 것은 해냈다고 말해 줘야 한다
+      if (h.evaded) {
+        banner = '피했습니다';
+        bannerT = 1.6;
+        audio?.event('click');
+        // 다 뺐으면 슬로우를 곧 놓는다 — 끝난 일에 시간이 붙어 있으면
+        // 그건 늘어짐이지 긴장이 아니다
+        dropSlow(slowmo, 'evade');
+      }
       continue;
     }
     const w = h.where;
@@ -1027,6 +1059,13 @@ const loot = { weapon: 0, armor: 0 };
 const salvage = makeSalvage();
 
 /**
+ * ★★★ v84 — **느려지는 시간.** 발사(사출)와 회피가 부른다.
+ *   ★ 둘이 각자 `dt` 를 곱하면 0.45×0.45 = 0.20 이라 화면이 멈춘다.
+ *     `slow.js` 가 **제일 느린 하나만** 쓰고 바닥으로 막는다
+ */
+const slowmo = makeSlow();
+
+/**
  * ★★★ v83 — **화물칸.** 아이템에는 **무게**가 있으므로 「이걸 실을까
  *   저걸 실을까」가 생긴다. 탄두 재료 다섯이 화물칸을 꽉 채우도록
  *   숫자를 맞춰 뒀다 (`cargo-table.js HOLD`)
@@ -1103,6 +1142,10 @@ let stuckT = 0;
 /** 마지막 프레임의 실제 부하 — `renderer.info` 는 매 패스 되돌아간다 */
 let lastCost = { calls: 0, tris: 0 };
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
+/** ★★★ v84 — 지금 급기동(Shift) 중인가. **회피가 이걸 읽는다** */
+let burstNow = false;
+/** ★★★ v84 — 지금 나를 맞힐 탄 하나 (화살표·경고가 읽는다) */
+let threat = null;
 let winching = false;     // 지금 윈치를 잡고 있나
 let loading = false;      // 땅에서 싣고 있나 — 같은 손잡이, 다른 일
 let liftHeldWas = false;  // 이륙은 제 셈을 갖는다 (눌린 순간을 두 곳에서 본다)
@@ -2358,6 +2401,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     if (bev === 'dry') { banner = '추진제가 모자라 못 밀어붙입니다'; bannerT = 2.4; }
   }
   const burst = steering && (input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+  // ★★★ v84 — **회피가 이 값을 읽는다.** 급기동을 안 쓰면 0.9초에
+  //   `DODGE.need` 를 못 채운다 (조종간만으로는 0.9 < 1.0) — 즉
+  //   **급기동을 써야 피해진다.** 값은 이미 있다: 추진제를 크게 태운다
+  burstNow = burst;
   fly3.burst = burst;
   stepFlight(fly3, dt, { atSeat: steering, push: flyPush, manual: !helm.auto, burst });
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
@@ -3361,6 +3408,9 @@ window.SPACE = {
   },
   /** ★ v69 — 상태창이 지금 켜져 있나 (앉으면 켜진다) */
   get statusOn() { return !!ship.statusHud?.mesh?.visible; },
+  /** ★★★ v84 — **느려지는 시간.** 검사가 배율과 예산을 읽는다 */
+  get slow() { return slowSummary(slowmo); },
+  askSlow(who, sec = null) { return askSlow(slowmo, who, sec); },
   /** 검사가 흉터를 하나 얹어 본다 */
   giveScar(sys) {
     for (let i = 0; i < 3; i++) noteFix(scars, sys, { [sys]: 1 }, clock / 60);
@@ -3872,7 +3922,16 @@ function frame(now) {
   last = now;
   // ★ **멈추면 시간도 멈춘다.** dt 를 0 으로 두면 아래 전부가 그대로
   //   얼어붙는다 — 계통마다 「멈췄나」를 묻게 하면 반드시 하나를 빠뜨린다
-  const dt = paused ? 0 : dt0;
+  //
+  // ══ ★★★ v84 — **슬로우도 같은 자리에서 건다** ═══════════════════════
+  //  멈춤을 `dt = 0` 한 줄로 둔 것과 **똑같은 이유**다: 계통마다 「지금
+  //  느린가」를 묻게 하면 반드시 하나를 빠뜨리고, 빠뜨린 그 하나만
+  //  제 속도로 돌아 화면이 어긋난다. 여기 한 줄을 통과시키면 아래가
+  //  전부 같이 느려진다.
+  //  ★ `slowK` 는 **화면·소리**가 읽는다 (가장자리 물듦 · 낮아지는 소리)
+  const slowed = stepSlow(slowmo, paused ? 0 : dt0);
+  const slowK = slowed.k;
+  const dt = paused ? 0 : slowed.dt;
   clock += dt;
 
   // ★ 멈췄으면 **쌓인 마우스도 버린다.** `takeLook()` 은 지난 움직임을
@@ -4437,8 +4496,31 @@ function frame(now) {
   setSkyRegion(sky, ship.outside.region);
   // ★★★ **부딪힌 것을 받아 온다** — 선체 안으로는 못 들어오고, 대신 흔들린다
   // ★★ v70 — 적은 **우리를 겨눠야** 쏜다. 기수 방위를 넘긴다
-  setNose(sky, aimAz);
+  setNose(sky, aimAz, aimEl);
+  // ══ ★★★ v84 — **옆으로 뺀 만큼** (회피) ═══════════════════════════
+  //  ★ `flyPush` 는 조종간 편향이고, 급기동(Shift)이 배수를 곱한다.
+  //    조종간만으로는 0.9초에 `DODGE.need` 를 못 채운다 — 그래서
+  //    **급기동을 써야 피해지고**, 급기동은 추진제를 태운다.
+  //    새 자원을 안 만들고 이미 있는 저울에 얹은 자리다
+  //  ★ 축을 az·el 로 맞춘다: 요는 그대로, 피치는 부호가 반대다
+  //    (화면 위로 밀면 기수가 든다 = el 이 는다)
+  const evMult = burstNow ? RCS.burst.mult : 1;
+  const evade = steering
+    ? { x: flyPush.yaw * evMult, y: flyPush.pitch * evMult }
+    : null;
+  // ══ ★★★ **회피 기동을 하면 슬로우로 전환된다** (사장님 말씀 그대로) ══
+  //  ★ **손이 먼저 움직여야 걸린다.** 저절로 느려지면 그건 상이지 조작이
+  //    아니고, 「자동으로 느려지는 게임」이 된다. 급기동을 누른 그 순간
+  //    시간이 늘어나고, 그 안에서 조종간을 미는 것은 여전히 손이 한다
+  //  ★ **맞을 탄이 있을 때만.** 빗나갈 탄에까지 걸면 그건 거짓말이고,
+  //    그러면 회차 예산도 순식간에 마른다
+  {
+    const th = threatNow(sky, flyPush.yaw, flyPush.pitch);
+    if (th && burstNow) askSlow(slowmo, 'evade', th.t / SLOW.evade.scale + 0.25);
+    threat = th;
+  }
   const skyEv = stepSky(sky, dt, {
+    evade,
     // ══ ★★★ **항로는 자동항법에만 영향을 준다** (v82) ═══════════════
     //
     //  ★ 사장님 「**항로 설정이 안되면 운전할 수 없잔아.** 이것도 고쳐.
@@ -4571,6 +4653,35 @@ function frame(now) {
   // ★ 멈춤 화면이 떠 있으면 안 띄운다 — 안 그러면 매 프레임 다시 켜져서
   //   showPause() 가 접어 놓은 것이 되살아난다. 「접는 곳」과 「켜는 곳」이
   //   다르면 켜는 쪽이 이긴다
+  // ★★ **느려진 것이 눈에 보여야 한다.** 배율만 바꾸면 사람은
+  //   「버벅인다」로 읽는다 — 느린 것과 끊긴 것은 화면이 갈라 준다.
+  //   ★ `dt` 가 아니라 **실시간**으로 물든다 (느릴 때 천천히 물들면
+  //     물드는 것 자체가 안 보인다)
+  if (slowFx) {
+    slowFx.style.opacity = slowK < 0.995
+      ? String(Math.min(0.92, (1 - slowK) * 1.55)) : '0';
+  }
+
+  // ══ ★★★ v84 — **어느 쪽으로 빼야 하는가** ═══════════════════════════
+  //  ★ 화살표를 **가운데가 아니라 그쪽에** 놓는다. 가운데에 두고 방향만
+  //    돌리면 눈이 「돌아간 삼각형」을 읽어야 하는데, 급할 때 사람은
+  //    모양을 안 읽고 **자리**를 본다
+  //  ★ 막대가 없으면 회피가 먹고 있는지 알 수가 없고, 그러면 v83 까지처럼
+  //    또 「주사위」로 읽힌다 — 되먹임이 있어야 조작이다
+  if (evBox) {
+    const show = !!threat && steering && !paused;
+    evBox.hidden = !show;
+    if (show) {
+      const d = threat.dir;
+      const R = 132;
+      const deg = Math.atan2(-d.y, d.x) * 180 / Math.PI;
+      evTip.style.transform = `translate(${(d.x * R).toFixed(0)}px, ${(-d.y * R).toFixed(0)}px) rotate(${deg.toFixed(0)}deg)`;
+      evSay.textContent = `${evadeWord(d)} — 급기동(Shift)`;
+      evSay.style.transform = `translate(calc(-50% + ${(d.x * R).toFixed(0)}px), ${(-d.y * R + 74).toFixed(0)}px)`;
+      evBar.style.width = `${Math.round(threat.k * 100)}%`;
+    }
+  }
+
   if (bannerT > 0 && !paused) {
     bannerT -= dt;
     hud.textContent = banner;
