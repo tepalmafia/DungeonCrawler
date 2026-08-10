@@ -11,7 +11,29 @@ html, body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-#view { display: block; width: 100%; height: 100%; cursor: none; }
+/* ══════════════════════════════════════════════════════════════════════
+   ★★★ **마우스 포인터가 보인다** (v80 · 사장님 「마우스포인트 찾기가 힘들어」)
+
+   ★ v79 까지 `#view { cursor: none }` 이 **늘** 걸려 있었다. 조종 중에는
+     맞다 (포인터 잠금이라 어차피 안 보인다). 그런데 **잠금이 풀린 동안**
+     — 시작 화면 · 멈춤 화면 · 점검 창 — 캔버스 위에서도 그대로 걸려서
+     **커서가 아예 안 보였다.** 「찾기가 힘들다」가 아니라 **없었다.**
+
+   ★★ 그래서 「조종 중일 때만」 숨긴다. 그리고 안 숨길 때는 기본 화살표
+     대신 **십자에 검은 테두리를 두른 큰 커서**를 쓴다 — 배경이 검은
+     우주라 흰 화살표 하나는 별과 구별이 안 된다. 테두리가 있어야
+     밝은 데(행성·폭발)에서도 보인다
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  --aim-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Cg fill='none' stroke='black' stroke-width='5' stroke-opacity='.6'%3E%3Ccircle cx='18' cy='18' r='9'/%3E%3Cpath d='M18 1v7M18 28v7M1 18h7M28 18h7'/%3E%3C/g%3E%3Cg fill='none' stroke='white' stroke-width='2.2'%3E%3Ccircle cx='18' cy='18' r='9'/%3E%3Cpath d='M18 1v7M18 28v7M1 18h7M28 18h7'/%3E%3C/g%3E%3Ccircle cx='18' cy='18' r='2' fill='white'/%3E%3C/svg%3E") 18 18, crosshair;
+}
+#view { display: block; width: 100%; height: 100%; cursor: var(--aim-cursor); }
+/* ★ **조종 중에만** 숨긴다 — main.js 가 포인터 잠금에 맞춰 이 클래스를 켠다 */
+body.flying #view { cursor: none; }
+/* 창들 위에서도 같은 커서 — 단추만 손가락 */
+#hint, #pause, #over, #end, #check { cursor: var(--aim-cursor); }
+#hint button, #pause button, #over button, #end button, #check button,
+#hint summary, #check label, #check select { cursor: pointer; }
 
 /* 조준점 — 손이 닿는 것을 보면 커진다.
    글자로 「E를 눌러 상호작용」이라고 안 쓴다. */

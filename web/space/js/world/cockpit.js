@@ -45,6 +45,8 @@ import { KINDS } from '../game/target-table.js';
 // ★★★ v75 — 레이더 계기가 고증한 값을 읽는다 (숫자와 규약은 표에만)
 import {
   SYMBOL, RINGS, RWR, rwrLevel, elWord, vcWord, bearing,
+  // ★★★ v80 — 소속을 모양으로 가르고, 판 안에 **범례**를 둔다
+  MARK, LEGEND, PLAIN,
 } from '../game/radar-table.js';
 import { RUSH } from '../game/boost-table.js';
 
@@ -403,15 +405,34 @@ function drawRadar(ctx, w, h, s) {
 
     // ★ ④ **심볼로 나눈다.** 원뿔 밖(수색)은 **빈 고리** — 「있는 줄만
     //   안다」가 모양으로 보인다. 채워 그리면 아는 것처럼 보인다
+    // ══ ★★★ **소속을 모양으로 가른다** (v80) ═══════════════════════
+    //  ★ 사장님 「**적이 뭔지 물체가 뭔지 알 수가 없네**」.
+    //    v79 까지 모양은 **「얼마나 잘 아는가」**만 말했다 (수색/추적/락온).
+    //    그건 레이더 기술자의 관심사이고, 조종사가 묻는 것은 **「저게 나를
+    //    죽이나」** 하나다. 실제 전술 심볼로지도 **소속을 모양으로** 가른다
+    //    (적대는 뾰족하게, 중립은 둥글게 — 색맹인 사람에게도 읽히라고).
     if (b.level === 'blip') {
-      ctx.strokeStyle = SYMBOL.search.color;
+      // 원뿔 밖 — **미확인.** 네모난 것이 「아직 뭔지 모른다」다
+      const m0 = MARK.unknown;
+      const q0 = f(m0.size);
+      ctx.strokeStyle = m0.color;
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(px, py, f(SYMBOL.search.size), 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeRect(px - q0, py - q0, q0 * 2, q0 * 2);
       continue;
     }
-    const sym = b.foe ? SYMBOL.foe : SYMBOL.track;
-    ctx.fillStyle = sym.color;
-    ctx.beginPath(); ctx.arc(px, py, f(sym.size), 0, Math.PI * 2); ctx.fill();
+    const mk = b.foe ? MARK.foe : MARK.thing;
+    const q = f(mk.size);
+    ctx.fillStyle = mk.color;
+    if (mk.shape === 'wedge') {
+      // ▽ — 적. 뾰족한 것이 위험한 것이다
+      ctx.beginPath();
+      ctx.moveTo(px - q, py - q * 0.8);
+      ctx.lineTo(px + q, py - q * 0.8);
+      ctx.lineTo(px, py + q);
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(px, py, q, 0, Math.PI * 2); ctx.fill();
+    }
 
     // ★★★ ②③ **점 옆에 두 줄** — 여기가 「오른쪽 왼쪽이 아니고」의 답이다.
     //   고도는 PPI 에 담을 수 없는 축이라 숫자로 내고, 접근율은 실제
@@ -422,12 +443,23 @@ function drawRadar(ctx, w, h, s) {
     //   ★ 접근율까지 점 옆에 적었더니 **글자 둘이 서로 겹쳐 하나도 안
     //     읽혔다** (화면을 찍어서 알았다). 자세한 것은 아래 **데이터 블록**이
     //     맡는다 — 실제 스코프가 우선순위 표적 하나에 그렇게 한다
-    const el = readable.has(b.id) ? elWord(b.relEl) : null;
-    if (el) {
-      ctx.font = `700 ${f(0.055)}px ui-monospace, monospace`;
-      ctx.textAlign = px > cx ? 'left' : 'right';
-      ctx.fillStyle = 'rgba(220,245,235,.92)';
-      ctx.fillText(el, px + (px > cx ? f(0.05) : -f(0.05)), py + f(0.02));
+    // ★★★ v80 — **이름을 적는다.** 모양을 외우게 하는 것보다 「요격기」라고
+    //   적는 편이 빠르다. 계기가 사람에게 맞추는 것이지 그 반대가 아니다.
+    //   ★ 디클러터 안에 든 것만 — 전부 적으면 겹쳐서 하나도 안 읽힌다
+    //     (v75 에 숫자 둘로 그 꼴을 이미 겪었다)
+    if (readable.has(b.id)) {
+      const rt = px > cx ? 'left' : 'right';
+      const dx = px + (px > cx ? f(0.05) : -f(0.05));
+      ctx.textAlign = rt;
+      ctx.font = `700 ${f(0.058)}px system-ui, sans-serif`;
+      ctx.fillStyle = mk.color;
+      ctx.fillText(KINDS[b.kind]?.name ?? '?', dx, py - f(0.01));
+      // ★ `elWord` 는 **수평이면 null 을 준다** (`READ.elMin` 4도 아래).
+      //   그대로 그렸더니 점 밑에 **「null」이라고 찍혔다** — 화면을 찍어서
+      //   알았다. 없을 때는 「수평」이라고 적는다 (아랫줄 데이터 블록과 같은 말)
+      ctx.font = `700 ${f(0.052)}px ui-monospace, monospace`;
+      ctx.fillStyle = 'rgba(220,245,235,.86)';
+      ctx.fillText(elWord(b.relEl) ?? '수평', dx, py + f(0.062));
       ctx.textAlign = 'left';
     }
 
@@ -450,6 +482,30 @@ function drawRadar(ctx, w, h, s) {
   //  안 읽히기 때문이다 — 화면을 찍어 그걸 그대로 겪었다.
   //  ★ 물린 것이 없으면 **제일 가까운 것**을 쓴다. 빈 칸으로 두면
   //    계기가 절반만 사는 것이고, 대개 제일 가까운 것이 제일 급하다
+  // ══ ★★★ **범례** — 판 안에 늘 있다 (v80) ═══════════════════════════
+  //  ★ 사장님 「**튜토리얼이 필요한것 같아. 툴팁이나**」.
+  //    한 번 알려 주고 마는 것보다 **계기에 늘 적혀 있는** 편이 낫다 —
+  //    2시간짜리에서 30분 전에 본 설명은 없는 것과 같다. 이 저장소가
+  //    「문서는 낡아도 조용하다」로 여러 번 겪은 것과 같은 이야기다
+  {
+    ctx.font = `700 ${f(0.050)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    // ★ **맨 아래**에 둔다. 처음에 판 위쪽(0.215)에 뒀더니 **점 이름과
+    //   겹쳤다** — 화면을 찍어서 알았다. 스코프 원이 판을 세로로 거의 다
+    //   먹으므로 글자를 놓을 수 있는 데는 **맨 위와 맨 아래**뿐이고,
+    //   맨 위는 제목과 고리 숫자가 쓴다
+    let lx = w * 0.04;
+    const ly = h * 0.978;
+    for (const g of LEGEND) {
+      const col = g.key === 'lock' ? SYMBOL.lock.color : (MARK[g.key]?.color ?? DIM);
+      ctx.fillStyle = col;
+      ctx.fillText(g.mark, lx, ly);
+      ctx.fillStyle = 'rgba(200,230,220,.62)';
+      ctx.fillText(g.what, lx + f(0.055), ly);
+      lx += f(0.055) + ctx.measureText(g.what).width + f(0.045);
+    }
+  }
+
   const prime = blips.filter((x) => x.level === 'full')
     .sort((x, y) => (y.locked ? 1 : 0) - (x.locked ? 1 : 0) || x.dist - y.dist)[0];
   if (prime) {
@@ -457,12 +513,12 @@ function drawRadar(ctx, w, h, s) {
     ctx.textAlign = 'left';
     ctx.fillStyle = prime.locked ? SYMBOL.lock.color : 'rgba(143,230,192,.72)';
     const nm = KINDS[prime.kind]?.name ?? '표적';
-    ctx.fillText(`${prime.locked ? '◆' : '·'} ${nm}`, w * 0.04, h * 0.90);
+    ctx.fillText(`${prime.locked ? '◆' : '·'} ${nm}`, w * 0.04, h * 0.845);
     ctx.fillStyle = 'rgba(220,245,235,.86)';
     const vc = vcWord(prime.closing);
     ctx.fillText(
       `방위 ${bearing(prime.relAz)}  ${elWord(prime.relEl) ?? '수평'}  ${Math.round(prime.dist)}m${vc ? `  ${vc}` : ''}`,
-      w * 0.04, h * 0.965,
+      w * 0.04, h * 0.905,
     );
   }
 
@@ -510,7 +566,10 @@ function drawRadar(ctx, w, h, s) {
     // ★ 데이터 블록과 **안 겹치는 자리**로 — 둘 다 아래에 두면 서로 먹는다
     ctx.font = `800 ${f(0.072)}px system-ui, sans-serif`;
     ctx.textAlign = 'right';
-    ctx.fillText(worst >= RWR.hot ? '피조준 — 쏜다' : '피조준', w * 0.96, h * 0.26);
+    // ★★ v80 — **군용 약어를 풀어 쓴다.** 사장님이 화면의 「피조준」을
+    //   보시고 「직관적이지 않다」고 하셨다. 아는 사람만 읽는 말은
+    //   계기에 안 적는다 (`radar-table.js PLAIN`)
+    ctx.fillText(worst >= RWR.hot ? '적이 나를 조준 — 쏜다' : PLAIN.threat, w * 0.96, h * 0.26);
     ctx.textAlign = 'left';
   }
 }

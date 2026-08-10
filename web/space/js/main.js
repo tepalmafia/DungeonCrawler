@@ -68,7 +68,7 @@ import { AIMS, pathTo } from './game/guide-table.js';
 import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/door.js';
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
-import { HELM, HELM_SEAT, FLY_VIEW, FLY_KEY, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
+import { HELM, HELM_SEAT, FLY_VIEW, STICK, deflect, YOKE, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord } from './game/combat-table.js';
@@ -192,7 +192,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 79;
+export const VERSION = 80;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -939,6 +939,30 @@ const fly3 = makeFlight();
 /** ★ 승부수 — 쫓길 때의 결심 넷 (v68) */
 const gambit = makeGambit();
 const flyPush = { pitch: 0, yaw: 0, roll: 0 };
+
+/**
+ * ★★★ **가상 조종간의 자리** (v80 · −1~1).
+ *
+ *   마우스가 미는 것은 「그 프레임의 각도」가 아니라 **이 자리**다.
+ *   손을 멈추면 천천히 가운데로 돌아온다 (`helm-table.js STICK`).
+ *   비행 시뮬의 relative mouse 가 하는 일이고, v79 의 「너무 느려」의 답이다
+ */
+const stick = { x: 0, y: 0 };
+
+/**
+ * ★ W/S 로 추력을 켜고 끈다 (v80 · 정석). 차단기와 **같은 길**을 쓴다 —
+ *   두 벌로 만들면 「키로 켠 것과 차단기로 켠 것이 다르다」가 난다
+ */
+function setThrustKey(on) {
+  if (on && !canTurnOn(power) && !power.thrust) {
+    banner = '전력이 모자랍니다 — 다른 것을 끄십시오';
+    bannerT = 2.0;
+    return;
+  }
+  power.thrust = on;
+  banner = on ? '추력 — 켬' : '추력 — 끔';
+  bannerT = 1.4;
+}
 
 // ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════════════
 //  사장님 「상대우주선을 **격추할때마다 적의 무기나 장갑을 회수**하면서
@@ -2595,6 +2619,16 @@ window.SPACE = {
    *   안 놓아지므로 검사가 상태를 보고 한 번 더 눌러야 한다
    */
   get helm2() { return { sat: helmSat, k: +helmSitK.toFixed(2), steering }; },
+  /**
+   * ★★ v80 — **가상 조종간의 자리** (`space-helm.js` · endtoend 가 읽는다).
+   *   기수 각도로 미루어 재면 헤드리스 시계(실제의 1/20) 때문에 값이
+   *   거의 안 움직여서 「스틱이 자리를 지키나」를 못 묻는다 — 스틱 자체를 낸다
+   */
+  get stick() {
+    return { x: +stick.x.toFixed(3), y: +stick.y.toFixed(3), push: { ...flyPush } };
+  },
+  /** 검사가 마우스를 민다 — 헤드리스에서 진짜 마우스 이벤트는 프레임을 탄다 */
+  pushStick(x, y) { stick.x = x; stick.y = y; return { x: stick.x, y: stick.y }; },
   putHelmSit(v) { helmSat = !!v; return helmSat; },
   // ══ ★★★ v79 — **광학 창 · 전투력** (space-optic.js 가 읽는다) ══════
   get optic() {
@@ -3697,34 +3731,48 @@ function frame(now) {
   //   `steering` 은 지난 프레임의 판정이라 한 프레임 늦는다 — 조준은
   //   interactStep 에서 나오고 그건 이 아래에서 돈다. 16ms 라 안 느껴진다.
   if (steering) {
-    steerPush = Math.max(-1, Math.min(1, look.dx * 0.03));
-    // ══ ★★ **세 축** (v60) ══════════════════════════════════════
-    //  여태 마우스 Y 는 **고개**만 움직였다. 조종간을 잡고 있는데
-    //  위아래가 시선이면 그건 조종간이 아니라 손잡이다.
-    //    좌우 → 옆미끄러짐 · 위아래 → **기수** · Q/E → **비틀기(360도)**
-    //  ★ 잡는 동안 고개가 안 돌아가는 것이 맞다 — 두 손으로 미는 중이다.
-    //    놓으면 그대로 돌아온다
+    // ══ ★★★ **가상 조종간** — 마우스+키보드 비행 시뮬의 정석 (v80) ══
+    //
+    //  ★ 사장님 「마우스와 키보드로 비행 전투 시뮬레이션에서는 **어떤
+    //    조작이 정석인지 확인하고 적용**해줘」.
+    //    Elite Dangerous · Star Citizen 계열이 공통으로 쓰는 얼개다:
+    //    **마우스 = 피치+요 · Q/E = 롤 · W/S = 추력**, 그리고
+    //    **relative mouse** — 마우스가 스틱을 밀고 손을 멈추면 천천히 중앙으로.
+    //
+    //  ★★★ **그리고 이것이 v79 「너무 느려」의 진짜 원인이었다.**
+    //    여태 `look.dx * 0.03` 이었는데 그건 **그 프레임에 움직인 화소**다 —
+    //    즉 마우스를 멈추는 순간 조종간이 저절로 가운데로 튄다.
+    //    느린 것이 아니라 **붙잡고 있을 수가 없었다.** 감도를 올렸어도
+    //    똑같았을 것이다 (포스트모템 §1-④).
+    stick.x = Math.max(-1, Math.min(1, stick.x + look.dx * STICK.gain));
+    stick.y = Math.max(-1, Math.min(1, stick.y + look.dy * STICK.gain));
+    // 손을 멈추면 **천천히** 가운데로 — 미는 것보다 훨씬 느리므로
+    // 밀고 있는 동안에는 안 밀린다
+    const back = STICK.center * dt;
+    stick.x -= Math.sign(stick.x) * Math.min(Math.abs(stick.x), back);
+    stick.y -= Math.sign(stick.y) * Math.min(Math.abs(stick.y), back);
+
+    steerPush = deflect(stick.x);
     flyPush.yaw = steerPush;
-    // ══ ★★★ **위아래를 키보드로도** (v79) ═══════════════════════════
-    //  ★ 사장님 「**상하도 키보드 WS 키로 이동**할 수 있도록해줘.
-    //             마우스로 올리고 내리기에 **너무 느려**」
-    //
-    //  ★★ 맞는 말이고, **왜 느린지도 잰 값이 있다.** 마우스 Y 는
-    //    `look.dy * 0.03` 으로 들어오는데, 한 프레임에 20화소를 그어도
-    //    0.6 이다 — 그리고 마우스는 **책상 끝에서 멈춘다.** 키는 안 멈춘다.
-    //
-    //  ★★★ **둘을 더한다, 고르지 않는다.** 키를 누르는 동안 마우스가 죽으면
-    //    「미세 조준은 마우스, 크게 트는 것은 키」가 안 된다. 실제 조종간도
-    //    트림(키)과 손(스틱)이 더해진다. 그리고 **W 가 위**다 — 걷기의
-    //    W(앞)와 같은 손가락이 「나아가는 쪽」을 가리킨다
-    //
-    //  ★ 걷기와 안 부딪힌다: 조종간을 잡으면 `walk()` 가 안 움직인다
-    //    (`steering` 이 켜져 있는 동안 걸음을 막는다 — 아래 walk 주석)
-    const keyPitch = (input.keys.has('KeyW') ? 1 : 0) - (input.keys.has('KeyS') ? 1 : 0);
-    flyPush.pitch = Math.max(-1, Math.min(1, -look.dy * 0.03 + keyPitch * FLY_KEY.pitch));
+    // ★ 화면 위가 「기수를 든다」다 — 마우스를 위로 밀면 올라간다
+    //   (비행 시뮬의 「스틱을 당긴다」와 반대 부호다. 마우스는 조준기라
+    //    화면을 따라가는 편이 훨씬 익다 — Elite 도 기본이 이쪽이다)
+    flyPush.pitch = -deflect(stick.y);
     flyPush.roll = (input.keys.has('KeyE') ? 1 : 0) - (input.keys.has('KeyQ') ? 1 : 0);
+
+    // ══ ★★ **W/S = 추력** — 정석으로 되돌린다 (v80) ═══════════════
+    //  v79 에 W/S 를 피치에 붙였던 것은 **느린 원인을 잘못 짚어서**였다.
+    //  스틱이 자리를 들고 있게 되었으므로 키가 필요 없어졌고,
+    //  W/S 는 이 장르에서 **추력**의 자리다.
+    //  ★ 누르는 동안이 아니라 **누른 순간** 한 번 — 이 배의 추력은
+    //    차단기·레버라 켜고 끄는 물건이다 (`space-helm.js` 규약)
+    if (input.keys.has('KeyW') && !power.thrust) setThrustKey(true);
+    if (input.keys.has('KeyS') && power.thrust) setThrustKey(false);
   } else {
     steerPush = 0;
+    // ★ 놓으면 **스틱도 가운데로 돌아간다** — 안 그러면 다시 잡는 순간
+    //   지난번에 밀어 둔 만큼이 그대로 먹는다
+    stick.x = 0; stick.y = 0;
     flyPush.pitch = 0; flyPush.yaw = 0; flyPush.roll = 0;
     me.yaw -= look.dx * 0.0022;
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
@@ -4509,6 +4557,12 @@ setInterval(() => {
 // ★★ 그리고 노는 중에 잠금이 풀리면 **멈춤 화면**을 띄운다. 여태 아무것도
 //   안 띄우고 제목만 되살렸으므로, 「어디까지 왔나」도 「저장됐나」도
 //   못 보고 제목만 봤다 — 멈춤 화면이 원래 그 말을 하는 자리다
+// ★★★ v80 — **커서를 조종 중에만 숨긴다** (사장님 「마우스포인트 찾기가
+//   힘들어」). CSS 의 `cursor:none` 이 늘 걸려 있어서, 잠금이 풀린
+//   동안(시작·멈춤·점검) **커서가 아예 없었다**
+document.addEventListener('pointerlockchange', () => {
+  document.body.classList.toggle('flying', !!document.pointerLockElement);
+});
 document.addEventListener('pointerlockchange', () => {
   if (wrecked || ended || check.open) return;
   if (!document.pointerLockElement && started && !paused) showPause(true);
