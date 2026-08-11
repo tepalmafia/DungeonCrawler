@@ -399,7 +399,11 @@ function draw(ctx, w, h, s) {
   //    뒤집힘 > 항로. 위가 있으면 아래는 말할 자리가 아니다
   {
     let act = null, tone = DIM;
-    if (s.catchS && s.catchS.id !== null) {
+    if (s.fix && s.fix.hold > 0) {
+      // ★★★ v106 — **수리가 제일 위다.** 누르고 있는 동안은 그것만 말한다
+      act = `수리 중 — P 를 누르고 계십시오 ${(s.fix.need - s.fix.hold).toFixed(1)}초`;
+      tone = WARN;
+    } else if (s.catchS && s.catchS.id !== null) {
       act = s.catchS.word; tone = HOT;
     } else if (s.dock && s.dock.docked) {
       act = `도킹 ${s.dock.word} — 들어온 것 ${s.dock.got ?? 0}`; tone = FG;
@@ -407,6 +411,8 @@ function draw(ctx, w, h, s) {
       act = `H — 붙는다 (${s.dock.near.dist}m)`; tone = SHOOT;
     } else if (isOver(wrapDeg((s.roll ?? 0) * 180 / Math.PI))) {
       act = '★ 뒤집힘 — 조종이 반대입니다'; tone = HOT;
+    } else if (s.fix && s.fix.can && s.fix.cool <= 0) {
+      act = '★ P — 수리'; tone = WARN;
     } else if (s.nav && s.nav.to && !(s.nav.auto && navState(s.nav.off) === 'on')) {
       act = s.nav.word;
       tone = navState(s.nav.off) === 'on' ? SHOOT

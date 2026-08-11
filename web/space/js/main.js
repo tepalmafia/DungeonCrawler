@@ -200,6 +200,9 @@ import { DOCK, WHY as DOCK_WHY, SAY as DOCK_SAY, dockWord, whyNotDock } from './
 import {
   makeDock, tryDock as dockTry, undock, stepDock, docked, summary as dockSummary,
 } from './game/dock.js';
+// ══ ★★★ v106 — **조종석 하나짜리 배** (사장님 「오직 전투와 파밍으로 …
+//   수리는 버튼하나로 해결하고」 · 「공간도 없애주고」 · 걷기는 「b」)
+import { PILOT, FIX, FIX_WHY, needsFix, fixWord } from './game/pilot-table.js';
 // ══ ★★★ v104 — **항법** (사장님 「항로, 미션을 선택하면 네비게이션이
 //   나오도록 해줘. 그래야 **수동으로도 이동할 수 있게**」)
 import { NAV, navWord, navState } from './game/nav-table.js';
@@ -276,7 +279,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 105;
+export const VERSION = 106;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -530,6 +533,26 @@ addEventListener('keydown', (e) => {
     //   두 단계로 두면 「놓았는데 안 나가진다」가 생긴다 — 없앤 상태를
     //   나가는 길에서만 되살리는 꼴이다
     if (helmSat) { yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    return;
+  }
+  // ══ ★★★ v106 — **P · 수리** (단추 하나) ══════════════════════════════
+  //
+  //  ★ 키를 붙이기 전에 **먼저 셌다** (v93 규약). 쓰이는 것이
+  //    A B C D E F G H J K L M Q R S T V W X Z · Shift Space Tab · Digit 이라
+  //    I N O P U Y 가 비어 있었다. **I 는 격납고 창**(사장님 「i창」)에
+  //    남겨 두고, 수리는 **P** 다.
+  //  ★★ **누르고 있어야 한다** (2.4초). 한 번 톡 누르면 되는 것은 조작이
+  //    아니라 단추이고, 이 배에서 공짜인 것은 없다
+  if (!helpOpen && !paused && e.code === 'KeyP') {
+    e.preventDefault();
+    const calmNow = chase.phase !== PHASE.CHASE && chase.phase !== PHASE.CAUGHT;
+    let why = null;
+    if (fix.cool > 0) why = 'cool';
+    else if (!calmNow && FIX.needCalm) why = 'calm';
+    else if (supply.parts < FIX.parts) why = 'parts';
+    else if (!needsFix(faults.wear.hull, heat, HEAT.max)) why = 'fine';
+    if (why) { say(ai, FIX_WHY[why], 'warn'); return; }
+    if (fix.hold <= 0) { fix.hold = 1e-4; say(ai, '수리 — 누르고 계십시오', 'tell'); }
     return;
   }
   // ══ ★★★ v103 — **K · 포획** ══════════════════════════════════════════
@@ -826,6 +849,12 @@ const catchS = makeCatch();
  *     그게 사장님 「그래야 **수동으로도** 이동할 수 있게」의 실체다
  */
 const nav = makeNav();
+/**
+ * ★★★ v106 — **수리 단추 하나** (사장님 「수리는 버튼하나로 해결하고」).
+ *   `hold` 는 누르고 있는 시간 · `cool` 은 다시 누르기까지.
+ *   ★ 공짜가 아니다 — **부품**을 쓰고 **쫓기는 중에는 못 한다**
+ */
+const fix = { hold: 0, cool: 0, why: null };
 /** ★ 이번 프레임에 맞았나 — 포획이 이것을 읽고 풀린다 */
 let hitNow = false;
 /** 지난 프레임의 기수 — 동체가 초당 몇 도 도는지를 여기서 잰다 */
@@ -1202,7 +1231,7 @@ function takeHits(list) {
     say(ai, w.what, 'tell');
     // ★★ 세 번에 한 번만 일이 된다 (`FAULT_CHANCE`). 매번이면 회차가
     //   고장 목록이 되고, 그러면 사람은 싸우는 대신 **안 맞으려고만** 한다
-    if (h.fault && openFault(faults, h.fault)) {
+    if (PILOT.faults && h.fault && openFault(faults, h.fault)) {
       say(ai, `${w.what} — 무언가 잘못됐습니다`, 'tell');
       audio?.event('fault');
     }
@@ -2758,7 +2787,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     audio?.event('fault');
   }
   if (!chasingNow) chaseOver(gambit);
-  if (canFire(tutor, 'fault') && stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
+  // ★★★ v106 — **고장이 안 난다** (`PILOT.faults`). 사장님 「수리 같은건
+  //   일단 모두 멈춰」 · 「뒤로 가서 냉각을 켠다거나 이런 부분은 모두 없애줘」.
+  //   ★ `stepFaults` 를 아예 안 부른다 — 「났는데 안 보이게」로 두면
+  //     손목·계기가 여전히 가리키고, 그건 없앤 것이 아니라 숨긴 것이다
+  if (PILOT.faults && canFire(tutor, 'fault') && stepFaults(faults, dt, { calm, leg: route.leg }) === 'spawn') {
     const o = faults.open[faults.open.length - 1];
     // ★ **증상만 말한다.** 어디인지·무엇인지는 안 말한다 (PLAN §3-1)
     say(ai, o.lead, 'tell');
@@ -2956,7 +2989,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     // 죽지 않는다. **대신 일이 는다** (PLAN §4-4)
     faults.wear.hull = Math.min(1, faults.wear.hull + HAZARD.hit.hull);
     heat = Math.min(HEAT.max, heat + HAZARD.hit.heat);
-    if (HAZARD.hit.fault) { faults.next = 0; stepFaults(faults, 0.001, { calm: true, leg: route.leg }); }
+    if (PILOT.faults && HAZARD.hit.fault) { faults.next = 0; stepFaults(faults, 0.001, { calm: true, leg: route.leg }); }
     say(ai, '부딪혔습니다', 'alarm');
     hitFlash = 1;
     // ★ v74 — **들이받은 것도 선체를 타고 온다.** 제일 낮고 제일 오래 운다.
@@ -4447,6 +4480,17 @@ window.SPACE = {
     }
     return out;
   },
+  /** ★★★ v106 — **수리 단추.** 검사(`space-pilot.js`)와 점검 모드가 읽는다 */
+  get fix() {
+    return {
+      hold: +fix.hold.toFixed(2), cool: +fix.cool.toFixed(1),
+      wear: +faults.wear.hull.toFixed(3), heat: Math.round(heat),
+      parts: supply.parts, needs: needsFix(faults.wear.hull, heat, HEAT.max),
+      faultsOn: PILOT.faults, open: openList(faults).length,
+    };
+  },
+  /** 검사가 P 를 누르고 있는 것과 같게 */
+  doFix() { fix.hold = FIX.hold; return true; },
   /** ★★★ v104 — **항법.** 검사(`space-nav.js`)와 점검 모드가 읽는다 */
   get nav() { return { ...navSummary(nav, !!helm.auto), legMult: nav.mult }; },
   /** 검사가 미션 쪽으로 걸어 본다 */
@@ -5436,6 +5480,37 @@ function frame(now) {
     if (docked(dockS)) chase.sign = Math.min(SIGN.max, chase.sign + DOCK.sign * dt);
   }
 
+  // ══ ★★★ v106 — **수리 단추 하나** (P) ═══════════════════════════
+  //
+  //  ★ 사장님 「**수리는 버튼하나로 해결**하고」 — 걸어가서 손으로 하던
+  //    네 동작(v20)을 **한 자리**로 접는다.
+  //  ★★ 그런데 **공짜면 안 된다.** 공짜면 「맞아도 그만」이 되고, 그러면
+  //    v70 이 만든 「맞으면 일이 된다」가 통째로 사라진다. 값은 **이미
+  //    있는 것**으로 낸다 — 부품(파밍으로 얻는 것)과 시간, 그리고
+  //    **쫓기는 중에는 못 한다**
+  if (fix.cool > 0) fix.cool = Math.max(0, fix.cool - dt);
+  if (fix.hold > 0) {
+    const calmNow = chase.phase !== PHASE.CHASE && chase.phase !== PHASE.CAUGHT;
+    if (!input.keys.has('KeyP') || !calmNow) {
+      // ★ 놓으면 **처음부터** — 톡톡 눌러서 공짜로 고치는 길을 막는다
+      fix.hold = 0;
+      if (!calmNow) say(ai, FIX_WHY.calm, 'warn');
+    } else {
+      fix.hold += dt;
+      if (fix.hold >= FIX.hold) {
+        fix.hold = 0;
+        fix.cool = FIX.cool;
+        supply.parts = Math.max(0, supply.parts - FIX.parts);
+        faults.wear.hull = Math.max(0, faults.wear.hull - FIX.hull);
+        // ★★ **열도 내려간다** — 냉각 밸브가 하던 일을 여기가 이어받는다.
+        //   없애면서 그 값까지 같이 없애면 열 계통이 죽는다
+        heat = Math.max(0, heat - FIX.heat);
+        say(ai, `수리했습니다 — 부품 ${FIX.parts} 썼습니다`, 'tell');
+        audio?.event('fixed');
+      }
+    }
+  }
+
   // ══ ★★★ v101 — **역추진의 값** — 열과 추진제 ═════════════════════════
   //  ★ 새 계통을 안 만든다. 이미 있는 열·추진제 저울에 얹는다
   heat = Math.min(HEAT.max, heat + thrHeat(thr, dt));
@@ -6005,6 +6080,12 @@ function frame(now) {
     // ★★★ v104 — **항로점.** 지금 어디로 가는 중인가 (사장님 「항로,
     //   미션을 선택하면 네비게이션이 나오도록 … 수동으로도 이동할 수 있게」)
     nav: navSummary(nav, !!helm.auto),
+    // ★★★ v106 — **수리 단추** (사장님 「수리는 버튼하나로」)
+    fix: {
+      hold: fix.hold, need: FIX.hold, cool: fix.cool,
+      can: needsFix(faults.wear.hull, heat, HEAT.max) && supply.parts >= FIX.parts,
+      word: fixWord({ busy: fix.hold > 0, left: Math.max(0, FIX.hold - fix.hold), cool: fix.cool }),
+    },
     // ★★★ v103 — **포획.** 붙는 동안 「몇 m 남았나 · 어떻게 끊나」가
     //   안 보이면 사람은 조종간이 왜 안 먹는지 모른다 (v100 의 발사관과
     //   같은 함정이다 — 규칙이 있는데 안 보이면 없는 것과 같다)
