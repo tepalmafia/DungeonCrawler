@@ -409,6 +409,18 @@ function draw(ctx, w, h, s) {
     }
   }
 
+  // ══ ★★★ v103 — **포획** — 따라붙는 중 ═══════════════════════════════
+  //  ★ 도킹 줄과 **같은 자리**를 쓴다. 둘은 한 번에 하나만 뜬다
+  //    (포획이 끝나야 도킹이 시작된다) — 자리를 새로 안 만든다
+  if (s.catchS && s.catchS.id !== null) {
+    ctx.fillStyle = HOT;
+    ctx.font = `700 ${Math.round(h * ROWS.dock.size)}px system-ui, sans-serif`;
+    ctx.fillText(s.catchS.word ?? '', cx, h * ROWS.dock.y);
+    ctx.fillStyle = DIM;
+    ctx.font = `600 ${Math.round(h * ROWS.dockWhy.size)}px system-ui, sans-serif`;
+    ctx.fillText('조종간이 잠깁니다 — 맞으면 풀립니다', cx, h * ROWS.dockWhy.y);
+  }
+
   // ══ ★★★ v103 — **수평의** — 「내가 지금 똑바로 유지하고 있나」 ═══════
   //
   //  ★ 사장님 「비행기를 **q e로 뒤집으면 반대가 되는 것 같은데??**
