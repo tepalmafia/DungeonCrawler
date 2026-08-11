@@ -200,6 +200,15 @@ import { DOCK, WHY as DOCK_WHY, SAY as DOCK_SAY, dockWord, whyNotDock } from './
 import {
   makeDock, tryDock as dockTry, undock, stepDock, docked, summary as dockSummary,
 } from './game/dock.js';
+// ══ ★★★ v107 — **부위와 등급** (사장님 「더 강한 무기, 더 강한 파츠,
+//   더 강한 장갑」 · 「i창을 통해 … 각 부분 별 파츠를」 · 갈아엎기는 「가」)
+import {
+  SLOTS, TIERS, TIER_BY, UPGRADE, CRAFT, oreFor, partName, PWHY,
+} from './game/parts-table.js';
+import {
+  makeFit, mightOf as fitMight, gainPart, equip, upgrade, craft, sparesFor,
+  summary as fitSummary,
+} from './game/parts.js';
 // ══ ★★★ v106 — **조종석 하나짜리 배** (사장님 「오직 전투와 파밍으로 …
 //   수리는 버튼하나로 해결하고」 · 「공간도 없애주고」 · 걷기는 「b」)
 import { PILOT, FIX, FIX_WHY, needsFix, fixWord } from './game/pilot-table.js';
@@ -279,7 +288,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 106;
+export const VERSION = 107;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -533,6 +542,15 @@ addEventListener('keydown', (e) => {
     //   두 단계로 두면 「놓았는데 안 나가진다」가 생긴다 — 없앤 상태를
     //   나가는 길에서만 되살리는 꼴이다
     if (helmSat) { yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    return;
+  }
+  // ══ ★★★ v107 — **I · 기체와 파츠 창** ═══════════════════════════════
+  //
+  //  ★ 사장님 「**i창을 통해 비행기 모양이 모이고 각 부분 별 파츠를 볼 수
+  //    있게** 하자」 · 격납고를 **방에서 화면으로** 옮긴 자리다 (「b」)
+  if (!paused && (e.code === 'KeyI' || (e.code === 'Escape' && bayOpen))) {
+    e.preventDefault();
+    showBay(!bayOpen);
     return;
   }
   // ══ ★★★ v106 — **P · 수리** (단추 하나) ══════════════════════════════
@@ -855,6 +873,12 @@ const nav = makeNav();
  *   ★ 공짜가 아니다 — **부품**을 쓰고 **쫓기는 중에는 못 한다**
  */
 const fix = { hold: 0, cool: 0, why: null };
+/**
+ * ★★★ v107 — **부위 일곱에 달린 것.** 파밍이 여기로 들어온다.
+ *   ★ `MINE.loot`(개수의 거듭제곱)를 **대신한다** — 둘을 같이 두면
+ *     두 곳에서 재게 되고, 그러면 반드시 갈라진다 (사장님 「가」)
+ */
+const fit = makeFit();
 /** ★ 이번 프레임에 맞았나 — 포획이 이것을 읽고 풀린다 */
 let hitNow = false;
 /** 지난 프레임의 기수 — 동체가 초당 몇 도 도는지를 여기서 잰다 */
@@ -1040,6 +1064,112 @@ function navSeed(k) {
   const b = ((h >>> 0) % 10007) / 10007;
   return [a, b];
 }
+// ══ ★★★ v107 — **I 창을 그린다** ═══════════════════════════════════════
+//
+//  ★ 사장님 「**i창을 통해 비행기 모양이 모이고 각 부분 별 파츠를 볼 수
+//    있게** 하자. 파츠도 파밍, 혹은 **재료로 개조, 제작**이 가능하게」
+//
+//  ★★ 도해는 **그림이 아니라 도형**이다. 그림은 사장님이 주시는 것이고
+//    (CLAUDE.md 절대 규칙), 여기 있는 것은 「어느 부위가 어디인가」를
+//    말하는 **배치도**다 — 규격서(`space-model.js`)와 같은 규약이다
+let bayOpen = false;
+/** 기체 도해 — 부위 일곱이 어디에 붙나 (판 크기의 0~1) */
+const FIT_AT = {
+  gun: [0.50, 0.15], tube: [0.26, 0.40], armor: [0.50, 0.50],
+  engine: [0.50, 0.86], sensor: [0.74, 0.40], sink: [0.22, 0.70], hold: [0.78, 0.70],
+};
+function drawBay() {
+  const box = document.getElementById('bay');
+  if (!box) return;
+  const s = fitSummary(fit);
+  // ── 도해 ──────────────────────────────────────────
+  const W = 520, H = 200;
+  const parts = [
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="기체 부위 배치도">`,
+    // 동체 — **쐐기**. 창밖 실루엣·조준경 표식과 같은 모양이라
+    // 「저게 내 배구나」가 한 번에 읽힌다
+    `<path class="hull" d="M${W * 0.5},12 L${W * 0.5 + 52},${H - 26}`
+    + ` L${W * 0.5},${H - 44} L${W * 0.5 - 52},${H - 26} Z"/>`,
+  ];
+  for (const sl of s.slots) {
+    const [fx, fy] = FIT_AT[sl.key] ?? [0.5, 0.5];
+    const x = fx * W, y = fy * H;
+    parts.push(`<rect class="slot-box${sl.canUp ? ' up' : ''}" x="${x - 32}" y="${y - 11}"`
+      + ' width="64" height="22" rx="3"/>');
+    parts.push(`<text class="slot-name" x="${x}" y="${y + 4}" text-anchor="middle">${sl.name}</text>`);
+  }
+  parts.push('</svg>');
+  document.getElementById('fit-diagram').innerHTML = parts.join('');
+
+  // ── 줄 일곱 ────────────────────────────────────────
+  const rows = s.slots.map((sl) => {
+    const canEquip = sl.spares > 0;
+    const canUp = sl.canUp && supply.ore >= sl.oreUp;
+    return `<span>${sl.name}</span>`
+      + `<b><span class="tier-${sl.tier}">${sl.label}</span>`
+      + `<small style="color:#5e6b7a"> &nbsp;${sl.what}</small>`
+      + (sl.spares
+        ? `<br><small style="color:#7d8b9c">여분 ${sl.spares} · 제일 좋은 것 ${sl.best}</small>`
+        : '')
+      + '</b>'
+      + `<button class="act" data-eq="${sl.key}" ${canEquip ? '' : 'disabled'}>단다</button>`
+      + '<span></span><span></span>'
+      + `<button class="act" data-up="${sl.key}" ${canUp ? '' : 'disabled'}>`
+      + `개조 · 광석 ${sl.oreUp}</button>`;
+  }).join('');
+  document.getElementById('fit-rows').innerHTML =
+    `<span>전투력</span><b class="might">${myPower()}</b><span></span>`
+    + `<span>광석</span><b>${Math.round(supply.ore)}</b><span></span>` + rows;
+
+  // ── 탄두 ───────────────────────────────────────────
+  const hs = headSummary(warhead);
+  document.getElementById('head-rows').innerHTML = PARTS5.map((p) => {
+    const inIt = (hs.in ?? []).includes(p.key);
+    return `<span>${p.name}</span><b>${inIt ? '꽂혔습니다' : '아직'}</b>`
+      + `<button class="act" data-head="${p.key}" ${inIt ? 'disabled' : ''}>꽂는다</button>`;
+  }).join('');
+}
+function showBay(on) {
+  bayOpen = !!on;
+  const box = document.getElementById('bay');
+  if (!box) return;
+  if (bayOpen) drawBay();
+  box.hidden = !bayOpen;
+  // ★ 열면 마우스를 풀어 준다 — 안 풀면 단추를 못 누른다
+  if (bayOpen) document.exitPointerLock?.();
+}
+addEventListener('click', (ev) => {
+  const b = ev.target.closest?.('#bay .act');
+  if (b) {
+    if (b.dataset.eq) {
+      const r = equip(fit, b.dataset.eq);
+      say(ai, r.ok ? `${partName(r.put)} 를 달았습니다` : PWHY[r.why], r.ok ? 'tell' : 'warn');
+    } else if (b.dataset.up) {
+      const r = upgrade(fit, b.dataset.up, { ore: supply.ore });
+      if (r.ok) {
+        supply.ore = Math.max(0, supply.ore - r.ore);
+        say(ai, `개조 — ${partName(r.to)}`, 'tell');
+      } else say(ai, PWHY[r.why], 'warn');
+    } else if (b.dataset.head) {
+      if (headPick(warhead, b.dataset.head) || warhead.carrying === b.dataset.head) {
+        warhead.carrying = b.dataset.head;
+        warhead.in.push(b.dataset.head);
+        warhead.carrying = null;
+        say(ai, '탄두에 꽂았습니다', 'tell');
+      } else say(ai, '그 재료가 없습니다', 'warn');
+    }
+    drawBay();
+    return;
+  }
+  const t = ev.target.closest?.('#bay .tabs button');
+  if (!t) return;
+  const fitOn = t.id === 'tab-fit';
+  document.getElementById('tab-fit').classList.toggle('on', fitOn);
+  document.getElementById('tab-head').classList.toggle('on', !fitOn);
+  document.getElementById('pane-fit').hidden = !fitOn;
+  document.getElementById('pane-head').hidden = fitOn;
+});
+
 /** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
 let closeRate = 0;
 let packWas = new Map();
@@ -1147,6 +1277,28 @@ function landShots(dt) {
         loot: null, myWas: myPower(), myNow: null,
         drop: pk ? packWord(pk.has, pk.part) : null,
       });
+    }
+    // ══ ★★★ v107 — **파밍이 파츠를 준다** ═══════════════════════════
+    //
+    //  ★ 사장님 「파밍은 **더 강한 무기, 더 강한 파츠, 더 강한 장갑**…」
+    //  ★★ **무엇을 부쉈나가 무엇이 나오나를 정한다** — 포함을 잡으면
+    //    장갑·주포가, 요격기를 잡으면 엔진·센서가 잘 나온다.
+    //    그래야 「무엇을 골라 부술지」가 한 겹 더 생긴다 (v79 의 규약).
+    //  ★ 등급은 **씨앗이 아니라 그 자리에서** 뽑는다 — 저장하고 이어했을 때
+    //    이미 받은 것이 바뀌지는 않으므로(받은 뒤에는 화물에 있다) 괜찮다
+    {
+      const BY_KIND = {
+        gunship: ['armor', 'gun', 'sink'], turret: ['armor', 'gun'],
+        fighter: ['engine', 'sensor'], drone: ['engine', 'tube'],
+        raider: ['gun', 'tube', 'hold'],
+      };
+      const pool = BY_KIND[t.kind] ?? ['hold'];
+      const slot = pool[(Math.random() * pool.length) | 0];
+      // 등급 — 흔한 것부터 (`TIERS[].find` 가 그 확률이다)
+      let r = Math.random(), tier = 'stock';
+      for (const tt of TIERS) { r -= tt.find; if (r <= 0) { tier = tt.key; break; } }
+      const got = gainPart(fit, slot, tier);
+      if (got) say(ai, `★ ${partName(got)} — I 창에서 답니다`, 'tell');
     }
     say(ai, `${TKINDS[t.kind]?.name ?? ''} 격추 — 잔해가 남았습니다 · 지원 ${Math.round(inS)}초`, 'warn');
     audio?.event('latch');
@@ -1526,13 +1678,18 @@ function takeSalvage(p) {
   audio?.event('fixed');
 }
 
-/** ★ 지금 내 전투력 — **선체가 깎이면 같이 깎인다** */
+/**
+ * ★★★ v107 — 지금 내 전투력. **개수가 아니라 달린 것으로 낸다** (사장님 「가」).
+ *
+ *   ★ v79 부터 `MINE.loot`(노획 **개수**의 거듭제곱)로 냈는데, 그건
+ *     「더 강한 무기」가 아니라 **「무기 몇 개」**였다. 이제 부위 일곱에
+ *     달린 파츠의 **등급**이 낸다 (`parts-table.js`).
+ *   ★★ **선체가 깎이면 같이 깎이는 것**은 그대로 남긴다 — 맞으면 약해지는
+ *     것이 이 게임의 오랜 규약이고, 그것까지 같이 없애면 「맞아도 그만」이 된다
+ */
 function myPower() {
-  return myMight({
-    weapons: WEAPON_LIST.map((w) => w.key),
-    hull: 1 - (faults.wear.hull ?? 0),
-    loot,
-  });
+  const hull = 1 - (faults.wear.hull ?? 0);
+  return +(fitMight(fit) * (0.55 + 0.45 * Math.max(0, hull))).toFixed(1);
 }
 
 /** ★ 광학 창이 지금 무엇을 비추나 — **락온한 것 · 없으면 겨눈 것 · 없으면 제일 가까운 적** */
@@ -4480,6 +4637,12 @@ window.SPACE = {
     }
     return out;
   },
+  /** ★★★ v107 — **부위와 등급.** 검사(`space-parts.js`)와 점검 모드가 읽는다 */
+  get fit() { return fitSummary(fit); },
+  /** 검사가 파츠를 하나 준다 */
+  givePart(slot = 'gun', tier = 'loot') { return gainPart(fit, slot, tier); },
+  /** 검사가 I 창을 연다 */
+  openBay(on = true) { showBay(on); return bayOpen; },
   /** ★★★ v106 — **수리 단추.** 검사(`space-pilot.js`)와 점검 모드가 읽는다 */
   get fix() {
     return {
