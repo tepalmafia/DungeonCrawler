@@ -110,7 +110,12 @@ export function stepRoute(rt, dt, power = {}, opt = {}) {
   //   밖에서 `dt` 를 0 으로 줄여 세우려다 압박까지 같이 멎을 뻔했다 —
   //   그러면 「내려앉아 있으면 시간이 안 간다」가 되어, 내리는 것이
   //   공짜가 된다. 규칙은 **이 파일이 갖는다**: 구간만 세우고 압박은 굴린다
-  rt.t += opt.hold ? 0 : dt * (power.thrust ? 1 : LEG.coast);
+  // ★★★ v104 — **향한 만큼 간다** (`opt.course` · `game/nav.js`).
+  //   사장님 「항로, 미션을 선택하면 네비게이션이 … 수동으로도 이동할 수 있게」.
+  //   ★ 값을 **여기 안 만든다** — 규칙은 `nav.js` 가 갖고 여기는 곱하기만
+  //     한다. 기본이 1 이라 항로점이 없거나 자동 항법이면 예전 그대로다
+  const course = opt.course ?? 1;
+  rt.t += opt.hold ? 0 : dt * (power.thrust ? 1 : LEG.coast) * course;
   rt.press = Math.min(PRESS.max, rt.press + rt.fork.pressRate * dt);
 
   // 넘침 — **한 번만 알린다.** 매 프레임 알리면 경보가 소음이 된다

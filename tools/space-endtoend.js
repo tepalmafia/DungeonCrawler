@@ -1208,6 +1208,34 @@ console.log('\n[6m] ★★★ **포획** — 멀리 날아간 것을 데려오�
   await S(() => { SPACE.clearSky(); });
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6n] **항법** — 고르면 갈 곳이 서나 · 수동에 길이 생기나 (v104)
+//
+//  ★ 사장님 「**항로, 미션을 선택하면 네비게이션이 나오도록 해줘.
+//    그래야 수동으로도 이동할 수 있게.**」
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6n] ★★★ **항법** — 고르면 갈 곳이 서나 (v104)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  const n0 = await S(() => SPACE.nav);
+  ok(!!n0.to, `① ★★ 갈래를 골랐으니 **갈 곳이 서 있다** — 「${n0.word}」`);
+  await S(() => SPACE.putAim(0, 0));
+  await p.waitForTimeout(400);
+  const on = await S(() => SPACE.nav);
+  await S(() => SPACE.putAim(90, 0));
+  await p.waitForTimeout(400);
+  const off = await S(() => SPACE.nav);
+  console.log(`   조준 0도 → ${on.off}° · 배수 ${on.mult}`);
+  console.log(`   조준 90도 → ${off.off}° · 배수 ${off.mult}`);
+  ok(off.off > on.off, '② ★★ 기수를 틀면 **벗어남이 는다**');
+  ok(off.mult < on.mult, `③ ★★★ **틀면 느려진다** (${on.mult} → ${off.mult}) — 수동에 길이 생겼다`);
+  ok(off.mult === 0, '④ ★★★ 완전히 딴 데를 보면 **아예 안 나아간다**');
+  await S(() => SPACE.putAim(0, 0));
+  await p.waitForTimeout(300);
+  ok((await S(() => SPACE.nav.mult)) > 0.8, '⑤ ★ 돌아오면 다시 나아간다');
+}
+
 console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져나갈 길이 있나 (v99)');
 {
   // ★ 여태 견줌은 「절망 — **아크를 채우고 빠진다**」고 말해 왔는데,
