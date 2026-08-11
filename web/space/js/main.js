@@ -2427,10 +2427,6 @@ function interactStep(dt) {
     }
   } else if (plate >= 0 && pressed) {
     if (canPick && chooseFork(route, ship.cock.keyAt(plate))) {
-      // ★★★ v104 — **고르면 갈 곳이 선다** (사장님 「항로, 미션을 선택하면
-      //   네비게이션이 나오도록」). 자리는 **씨앗**으로 뽑는다 —
-      //   `Math.random` 이면 저장하고 이어했을 때 목적지가 옮겨 간다
-      setFork(nav, route.fork, navSeed(`fork${route.leg}`));
       ship.outside.setRegion(regionOf(route));
       say(ai, `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`, 'tell');
       audio?.event('latch');
@@ -3535,7 +3531,6 @@ window.SPACE = {
     if (route.phase === RPHASE.PORT) {
       chooseFork(route, route.offer[0].key);
       ship.outside.setRegion(regionOf(route));
-      setFork(nav, route.fork, navSeed(`fork${route.leg}`));
     }
   },
   /** 지금 조준선에 뭐가 걸리나 — 검사용 */
@@ -4737,7 +4732,7 @@ window.SPACE = {
   /** 갈래를 고른다 — 검사가 관측실까지 안 걸어가고 부를 수 있게 */
   pick(key) {
     const ok = chooseFork(route, key);
-    if (ok) { ship.outside.setRegion(regionOf(route)); setFork(nav, route.fork, navSeed(`fork${route.leg}`)); }
+    if (ok) ship.outside.setRegion(regionOf(route));
     return ok;
   },
   /** 구간을 끝까지 밀어 놓는다 — 거점 도착을 실제로 내 보려고 */
@@ -5214,6 +5209,42 @@ function frame(now) {
   //   센다). 「숨는 것」과 「안 쫓기는 것」은 다르다는 규약 그대로다
   // ★ **응답하는 동안도 구간이 안 나아간다** — 다가가느라 시간을 버리는
   //   것이고 그동안 압박은 계속 쌓인다 (착륙과 같은 규약 · RESCUE.hold)
+  // ══ ★★★ v104 — **갈 곳은 한 곳에서 정한다** ═════════════════════
+  //
+  //  ★ 사장님 「**항로, 미션을 선택하면** 네비게이션이 나오도록 해줘」
+  //
+  //  ★★ 처음에 「갈래를 고르는 순간 걸고, 미션을 고르는 순간 갈아 끼운다」로
+  //    이벤트마다 손으로 걸려고 했다. 그러면 **푸는 자리를 하나만 빠뜨려도
+  //    끝난 미션을 계속 가리킨다** — 이 저장소가 문·에어록·크레이들에서
+  //    세 번 밟은 함정이다 (건 곳은 다섯인데 푸는 곳은 넷이었다).
+  //
+  //  ★★★ 그래서 **매 프레임 「지금 갈 곳이 어디여야 하나」를 다시 정한다.**
+  //    거는 곳도 푸는 곳도 없다 — 상태를 보고 답이 나온다. 우선순위는
+  //    「지금 하고 있는 일」 순이다:
+  //
+  //        ① 구조 신호에 응답 중이거나 옆에 붙는 중  → **구조 신호**
+  //        ② 행성에 내리는 중                        → **행성**
+  //        ③ 아무것도 아니면                         → **이번 구간의 갈래**
+  //
+  //  ★ 미션이 끝나면 ③ 으로 저절로 돌아온다 — 「들렀다가 다시 항로로」가
+  //    코드 한 줄 없이 성립한다
+  {
+    const onRescue = radioOn(rescue) || rescueNear(rescue);
+    const onLand = land.step !== LSTEP.NONE;
+    const want = onRescue ? 'rescue' : (onLand ? 'land' : 'fork');
+    const now = nav.to?.kind === 'mission' ? nav.to.key : (nav.to ? 'fork' : null);
+    // ★ **구간이 바뀌면 갈래도 바뀐다.** `want` 만 보면 「fork → fork」라
+    //   같다고 여겨 **지난 구간의 목적지를 계속 가리킨다** — 첫 판에
+    //   그렇게 짰다가 여기서 잡았다. 어느 갈래인지까지 견준다
+    const same = want === now
+      && (want !== 'fork' || nav.to?.key === (route.fork?.key ?? route.fork?.region));
+    if (!same) {
+      if (want === 'rescue') setMission(nav, { key: 'rescue', name: '구조 신호' }, navSeed(`r${route.leg}`));
+      else if (want === 'land') setMission(nav, { key: 'land', name: '행성' }, navSeed(`l${route.leg}`));
+      else if (route.fork) setFork(nav, route.fork, navSeed(`fork${route.leg}`));
+      else clearNav(nav);
+    }
+  }
   // ══ ★★★ v104 — **항법이 구간 속도를 정한다** ═════════════════════
   //
   //  ★ 사장님 「항로, 미션을 선택하면 네비게이션이 나오도록 해줘.
