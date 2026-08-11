@@ -9,6 +9,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { NET, PACK, CALL, packOf, callIn, inReach, reelTime, WHY, WAYS, timeOf } from './salvage-table.js';
 import { azDiff } from './target.js';
+// ★★★ v103 — **꾸러미가 일정 거리에서 멎는다** (사장님 「멀리 날아가버리잔아」)
+import { DRIFT_MAX } from './catch-table.js';
 
 export function makeSalvage() {
   return {
@@ -68,8 +70,18 @@ export function stepSalvage(s, dt, { moving = true } = {}) {
   for (let i = s.packs.length - 1; i >= 0; i--) {
     const p = s.packs[i];
     p.t -= dt;
-    // 배가 나아가면 멀어진다 — 가만히 안 있는다
-    if (moving) p.dist += PACK.drift * dt;
+    // ══ ★★★ v103 — **일정 거리에서 멎는다** ═══════════════════════
+    //
+    //  ★ 사장님 「적이나 물체를 부수고 **그 자리에 있어야 아이템을
+    //    획득하지. 멀리 날아가버리잔아**」 — 재 보니 그대로였다:
+    //    1.2m/초 × 55초 = **66m** 인데 도킹은 32m 까지만 닿는다.
+    //    즉 **27초가 지나면 영영 못 문다.**
+    //
+    //  ★★ 우주에 마찰이 없으니 「저절로 멎는다」는 거짓말이 아닌가 —
+    //    아니다. **꾸러미도 배와 같은 방향으로 흐르고 있다.** 멀어지는
+    //    것은 배가 더 빨라서이고, 상대 속도는 곧 0 으로 잦아든다.
+    //    고증을 접는 것이 아니라 **제대로 세는 것**이다
+    if (moving) p.dist = Math.min(DRIFT_MAX, p.dist + PACK.drift * dt);
     if (p.t <= 0) {
       // ★ 감고 있던 것이 흩어지면 **그물도 놓친다**
       if (s.net && s.net.pack === p.id) s.net = null;

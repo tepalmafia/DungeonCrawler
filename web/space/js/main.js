@@ -141,6 +141,8 @@ import {
 } from './game/slow.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
+// ★★★ v103 — **비행 보조 · 수평의** (사장님 「물리방향으로 움직이니 너무 어렵다」)
+import { ASSIST, assistWord, rollWord, isOver, wrapDeg } from './game/horizon-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
@@ -198,6 +200,12 @@ import { DOCK, WHY as DOCK_WHY, SAY as DOCK_SAY, dockWord, whyNotDock } from './
 import {
   makeDock, tryDock as dockTry, undock, stepDock, docked, summary as dockSummary,
 } from './game/dock.js';
+// ══ ★★★ v103 — **포획** (사장님 「멀리 날아가버리잔아 … 자동으로 따라붙어서」)
+import { CATCH, CWHY, catchWord } from './game/catch-table.js';
+import {
+  makeCatch, beginCatch, stepCatch, stopCatch, chasing as catching,
+  summary as catchSummary,
+} from './game/catch.js';
 import {
   makeMount, stepMount, errOf as mountErr, offOf as mountOff,
   summary as mountSummary,
@@ -261,7 +269,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 102;
+export const VERSION = 103;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -305,6 +313,11 @@ let focusK = 0;
 /** ★★ 조종석 좌석에 앉아 있나 (v61) · 그리고 얼마나 앉았나 0~1 */
 let helmSat = false;
 let helmSitK = 0;
+/**
+ * ★★★ v103 — **비행 보조가 켜져 있나** (자동 수평 · 기본 켜짐).
+ *   왜 기본이 켜짐인지, 왜 롤에만 거는지는 `game/horizon-table.js` 에 있다
+ */
+let assistOn = ASSIST.on;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
 scene.add(camera);
@@ -510,6 +523,51 @@ addEventListener('keydown', (e) => {
     //   두 단계로 두면 「놓았는데 안 나가진다」가 생긴다 — 없앤 상태를
     //   나가는 길에서만 되살리는 꼴이다
     if (helmSat) { yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    return;
+  }
+  // ══ ★★★ v103 — **K · 포획** ══════════════════════════════════════════
+  //
+  //  ★ 사장님 「적이나 물체를 부수고 **그 자리에 있어야 아이템을 획득하지.
+  //    멀리 날아가버리잔아.** 일정 거리만 날아가고 **포획 같은 단축키로
+  //    자동으로 따라붙어서 도킹해서 아이템을 회수** 할 수 있도록해」
+  //
+  //  ★★ 키를 붙이기 전에 **먼저 셌다** (v93 규약). 회수 식구가 F(팔)·
+  //    G(그물)·B(로봇)·H(도킹)이고, 남은 것이 I K N O P U Y 였다.
+  //    **K 는 그 식구 바로 옆이고 catch 다.**
+  //  ★★★ 누르면 붙고 **다시 누르면 끊는다** — 갇히면 그건 벌이 아니라
+  //    고장이다 (v52 에 좌석에 갇혀 본 적이 있다)
+  if (!helpOpen && !paused && e.code === 'KeyK') {
+    e.preventDefault();
+    if (catchS.id !== null) { stopCatch(catchS); say(ai, '포획을 끊었습니다', 'tell'); return; }
+    const p0 = nearPack();
+    const r = beginCatch(catchS, {
+      has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
+      seated: helmSat || steering,
+      dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+    });
+    if (!r.ok) { say(ai, CWHY[r.why], 'warn'); return; }
+    say(ai, '포획 — 따라붙습니다. 조종간이 잠깁니다', 'alarm');
+    audio?.event('tube');
+    return;
+  }
+  // ══ ★★★ v103 — **L · 비행 보조** (자동 수평) ══════════════════════════
+  //
+  //  ★ 사장님 「**물리방향으로 움직이니 게임이 너무 어렵게 느껴지는데?**」
+  //    「hud 를 만들어야하나? 아니면 **수평 유지 단축키**를 만들어야하나?」
+  //
+  //  ★★ **단축키가 아니다.** 「수평으로 돌려 주는 키」는 사람이 **뒤집힌 줄
+  //    알아야** 누른다. 그런데 사장님이 겪으신 것은 「뒤집혔다」가 아니라
+  //    「반대로 간다」였다 — 누를 생각 자체를 못 하는 상태다.
+  //    그래서 **저절로 도는 것**을 만들고 **기본을 켜짐**으로 둔다.
+  //    이 키는 그것을 **끄는** 키다 (360도를 원하는 사람용).
+  //
+  //  ★ 키를 붙이기 전에 **먼저 셌다** (v93 규약 · v103 은 이름도 센다).
+  //    쓰이는 것이 A B C D E F G H J M Q R S T V W X Z · Shift Space Tab ·
+  //    Digit 이라 I K L N O P U Y 가 비어 있었다. **L 은 level 이다**
+  if (!helpOpen && !paused && e.code === 'KeyL') {
+    e.preventDefault();
+    assistOn = !assistOn;
+    say(ai, assistWord(assistOn), assistOn ? 'tell' : 'warn');
     return;
   }
   if (e.code === 'F1') { e.preventDefault(); showHelp(!helpOpen); return; }
@@ -750,6 +808,13 @@ const mount = makeMount();
 const thr = makeThrottle();
 /** ★★★ v101 — 도킹 회수. 묶은 꾸러미에 붙어서 **여럿을 한 번에** 담는다 */
 const dockS = makeDock();
+/**
+ * ★★★ v103 — **포획.** 부순 자리의 꾸러미로 **저절로 따라붙는다** (K).
+ *   붙는 동안 조종간을 못 쓰고, **맞으면 풀린다** — 그게 값이다
+ */
+const catchS = makeCatch();
+/** ★ 이번 프레임에 맞았나 — 포획이 이것을 읽고 풀린다 */
+let hitNow = false;
 /** 지난 프레임의 기수 — 동체가 초당 몇 도 도는지를 여기서 잰다 */
 let noseWas = { az: 0, el: 0 };
 /** 동체가 지금 도는 속도 (도/초) — 흔들림이 이것에 비례한다 */
@@ -1092,6 +1157,8 @@ function takeHits(list) {
     //   `drone.punch` 3.2). 「두껍고 세다」·「몸이 탄이다」의 뒷절반이 여기다
     const punch = h.punch ?? 1;
     hitFlash = Math.max(hitFlash, Math.min(1, 0.8 * punch));
+    // ★★★ v103 — **포획이 이걸 읽고 풀린다.** 「적이 쏘는 동안은 못 줍는다」
+    hitNow = true;
     faults.wear.hull = Math.min(1, faults.wear.hull + w.hull * punch);
     heat = Math.min(HEAT.max, heat + w.heat * punch);
     // ══ ★★★ **맞은 소리** (v74 · 진공 규칙) ═══════════════════════════
@@ -2820,7 +2887,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   //    겹쳐서 **위아래가 어느 쪽으로도 안 됐다.**
   //  ★★ 조종간을 잡는 것은 이제 **창이 열리고 화면이 커지는 것**의 뜻이지
   //    「조종을 켜는 스위치」가 아니다
-  stepFlight(fly3, dt, { atSeat: steering || helmSat, push: flyPush, manual: !helm.auto, burst });
+  stepFlight(fly3, dt, {
+    atSeat: steering || helmSat, push: flyPush, manual: !helm.auto, burst,
+    // ★★★ v103 — **비행 보조.** 롤만 저절로 수평으로 돌아온다 (L 로 끈다)
+    assist: assistOn,
+  });
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
   //   천천히 돌리면 반동휠이 공짜로 하고, 급하게 돌리면 추력기가 태운다.
   //   360도를 열어 준 값이 여기 있다 — 값이 없으면 조종이 버튼이 된다
@@ -3159,6 +3230,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     ship.optic.redraw({
       on: helmSat,
       target: ot ? { kind: ot.kind, dist: ot.dist, az: ot.az, el: ot.el } : null,
+      // ★★★ v103 — **진짜 메시가 있는 자리**를 같이 준다 (사장님 「광학으로
+      //   보는 hud 랑 타겟원 안에 보는거랑 위치가 다른 것 같은데?」).
+      //   각도로 다시 세면 v98 에서 표적 그룹이 눈에 붙은 만큼 어긋난다 —
+      //   three 가 이미 아는 값을 물어본다
+      at: ot ? ship.outside.targets.worldOf(ot.id) : null,
       zoom: ot ? autoZoom(ot.kind, ot.dist, w.key) : 1,
       push,
       my: myPower(),
@@ -4281,6 +4357,85 @@ window.SPACE = {
     v.project(camera);
     return { x: +v.x.toFixed(3), y: +v.y.toFixed(3), z: +v.z.toFixed(2) };
   },
+  // ══ ★★★ v103 — **계기가 하늘을 얼마나 먹나** ═══════════════════════
+  //
+  //  ★ 사장님 「**광학창이랑 배 상태창이랑 레이더 등이 화면을 너무
+  //    가리는데?** 전투화면이 더 광할하고 방해되지 않는 선에서 재배치해줘」
+  //
+  //  ★★ `blocked()` 는 격자를 쏴서 「얼마나 막혔나」를 세지만 **어느 판이
+  //    화면의 어디를 차지하나**는 못 말한다. 여기서는 판의 **네 귀퉁이를
+  //    진짜 카메라로 투영**한다 — 자리와 크기가 한꺼번에 나온다.
+  //  ★★★ 재는 것과 고치는 것을 한 자리에 두지 않는다: 이 값을 읽고
+  //    **표**(`game/screen-table.js`)가 「어디까지 봐주나」를 정한다
+  panels() {
+    const list = [
+      ['조준경', ship.sight?.mesh], ['광학창', ship.optic?.mesh],
+      ['상태창', ship.statusHud?.mesh], ['레이더', ship.radarHud?.mesh],
+    ];
+    const out = {};
+    const v = new THREE.Vector3();
+    const eye = camera.getWorldPosition(new THREE.Vector3());
+    for (const [name, m] of list) {
+      if (!m || !m.visible) { out[name] = null; continue; }
+      // ★★ **판이 아니라 그룹일 수 있다** (광학창이 그렇다). 처음에
+      //   `geometry.parameters` 를 읽었더니 그룹은 값이 없어 1×1 로 떨어졌고,
+      //   그래서 광학창이 **화면의 95%**라는 거짓말이 나왔다.
+      //   `Box3` 는 둘 다 읽는다 — **재는 것이 화면과 다르면 그 숫자로
+      //   고치면 안 된다** (v92 의 조준 판정 상자와 같은 함정이다)
+      const box = new THREE.Box3().setFromObject(m);
+      if (box.isEmpty()) { out[name] = null; continue; }
+      let x0 = 9, x1 = -9, y0 = 9, y1 = -9, behind = 0;
+      for (const sx of [box.min.x, box.max.x]) {
+        for (const sy of [box.min.y, box.max.y]) {
+          for (const sz of [box.min.z, box.max.z]) {
+            v.set(sx, sy, sz).project(camera);
+            if (v.z > 1) { behind++; continue; }
+            x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x);
+            y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+          }
+        }
+      }
+      if (behind === 8) { out[name] = null; continue; }
+      const mid = box.getCenter(new THREE.Vector3());
+      out[name] = {
+        x0: +x0.toFixed(3), x1: +x1.toFixed(3), y0: +y0.toFixed(3), y1: +y1.toFixed(3),
+        // 화면 넓이의 몇 할인가 (정규화 좌표는 −1~1 이라 넓이가 4 다)
+        area: +(((x1 - x0) * (y1 - y0)) / 4).toFixed(4),
+        cx: +((x0 + x1) / 2).toFixed(3), cy: +((y0 + y1) / 2).toFixed(3),
+        /** ★ 눈에서 얼마나 떨어져 있나 (m) — 각을 낼 때 이것이 분모다 */
+        eye: +eye.distanceTo(mid).toFixed(3),
+        /** ★★ 실제로 **몇 도**를 덮나. 표가 적어 둔 각과 이것이 갈리면
+         *   눈금과 하늘이 어긋난다 (조준경이 그 자리다) */
+        degH: +(2 * Math.atan(Math.abs(x1 - x0) / 2 * Math.tan(camera.fov / 2 * Math.PI / 180)
+          * camera.aspect) * 180 / Math.PI).toFixed(1),
+        degV: +(2 * Math.atan(Math.abs(y1 - y0) / 2 * Math.tan(camera.fov / 2 * Math.PI / 180))
+          * 180 / Math.PI).toFixed(1),
+      };
+    }
+    return out;
+  },
+  /** ★★★ v103 — **포획.** 검사(`space-catch.js`)와 점검 모드가 읽는다 */
+  get catch() {
+    const p0 = nearPack();
+    return {
+      ...catchSummary(catchS),
+      word: catchWord(catchS),
+      near: p0 ? { id: p0.id, dist: Math.round(p0.dist), off: Math.round(p0.off) } : null,
+      packs: (salvage.packs ?? []).length,
+    };
+  },
+  /** 검사가 K 를 누른 것과 같게 */
+  tryCatch() {
+    const p0 = nearPack();
+    return beginCatch(catchS, {
+      has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
+      seated: helmSat || steering,
+      dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+    });
+  },
+  /** ★★★ v103 — **비행 보조** (자동 수평). 검사와 점검 모드가 읽는다 */
+  get assist() { return { on: assistOn, roll: rollDeg(fly3.roll), word: rollWord(wrapDeg(rollDeg(fly3.roll))), over: isOver(rollDeg(fly3.roll)) }; },
+  setAssist(v) { assistOn = !!v; return assistOn; },
   /** ★ 크레이들이 **화면에** 무엇을 그리고 있나 — 「불이 켜졌나」는 여기서만 나온다 */
   get headSeen() { return ship.cradle?.seen ?? null; },
   /** 검사가 재료를 손에 쥐어 준다 — 구간 다섯을 다 돌 수는 없다 */
@@ -4783,6 +4938,16 @@ function frame(now) {
     //    화면을 따라가는 편이 훨씬 익다 — Elite 도 기본이 이쪽이다)
     flyPush.pitch = -deflect(stick.y);
     flyPush.roll = (input.keys.has('KeyE') ? 1 : 0) - (input.keys.has('KeyQ') ? 1 : 0);
+    // ══ ★★★ v103 — **포획 중에는 조종간이 잠긴다** ═══════════════════
+    //  ★ 이것이 포획의 값 전부다. 붙는 동안 기수를 못 돌리므로 **회피를
+    //    못 한다** — 그래서 「지금 주울까 나중에 주울까」가 생긴다.
+    //    이 줄이 없으면 포획은 조작이 아니라 **줍기 단추**다
+    //  ★★ 갇히지는 않는다 — K 를 다시 누르면 그 자리에서 풀린다
+    if (CATCH.holdsHelm && catching(catchS)) {
+      flyPush.yaw = 0; flyPush.pitch = 0; flyPush.roll = 0;
+      steerPush = 0;
+      stick.x = 0; stick.y = 0;
+    }
 
     // ══ ★★ **W/S = 추력** — 정석으로 되돌린다 (v80) ═══════════════
     //  v79 에 W/S 를 피치에 붙였던 것은 **느린 원인을 잘못 짚어서**였다.
@@ -5107,6 +5272,48 @@ function frame(now) {
       closeRate = (packWas.get(p0.id) - p0.dist) / dt;
     } else closeRate = 0;
     packWas = now;
+
+    // ══ ★★★ v103 — **포획** — 따라붙고, 닿으면 문다 ═══════════════════
+    //
+    //  ★ 사장님 「**자동으로 따라붙어서 도킹해서 아이템을 회수**할 수
+    //    있도록해」 — 두 계통을 잇는 자리다. 포획은 **데려다 줄 뿐**이고
+    //    무는 것은 그대로 `dock.js` 가 한다. 새 회수 길을 안 만든다
+    if (catchS.id !== null) {
+      const p1 = (salvage.packs ?? []).find((q) => q.id === catchS.id) ?? null;
+      const rel = p1 ? relOf(p1, { yaw: aimAz, pitch: aimEl }) : null;
+      const why = stepCatch(catchS, dt, {
+        dist: rel ? rel.dist : null,
+        off: rel ? rel.off : null,
+        hit: hitNow, gone: !p1, dry: isDry(supply.fuel),
+        reach: DOCK.reach,
+      });
+      // ★ **읽었으면 지운다.** `takeHits` 는 이 아래에서 도므로 한 프레임
+      //   늦게 닿는데(16ms), 여기서 안 지우면 **한 번 맞은 것이 계속**
+      //   포획을 풀어 다시 걸 수가 없다 — 늦는 것보다 그쪽이 훨씬 나쁘다
+      hitNow = false;
+      // ★ 값은 **이미 있는 저울**에 얹는다 — 새 자원을 안 만든다
+      if (catchS.burned) supply.fuel = Math.max(0, supply.fuel - catchS.burned);
+      if (catchS.signed) chase.sign = Math.min(SIGN.max, chase.sign + catchS.signed);
+      if (catchS.heated) heat = Math.min(HEAT.max, heat + catchS.heated);
+      // ★★ **꾸러미가 다가온다.** 배가 가는 것이지만 자리는 상대 거리로
+      //   들고 있으므로(`salvage.js` 규약) 여기서 줄인다
+      if (p1 && !catchS.arrived) p1.dist = Math.max(2, catchS.dist);
+      if (why === 'hit') say(ai, '★ 맞았습니다 — 포획이 풀렸습니다', 'alarm');
+      else if (why === 'gone') say(ai, '꾸러미가 흩어졌습니다', 'warn');
+      else if (why === 'dry') say(ai, CWHY.dry, 'warn');
+      else if (why === 'arrived') {
+        // ★★★ **닿았으면 그대로 문다** — 사장님이 「따라붙어서 도킹해서」라고
+        //   하신 그대로다. 여기서 또 H 를 누르라고 하면 그건 두 손이다
+        const r = dockTry(dockS, {
+          has: true, id: catchS.id, dist: catchS.dist,
+          close: 0, off: catchS.off, full: cargoLeft(cargo) <= 0,
+        });
+        stopCatch(catchS);
+        say(ai, r.ok ? DOCK_SAY.close : (DOCK_WHY[r.why] ?? '못 물었습니다'),
+          r.ok ? 'tell' : 'warn');
+        if (r.ok) audio?.event('latch');
+      }
+    }
 
     const held = (salvage.packs ?? []).find((q) => q.id === dockS.id) ?? null;
     const ev = stepDock(dockS, dt, {
@@ -5701,6 +5908,10 @@ function frame(now) {
         blocked: why, why: why ? DOCK_WHY[why] : null,
       };
     })(),
+    // ★★★ v103 — **포획.** 붙는 동안 「몇 m 남았나 · 어떻게 끊나」가
+    //   안 보이면 사람은 조종간이 왜 안 먹는지 모른다 (v100 의 발사관과
+    //   같은 함정이다 — 규칙이 있는데 안 보이면 없는 것과 같다)
+    catchS: catchS.id !== null ? { ...catchSummary(catchS), word: catchWord(catchS) } : null,
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,
     // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며

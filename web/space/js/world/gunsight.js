@@ -47,6 +47,11 @@ import { RADAR } from '../game/combat-table.js';
 //   v68·v93·v95 가 전부 그 병이었다
 import { relOf } from '../game/frame.js';
 import { azDiff } from '../game/target.js';
+// ★★★ v103 — **자리는 표에 있다** (사장님 「선이나 글이 의미하는 것은?」·
+//   「타겟 라인이 짤리는 문제도 수정해」). `h*0.95` 같은 것을 여기 안 적는다
+import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs, pitchWord } from '../game/hud-table.js';
+// ★★★ v103 — **수평의.** 「내가 지금 똑바로 유지하고 있는지」
+import { HORIZON, rollWord, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
 
 /**
  * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
@@ -339,8 +344,12 @@ function draw(ctx, w, h, s) {
     const my = cy - (mp * sr + mq * cr);
     const r0 = h * 0.045;
     // ★ 흔들리면 **원이 커진다** — 「불안정」을 글이 아니라 크기로 먼저 말한다
+    // ★★★ v103 — **끝이 있다.** 여태 `pxH(20°)*0.5` 라 400화소까지 커졌고,
+    //   판이 768 이라 **위아래가 통째로 잘렸다** (사장님 사진의 잘린 주황 원).
+    //   고리는 「이 안 어딘가로 간다」는 뜻이므로 판을 넘으면 뜻을 잃는다 —
+    //   넘는 순간부터는 크기가 아니라 **색**이 말한다 (`mountWord` 의 「불안정」)
     const wob = Math.max(0, m.wob ?? 0);
-    const rw = r0 + pxH(Math.min(20, wob)) * 0.5;
+    const rw = Math.min(h * WOBMAX, r0 + pxH(Math.min(20, wob)) * 0.5);
     ctx.strokeStyle = m.pinned ? HOT : (wob > 3 ? 'rgba(255,180,120,.85)' : FG);
     ctx.lineWidth = Math.max(1.4, h * 0.008);
     // 마름모 — 십자선(십자)과 **모양이 달라야** 둘이 안 헷갈린다
@@ -360,8 +369,17 @@ function draw(ctx, w, h, s) {
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(mx, my); ctx.stroke();
     ctx.fillStyle = m.pinned ? HOT : DIM;
     ctx.font = `700 ${Math.round(h * 0.036)}px system-ui, sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText(m.word ?? '', mx + r0 + w * 0.008, my + h * 0.012);
+    // ★★★ v103 — **판 밖으로 안 나간다** (사장님 「타겟 라인이 짤리는 문제」).
+    //   여태 마름모 오른쪽에 그냥 붙였는데, 마름모가 오른쪽 끝에 있으면
+    //   글이 판을 넘어갔다 — 사장님 사진의 「…적 중」이 그것이다.
+    //   넘칠 것 같으면 **왼쪽에** 적는다
+    const word = m.word ?? '';
+    const wpx = ctx.measureText(word).width;
+    const rightOK = mx + r0 + w * 0.008 + wpx <= w * SAFE.x1;
+    ctx.textAlign = rightOK ? 'left' : 'right';
+    ctx.fillText(word,
+      rightOK ? mx + r0 + w * 0.008 : Math.max(w * SAFE.x0 + wpx, mx - r0 - w * 0.008),
+      Math.max(h * (SAFE.y0 + 0.03), Math.min(h * 0.62, my + h * 0.012)));
     ctx.textAlign = 'center';
   }
 
@@ -371,20 +389,146 @@ function draw(ctx, w, h, s) {
   //    **거리**와 **다가가는 속도**다. 속도가 한계를 넘으면 걸쇠가 튕기므로
   //    (「너무 빠릅니다 — 역추진으로 줄이십시오」) 그 값이 안 보이면
   //    사람은 왜 안 물리는지 모른다
+  //  ★★★ v103 — **자리를 표에서 읽는다** (`hud-table.js ROWS`). 여태 여기
+  //    `h*0.80` 이라고 적혀 있었고, 아랫줄·자국 막대도 각자 제 숫자를
+  //    갖고 있었다 — 그래서 셋이 겹치는 것을 아무도 못 봤다
   if (s.dock && (s.dock.near || s.dock.docked)) {
     const d = s.dock;
-    const bx = w * 0.5, by = h * 0.80;
+    const bx = w * 0.5;
     const soft = (d.close ?? 0) <= (d.softAt ?? 12);
     ctx.fillStyle = d.docked ? FG : (soft ? FG : HOT);
-    ctx.font = `700 ${Math.round(h * 0.042)}px system-ui, sans-serif`;
+    ctx.font = `700 ${Math.round(h * ROWS.dock.size)}px system-ui, sans-serif`;
     const line = d.docked
       ? `도킹 ${d.word} — 들어온 것 ${d.got ?? 0}`
       : `도킹 H — ${d.near ? `${d.near.dist}m` : ''} · 접근 ${(d.close ?? 0).toFixed(1)}m/초`;
-    ctx.fillText(line, bx, by);
+    ctx.fillText(line, bx, h * ROWS.dock.y);
     if (!d.docked && d.blocked) {
       ctx.fillStyle = soft ? DIM : HOT;
-      ctx.font = `600 ${Math.round(h * 0.034)}px system-ui, sans-serif`;
-      ctx.fillText(d.why ?? '', bx, by + h * 0.045);
+      ctx.font = `600 ${Math.round(h * ROWS.dockWhy.size)}px system-ui, sans-serif`;
+      ctx.fillText(d.why ?? '', bx, h * ROWS.dockWhy.y);
+    }
+  }
+
+  // ══ ★★★ v103 — **포획** — 따라붙는 중 ═══════════════════════════════
+  //  ★ 도킹 줄과 **같은 자리**를 쓴다. 둘은 한 번에 하나만 뜬다
+  //    (포획이 끝나야 도킹이 시작된다) — 자리를 새로 안 만든다
+  if (s.catchS && s.catchS.id !== null) {
+    ctx.fillStyle = HOT;
+    ctx.font = `700 ${Math.round(h * ROWS.dock.size)}px system-ui, sans-serif`;
+    ctx.fillText(s.catchS.word ?? '', cx, h * ROWS.dock.y);
+    ctx.fillStyle = DIM;
+    ctx.font = `600 ${Math.round(h * ROWS.dockWhy.size)}px system-ui, sans-serif`;
+    ctx.fillText('조종간이 잠깁니다 — 맞으면 풀립니다', cx, h * ROWS.dockWhy.y);
+  }
+
+  // ══ ★★★ v103 — **수평의** — 「내가 지금 똑바로 유지하고 있나」 ═══════
+  //
+  //  ★ 사장님 「비행기를 **q e로 뒤집으면 반대가 되는 것 같은데??**
+  //    그렇다면 **내가 지금 똑바로 유지하고 있는지를 표시**해줘야 하나?」
+  //
+  //  ★★ 물으신 끝에 스스로 답하신 그대로다. 뒤집히면 조종이 반대가 되는
+  //    것은 **버그가 아니라 물리**이고 (조종은 동체 기준, 눈은 세상 기준),
+  //    실기가 그것을 푼 방법이 **수평의**다.
+  //
+  //  ★★★ 그리는 것은 **비스듬한 선 하나**다. 세상의 수평선을 판 위에
+  //    얹으면 십자선(동체)과의 각이 곧 지금 기울기이므로, **숫자를 읽기
+  //    전에 눈이 먼저 안다.** 숫자는 그 아래 한 줄로 거든다.
+  //  ★ 표식 회전(`cr`·`sr`)을 **그대로 쓴다** — 여기서 다시 세지 않는다
+  {
+    const rdeg = wrapDeg((s.roll ?? 0) * 180 / Math.PI);
+    const over = isOver(rdeg), lv = isLevel(rdeg);
+    const col = over ? HOT : (Math.abs(rdeg) > HORIZON.warnAt ? WARN : DIM);
+    // ══ ★★★ v103 (두 번째 판) — **피치도 넣는다** ════════════════════
+    //
+    //  ★ 사장님 「**비행기 현재 회전 상때도 도입했어?**」
+    //
+    //  ★★ 첫 판은 절반이었다: 선을 **늘 복판**에 그려서 롤만 보였다.
+    //    실기 자세계는 「복판에 못박힌 기수 표시 + **오르내리는** 수평선」이
+    //    한 벌이고, **그 사이의 벌어짐이 곧 기수 각**이다. 선을 복판에
+    //    못박으면 그 정보가 통째로 사라진다.
+    //  ★ 접는 이유(`ADI.squeeze`)는 표에 적어 뒀다 — 판이 세로 20도라
+    //    참 크기로는 **기수 10도에 벌써 판 끝**이다
+    const eldeg = s.el ?? 0;
+    // 수평선이 판에서 얼마나 내려가 있나 (기수를 들면 아래로)
+    const drop0 = -pxV(Math.max(-79, Math.min(79, eldeg))) * ADI.squeeze;
+    // ★ 판을 넘으면 **가장자리에 붙여 남긴다** — 사라지면 「얼마나
+    //   들렸나」를 볼 방법이 없어진다
+    const lim = h * ADI.pin;
+    const pinned = Math.abs(drop0) > lim;
+    const drop = pinned ? Math.sign(drop0) * lim : drop0;
+    const ux = cr, uy = -sr;                    // 세상의 가로 방향
+    const vx = sr, vy = cr;                     // 세상의 위아래 방향
+    /** 수평선 기준으로 (앞으로 a, 아래로 b) 만큼 간 자리 */
+    const P = (a, b) => [cx + ux * a + vx * (drop + b), cy + uy * a + vy * (drop + b)];
+
+    // ── 수평선 — 가운데는 십자선 자리라 비운다 ─────────────
+    // ★ 가운데를 **넉넉히** 비운다. 처음에 0.075 로 뒀더니 십자선이 선에
+    //   묻혔다 — 화면으로 잡았다. 수평의는 거드는 것이지 주인공이 아니다
+    const L = w * 0.32, G = w * 0.125;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(1.4, h * (lv ? 0.007 : 0.010));
+    ctx.beginPath();
+    ctx.moveTo(...P(-L, 0)); ctx.lineTo(...P(-G, 0));
+    ctx.moveTo(...P(G, 0)); ctx.lineTo(...P(L, 0));
+    // ★ 양 끝에 **아래로 꺾인 날개** — 어느 쪽이 하늘인지 선만으로는 모른다.
+    //   실제 수평의의 눈금이 하는 일이 이것이다
+    const dn = h * 0.035;
+    for (const sgn of [-1, 1]) {
+      ctx.moveTo(...P(L * sgn, 0)); ctx.lineTo(...P(L * sgn, dn));
+    }
+    ctx.stroke();
+
+    // ── ★★ 피치 사다리 — 10도마다 ────────────────────────
+    //  ★ 짧게 · 옅게 긋는다. 수평선보다 눈에 띄면 「지금 수평이 어디냐」가
+    //    안 읽힌다 — 사다리는 눈금이지 주인공이 아니다
+    //  ★★★ **꺾여 있으면 안 그린다.** 수평선이 판 밖이라 `drop` 을 붙여
+    //    놓은 상태에서 사다리를 그리면 눈금이 제자리가 아닌 곳에 **뭉친다** —
+    //    화면을 찍어 잡았다. 뜻이 없는 눈금은 눈금이 아니라 얼룩이다.
+    //    이때는 **가장자리 화살표**만 어느 쪽인지 말한다
+    ctx.strokeStyle = DIM;
+    ctx.lineWidth = Math.max(1, h * 0.004);
+    ctx.font = `600 ${Math.round(h * 0.030)}px ui-monospace, monospace`;
+    ctx.fillStyle = DIM;
+    ctx.textAlign = 'center';
+    const RL = w * 0.10, RG = w * 0.125;
+    if (pinned) {
+      // 붙은 쪽을 가리키는 꺾쇠 — 「수평선은 저 아래(위)에 있다」
+      const sgn = Math.sign(drop0);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(1.4, h * 0.008);
+      ctx.beginPath();
+      const a0 = w * 0.045, b0 = h * 0.030 * sgn;
+      ctx.moveTo(...P(-a0, 0)); ctx.lineTo(...P(0, b0)); ctx.lineTo(...P(a0, 0));
+      ctx.stroke();
+    } else for (const d of rungs()) {
+      // 눈금은 수평선에서 **d 도만큼 떨어진** 자리다 (같은 자로 접는다)
+      const b = pxV(d) * ADI.squeeze;
+      if (Math.abs(drop + b) > h * 0.46) continue;   // 판 밖은 안 그린다
+      ctx.beginPath();
+      for (const sgn of [-1, 1]) {
+        ctx.moveTo(...P(RG * sgn, b)); ctx.lineTo(...P((RG + RL) * sgn, b));
+        // ★ 아래쪽 눈금은 **끝을 위로 꺾는다** — 위아래를 모양으로 가른다
+        //   (실기 사다리의 규약이다. 색이나 굵기로 가르면 흐린 화면에서 진다)
+        if (d < 0) { ctx.moveTo(...P((RG + RL) * sgn, b)); ctx.lineTo(...P((RG + RL) * sgn, b - dn * 0.6)); }
+      }
+      ctx.stroke();
+      const [tx, ty] = P(-(RG + RL) - w * 0.028, b);
+      ctx.fillText(String(Math.abs(d)), tx, ty + h * 0.010);
+    }
+
+    // ── 말 — 기울기와 기수 각 ─────────────────────────────
+    // ★★ 조용할 때는 안 적는다. 늘 떠 있는 경고는 경고가 아니다 —
+    //   수평이고 기수도 평평하면 선과 사다리만 서 있는다
+    const pw = pitchWord(eldeg);
+    const bits = [];
+    if (!lv) bits.push(rollWord(rdeg));
+    if (pw !== '수평') bits.push(pw);
+    // ★ 「수평선이 화면 밖」은 **안 적는다** — 꺾쇠가 이미 말한다.
+    //   같은 것을 그림과 글로 두 번 말하면 줄만 길어지고 안 읽힌다
+    if (bits.length) {
+      ctx.fillStyle = col;
+      ctx.font = `700 ${Math.round(h * ROWS.level.size)}px system-ui, sans-serif`;
+      ctx.fillText(bits.join(' · '), cx, h * ROWS.level.y);
     }
   }
 
@@ -427,7 +571,11 @@ function draw(ctx, w, h, s) {
   //    그러면 이 게임의 손이 통째로 없어진다. **잡는 것은 레이더,
   //    맞히는 것은 손** — v79 부터의 규약이다
   {
-    const rr = LOCK_CONE * sx;
+    // ★★★ v103 — `LOCK_CONE * sx` 였다. `sx` 는 **눈금선용 비례**라
+    //   표적을 놓는 자(`pxH` · tan)와 다르다 — 즉 **원의 크기와 표적의
+    //   자리가 서로 다른 자로** 그려지고 있었다. v98 에 선도점에서 고친
+    //   그 자리이고, 락온 원만 남아 있었다. **찍는 자는 하나여야 한다**
+    const rr = pxH(LOCK_CONE);
     ctx.strokeStyle = locked ? HOT : 'rgba(143,230,192,.30)';
     ctx.lineWidth = Math.max(1.2, h * 0.006);
     ctx.setLineDash(locked ? [] : [h * 0.03, h * 0.03]);
@@ -448,8 +596,12 @@ function draw(ctx, w, h, s) {
   }
 
   // ── 아래 한 줄 — **숫자로 안 띄운다** ────────────────────
+  //  ★★★ v103 — **0.085 → 0.055.** 65화소짜리 글씨가 자국 막대(h·0.90)를
+  //    뚫고 지나가고 있었다 — 사장님 사진의 「좌 3?■■· 위 34°」가 그것이다.
+  //    글씨를 줄이고 자국은 위로 옮겼다 (`hud-table.js SIGNBOX`)
   ctx.fillStyle = locked ? HOT : DIM;
-  ctx.font = `700 ${f(0.085)}px system-ui, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.font = `700 ${f(ROWS.foot.size)}px system-ui, sans-serif`;
   // ★ 화면 안에 있으면 그것을, 없으면 **제일 가까운 것이 어느 쪽인지**를
   //   말한다. 「없습니다」는 하늘이 정말 빌 때만 쓴다
   const word = near
@@ -458,15 +610,15 @@ function draw(ctx, w, h, s) {
     : any
       ? sideWord(any, aimAz, aimEl)
       : '떠도는 것이 없습니다';
-  ctx.fillText(word, w * 0.05, h * 0.95);
+  ctx.fillText(word, w * COLS.left, h * ROWS.foot.y);
 
   if (s.cool > 0) {
     ctx.fillStyle = DIM;
     ctx.textAlign = 'right';
-    ctx.font = `700 ${f(0.08)}px ui-monospace, monospace`;
-    ctx.fillText('재는 중', w * 0.95, h * 0.95);
-    ctx.textAlign = 'left';
+    ctx.font = `700 ${f(ROWS.foot.size)}px ui-monospace, monospace`;
+    ctx.fillText('재는 중', w * COLS.right, h * ROWS.foot.y);
   }
+  ctx.textAlign = 'center';
 }
 
 /**
@@ -486,17 +638,24 @@ function draw(ctx, w, h, s) {
  *   HUD 로 올린다. **모는 동안 보는 것**이라 원래 여기 있어야 했다:
  *   왼쪽 아래 구석에 숫자와 막대만. 자리를 많이 안 먹는다
  */
+// ══ ★★★ v103 — **왼쪽 아래에서 오른쪽 위로** ═══════════════════════════
+//  ★ 여기가 `w*0.05, h*0.90` 이었고 아랫줄 글도 `w*0.05, h*0.95` 였다 —
+//    **같은 구석에 둘**이라 글자가 막대를 뚫고 지나갔다 (사장님 사진).
+//  ★★ 자국은 「지금 얼마나 눈에 띄나」라 **늘 떠 있는 값**이고, 늘 떠
+//    있는 것은 구석으로 간다. 아랫줄은 바뀌는 값이라 눈이 가는 자리에 둔다
 function drawSign(ctx, w, h, s) {
+  ctx.textAlign = 'left';
   if (!s.power?.sensor) {
     ctx.fillStyle = 'rgba(255,154,92,.85)';
-    ctx.font = `600 ${Math.round(h * 0.055)}px system-ui, sans-serif`;
-    ctx.fillText('탐지 꺼짐', w * 0.05, h * 0.95);
+    ctx.font = `600 ${Math.round(h * SIGNBOX.label)}px system-ui, sans-serif`;
+    ctx.fillText('탐지 꺼짐', w * SIGNBOX.x, h * (SIGNBOX.y + SIGNBOX.h));
+    ctx.textAlign = 'center';
     return;
   }
   const at = s.contactAt ?? SIGN.contactAt;
   const v = Math.max(0, Math.min(1, (s.sign ?? 0) / SIGN.max));
   const over = (s.sign ?? 0) > at;
-  const bx = w * 0.05, by = h * 0.90, bw = w * 0.20, bh = h * 0.035;
+  const bx = w * SIGNBOX.x, by = h * SIGNBOX.y, bw = w * SIGNBOX.w, bh = h * SIGNBOX.h;
   ctx.strokeStyle = DIM; ctx.lineWidth = 1;
   ctx.strokeRect(bx, by, bw, bh);
   ctx.fillStyle = over ? HOT : FG;
@@ -508,8 +667,9 @@ function drawSign(ctx, w, h, s) {
   ctx.lineTo(bx + bw * (at / SIGN.max), by + bh + h * 0.012);
   ctx.stroke();
   ctx.fillStyle = over ? HOT : DIM;
-  ctx.font = `600 ${Math.round(h * 0.05)}px ui-monospace, monospace`;
-  ctx.fillText(`자국 ${Math.round(s.sign ?? 0)}`, bx, by - h * 0.022);
+  ctx.font = `600 ${Math.round(h * SIGNBOX.label)}px ui-monospace, monospace`;
+  ctx.fillText(`자국 ${Math.round(s.sign ?? 0)}`, bx, by - h * 0.014);
+  ctx.textAlign = 'center';
 }
 
 export function buildSight(width = 2.1, height = 1.5) {

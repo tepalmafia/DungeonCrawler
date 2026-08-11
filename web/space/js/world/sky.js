@@ -455,11 +455,23 @@ export function buildDust(parent, z) {
       attr.needsUpdate = true;
       // ★ 줄은 **알갱이가 지나온 쪽으로** 뻗는다. 먼지는 z 가 커지는 쪽으로
       //   흐르므로(`arr[k] += d`) 자국은 **작은 z 쪽**, 즉 `-sLen` 이다
+      // ══ ★★★ v103 — **뒤로 갈 때는 반대다** ═══════════════════════════
+      //
+      //  ★ 사장님 「**반대로 가면 빛무리가 반대 방향으로 날아가서 속도감이
+      //    반대**이고」 — 맞다. 여기가 `- sLen` 으로 **못박혀** 있었다.
+      //
+      //  ★★ 역추진(v101)이 들어오면서 `d` 가 음수가 될 수 있게 됐는데
+      //    자국은 그대로 앞쪽으로 뻗었다 — 즉 **꼬리가 머리 쪽에 달렸다.**
+      //    알갱이는 뒤로 흐르는데 자국은 앞으로 뻗으니 눈이 「앞으로 간다」로
+      //    읽는다. 속도감이 반대인 것이 아니라 **자국이 거짓말**을 했다.
+      //  ★ v101 에 스로틀을 만들면서 이 줄을 안 고쳤다 — 계통을 하나 더하면
+      //    **딸린 값도 같이 고친다**가 이 저장소가 제일 자주 밟는 함정이다
       if (streak.visible) {
+        const tail = (d < 0 ? sLen : -sLen);
         for (let i = 0; i < DUST.n; i++) {
           const a = i * 6, b = i * 3;
           sp[a] = arr[b]; sp[a + 1] = arr[b + 1]; sp[a + 2] = arr[b + 2];
-          sp[a + 3] = arr[b]; sp[a + 4] = arr[b + 1]; sp[a + 5] = arr[b + 2] - sLen;
+          sp[a + 3] = arr[b]; sp[a + 4] = arr[b + 1]; sp[a + 5] = arr[b + 2] + tail;
         }
         sg.attributes.position.needsUpdate = true;
       }

@@ -59,7 +59,10 @@ import { FLY_VIEW } from '../game/helm-table.js';
  *   눈썹 차양 **아래** MFD 다. 셋을 이 높이 한 줄에 세운다.
  *   ★ 더 올리면 하늘을 먹고, 더 내리면 무릎 가림판 뒤로 숨는다
  */
-const MFD_Y = 0.30;
+// ★★★ v103 — 0.30 → 0.28. 재 보니 상태창·레이더의 **아래끝이 화면 밖**이었다
+//   (y −1.02 · −1.07). 사장님 사진에서 레이더의 「파편 · 방위」 줄이 잘려
+//   있던 것이 이것이다 — **잘린 계기는 없는 계기다** (`space-screen.js`)
+const MFD_Y = 0.28;
 
 /**
  * ══ ★★★ v102 — **곁판은 눈을 보게 돌린다** ═══════════════════════════
@@ -1154,7 +1157,9 @@ export function buildShip(scene, camera = null, renderer = null) {
   //      조준선·선도점·표적 지시선이 지나는 복판을 안 건드리고, 아래로는
   //      레이더 계기가 있는 왼쪽 아래 구석과도 안 겹친다. 홀로그램(할 일)이
   //      바로 그 구석에 뜨므로 **셋이 서로 안 포갠다**
-  const statusHud = buildStatusHud(HUDV.w * 0.86, HUDV.h * 0.80);
+  // ★★★ v103 — **0.85 배로 줄인다** (사장님 「화면을 너무 가리는데?」).
+  //   재 보니 화면의 5.3% 였고 아래끝이 잘려 있었다 — 줄이면 둘 다 풀린다
+  const statusHud = buildStatusHud(HUDV.w * 0.73, HUDV.h * 0.68);
   // ★★ v92 — **셋을 계기판에 가로로 나란히** (왼쪽 상태 · 가운데 광학 ·
   //   오른쪽 레이더). 실제 전투기의 MFD 셋이 그 배치이고, 무엇보다
   //   **하늘을 안 먹는다** — 높이를 하나로 맞춰야 줄이 선다
@@ -1167,7 +1172,8 @@ export function buildShip(scene, camera = null, renderer = null) {
   //  사장님 「레이더가 **hud처럼 나와야지. 앉아있을때는 알 수가 없잔아**」.
   //  ★ 상태창의 **반대쪽**에 둔다. 둘이 같은 쪽이면 하나가 하나를 가리고,
   //    가운데는 조준선·선도점·표적 지시선이 지나는 자리라 못 쓴다
-  const radarHud = buildRadarHud(HUDV.w * 0.92, HUDV.h * 0.92);
+  // ★★★ v103 — **0.82 배.** 넷 중 제일 컸다 (화면의 6.8% · 45.6°×34.8°)
+  const radarHud = buildRadarHud(HUDV.w * 0.75, HUDV.h * 0.75);
   // ★ 화면을 찍어 자리를 잡았다 — 처음 자리는 **콘솔 기둥에 왼쪽 아래가
   //   물렸다.** 상태창이 왼쪽 위이므로 이쪽은 오른쪽 위로 올려 맞춘다
   radarHud.mesh.position.set(
@@ -1189,7 +1195,9 @@ export function buildShip(scene, camera = null, renderer = null) {
   //    안 숨기면 판이 조종석 벽을 비추거나 **판이 판을 비춘다**
   const optic = renderer
     // ★ v86 — 당겨 보는 동안 **참 크기**로 그리게 한다 (`targets.setTrueScale`)
-    ? buildOptic(renderer, scene, [ship], HUDV.w * 1.12, HUDV.h * 1.04,
+    // ★★★ v103 — **0.75 배.** 넷 중 유일하게 **전투 원뿔을 건드리고**
+    //   있었다 (복판에서 0.27 · 기준 0.45). 줄이고 아래에서 더 밀어낸다
+    ? buildOptic(renderer, scene, [ship], HUDV.w * 0.84, HUDV.h * 0.78,
       (on) => outside.targets.setTrueScale(on))
     : null;
   if (optic) {
@@ -1213,8 +1221,20 @@ export function buildShip(scene, camera = null, renderer = null) {
     //   ★ v92 에 내가 「하늘을 먹는다」고 계기판으로 내렸는데, 내려놓으니
     //     **차양 아래라 앉은 눈에서 잘린다** — 가리는 것을 없애려다
     //     **쓸 수 없게** 만들었다. 당겨 보는 창은 **보여야** 쓸모가 있다
+    // ══ ★★★ v103 — **왼쪽으로 더 민다** (전투 원뿔 밖으로) ═════════════
+    //
+    //  ★ 사장님 「**광학창이랑 … 화면을 너무 가리는데?** 전투화면이 더
+    //    광할하고 방해되지 않는 선에서 재배치해줘」
+    //
+    //  ★★ 재 보니 광학창의 오른쪽 끝이 **화면 복판에서 0.27** 이었다
+    //    (`SPACE.panels()`). 조준경이 쓰는 원뿔이 0.45 이므로 **조준선
+    //    바로 옆**이다 — 겨누는 눈이 판에 걸린다.
+    //  ★★★ 자리는 그대로 **왼쪽 위**다 (v95 에 사장님이 「원래 자리로
+    //    복구해」 하신 것을 지킨다). 옮기는 것이 아니라 **밀어낸다** —
+    //    1.46 → 1.82, 그리고 판을 0.75 배로 줄였다. 계산이 아니라
+    //    `space-screen.js` 가 재서 고른 값이다
     optic.mesh.position.set(
-      -HUDV.w * 1.46, DEP.y + HUDV.h * 0.86, DEP.z - HUDV.dist - 0.01,
+      -HUDV.w * 1.82, DEP.y + HUDV.h * 1.17, DEP.z - HUDV.dist - 0.01,
     );
     faceEye(optic.mesh);        // ★ v102 — 사람을 보게 돌린다
     ship.add(optic.mesh);

@@ -1744,7 +1744,12 @@ export function buildOutside(scene, z) {
     //   v87 에 `rush` 로 켰다가 화면을 찍고 잡았다: R 을 안 누르면
     //   **등속 화면이 한 톨도 안 바뀌어** 있었다 (사장님이 물으신 그 상태)
     const fd = d * (1 + rush * (RUSH.dust - 1));
-    dust.setRush(rush, fd / Math.max(dt, 1e-4));
+    // ★★★ v103 — **절댓값이다.** 역추진(v101)이면 `fd` 가 음수라
+    //   `streakLen` 의 `mps > STREAK.min` 이 안 서고, 그래서 **뒤로 가는
+    //   동안 속도감이 통째로 없어졌다** (사장님 「반대로 가면 … 속도감이
+    //   반대」의 나머지 절반이다). 길이는 빠르기가 정하고, **방향은
+    //   `flow()` 가 정한다** — 둘을 한 값에 섞으면 이런 일이 난다
+    dust.setRush(rush, Math.abs(fd) / Math.max(dt, 1e-4));
     dust.flow(fd);
 
     // 잔해
