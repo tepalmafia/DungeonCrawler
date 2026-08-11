@@ -12,11 +12,11 @@
 //      ③ 표식마다 **이름과 뜻이 있나** — 이름 없는 선을 안 그린다
 //      ④ 자국 막대가 글줄과 **안 겹치나**
 // ══════════════════════════════════════════════════════════════════════════
+import { hudFov } from '../web/space/js/game/view-table.js';
 import {
   ROWS, COLS, SIGNBOX, SAFE, WOBMAX, MARKS, spanOf, rowsOverlap,
-  ADI, rungs, pitchWord,
+  ADI, rungs, pitchWord, READ, plateShare, minSize, toPx,
 } from '../web/space/js/game/hud-table.js';
-import { hudFov } from '../web/space/js/game/view-table.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -39,7 +39,8 @@ console.log('\n[1] ★★★ **글끼리 겹치나** — 겹치면 둘 다 못 �
   }
   ok(!laps.length,
     `★★★ **줄이 서로 안 겹친다** ${laps.length ? `— ${laps.join(' · ')}` : ''}`);
-  ok(SIGNBOX.y + SIGNBOX.h < spanOf(ROWS.dock).y0,
+  const topRow = Object.values(ROWS).reduce((a, r) => Math.min(a, spanOf(r).y0), 9);
+  ok(SIGNBOX.y + SIGNBOX.h < topRow,
     '★★★ **자국 막대가 글줄 위에 있다** — 여태 아랫줄 글과 같은 자리였고,'
     + ' 그래서 사장님 사진에서 글자가 막대를 뚫고 지나갔다');
 }
@@ -80,7 +81,32 @@ console.log('\n[4] ★ 표가 **한 곳인가**');
     '★★ 줄마다 **무엇을 적는 줄인지**가 있다 — 이름 없는 자리를 안 만든다');
 }
 
-console.log('\n[5] ★★★ **자세계** — 「비행기 현재 회전 상태」가 다 보이나 (사장님 물음)');
+console.log('\n[5] ★★★ **화면에서 읽히나** — 판이 작다 (v105 · 사장님 「글씨가 작게 여러개」)');
+{
+  const V = hudFov().v;
+  const share = plateShare(V), need = minSize(V);
+  console.log(`   조준경이 화면 세로의 **${(share * 100).toFixed(1)}%** 를 덮는다`
+    + ` — ${READ.screenH}화소 화면이면 **${(share * READ.screenH).toFixed(0)}화소**`);
+  console.log(`   그래서 읽히려면 판 높이의 **${need.toFixed(3)}** 이상이어야 한다\n`);
+  console.log('   줄        판 대비    화면 화소');
+  for (const [k, r] of Object.entries(ROWS)) {
+    console.log(`   ${k.padEnd(9)} ${r.size.toFixed(3)}      ${toPx(r.size, V).toFixed(1)}px`);
+  }
+  for (const [k, r] of Object.entries(ROWS)) {
+    ok(r.size >= need,
+      `★★★ ${k} 이 화면에서 **${toPx(r.size, V).toFixed(1)}px** (${READ.minPx}px 이상)`);
+  }
+  ok(toPx(SIGNBOX.label, V) >= READ.minPx * 0.85,
+    `★★ 자국 이름표도 읽힌다 (${toPx(SIGNBOX.label, V).toFixed(1)}px)`);
+  ok(Object.keys(ROWS).length <= 3,
+    `★★★ **글줄이 ${Object.keys(ROWS).length} 개다** — 키우면 자리가 없어지므로 수를 줄였다.`
+    + ' 다섯을 15화소로 키우면 판의 절반을 먹는다 (사장님 「조잡하잔아」의 답)');
+  ok(ADI.showFrom > 0 && ADI.span <= 20,
+    `★★★ **사다리는 ${ADI.showFrom}도 넘게 기울 때만 · ±${ADI.span}도까지** —`
+    + ' 수평일 때 사다리는 아무것도 안 말하는데 늘 그려서 판을 덮고 있었다');
+}
+
+console.log('\n[6] ★★★ **자세계** — 「비행기 현재 회전 상태」가 다 보이나 (사장님 물음)');
 {
   //  ★ 첫 판은 **절반**이었다: 수평선을 늘 화면 복판에 그려서 롤만 보였다.
   //    실기의 자세계는 「고정된 기수 표시 + 움직이는 수평선」이 한 벌이고,

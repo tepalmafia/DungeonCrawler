@@ -49,9 +49,9 @@ import { relOf } from '../game/frame.js';
 import { azDiff } from '../game/target.js';
 // ★★★ v103 — **자리는 표에 있다** (사장님 「선이나 글이 의미하는 것은?」·
 //   「타겟 라인이 짤리는 문제도 수정해」). `h*0.95` 같은 것을 여기 안 적는다
-import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs, pitchWord } from '../game/hud-table.js';
+import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs } from '../game/hud-table.js';
 // ★★★ v103 — **수평의.** 「내가 지금 똑바로 유지하고 있는지」
-import { HORIZON, rollWord, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
+import { HORIZON, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
 // ★★★ v104 — **항로점** (사장님 「항로, 미션을 선택하면 네비게이션이 나오도록」)
 import { navState } from '../game/nav-table.js';
 
@@ -208,16 +208,11 @@ function draw(ctx, w, h, s) {
   //   ★ v97 — 반복문 안에 있던 것을 **위로 올렸다** — 락온 원도 같은 것을
   //     쓰는데 거기서는 없는 이름이라 터졌다 (`node --check` 는 통과한다)
   const cr = Math.cos(s.roll ?? 0), sr = Math.sin(s.roll ?? 0);
-  ctx.strokeStyle = 'rgba(143,230,192,.13)';
-  ctx.lineWidth = 1;
-  for (let a = -10; a <= 10; a += 5) {
-    const x = cx + a * sx;
-    ctx.beginPath(); ctx.moveTo(x, h * 0.08); ctx.lineTo(x, h * 0.92); ctx.stroke();
-  }
-  for (let e = -8; e <= 8; e += 4) {
-    const y = cy - e * sy;
-    ctx.beginPath(); ctx.moveTo(w * 0.04, y); ctx.lineTo(w * 0.96, y); ctx.stroke();
-  }
+  // ══ ★★★ v105 — **격자를 지웠다** ═════════════════════════════════
+  //  ★ 사장님 「글씨가 작게 여러개 있는데 읽을 수가 없고 **조잡하잔아**」.
+  //    가로 다섯 · 세로 다섯 줄이 늘 깔려 있었는데, 이 격자는 **아무도
+  //    안 읽는다** — 도(度)를 세는 사람이 없다. 뜻이 없는 선은 배경이고,
+  //    배경은 읽을 것을 가린다. `sx`·`sy` 도 이제 락온 원이 안 쓴다(v103)
 
   // ══ ★★★ **떠도는 것들 — 기수 기준으로 그린다** (v69) ═══════════════
   //
@@ -394,20 +389,34 @@ function draw(ctx, w, h, s) {
   //  ★★★ v103 — **자리를 표에서 읽는다** (`hud-table.js ROWS`). 여태 여기
   //    `h*0.80` 이라고 적혀 있었고, 아랫줄·자국 막대도 각자 제 숫자를
   //    갖고 있었다 — 그래서 셋이 겹치는 것을 아무도 못 봤다
-  if (s.dock && (s.dock.near || s.dock.docked)) {
-    const d = s.dock;
-    const bx = w * 0.5;
-    const soft = (d.close ?? 0) <= (d.softAt ?? 12);
-    ctx.fillStyle = d.docked ? FG : (soft ? FG : HOT);
-    ctx.font = `700 ${Math.round(h * ROWS.dock.size)}px system-ui, sans-serif`;
-    const line = d.docked
-      ? `도킹 ${d.word} — 들어온 것 ${d.got ?? 0}`
-      : `도킹 H — ${d.near ? `${d.near.dist}m` : ''} · 접근 ${(d.close ?? 0).toFixed(1)}m/초`;
-    ctx.fillText(line, bx, h * ROWS.dock.y);
-    if (!d.docked && d.blocked) {
-      ctx.fillStyle = soft ? DIM : HOT;
-      ctx.font = `600 ${Math.round(h * ROWS.dockWhy.size)}px system-ui, sans-serif`;
-      ctx.fillText(d.why ?? '', bx, h * ROWS.dockWhy.y);
+  // ══ ★★★ v105 — **넷을 한 줄로** (사장님 「글씨가 작게 여러개 있는데
+  //  읽을 수가 없고 조잡하잔아」) ══════════════════════════════════════
+  //
+  //  ★★ 여태 도킹·까닭·수평의·항로점이 **각자 제 줄**을 갖고 동시에 떴다.
+  //    판이 화면에서 185화소인데 줄 넷을 7화소로 쌓았으니 못 읽는 것이
+  //    당연하다. **하나만 고른다** — 급한 것부터.
+  //  ★ 고르는 순서가 곧 「지금 뭘 해야 하나」다: 붙는 중 > 붙을 수 있음 >
+  //    뒤집힘 > 항로. 위가 있으면 아래는 말할 자리가 아니다
+  {
+    let act = null, tone = DIM;
+    if (s.catchS && s.catchS.id !== null) {
+      act = s.catchS.word; tone = HOT;
+    } else if (s.dock && s.dock.docked) {
+      act = `도킹 ${s.dock.word} — 들어온 것 ${s.dock.got ?? 0}`; tone = FG;
+    } else if (s.dock && s.dock.near && !s.dock.blocked) {
+      act = `H — 붙는다 (${s.dock.near.dist}m)`; tone = SHOOT;
+    } else if (isOver(wrapDeg((s.roll ?? 0) * 180 / Math.PI))) {
+      act = '★ 뒤집힘 — 조종이 반대입니다'; tone = HOT;
+    } else if (s.nav && s.nav.to && !(s.nav.auto && navState(s.nav.off) === 'on')) {
+      act = s.nav.word;
+      tone = navState(s.nav.off) === 'on' ? SHOOT
+        : (navState(s.nav.off) === 'off' ? HOT : WARN);
+    }
+    if (act) {
+      ctx.fillStyle = tone;
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${Math.round(h * ROWS.act.size)}px system-ui, sans-serif`;
+      ctx.fillText(act, cx, h * ROWS.act.y);
     }
   }
 
@@ -465,25 +474,7 @@ function draw(ctx, w, h, s) {
       ctx.closePath();
       ctx.stroke();
     }
-    // 한 줄 — **자동이면 조용하다.** 배가 스스로 향하므로 할 일이 없다
-    if (!n.auto || st !== 'on') {
-      ctx.fillStyle = col;
-      ctx.textAlign = 'center';
-      ctx.font = `700 ${Math.round(h * ROWS.nav.size)}px system-ui, sans-serif`;
-      ctx.fillText(n.word ?? '', cx, h * ROWS.nav.y);
-    }
-  }
-
-  // ══ ★★★ v103 — **포획** — 따라붙는 중 ═══════════════════════════════
-  //  ★ 도킹 줄과 **같은 자리**를 쓴다. 둘은 한 번에 하나만 뜬다
-  //    (포획이 끝나야 도킹이 시작된다) — 자리를 새로 안 만든다
-  if (s.catchS && s.catchS.id !== null) {
-    ctx.fillStyle = HOT;
-    ctx.font = `700 ${Math.round(h * ROWS.dock.size)}px system-ui, sans-serif`;
-    ctx.fillText(s.catchS.word ?? '', cx, h * ROWS.dock.y);
-    ctx.fillStyle = DIM;
-    ctx.font = `600 ${Math.round(h * ROWS.dockWhy.size)}px system-ui, sans-serif`;
-    ctx.fillText('조종간이 잠깁니다 — 맞으면 풀립니다', cx, h * ROWS.dockWhy.y);
+    // ★ 글은 여기서 안 적는다 — 위의 **한 줄**이 대신 말한다 (v105)
   }
 
   // ══ ★★★ v103 — **수평의** — 「내가 지금 똑바로 유지하고 있나」 ═══════
@@ -552,7 +543,7 @@ function draw(ctx, w, h, s) {
     //    이때는 **가장자리 화살표**만 어느 쪽인지 말한다
     ctx.strokeStyle = DIM;
     ctx.lineWidth = Math.max(1, h * 0.004);
-    ctx.font = `600 ${Math.round(h * 0.030)}px ui-monospace, monospace`;
+    ctx.font = `600 ${Math.round(h * 0.058)}px ui-monospace, monospace`;
     ctx.fillStyle = DIM;
     ctx.textAlign = 'center';
     const RL = w * 0.10, RG = w * 0.125;
@@ -565,7 +556,10 @@ function draw(ctx, w, h, s) {
       const a0 = w * 0.045, b0 = h * 0.030 * sgn;
       ctx.moveTo(...P(-a0, 0)); ctx.lineTo(...P(0, b0)); ctx.lineTo(...P(a0, 0));
       ctx.stroke();
-    } else for (const d of rungs()) {
+    } else if (Math.abs(rdeg) > ADI.showFrom || Math.abs(eldeg) > ADI.showFrom) {
+      // ★★★ v105 — **할 말이 있을 때만 그린다.** 수평일 때 사다리는
+      //   아무것도 안 말하는데 늘 그려서 판을 빗금으로 덮고 있었다
+      for (const d of rungs()) {
       // 눈금은 수평선에서 **d 도만큼 떨어진** 자리다 (같은 자로 접는다)
       const b = pxV(d) * ADI.squeeze;
       if (Math.abs(drop + b) > h * 0.46) continue;   // 판 밖은 안 그린다
@@ -577,24 +571,14 @@ function draw(ctx, w, h, s) {
         if (d < 0) { ctx.moveTo(...P((RG + RL) * sgn, b)); ctx.lineTo(...P((RG + RL) * sgn, b - dn * 0.6)); }
       }
       ctx.stroke();
-      const [tx, ty] = P(-(RG + RL) - w * 0.028, b);
-      ctx.fillText(String(Math.abs(d)), tx, ty + h * 0.010);
+      const [tx, ty] = P(-(RG + RL) - w * 0.030, b);
+      ctx.fillText(String(Math.abs(d)), tx, ty + h * 0.012);
+      }
     }
 
-    // ── 말 — 기울기와 기수 각 ─────────────────────────────
-    // ★★ 조용할 때는 안 적는다. 늘 떠 있는 경고는 경고가 아니다 —
-    //   수평이고 기수도 평평하면 선과 사다리만 서 있는다
-    const pw = pitchWord(eldeg);
-    const bits = [];
-    if (!lv) bits.push(rollWord(rdeg));
-    if (pw !== '수평') bits.push(pw);
-    // ★ 「수평선이 화면 밖」은 **안 적는다** — 꺾쇠가 이미 말한다.
-    //   같은 것을 그림과 글로 두 번 말하면 줄만 길어지고 안 읽힌다
-    if (bits.length) {
-      ctx.fillStyle = col;
-      ctx.font = `700 ${Math.round(h * ROWS.level.size)}px system-ui, sans-serif`;
-      ctx.fillText(bits.join(' · '), cx, h * ROWS.level.y);
-    }
+    // ★★★ v105 — **말은 위의 한 줄이 한다.** 여기는 **선만** 그린다.
+    //   기울기는 선이 이미 눈으로 말하고 있고, 그 위에 글까지 얹으면
+    //   그게 사장님이 보신 「작게 여러 개」다
   }
 
   // ── 십자선 — **기수가 보는 곳.** 곧 화면 한가운데다 ──────
