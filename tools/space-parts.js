@@ -1,189 +1,158 @@
 // ══════════════════════════════════════════════════════════════════════════
-//  ★★★ **부위 · 내구 · 도망** — 크기에 따라 다른가 (v86)
+//  ★★★ **부위와 등급** — 뼈대만 (v107)
 //
 //    node tools/space-parts.js
 //
-//  ★ 사장님 「적 우주선도 **각 부위별로 타격 시 더 버티던지 도망가던지**
-//    해야지. **한발만에 터지는건 지양**해줘. **엔진을 정확히 타격하거나
-//    핵심 시설을 타격해야 그나마 빨리 승리**하는것으로. 작은 전투기는
-//    한방에도 이길 수 있지만. **크기에 따라 전투력에 따라 다르게**」
+//  ★ 사장님 「파밍은 **더 강한 무기, 더 강한 파츠, 더 강한 장갑**…」
+//    「**i창을 통해 비행기 모양이 모이고 각 부분 별 파츠를 볼 수 있게** 하자.
+//      파츠도 파밍, 혹은 **재료로 개조, 제작**이 가능하게」 · 갈아엎기는 「가」
 //
-//  ★★ 묻는 것 여섯:
-//      ① **한 발에 안 터지나** (큰 것)
-//      ② **작은 것은 한 방인가** — 「작은 전투기는 한방에도」
-//      ③ **부위를 맞히면 빨리 끝나나** — 안 그러면 맷집만 올린 것이다
-//      ④ **겨눠야 부위가 나오나** — 대충 쏴도 핵심이 나오면 겨눌 이유가 없다
-//      ⑤ **깨진 부위가 저쪽을 막나** (엔진 → 못 움직임 · 무기 → 안 쏨)
-//      ⑥ **도망가나** · 엔진을 깨면 **못 도망가나**
-//
-//  ★ 브라우저를 안 쓴다.
+//  ★★★ 묻는 것 여섯
+//      ① **정말 「더 강한」이 없었나** — 사장님 말씀을 표로 검산한다
+//      ② 부위가 **게임에 있는 값**을 가리키나 (없는 것을 가리키면 빨개진다)
+//      ③ ★★ 주우면 **저절로 좋아지지 않나** — 고르는 것이 남나
+//      ④ ★★★ 개조가 **공짜가 아닌가** · 끝이 있나
+//      ⑤ ★★ 회차 하나에 얼마나 크나 — 20분에 다 크지 않나
+//      ⑥ ★ 못 하는 자리마다 까닭을 말하나
 // ══════════════════════════════════════════════════════════════════════════
 import {
-  KINDS, PARTS, partOf, FLEE, CORE_AT, ENGAGE,
-} from '../web/space/js/game/target-table.js';
+  SLOTS, TIERS, TIER_BY, tierIdx, UPGRADE, CRAFT, oreFor,
+  partsMight, BASE_MIGHT, partName, PWHY, WEIGHT,
+} from '../web/space/js/game/parts-table.js';
 import {
-  makeSky, setRegion, setNose, stepSky, spawnFoe, hitPart, behindOf, summary,
-} from '../web/space/js/game/target.js';
-import { WEAPONS } from '../web/space/js/game/combat-table.js';
+  makeFit, mightOf, gainPart, equip, upgrade, craft, sparesFor, summary,
+} from '../web/space/js/game/parts.js';
+import { MINE } from '../web/space/js/game/might-table.js';
+import { ITEMS } from '../web/space/js/game/cargo-table.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
-const head = (t) => console.log(`\n${t}`);
-const DT = 1 / 30;
-function rngOf(seed = 5) {
-  let h = seed >>> 0;
-  return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507)) >>> 0) / 4294967296;
-}
-/** 이 무기로 이 부위만 노려서 몇 발이면 부수나 */
-const shotsFor = (kind, wKey, partKey) => {
-  const w = WEAPONS[wKey];
-  const hp0 = KINDS[kind].hits;
-  const per = w.dmg * PARTS[partKey].mult;
-  return Math.ceil(hp0 / per);
-};
 
-console.log('\n부위 · 내구 · 도망 — 크기에 따라 다른가');
-console.log(`   부위 ${Object.keys(PARTS).length} · 핵심은 조준 오차 ${(CORE_AT * 100).toFixed(0)}% 안 · 도망 ${(FLEE.at * 100).toFixed(0)}%`);
+console.log('부위와 등급 — 뼈대만 (게임을 안 부른다)');
 
-// ══ ① 한 발에 안 터지나 ═══════════════════════════════════════════════
-head('[1] ★★★ **한 발에 안 터진다** (큰 것) — 사장님 「한발만에 터지는건 지양」');
+console.log('\n[1] ★★★ **정말 「더 강한」이 없었나** — 사장님 말씀을 검산한다');
 {
-  console.log('   종류      맷집  유도(선체)  유도(핵심)  레이저(선체)  레이저(핵심)');
-  for (const k of ['fighter', 'drone', 'raider', 'turret', 'gunship', 'convoy']) {
-    console.log(`   ${KINDS[k].name.padEnd(9)} ${String(KINDS[k].hits).padStart(3)}`
-      + `  ${String(shotsFor(k, 'arh', 'hull')).padStart(8)}발`
-      + `  ${String(shotsFor(k, 'arh', 'core')).padStart(8)}발`
-      + `  ${String(shotsFor(k, 'laser', 'hull')).padStart(10)}발`
-      + `  ${String(shotsFor(k, 'laser', 'core')).padStart(10)}발`);
+  const all = Object.keys(ITEMS);
+  const war = all.filter((k) => ITEMS[k].group === 'war');
+  console.log(`   파밍으로 나오는 것 ${all.length} 가지 · 그중 싸움용 **${war.length}** 가지`
+    + ` (${war.join(' · ')})`);
+  // ★★ 처음에 「싸움용이 셋 이하」로 쟀다가 넷이 나와 빨개졌다 —
+  //   `ore`·`arc` 는 **재료**지 무기가 아닌데 같은 무리에 들어 있었다.
+  //   그리고 그건 내 주장이 아니었다. **진짜 주장은 「등급이 없다」**이고,
+  //   그건 이렇게 잰다: 파밍으로 나오는 열여섯 중 **등급을 가진 것이 몇인가**
+  const tiered = all.filter((k) => ITEMS[k].tier || ITEMS[k].tiers || ITEMS[k].grade);
+  ok(tiered.length === 0,
+    `★★★ **등급을 가진 물건이 하나도 없었다** (16 중 0) — 「더 강한 무기」가`
+    + ' 아니라 「무기 몇 개」였던 진짜 까닭이 이것이다');
+  ok(!!MINE.loot && typeof MINE.loot.weapon === 'number',
+    '★★★ 그리고 그 둘이 **개수**로만 셌다 (`MINE.loot` = 개수의 거듭제곱) —'
+    + ' 즉 파밍이 「더 강한 무기」가 아니라 **「무기 몇 개」**였다');
+  ok(SLOTS.length === 7,
+    `★★ 이제 **부위 ${SLOTS.length} 개**다 — 방 일곱 · 가르침 일곱과 같은 규약이다`);
+  ok(TIERS.length === 5 && TIERS[0].mult === 1,
+    `★★ 등급 ${TIERS.length} 개 · 시작이 **1 배**다 — 「낡은 것」에서 시작하면`
+    + ' 손해 보는 기분이고, **오르기만 하는 것**이 파밍의 맛이다');
+}
+
+console.log('\n[2] ★★ 부위가 **게임에 있는 값**을 가리키나');
+{
+  console.log('   부위       무게   무엇에 붙나');
+  for (const s of SLOTS) {
+    console.log(`   ${s.name.padEnd(7)} ${String(WEIGHT[s.key]).padStart(4)}   ${s.feeds}  — ${s.what}`);
   }
-  for (const k of ['raider', 'turret', 'gunship', 'convoy']) {
-    ok(shotsFor(k, 'arh', 'hull') >= 2,
-      `${KINDS[k].name} — 유도탄으로 선체를 때리면 ${shotsFor(k, 'arh', 'hull')}발 (한 발이 아니다)`);
+  ok(SLOTS.every((s) => s.feeds && s.what),
+    '★★★ 부위마다 **무엇에 붙는지**가 적혀 있다 — 안 적으면 「전투력이 올랐다」는'
+    + ' 숫자만 남고 무엇이 좋아졌는지 모른다');
+  ok(new Set(SLOTS.map((s) => s.key)).size === SLOTS.length, '★ 이름이 안 겹친다');
+  ok(WEIGHT.gun > WEIGHT.hold && WEIGHT.armor > WEIGHT.hold,
+    '★★ 주포·장갑이 화물칸보다 무겁다 — 다만 화물칸도 **0 이 아니다**'
+    + ' (싸움엔 안 쓰여도 파밍에는 쓰인다)');
+}
+
+console.log('\n[3] ★★★ 주우면 **저절로 좋아지지 않나** — 고르는 것이 남나');
+{
+  const f = makeFit();
+  const was = mightOf(f);
+  gainPart(f, 'gun', 'loot');
+  ok(mightOf(f) === was,
+    `★★★ **주워도 전투력이 안 오른다** (${was}) — 여분으로 쌓일 뿐이다.`
+    + ' 저절로 갈아 끼워지면 I 창을 볼 이유가 없어지고, 그러면 고르는 것이 사라진다');
+  const r = equip(f, 'gun');
+  ok(r.ok && mightOf(f) > was,
+    `★★ **달아야 오른다** (${was} → ${mightOf(f)}) — 「${partName(r.put)}」`);
+  ok(f.spare.length === 1 && f.spare[0].tier === 'stock',
+    '★ 있던 것은 **버리지 않고 여분으로** 내려간다 — 개조 재료가 된다');
+  ok(equip(f, 'sensor').why === 'slot', `★ 없으면 못 단다 — 「${PWHY.slot}」`);
+}
+
+console.log('\n[4] ★★★ 개조가 **공짜가 아닌가** · 끝이 있나');
+{
+  console.log('   등급          배수    다음으로 올리는 데 드는 광석');
+  for (const t of TIERS) {
+    const last = tierIdx(t.key) >= tierIdx(UPGRADE.maxTier);
+    console.log(`   ${t.name.padEnd(11)} ${t.mult.toFixed(2)}    ${last ? '— (주워야 나온다)' : oreFor(t.key)}`);
   }
-}
-
-// ══ ② 작은 것은 한 방 ════════════════════════════════════════════════
-head('[2] ★★ **작은 것은 한 방** — 「작은 전투기는 한방에도 이길 수 있지만」');
-{
-  ok(shotsFor('fighter', 'arh', 'hull') === 1, '요격기는 유도탄 한 발');
-  ok(shotsFor('drone', 'laser', 'hull') === 1, '자폭정은 레이저 한 발 — 먼저 보기만 하면 된다');
-  ok(shotsFor('gunship', 'laser', 'hull') > shotsFor('fighter', 'laser', 'hull') * 5,
-    '★★ 포함과 요격기가 **한 자리 수 이상 다르다** — 「크기에 따라」가 성립한다');
-}
-
-// ══ ③ 부위를 맞히면 빨리 ═════════════════════════════════════════════
-head('[3] ★★★ **부위를 맞히면 빨리 끝난다** — 안 그러면 맷집만 올린 것이다');
-{
-  for (const k of ['raider', 'gunship']) {
-    const hull = shotsFor(k, 'laser', 'hull');
-    const core = shotsFor(k, 'laser', 'core');
-    console.log(`   ${KINDS[k].name} — 레이저 선체 ${hull}발 vs 핵심 ${core}발 (${(hull / core).toFixed(1)}배)`);
-    ok(core * 2 <= hull, `★ 핵심을 맞히면 **절반 이하**로 끝난다`);
+  const f = makeFit();
+  ok(upgrade(f, 'gun', { ore: 9999 }).why === 'spare',
+    `★★★ **여분이 있어야 한다** — 「${PWHY.spare}」. 광석만으로는 안 된다`);
+  gainPart(f, 'gun', 'stock'); gainPart(f, 'gun', 'stock');
+  ok(upgrade(f, 'gun', { ore: 0 }).why === 'ore',
+    `★★★ **광석도 든다** — 「${PWHY.ore}」. 여분만으로도 안 된다`);
+  const before = mightOf(f);
+  const up = upgrade(f, 'gun', { ore: 9999 });
+  ok(up.ok && mightOf(f) > before,
+    `★★ 둘을 다 내면 오른다 (${before} → ${mightOf(f)} · 광석 ${up.ore})`);
+  ok(f.spare.length === 0, '★ 태운 여분이 **정말 없어진다**');
+  // 끝까지 올려 본다
+  const g = makeFit();
+  let n = 0;
+  for (let i = 0; i < 20; i++) {
+    gainPart(g, 'gun', 'stock'); gainPart(g, 'gun', 'stock');
+    if (!upgrade(g, 'gun', { ore: 99999 }).ok) break;
+    n++;
   }
-  ok(PARTS.core.mult > PARTS.engine.mult && PARTS.engine.mult > PARTS.hull.mult,
-    '핵심 > 엔진·무기 > 선체 — 겨눌수록 이득이다');
+  ok(g.on.gun.tier === UPGRADE.maxTier,
+    `★★★ **개조로는 「${TIER_BY[UPGRADE.maxTier].name}」까지**다 (${n}번) —`
+    + ` 그 위(「${TIERS[TIERS.length - 1].name}」)는 **주워야만** 나온다.`
+    + ' 다 올릴 수 있으면 파밍할 이유가 없어진다');
 }
 
-// ══ ④ 겨눠야 나오나 ══════════════════════════════════════════════════
-head('[4] ★★★ **대충 쏘면 핵심이 안 나온다** — 나오면 겨눌 이유가 없다');
+console.log('\n[5] ★★ 회차 하나에 **얼마나 크나** — 20분에 다 크지 않나');
 {
-  const tol = WEAPONS.laser.tol;
-  const rnd = rngOf(3);
-  const tally = (off, behind) => {
-    const c = { core: 0, engine: 0, gun: 0, hull: 0 };
-    for (let i = 0; i < 4000; i++) c[partOf(off, tol, behind, rnd).key]++;
-    return c;
-  };
-  const dead = tally(0, 0.4);
-  const wide = tally(tol * 0.9, 0.4);
-  console.log(`   한가운데(오차 0)  — 핵심 ${(dead.core / 40).toFixed(0)}%`);
-  console.log(`   가장자리(오차 ${(tol * 0.9).toFixed(1)}°) — 핵심 ${(wide.core / 40).toFixed(0)}%`);
-  ok(dead.core > wide.core * 4, '★★ 한가운데라야 핵심이 나온다');
-  ok(wide.core === 0, `오차가 ${(CORE_AT * 100).toFixed(0)}% 를 넘으면 **핵심이 아예 안 나온다**`);
-
-  const back = tally(tol * 0.6, 1);
-  const front = tally(tol * 0.6, 0);
-  console.log(`   뒤를 잡았을 때 — 엔진 ${(back.engine / 40).toFixed(0)}% · 무기 ${(back.gun / 40).toFixed(0)}%`);
-  console.log(`   정면일 때      — 엔진 ${(front.engine / 40).toFixed(0)}% · 무기 ${(front.gun / 40).toFixed(0)}%`);
-  ok(back.engine > front.engine * 3, '★★★ **뒤를 잡으면 엔진**이 나온다 — 꽁무니가 보이니까');
-  ok(front.gun > back.gun * 3, '★ 정면으로 맞붙으면 **무기**가 나온다 — 포구가 이쪽을 본다');
+  //  ★ v79 에 노획이 「여섯 대 잡으면 천장」이라 20분 만에 다 컸던 적이
+  //    있다 (`might-table.js` 주석). 같은 함정을 다시 밟는지 본다
+  const f = makeFit();
+  const start = mightOf(f);
+  const top = partsMight(Object.fromEntries(
+    SLOTS.map((s) => [s.key, { slot: s.key, tier: 'ace' }]),
+  ));
+  console.log(`   다 표준 **${start}** → 다 격추왕 **${top.toFixed(2)}**`
+    + ` (${(top / start).toFixed(2)}배)`);
+  ok(Math.abs(start - BASE_MIGHT) < 1e-6, '★ 바닥값이 표와 같다');
+  ok(top / start > 1.8 && top / start < 2.6,
+    `★★ 끝까지 키워도 **${(top / start).toFixed(2)}배**다 — 열 배가 되면`
+    + ' 초반이 의미 없어지고, 1.2배면 파밍할 이유가 없다');
+  // 부위 하나만 몰아 키우면?
+  const one = makeFit();
+  one.on.gun = { slot: 'gun', tier: 'ace' };
+  ok(mightOf(one) / start < 1.35,
+    `★★★ **한 부위만 몰아도 ${(mightOf(one) / start).toFixed(2)}배**다 —`
+    + ' 일곱을 고루 키워야 하므로 「무엇부터 올릴까」가 회차 내내 남는다');
 }
 
-// ══ ⑤ 깨진 부위가 막나 ═══════════════════════════════════════════════
-head('[5] ★★★ **깨진 부위가 저쪽을 막나**');
+console.log('\n[6] ★ 못 하는 자리마다 **까닭을 말하나**');
 {
-  // 엔진을 깨면 못 움직인다
-  const s = makeSky(rngOf(11));
-  setRegion(s, 'empty');
-  stepSky(s, DT, { quiet: true });
-  const t = spawnFoe(s, 'gunship');
-  setNose(s, t.az, t.el);
-  const d0 = t.dist;
-  for (let i = 0; i < 60; i++) stepSky(s, DT, { quiet: true, moving: false });
-  const moved = Math.abs(t.dist - d0) > 0.5;
-  ok(moved, '멀쩡하면 움직인다');
-  // 엔진 파괴
-  hitPart(t, { off: 0, tol: 4, dmg: 1, rnd: () => 0.9 });
-  t.dead = { move: true };
-  const d1 = t.dist;
-  for (let i = 0; i < 90; i++) stepSky(s, DT, { quiet: true, moving: false });
-  ok(Math.abs(t.dist - d1) < 0.01, '★★★ 엔진을 깨면 **꼼짝 못 한다**');
-
-  // 무기를 깨면 안 쏜다
-  const s2 = makeSky(rngOf(12));
-  setRegion(s2, 'empty');
-  stepSky(s2, DT, { quiet: true });
-  const g = spawnFoe(s2, 'gunship');
-  g.dist = 80; setNose(s2, g.az, g.el);
-  let fired = 0;
-  for (let i = 0; i < 400; i++) { const e = stepSky(s2, DT, { quiet: true }); fired += s2.incoming.length; }
-  ok(fired > 0, '멀쩡하면 쏜다');
-  g.dead = { shoot: true };
-  s2.incoming.length = 0;
-  for (let i = 0; i < 400; i++) stepSky(s2, DT, { quiet: true });
-  ok(s2.incoming.length === 0, '★★★ 무기를 깨면 **한 발도 안 쏜다**');
+  for (const [k, w] of Object.entries(PWHY)) ok(!!w && w.length > 5, `★ ${k.padEnd(6)} — 「${w}」`);
+  const f = makeFit();
+  ok(craft(f, 'gun', { ore: 0, parts: 99 }).why === 'ore', '★ 제작도 광석이 든다');
+  ok(craft(f, 'gun', { ore: 999, parts: 0 }).why === 'parts', '★ 부품도 든다');
+  const c = craft(f, 'sensor', { ore: 999, parts: 99 });
+  ok(c.ok && c.made.tier === CRAFT.tier,
+    `★★ 만들면 **표준**이 나온다 — 만들어서 시제품이 나오면 주울 이유가 없어진다`);
+  const s = summary(f);
+  ok(s.slots.length === SLOTS.length && s.slots.every((x) => x.label),
+    '★★ I 창이 그릴 것이 다 나온다 (부위 · 등급 · 여분 · 개조 가능 여부)');
 }
 
-// ══ ⑥ 도망 ═══════════════════════════════════════════════════════════
-head('[6] ★★★ **맞으면 도망간다** — 그리고 엔진을 깨면 못 도망간다');
-{
-  const s = makeSky(rngOf(21));
-  setRegion(s, 'empty');
-  stepSky(s, DT, { quiet: true });
-  const t = spawnFoe(s, 'gunship');
-  t.dist = 90; setNose(s, t.az, t.el);
-  t.hp = KINDS.gunship.hits * (FLEE.at - 0.02);
-  const d0 = t.dist;
-  for (let i = 0; i < 90; i++) stepSky(s, DT, { quiet: true, moving: false });
-  console.log(`   맷집 ${(FLEE.at * 100).toFixed(0)}% 밑 — ${d0}m 에서 ${t.dist.toFixed(0)}m 로`);
-  ok(t.fleeing && t.dist > d0 + 5, '★★ **뺀다**');
-
-  // 엔진을 깨 두면
-  const s2 = makeSky(rngOf(22));
-  setRegion(s2, 'empty');
-  stepSky(s2, DT, { quiet: true });
-  const g = spawnFoe(s2, 'gunship');
-  g.dist = 90; g.hp = KINDS.gunship.hits * (FLEE.at - 0.02);
-  g.dead = { move: true };
-  const gd = g.dist;
-  for (let i = 0; i < 90; i++) stepSky(s2, DT, { quiet: true, moving: false });
-  ok(Math.abs(g.dist - gd) < 0.01,
-    '★★★ 엔진을 먼저 깨 놓으면 **못 도망간다** — 그래서 「엔진부터 깰까」가 결심이 된다');
-
-  // 작은 것은 안 뺀다
-  const s3 = makeSky(rngOf(23));
-  setRegion(s3, 'empty');
-  stepSky(s3, DT, { quiet: true });
-  const f = spawnFoe(s3, 'drone');
-  f.hp = 0.2;
-  const fd = f.dist;
-  for (let i = 0; i < 60; i++) stepSky(s3, DT, { quiet: true, moving: false });
-  ok(!f.fleeing && f.dist < fd, '★ 자폭정은 **안 뺀다** — 몸이 탄이다');
-}
-
-console.log(bad ? `\n✘ ${bad} 개가 안 맞습니다` : '\n✔ 전부 맞습니다');
-console.log(`
-  ※ **「싸우는 맛이 나나」는 여기서 안 나온다.** 여기서 나오는 것은
-     「한 발에 안 터지나 · 크기가 다른가 · 겨누면 이득인가 · 깨진 부위가
-     막나 · 도망가나」뿐이다.`);
+console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');
 process.exit(bad ? 1 : 0);
