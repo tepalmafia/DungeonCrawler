@@ -20,10 +20,14 @@ import {
   OPTIC, fovOf, capOf, autoZoom, pixelsOf, blurOf, readable, readOut, sizeOf,
 } from '../web/space/js/game/optic-table.js';
 import {
-  mightOf, packMight, myMight, oddsOf, lootOf, MINE, threatOf,
+  mightOf, packMight, myMight, oddsOf, MINE, threatOf,
 } from '../web/space/js/game/might-table.js';
 import { KINDS, WRECK, SEEN } from '../web/space/js/game/target-table.js';
 import { WEAPONS } from '../web/space/js/game/combat-table.js';
+// ★★★ v110 — 전투력이 **부위 장착**으로 바뀌었다 (v107 「가」)
+import { makeFit, mightOf as fitMight, gainPart, equip } from '../web/space/js/game/parts.js';
+import { BASE_MIGHT } from '../web/space/js/game/parts-table.js';
+import { partOf } from '../web/space/js/game/farm-table.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -81,9 +85,9 @@ head('[4] 늘 최대로 당겨 놓는 것이 답이 아닌가 — **떨림**');
 // ══ ⑤ 전투력 — 견줌이 성립하나 ══════════════════════════════════════
 head('[5] 전투력 — 「강하면 피하고 약하면 부순다」가 성립하나');
 {
-  const start = myMight({ weapons: ['laser'], hull: 1, loot: { weapon: 0, armor: 0 } });
-  const full = myMight({ weapons: ['laser', 'ir', 'arh'], hull: 1, loot: { weapon: 0, armor: 0 } });
-  const hurt = myMight({ weapons: ['laser', 'ir', 'arh'], hull: 0.4, loot: { weapon: 0, armor: 0 } });
+  const start = myMight({ weapons: ['laser'], hull: 1 });
+  const full = myMight({ weapons: ['laser', 'ir', 'arh'], hull: 1 });
+  const hurt = myMight({ weapons: ['laser', 'ir', 'arh'], hull: 0.4 });
   console.log(`      내 전투력 — 처음 ${start} · 무기 셋 ${full} · 선체 40%면 ${hurt}`);
   ok(full > start, '무기를 갖추면 오른다');
   ok(hurt < full, '**선체가 깎이면 내려간다** — 피해가 다음 판단을 바꾼다');
@@ -101,32 +105,35 @@ head('[5] 전투력 — 「강하면 피하고 약하면 부순다」가 성립�
     '그러나 **세 배는 아니다** — 하나씩 떼어 잡을 수 있다');
 }
 
-// ══ ⑥ 노획 — 격추가 나를 키우나 ══════════════════════════════════════
+// ══ ⑥ 파밍 — 격추가 나를 키우나 (v110 에 다시 씀) ═══════════════════
 head('[6] 격추할 때마다 **회수해서 전투력이 오르나**');
 {
-  const W = ['laser', 'ir', 'arh'];
-  let loot = { weapon: 0, armor: 0 };
-  const at = () => myMight({ weapons: W, hull: 0.9, loot });
-  const was = at();
+  // ══ ★★★ v110 — **이 절이 죽은 식을 재고 있었다** ═══════════════════
+  //
+  //  전에는 `lootOf` 로 노획 개수를 쌓고 `myMight` 이 그 거듭제곱을 더하는
+  //  것을 쟀다. v107 이 전투력을 **부위 장착**으로 갈아엎었고 v110 이 옛
+  //  식을 걷어냈으므로, 그 검사는 **이제 없는 것을 재는 검사**다.
+  //  ★ 오르는지는 그대로 묻되, **지금 오르는 방식**으로 묻는다
+  const f = makeFit();
+  const was = fitMight(f);
+  const seq = [];
   let last = was;
-  const grew = [];
   for (let i = 1; i <= 25; i++) {
-    const g = lootOf(i % 3 === 0 ? 'gunship' : 'raider');
-    loot = { weapon: loot.weapon + g.weapon, armor: loot.armor + g.armor };
-    const now = at();
-    grew.push(now - last);
+    const kind = i % 3 === 0 ? 'gunship' : 'raider';
+    const p = partOf(kind, 0.0, ((i * 37) % 100) / 100, ((i * 53) % 100) / 100);
+    if (p) { gainPart(f, p.slot, p.tier); equip(f, p.slot, 0); }
+    const now = fitMight(f);
+    seq.push(now - last);
     last = now;
   }
-  console.log(`      25대 잡는 동안 — ${was} → ${last}`);
-  ok(last > was, '격추가 쌓이면 전투력이 오른다');
-  ok(grew[0] > grew[grew.length - 1], '★ **뒤로 갈수록 덜 오른다** — 초반에 다 크면 남은 시간이 심심하다');
-  ok(last <= MINE.cap, `천장이 있다 (${MINE.cap})`);
-  // 25대를 잡아도 천장에 겨우 닿아야 2시간이 산다
-  ok(last >= MINE.cap * 0.85, '그래도 끝까지 가면 거의 다 큰다 — 오르는 맛이 있다');
-
-  // 안 쏘는 것에서는 무기가 안 나온다
-  ok(lootOf('junk').weapon === 0, '파편에서는 무기가 안 나온다 — 없는 것을 뜯을 수는 없다');
-  ok(lootOf('gunship').armor > lootOf('fighter').armor, '두꺼운 것에서 장갑이 더 나온다');
+  console.log(`      25대 잡는 동안 — ${was} → ${last} (${(last / was).toFixed(2)}배)`);
+  ok(last > was, '★★★ **격추가 쌓이면 전투력이 오른다** — 개수가 아니라 **달린 등급**으로');
+  ok(last <= BASE_MIGHT * 2.05 + 0.01,
+    `★ 천장이 있다 — 다 「격추왕의 것」이라도 ${(BASE_MIGHT * 2.05).toFixed(1)} 이다`);
+  // ★ 부위마다 무게가 달라 **같은 등급이라도 어디에 붙었나로 값이 다르다**
+  ok(seq.some((d) => d > 0) && seq.some((d) => d === 0),
+    '★★ 오르기만 하는 게 아니라 **안 오르는 격추도 있다** — 파츠가 안 나오거나'
+    + ' 이미 더 좋은 것이 달려 있으면 그렇다. 늘 오르면 그건 경험치지 파밍이 아니다');
 }
 
 // ══ ⑦ 판이 무엇을 말하나 — 적/쓰레기가 다른 것을 말하나 ═══════════════
@@ -135,7 +142,9 @@ head('[7] 판이 **나에게 무엇인가**를 말하나 (적 · 쓰레기 · �
   const foe = readOut('gunship');
   const junk = readOut('tank');
   ok(foe.foe && foe.might > 0, '적이면 **전투력**을 말한다');
-  ok(foe.loot && (foe.loot.weapon || foe.loot.armor), '적이면 **뜯을 것**을 말한다');
+  ok(foe.slots && foe.slots.length > 0,
+    `★★ 적이면 **뜯을 부위**를 말한다 (${(readOut('gunship').slots ?? []).join(' · ')}) —`
+    + ' v110 전에는 「무기 +3 · 장갑 +10」이었고, 그 숫자는 아무 데도 안 붙었다');
   ok(!junk.foe && junk.has.length > 0, '쓰레기면 **든 것**을 말한다 (식량·광석·부품)');
   console.log(`      ${junk.name} — ${junk.has.join(' · ')}`);
   ok(junk.has.some((t) => t.includes('식량')), '연료통에 식량이 있다고 말한다 — 사장님 「필요한 재료나 음식이 있는지」');

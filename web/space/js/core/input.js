@@ -44,6 +44,19 @@ export class Input {
       // 브라우저 단축키를 뺏지 않는다 — 새로고침이 막히면 개발이 지옥이 된다
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       this.keys.add(e.code);
+      // ══ ★★★ v110 — **Space 가 쏘기가 됐다.** 브라우저에게 뺏기면 안 된다
+      //
+      //  ★ 기본 동작이 둘이라 둘 다 막아야 한다:
+      //      ① **쪽을 내린다** (page scroll) — 화면이 통째로 흔들린다
+      //      ② **초점 잡힌 단추를 누른다** — 「시작」을 누르고 게임에 들어간
+      //         직후에는 그 단추에 초점이 남아 있어서, 쏘려고 Space 를 치면
+      //         **시작 단추가 또 눌린다**
+      //  ★★ 그래서 막고, 초점도 떼어 놓는다. 이건 코드로는 안 보이고
+      //    **직접 눌러 봐야** 나오는 종류다 (space-endtoend.js 가 본다)
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (this.locked) document.activeElement?.blur?.();
+      }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.run = true;
     });
     addEventListener('keyup', (e) => {

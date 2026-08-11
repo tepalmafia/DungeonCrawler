@@ -71,6 +71,9 @@ import { makeDoors, stepDoors, jammedOne, summary as doorSummary } from './game/
 import { SCENES, EMBER } from './game/scene-table.js';
 import { DRIFT } from './game/drift-table.js';
 import { HELM, HELM_SEAT, FLY_VIEW, STICK, deflect, YOKE, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
+// ══ ★★★ v110 — **손 배치** (사장님 「공격도 스페이스로 … r을 누르면 추력이
+//   켜지고 꾹 누르면 가속되는 걸로」). 톡과 꾹을 가르는 것은 표가 한다
+import { KEYS, TAP, makeTap, tapStep, KEY_WORD } from './game/keys-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord, PICK } from './game/combat-table.js';
@@ -106,7 +109,7 @@ import { HULL, HITS } from './game/target-table.js';
 //          흩어진 적이나 **전투력이 낮은 적은 파괴**하면서 진행」
 //          「**상대 우주선의 전투력**도 표시되고 **우리 비행기의 전투력 차이**」
 //          「격추할때마다 **적의 무기나 장갑을 회수**하면서 나도 전투력이 올라가게」
-import { mightOf, lootOf, myMight, oddsOf } from './game/might-table.js';
+import { mightOf, myMight, oddsOf } from './game/might-table.js';
 import { autoZoom, OPTIC } from './game/optic-table.js';
 // ══ ★★★ **회수** (v81) — 사장님 「파괴하고 **적의 지원이 오기전에** …
 //   회수하고」 · 「조종석에서 **그물**이나 기타 회수 장비를 쏘아 회수」
@@ -212,6 +215,13 @@ import {
   makeFit, mightOf as fitMight, gainPart, equip, upgrade, craft, sparesFor,
   summary as fitSummary,
 } from './game/parts.js';
+// ══ ★★★ v110 — **파밍** (사장님 「파밍은 더 강한 무기, 더 강한 파츠,
+//   더 강한 장갑, 보급품, 식량」). v107 이 부위를 만들고 **떨구는 자리를
+//   안 만들어** 회차마다 죽은 칸 396개가 쌓이고 있었다 — `farm-table.js`
+import {
+  GROUPS as FARM_GROUPS, GROUP_OF_SLOT, SPARE_MAX,
+  overflow as spareOverflow, RETIRED as FARM_RETIRED,
+} from './game/farm-table.js';
 // ══ ★★★ v106 — **조종석 하나짜리 배** (사장님 「오직 전투와 파밍으로 …
 //   수리는 버튼하나로 해결하고」 · 「공간도 없애주고」 · 걷기는 「b」)
 import { PILOT, FIX, FIX_WHY, needsFix, fixWord } from './game/pilot-table.js';
@@ -291,7 +301,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 109;
+export const VERSION = 110;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -333,8 +343,45 @@ const FOV_WIDE = 72;
 /** 지금 얼마나 당겨져 있나 0~1 */
 let focusK = 0;
 /** ★★ 조종석 좌석에 앉아 있나 (v61) · 그리고 얼마나 앉았나 0~1 */
+// ★★★ v110 — **일어서는 것이 없다.** `false` 로 시작하지만 첫 프레임에
+//   `sitAtHelm()` 이 켜고, 그 뒤로 이것을 거짓으로 만드는 곳이 **한 군데도
+//   없다** (사장님 「일어선다는것은 아예 없애주고」)
 let helmSat = false;
 let helmSitK = 0;
+
+/**
+ * ══ ★★★ v110 — **처음부터 조종간에 앉은 채로 시작한다** ═══════════════
+ *
+ *  ★ 사장님 「**처음부터 조정간에 앉은 상태로 시작**하게 해줘」
+ *
+ *  ★★ v109 는 `btn-play` **한 곳**에서 `helmSat = true` 만 켰다. 그래서
+ *    두 가지가 새어 나갔다:
+ *
+ *      ① **몸을 좌석으로 안 옮겼다.** 저장을 이어하면 몸이 저장된 자리
+ *         (통로일 수도 있다)에 남은 채 「앉은 것」이 되고, 눈만 낮아진다 —
+ *         사장님이 보내 주신 화면이 정확히 그것이다: 방 이름표와 계기
+ *         판들이 사방에 기울어져 떠 있는 그림
+ *      ② **들어오는 길이 하나가 아니다.** 점검 모드 · 새 게임 · 이어하기가
+ *         제각기 있는데 한 곳에만 걸면 나머지로 들어온 사람은 서 있다
+ *
+ *  ★ 그래서 **앉히는 일을 한 함수로 모으고**, 프레임마다 「조종석 고정이면
+ *    앉아 있다」를 지킨다. 「들어가는 길을 하나만 만들지 않는다」는
+ *    v106 의 규약과 어긋나지 않는다 — 길은 여럿이고, **닿는 자리가 하나**다
+ *
+ * @param snap 참이면 미끄러지지 않고 **그 자리에서** 앉는다 (시작할 때)
+ */
+function sitAtHelm(snap = true) {
+  if (!PILOT.seatOnly) return;
+  helmSat = true;
+  // ★ 사장님 말씀은 「앉은 상태」가 아니라 「**조종간에** 앉은 상태」다.
+  //   v88 부터 앉는 것과 잡는 것이 한 상태이므로 둘을 같이 켠다
+  yokeHeld = true;
+  if (snap) {
+    me.x = HELM_SEAT.seatAt.x; me.z = HELM_SEAT.seatAt.z;
+    me.vx = 0; me.vz = 0;
+    helmSitK = 1;
+  }
+}
 /**
  * ★★★ v103 — **비행 보조가 켜져 있나** (자동 수평 · 기본 켜짐).
  *   왜 기본이 켜짐인지, 왜 롤에만 거는지는 `game/horizon-table.js` 에 있다
@@ -549,11 +596,18 @@ addEventListener('keydown', (e) => {
     //    계기를 보거나 I 창을 열 때 쓰고, 자리는 안 뜬다.
     //  ★★ 나가는 길을 아예 없애는 것이 아니라 **갈 곳이 없어진 것**이다:
     //    방 여섯이 죽었으므로 일어나 봐야 설 데가 없다 (`pilot-table.js`)
-    if (PILOT.seatOnly) {
-      if (yokeHeld) { yokeHeld = false; say(ai, '조종간을 놓았습니다 — 계기는 I', 'tell'); }
-    } else if (helmSat) {
-      yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell');
-    }
+    // ══ ★★★ v110 — **「일어난다」를 아예 없앴다** (사장님 말씀 그대로) ══
+    //
+    //  v109 는 `PILOT.seatOnly` 일 때만 안 일어나게 **막았다.** 막은 것과
+    //  없앤 것은 다르다 — 막으면 「막힌 길」이 코드에 남아, 저장을
+    //  이어하거나 점검 모드로 들어오면 **그 길로 새어 나간다.**
+    //  사장님이 보내 주신 화면(방 이름표와 계기가 사방에 기울어져 뜬 것)이
+    //  그 새어 나간 자리였다.
+    //
+    //  ★ 이제 X 는 **조종간만 놓는다.** 자리는 뜰 수 없다 — `helmSat` 을
+    //    거짓으로 만드는 곳이 게임에 **하나도 없다**
+    if (yokeHeld) { yokeHeld = false; say(ai, '조종간을 놓았습니다 — 다시 잡으려면 누릅니다 · 계기는 I', 'tell'); }
+    else { yokeHeld = true; say(ai, '조종간을 잡았습니다', 'tell'); }
     return;
   }
   // ══ ★★★ v107 — **I · 기체와 파츠 창** ═══════════════════════════════
@@ -1313,32 +1367,27 @@ function landShots(dt) {
       const at = ship.outside.targets.posOf(t.id) ?? shotAt(t.az, t.el, t.dist);
       ship.optic.killed(at, {
         name: TKINDS[t.kind]?.name ?? '?',
-        loot: null, myWas: myPower(), myNow: null,
+        loot: null, myWas: myPower(), myNow: null,   // ★ v110 — 노획 개수는 죽었다
         drop: pk ? packWord(pk.has, pk.part) : null,
       });
     }
-    // ══ ★★★ v107 — **파밍이 파츠를 준다** ═══════════════════════════
+    // ══ ★★★ v110 — **여기 있던 파츠 떨구기를 걷어냈다** ═══════════════
     //
-    //  ★ 사장님 「파밍은 **더 강한 무기, 더 강한 파츠, 더 강한 장갑**…」
-    //  ★★ **무엇을 부쉈나가 무엇이 나오나를 정한다** — 포함을 잡으면
-    //    장갑·주포가, 요격기를 잡으면 엔진·센서가 잘 나온다.
-    //    그래야 「무엇을 골라 부술지」가 한 겹 더 생긴다 (v79 의 규약).
-    //  ★ 등급은 **씨앗이 아니라 그 자리에서** 뽑는다 — 저장하고 이어했을 때
-    //    이미 받은 것이 바뀌지는 않으므로(받은 뒤에는 화물에 있다) 괜찮다
-    {
-      const BY_KIND = {
-        gunship: ['armor', 'gun', 'sink'], turret: ['armor', 'gun'],
-        fighter: ['engine', 'sensor'], drone: ['engine', 'tube'],
-        raider: ['gun', 'tube', 'hold'],
-      };
-      const pool = BY_KIND[t.kind] ?? ['hold'];
-      const slot = pool[(Math.random() * pool.length) | 0];
-      // 등급 — 흔한 것부터 (`TIERS[].find` 가 그 확률이다)
-      let r = Math.random(), tier = 'stock';
-      for (const tt of TIERS) { r -= tt.find; if (r <= 0) { tier = tt.key; break; } }
-      const got = gainPart(fit, slot, tier);
-      if (got) say(ai, `★ ${partName(got)} — I 창에서 답니다`, 'tell');
-    }
+    //  v107 이 이 자리에 **표를 안 거치고** 파츠를 냈다: `BY_KIND` 를 손으로
+    //  적고, 등급도 여기서 굴리고, **격추하는 순간** 손에 쥐여 줬다.
+    //  세 군데가 다 틀렸다 —
+    //
+    //    ① **정하는 곳이 둘**이 됐다. 표(`farm-table.js SLOT_FROM`)와 여기가
+    //       서로 다른 목록을 들고 있었고, 이 저장소가 제일 자주 갈라지는
+    //       자리가 정확히 그것이다 (v98 의 자리 넷 · v103 의 줄 다섯)
+    //    ② **회수를 건너뛰었다.** v80 이 「부순 것과 얻는 것 사이에 일이
+    //       하나 있다」로 지은 것을 파츠만 몰래 지나갔다 — 제일 값진 것이
+    //       공짜가 되면 「줍고 버리고」의 결심이 통째로 힘을 잃는다
+    //    ③ 뼈대만 도는 도구가 **못 읽었다.** 게임 안에 있으니 검사가
+    //       「파츠가 안 떨어진다」고 말했고, 나도 그렇게 믿고 세고 있었다
+    //
+    //  ★ 이제 파츠는 **꾸러미에 들어가고**(`salvage.js dropPack`)
+    //    **회수해야** 들어온다 (`takeSalvage`)
     say(ai, `${TKINDS[t.kind]?.name ?? ''} 격추 — 잔해가 남았습니다 · 지원 ${Math.round(inS)}초`, 'warn');
     audio?.event('latch');
     audio?.event('fixed');
@@ -1434,7 +1483,7 @@ function takeHits(list) {
 //   2시간짜리를 **한 번도 끝까지 못 해 본 채로** 만들게 된다.
 /** 저장할 것들을 한 곳으로 접는다 — `save-table.js FIELDS` 가 칸을 고른다 */
 const world = () => ({
-  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot, salvage, cargo,
+  route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, fit, salvage, cargo,
   // ★ v99 — 아크 도약. `save-table.js FIELDS.arc` 가 칸을 고른다
   arc: arcS,
   // ★ v101 — 스로틀·도킹. `save-table.js FIELDS` 가 칸을 고른다
@@ -1655,13 +1704,15 @@ function setThrustKey(on) {
   //   (아래 `thrustWas`)
 }
 
-// ══ ★★★ **노획 — 격추가 나를 키운다** (v79) ═══════════════════════════
+// ══ ★★★ **노획 — 격추가 나를 키운다** (v79 → v107 → v110) ═════════════
 //  사장님 「상대우주선을 **격추할때마다 적의 무기나 장갑을 회수**하면서
 //          **나도 전투력이 올라가게** 설계하시오」
 //
-//  ★ 개수만 센다. 전투력으로 옮기는 식은 `might-table.js` 한 곳에만 있다 —
-//    여기서도 더하면 표가 둘이 되고, 둘이면 갈라진다
-const loot = { weapon: 0, armor: 0 };
+//  ★★★ v110 — **`loot = { weapon, armor }` 를 걷어냈다.**
+//    v107 이 전투력을 부위 장착으로 갈아엎으면서 (사장님 「가」) 이 둘은
+//    전투력 식에서 빠졌는데, **떨어지는 것은 그대로 뒀다.** 재 보니
+//    회차마다 **396개**가 아무 데도 안 쓰이는 칸으로 들어가고 있었다.
+//    이제 그 자리를 **부위 파츠**가 대신한다 — 아래 `takeSalvage`.
 
 /** ★★★ v81 — **회수.** 부순 자리에 남는 꾸러미 · 그물 · 지원 도착 시계 */
 const salvage = makeSalvage();
@@ -1700,15 +1751,37 @@ function takeSalvage(p) {
   if (u.food) supply.food = Math.min(FOOD.max, supply.food + u.food);
   if (u.parts) supply.parts = Math.min(PARTS.max, supply.parts + u.parts);
   if (u.ore) supply.ore = Math.min(ORE.max, supply.ore + u.ore);
-  if (u.lootWeapon) loot.weapon += u.lootWeapon;
-  if (u.lootArmor) loot.armor += u.lootArmor;
-  if (u.suitAir) refillSuit(suit, u.suitAir);
+  // ★ 아크 전지는 **화물칸에 실린 개수 그대로**를 도약이 읽는다
+  //   (`cargo.items.arc`). 그래서 여기서 옮길 것이 없다 — `use` 는
+  //   「떨어져도 되는 물건인가」의 표시로만 쓰인다 (`dropsNow`)
   if (u.sink) sink = Math.max(0, sink + u.sink);
+  // ══ ★★★ v110 — **부위 파츠가 여기서 나온다** ══════════════════════
+  //
+  //  ★ v107 이 부위 일곱 · 등급 다섯을 지어 놓고 **떨구는 자리를 안
+  //    만들었다.** `SPACE.givePart()`(점검용 구멍)로만 나왔으니, 사장님이
+  //    제일 먼저 말씀하신 「더 강한 무기 · 파츠 · 장갑」이 표에만 있고
+  //    게임에는 없었다. 그 구멍을 여기서 막는다.
+  //  ★★ **꾸러미 하나에 파츠는 최대 하나다.** 우수수 쏟아지면 파밍이
+  //    아니라 청소가 된다 (`farm-table.js partOf`).
+  //  ★ 어느 부위가 · 어느 등급이 나오나는 **표가 정한다** — 여기서 고르면
+  //    정하는 곳이 둘이 되고, 둘이면 갈라진다
+  let partWord = '';
+  if (p.fitPart) {
+    gainPart(fit, p.fitPart.slot, p.fitPart.tier);
+    partWord = ` · ★ ${partName(p.fitPart)}`;
+    // 랙이 넘치면 **제일 낮은 등급부터** 떨어진다. 싸우는 중에 고르게
+    // 하면 창을 열어야 하고, 그건 v109 가 없앤 「뒤로 가서」와 같은 병이다
+    const out = spareOverflow(fit.spare);
+    for (const dead of out) fit.spare.splice(fit.spare.indexOf(dead), 1);
+    if (out.length) partWord += ` (랙이 차서 ${partName(out[0])} 를 버림)`;
+  }
   const now = myPower();
-  let extra = '';
+  let extra = partWord;
   // ★ 탄두 재료는 **손에 들려 준다** — 꽂힌 것이 아니다 (v71)
+  //   ★ v110 — `=` 가 아니라 `+=` 다. 파츠와 탄두 재료가 **한 꾸러미에
+  //     같이** 들 수 있고, 덮어쓰면 둘 중 하나가 조용히 사라진다
   if (p.part && headPick(warhead, p.part)) {
-    extra = p.part === 'core' ? ' · ★ 분열 노심 — 기관실 크레이들로'
+    extra += p.part === 'core' ? ' · ★ 분열 노심 — 기관실 크레이들로'
       : ' · ★ 재돌입체 외피 — 기관실 크레이들로';
   }
   const missed = Object.keys(r.missed).length
@@ -1726,6 +1799,21 @@ function takeSalvage(p) {
  *   ★★ **선체가 깎이면 같이 깎이는 것**은 그대로 남긴다 — 맞으면 약해지는
  *     것이 이 게임의 오랜 규약이고, 그것까지 같이 없애면 「맞아도 그만」이 된다
  */
+/**
+ * ★★ 랙에 **지금 달린 것보다 좋은 것**이 있나 — 있으면 그 이름.
+ *
+ *   ★ 여기서 **자동으로 달지 않는다.** 고르는 것이 이 계통의 전부이고
+ *     (`parts.js gainPart` 주석), 저절로 좋아지면 I 창이 죽는다.
+ *     대신 **놓칠 수 없게 부른다** — 그 둘은 다른 일이다
+ */
+function betterSpare() {
+  for (const p of fit.spare) {
+    const on = fit.on[p.slot];
+    if (!on || TIER_BY[p.tier]?.mult > (TIER_BY[on.tier]?.mult ?? 0)) return partName(p);
+  }
+  return null;
+}
+
 function myPower() {
   const hull = 1 - (faults.wear.hull ?? 0);
   return +(fitMight(fit) * (0.55 + 0.45 * Math.max(0, hull))).toFixed(1);
@@ -1756,8 +1844,14 @@ let lastCost = { calls: 0, tris: 0 };
 let hitFlash = 0;         // 부딪힌 순간의 화면 충격
 /** ★★★ v84 — 지금 급기동(Shift) 중인가. **회피가 이걸 읽는다** */
 let burstNow = false;
-/** ★ v86 — Space 는 **누른 순간** 한 번만 먹는다 (추력은 켜고 끄는 물건이다) */
-let thrustHeldKey = false;
+/**
+ * ★★★ v110 — **R 의 톡·꾹을 재는 시계.** 표가 가른다 (`keys-table.js`).
+ *   ★ v86 의 `thrustHeldKey`(Space 를 누른 순간 한 번만) 자리다 —
+ *     이제 「한 번만」이 아니라 「얼마나 오래」를 재야 하므로 시계가 든다
+ */
+const thrustTap = makeTap();
+/** ★ 이번 프레임에 **꾹**인가 — `wantRush` 가 이걸 묻는다 */
+let rushWanted = false;
 /**
  * ★★★ v87 — **밟는 순간 눈이 뒤로 밀린다** (`boost-table.js KICK`).
  *   ★ 우주에서 등속은 아무 느낌이 없다 (고증). 느껴지는 것은 **가속**뿐이고
@@ -2789,7 +2883,9 @@ function interactStep(dt) {
     //  ★ 어디를 보게 하나: 창의 한복판 = 수평. 기수 방향이 곧 조준이므로
     //    수평이 아니면 앉자마자 배가 틀어져 보인다
     me.pitch = 0;
-    say(ai, '조종간을 잡았습니다 — 계기는 오른쪽 단추, 나갈 때는 X', 'tell');
+    // ★ v110 — 「나갈 때는 X」였다. **나갈 데가 없다** (사장님 「항상 앉은
+    //   상태에서 모든 조작을 한다. 가 기본이야」). X 는 놓았다 잡는 것뿐이다
+    say(ai, '조종간을 잡았습니다 — 계기는 I · 손을 놓으려면 X', 'tell');
     audio?.event('click');
     // ══ ★★ v88 — **내리는 길은 X 하나다** (그리고 그렇게 적는다) ══════
     //  이 가지는 원래 「아무것도 안 잡힌 데를 누르면 일어난다」였다.
@@ -2799,26 +2895,11 @@ function interactStep(dt) {
     //    **닿지 않는 두 번째 길을 적어 두는 것**이 더 나쁘다 (좌석은 몸
     //    아래라 조준선이 안 닿고, 빈 곳 클릭은 이제 발사다). 대신 **앉는
     //    순간 등대가 「나갈 때는 X」라고 말하고**, F1 에도 그렇게 적었다
-  } else if (false) {
-    // ★ 일어나는 것은 **아무것도 안 잡힌 데를 누를 때**다. 손잡이를 누르면
-    //   그건 잡는 것이지 일어나는 것이 아니다 — 한 손잡이가 두 일을 하면 부딪힌다
-    //
-    // ══ ★★★ **v66 — 여기가 「눌렀는데 배가 안 간다」의 진짜 원인이었다** ══
-    //  여태 조건이 `!onYoke` 였다. v65 까지는 앉아서 누를 것이 **조종간
-    //  하나뿐**이라 그걸로 충분했다. 그런데 v66 에서 **항로 갈래 판 ·
-    //  추력 레버 · 자동 항법**이 조종석으로 오자, 그것들을 누를 때마다
-    //  `onYoke` 가 거짓이라 **일어나 버렸다.**
-    //
-    //  일어나면 몸이 좌석 뒤로 물러나므로 **조준선이 그 프레임에 딴 것을
-    //  잡고**, 그 딴 것이 하필 조종간이라 수동 조종이 켜졌다. 화면에는
-    //  「눌렀더니 자동 항법이 꺼졌습니다」만 뜬다 — 원인과 아무 상관도
-    //  없어 보이는 말이다. 손잡이를 하나 늘릴 때마다 여기 이름을 하나씩
-    //  더 적는 방식이었으면 다음 판에 또 밟는다. **잡힌 것이 있나**로 묻는다
-    yokeHeld = false;
-    helmSat = false;
-    say(ai, '일어납니다', 'tell');
-    audio?.event('click');
   }
+  // ★★★ v110 — 여기 `else if (false)` 로 꺼 둔 「일어난다」 가지가 있었다.
+  //   v88 에 이미 안 쓰이게 됐는데 **몸통을 남겨 뒀고**, 그 안에
+  //   `helmSat = false` 가 들어 있었다. 꺼 둔 코드는 언젠가 켜진다 —
+  //   사장님 「일어선다는것은 아예 없애주고」. 통째로 걷어냈다
 
   // ★ **잡고 있는 동안** WASD 가 포탑을 돌린다 (walk() 가 읽는다)
   // ★★★ v64 — **손잡이가 없어졌다.** 조준은 기수가 한다 (조종간이 곧 조준).
@@ -2843,7 +2924,17 @@ function interactStep(dt) {
   //  v66 이 그것들을 조종석으로 옮겨 놓았으므로 이건 배가 안 떠나는 것과
   //  같은 말이다. **「잡힌 것이 있나」로 가른다** — 위 일어나기가 이미
   //  쓰는 규칙이고, 실제 조종간도 계기를 누르는 손과 방아쇠가 다르다
-  const firePressed = steering && input.hold && !aimName;
+  // ══ ★★★ v110 — **쏘기가 Space 로 갔다** (사장님 「공격도 스페이스로」) ══
+  //
+  //  ★ v86 에 「쏘기 = 마우스 왼쪽」으로 옮겼고, 그때 이유가 「도움말이
+  //    맞고 코드가 틀렸다」였다. 이번엔 사장님이 **배치 자체를** 바꾸셨다.
+  //  ★★ 그리고 이 옮김이 **v88 의 골칫거리를 통째로 없앤다**: 앉으면
+  //    좌클릭이 늘 발사가 되어 갈래 판·추력 레버를 못 눌렀고, 그래서
+  //    `!aimName`(조준선에 뭐가 걸렸나)으로 갈라야 했다. 쏘기가 Space 면
+  //    **좌클릭은 오직 계기 누르기**라 가를 것이 없다.
+  //  ★ 그래도 `!aimName` 을 남긴다 — 조준선이 계기에 가 있을 때 Space 를
+  //    치면 「누르려던 것」과 「쏜 것」이 겹쳐 보인다. 남겨 두는 값이 싸다
+  const firePressed = steering && input.keys.has('Space') && !aimName;
   // ══ ★★★ v94 — **오른쪽 단추 = 보조 무기 · 휠 클릭 = 표적** ═══════════
   //
   //  사장님 「**다른 비행시뮬레이션 게임을 찾아서 벤치마크해서 그대로 적용**」
@@ -3118,13 +3209,20 @@ function systemsStep(dt, valveOpen, regionMult) {
     //    답이다. R 은 조건 셋을 다 만족해야 먹는데(추력 · 구간 중 · 추진제)
     //    안 먹을 때 **아무 말도 안 했다.** 이 저장소의 규약이 있다:
     //    「조용히 안 나가면 그건 고장으로 읽힌다」 (v64 · `combat-table.js WHY`)
-    const wantRush = input.keys.has('KeyR');
+    // ★★★ v110 — R 은 이제 **꾹**일 때만 급가속이다 (톡은 추력 켜고 끄기).
+    //   가르는 것은 `keys-table.js tapStep` 한 곳이 하고, 여기는 그 답을
+    //   **묻기만** 한다 — 여기서 또 세면 톡과 꾹이 두 곳에서 갈린다
+    const wantRush = rushWanted;
     // ★★ v82 — **항로 조건을 뺐다.** 「항로는 자동항법에만」 (사장님).
     //   급가속은 **엔진 일**이지 항법 일이 아니다 — 거점에 대고 있어도
     //   밟으면 나가야 한다
     const rushOk = power.thrust;
     if (wantRush && !rushOk && rushSaid <= 0) {
-      say(ai, '급가속 — 추력을 먼저 켜십시오 (W)', 'tell');
+      // ★★ v110 — 이 말이 이제 안 나온다. **R 꾹이 추력을 같이 켜 주기**
+      //   때문이다 (`rk.rush && !power.thrust` → `setThrustKey(true)`).
+      //   말은 남긴다 — 딴 까닭으로 추력이 안 켜질 때(추진제 바닥)는 여전히
+      //   여기로 온다. 그리고 「조용히 안 나가면 고장으로 읽힌다」가 규약이다
+      say(ai, '급가속 — 추력이 안 켜집니다 (추진제를 보십시오)', 'tell');
       rushSaid = 2.5;
     }
     if (rushSaid > 0) rushSaid -= dt;
@@ -3566,7 +3664,8 @@ window.SPACE = {
   },
   /** 검사가 마우스를 민다 — 헤드리스에서 진짜 마우스 이벤트는 프레임을 탄다 */
   pushStick(x, y) { stick.x = x; stick.y = y; return { x: stick.x, y: stick.y }; },
-  putHelmSit(v) { helmSat = !!v; return helmSat; },
+  /** ★ v110 — 못 일어나므로 **늘 앉는다.** 이름은 남긴다 (검사가 부른다) */
+  putHelmSit() { sitAtHelm(); return helmSat; },
   // ══ ★★★ v79 — **광학 창 · 전투력** (space-optic.js 가 읽는다) ══════
   get optic() {
     const ot = opticTarget();
@@ -3585,14 +3684,24 @@ window.SPACE = {
     const mine = myPower();
     const theirs = ot ? mightOf(ot.kind) : 0;
     return {
-      mine, loot: { ...loot },
+      // ★ v110 — 「노획 개수」가 아니라 **달린 것**이다. `loot` 는 죽었다
+      mine, fit: fitSummary(fit).slots.map((x) => `${x.name} ${x.label}`),
+      spare: fit.spare.length, spareMax: SPARE_MAX,
       theirs, kind: ot?.kind ?? null,
       odds: ot ? oddsOf(mine, theirs).key : null,
       word: ot ? oddsOf(mine, theirs).word : null,
     };
   },
-  /** 검사가 노획을 밀어 놓는다 — 스무 대를 헤드리스로 잡지 않으려고 */
-  putLoot(w = 0, a = 0) { loot.weapon = w; loot.armor = a; return { ...loot }; },
+  /**
+   * 검사가 파츠를 밀어 놓는다 — 스무 대를 헤드리스로 잡지 않으려고.
+   *   ★ v110 — 옛 `putLoot(무기수, 장갑수)` 자리다. 개수가 아니라
+   *     **부위와 등급**을 넣는다 (`SPACE.givePart` 와 같은 구멍이지만
+   *     이쪽은 여러 개를 한 번에)
+   */
+  putParts(list = [['gun', 'loot']]) {
+    for (const [slot, tier] of list) gainPart(fit, slot, tier);
+    return fitSummary(fit).spare;
+  },
   /**
    * ★★ **적이 앞을 보나** — 코가 이쪽인가 엔진 불이 이쪽인가 (v79).
    *   v69~v78 내내 `lookAt` 이 +Z 를 돌려세워서 **등을 보인 채** 왔다.
@@ -4848,12 +4957,12 @@ window.SPACE = {
    *   검사와 점검 모드가 아직 부르고, 조용히 사라지면 「안 된다」로 읽힌다
    */
   putGun(up) {
-    helmSat = !!up;
+    helmSat = true;      // ★ v110 — 일어나는 것이 없어졌다
     // ★★ v88 — **앉는 것이 곧 잡는 것이다.** 여기서 `yokeHeld` 를 같이
     //   안 켜면 검사만 「앉았는데 안 잡은」 상태를 만들 수 있고, 그건
     //   게임에 이제 없는 상태다 — 검사가 없는 것을 재게 된다
     yokeHeld = !!up;
-    const at = up ? HELM_SEAT.seatAt : HELM_SEAT.standAt;
+    const at = HELM_SEAT.seatAt;   // ★ v110 — `standAt` 은 갈 데가 없다
     me.x = at.x; me.z = at.z;
     // ★ 앉으면 시선을 **안 내린다** (v88) — 앉는 것이 곧 잡는 것이므로
     //   처음부터 창을 본다
@@ -5291,8 +5400,21 @@ function frame(now) {
     //   A/D 가 없으면 **왼손이 반쪽**이라 「적을 쫓을 수가 없다」가 된다
     const kSide = (input.keys.has('KeyD') ? 1 : 0) - (input.keys.has('KeyA') ? 1 : 0);
     if (kSide !== 0) { flyPush.yaw = kSide; steerPush = kSide; }
-    if (input.keys.has('Space')) { if (!thrustHeldKey) { setThrustKey(!power.thrust); thrustHeldKey = true; } }
-    else thrustHeldKey = false;
+    // ══ ★★★ v110 — **추력은 R 톡 · 급가속은 R 꾹** ═══════════════════
+    //
+    //  ★ 사장님 「추력을 올리는 것도 **r을 누르면 추력이 켜지고 꾹 누르면
+    //    가속되는 걸로** 해줘」. Space 가 쏘기로 갔으므로 자리를 비켜 준다.
+    //  ★★ 한 키가 두 일을 하는데 **부딪히지 않는 까닭**: 두 일이 같은
+    //    방향이다. 급가속은 추력이 켜져 있어야 되고, 꾹 누르면 켜면서
+    //    민다. 이 저장소가 태운 것은 늘 **서로 반대인 두 일**을 한 키에
+    //    둔 자리였다 (v47 잡기/일어나기 · v66 누르기/일어나기).
+    //  ★ 가르는 시간은 표가 든다 (`keys-table.js TAP`) — 여기서 또 세면
+    //    재는 곳이 둘이 된다
+    const rk = tapStep(thrustTap, input.keys.has('KeyR'), dt);
+    if (rk.tap) setThrustKey(!power.thrust);
+    // ★ 꾹이면 **추력이 꺼져 있어도 켜면서** 민다 — 「켜고 밀기」가 한 동작
+    if (rk.rush && !power.thrust) setThrustKey(true);
+    rushWanted = rk.rush;
   } else {
     steerPush = 0;
     // ★★ v88 — **둘러보는 동안에는 스틱을 안 지운다.** 지우면 손을 떼는
@@ -5917,10 +6039,13 @@ function frame(now) {
   //  ★ 새 동작을 안 만들었다. **잡는 것 하나로 앉기까지 된다** —
   //    「한 손잡이가 두 일을 하면 부딪힌다」와 안 부딪히는 이유는,
   //    앉는 것이 잡는 것의 **결과**이지 다른 일이 아니기 때문이다
+  // ★★★ v110 — **조종석 고정이면 앉은 것이 배의 상태다.** 한 곳에서만
+  //   켜면 이어하기·점검 모드로 들어온 사람이 선 채로 남는다 (위 `sitAtHelm`)
+  if (PILOT.seatOnly && !helmSat) sitAtHelm(false);
   helmSitK += ((helmSat ? 1 : 0) - helmSitK) * Math.min(1, dt * HELM_SEAT.slide * 0.6);
   if (helmSitK > 0.002) {
     // 앉는 동안 몸이 **미끄러진다.** 툭 옮기면 그것도 거짓말이다 (주포 좌석과 같다)
-    const s = helmSat ? HELM_SEAT.seatAt : HELM_SEAT.standAt;
+    const s = HELM_SEAT.seatAt;    // ★ v110 — 일어서는 자리가 없어졌다
     const k = Math.min(1, dt * HELM_SEAT.slide);
     me.x += (s.x - me.x) * k;
     me.z += (s.z - me.z) * k;
@@ -6304,6 +6429,10 @@ function frame(now) {
     //   안 보이면 사람은 조종간이 왜 안 먹는지 모른다 (v100 의 발사관과
     //   같은 함정이다 — 규칙이 있는데 안 보이면 없는 것과 같다)
     catchS: catchS.id !== null ? { ...catchSummary(catchS), word: catchWord(catchS) } : null,
+    // ★★★ v110 — **랙에 더 좋은 파츠가 있나.** 있으면 조준경이 한 줄로
+    //   부른다. 저절로 달면 I 창을 볼 이유가 없어지고, 안 부르면 v107 처럼
+    //   **만들어 놓고 아무도 못 쓰는** 것이 된다
+    fitUp: betterSpare(),
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,
     // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며
@@ -6650,9 +6779,7 @@ document.addEventListener('pointerlockchange', () => {
   wire('btn-play', () => {
     beginOnce();
     drawLegend();          // ★ v108 — 시작하면 범례가 뜬다
-    // ★★★ v109 — **시작하면 이미 앉아 있다.** 걸어갈 방이 없으므로
-    //   「조종석까지 걸어가기」가 첫 일이 될 이유가 없다 (사장님 「b」)
-    if (PILOT.seatOnly) { helmSat = true; }
+    sitAtHelm();           // ★★★ v110 — **조종간을 잡은 채로 시작한다**
     renderer.domElement.requestPointerLock?.();
   });
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });

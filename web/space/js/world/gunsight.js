@@ -422,6 +422,13 @@ function draw(ctx, w, h, s) {
       act = '★ 뒤집힘 — 조종이 반대입니다'; tone = HOT;
     } else if (s.fix && s.fix.can && s.fix.cool <= 0) {
       act = '★ P — 수리'; tone = WARN;
+    } else if (s.fitUp) {
+      // ══ ★★★ v110 — **더 좋은 파츠가 랙에 있다** ═══════════════════════
+      //  회수한 파츠는 **저절로 안 달린다** (저절로 달면 I 창을 볼 이유가
+      //  없어지고 「고르는 것」이 사라진다). 그런데 안 부르면 랙에 쌓아
+      //  놓고 못 보고 지나간다 — v107 이 파츠를 만들고 아무도 못 쓴 것과
+      //  같은 병이다. **고르게 하되, 고를 것이 생긴 것은 말해 준다**
+      act = `★ I — ${s.fitUp} 가 랙에 있습니다`; tone = WARN;
     } else if (s.nav && s.nav.to && !(s.nav.auto && navState(s.nav.off) === 'on')) {
       act = s.nav.word;
       tone = navState(s.nav.off) === 'on' ? SHOOT

@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=109">
+<link rel="stylesheet" href="css/style.css?v=110">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -100,16 +100,14 @@
     <details class="keys">
       <summary>조작법</summary>
       <div class="grid">
-        <span>움직이기</span><b>W A S D</b>
-        <span>달리기</span><b>Shift</b>
-        <span>손 쓰기</span><b>마우스 왼쪽 — 잡고 · 누르고 · 돌린다</b>
+        <span>손 쓰기</span><b>마우스 왼쪽 — 누르고 · 돌린다</b>
         <span>손목 장치</span><b>Q — 지금 할 일을 말한다</b>
-        <span>조종석에서</span><b>조종간을 잡으면 창이 열린다 (<b>X</b> 로 놓고 일어난다)</b>
+        <span>★ 조종석에서</span><b><b>늘 앉아 있습니다</b> — 일어서는 것은 없습니다. 모든 조작을 앉은 자리에서 합니다 (<b>X</b> 로 조종간을 놓았다 잡습니다)</b>
         <span>기수 (피치 &middot; 요)</span><b>마우스 &mdash; 민 자리에 머문다. 손을 멈추면 천천히 가운데로</b>
         <span>비틀기 (롤)</span><b>Q &middot; E</b>
         <span>스로틀</span><b>W &middot; S &mdash; 전진 &middot; <b>역추진</b>. 놓아도 가운데로 안 돌아온다</b>
         <span>★ 비행 보조</span><b>L &mdash; <b>기본 켜짐.</b> 손을 떼면 저절로 수평으로 돌아온다. 끄면 360&deg; 자유지만 <b>뒤집히면 조종이 반대</b>가 된다</b>
-        <span>추력</span><b>Space &mdash; 켜고 끕니다</b>
+        <span>★ 추력</span><b><b>R 톡</b> &mdash; 켜고 끕니다</b>
         <span>광학 창</span><b>Z &mdash; 화면 가득. 켜 두면 창밖을 못 본다</b>
         <span>회수 그물</span><b>G &mdash; 잔해를 감아 온다. 감는 동안은 못 나아간다</b>
         <span>★ 기체 · 파츠</span><b><b>I</b> &mdash; 부위 일곱에 무엇이 달렸나. 파밍으로 들어온 파츠를 <b>달고 · 개조</b>한다. 탄두 재료도 여기서 꽂는다</b>
@@ -118,7 +116,7 @@
         <span>★ 항로점</span><b>갈래를 고르면 조준경에 <b>속 빈 마름모</b>가 뜬다. <b>수동일 때는 그쪽을 향해야 구간이 나아간다</b> (자동 항법이면 배가 알아서 향한다)</b>
         <span>도킹</span><b>H &mdash; 붙어서 <b>여럿을 한 번에</b> 담는다</b>
         <span>★ 투하</span><b><b>V</b> &mdash; 마지막 구간에서 <b>투하 창</b>이 열렸을 때. 먼저 기관실에서 <b>무장</b>해야 한다</b>
-        <span>급기동 · 급가속</span><b>Shift &middot; R</b>
+        <span>★ 급기동 · 급가속</span><b>Shift &middot; <b>R 꾹</b> &mdash; 꾹 누르면 추력이 꺼져 있어도 켜지면서 밀립니다</b>
         <span>멈추기</span><b>Esc</b>
         <span>소리 끄기</span><b>M</b>
         <span>도움말</span><b>F1 &mdash; 조작과 <b>전투</b>를 따로 봅니다</b>
@@ -193,11 +191,10 @@
     </div>
 
     <div id="help-basic" class="page">
-      <h3>걷고 보고 만진다</h3>
+      <h3>앉아서 본다 · 만진다</h3>
       <div class="grid">
-        <span>움직이기</span><b>W A S D</b>
-        <span>달리기</span><b>Shift</b>
-        <span>손 쓰기</span><b>마우스 왼쪽 &mdash; 잡고 · 누르고 · 돌린다</b>
+        <span>★ 자리</span><b><b>늘 조종석에 앉아 있습니다.</b> 일어서는 것은 없고, 모든 조작을 앉은 자리에서 합니다</b>
+        <span>손 쓰기</span><b>마우스 왼쪽 &mdash; 누르고 · 돌린다</b>
         <span>손목 장치</span><b>Q &mdash; 지금 할 일을 말한다</b>
         <span>멈추기 · 소리</span><b>Esc · M</b>
         <span>도움말</span><b>F1 &mdash; 조작과 <b>전투</b>를 따로 봅니다</b>
@@ -211,9 +208,9 @@
         <span>기수 위아래</span><b><b>W 올림 · S 내림</b> &mdash; 마우스로도 됩니다</b>
         <span>기수 좌우</span><b><b>A 왼쪽 · D 오른쪽</b> &mdash; 마우스로도 됩니다 (<b>민 자리에 머문다</b>)</b>
         <span>비틀기 (롤)</span><b>Q · E</b>
-        <span>추력</span><b><b>Space</b> &mdash; 켜고 끕니다. <b>켜야 앞으로 나아간다</b></b>
+        <span>★ 추력</span><b><b>R 톡</b> &mdash; 켜고 끕니다. <b>켜야 앞으로 나아간다</b></b>
         <span>★ 투하</span><b><b>V</b> &mdash; 마지막 구간에서 <b>투하 창</b>이 열렸을 때. 먼저 기관실에서 <b>무장</b>해야 한다</b>
-        <span>급기동 · 급가속</span><b>Shift · R &mdash; R 은 추력이 켜져 있어야 한다</b>
+        <span>★ 급기동 · 급가속</span><b>Shift · <b>R 꾹</b> &mdash; 꾹 누르면 추력을 <b>같이 켜 준다</b></b>
         <span>항로</span><b>조종석 콘솔의 갈래 판. <b>자동 항법에만</b> 쓴다 &mdash; 안 골라도 몰 수 있다</b>
       </div>
     </div>
@@ -230,12 +227,12 @@
       <div class="grid">
         <span>표적 지정</span><b><b>T</b> 제일 가까운 적 &middot; <b>Tab</b> 다음 것 &mdash; <b>찾아 줄 뿐, 묶는 것은 손이 한다</b></b>
         <span>무기 고르기</span><b>1 레이저 · 2 열추적탄 · 3 유도탄</b>
-        <span>쏘기</span><b>마우스 <b>왼쪽</b> 주무기 &middot; <b>오른쪽</b> 유도탄 &mdash; 조준선에 계기가 걸려 있으면 그걸 누른다</b>
+        <span>★ 쏘기</span><b><b>Space</b> 주무기 &middot; 마우스 <b>오른쪽</b> 유도탄 &mdash; 마우스 <b>왼쪽</b>은 이제 계기 누르기만 합니다</b>
         <span>표적 묶기</span><b><b>휠 클릭</b> 또는 <b>T</b> &mdash; 조준선 안의 것 &middot; <b>Tab</b> 은 차례로 넘긴다</b>
         <span>쏠 수 있나</span><b>표적 둘레가 <span class="ok">초록</span>이면 사거리 안, <span class="no">회색</span>이면 밖. 아랫줄이 <b>「몇 m 더」</b>를 말한다</b>
         <span>락온</span><b>점선 원 안에 <b>2.6초</b> 붙들면 저절로 물린다 (호가 차오른다). <b>쏘는 것은 손이 한다</b></b>
         <span>유도탄</span><b>물려야 나간다. 놓치면 길을 잃는다</b>
-        <span>가까이 가려면</span><b>추력(W) · 급가속(R) &mdash; <b>R 이 훨씬 빠르다</b></b>
+        <span>가까이 가려면</span><b>추력(R 톡) · 급가속(<b>R 꾹</b>) &mdash; <b>꾹이 훨씬 빠르다</b></b>
       </div>
       <h3>부순 뒤 &mdash; 여기가 이 게임의 값이다</h3>
       <div class="grid">
@@ -293,6 +290,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=109"></script>
+<script type="module" src="js/main.js?v=110"></script>
 </body>
 </html>

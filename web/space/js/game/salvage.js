@@ -8,6 +8,7 @@
 //  ★ three.js 를 안 쓴다.
 // ══════════════════════════════════════════════════════════════════════════
 import { NET, PACK, CALL, packOf, callIn, inReach, reelTime, WHY, WAYS, timeOf } from './salvage-table.js';
+import { partOf } from './farm-table.js';
 import { azDiff } from './target.js';
 // ★★★ v103 — **꾸러미가 일정 거리에서 멎는다** (사장님 「멀리 날아가버리잔아」)
 import { DRIFT_MAX } from './catch-table.js';
@@ -36,7 +37,7 @@ export function makeSalvage() {
  * @param t 부순 표적 { kind, az, el, dist }
  * @param part 같이 떨어지는 탄두 재료 ('core' | 'shell' | null)
  */
-export function dropPack(s, t, part = null) {
+export function dropPack(s, t, part = null, rolls = null) {
   const has = packOf(t.kind);
   if (!has) return null;
   const p = {
@@ -45,6 +46,13 @@ export function dropPack(s, t, part = null) {
     az: t.az, el: t.el, dist: t.dist,
     t: PACK.live,
     has, part,
+    /**
+     * ★★★ v110 — **부위 파츠 하나** (`farm-table.js partOf`) · 없으면 null.
+     *
+     *   ★ 난수는 **부르는 쪽이 넣는다.** 표도 이 파일도 난수를 안 만든다 —
+     *     그래야 검사가 같은 값을 두 번 넣어 같은 답을 얻는다
+     */
+    fitPart: partOf(t.kind, ...(rolls ?? [Math.random(), Math.random(), Math.random()])),
   };
   s.packs.push(p);
   // ★ 지원 — **더 빨리 오는 쪽으로만** 당긴다. 이미 20초 남았는데 포함을
@@ -175,7 +183,7 @@ export function summary(s) {
     packs: s.packs.map((p) => ({
       id: p.id, kind: p.kind,
       az: +p.az.toFixed(1), el: +p.el.toFixed(1), dist: +p.dist.toFixed(0),
-      t: +p.t.toFixed(1), part: p.part ?? null, has: { ...p.has },
+      t: +p.t.toFixed(1), part: p.part ?? null, fitPart: p.fitPart ?? null, has: { ...p.has },
     })),
     net: s.net ? { pack: s.net.pack, phase: s.net.phase, t: +s.net.t.toFixed(2), way: s.net.way ?? 'net' } : null,
     cool: +s.cool.toFixed(2),

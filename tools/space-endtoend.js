@@ -1168,9 +1168,16 @@ console.log('\n[6j] ★★ **회수** — 꾸러미 · 그물 · 지원 시계 (
   ok(await S(() => SPACE.salvage.thrustHeld),
     '⑦ ★★ **감는 동안 추진이 묶인다** — 주우려면 도망칠 수 없다');
   const was = await S(() => SPACE.might.mine);
+  const sp0 = await S(() => SPACE.might.spare);
   ok(await until(() => SPACE.salvage.got > 0, 90, '회수'), '⑧ ★★ 끝까지 감으면 들어온다');
-  const now = await S(() => SPACE.might.mine);
-  ok(now > was, `⑨ ★★ 회수가 **나를 키운다** — 전투력 ${was} → ${now}`);
+  // ══ ★★ v110 — **회수가 「키운다」에서 「키울 것을 준다」로 바뀌었다** ══
+  //  파츠는 랙에 여분으로 걸리고, **I 창에서 달아야** 전투력이 오른다.
+  //  저절로 달면 I 창을 볼 이유가 없어지고 「고르는 것」이 사라진다.
+  //  ★ 대신 놓칠 수 없게 조준경이 「★ I — 더 좋은 파츠」라고 부른다
+  const sp1 = await S(() => SPACE.might.spare);
+  const cargoUp = await S(() => Object.keys(SPACE.cargo?.items ?? {}).length > 0);
+  ok(sp1 > sp0 || cargoUp,
+    `⑨ ★★ 회수가 **무언가를 준다** — 랙 ${sp0}→${sp1} · 화물 ${cargoUp ? '늘었다' : '그대로'}`);
   ok(!(await S(() => SPACE.salvage.thrustHeld)), '⑩ 다 감으면 다시 나아갈 수 있다');
   await S(() => SPACE.clearSky());
 }
@@ -1234,6 +1241,102 @@ console.log('\n[6n] ★★★ **항법** — 고르면 갈 곳이 서나 (v104)'
   await S(() => SPACE.putAim(0, 0));
   await p.waitForTimeout(300);
   ok((await S(() => SPACE.nav.mult)) > 0.8, '⑤ ★ 돌아오면 다시 나아간다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6o] **파밍** — 부수면 파츠가 나오나 · 앉은 채로 다나 (v110)
+//
+//  ★ 사장님 「파밍은 **더 강한 무기, 더 강한 파츠, 더 강한 장갑, 보급품,
+//    식량** 등을 얻을 거야」 · 「**항상 앉은 상태에서 모든 조작을 한다.
+//    가 기본이야.**」
+//
+//  ★★ v107 이 부위 일곱 · 등급 다섯을 짓고 **떨구는 자리를 안 만들었다.**
+//    각 계통의 검사는 다 초록인데 **사람은 거기까지 못 간다** — 이 검사가
+//    막으려는 것이 정확히 그것이다
+// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6p] **손 배치** — Space 로 쏘나 · R 톡/꾹이 갈리나 (v110)
+//
+//  ★ 사장님 「공격도 스페이스로 바꾸고. 추력을 올리는 것도 r을 누르면
+//    추력이 켜지고 꾹 누르면 가속되는 걸로 해줘. **이렇게해도 전투나
+//    이동에 문제가 없을지 검증**하고」
+//
+//  ★★ 뼈대(`space-keys.js`)는 「톡과 꾹이 안 섞이나」까지만 잰다.
+//    **브라우저가 Space 를 뺏나**는 여기서만 나온다 — 쪽이 내려가거나
+//    초점 잡힌 「시작」 단추가 다시 눌리는 종류다
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6p] ★★★ **손 배치** — Space 사격 · R 톡/꾹 (v110)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  // ① Space 가 브라우저에게 안 뺏기나 — 시작 화면이 다시 안 뜨나
+  await p.keyboard.down('Space'); await p.waitForTimeout(150); await p.keyboard.up('Space');
+  ok(await p.evaluate(() => !!document.getElementById('hint')?.hidden),
+    '① ★★★ Space 를 쳐도 **시작 화면이 다시 안 뜬다** — 초점이 단추에 남아 있으면'
+    + ' 쏘려고 누를 때마다 「시작」이 다시 눌린다');
+  // ② R 톡 = 켜고 끄기
+  const t0 = await S(() => SPACE.power.thrust);
+  await p.keyboard.down('KeyR'); await p.waitForTimeout(90); await p.keyboard.up('KeyR');
+  await p.waitForTimeout(300);
+  ok((await S(() => SPACE.power.thrust)) !== t0, '② ★★★ **R 톡 — 추력이 바뀐다**');
+  // ③ R 꾹 = 밀린다 · 떼도 추력이 남는다
+  await p.keyboard.down('KeyR');
+  const pushed = await until(() => SPACE.boost.k > 0.05, 20, '급가속');
+  ok(pushed, '③ ★★★ **R 꾹 — 밀린다**');
+  ok(await S(() => SPACE.power.thrust), '④ ★★ 꾹이면 추력이 **켜져 있다** (꺼져 있었어도 같이 켜진다)');
+  await p.keyboard.up('KeyR'); await p.waitForTimeout(400);
+  ok(await S(() => SPACE.power.thrust),
+    '⑤ ★★★ **떼도 추력이 남는다** — 꺼지면 급가속이 「밀었다가 도로 느려지는」 헛일이 된다');
+  // ⑥ Space 가 정말 쏘나
+  //   ★ `hp` 로 재지 않는다 — `SPACE.putTarget` 이 검사용으로 **hp 를 1 로**
+  //     박아 넣으므로 한 발에 죽고, 그러면 「깎였나」를 물을 수가 없다.
+  //     **하늘에서 사라졌나 · 꾸러미가 남았나**로 묻는다 (진짜 결과다)
+  await S(() => { SPACE.putAim(0, 0); SPACE.putTarget('gunship'); });
+  await until(() => !!SPACE.combat.target, 20, '표적');
+  const sky0 = await S(() => SPACE.sky.list.length);
+  const pk0 = await S(() => SPACE.salvage.packs.length);
+  await p.keyboard.down('Space'); await p.waitForTimeout(700); await p.keyboard.up('Space');
+  const sky1 = await S(() => SPACE.sky.list.length);
+  const pk1 = await S(() => SPACE.salvage.packs.length);
+  ok(sky1 < sky0 && pk1 > pk0,
+    `⑥ ★★★ **Space 로 쏘니 부서지고 잔해가 남는다** (하늘 ${sky0}→${sky1} · 꾸러미 ${pk0}→${pk1})`);
+  await S(() => SPACE.clearSky());
+}
+
+console.log('\n[6o] ★★★ **파밍** — 부수면 파츠가 나오나 (v110)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  ok(await S(() => SPACE.helm2.sat), '① ★★★ **앉아 있다** — 일어서는 것은 게임에 없다');
+  const sp0 = await S(() => SPACE.might.spare);
+  // ★ 파츠는 **확률**이라 한 번으로는 안 나올 수 있다. 여러 번 부순다
+  let got = 0;
+  for (let i = 0; i < 14 && !got; i++) {
+    await S(() => { SPACE.putAim(0, 0); SPACE.putPack('gunship', 40); });
+    got = await S(() => (SPACE.salvage.packs.filter((x) => x.fitPart).length));
+  }
+  ok(got > 0, `② ★★★ **부수면 부위 파츠가 나온다** — v107 은 만들고 떨구는 자리를 안 만들었다`);
+  const p0 = await S(() => SPACE.salvage.packs.find((x) => x.fitPart)?.fitPart ?? null);
+  console.log(`   꾸러미 안 — ${JSON.stringify(p0)}`);
+  ok(!!p0?.slot && !!p0?.tier, '③ ★★ **부위와 등급**이 붙어 있다 — 그것이 「더 강한」이다');
+  // I 창 — 앉은 채로 열리고 일곱 줄이 다 그려지나
+  await S(() => SPACE.openBay(true));
+  await p.waitForTimeout(250);
+  ok(await p.evaluate(() => !document.getElementById('bay')?.hidden),
+    '④ ★★★ **I 창이 앉은 채로 열린다** — 걸어갈 격납고가 없다');
+  const rows = await p.evaluate(() => document.querySelectorAll('#fit-rows button[data-eq]').length);
+  ok(rows === 7, `⑤ ★★ 부위 **일곱 줄**이 다 그려진다 (${rows})`);
+  // 여분을 밀어 넣고 **정말 달리나**
+  await S(() => SPACE.putParts([['gun', 'ace']]));
+  await S(() => SPACE.openBay(true));
+  const was = await S(() => SPACE.might.mine);
+  await p.click('#fit-rows button[data-eq="gun"]').catch(() => {});
+  await p.waitForTimeout(250);
+  const now = await S(() => SPACE.might.mine);
+  ok(now > was, `⑥ ★★★ **단추를 누르니 전투력이 올랐다** (${was} → ${now}) — 진짜 마우스로`);
+  await S(() => SPACE.openBay(false));
+  console.log(`   랙 ${await S(() => SPACE.might.spare)}/${await S(() => SPACE.might.spareMax)}`);
+  await S(() => SPACE.clearSky());
 }
 
 console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져나갈 길이 있나 (v99)');
