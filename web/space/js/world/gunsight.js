@@ -322,6 +322,72 @@ function draw(ctx, w, h, s) {
     ctx.beginPath(); ctx.moveTo(near.x, near.y); ctx.lineTo(lx, ly); ctx.stroke();
   }
 
+  // ══ ★★★ v102 — **발사관이 어디를 보고 있나** ═════════════════════════
+  //
+  //  ★ 사장님 「**계기에 표시되도록** 해줘」. v100 에 발사관을 만들면서
+  //    규칙만 만들고 **화면에는 안 냈다** — 규칙이 있는데 안 보이면
+  //    없는 것과 같다 (v82 에 락온 원으로 똑같이 겪었다).
+  //
+  //  ★★ 십자선(기수)과 **따로** 그린다. 그 둘이 벌어져 있는 것이 곧
+  //    「동체는 돌았는데 발사관은 물고 있다」이고, 사장님이 말씀하신
+  //    「방향은 유지」가 눈에 보이는 자리다.
+  //  ★ 자리는 `mount.js` 가 준다 — **여기서 다시 안 잰다** (frame.js 규약)
+  if (s.mount && s.mount.id !== null) {
+    const m = s.mount;
+    const mp = pxH(m.az), mq = pxV(m.el);
+    const mx = cx + (mp * cr - mq * sr);
+    const my = cy - (mp * sr + mq * cr);
+    const r0 = h * 0.045;
+    // ★ 흔들리면 **원이 커진다** — 「불안정」을 글이 아니라 크기로 먼저 말한다
+    const wob = Math.max(0, m.wob ?? 0);
+    const rw = r0 + pxH(Math.min(20, wob)) * 0.5;
+    ctx.strokeStyle = m.pinned ? HOT : (wob > 3 ? 'rgba(255,180,120,.85)' : FG);
+    ctx.lineWidth = Math.max(1.4, h * 0.008);
+    // 마름모 — 십자선(십자)과 **모양이 달라야** 둘이 안 헷갈린다
+    ctx.beginPath();
+    ctx.moveTo(mx, my - r0); ctx.lineTo(mx + r0, my);
+    ctx.lineTo(mx, my + r0); ctx.lineTo(mx - r0, my);
+    ctx.closePath(); ctx.stroke();
+    if (wob > 0.4) {
+      // 흔들림 고리 — 이 안 어딘가로 간다는 뜻이다
+      ctx.strokeStyle = 'rgba(255,180,120,.35)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(mx, my, rw, 0, Math.PI * 2); ctx.stroke();
+    }
+    // 기수에서 발사관까지 — **얼마나 벌어졌나**가 선으로 보인다
+    ctx.strokeStyle = 'rgba(143,230,192,.30)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(mx, my); ctx.stroke();
+    ctx.fillStyle = m.pinned ? HOT : DIM;
+    ctx.font = `700 ${Math.round(h * 0.036)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(m.word ?? '', mx + r0 + w * 0.008, my + h * 0.012);
+    ctx.textAlign = 'center';
+  }
+
+  // ══ ★★★ v102 — **도킹** — 붙을 수 있나 · 얼마나 빠른가 ═══════════════
+  //
+  //  ★ 도킹은 **조준이 아니라 조종**이라 숫자 둘이 있어야 손이 움직인다:
+  //    **거리**와 **다가가는 속도**다. 속도가 한계를 넘으면 걸쇠가 튕기므로
+  //    (「너무 빠릅니다 — 역추진으로 줄이십시오」) 그 값이 안 보이면
+  //    사람은 왜 안 물리는지 모른다
+  if (s.dock && (s.dock.near || s.dock.docked)) {
+    const d = s.dock;
+    const bx = w * 0.5, by = h * 0.80;
+    const soft = (d.close ?? 0) <= (d.softAt ?? 12);
+    ctx.fillStyle = d.docked ? FG : (soft ? FG : HOT);
+    ctx.font = `700 ${Math.round(h * 0.042)}px system-ui, sans-serif`;
+    const line = d.docked
+      ? `도킹 ${d.word} — 들어온 것 ${d.got ?? 0}`
+      : `도킹 H — ${d.near ? `${d.near.dist}m` : ''} · 접근 ${(d.close ?? 0).toFixed(1)}m/초`;
+    ctx.fillText(line, bx, by);
+    if (!d.docked && d.blocked) {
+      ctx.fillStyle = soft ? DIM : HOT;
+      ctx.font = `600 ${Math.round(h * 0.034)}px system-ui, sans-serif`;
+      ctx.fillText(d.why ?? '', bx, by + h * 0.045);
+    }
+  }
+
   // ── 십자선 — **기수가 보는 곳.** 곧 화면 한가운데다 ──────
   const ax = cx, ay = cy;
   // ══ ★★★ v97 — **락온 원은 표적 위에 얹힌다** ═══════════════════════
