@@ -458,7 +458,9 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
     return v;
   });
   await sit();
-  await aimAround(0, -7.75, 0, -0.55, 'yoke');
+  // ★ v99 — `aimAround('yoke')` 를 뺐다. v88 부터 **앉으면 이미 잡혀
+  //   있고**, 잡으면 **창이 화면을 채우므로**(v63) 조종간을 조준할 수가
+  //   없다 — 검사가 40번을 되풀이하다 지쳤다 (「멈춘다」로 보였다)
   await down();
   for (let i = 0; i < 14; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 60, movementY: 0 })));
@@ -584,12 +586,22 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   await press(1.0);
   ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '문 닫기'),
     '⑨ 문을 닫는다');
-  // ★ 조종간을 잡으려면 **앉아야** 한다 (v66 에서 무릎 사이로 내렸다)
+  // ══ ★★★ v99 — **v88 이후로 이 세 줄이 스스로를 방해하고 있었다** ══
+  //
+  //  ★ 「앉는다 → 조종간을 **조준해서 누른다**」였다. v66~v87 은 앉기와
+  //    잡기가 다른 동작이었으므로 맞았다. 그런데 v88 에 사장님이
+  //    「**앉자마자 조정간이 바로 잡히도록**」 하셔서 앉으면 이미 잡혀
+  //    있고, 조종간은 **토글**이다 (`letGoYoke` 가 있는 이유) —
+  //    즉 잡힌 채로 또 누르면 **놓는다.** 그래서 뜰 수가 없었다.
+  //
+  //  ★★ 뜨는 조건은 `landDown && onYoke && input.hold` 다 (`main.js`).
+  //    앉았으면 `onYoke` 는 이미 참이므로 **누르고 있기만** 하면 된다
   await sit();
-  await aimAround(0, -7.75, 0, -0.55, 'yoke');
+  ok((await S(() => SPACE.helm2)).steering,
+    '⑩a 앉으니 **이미 잡혀 있다** (v88) — 여기서 또 누르면 놓는 것이다');
   await pressUntil(() => SPACE.land.step === 'up', 5, 1.5);
   ok(await until(() => SPACE.land.step === 'up', 40, '이륙'),
-    `⑩ 조종간을 잡으니 뜬다 — 「${await said()}」`);
+    `⑩ 잡은 채로 누르니 **뜬다** — 「${await said()}」`);
   // 이륙 분사 12초 + 상승 18초는 헤드리스로 10분이 넘는다 — 끝자락으로 민다
   await S(() => SPACE.putLand('up', 28.5));
   ok(await until(() => !SPACE.land.busy, 120, '하늘로'),
@@ -799,10 +811,15 @@ console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)')
     + ' 화면이 비어 있으면 그건 없는 시간이다');
 
   // ⑥ 맞으면 배가 상한다
+  //  ★★ v99 — 여기가 **20초를 정해 놓고** 셌다 (`40 × 500ms`). 그런데
+  //    헤드리스 시계는 실제의 1/25~1/44 라 그건 게임 시간으로 **1초도
+  //    안 된다** — 적은 3.4초를 겨누고 탄은 0.9초를 난다. 즉 맞을 시간을
+  //    준 적이 없다. 바로 위 ④ 의 주석이 「정해 놓은 만큼 세지 말고
+  //    **될 때까지** 기다린다」인데 여기만 안 지켰다
   const h0 = await S(() => SPACE.faults.wear.hull);
-  for (let i = 0; i < 40; i++) await p.waitForTimeout(500);
+  const worn = await until(() => SPACE.faults.wear.hull > h0, 300, '선체가 깎이는 것');
   const h1 = await S(() => SPACE.faults.wear.hull);
-  ok(h1 > h0, `⑥ ★★★ 맞으니 **선체가 깎인다** (${h0.toFixed(3)} → ${h1.toFixed(3)})`);
+  ok(worn && h1 > h0, `⑥ ★★★ 맞으니 **선체가 깎인다** (${h0.toFixed(3)} → ${h1.toFixed(3)})`);
   await S(() => SPACE.clearSky?.());
 }
 
@@ -880,7 +897,8 @@ console.log('\n[6f] ★★★ **몰아 붙인다** — 손목·상태창·부호
   //   여기서는 25초쯤 걸린다 — 3초만 기다렸다가 「안 접힌다」로 빨개졌었다.
   //   조건이 참이 될 때까지 기다리지, 정해 놓은 만큼 세지 않는다
   const w0 = await S(() => SPACE.wrist);
-  await aimAt(0, -7.75, 0, -0.34, 'yoke');
+  // ★ v99 — 여기도 뺐다 (위와 같은 까닭). 앉는 순간 이미 잡혔으므로
+  //   **접히는 것을 바로 묻는다**
   await down();
   const folded = await until(() => !SPACE.wrist.shown, 90, '손목이 접히기');
   const w1 = await S(() => SPACE.wrist);
@@ -1101,8 +1119,21 @@ console.log('\n[6i] ★★ **광학 창** — 앉으면 뜨나 · 격추가 보�
     '⑧ ★★ 격추하면 **판이 그 자리를 비춘다** (되감기)');
   ok(await until(() => SPACE.wrecks > 0, 25, '잔해'),
     '⑨ ★★ **잔해가 남는다** — 한 프레임에 사라지지 않는다 (부서지는 것이 보인다)');
+  // ══ ★★★ v99 — **이 줄도 v79 를 재고 있었다** ═══════════════════════
+  //
+  //  「격추가 나를 키운다」로 물었다. v79 에는 맞았다 — **부수면 노획이
+  //  저절로 붙었다.** 그런데 v81 이 그것을 일부러 뒤집었다
+  //  (`salvage-table.js` 머리말): 부순 다음에 **회수**라는 동작이 하나
+  //  더 있고, 거기 지원 시계가 붙는다. 그래야 「지나친다」가 값이 있는
+  //  선택이 된다.
+  //
+  //  ★★ 그래서 이 줄은 **뒤집힌 설계를 빨갛게 고발하고 있었다** —
+  //    게임이 틀린 것이 아니라 검사가 v79 에 멈춰 있었다.
+  //    이제 **v81 이 정한 것**을 지킨다: 부순 것만으로는 안 큰다
   const now = await S(() => SPACE.might.mine);
-  ok(now > was, `⑩ ★★ 격추가 **나를 키운다** — 전투력 ${was} → ${now} (무기·장갑 회수)`);
+  ok(now === was,
+    `⑩ ★★★ 격추만으로는 **안 큰다** (전투력 ${was} → ${now}) —`
+    + ' v81 부터 **회수해야** 들어온다. 부수면 저절로 붙으면 「지나친다」가 공짜가 된다');
 
   // ── 화면 가득 (Z) ──
   await p.keyboard.press('KeyZ');
@@ -1179,41 +1210,58 @@ console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져�
   ok(!again.ok && again.why === 'cool', '⑨ ★ 바로 또 누르면 **왜 안 되는지 말한다**');
 }
 
-console.log('\n[7] ★★ **끝까지 간다** — 성간 공백 · 그리고 「이렇게 왔다」');
+console.log('\n[7] ★★★ **끝까지 간다** — 적 행성 상공 · 투하 · 그리고 「이렇게 왔다」');
 {
-  // 2시간을 손으로 몰 수는 없다. **문턱까지만** 밀어 놓고 그 다음은
-  // 게임이 스스로 하게 둔다 — `setLeg` 로 구간만 옮기면 성간 공백을
-  // 건너뛰므로, 여기서는 11구간 **끝**에 세우고 들어서는 것을 본다
+  // ══ ★★★ v99 — **이 절이 없어진 설계를 재고 있었다** ═══════════════
+  //
+  //  v98 까지 여기는 **성간 공백**을 물었다: 「따라오지」라고 말하나 ·
+  //  창밖이 `void` 인가 · **떠도는 것이 없나** · 별이 그대로인가.
+  //  그런데 v93 에 목적이 뒤집히면서 마지막 구간은 **적 행성 상공**이
+  //  됐다 (`void-table.js VOID.region = 'siege'` · `byRegion.siege = 8`).
+  //
+  //  ★★ 그래서 넷이 빨갰는데, **게임이 틀린 것이 아니라 검사가 낡은
+  //    것**이었다. 이 저장소가 제일 자주 밟는 함정이다 — 「없어진 것을
+  //    재는 검사는 조용하다가 엉뚱할 때 운다」.
+  //
+  //  ★★★ 이제 **지금 있는 끝**을 묻는다: 닿는다 → 창이 열린다 →
+  //    떨군다 → 벌린다 → 끝 화면이 **목록**이다
   await S(() => { SPACE.setPower('thrust', true); SPACE.seekVoid(); });
-  ok(await until(() => SPACE.inVoid, 30, '성간 공백 진입'),
-    '① **성간 공백에 들어선다** — 거점을 안 거치고 바로');
+  ok(await until(() => SPACE.inVoid, 30, '마지막 구간 진입'),
+    '① **마지막 구간에 들어선다** — 거점을 안 거치고 바로');
+  ok(await until(() => SPACE.region === 'siege', 40, '창밖이 적 행성 상공으로 바뀌기'),
+    `② 창밖이 **적 행성 상공**으로 바뀐다 (지금 ${await S(() => SPACE.region)})`);
+  // ★★ **여기가 제일 뜨거운 곳이다.** v98 까지는 반대로 「떠도는 것이
+  //   없다」를 물었다 — 그건 「따라오지 못하는 곳」 시절의 물음이다
+  ok(await until(() => SPACE.sky.list.length > 0, 60, '적'),
+    '③ ★★★ **적이 있다** — 제일 두꺼운 곳이다 (v98 까지는 「없다」를 물었다)');
   const said1 = await said();
-  ok(said1.includes('따라오지'), `② 들어설 때 말해 준다 — 「${said1.trim()}」`);
-  // ★ 구역은 **천천히 갈아탄다** (`REGION_BLEND`) — 즉시 물으면 아직 옛 구역이다
-  ok(await until(() => SPACE.region === 'void', 40, '창밖이 성간 공백으로 바뀌기'),
-    `③ 창밖이 성간 공백으로 바뀐다 (지금 ${await S(() => SPACE.region)})`);
-  ok((await S(() => SPACE.sky.list.length)) === 0,
-    '④ **떠도는 것이 없다** — 여기서는 못 번다');
-  // ★ 별이 정말 줄어드나. 갈아타기는 프레임마다라 헤드리스에서는 느리다 —
-  //   **바라는 값**이 바뀐 것을 보고, 지금 값이 그쪽으로 가고 있는지만 본다
-  // ══ ★★★ **여기가 v58 이전 값을 그대로 묻고 있었다** ═══════════════
-  //  「별을 0.2 아래로 줄이러 간다」였다. 그런데 v58 에서 **고증으로
-  //  뒤집혔다** (`regions-table.js` 의 void 주석):
-  //
-  //    「은하 원반을 벗어나면 **은하수 띠**가 사라지는 것이지 별이 주는
-  //     것이 아니다. 오히려 성간 먼지가 없어서 **더 또렷하다.**」
-  //
-  //  그래서 `void.stars` 는 **0.95** 이고, 「아무것도 없다」는 **띠**가
-  //  맡는다 (`band: 0`). 검사가 낡은 값을 물으니 게임이 맞는데도
-  //  빨갰다 — 오늘 이 종류를 다섯 번 만났다.
-  //  ★ 「띠가 0 이 된다」만 물으면 **아무것도 안 지킨다** — 들어서기 전에도
-  //    0 이라 `(0 → 0)` 이 나왔다. **틀리면 빨개지는 쪽**은 별이다:
-  //    누가 `void.stars` 를 옛 0.16 으로 되돌리면 여기가 잡는다
-  const gone = await until(() => SPACE.land.view.band <= 0.15, 120, '은하수 띠가 사라지기');
-  const v0 = await S(() => SPACE.land.view);
-  ok(gone && v0.wantStars >= 0.9,
-    `⑤ **별은 ${v0.wantStars} 로 그대로고 은하수 띠가 ${v0.band} 다** —`
-    + ' 원반을 벗어나면 별이 주는 게 아니라 띠가 사라진다 (v58 고증)');
+  ok(/상공|방공|마지막 구간/.test(said1), `④ 들어설 때 말해 준다 — 「${said1.trim()}」`);
+
+  // ══ 투하 — 마디 넷 ═══════════════════════════════════════════
+  ok(await until(() => SPACE.drop.phase === 'run', 60, '투하 진입'),
+    '⑤ ★★ **투하가 시작된다** — 시계가 혼자 간다');
+  // 무장 안 한 채 V — **왜 안 되는지 말하나**
+  await p.keyboard.press('KeyV');
+  await p.waitForTimeout(500);
+  ok(/무장|크레이들|창이 아닙니다/.test(await said()),
+    `⑥ 무장 전에 V 를 누르면 **까닭을 말한다** — 「${(await said()).trim()}」`);
+  // 재료를 채우고 무장한다 (기관실 왕복은 space-head.js 가 따로 본다)
+  await S(() => { SPACE.fillHead(); SPACE.armHead(); });
+  ok((await S(() => SPACE.warhead)).armed, '⑦ 채우고 무장하면 **무장된다**');
+  // 창이 열릴 때까지 — 헤드리스로 150초를 안 걷는다
+  await S(() => SPACE.putDrop('run', 149));
+  ok(await until(() => SPACE.drop.phase === 'window', 90, '투하 창'),
+    '⑧ ★★ **투하 창이 열린다**');
+  await p.keyboard.press('KeyV');
+  await p.waitForTimeout(700);
+  ok(await until(() => ['fall', 'blast', 'over'].includes(SPACE.drop.phase), 60, '떨어짐'),
+    '⑨ ★★★ **V 로 떨군다** — 목적 한 줄의 세 번째가 손에 닿는다');
+  ok(await until(() => SPACE.outside.shots > 0 || SPACE.drop.phase !== 'fall', 40, '창밖의 탄'),
+    '⑩ ★ **창밖으로 떨어지는 것이 보인다** — 규칙에만 있는 것이 아니다');
+  // 벌린다 — 급가속
+  await S(() => { SPACE.setPower('thrust', true); SPACE.putBoost(1); });
+  ok(await until(() => ['blast', 'over'].includes(SPACE.drop.phase), 120, '터짐'),
+    '⑪ ★★ **터진다** — 벌린 만큼 덜 상한다');
 
   // ★★ 그리고 **도착한다**
   await S(() => SPACE.seekEnd());

@@ -18,6 +18,8 @@ import { KINDS, isFoe, ENEMY_FIRE } from './target-table.js';
 import { wrap, relOf } from './frame.js';
 import { flyTime, slowsOnLaunch } from './slow-table.js';
 import { MISSILES } from './supply-table.js';
+// ★★★ v100 — **발사관.** 기수 고정(레이저)과 짐벌(유도탄)을 가른다
+import { isGimbaled } from './mount-table.js';
 
 export function makeCombat() {
   return {
@@ -233,7 +235,7 @@ export function forgetLock(c, id) {
  * @param aimed 조준선이 잡은 것 · supply 보급 · rnd 난수
  * @returns { ok, why, shot } — 못 쏘면 `why` 에 이유
  */
-export function fire(c, { aimed, supply, rnd = Math.random }) {
+export function fire(c, { aimed, supply, rnd = Math.random, mount = null }) {
   const w = weaponOf(c);
   const t = aimed?.t ?? null;
   const why = whyNotFire({
@@ -288,9 +290,21 @@ export function fire(c, { aimed, supply, rnd = Math.random }) {
   const leadAz = w.lead ? t.vaz * flight : 0;
   const leadEl = w.lead ? t.vel * flight : 0;
   // 겨눠야 하는 자리는 표적이 아니라 **선도점**이다
-  const off = w.lead
+  let off = w.lead
     ? Math.hypot((aimed.relAz ?? 0) - leadAz, (aimed.relEl ?? 0) - leadEl)
     : aimed.off;
+  // ══ ★★★ v100 — **발사관에 실린 무기는 기수가 아니라 발사관에서 잰다** ══
+  //
+  //  ★ 사장님 「적을 계속 타겟팅 하면서 회피 기동이 가능하도록」.
+  //    v99 까지 명중 판정이 **기수 기준**이라, 옆으로 빼는 순간
+  //    `off` 가 허용각(4.2도)을 넘어 **한 발도 못 맞혔다.**
+  //
+  //  ★★ 이제 짐벌 무기는 `mount` 가 준 오차를 쓴다 — 따라가다 뒤처진
+  //    몫과 **흔들린 몫**을 합친 값이다 (`mount.js errOf`). 그래서
+  //    「피하면서 쏜다」가 되고, 대신 **정확도를 내준다.**
+  //  ★ 레이저는 그대로 기수 고정이다 — 기총이므로 겨눠야 맞는다.
+  //    그 둘의 차이가 「붙어서 훑을까 빼면서 물까」를 만든다
+  if (mount && isGimbaled(w.key)) off = mount.err ?? off;
 
   const shot = {
     id: c.fired,

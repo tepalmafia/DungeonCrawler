@@ -177,6 +177,14 @@ import {
 // ★★★ v98 — **자리를 아는 곳 하나** (블록아웃). `SPACE.align()` 이 이것과
 //   진짜 카메라를 나란히 놓아 「창밖 == 계기」를 숫자로 만든다
 import { relOf } from './game/frame.js';
+// ══ ★★★ v100 — **발사관** (`docs` 없음 · `tools/space-mount.js` 가 뼈대) ══
+//  ★ 사장님 「적을 계속 타겟팅 하면서 회피 기동이 가능하도록 …
+//    동체는 회전해도 타겟팅이 불안정해지지만 **방향은 유지**하는걸로?」
+import { MOUNT, isGimbaled, mountWord, spreadOf } from './game/mount-table.js';
+import {
+  makeMount, stepMount, errOf as mountErr, offOf as mountOff,
+  summary as mountSummary,
+} from './game/mount.js';
 import { LOCK, WHY as LOCK_WHY, airWord } from './game/airlock-table.js';
 import {
   makeLock, cycle as cycleLock, stepLock, canHaul, haulWhy,
@@ -236,7 +244,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 99;
+export const VERSION = 100;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -690,6 +698,15 @@ const warhead = makeWarhead();
 const dropS = makeDrop();
 /** ★★★ v99 — 아크 도약. 전지는 화물칸에서 태우고, 열은 저장고로 간다 */
 const arcS = makeArc();
+/**
+ * ★★★ v100 — **발사관.** 동체와 따로 돌아 표적을 따라간다.
+ *   레이저는 기수 고정이고 유도탄·열추적만 여기에 실린다 (`GIMBALED`)
+ */
+const mount = makeMount();
+/** 지난 프레임의 기수 — 동체가 초당 몇 도 도는지를 여기서 잰다 */
+let noseWas = { az: 0, el: 0 };
+/** 동체가 지금 도는 속도 (도/초) — 흔들림이 이것에 비례한다 */
+let hullSpin = 0;
 /** ★★★ 급가속 (v73) — R 을 누르고 있으면 튀어나간다 */
 const boost = makeBoost();
 /**
@@ -705,6 +722,8 @@ const dark = makeDark();
 // ★★ **포탑이 겨누는 쪽** — 방위·고도(도). WASD 가 여기를 움직인다.
 //   사람이 보는 쪽과 **따로** 논다 — 그게 「실내에서 원격으로 돌린다」다
 let aimAz = 0, aimEl = 0;
+/** ★ v100 — W/S 가 눌린 채인가 (한 번 누를 때 한 번만 먹게) */
+let fwdHeld = false;
 /**
  * ★★★ v98 — **기수가 머리 위를 넘어갔나** (`aimOf`). 넘어가면 배가
  *   뒤집힌 것이라 **표식도 반 바퀴 돌아야** 실물에 얹힌다
@@ -839,7 +858,11 @@ function whyNotJumpNow() {
 function fireGun() {
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
-  const r = fireWeapon(combat, { aimed, supply, rnd: Math.random });
+  // ★ v100 — **발사관이 잰 오차**를 같이 넘긴다 (짐벌 무기만 쓴다)
+  const r = fireWeapon(combat, {
+    aimed, supply, rnd: Math.random,
+    mount: mountSummary(mount, aimed ? { az: aimed.relAz, el: aimed.relEl } : null),
+  });
   if (!r.ok) { say(ai, CBT_WHY[r.why] ?? '지금은 못 쏩니다', 'tell'); return; }
   const w = r.weapon;
   // ══ ★★★ **쏘는 소리** (v74 · 진공 규칙) ═══════════════════════════
@@ -3191,6 +3214,21 @@ window.SPACE = {
   // ══ ★★★ v81 — **회수** (space-salvage.js · endtoend 가 읽는다) ══════
   get salvage() { return { ...salvSummary(salvage), seen: ship.outside.salvage?.seen ?? null }; },
   // ══ ★★★ v83 — **화물칸 · 들어온 목록** (space-cargo.js · endtoend) ══
+  /**
+   * ★★★ v100 — **발사관.** 검사(`space-mount.js`)와 계기가 읽는다.
+   *   「동체는 돌아도 방향은 유지 · 타겟팅은 불안정」이 숫자로 여기 있다
+   */
+  get mount() {
+    const a = aimedAt(sky, aimAz, aimEl);
+    const rel = a ? { az: a.relAz, el: a.relEl } : null;
+    return {
+      ...mountSummary(mount, rel),
+      /** 동체가 지금 초당 몇 도 도나 — 흔들림이 이것에 비례한다 */
+      spin: +hullSpin.toFixed(1),
+      word: mountWord(mount),
+      cone: MOUNT.cone,
+    };
+  },
   /** ★★★ v99 — 아크 도약. 검사(`space-arc.js`)와 점검 모드가 읽는다 */
   get arc() {
     return {
@@ -4668,8 +4706,25 @@ function frame(now) {
     //    **정석보다 사장님 손이 먼저다.**
     //  ★★ 추력은 **Space** 로 간다 — 비어 있고, 비행 게임에서 흔한 자리다.
     //    ★ 마우스 위아래는 **그대로 산다** — 둘 다 먹는다
-    const kUp = (input.keys.has('KeyW') ? 1 : 0) - (input.keys.has('KeyS') ? 1 : 0);
-    if (kUp !== 0) flyPush.pitch = kUp;
+    // ══ ★★★ v100 — **W/S 는 전진·후진이다** (사장님 「w, s 키는 상하좌우가
+    //  아닌 **전진 후진**으로 바꿔줘. **마우스는 방향 이동은 그대로 유지**하고」)
+    //
+    //  ★ v86 에 W/S 를 **상하**로 뒀다 (「키보드 WS로 상하 조정」). 그때는
+    //    맞았다 — 마우스가 조준이자 조종이라 위아래를 마우스로만 하면
+    //    손목이 짧게 움직여야 했다. 그런데 v100 에 **발사관이 표적을
+    //    따라가게** 되면서 마우스가 조준을 겸할 필요가 없어졌다:
+    //    마우스는 **동체 방향**만 맡고, 조준은 발사관이 한다.
+    //    그래서 W/S 가 상하에서 풀려나 **추력**으로 돌아갈 수 있게 됐다.
+    //
+    //  ★★ **위아래는 마우스에 그대로 산다** — 사장님이 「마우스는 방향
+    //    이동은 그대로 유지」라고 하셨고, 그것이 v86 에서 지키려던 것이다.
+    //    없앤 것이 아니라 **키에서만 뗐다**
+    //
+    //  ★ 이 배에 **역추진은 없다.** S 는 추력을 끄는 것이고, 그러면
+    //    타성으로 느려진다 (`LEG.coast`). 없는 것을 있는 척하지 않는다
+    if (input.keys.has('KeyW')) { if (!fwdHeld) { setThrustKey(true); fwdHeld = true; } }
+    else if (input.keys.has('KeyS')) { if (!fwdHeld) { setThrustKey(false); fwdHeld = true; } }
+    else fwdHeld = false;
     // ★★★ v88 — **A/D 는 좌우다.** 여태 「일어난다」였다 (v52 에 좌석에
     //   갇힌 적이 있어 비상구로 둔 것). 그런데 v88 에서 앉는 것이 곧 잡는
     //   것이 되고 나가는 길이 **X 와 좌석 다시 누르기 둘**로 분명해졌으므로,
@@ -4883,21 +4938,28 @@ function frame(now) {
     say(ai, '따라잡혔습니다 — 그물이 닫혔습니다', 'tell');
     if (chase.phase === PHASE.CALM) chase.risk = 200;
   }
-  // ★★ **성간 공백에 들어섰다** (8판 · `void-table.js`). 거점을 안 거치고
-  //   바로 마지막 구간으로 들어온다 — 고를 것도 살 것도 없다
+  // ══ ★★★ **마지막 구간에 들어섰다** — 적 행성 상공 ═══════════════════
+  //
+  //  ★ v98 까지 여기가 **8판의 성간 공백** 그대로였다: 쫓아오던 것을
+  //    풀어 주고(`SHAKEN`), 위험을 0 으로 만들고, **「뿌리쳤다」 소리까지**
+  //    냈다. 목적이 「따라오지 못하는 곳까지 간다」였을 때는 맞는 동작이다.
+  //
+  //  ★★ 그런데 목적이 v93 에 **「적 행성에 떨군다」로 뒤집혔다.** 그래서
+  //    같은 순간에 두 가지가 동시에 일어나고 있었다:
+  //
+  //      투하가 말한다 — 「적 행성 상공입니다 — **방공이 두껍습니다**」
+  //      여기가 말한다 — 「성간 공백 — **더는 아무도 따라오지 않습니다**」
+  //
+  //    그리고 실제로 추격을 **풀어 줬다.** 제일 두꺼운 곳(`byRegion.siege`
+  //    가 8 로 전 구역 중 제일 많다)에 닿는 순간 압박이 사라졌다.
+  //
+  //  ★★★ `tools/space-route.js` 는 이미 **「적 본진 4·3·4·4 추격」**이라고
+  //    재고 있었다 — **검사와 게임이 정반대**였는데 둘 다 초록이었다.
+  //    검사는 표를 읽고 게임은 여기를 도니까. 이제 안 푼다
   if (rev === 'void') {
     say(ai, VOID.enter, 'tell');
-    // 쫓아오던 것이 있으면 **여기서 떨어진다.** 「따라오지 못하는 곳」이
-    // 이름값을 하려면 붙어 있던 것도 놓쳐야 한다
-    if (chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT) {
-      chase.phase = PHASE.SHAKEN; chase.timer = 0; chase.dist = 0;
-    }
-    chase.risk = 0;
     // ★ 창밖은 `regionOf(route)` 가 정한다 — **매 프레임** 되돌리므로
-    //   여기서 한 번 부르면 다음 프레임에 지워진다. 실제로 그렇게
-    //   고쳤다가 검사가 다시 잡았고, 이제 `route.js` 가 말한다
-    audio?.event('escaped');
-    escapedAt = clock;
+    //   여기서 한 번 부르면 다음 프레임에 지워진다
     saveNow();          // 여기까지는 저장해 둔다 — 마지막 구간도 8분이다
   }
   // ══ ★★★ v93 — **떨군다** (`drop.js` · WAR.md §6) ═══════════════════
@@ -5283,6 +5345,15 @@ function frame(now) {
   //    실제 전투기의 기총이 기수 고정인 것과 같다. 겨눔을 따로 두면
   //    「배는 저쪽을 보는데 총은 이쪽」이 되고, 그건 계기가 둘인 것이다
   const nose = noseAim();
+  // ★ v100 — **동체가 초당 몇 도 도나.** 발사관의 흔들림이 이 값에 비례한다.
+  //   조종간 편향이 아니라 **실제로 돈 각**으로 잰다 — 자세 제어 고장이나
+  //   짐벌이 흔드는 것도 똑같이 흔들려야 말이 된다
+  {
+    const dAz = ((nose.az - noseWas.az + 540) % 360) - 180;
+    const dEl = nose.el - noseWas.el;
+    hullSpin = Math.hypot(dAz, dEl) / Math.max(dt, 1e-6);
+    noseWas = { az: nose.az, el: nose.el };
+  }
   aimAz = nose.az; aimEl = nose.el; noseOver = !!nose.over;
 
   // ── ★★ 떠도는 것들 · 적 우주선 ─────────────────────────
@@ -5405,6 +5476,24 @@ function frame(now) {
     }
   }
   const radEv = stepRadar(combat, dt, radarAimed);
+
+  // ══ ★★★ v100 — **발사관이 표적을 따라간다** ═══════════════════════════
+  //
+  //  ★ 사장님 「적을 계속 타겟팅 하면서 **회피 기동이 가능**하도록 …
+  //    동체는 회전해도 **타겟팅이 불안정해지지만 방향은 유지**하는걸로?」
+  //
+  //  ★★ 여기가 그 자리다. 발사관은 **묶은 표적**(없으면 지금 겨눈 것)을
+  //    쫓고, 동체가 도는 만큼 **흔들린다.** 그러면 회피가 「표적을 버리는
+  //    일」에서 **「정확도를 내주는 일」**이 된다.
+  //  ★ 자리는 여기서 안 잰다 — `frame.js relOf` 가 준 것을 그대로 쓴다
+  {
+    const mt = radarAimed?.t ?? null;
+    stepMount(mount, dt, {
+      aim: mt ? { az: radarAimed.relAz, el: radarAimed.relEl } : null,
+      id: mt ? mt.id : null,
+      spin: hullSpin,
+    });
+  }
   // ★★★ v69 — **탐색기 으르렁**. 잡으면 으르렁, **물면 음이 높아진다**
   //   (AIM-9 사이드와인더 고증). 눈이 늘 조준선에 가 있을 수 없으므로
   //   **귀가 대신 본다** — 이게 「직관적으로 방향을 맞춘다」의 절반이다
