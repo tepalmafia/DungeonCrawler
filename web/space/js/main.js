@@ -303,7 +303,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 112;
+export const VERSION = 113;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -3892,6 +3892,72 @@ window.SPACE = {
       t: sec ?? ENEMY_FIRE.fly, pk: 1, roll: 0, dodge: 0, willHit: true,
     });
     return sky.incoming.length;
+  },
+  /**
+   * ══ ★★★ v113 — **쏜 것이 어느 쪽을 보나** (사장님 「모양이 이상하게」) ══
+   *
+   *  ★ 「모양」은 지금까지 아무도 안 재던 것이다. 자리는 `space-align.js` 가,
+   *    규칙은 `space-combat.js` 가 재는데 **코가 어디를 보나**는 눈밖에
+   *    없었다. 그래서 v84~v112 내내 **불이 미사일 앞에** 붙어 있었다.
+   *  ★★ 그런데 **눈 없이 잴 수 있다** — `lookAt` 이 어느 축을 앞으로
+   *    돌려세우는지는 벡터 하나로 나온다. 여기가 그 구멍이다
+   *    (`tools/space-shot.js`).
+   *  ★ **진짜 메시**를 읽는다 — 베껴 만들면 그때부터 둘이 갈라진다
+   */
+  shotShape(kind = 'ir', sec = 0.5) {
+    ship.outside.shots.fire(kind, { az: aimAz, el: aimEl, dist: 120, id: null });
+    ship.outside.shots.update(sec);
+    const g = ship.outside.shots.group;
+    g.updateMatrixWorld(true);
+    const M = new THREE.Vector3(0, -0.4, -11);            // shots.js MUZZLE
+    const D = Math.PI / 180;
+    const a = aimAz * D, e = aimEl * D;
+    const go = new THREE.Vector3(
+      Math.sin(a) * Math.cos(e) * 120, Math.sin(e) * 120, -Math.cos(a) * Math.cos(e) * 120,
+    ).sub(M).normalize();
+    const q = new THREE.Quaternion();
+    // ★★ **몸통 기준**으로 잰다. 처음에 기수(MUZZLE) 기준으로 쟀다가
+    //   태웠다 — 0.5초 뒤에는 미사일이 이미 18m 를 날아가 있어서
+    //   「부품이 앞이냐 뒤냐」가 아니라 **날아간 거리**가 나왔다
+    const at0 = new THREE.Vector3();
+    const part = (o, origin) => ({
+      geo: o.geometry?.type ?? '?',
+      /** 로컬 +Y 가 월드에서 어디를 보나 — 캡슐·원뿔·기둥의 축이다 */
+      axis: +new THREE.Vector3(0, 1, 0).applyQuaternion(o.getWorldQuaternion(q)).dot(go).toFixed(3),
+      /** ★ **몸통 기준** 앞뒤 (+ 면 코 쪽 · − 면 꼬리 쪽) */
+      ahead: +o.getWorldPosition(new THREE.Vector3()).sub(origin).dot(go).toFixed(2),
+      on: !!o.visible,
+      r: o.geometry?.parameters?.radiusBottom ?? o.geometry?.parameters?.radius ?? null,
+      rTop: o.geometry?.parameters?.radiusTop ?? null,
+      h: o.geometry?.parameters?.height ?? null,
+      seg: o.geometry?.parameters?.radialSegments ?? null,
+    });
+    // 방금 쏜 것 = **제일 나중에** 붙은, 조각이 여럿인 그룹
+    const shot = [...g.children].reverse().find((c) => c.isGroup && c.children.length >= 2);
+    const origin = shot ? shot.getWorldPosition(at0) : M;
+    return {
+      kind, go: [+go.x.toFixed(2), +go.y.toFixed(2), +go.z.toFixed(2)],
+      /** ★ 몸통이 기수에서 얼마나 갔나 — 재는 기준이 옳은지 사람이 본다 */
+      flown: +origin.clone().sub(M).dot(go).toFixed(2),
+      parts: shot ? shot.children.map((o) => part(o, origin)) : [],
+    };
+  },
+  /** ★ v113 — 쏜 것이 **화면 어디에 있나** (없으면 안 보이는 것이다) */
+  shotOnScreen() {
+    const g = ship.outside.shots.group;
+    g.updateMatrixWorld(true);
+    const shot = [...g.children].reverse().find((c) => c.isGroup && c.children.length >= 2);
+    if (!shot) return null;
+    const w = shot.getWorldPosition(new THREE.Vector3());
+    const v = w.clone().project(camera);
+    return {
+      world: [+w.x.toFixed(1), +w.y.toFixed(1), +w.z.toFixed(1)],
+      cam: [+camera.position.x.toFixed(1), +camera.position.y.toFixed(1), +camera.position.z.toFixed(1)],
+      ndc: [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)],
+      onScreen: Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z > -1 && v.z < 1,
+      dist: +camera.position.distanceTo(w).toFixed(1),
+      vis: shot.visible && shot.parent?.visible,
+    };
   },
   putPack(kind = 'raider', dist = 60) {
     const t = { kind, az: aimAz, el: aimEl, dist };

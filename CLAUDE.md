@@ -369,6 +369,7 @@ node tools/space-legend.js       스페이스워 — ★★★ **범례** · 적
 node tools/space-farm.js         스페이스워 — ★★★ **파밍** · 파츠가 정말 떨어지나 · 센 것이 좋은 것을 주나 (뼈대만 · v110)
 node tools/space-keys.js         스페이스워 — ★★★ **손 배치** · Space 사격 · R 톡(추력)/꾹(급가속) 이 안 섞이나 (뼈대만 · v110)
 node tools/space-evade.js        스페이스워 — ★★★ **회피 타이밍** · Q/E 로 피해지나 · 언제 꺾느냐로 갈리나 (뼈대만 · v111)
+node tools/space-shot.js         스페이스워 — ★★★ **쏜 것의 생김새** · 코가 앞을 보나 · 불이 뒤에 있나 (진짜 메시 · v113)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
