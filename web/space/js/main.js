@@ -87,7 +87,9 @@ import { speedOf as statusSpeed } from './world/status.js';
 // ★★★ 급가속 (v73) — **따로 하는 조작.** Shift 는 기수를 돌리고, R 은 튀어나간다
 import { BOOST, RUSH, KICK } from './game/boost-table.js';
 // ★ v91 — HUD 판의 크기·거리와 **그림이 쓰는 각**. 둘이 갈라지면 표식이 어긋난다
-import { HUD as HUDV, hudFov } from './game/view-table.js';
+import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
+// ★★★ v114 — **계기 자리는 화면 좌표로** (사장님 「화면 uhd 정렬좀해」)
+import { centerFor, worldAt } from './game/screen-table.js';
 import {
   makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
 } from './game/boost.js';
@@ -127,6 +129,7 @@ import {
 } from './game/arc.js';
 import {
   makeCargo, put as cargoPut, useOf, stepCargo, word as cargoWord, take as cargoTake,
+  settle as cargoSettle, drop as cargoDrop,
   summary as cargoSummary, used as cargoUsed, left as cargoLeft,
 } from './game/cargo.js';
 import {
@@ -177,6 +180,13 @@ import { TURRET_RISE } from './world/turret.js';
 import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/target-table.js';
 // ★★★ v111 — **회피 타이밍** (사장님 「타이밍을 어떻게 줄지」). 고리와 규칙이 한 표를 본다
 import { EVADE, ringAt, RING_WORD } from './game/evade-table.js';
+// ★★★ v114 — **조준 띠** (사장님 「정확히 안쪽을 맞출 수록 데이미지가」)
+import { bandAt, HIT_WORD } from './game/aim-table.js';
+// ★★★ v114 — **인벤토리와 제조** (사장님 「인벤토리도 만들어야지. 제조하는 것도」)
+import {
+  RECIPES, RECIPE_LIST, canMake, costWord, WHY as CRAFT_WHY,
+} from './game/craft-table.js';
+import { ITEMS as CARGO_ITEMS, nameOf as nameOfItem, massOf as itemMass } from './game/cargo-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
@@ -303,7 +313,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 113;
+export const VERSION = 114;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -427,6 +437,10 @@ scene.environment = makeEnvironment(renderer);
 scene.environmentIntensity = 0.75;
 
 const ship = buildShip(scene, camera, renderer);
+// ★ 배가 선 **직후** 한 번 놓는다. `resize()` 는 배보다 먼저 도는데,
+//   그때는 `ship` 이 없어 그냥 지나간다 — 이 한 줄이 없으면 **첫 화면만**
+//   옛 자리에 그려지고 창을 한 번 흔들어야 정렬된다
+placePanels();
 // ── 옮길 수 있는 물건 ────────────────────────────────────────
 // ★ 벨크로 자리는 **베이 번호**로 찾는다 (game/carry-table.js SPOTS).
 //   좌표를 여기 또 적으면 랙을 옮길 때마다 자리가 허공에 남는다
@@ -1215,11 +1229,27 @@ function drawLegend() {
 let legT = 0;
 
 let bayOpen = false;
+/**
+ * ★★★ v114 — **지금 만들고 있는 것** (`craft-table.js`).
+ *   ★ 창을 닫아도 돈다 — 「걸어 놓고 다른 일을 한다」가 제조의 값이고,
+ *     창을 열어 둬야 도는 것이면 그건 그냥 긴 단추다
+ *   ★★ 다만 **쫓기기 시작하면 멈춘다** (`stepCraft`) — 손이 조종간으로 간다
+ */
+let craftJob = null;
 /** 기체 도해 — 부위 일곱이 어디에 붙나 (판 크기의 0~1) */
 const FIT_AT = {
   gun: [0.50, 0.15], tube: [0.26, 0.40], armor: [0.50, 0.50],
   engine: [0.50, 0.86], sensor: [0.74, 0.40], sink: [0.22, 0.70], hold: [0.78, 0.70],
 };
+/**
+ * ★ v114 — 표의 `**굵게**` 를 화면에서 굵게. 표는 사람이 읽는 글이라
+ *   저장소 규약대로 별표를 쓰는데, 그대로 뿌리면 **별표가 그냥 보인다**
+ *   (찍어 보고 잡았다). `<` 는 먼저 죽여 둔다 — 표에서 오는 글이다
+ */
+const bold = (t = '') => String(t)
+  .replace(/[<>]/g, '')
+  .replace(/\*\*(.+?)\*\*/g, '<b style="color:#b9c6d4">$1</b>');
+
 function drawBay() {
   const box = document.getElementById('bay');
   if (!box) return;
@@ -1263,6 +1293,53 @@ function drawBay() {
     `<span>전투력</span><b class="might">${myPower()}</b><span></span>`
     + `<span>광석</span><b>${Math.round(supply.ore)}</b><span></span>` + rows;
 
+  // ══ ★★★ v114 — **화물칸과 제조** ═══════════════════════════════════
+  //
+  //  ★ 사장님 「**인벤토리도 만들어야지. 제조하는 것도 만들고**」
+  //
+  //  ★★ 이 칸이 있어야 v114 의 화물 고침이 **눈에 보인다.** 새는 구멍을
+  //    막아 놓고 화면이 없으면 사장님은 여전히 「왜 찼지」밖에 못 물으신다 —
+  //    규칙이 있는데 화면에 없으면 없는 것과 같다 (v64~v82 락온 원)
+  {
+    const cs = cargoSummary(cargo);
+    const pct = Math.round((cs.used / cs.hold) * 100);
+    document.getElementById('hold-bar').innerHTML =
+      `<div class="hold-gauge${pct >= 90 ? ' full' : ''}">`
+      + `<i style="width:${Math.min(100, pct)}%"></i></div>`
+      + `<small style="color:#7d8b9c">${cs.used} / ${cs.hold} 짐 · 남은 자리 ${cs.left}`
+      + (cs.missed ? ` · <b style="color:#e0a34a">자리가 없어 놓친 것 ${cs.missed}</b>` : '')
+      + '</small>';
+    const items = Object.entries(cs.items).filter(([, n]) => n > 0);
+    document.getElementById('hold-rows').innerHTML = items.length
+      ? items.map(([k, n]) => {
+        const it = CARGO_ITEMS[k] ?? {};
+        return `<span>${nameOfItem(k)}</span>`
+          + `<b>${n} 개 · ${itemMass(k) * n} 짐`
+          + `<br><small style="color:#5e6b7a">${bold(it.need)}</small></b>`
+          + `<button class="act" data-toss="${k}">버린다</button>`;
+      }).join('')
+      // ★ 비어 있는 것이 **정상**이다 — 주운 것은 배가 삼킨다. 그 말을
+      //   안 적으면 「인벤토리가 고장났나」로 읽힌다
+      : '<span>비었습니다</span><b><small style="color:#5e6b7a">'
+        + '주운 것은 배가 바로 삼킵니다 — 통이 꽉 찼을 때만 여기 남습니다'
+        + '</small></b><span></span>';
+    // ── 제조 ─────────────────────────────────────────
+    const calm = !chase.on;
+    document.getElementById('craft-rows').innerHTML = RECIPE_LIST.map((r) => {
+      const c = canMake(r.key, { items: cs.items, calm, busy: !!craftJob });
+      const out = r.to.item ? `${nameOfItem(r.to.item)} ${r.to.n}` : `유도탄 ${r.to.n} 발`;
+      return `<span>${r.name}</span>`
+        + `<b>${out} &nbsp;<small style="color:#5e6b7a">${r.sec}초</small>`
+        + `<br><small style="color:#7d8b9c">${costWord(r)}</small>`
+        + `<br><small style="color:#5e6b7a">${bold(r.why)}</small></b>`
+        + `<button class="act" data-make="${r.key}" ${c.ok ? '' : 'disabled'}>`
+        + `${c.ok ? '만든다' : (CRAFT_WHY[c.why] ?? '못 만듭니다')}</button>`;
+    }).join('')
+      + (craftJob
+        ? `<span>만드는 중</span><b>${RECIPES[craftJob.key].name} — ${craftJob.left.toFixed(0)}초</b><span></span>`
+        : '');
+  }
+
   // ── 탄두 ───────────────────────────────────────────
   const hs = headSummary(warhead);
   document.getElementById('head-rows').innerHTML = PARTS5.map((p) => {
@@ -1286,6 +1363,22 @@ addEventListener('click', (ev) => {
     if (b.dataset.eq) {
       const r = equip(fit, b.dataset.eq);
       say(ai, r.ok ? `${partName(r.put)} 를 달았습니다` : PWHY[r.why], r.ok ? 'tell' : 'warn');
+    } else if (b.dataset.toss) {
+      // ★ 버리는 것이 **이 창의 첫째 일**이다 (「무엇을 버릴지」 · v83)
+      const n = cargoDrop(cargo, b.dataset.toss, 1);
+      if (n) say(ai, `${nameOfItem(b.dataset.toss)} 를 버렸습니다`, 'tell');
+    } else if (b.dataset.make) {
+      const key = b.dataset.make;
+      const cs = cargoSummary(cargo);
+      const c = canMake(key, { items: cs.items, calm: !chase.on, busy: !!craftJob });
+      if (!c.ok) { say(ai, CRAFT_WHY[c.why] ?? '지금은 못 만듭니다', 'warn'); }
+      else {
+        // ★★ **재료를 지금 뺀다.** 다 만든 뒤에 빼면 그 사이에 버릴 수 있고,
+        //   그러면 공짜가 된다 — 값을 먼저 치르는 것이 이 게임의 규약이다
+        for (const [k, n] of Object.entries(RECIPES[key].cost)) cargoTake(cargo, k, n);
+        craftJob = { key, left: RECIPES[key].sec };
+        say(ai, `${RECIPES[key].name} — ${RECIPES[key].sec}초`, 'tell');
+      }
     } else if (b.dataset.up) {
       const r = upgrade(fit, b.dataset.up, { ore: supply.ore });
       if (r.ok) {
@@ -1305,11 +1398,15 @@ addEventListener('click', (ev) => {
   }
   const t = ev.target.closest?.('#bay .tabs button');
   if (!t) return;
-  const fitOn = t.id === 'tab-fit';
-  document.getElementById('tab-fit').classList.toggle('on', fitOn);
-  document.getElementById('tab-head').classList.toggle('on', !fitOn);
-  document.getElementById('pane-fit').hidden = !fitOn;
-  document.getElementById('pane-head').hidden = fitOn;
+  // ★ v114 — 칸이 **셋**이 됐다 (기체 · 화물·제조 · 탄두). 둘일 때 쓰던
+  //   `fitOn` 같은 참거짓 하나로는 셋을 못 가른다 — 늘리면서 안 고치면
+  //   「누르면 둘 다 열리는」 창이 된다
+  for (const [tab, pane] of [['tab-fit', 'pane-fit'], ['tab-hold', 'pane-hold'], ['tab-head', 'pane-head']]) {
+    const on = t.id === tab;
+    document.getElementById(tab)?.classList.toggle('on', on);
+    const el = document.getElementById(pane);
+    if (el) el.hidden = !on;
+  }
 });
 
 /** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
@@ -1356,6 +1453,37 @@ function fireGun() {
 }
 
 /** ★★ 날아간 것이 닿았다 — 부수거나 빗나간다 */
+/**
+ * ★★★ v114 — **만드는 중인 것이 돈다** (`craft-table.js RECIPES`).
+ *
+ *   ★ 창을 닫아도 돈다 — 걸어 놓고 다른 일을 하는 것이 제조의 값이다.
+ *   ★★ 그런데 **쫓기기 시작하면 멈춘다.** 재료는 이미 뺐으므로 손해가
+ *     아니고, 다시 조용해지면 이어진다 — 「동시에 두 곳에 못 있는다」가
+ *     이 배의 축이고 제조도 거기서 벗어나지 않는다
+ */
+function stepCraft(dt) {
+  if (!craftJob) return;
+  if (chase.on) return;                       // ★ 쫓기는 동안은 멈춘다
+  craftJob.left -= dt;
+  if (craftJob.left > 0) { if (bayOpen) drawBay(); return; }
+  const r = RECIPES[craftJob.key];
+  craftJob = null;
+  if (r.to.field === 'missiles') {
+    supply.missiles = Math.min(MISSILES.max, (supply.missiles ?? 0) + r.to.n);
+  } else if (r.to.item) {
+    // ★ 만든 것도 **화물칸을 거친다** — 자리가 없으면 못 싣는다.
+    //   여기서만 예외를 두면 「제조로 화물칸을 넘긴다」가 열린다
+    const got = cargoPut(cargo, { [r.to.item]: r.to.n });
+    if (Object.keys(got.took).length === 0) {
+      say(ai, `${r.name} 을 마쳤는데 **화물칸에 자리가 없습니다**`, 'warn');
+      if (bayOpen) drawBay();
+      return;
+    }
+  }
+  say(ai, `★ ${r.name} 을 마쳤습니다`, 'tell');
+  if (bayOpen) drawBay();
+}
+
 function landShots(dt) {
   const done = stepShots(combat, dt, {
     find: (id) => sky.list.find((t) => t.id === id) ?? null,
@@ -1373,7 +1501,20 @@ function landShots(dt) {
     //  ★★ 한가운데를 정확히 겨눌수록 **핵심**, 도망가는 놈을 쫓아 쏘면
     //    **엔진**, 정면으로 맞붙으면 **무기**가 나온다. 그냥 때리면 선체다
     const wpn = WEAPONS[d.shot.weapon] ?? WEAPONS.laser;
-    const hp = hitPart(t, { off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg });
+    // ══ ★★★ v114 — **정확히 안쪽일수록 아프다** (`aim-table.js BANDS`) ═══
+    //
+    //  ★ 사장님 「**중앙 타겟 영역도 키우고 정확히 안쪽을 맞출 수록
+    //    데이미지가 들어가도록**」
+    //
+    //  ★★ 부위(`PARTS`)와 **다른 물건**이다. 부위는 「무엇을 맞혔나」이고
+    //    (그래서 **확률**로 갈린다), 띠는 「얼마나 가운데였나」다 (그래서
+    //    **확실히** 갈린다). 둘을 곱하면 「잘 겨누면 핵심이 잘 나오고,
+    //    나온 그 한 발도 더 아프다」가 된다
+    //  ★ 배수를 여기서 안 정한다 — 표가 정하고 `space-aim.js` 가 잰다
+    const band = bandAt(d.shot.off, wpn.tol, !!wpn.seek);
+    const hp = hitPart(t, {
+      off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg * (band?.mult ?? 1),
+    });
     t.flash = 0.5;
     // ★ 맞은 자리에서 터진다 — 「맞았나」를 숫자로만 알려주지 않는다
     ship.outside.shots.pop(shotAt(t.az, t.el, t.dist));
@@ -1382,8 +1523,12 @@ function landShots(dt) {
       //   모르면 겨누지 않는다 — 규칙이 있는데 화면에 없으면 없는 것과 같다
       const dead = hp.part.kills === 'move' ? ' · 엔진 정지'
         : hp.part.kills === 'shoot' ? ' · 무기 파괴' : '';
-      say(ai, `${TKINDS[t.kind].name} ${hp.part.name} 명중${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
-        hp.part.key === 'core' || dead ? 'warn' : 'tell');
+      // ★★★ v114 — **띠를 말한다.** 「스쳤습니다 — 조금 더 안쪽」이
+      //   이 계통의 전부다. 규칙이 있는데 화면에 없으면 없는 것과 같고,
+      //   특히 **스침은 옛 규칙이면 빗나감**이라 안 말하면 배울 것이 없다
+      const bw = band ? HIT_WORD[band.key] : '명중';
+      say(ai, `${TKINDS[t.kind].name} ${hp.part.name} ${bw}${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
+        band?.key === 'bull' || hp.part.key === 'core' || dead ? 'warn' : 'tell');
       continue;
     }
     // 부쉈다
@@ -1802,13 +1947,28 @@ function takeSalvage(p) {
   //  무엇을 버릴지」의 두 번째 층이다 (`docs/space/ITEMS.md §4`)
   const r = cargoPut(cargo, p.has);
   // 실은 것만 배의 계통으로 들어간다 (`cargo-table.js ITEMS[k].use`)
-  const u = useOf(r.took);
+  // ══ ★★★ v114 — **삼킨 것은 화물칸에서 뺀다** (`cargo.js settle`) ═════
+  //
+  //  ★ 사장님 「**화물칸이 벌써 다 찼다는데?** 필요한 아이템 드랍률을 낮춰」
+  //
+  //  ★★ 재 보니 드랍률이 아니라 **새는 구멍**이었다: v113 까지 여기서
+  //    `useOf` 로 통에 붓기만 하고 **화물칸에서는 안 뺐다.** 이미 써 버린
+  //    것이 무게로 남아 있었고, 그래서 **5.6 마리면 100 짐이 꽉 찼다.**
+  //    드랍률을 낮췄으면 조금 늦게 같은 일이 났을 것이다.
+  //  ★★★ **배가 더 받을 수 있는 만큼만** 삼킨다. 통이 꽉 차 있으면
+  //    화물칸에 남고, 그게 진짜 짐이다 — 「무엇을 버릴지」가 여기서 산다
+  const { ate: u } = cargoSettle(cargo, r.took, {
+    food: FOOD.max - supply.food,
+    parts: PARTS.max - supply.parts,
+    ore: ORE.max - supply.ore,
+    // ★ 냉각제는 **열이 남아 있을 때만** 삼킨다 (시원하면 아껴 둔다)
+    sink,
+    // ★ 아크 전지는 자리를 안 준다 — 화물칸에 **실려 있는 개수 그대로**를
+    //   도약이 읽으므로(`cargo.items.arc`) 삼키면 그 자리 물건이 없어진다
+  });
   if (u.food) supply.food = Math.min(FOOD.max, supply.food + u.food);
   if (u.parts) supply.parts = Math.min(PARTS.max, supply.parts + u.parts);
   if (u.ore) supply.ore = Math.min(ORE.max, supply.ore + u.ore);
-  // ★ 아크 전지는 **화물칸에 실린 개수 그대로**를 도약이 읽는다
-  //   (`cargo.items.arc`). 그래서 여기서 옮길 것이 없다 — `use` 는
-  //   「떨어져도 되는 물건인가」의 표시로만 쓰인다 (`dropsNow`)
   if (u.sink) sink = Math.max(0, sink + u.sink);
   // ══ ★★★ v110 — **부위 파츠가 여기서 나온다** ══════════════════════
   //
@@ -2064,6 +2224,75 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.45, 0.76);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v114 — **계기를 화면 구석에 못박는다** (사장님 「화면 uhd 정렬좀해
+//     시야를 안가리게」)
+//
+//  ★ 계기 셋은 배에 박힌 3D 판이라 자리를 **미터**로 적어 두었는데,
+//    화면 가로 좌표에만 `aspect` 가 들어간다 — 즉 **화면이 넓어질수록
+//    판이 하늘 복판으로 걸어 들어온다.** v103 은 1280×760 한 창에서만
+//    재고 고쳤으므로 그 창에서만 맞았다.
+//  ★★ 그래서 자리를 **화면 좌표**(`screen-table.js ANCHOR`)로 적고,
+//    창이 바뀔 때마다 그때의 aspect 로 **미터를 다시 낸다.**
+//  ★ 셈은 표가 한다 (`worldAt` · `centerFor`) — 여기서 다시 곱하면
+//    「도구가 재는 자리」와 「그려지는 자리」가 갈라진다 (v98 의 병)
+// ══════════════════════════════════════════════════════════════════════════
+/** ★ 지난번에 놓을 때의 화각·비율 — 바뀔 때만 다시 놓는다 */
+let fovWas = -1, aspectWas = -1;
+function placePanels() {
+  if (!ship) return;
+  const aspect = camera.aspect || 1;
+  const fovDeg = camera.fov;
+  const dist = HUDV.dist + 0.01;                 // 눈 → 판 (계기 셋은 살짝 뒤)
+  const t = Math.tan((fovDeg * Math.PI) / 360) * dist;
+  // ★★★ **눈은 `DEP` 다** — v91 이 그렇게 못박았다 (조준경과 같은 자리를
+  //   써야 「조준경은 맞는데 계기는 어긋나는」 것이 안 생긴다)
+  const eyeY = DEP.y + FLY_VIEW.rise;
+  const eyeZ = DEP.z - FLY_VIEW.lean;
+  const put = (name, obj) => {
+    if (!obj?.mesh) return;
+    // ══ ★★★ **크기를 짐작하지 않고 판에게 묻는다** ═══════════════════
+    //
+    //  ★ 처음에 「지을 때 넘긴 폭·높이」(`obj.size`)로 쟀다가 찍어 보고
+    //    틀린 것을 알았다 — **레이더가 아래로 잘려 있었다.** 판은 그 크기의
+    //    사각형 하나가 아니라 테두리·글자판을 더 단 **그룹**이라, 진짜
+    //    덩치도 다르고 **복판이 원점에 있지도 않다.** 짐작한 크기로 구석에
+    //    대면 그 차이만큼 어긋난다.
+    //  ★★ `Box3` 로 **한 번 재서** 기억한다 (판 모양은 안 변한다).
+    //    이 저장소가 v103 에 광학창을 `geometry.parameters` 로 재다가
+    //    「화면의 95%」라는 거짓말을 얻은 그 자리이고, 답도 그때와 같다
+    if (!obj.localBox) {
+      obj.mesh.position.set(0, 0, 0);
+      obj.mesh.rotation.set(0, 0, 0);
+      obj.mesh.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(obj.mesh);
+      obj.localBox = {
+        hw: (bb.max.x - bb.min.x) / 2, hh: (bb.max.y - bb.min.y) / 2,
+        ox: (bb.max.x + bb.min.x) / 2, oy: (bb.max.y + bb.min.y) / 2,
+      };
+    }
+    const lb = obj.localBox;
+    // 판의 반쪽 크기를 **화면 좌표**로 — 가로만 aspect 로 나뉜다
+    const halfW = lb.hw / (t * aspect);
+    const halfH = lb.hh / t;
+    const c = centerFor(name, halfW, halfH);
+    const p = worldAt({ nx: c.nx, ny: c.ny, dist, fovDeg, aspect });
+    // ★ 복판이 원점에서 밀려 있으면 그만큼 되돌린다
+    obj.mesh.position.set(p.x - lb.ox, eyeY + p.y - lb.oy, eyeZ - dist);
+    // ══ ★★★ **눕히지 않는다** (v114) ═══════════════════════════════
+    //  v102 가 `faceEye()` 로 판을 사람 쪽으로 **돌려 세웠다.** 물건으로는
+    //  맞는 말인데(진짜 계기판은 조종사를 본다), 이 셋은 눈앞 0.66m 에
+    //  떠 있는 **HUD 판**이라 30도씩 돌아가면 화면에서 **마름모로 찌그러져
+    //  보인다** — 사장님이 보내신 사진에서 상태창·레이더·광학창이 죄다
+    //  비스듬히 기울어 있던 것이 이것이다. 「정렬 좀 해」의 절반이 여기다.
+    //  ★ 조준경은 처음부터 안 눕혔다 (창과 나란하다). 넷을 같은 규약으로 맞춘다
+    obj.mesh.rotation.set(0, 0, 0);
+  };
+  put('광학창', ship.optic);
+  put('상태창', ship.statusHud);
+  put('레이더', ship.radarHud);
+}
+
 function resize() {
   const w = innerWidth, h = innerHeight;
   const dpr = Math.min(devicePixelRatio, 2);
@@ -2074,6 +2303,8 @@ function resize() {
   bloom.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // ★ 카메라가 바뀐 **뒤에** 놓는다 — 앞에 놓으면 한 판 늦은 aspect 로 놓인다
+  placePanels();
 }
 addEventListener('resize', resize);
 resize();
@@ -4891,6 +5122,22 @@ window.SPACE = {
   //    진짜 카메라로 투영**한다 — 자리와 크기가 한꺼번에 나온다.
   //  ★★★ 재는 것과 고치는 것을 한 자리에 두지 않는다: 이 값을 읽고
   //    **표**(`game/screen-table.js`)가 「어디까지 봐주나」를 정한다
+  /** ★ v114 — 정렬을 고치는 동안 쓴 구멍. 판이 어디 있고 얼마나 큰가 */
+  cam() { const v = camera.getWorldPosition(new THREE.Vector3()); return [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2), camera.fov, +camera.aspect.toFixed(3)]; },
+  panelDebug() {
+    const out = {};
+    for (const [n, o] of [['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud]]) {
+      if (!o?.mesh) { out[n] = null; continue; }
+      const box = new THREE.Box3().setFromObject(o.mesh);
+      out[n] = {
+        pos: o.mesh.position.toArray().map((x) => +x.toFixed(3)),
+        rot: o.mesh.rotation.toArray().slice(0, 3).map((x) => +(+x).toFixed(3)),
+        size: o.size, box: box.getSize(new THREE.Vector3()).toArray().map((x) => +x.toFixed(2)),
+        kids: o.mesh.children?.map((c) => `${c.name || c.type}${c.visible ? '' : '(숨음)'}`) ?? [],
+      };
+    }
+    return out;
+  },
   panels() {
     const list = [
       ['조준경', ship.sight?.mesh], ['광학창', ship.optic?.mesh],
@@ -4944,6 +5191,9 @@ window.SPACE = {
   givePart(slot = 'gun', tier = 'loot') { return gainPart(fit, slot, tier); },
   /** 검사가 I 창을 연다 */
   openBay(on = true) { showBay(on); return bayOpen; },
+  /** ★ v114 — 점검용 구멍. 화물칸에 물건을 넣어 인벤토리·제조를 눌러 본다 */
+  giveCargo(g) { const r = cargoPut(cargo, g); if (bayOpen) drawBay(); return r; },
+  craftNow() { return craftJob ? { ...craftJob } : null; },
   /** ★★★ v106 — **수리 단추.** 검사(`space-pilot.js`)와 점검 모드가 읽는다 */
   get fix() {
     return {
@@ -6511,6 +6761,7 @@ function frame(now) {
   if (radEv === 'break') { say(ai, '놓쳤습니다', 'tell'); }
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
+  stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다
 
   // 조준경 — **앉아 있을 때만 켜진다.** 늘 켜 두면 「지금 겨누는 중인가」가 안 읽힌다
   // ══ ★★★ v95 — **판은 안 굴린다. 판 안의 표식만 굴린다** ═══════════
@@ -6824,6 +7075,19 @@ function frame(now) {
   // ★★★ v79 — **광학 창을 먼저 그린다.** 렌더 타깃에 장면을 한 번 더
   //   그리는 일이라 주 렌더(합성기) **앞**이어야 한다 — 뒤에 두면 판에
   //   붙는 그림이 늘 **한 프레임 늦고**, 빠르게 도는 중에는 그게 보인다
+  // ══ ★★★ v114 — **화각이 바뀌면 계기를 다시 놓는다** ═══════════════
+  //
+  //  ★ 처음에 `resize()` 에서만 놓았다가 재 보고 틀린 것을 알았다:
+  //    이 배의 화각은 **고정이 아니다.** 앉아서 조종간을 잡으면 72 →
+  //    **93.4도**로 열리고(`FLY_VIEW`), 급가속이면 더 열린다(`SPEED.fovOpen`).
+  //    화각이 화면 좌표의 분모이므로, 창 크기가 그대로여도 **판이 걸어
+  //    다닌다** — 정렬을 창에만 걸어 두면 조종간을 잡는 순간 어긋난다.
+  //  ★★ 그래서 **바뀌었을 때만** 다시 놓는다. 매 프레임 놓아도 값은
+  //    같지만, 「무엇이 이걸 움직이나」가 코드에 안 남는다
+  if (Math.abs(camera.fov - fovWas) > 0.01 || Math.abs(camera.aspect - aspectWas) > 0.001) {
+    fovWas = camera.fov; aspectWas = camera.aspect;
+    placePanels();
+  }
   ship.optic?.render(helmSat);
   composer.render();
   lastCost = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };

@@ -520,3 +520,15 @@ body.flying #view { cursor: none; }
 #evade[data-band="perfect"] .tip { color: #6fd8a0; }
 #evade[data-band="late"]    .tip { color: #ff6a52; }
 #evade[data-band="perfect"] .tip::after { opacity: 1; border-width: 3px; }
+
+
+/* ══ ★★★ v114 — **화물칸 눈금** (사장님 「인벤토리도 만들어야지」) ══════
+   ★ 숫자만 적으면 「얼마나 찼나」가 안 읽힌다. 막대는 **한눈에** 말한다 —
+     이 저장소가 손목·상태창에서 이미 쓰는 규약이고, 90% 를 넘으면 색이
+     바뀌어 「곧 못 싣는다」를 미리 말한다 */
+.hold-gauge {
+  height: 10px; border-radius: 5px; background: #1b2430;
+  border: 1px solid #2b3644; overflow: hidden; margin: 2px 0 6px;
+}
+.hold-gauge > i { display: block; height: 100%; background: #6fd3a0; }
+.hold-gauge.full > i { background: #e0a34a; }

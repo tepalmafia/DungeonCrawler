@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=113">
+<link rel="stylesheet" href="css/style.css?v=114">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -169,6 +169,7 @@
   <div class="sheet">
     <div class="tabs">
       <button id="tab-fit" class="on">기체</button>
+      <button id="tab-hold">화물 · 제조</button>
       <button id="tab-head">탄두</button>
       <span class="close">I · Esc 로 닫습니다</span>
     </div>
@@ -176,6 +177,18 @@
       <h3>기체 &mdash; 부위 일곱</h3>
       <div id="fit-diagram"></div>
       <div id="fit-rows" class="grid"></div>
+    </div>
+    <!-- ══ ★★★ v114 — **인벤토리와 제조** (사장님 「인벤토리도 만들어야지.
+         제조하는 것도 만들고」).
+         ★ 새 키를 안 만들고 **이 창의 한 칸**으로 넣는다 — 손이 쓸 수 있는
+           키는 세 개뿐이고(`keys-table.js HAND_MAX`), 인벤토리는 싸우는
+           중에 여는 것이 아니라 **숨 돌릴 때** 여는 것이라 여기가 맞다 -->
+    <div id="pane-hold" hidden>
+      <h3>화물칸 &mdash; 실린 것</h3>
+      <div id="hold-bar"></div>
+      <div id="hold-rows" class="grid"></div>
+      <h3>제조 &mdash; 실은 것을 쓸 것으로</h3>
+      <div id="craft-rows" class="grid"></div>
     </div>
     <div id="pane-head" hidden>
       <h3>탄두 &mdash; 재료 다섯</h3>
@@ -292,6 +305,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=113"></script>
+<script type="module" src="js/main.js?v=114"></script>
 </body>
 </html>

@@ -57,6 +57,8 @@ import { navState } from '../game/nav-table.js';
 // ★★★ v108 — **무리 색** (적 빨강 · 물건 초록 · 행성 파랑).
 //   사장님 「적인지 물체인디 행성인지 알 수 있도록 … 도형으로」
 import { hueOf, bandOf } from '../game/legend-table.js';
+// ★★★ v114 — **조준 띠** (사장님 「중앙 타겟 영역도 키우고」)
+import { RINGS } from '../game/aim-table.js';
 
 /**
  * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
@@ -619,6 +621,31 @@ function draw(ctx, w, h, s) {
     ly0 = cy - (p0 * sr + q0 * cr);
   }
   const locked = near && nearD <= (TARGET.aimTol * (KINDS[near.t.kind]?.size ?? 1)) && near.t.inRange;
+  // ══ ★★★ v114 — **중앙 타겟 영역을 그린다** (`aim-table.js RINGS`) ═════
+  //
+  //  ★ 사장님 「**중앙 타겟 영역도 키우고 정확히 안쪽을 맞출 수록
+  //    데이미지가 들어가도록**」 — 규칙만 고치면 **화면에 없는 규칙**이 된다.
+  //    이 저장소는 그 병을 여러 번 앓았다 (락온 원이 v64~v82 내내 안 보였다).
+  //
+  //  ★★ **지금 겨눈 것의 자로 그린다.** 큰 것은 크게, 작은 것은 작게 —
+  //    허용 각이 표적 크기를 곱한 값이기 때문이다(`tolOf`). 고정 크기로
+  //    그리면 「보이는 고리와 맞는 각」이 갈라지고, 그게 v98 의 병이다.
+  //  ★ 반지름 비율도 여기서 안 정한다 — 표(`RINGS`)가 정한다
+  if (near && near.t.inRange) {
+    const tolDeg = TARGET.aimTol * (KINDS[near.t.kind]?.size ?? 1);
+    const nowK = nearD / Math.max(1e-6, tolDeg);
+    for (const ring of RINGS) {
+      const rr2 = pxH(tolDeg * ring.r);
+      // ★ **지금 든 띠만 진하다.** 넷을 다 진하게 그리면 과녁이 아니라
+      //   무늬가 되고, 그러면 「지금 어디인가」를 못 읽는다
+      const on = nowK <= ring.r && nowK > (RINGS[RINGS.indexOf(ring) - 1]?.r ?? 0);
+      ctx.strokeStyle = on
+        ? (ring.tone === 'hot' ? HOT : ring.tone === 'good' ? FG : WARN)
+        : 'rgba(143,230,192,.16)';
+      ctx.lineWidth = Math.max(1, h * (on ? 0.009 : 0.004));
+      ctx.beginPath(); ctx.arc(ax, ay, rr2, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
   ctx.strokeStyle = locked ? HOT : FG;
   ctx.lineWidth = Math.max(1.6, h * 0.012);
   const g2 = h * 0.055;
