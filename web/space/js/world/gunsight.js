@@ -52,6 +52,8 @@ import { azDiff } from '../game/target.js';
 import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs, pitchWord } from '../game/hud-table.js';
 // ★★★ v103 — **수평의.** 「내가 지금 똑바로 유지하고 있는지」
 import { HORIZON, rollWord, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
+// ★★★ v104 — **항로점** (사장님 「항로, 미션을 선택하면 네비게이션이 나오도록」)
+import { navState } from '../game/nav-table.js';
 
 /**
  * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
@@ -406,6 +408,69 @@ function draw(ctx, w, h, s) {
       ctx.fillStyle = soft ? DIM : HOT;
       ctx.font = `600 ${Math.round(h * ROWS.dockWhy.size)}px system-ui, sans-serif`;
       ctx.fillText(d.why ?? '', bx, h * ROWS.dockWhy.y);
+    }
+  }
+
+  // ══ ★★★ v104 — **항로점** — 지금 어디로 가는 중인가 ═════════════════
+  //
+  //  ★ 사장님 「**항로, 미션을 선택하면 네비게이션이 나오도록 해줘.
+  //    그래야 수동으로도 이동할 수 있게.**」
+  //
+  //  ★★ **표적과 같은 자로 놓는다** (`pxH`·`pxV`). 여기서 제 방식으로
+  //    다시 재면 「계기에는 저기, 창밖에는 여기」가 또 난다 —
+  //    v91~v98 이 네 판 내내 그 병이었다.
+  //  ★ 모양은 **속 빈 마름모**다. 표적(상자·쐐기)과도, 발사관(꽉 찬
+  //    마름모)과도 안 헷갈려야 한다
+  if (s.nav && s.nav.to) {
+    const n = s.nav;
+    const st = navState(n.off);
+    const col = st === 'on' ? SHOOT : (st === 'off' ? HOT : WARN);
+    // ★★ **표적과 똑같이 놓는다** — `relOf` 가 준 각을 `pxH`·`pxV` 로
+    //   찍고 표식 회전(`cr`·`sr`)을 얹는다. 여기서 다시 세지 않는다
+    const nz = relOf({ az: n.to.az, el: n.to.el, dist: n.to.dist ?? 1000 },
+      { yaw: s.az ?? 0, pitch: s.el ?? 0 });
+    const np = pxH(nz.az), nq = pxV(nz.el);
+    const nx = cx + (np * cr - nq * sr);
+    const ny = cy - (np * sr + nq * cr);
+    const R = h * 0.030;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(1.4, h * 0.006);
+    const inPlate = !nz.behind
+      && nx > w * 0.06 && nx < w * 0.94 && ny > h * 0.08 && ny < h * 0.62;
+    if (inPlate) {
+      // 판 안 — 마름모 + 둘레 고리
+      ctx.beginPath();
+      ctx.moveTo(nx, ny - R); ctx.lineTo(nx + R, ny);
+      ctx.lineTo(nx, ny + R); ctx.lineTo(nx - R, ny);
+      ctx.closePath();
+      ctx.stroke();
+      // ★ 항로 위일 때만 고리를 씌운다 — 「지금 맞다」를 한 번에 알린다
+      if (st === 'on') {
+        ctx.beginPath();
+        ctx.arc(nx, ny, R * 1.75, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      // ★★ 판 밖 — **가장자리 세모**로 어느 쪽인지 가리킨다.
+      //   숫자만 주면 「우 96도」로는 어느 쪽으로 도는 것이 가까운지
+      //   한 번 더 생각해야 한다 (v75 에서 배운 것과 같은 규약)
+      const ang = Math.atan2(-(ny - cy), nx - cx);
+      const rr = Math.min(w, h) * 0.40;
+      const ex = cx + Math.cos(ang) * rr, ey = cy - Math.sin(ang) * rr;
+      const T = h * 0.034;
+      ctx.beginPath();
+      ctx.moveTo(ex + Math.cos(ang) * T, ey - Math.sin(ang) * T);
+      ctx.lineTo(ex + Math.cos(ang + 2.5) * T, ey - Math.sin(ang + 2.5) * T);
+      ctx.lineTo(ex + Math.cos(ang - 2.5) * T, ey - Math.sin(ang - 2.5) * T);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    // 한 줄 — **자동이면 조용하다.** 배가 스스로 향하므로 할 일이 없다
+    if (!n.auto || st !== 'on') {
+      ctx.fillStyle = col;
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${Math.round(h * ROWS.nav.size)}px system-ui, sans-serif`;
+      ctx.fillText(n.word ?? '', cx, h * ROWS.nav.y);
     }
   }
 

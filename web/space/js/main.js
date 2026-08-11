@@ -200,6 +200,13 @@ import { DOCK, WHY as DOCK_WHY, SAY as DOCK_SAY, dockWord, whyNotDock } from './
 import {
   makeDock, tryDock as dockTry, undock, stepDock, docked, summary as dockSummary,
 } from './game/dock.js';
+// ══ ★★★ v104 — **항법** (사장님 「항로, 미션을 선택하면 네비게이션이
+//   나오도록 해줘. 그래야 **수동으로도 이동할 수 있게**」)
+import { NAV, navWord, navState } from './game/nav-table.js';
+import {
+  makeNav, setFork, setMission, clearNav, hasNav, stepNav,
+  summary as navSummary,
+} from './game/nav.js';
 // ══ ★★★ v103 — **포획** (사장님 「멀리 날아가버리잔아 … 자동으로 따라붙어서」)
 import { CATCH, CWHY, catchWord } from './game/catch-table.js';
 import {
@@ -269,7 +276,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 103;
+export const VERSION = 104;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -813,6 +820,12 @@ const dockS = makeDock();
  *   붙는 동안 조종간을 못 쓰고, **맞으면 풀린다** — 그게 값이다
  */
 const catchS = makeCatch();
+/**
+ * ★★★ v104 — **항법.** 갈래·미션을 고르면 하늘에 갈 곳이 선다.
+ *   ★ 자동 항법이면 지금과 똑같고, **수동일 때만** 향해야 나아간다 —
+ *     그게 사장님 「그래야 **수동으로도** 이동할 수 있게」의 실체다
+ */
+const nav = makeNav();
 /** ★ 이번 프레임에 맞았나 — 포획이 이것을 읽고 풀린다 */
 let hitNow = false;
 /** 지난 프레임의 기수 — 동체가 초당 몇 도 도는지를 여기서 잰다 */
@@ -980,6 +993,23 @@ function nearPack() {
     if (!best || r.dist < best.dist) best = { id: q.id, dist: r.dist, off: r.off, has: q.has, part: q.part ?? null };
   }
   return best;
+}
+/**
+ * ★★★ v104 — **항로점 자리를 뽑는 씨앗** (0~1 짜리 둘).
+ *
+ *   ★ `Math.random` 을 쓰면 **저장하고 이어했을 때 목적지가 옮겨 간다.**
+ *     「아까 저기였는데」는 계기가 거짓말한 것과 같다 (v56 에 저장으로
+ *     한 번 겪었다). 회차 씨앗은 이미 있으므로 거기서 뽑는다 —
+ *     같은 시드 · 같은 구간이면 **늘 같은 자리**다
+ */
+function navSeed(k) {
+  let h = 2166136261;
+  const t = `${seed}#${k}`;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const a = ((h >>> 0) % 10007) / 10007;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  const b = ((h >>> 0) % 10007) / 10007;
+  return [a, b];
 }
 /** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
 let closeRate = 0;
@@ -2397,6 +2427,10 @@ function interactStep(dt) {
     }
   } else if (plate >= 0 && pressed) {
     if (canPick && chooseFork(route, ship.cock.keyAt(plate))) {
+      // ★★★ v104 — **고르면 갈 곳이 선다** (사장님 「항로, 미션을 선택하면
+      //   네비게이션이 나오도록」). 자리는 **씨앗**으로 뽑는다 —
+      //   `Math.random` 이면 저장하고 이어했을 때 목적지가 옮겨 간다
+      setFork(nav, route.fork, navSeed(`fork${route.leg}`));
       ship.outside.setRegion(regionOf(route));
       say(ai, `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`, 'tell');
       audio?.event('latch');
@@ -3498,7 +3532,11 @@ window.SPACE = {
     //   멈춘다 (space-audio 가 실제로 그랬다). 「붙여 놓고 재겠다」는 뜻이니
     //   **항행 중으로 만들어 준다** — 거점에서 붙는 것이 아니라
     chase.risk = 200;
-    if (route.phase === RPHASE.PORT) { chooseFork(route, route.offer[0].key); ship.outside.setRegion(regionOf(route)); }
+    if (route.phase === RPHASE.PORT) {
+      chooseFork(route, route.offer[0].key);
+      ship.outside.setRegion(regionOf(route));
+      setFork(nav, route.fork, navSeed(`fork${route.leg}`));
+    }
   },
   /** 지금 조준선에 뭐가 걸리나 — 검사용 */
   get aim() { return aimName; },
@@ -4414,6 +4452,13 @@ window.SPACE = {
     }
     return out;
   },
+  /** ★★★ v104 — **항법.** 검사(`space-nav.js`)와 점검 모드가 읽는다 */
+  get nav() { return { ...navSummary(nav, !!helm.auto), legMult: nav.mult }; },
+  /** 검사가 미션 쪽으로 걸어 본다 */
+  putNavMission(key = 'wreck', name = '표류선') {
+    return setMission(nav, { key, name }, navSeed(`m${key}`));
+  },
+  clearNav() { return !!clearNav(nav); },
   /** ★★★ v103 — **포획.** 검사(`space-catch.js`)와 점검 모드가 읽는다 */
   get catch() {
     const p0 = nearPack();
@@ -4690,7 +4735,11 @@ window.SPACE = {
   seekEnd() { return this.seekLegEnd(LEG.count - 1); },
   pause(v) { showPause(v ?? !paused); return paused; },
   /** 갈래를 고른다 — 검사가 관측실까지 안 걸어가고 부를 수 있게 */
-  pick(key) { const ok = chooseFork(route, key); if (ok) ship.outside.setRegion(regionOf(route)); return ok; },
+  pick(key) {
+    const ok = chooseFork(route, key);
+    if (ok) { ship.outside.setRegion(regionOf(route)); setFork(nav, route.fork, navSeed(`fork${route.leg}`)); }
+    return ok;
+  },
   /** 구간을 끝까지 밀어 놓는다 — 거점 도착을 실제로 내 보려고 */
   skipLeg() { route.t = route.need; },
   /**
@@ -5165,8 +5214,22 @@ function frame(now) {
   //   센다). 「숨는 것」과 「안 쫓기는 것」은 다르다는 규약 그대로다
   // ★ **응답하는 동안도 구간이 안 나아간다** — 다가가느라 시간을 버리는
   //   것이고 그동안 압박은 계속 쌓인다 (착륙과 같은 규약 · RESCUE.hold)
+  // ══ ★★★ v104 — **항법이 구간 속도를 정한다** ═════════════════════
+  //
+  //  ★ 사장님 「항로, 미션을 선택하면 네비게이션이 나오도록 해줘.
+  //    **그래야 수동으로도 이동할 수 있게**」
+  //
+  //  ★★ 여태 「간다」는 시계였다 — 기수를 어느 쪽으로 돌려도 똑같이 흘렀다.
+  //    이제 **향한 만큼** 간다. 다만 **자동 항법이면 늘 1** 이라
+  //    좌석을 비우는 정비공의 회차는 지금과 똑같다 (`nav-table.js` 참고)
+  {
+    const to = nav.to;
+    const rel = to ? relOf({ az: to.az, el: to.el, dist: to.dist ?? 1000 },
+      { yaw: aimAz, pitch: aimEl }) : null;
+    stepNav(nav, dt, { off: rel ? rel.off : null, auto: !!helm.auto });
+  }
   const rev = stepRoute(route, dt * helmLeg(helm), power,
-    { hold: landBusy(land) || rescueHold(rescue) });
+    { hold: landBusy(land) || rescueHold(rescue), course: nav.mult });
   // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
   //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
   const missed = rev === 'arrive' && !tryDock(helm);
@@ -5908,6 +5971,9 @@ function frame(now) {
         blocked: why, why: why ? DOCK_WHY[why] : null,
       };
     })(),
+    // ★★★ v104 — **항로점.** 지금 어디로 가는 중인가 (사장님 「항로,
+    //   미션을 선택하면 네비게이션이 나오도록 … 수동으로도 이동할 수 있게」)
+    nav: navSummary(nav, !!helm.auto),
     // ★★★ v103 — **포획.** 붙는 동안 「몇 m 남았나 · 어떻게 끊나」가
     //   안 보이면 사람은 조종간이 왜 안 먹는지 모른다 (v100 의 발사관과
     //   같은 함정이다 — 규칙이 있는데 안 보이면 없는 것과 같다)
