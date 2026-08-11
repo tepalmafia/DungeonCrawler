@@ -14,6 +14,8 @@ import {
 // ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
 //   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
 import { wrap, relOf } from './frame.js';
+// ★★★ v111 — **회피 타이밍** (사장님 「q e를 써서 회피기동 … 타이밍을 어떻게」)
+import { gainAt, hurtMult } from './evade-table.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
 
@@ -341,7 +343,19 @@ export function stepSky(sky, dt, {
     if (evade) {
       // ★ v98 — 기수 기준으로 옮기는 일도 `frame.js` 가 한다
       const r = relOf(s, { yaw: sky.noseAz ?? 0, pitch: sky.noseEl ?? 0 });
-      s.dodge += evadeGain(r.az, r.el, evade.x ?? 0, evade.y ?? 0) * dt;
+      // ══ ★★★ v111 — **굴리기(Q/E)와 타이밍이 붙었다** ═══════════════
+      //  ★ 사장님 「미사일이 날아올때 **q e를 써서 회피기동**을 하면 높은
+      //    확률로 회피하거나 **피해를 줄일 수** 있도록」
+      //  ★★ 얼마나 쌓이나는 **표가 정한다** (`evade-table.js gainAt`) —
+      //    남은 시간이 창 안이면 굴리기가 크게 쌓이고, 밖이면 0 이다.
+      //    여기서 또 세면 화면의 고리와 규칙이 갈라진다
+      s.dodge += gainAt(s.t, {
+        push: evadeGain(r.az, r.el, evade.x ?? 0, evade.y ?? 0),
+        roll: Math.abs(evade.roll ?? 0),
+        // ★ 급기동 배수는 `main.js` 가 이미 `evade.x/y` 에 곱해서 준다 —
+        //   여기서 또 곱하면 두 번 곱해진다. 굴리기 쪽만 따로 곱한다
+        burst: false,
+      }) * dt;
     }
     if (s.t > 0) continue;
     sky.incoming.splice(i, 1);
@@ -358,6 +372,10 @@ export function stepSky(sky, dt, {
     const where = pickHit(sky.rnd);
     hits.push({
       miss: false, where,
+      // ★★★ v111 — **못 피해도 덜 맞는다** (사장님 「피해를 줄일 수」).
+      //   다 못 채워도 쌓은 만큼 준다 — 되거나 안 되거나 둘뿐이면
+      //   「거의 피했다」가 없어지고, 그러면 아깝지가 않다
+      soft: +hurtMult(s.dodge).toFixed(2),
       // ★ 포함은 한 발이 더 아프다 (`punch`) — 「두껍고 세다」의 뒷절반
       punch: KINDS[s.kind]?.punch ?? 1,
       // ★ 세 번에 한 번만 고장이 난다 — 매번이면 회차가 고장 목록이 된다

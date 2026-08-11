@@ -175,6 +175,8 @@ import {
 import { TURRET_RISE } from './world/turret.js';
 // ★ 떠도는 것들 — 우주 쓰레기와 죽은 위성 (사장님 요청 · game/target-table.js)
 import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/target-table.js';
+// ★★★ v111 — **회피 타이밍** (사장님 「타이밍을 어떻게 줄지」). 고리와 규칙이 한 표를 본다
+import { EVADE, ringAt, RING_WORD } from './game/evade-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
@@ -301,7 +303,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 110;
+export const VERSION = 111;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -664,6 +666,27 @@ addEventListener('keydown', (e) => {
     audio?.event('tube');
     return;
   }
+  // ══ ★★★ v111 — **방향키 좌 = 추력 · 우 = 자동 항법** ═══════════════
+  //
+  //  ★ 사장님 「**방향키 좌를 추력, 우를 자동항법으로 해줘**」
+  //
+  //  ★★ **R 과 조종간 옆 스위치를 안 없앤다** — 더한다. 「들어가는 길을
+  //    하나만 만들지 않는다」가 이 저장소의 규약이고 (v106 에 F2 하나뿐이라
+  //    사장님께는 없는 것과 같았던 일이 있다), 특히 자동 항법은 지금
+  //    **조준선으로 스위치를 찍어야** 켜져서 싸우는 중에는 사실상 못 켠다.
+  //  ★ 왼손이 WASD·Q/E·R·Shift 로 이미 꽉 차 있으므로, 방향키는
+  //    **오른손이 잠깐 쓰는 자리**다 — 마우스에서 손을 떼는 값이 붙는다
+  if (!helpOpen && !paused && e.code === 'ArrowLeft') {
+    e.preventDefault();
+    setThrustKey(!power.thrust);
+    return;
+  }
+  if (!helpOpen && !paused && e.code === 'ArrowRight') {
+    e.preventDefault();
+    if (helm.auto) { takeHelm(helm); say(ai, '수동 조종 — 자동 항법이 꺼졌습니다', 'tell'); }
+    else if (engageAuto(helm)) { say(ai, '자동 항법 — 항로로 돌아갑니다', 'tell'); audio?.event('fixed'); }
+    return;
+  }
   // ══ ★★★ v103 — **L · 비행 보조** (자동 수평) ══════════════════════════
   //
   //  ★ 사장님 「**물리방향으로 움직이니 게임이 너무 어렵게 느껴지는데?**」
@@ -706,9 +729,35 @@ for (const w of Object.values(WAYS)) {
     const a = noseAim();
     const r = fireNet(salvage, { az: a.az, el: a.el, seated: helmSat, way: w.key });
     if (!r.ok) {
-      say(ai, r.why === 'far'
-        ? `${w.name} — ${w.reach}m 안이어야 합니다 (다가가십시오)`
-        : (SALV_WHY[r.why] ?? '지금은 못 씁니다'), 'tell');
+      // ══ ★★★ v111 — **멀면 거절하지 않고 따라붙는다** ═══════════════
+      //
+      //  ★ 사장님 「**f로 아이템을 먹을려고 하는데 25m 안으로 들어가기
+      //    어려운데 방법은? 자동으로 접근해서 먹게 해야하는거 아냐?**」
+      //
+      //  ★★ 맞는 말씀이고, 그 물건은 **이미 있다** — v103 의 포획(K)이
+      //    260m 안에서 저절로 따라붙어 문다. 그런데 **아무도 안 알려 줬다.**
+      //    F 를 누르면 「25m 안이어야 합니다」라고만 하고 끝났으니,
+      //    사람은 「25m 를 어떻게 맞추지」만 남는다. 규칙은 있는데
+      //    **가는 길이 없으면 없는 것과 같다** (v100 의 발사관과 같은 함정).
+      //
+      //  ★★★ 그래서 **F 는 「회수한다」 하나가 된다**: 닿으면 그 자리에서
+      //    물고, 멀면 **저절로 따라붙는다.** 셋을 고르는 것(F·G·B)은
+      //    그대로 남는다 — 값이 다르므로 (`cargo-table.js WAYS`)
+      if (r.why === 'far') {
+        const p0 = nearPack();
+        const c = beginCatch(catchS, {
+          has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
+          seated: helmSat || steering,
+          dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+        });
+        say(ai, c.ok
+          ? `${w.name} — ${Math.round(p0?.dist ?? 0)}m 는 멉니다. **따라붙습니다** (K 로 끊습니다)`
+          : (CWHY[c.why] ?? `${w.name} — ${w.reach}m 안이어야 합니다`),
+        c.ok ? 'alarm' : 'warn');
+        if (c.ok) audio?.event('tube');
+        return;
+      }
+      say(ai, SALV_WHY[r.why] ?? '지금은 못 씁니다', 'tell');
       return;
     }
     chase.sign = Math.min(100, chase.sign + w.sign);   // 사출은 숨길 수 없다 (v44)
@@ -1454,12 +1503,18 @@ function takeHits(list) {
     const w = h.where;
     // ★ 종류마다 한 발의 무게가 다르다 (`KINDS.gunship.punch` 1.8 ·
     //   `drone.punch` 3.2). 「두껍고 세다」·「몸이 탄이다」의 뒷절반이 여기다
-    const punch = h.punch ?? 1;
+    // ★★★ v111 — **못 피해도 덜 맞는다** (사장님 「피해를 줄일 수 있도록」).
+    //   회피를 다 못 채웠어도 쌓은 만큼 피해가 준다 (`evade-table.js hurtMult`).
+    //   ★ `punch` 에 곱한다 — 선체·열·소리·번쩍임이 다 이 하나를 보므로
+    //     한 곳만 고치면 넷이 같이 줄어든다 (재는 곳을 늘리지 않는다)
+    const punch = (h.punch ?? 1) * (h.soft ?? 1);
     hitFlash = Math.max(hitFlash, Math.min(1, 0.8 * punch));
     // ★★★ v103 — **포획이 이걸 읽고 풀린다.** 「적이 쏘는 동안은 못 줍는다」
     hitNow = true;
     faults.wear.hull = Math.min(1, faults.wear.hull + w.hull * punch);
     heat = Math.min(HEAT.max, heat + w.heat * punch);
+    // ★ 반쯤 피한 것은 **말해 준다** — 안 말하면 노력이 있었는지 모른다
+    if ((h.soft ?? 1) < 0.9) say(ai, `빗겨 맞았습니다 — 피해 ${Math.round((1 - h.soft) * 100)}% 감소`, 'tell');
     // ══ ★★★ **맞은 소리** (v74 · 진공 규칙) ═══════════════════════════
     //  밖에서 터지는 것은 안 들린다. **선체에 닿은 것만** 들린다 —
     //  공기가 아니라 금속을 타고 들어온 소리다 (구조전달음).
@@ -2357,12 +2412,24 @@ function interactStep(dt) {
   }
   // 좌석에서 일어나면 손도 놓는다 — 「자세는 안 잇는다」와 같은 규약
   if (!helmSat) yokeHeld = false;
+  const steerWas = steering;   // ★ v111 — 「잡는 순간」을 알려면 지난 프레임이 든다
   steering = yokeHeld;
   // ★★ **잡는 순간 자동 항법이 꺼진다** (사장님 「수동으로 운전할때는
   //   자동항법 꺼지는 걸로」). 이게 있어야 「내가 몬다」가 성립한다 —
   //   전에는 놓으면 배가 저절로 항로로 돌아와서 **한 일이 아무 자국도
   //   안 남았다.** 그게 「조정석을 잡아도 운전이 안 되잔아」의 실체다
-  if (steering && takeHelm(helm)) {
+  // ══ ★★★ v111 — **「잡는 순간」이지 「잡고 있는 동안」이 아니다** ═════
+  //
+  //  ★ 여기가 매 프레임 `steering` 을 보고 있었다. v109 까지는 조종간을
+  //    **잡았다 놓았다** 했으므로 사실상 「잡는 순간」과 같았는데, v110 이
+  //    **늘 잡은 채**로 만들면서 이 줄이 **매 프레임 자동 항법을 껐다.**
+  //    그래서 방향키 우로 켜도 다음 프레임에 도로 꺼졌다 — 사장님이
+  //    「방향키 우를 자동항법으로」라고 하셨는데 아예 안 켜지는 상태였다.
+  //  ★★ 그래서 **가장자리**로 바꾼다: 안 잡고 있다가 잡은 그 프레임에만.
+  //    그리고 **손이 조종간을 미는 것**도 같은 뜻이므로 그때도 끈다 —
+  //    「내가 몬다」가 성립하는 자리는 잡은 것이 아니라 **민 것**이다
+  const pushing = Math.abs(flyPush.pitch) + Math.abs(flyPush.yaw) + Math.abs(flyPush.roll) > 0.02;
+  if ((steering && !steerWas) || (steering && pushing)) if (takeHelm(helm)) {
     say(ai, '수동 조종 — 자동 항법이 꺼졌습니다', 'tell');
     audio?.event('latch');
   }
@@ -3812,6 +3879,19 @@ window.SPACE = {
     return fireNet(salvage, { az: a.az, el: a.el, seated: helmSat });
   },
   /** 검사가 꾸러미를 하나 떨군다 */
+  /**
+   * ★★★ v111 — **검사가 적 탄 한 발을 띄운다.**
+   *   회피 타이밍(고리)을 화면에서 보려면 탄이 날아오고 있어야 하는데,
+   *   실제로 적이 쏠 때까지 기다리면 헤드리스로 몇 분이다 (시계가 1/25)
+   */
+  putShotAtMe(sec = null) {
+    sky.incoming.push({
+      id: sky.next++, from: sky.list[0]?.id ?? 0, kind: sky.list[0]?.kind ?? 'raider',
+      az: aimAz, el: aimEl, dist: 60,
+      t: sec ?? ENEMY_FIRE.fly, pk: 1, roll: 0, dodge: 0, willHit: true,
+    });
+    return sky.incoming.length;
+  },
   putPack(kind = 'raider', dist = 60) {
     const t = { kind, az: aimAz, el: aimEl, dist };
     return dropPack(salvage, t, null);
@@ -5314,6 +5394,17 @@ function frame(now) {
   //   v90 에 오른쪽 단추로 냈던 것을 옮긴다 — 실제 시뮬의 free-look 도
   //   보통 따로 난 키이지 발사 단추가 아니다
   const freeLook = steering && input.keys.has('KeyC');
+  // ══ ★★★ v111 — **롤 밀기는 가지 밖에서 매 프레임 다시 읽는다** ═══════
+  //
+  //  ★ 여태 `flyPush.roll` 을 아래 `if (steering && !freeLook)` **안에서만**
+  //    썼다. 그래서 둘러보기(C)를 켜면 그 가지가 안 돌고, 아래 `else` 의
+  //    지우기도 `if (!freeLook)` 로 막혀 있어 **마지막 값이 그대로 남았다.**
+  //  ★★ 남은 값이 0 이 아니면 `flight.js` 가 「손이 조종간을 잡고 있다」로
+  //    보고 **자동 수평을 아예 안 돌린다** (`hand`). 즉 C 를 한 번 켠 뒤로는
+  //    기울어진 채로 영영 안 펴진다 — 사장님 「회전을 계속 하다보니 안되네」.
+  //  ★ 읽는 자리를 가지 밖으로 빼면 그 구멍이 **생길 수가 없다**
+  flyPush.roll = (steering && !catching(catchS))
+    ? ((input.keys.has('KeyE') ? 1 : 0) - (input.keys.has('KeyQ') ? 1 : 0)) : 0;
   if (steering && !freeLook) {
     // ══ ★★★ **가상 조종간** — 마우스+키보드 비행 시뮬의 정석 (v80) ══
     //
@@ -5342,7 +5433,7 @@ function frame(now) {
     //   (비행 시뮬의 「스틱을 당긴다」와 반대 부호다. 마우스는 조준기라
     //    화면을 따라가는 편이 훨씬 익다 — Elite 도 기본이 이쪽이다)
     flyPush.pitch = -deflect(stick.y);
-    flyPush.roll = (input.keys.has('KeyE') ? 1 : 0) - (input.keys.has('KeyQ') ? 1 : 0);
+    // ★ v111 — 롤은 **위에서** 이미 읽었다 (가지 밖). 여기서 또 읽지 않는다
     // ══ ★★★ v103 — **포획 중에는 조종간이 잠긴다** ═══════════════════
     //  ★ 이것이 포획의 값 전부다. 붙는 동안 기수를 못 돌리므로 **회피를
     //    못 한다** — 그래서 「지금 주울까 나중에 주울까」가 생긴다.
@@ -5424,7 +5515,9 @@ function frame(now) {
       // ★ 놓으면 **스틱도 가운데로 돌아간다** — 안 그러면 다시 잡는 순간
       //   지난번에 밀어 둔 만큼이 그대로 먹는다
       stick.x = 0; stick.y = 0;
-      flyPush.pitch = 0; flyPush.yaw = 0; flyPush.roll = 0;
+      // ★ v111 — `roll` 은 여기서 안 건드린다. 가지 밖에서 매 프레임
+      //   다시 읽으므로 (`steering` 이 아니면 0), 여기서 또 지우면 두 곳이 된다
+      flyPush.pitch = 0; flyPush.yaw = 0;
     }
     me.yaw -= look.dx * 0.0022;
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
@@ -6232,7 +6325,10 @@ function frame(now) {
   //    (화면 위로 밀면 기수가 든다 = el 이 는다)
   const evMult = burstNow ? RCS.burst.mult : 1;
   const evade = steering
-    ? { x: flyPush.yaw * evMult, y: flyPush.pitch * evMult }
+    // ★★★ v111 — **굴리기도 회피다** (사장님 「q e를 써서 회피기동」).
+    //   `roll` 은 배수를 안 곱해 보낸다 — 창 배수는 표가 준다
+    //   (`evade-table.js gainAt`). 여기서 곱하면 두 번 곱해진다
+    ? { x: flyPush.yaw * evMult, y: flyPush.pitch * evMult, roll: flyPush.roll * (burstNow ? RCS.burst.mult : 1) }
     : null;
   // ══ ★★★ **회피 기동을 하면 슬로우로 전환된다** (사장님 말씀 그대로) ══
   //  ★ **손이 먼저 움직여야 걸린다.** 저절로 느려지면 그건 상이지 조작이
@@ -6527,7 +6623,24 @@ function frame(now) {
       const R = 132;
       const deg = Math.atan2(-d.y, d.x) * 180 / Math.PI;
       evTip.style.transform = `translate(${(d.x * R).toFixed(0)}px, ${(-d.y * R).toFixed(0)}px) rotate(${deg.toFixed(0)}deg)`;
-      evSay.textContent = `${evadeWord(d)} — 급기동(Shift)`;
+      // ══ ★★★ v111 — **언제 꺾을지를 말한다** ═══════════════════════
+      //
+      //  ★ 사장님 「적의 미사일을 보고 **타이밍을 어떻게 맞출지 타이밍을
+      //    어떻게 줄지** 기획하고 적용해」
+      //
+      //  ★★ 답은 **줄어드는 고리**다 — 숫자를 띄우면 안 읽히고, 고리가
+      //    표시에 닿는 순간이 「지금」이면 눈이 그것을 잘 읽는다. 리듬
+      //    게임이 다 쓰는 것이고, 여기서는 **적 탄이 곧 박자**다.
+      //  ★ 고리와 규칙이 **같은 표**를 본다 (`evade-table.js ringAt`) —
+      //    화면이 「지금」이라고 했는데 규칙이 아니면 그 계기는 그 뒤로
+      //    아무도 안 믿는다 (이 배의 오랜 규약)
+      const ring = ringAt(threat.t ?? 0);
+      evBox.dataset.band = ring.band;
+      evTip.style.setProperty('--ring', `${(28 + ring.r * 92).toFixed(0)}px`);
+      // ★ v111 — 처음에 여기서 「— Q · E」를 덧붙였다가 태웠다.
+      //   `RING_WORD.now` 가 이미 그 말을 들고 있어서 **두 번** 나왔다
+      //   (「★ 지금 — Q · E — Q · E」). 말은 표 한 곳에만 둔다
+      evSay.textContent = `${evadeWord(d)} · ${RING_WORD[ring.band]}`;
       evSay.style.transform = `translate(calc(-50% + ${(d.x * R).toFixed(0)}px), ${(-d.y * R + 74).toFixed(0)}px)`;
       evBar.style.width = `${Math.round(threat.k * 100)}%`;
     }

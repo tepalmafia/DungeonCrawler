@@ -119,19 +119,44 @@ console.log('\n[7] ★★ 보조가 **조종을 없애지는 않나** — 늘 �
   const dt = 1 / 60;
   // 손으로 감는다 (Q/E 를 잡고 있다)
   let byHand = 0; { let r = Math.PI; while (Math.abs(r) > 0.02 && byHand < 30) { r -= Math.min(Math.abs(r), AXES.roll.rate * dt) * Math.sign(r); byHand += dt; } }
+  // ★ 급기동(Shift)으로 감는다 — 추진제를 태우는 대신 훨씬 빠르다
+  const BURST = 2.4;
+  let byBurst = 0; { let r = Math.PI; while (Math.abs(r) > 0.02 && byBurst < 30) { r -= Math.min(Math.abs(r), AXES.roll.rate * BURST * dt) * Math.sign(r); byBurst += dt; } }
   // 놓고 보조에 맡긴다
   let byAid = 0; { let r = Math.PI; while (Math.abs(wrapDeg(r * DEG)) > 1 && byAid < 30) { r += levelStep(r, dt); byAid += dt; } }
-  console.log(`   180도 되돌리기 — 손 **${byHand.toFixed(2)}초** · 보조 **${byAid.toFixed(2)}초**`);
-  ok(byHand < byAid,
-    '★★★ **손이 더 빠르다** — 급하면 잡고 감는 것이 답이다. 보조가 손을 이기면 조종이 없어진다');
-  ok(byAid - byHand > 0.8,
-    `★★ 그 차이가 ${(byAid - byHand).toFixed(2)}초다 — 대신 그동안 **손이 자유롭다.**`
-    + ' 정비공 게임에서 그게 값이다 (조종석에 매인 시간 · space-fly.js)');
-  // 손이 잡고 있으면 보조가 안 끼어든다
+  console.log(`   180도 되돌리기 — 손 **${byHand.toFixed(2)}초** · 급기동 **${byBurst.toFixed(2)}초**`
+    + ` · 보조 **${byAid.toFixed(2)}초**`);
+  // ══ ★★★ v111 — **여기서 주장이 뒤집혔다** ═══════════════════════════
+  //
+  //  v103 은 「손이 보조보다 빨라야 한다」였다 — 보조가 손을 이기면 조종이
+  //  없어진다는 이유였고, 그때는 맞았다. 그런데 사장님이 실제로 돌려
+  //  보시고 「**뒤집혀서 방향이 반대가 되는데 자동으로 돌아오게 해야지**」
+  //  라고 하셨고, 이어서 「**회전을 계속 하다보니 안되네**」라고 원인까지
+  //  짚으셨다. 보조(0.85)가 손(1.25)보다 느리니 **싸우면서 계속 굴리면
+  //  영영 못 따라잡는** 것이었다.
+  //
+  //  ★★ 그래서 뒤집는다: **보조가 손보다 빠르다.** 대신 「조종이 없어진다」를
+  //    막는 것은 **속도가 아니라 다른 둘**이다 —
+  //      ① 손이 Q/E 를 잡고 있으면 보조는 **아예 안 돈다** (`hand`)
+  //      ② 급기동(Shift)을 쓰면 **여전히 손이 제일 빠르다** — 대신 태운다
+  ok(byAid < byHand,
+    `★★★ **보조가 손보다 빠르다** (${byAid.toFixed(2)} < ${byHand.toFixed(2)}) —`
+    + ' 사장님 「자동으로 돌아오게 해야지」. v103 은 반대로 정했었고,'
+    + ' 그 값이 「계속 굴리면 안 돌아온다」를 만들었다');
+  ok(byBurst < byAid,
+    `★★★ **그래도 급기동이 제일 빠르다** (${byBurst.toFixed(2)} < ${byAid.toFixed(2)}) —`
+    + ' 급하면 잡고 감는 것이 답이다. 조종이 없어지지 않는 자리가 여기다');
+  // ★ 그리고 손이 밀고 있으면 보조는 **아예 안 돈다** — 그것이 진짜 안전장치
   ok(levelStep(Math.PI, dt, { hand: true }) === 0,
-    '★★★ **손이 Q/E 를 잡고 있으면 보조는 안 건드린다** — 안 그러면 배를 굴릴 수가 없다');
-  ok(levelStep(Math.PI, dt, { on: false }) === 0,
-    `★ 껐으면 아무 일도 안 한다 — 「${assistWord(false)}」`);
+    '★★★ **손이 잡고 있으면 보조가 한 걸음도 안 움직인다** — 배를 굴릴 수 없으면'
+    + ' 그건 보조가 아니라 금지다. 속도가 아니라 이 한 줄이 조종을 지킨다');
+  // ★★ 잔 기울기는 느긋해야 한다 — 옆으로 눕혀 겨누는 것이 안 되면 안 된다
+  const slow = Math.abs(levelStep(5 / DEG, dt)) * DEG / dt;
+  const fast = Math.abs(levelStep(Math.PI, dt)) * DEG / dt;
+  console.log(`   펴는 속도 — 5도에서 ${slow.toFixed(0)}°/초 · 180도에서 ${fast.toFixed(0)}°/초`);
+  ok(fast > slow * 2,
+    `★★ **기운 만큼 빨라진다** (${(fast / slow).toFixed(1)}배) — 잔 기울기는 느긋해서`
+    + ' 옆으로 눕혀 겨눌 수 있고, 뒤집힌 것은 빨리 선다');
 }
 
 console.log('\n[8] ★ 그래서 **단축키를 만들 것인가** — 답: 안 만든다');
