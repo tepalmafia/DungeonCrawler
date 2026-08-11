@@ -200,6 +200,9 @@ import { DOCK, WHY as DOCK_WHY, SAY as DOCK_SAY, dockWord, whyNotDock } from './
 import {
   makeDock, tryDock as dockTry, undock, stepDock, docked, summary as dockSummary,
 } from './game/dock.js';
+// ══ ★★★ v108 — **범례** (사장님 「우측 화면 상단에 도형이나 기타 표시로
+//   적인지 물체인디 행성인지 알 수 있도록」)
+import { BANDS, bandOf, hueOf, WORDS_FOR } from './game/legend-table.js';
 // ══ ★★★ v107 — **부위와 등급** (사장님 「더 강한 무기, 더 강한 파츠,
 //   더 강한 장갑」 · 「i창을 통해 … 각 부분 별 파츠를」 · 갈아엎기는 「가」)
 import {
@@ -288,7 +291,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 107;
+export const VERSION = 108;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1072,6 +1075,33 @@ function navSeed(k) {
 //  ★★ 도해는 **그림이 아니라 도형**이다. 그림은 사장님이 주시는 것이고
 //    (CLAUDE.md 절대 규칙), 여기 있는 것은 「어느 부위가 어디인가」를
 //    말하는 **배치도**다 — 규격서(`space-model.js`)와 같은 규약이다
+// ══ ★★★ v108 — **범례를 그린다** ═════════════════════════════════════
+//
+//  ★ 사장님 「**글씨가 아닌 이모티콘이나 도형으로** 무슨 의미인지」 —
+//    그래서 90초 뒤에는 **글이 빠지고 도형만** 남는다. 영영 붙어 있으면
+//    범례가 아니라 설명서다
+const LEG_SHAPE = {
+  wedge: 'M10,2 L18,17 L10,13 L2,17 Z',
+  chip: 'M2,7 L8,2 L18,6 L12,18 Z',
+  disc: '',
+};
+function drawLegend() {
+  const box = document.getElementById('legend');
+  if (!box) return;
+  box.innerHTML = BANDS.map((b) => {
+    const art = b.mark === 'disc'
+      ? `<circle cx="10" cy="10" r="7" fill="none" stroke="${b.hue}" stroke-width="1.8"/>`
+      : `<path d="${LEG_SHAPE[b.mark]}" fill="none" stroke="${b.hue}" stroke-width="1.8"`
+        + ' stroke-linejoin="round"/>';
+    return `<div class="row"><svg viewBox="0 0 20 20">${art}</svg>`
+      + `<span><span class="nm" style="color:${b.hue}">${b.name}</span>`
+      + `<br><span class="wh">${b.what}</span></span></div>`;
+  }).join('');
+  box.hidden = false;
+}
+/** 시작하고 얼마나 지났나 — 글이 빠지는 시계 */
+let legT = 0;
+
 let bayOpen = false;
 /** 기체 도해 — 부위 일곱이 어디에 붙나 (판 크기의 0~1) */
 const FIT_AT = {
@@ -5651,6 +5681,12 @@ function frame(now) {
   //    v70 이 만든 「맞으면 일이 된다」가 통째로 사라진다. 값은 **이미
   //    있는 것**으로 낸다 — 부품(파밍으로 얻는 것)과 시간, 그리고
   //    **쫓기는 중에는 못 한다**
+  // ★★★ v108 — **90초 뒤에는 도형만 남는다**
+  legT += dt;
+  {
+    const lb = document.getElementById('legend');
+    if (lb) lb.classList.toggle('bare', legT > WORDS_FOR);
+  }
   if (fix.cool > 0) fix.cool = Math.max(0, fix.cool - dt);
   if (fix.hold > 0) {
     const calmNow = chase.phase !== PHASE.CHASE && chase.phase !== PHASE.CAUGHT;
@@ -6596,7 +6632,11 @@ document.addEventListener('pointerlockchange', () => {
   // ★ v78 — **시작 단추.** 여태 「화면을 눌러 시작합니다」 한 줄뿐이라
   //   처음 온 사람은 무엇을 눌러야 하는지도 몰랐다. 누르면 제목 화면이
   //   닫히고 포인터 잠금을 건다 — 보통 게임이 하는 그대로
-  wire('btn-play', () => { beginOnce(); renderer.domElement.requestPointerLock?.(); });
+  wire('btn-play', () => {
+    beginOnce();
+    drawLegend();          // ★ v108 — 시작하면 범례가 뜬다
+    renderer.domElement.requestPointerLock?.();
+  });
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
   wire('btn-new3', () => SPACE.newGame());
   // 멈춤 화면에서 열면 **멈춘 채로** 연다 — 점검하다 배가 저 혼자 가면 곤란하다
