@@ -23,7 +23,7 @@ import {
   reeling, thrustHeld, callWarn, summary,
 } from '../web/space/js/game/salvage.js';
 import { KINDS, TARGET } from '../web/space/js/game/target-table.js';
-import { mightOf, lootOf } from '../web/space/js/game/might-table.js';
+import { mightOf } from '../web/space/js/game/might-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 import { WINCH } from '../web/space/js/game/supply-table.js';
 
@@ -50,13 +50,15 @@ head('[1] 부수면 **저절로 들어오지 않는다** — 꾸러미가 남는
   ok(!!p, '부수면 그 자리에 꾸러미가 남는다');
   ok(s.packs.length === 1, '떠 있다 — 아직 내 것이 아니다');
   const has = packOf('raider');
-  const l = lootOf('raider');
-  ok(has.weapon === l.weapon && has.armor === l.armor, '노획(전투력)이 꾸러미에 들어 있다');
+  // ★★ v110 — 여기서 「노획 무기·장갑이 꾸러미에 들었나」를 물었다.
+  //   그 둘은 v107 에 전투력에서 빠지고 v110 에 물건까지 걷어냈다.
+  //   이제 **부위 파츠**가 그 자리다 (`p.fitPart` · `farm-table.js`)
+  ok('fitPart' in p, '★★★ 꾸러미에 **부위 파츠 자리**가 있다 — 격추가 아니라 **회수**해야 들어온다');
   // ★ v83 — 꾸러미가 **덩어리에서 아이템으로** 바뀌었다. 광석 30 이
-  //   「광석 ×1」이 된다 (한 덩이 22). 덩어리는 고를 것을 안 만든다
+  //   「광석 ×3」이 된다 (한 덩이 10). 덩어리는 고를 것을 안 만든다
   ok((has.ore ?? 0) > 0, '보급도 같은 꾸러미에 들어 있다 — 셋으로 흩어져 있던 것을 묶었다');
-  ok((has.seal ?? 0) + (has.wire ?? 0) + (has.oru ?? 0) > 0,
-    '★ **부품이 넷으로 갈라져** 들어 있다 (화물의 36.4% 가 정비용이라는 값이 근거)');
+  ok((has.spare ?? 0) > 0,
+    '★ **정비 부품**이 들어 있다 (v110 에 교체 유닛·밀봉재·배선 셋을 하나로 합쳤다)');
   console.log(`      적 우주선 꾸러미 — ${packWord(has, null)}`);
   ok(s.got === 0, '아직 하나도 안 얻었다');
 }

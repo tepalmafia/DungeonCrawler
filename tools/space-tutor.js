@@ -76,7 +76,7 @@ function world(w, tu, dt) {
 
 /** 사람 쪽 — 가르침이 뜨면 9초 뒤에 그것을 한다 */
 function play(w, key) {
-  if (key === 'walk') { w.walked = TUTOR.walked + 1; w.turned = TUTOR.turned + 0.5; }
+  if (key === 'look') { w.turned = TUTOR.turned + 0.5; }
   if (key === 'route') { w.forkPicked++; w.atPort = false; }
   if (key === 'power') { w.flips++; w.thrust = true; }
   // ★ `coolFor` 가 아니라 **셈**이다. 상태값을 done 으로 쓰면 26초 뒤에
@@ -383,7 +383,7 @@ if (see >= 0) {
 
   console.log('\n[9] 배너와 **겹치지 않나** — 겹치면 둘 다 안 읽는다');
   {
-    await p.evaluate(() => SPACE.teach('walk', 0));
+    await p.evaluate(() => SPACE.teach('look', 0));
     await p.waitForTimeout(1000);
     const two = await p.evaluate(() => {
       const el = document.getElementById('lesson');

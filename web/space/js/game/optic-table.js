@@ -48,7 +48,10 @@
 
 import { WEAPONS } from './combat-table.js';
 import { KINDS } from './target-table.js';
-import { mightOf, lootOf } from './might-table.js';
+import { mightOf } from './might-table.js';
+// ★★★ v110 — 노획 개수 대신 **뜯을 수 있는 부위**를 적는다
+import { SLOT_FROM, partChance } from './farm-table.js';
+import { SLOT_BY } from './parts-table.js';
 
 /** 조종 중 화각 (세로 도) — `helm-table.js FLY_VIEW.fov` 와 같은 값이다.
  *  ★ 두 곳에 적는 것이 아니라 **여기서만 계산에 쓴다** (표시용). 실제
@@ -227,15 +230,24 @@ export function readOut(kind) {
   //   귀찮은데 왜 포함을 먼저 깨나」의 답이고, 안 적으면 그 갈래가
   //   **눈에 안 보인다** — 규칙에만 있고 화면에 없는 것은 없는 것이다
   if (g.arc) has.unshift(`★ 아크 전지 ${g.arc}`);
-  const loot = lootOf(kind);
+  // ══ ★★★ v110 — **노획 개수 대신 「어느 부위가 나오나」** ═════════════
+  //
+  //  전에는 `lootOf` 로 「무기 +2 · 장갑 +5」를 적었다. v107 이 그 둘을
+  //  전투력에서 빼면서 이 줄은 **아무것도 아닌 숫자**가 됐다.
+  //  ★★ 이제 **뜯을 수 있는 부위**를 적는다 (`farm-table.js SLOT_FROM`).
+  //    이 줄이 「엔진이 급한데 저 포함을 부술까」의 답이 된다 — 노획
+  //    개수는 아무 답도 안 줬다
+  const slots = (SLOT_FROM[kind] ?? []).map((sl) => SLOT_BY[sl]?.name ?? sl);
   return {
     name: k.name,
     foe,
     might: foe ? mightOf(kind) : 0,
     /** 부수면 나오는 것 — 쓰레기의 「필요한 재료나 음식」이 이 줄이다 */
     has,
-    /** 적이면 노획 — 뜯어서 내 전투력에 붙는 것 */
-    loot: (loot.weapon || loot.armor) ? loot : null,
+    /** ★ 뜯을 수 있는 부위 — 앞에 적힌 것이 잘 나온다 · 없으면 null */
+    slots: slots.length ? slots : null,
+    /** 파츠가 나올 확률 (0~1) — 「센 것일수록 자주」가 여기 보인다 */
+    partOdds: partChance(kind),
     what: k.what ?? '',
   };
 }

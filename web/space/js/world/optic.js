@@ -335,11 +335,11 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale =
       // ★★★ **격추** — 이 판이 지금 비추는 것은 부서지는 그 물건이다
       line('격추', mx, r1, f(0.10), WARN, 800);
       line(deadInfo.name ?? '', mx + f(0.30), r1, f(0.088), GREEN, 700);
-      const got = [];
-      if (deadInfo.loot?.weapon) got.push(`무기 +${deadInfo.loot.weapon}`);
-      if (deadInfo.loot?.armor) got.push(`장갑 +${deadInfo.loot.armor}`);
-      line(got.length ? `회수 — ${got.join(' · ')}` : '회수할 것이 없습니다',
-        mx, r2, f(0.072), got.length ? GREEN : DIM);
+      // ★★★ v110 — **꾸러미에 무엇이 들었나**를 그대로 적는다.
+      //   전에는 「무기 +2 · 장갑 +5」였는데, v107 이 그 둘을 전투력에서
+      //   빼면서 **아무 데도 안 붙는 숫자**를 크게 띄우고 있었다
+      line(deadInfo.drop ? `잔해 — ${deadInfo.drop}` : '회수할 것이 없습니다',
+        mx, r2, f(0.072), deadInfo.drop ? GREEN : DIM);
       if (deadInfo.myNow) {
         line(`내 전투력 ${deadInfo.myWas} → ${deadInfo.myNow}`, mx, r3, f(0.070), WARN, 700);
       }
@@ -352,7 +352,11 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale =
         // ★★ **전투력 · 내 것 · 견줌** — 이 줄이 「붙을까 지나칠까」다
         const o = oddsOf(s.my ?? 0, r.might);
         const col = o.tone === 'good' ? GREEN : (o.tone === 'warn' ? WARN : BAD);
-        line(`전투력 ${r.might}  ·  나 ${s.my ?? '?'}`, mx, r2, f(0.072), DIM);
+        // ★★★ v110 — **뜯을 수 있는 부위**를 같이 적는다. 이 줄이
+        //   「엔진이 급한데 저걸 부술까」의 답이다 (노획 개수는 답이 없었다)
+        line(`전투력 ${r.might} · 나 ${s.my ?? '?'}`
+          + (r.slots ? `   ▸ ${r.slots.slice(0, 3).join(' · ')}` : ''),
+          mx, r2, f(0.072), DIM);
         ctx.textAlign = 'right';
         line(o.word, W - mx, r1, f(0.105), col, 800);
         ctx.textAlign = 'left';

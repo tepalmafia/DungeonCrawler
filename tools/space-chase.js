@@ -97,7 +97,7 @@ console.log('\n[0-0] 가르침 — **하면 사라진다** (TUTORIAL.md §3-A)')
   for (let i = 0; i < 140 && !walked; i++) {
     await S(() => window.dispatchEvent(new MouseEvent('mousemove', { movementX: 40 })));
     await p.waitForTimeout(400);
-    walked = await S(() => SPACE.tutor.now !== 'walk');
+    walked = await S(() => SPACE.tutor.now !== 'look');
   }
   await p.keyboard.up('KeyW');
   const t1 = await S(() => SPACE.tutor);

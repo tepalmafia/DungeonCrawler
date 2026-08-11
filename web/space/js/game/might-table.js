@@ -109,26 +109,18 @@ export const MINE = {
   /** 선체 100 이면 이만큼 (선체가 반이면 절반) */
   perHull: 6.0,
   /**
-   * ★★★ **노획** — 격추하면 나온다. 사장님 「적의 무기나 장갑을 회수하면서
-   *   나도 전투력이 올라가게」.
+   * ══ ★★★ v110 — **노획 개수는 죽었다** ══════════════════════════════
    *
-   *   ★ 무기는 **화력**으로, 장갑은 **버팀**으로 붙는다. 둘을 한 숫자로
-   *     합치지 않는 이유: 합치면 「무엇을 노렸나」가 안 남는다. 포함을
-   *     잡으면 장갑이, 요격기를 잡으면 무기가 많이 나온다 — 그게
-   *     **무엇을 골라 부술지**를 한 겹 더 만든다
+   *  여기 `loot: { weapon: 0.9, armor: 0.7 }` 과 `lootPow: 0.62` 가 있었다.
+   *  v107 이 전투력을 **부위 장착**(`parts-table.js partsMight`)으로
+   *  갈아엎으면서 (사장님 「가」) 이 항은 안 쓰이게 됐는데, **떨어지는 것은
+   *  그대로 뒀다** — 회차마다 「노획 무기 108 · 장갑판 288」이 아무 데도
+   *  안 붙는 칸으로 들어가고 있었다.
+   *
+   *  ★★ 그래서 **식과 물건을 같이 걷어냈다.** 식만 지우면 물건이 남아
+   *    「주웠는데 안 오르네」가 되고, 물건만 지우면 식이 남아 다음 사람이
+   *    그 식을 보고 물건을 다시 만든다
    */
-  loot: { weapon: 0.9, armor: 0.7 },
-  /**
-   * ★★ **노획은 덜 붙는다** — 열 번째 뜯어 온 포신은 첫 번째만큼 안 는다.
-   *
-   *   처음엔 그냥 개수 × 값이었는데 재 보니 **여섯 대 잡으면 천장**이었다
-   *   (33.6/34). 2시간짜리에서 20분 만에 다 큰다는 뜻이고, 그러면 남은
-   *   100분 동안 「피할까 부술까」가 게임에서 사라진다.
-   *
-   *   ★ 말도 된다: 남의 배에서 뜯은 무기를 내 배에 다는 데는 자리와
-   *     전력이 든다. 붙일 자리가 줄수록 덜 붙는 것이 맞다
-   */
-  lootPow: 0.62,
   /**
    * ★ 천장. 없으면 2시간 뒤에 모든 적이 「우세」로 나오고, 그 순간
    *   「피한다」가 게임에서 사라진다. 제일 센 적(요격기 떼 18.7)의
@@ -138,26 +130,18 @@ export const MINE = {
 };
 
 /**
- * ★★ 격추하면 노획이 얼마나 나오나.
+ * ★ 내 전투력의 **바탕**만 — 무기 목록 · 선체(0~1).
  *
- *   ★ **쏘는 것에서 무기가, 두꺼운 것에서 장갑이** 나온다. 안 쏘는 것
- *     (파편·연료통·호송선)에서는 무기가 안 나온다 — 없는 것을 뜯을 수는 없다
+ *   ★★ v110 부터 **여기서 노획을 안 센다.** 진짜 내 전투력은
+ *     `parts-table.js partsMight(fit)` 이고, 게임은 `main.js myPower()`
+ *     한 곳에서만 그것을 부른다. 이 함수는 「아무것도 안 달았을 때
+ *     얼마인가」를 견주는 바닥으로 남는다 — 재는 곳을 둘로 만들지 않으려고
+ *     **노획 인자를 지웠다**
  */
-export function lootOf(kind) {
-  const k = typeof kind === 'string' ? KINDS[kind] : kind;
-  if (!k) return { weapon: 0, armor: 0 };
-  const weapon = k.shoots ? Math.max(1, Math.round((1 + (k.punch ?? 1)) * 0.9)) : 0;
-  const armor = Math.max(0, Math.round((k.hits ?? 1) * 0.45));
-  return { weapon, armor };
-}
-
-/** 내 전투력 — 무기 목록 · 선체(0~1) · 노획 개수 */
-export function myMight({ weapons = [], hull = 1, loot = { weapon: 0, armor: 0 } } = {}) {
+export function myMight({ weapons = [], hull = 1 } = {}) {
   let m = MINE.base;
   for (const w of weapons) m += MINE.byWeapon[w] ?? 0;
   m += MINE.perHull * Math.max(0, Math.min(1, hull));
-  m += MINE.loot.weapon * Math.pow(Math.max(0, loot.weapon ?? 0), MINE.lootPow)
-     + MINE.loot.armor * Math.pow(Math.max(0, loot.armor ?? 0), MINE.lootPow);
   return +Math.min(MINE.cap, m).toFixed(1);
 }
 

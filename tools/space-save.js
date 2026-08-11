@@ -77,7 +77,7 @@ console.log('\n[2] ★ **저장했다 불러오면 같은가** — 반쯤 저장
   a.hazard.hits = 3; a.hazard.dodged = 6;
   a.move.breath = 0.4; a.move.spent = true;
   a.carry.held = 'coolant';
-  a.tutor.i = 7; a.tutor.done = ['walk', 'route']; a.tutor.grips = { spot: 2 };
+  a.tutor.i = 7; a.tutor.done = ['look', 'route']; a.tutor.grips = { spot: 2 };
   a.scenes.leg = 9; a.scenes.keys = ['A', 'F']; a.scenes.phase = 'act'; a.scenes.done = ['A', 'B'];
   a.scenes.ended = ['F']; a.scenes.ember = 6.2; a.scenes.overdue = true;
   a.lock.open = true; a.lock.air = 0.41; a.lock.blown = 2; a.lock.t = 88.5;
