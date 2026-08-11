@@ -46,18 +46,34 @@ console.log('\n[1] 배치가 **규칙을 지키나** — 여기가 이 판의 �
   ok(a.counts.A === 4 && a.counts.C === 2, 'A 는 네 번 · C 는 두 번 — 나머지는 한 번씩');
 }
 
-console.log('\n[2] 여덟이 **다 다른 방에 묶나** — 세기를 올려선 못 하는 일이다');
+console.log('\n[2] 일곱이 **다 다른 데서 오나** — 세기를 올려선 못 하는 일이다');
 {
-  const rooms = Object.values(SCENES).map((s) => s.room);
-  const uniq = new Set(rooms);
-  console.log('   ' + Object.values(SCENES).map((s) => `${s.key}:${s.room}`).join(' '));
-  ok(uniq.size >= GOALS.distinctRooms,
-    `서로 다른 방 ${uniq.size}곳 (목표 ${GOALS.distinctRooms} 이상)`);
+  // ══ ★★★ v112 — **「다른 방」이 「다른 데서 온다」가 됐다** ═══════════
+  //
+  //  옛 검사는 「여덟 장면이 서로 다른 방에서 열리나」였다. 좋은 자였는데
+  //  **방이 조종석 하나만 남았다** (v109 · 사장님 「공간도 없애주고」).
+  //  그대로 두면 영영 1 이 나오고, **못 고칠 것을 빨갛게 들고 있는 검사**는
+  //  며칠 안에 무시된다 — 무시되는 검사는 없는 검사보다 나쁘다.
+  //  ★ 그래서 자를 바꾼다: **무엇이 오는가**(`from`). 재고 싶었던 것은
+  //    원래 「같은 일의 반복이 아닌가」였고, 그건 방이 아니라 **결**이다
+  const from = Object.values(SCENES).map((s) => s.from);
+  const uniq = new Set(from);
+  console.log('   ' + Object.values(SCENES).map((s) => `${s.key}:${s.from}`).join(' '));
+  ok(uniq.size >= GOALS.distinctFrom,
+    `서로 다른 데서 ${uniq.size}가지 (목표 ${GOALS.distinctFrom} 이상)`);
   // C 와 D 는 둘 다 조종석이다 — **일부러**다. 다만 하는 일이 달라야 한다
   ok(SCENES.C.hands !== SCENES.D.hands,
-    '조종석을 같이 쓰는 C·D 는 손이 하는 일이 다르다');
+    '한자리에 앉아 있어도 C·D 는 손이 하는 일이 다르다');
   ok(Object.values(SCENES).every((s) => s.lead && s.hands),
-    '여덟이 다 「무엇이 오는지」와 「손이 뭘 하는지」를 갖는다');
+    '일곱이 다 「무엇이 오는지」와 「손이 뭘 하는지」를 갖는다');
+  // ★★ **접은 둘을 소리 내어 센다** — 조용히 지우면 다음 사람이 다시 만든다
+  ok(!SCENES.F && !SCENES.H,
+    '★★★ **F(감압)와 H(성간 공백)를 접었다** — 감압은 방·문·우주복이 다'
+    + ' 없어져 남는 것이 소리뿐이었고, 성간 공백은 `WAR.md` 가 버리기로'
+    + ' 적어 둔 둘 중 하나다 (목적이 도망에서 돌진으로 뒤집혔다)');
+  ok(!!SCENES.J && SCENES.J.built,
+    '★★★ **J(투하)가 그 자리에 섰다** — 목적 한 줄의 마지막 마디가'
+    + ' 처음으로 장면이 됐다 (「뚫는다 · 채운다 · **떨군다**」)');
 }
 
 console.log('\n[3] 네 박자가 **정말 그 길이로 도나**');
@@ -254,8 +270,9 @@ console.log('\n[7] 아직 못 만든 것을 **소리 내어 센다**');
     a.missing.length
       ? `아직 ${a.missing.length}개가 비었다 (${a.missing.join('·')}) — 빈 자리는 12구간에 구멍을 낸다`
       : '★★ **여덟 장면이 다 섰다** — 12구간에 빈 자리가 없다 (F 는 v62 · 우주복이 생기면서 지어졌다)');
-  ok(SCENES.H.built === true,
-    '★ H(성간 공백)가 지어졌다 — 8판 · PLAN2H §9. 끝이 있어야 2시간을 한 번 통과해 본다');
+  ok(SCENES.J.built === true,
+    '★ J(투하)가 지어졌다 — 끝이 있어야 2시간을 한 번 통과해 본다.'
+    + ' v112 에 H(성간 공백) 자리를 받았다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════

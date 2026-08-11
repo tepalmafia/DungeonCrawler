@@ -29,6 +29,8 @@ import { SCENES, PLACEMENT } from '../web/space/js/game/scene-table.js';
 // ★ `MISSIONS` 는 **배열**이다 — 열쇠로 찾으려면 `BY_KEY` 를 써야 한다.
 //   처음에 `MISSIONS[key]` 로 썼다가 「fault:foulCoolant 이 없다」로 빨개졌다
 import { MISSIONS, BY_KEY } from '../web/space/js/game/mission-table.js';
+// ★★★ v112 — 고장이 꺼졌나를 여기서 못 박는다 (아래 [5])
+import { PILOT } from '../web/space/js/game/pilot-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 
 const WRITE = process.argv.includes('--write');
@@ -138,29 +140,40 @@ console.log('\n[5] ★★ **모든 장면이 줄기에 달려 있나** — 안 �
   const orphan = Object.keys(SCENES).filter((k) => !used.has(`scene:${k}`));
   console.log(`   줄기에 달린 장면 ${Object.keys(SCENES).length - orphan.length}/${Object.keys(SCENES).length}`);
   ok(orphan.length === 0,
-    orphan.length ? `줄기에 안 달린 장면: ${orphan.join('·')} — 왜 있는지 말할 수 없다면 빼야 한다` : '장면 여덟이 모두 어느 줄기의 칸이다');
+    orphan.length ? `줄기에 안 달린 장면: ${orphan.join('·')} — 왜 있는지 말할 수 없다면 빼야 한다`
+      : `장면 ${Object.keys(SCENES).length} 이 모두 어느 줄기의 칸이다`);
 
-  // ★★★ **이 셈이 틀려 있었다** (v68 에서 고쳤다).
-  //   `m.steps` 만 세고 있었는데, `fault.js` 의 `open()` 은 **갈래의 `at`
-  //   으로도** 손이 갈 자리를 만든다 (미소운석·원인 모를 열이 그것이다).
-  //   그래서 「8/19」로 나왔지만 실제로는 열이 나오고 있었다 —
-  //   **검사가 적게 세면 「모자라다」고 착각하고 엉뚱한 데를 판다.**
+  // ══ ★★★ v112 — **이 셈이 죽은 것을 세고 있었다** ═══════════════════
   //
-  //   그리고 나머지 아홉 중 넷은 v68 에서 **승부수**로 지었고
-  //   (`gambit-table.js` — 고장이 아니라 결심이라 `steps` 를 못 적었다),
-  //   둘은 딴 계통으로 이미 서 있다 (`builtElsewhere`).
-  const list = Object.values(MISSIONS);
-  const playable = list.filter((m) => (m.steps && m.steps.length)
-    || ((m.branches || []).length > 0 && (m.branches || []).every((b) => b.at)));
-  const gambits = list.filter((m) => GB_KEYS.has(m.key));
-  const elsewhere = list.filter((m) => m.builtAs && !GB_KEYS.has(m.key));
-  const live = new Set([...playable, ...gambits, ...elsewhere].map((m) => m.key));
-  const left = list.filter((m) => !live.has(m.key));
-  console.log(`   고장으로 ${playable.length} · 승부수로 ${gambits.length} · 딴 계통으로 ${elsewhere.length}`
-    + ` = **${live.size}/${list.length}**`);
-  if (left.length) console.log(`   아직 표에만: ${left.map((m) => m.name).join(' · ')}`);
-  ok(live.size >= 16,
-    `**${live.size}종이 실제로 나온다** (16 이상) — 표에만 있는 것은 「설계에는 있는데 게임에는 없다」다`);
+  //  여기서 「고장 19종 중 몇 종이 실제로 나오나」를 셌다. v68 에 한 번
+  //  고쳤고 (`steps` 만 세다가 갈래의 `at` 도 세게), 그 뒤로 16/19 로
+  //  초록이었다. 그런데 **v106 이 고장을 통째로 껐다**
+  //  (`PILOT.faults = false` · 사장님 「수리는 버튼하나로 해결하고」).
+  //  즉 이 검사는 **하나도 안 나오는 것을 16종 나온다고** 찍고 있었다.
+  //
+  //  ★★ 「검사가 초록인데 게임에 없다」가 이 저장소가 제일 무서워하는
+  //    자리다 (v107 이 파츠를 만들고 떨구는 자리를 안 만든 것과 같다).
+  //    그래서 셈을 **지금 실제로 나오는 것**으로 바꾼다: 장면 일곱과
+  //    계통 열아홉이 **줄기에 달려 있나**.
+  const sysUsed = new Set(THREADS.flatMap((t) => beats(t))
+    .filter((b) => b.at.startsWith('sys:')).map((b) => b.at.slice(4)));
+  const idle = Object.keys(SYSTEMS).filter((k) => !sysUsed.has(k));
+  console.log(`   줄기가 부르는 계통 ${sysUsed.size}/${Object.keys(SYSTEMS).length}`);
+  if (idle.length) console.log(`   줄기에 안 달린 계통: ${idle.join(' · ')}`);
+  ok(sysUsed.size >= 8,
+    `★★★ **줄기가 계통 ${sysUsed.size} 가지를 부른다** — 이야기가 규칙 위에`
+    + ' 얹혀 있다는 뜻이다. 적으면 그건 이야기가 아니라 장면 목록이다');
+  // ★ 안 달린 계통이 있는 것은 **실패가 아니다** — 이야기가 아니라 살림인
+  //   것들이 있다 (자국 · 잡힘 · 스로틀 · 발사관 …). 다만 **소리 내어 센다**
+  ok(idle.length <= Object.keys(SYSTEMS).length / 2,
+    `★ 안 달린 것이 절반을 안 넘는다 (${idle.length}/${Object.keys(SYSTEMS).length}) —`
+    + ' 절반을 넘으면 그건 이야기가 게임을 못 따라간 것이다');
+  // ★★ 그리고 **고장이 정말 꺼져 있나**를 여기서 못 박는다. 다시 켜지면
+  //   이 줄이 빨개지고, 그때 이 표를 다시 봐야 한다
+  ok(PILOT.faults === false,
+    '★★ **고장은 꺼져 있다** (`PILOT.faults`) — 「배가 낡아 간다」 줄기를'
+    + ' 「맞으면 닳는다」로 다시 쓴 까닭이 이 한 줄이다. 다시 켜면 여기가'
+    + ' 빨개지고, 그때 줄기를 또 손봐야 한다');
 }
 
 console.log('\n[6] 아직 안 지은 칸을 **소리 내어 센다**');
