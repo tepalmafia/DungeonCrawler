@@ -291,7 +291,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 108;
+export const VERSION = 109;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -544,7 +544,16 @@ addEventListener('keydown', (e) => {
     //   v88 에서 앉는 것과 잡는 것이 한 상태가 됐으므로 나오는 것도 하나다.
     //   두 단계로 두면 「놓았는데 안 나가진다」가 생긴다 — 없앤 상태를
     //   나가는 길에서만 되살리는 꼴이다
-    if (helmSat) { yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    // ══ ★★★ v109 — **조종석에서 안 나온다** (사장님 「b」·「공간도 없애주고」)
+    //  ★ 여기가 「일어난다」였다. 이제 X 는 **조종간만 놓는다** —
+    //    계기를 보거나 I 창을 열 때 쓰고, 자리는 안 뜬다.
+    //  ★★ 나가는 길을 아예 없애는 것이 아니라 **갈 곳이 없어진 것**이다:
+    //    방 여섯이 죽었으므로 일어나 봐야 설 데가 없다 (`pilot-table.js`)
+    if (PILOT.seatOnly) {
+      if (yokeHeld) { yokeHeld = false; say(ai, '조종간을 놓았습니다 — 계기는 I', 'tell'); }
+    } else if (helmSat) {
+      yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell');
+    }
     return;
   }
   // ══ ★★★ v107 — **I · 기체와 파츠 창** ═══════════════════════════════
@@ -1923,6 +1932,12 @@ resize();
 // x 와 z 를 **따로** 밀어 본다. 같이 밀면 벽에 비스듬히 닿았을 때
 // 통째로 막혀서 「벽에 붙으면 못 움직인다」가 된다.
 function walk(dt) {
+  // ══ ★★★ v109 — **안 걷는다** (사장님 「b」·「공간도 없애주고」) ══════
+  //  ★ 방 여섯이 죽었으므로 갈 데가 없다. 걷기를 남겨 두면 **빈 복도를
+  //    돌아다니는** 게임이 되고, 그건 없앤 것이 아니라 껍데기만 남긴 것이다.
+  //  ★★ 함수를 지우지 않고 **여기서 멈춘다** — 나중에 되살릴 수 있게
+  //    (사장님이 「일단」이라고 하신 적이 있고, 되돌릴 길은 열어 둔다)
+  if (PILOT.seatOnly) { me.vx = 0; me.vz = 0; return; }
   const { f, r } = input.move();
 
   // ══ ★★ **손잡이를 잡고 있으면 WASD 가 걷기가 아니다** ══════
@@ -6635,6 +6650,9 @@ document.addEventListener('pointerlockchange', () => {
   wire('btn-play', () => {
     beginOnce();
     drawLegend();          // ★ v108 — 시작하면 범례가 뜬다
+    // ★★★ v109 — **시작하면 이미 앉아 있다.** 걸어갈 방이 없으므로
+    //   「조종석까지 걸어가기」가 첫 일이 될 이유가 없다 (사장님 「b」)
+    if (PILOT.seatOnly) { helmSat = true; }
     renderer.domElement.requestPointerLock?.();
   });
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
