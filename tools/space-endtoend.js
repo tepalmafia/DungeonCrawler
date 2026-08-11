@@ -817,7 +817,10 @@ console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)')
   //    준 적이 없다. 바로 위 ④ 의 주석이 「정해 놓은 만큼 세지 말고
   //    **될 때까지** 기다린다」인데 여기만 안 지켰다
   const h0 = await S(() => SPACE.faults.wear.hull);
-  const worn = await until(() => SPACE.faults.wear.hull > h0, 300, '선체가 깎이는 것');
+  // ★ `until` 의 함수는 **페이지 안에서** 돈다 — 여기 `h0` 는 Node 쪽
+  //   변수라 안 보인다 (한 번 이걸로 터뜨렸다). 창에 얹어 놓고 읽는다
+  await S((v) => { window.__h0 = v; }, h0);
+  const worn = await until(() => SPACE.faults.wear.hull > window.__h0, 300, '선체가 깎이는 것');
   const h1 = await S(() => SPACE.faults.wear.hull);
   ok(worn && h1 > h0, `⑥ ★★★ 맞으니 **선체가 깎인다** (${h0.toFixed(3)} → ${h1.toFixed(3)})`);
   await S(() => SPACE.clearSky?.());

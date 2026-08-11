@@ -340,6 +340,8 @@ node tools/space-block.js        스페이스워 — ★★★ **전투 블록�
 node tools/space-align.js        스페이스워 — ★★★ **창밖의 저것 == 계기의 저것인가** (진짜 카메라 · 진짜 메시)
 node tools/space-arc.js          스페이스워 — ★★★ **아크 도약** · 공짜가 아닌가 · 늘 정답은 아닌가 (뼈대만)
 node tools/space-mount.js        스페이스워 — ★★★ **발사관** · 회피하며 물고 있나 · 방향은 유지하되 흔들리나 (뼈대만)
+node tools/space-throttle.js     스페이스워 — ★★★ **스로틀** · 전진과 역추진 · 놓아도 안 돌아오나 (뼈대만)
+node tools/space-dock.js         스페이스워 — ★★★ **도킹 회수** · 붙어서 여럿을 담나 · 값을 치르나 (뼈대만)
 node tools/space-drop.js         스페이스워 — ★★★ **투하** · 마디 넷 · 결말 셋 · 이탈이 결심인가 (v93)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
