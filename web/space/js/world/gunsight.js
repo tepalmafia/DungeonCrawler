@@ -54,6 +54,9 @@ import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs } from '../game/hud-table
 import { HORIZON, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
 // ★★★ v104 — **항로점** (사장님 「항로, 미션을 선택하면 네비게이션이 나오도록」)
 import { navState } from '../game/nav-table.js';
+// ★★★ v108 — **무리 색** (적 빨강 · 물건 초록 · 행성 파랑).
+//   사장님 「적인지 물체인디 행성인지 알 수 있도록 … 도형으로」
+import { hueOf, bandOf } from '../game/legend-table.js';
 
 /**
  * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
@@ -251,9 +254,12 @@ function draw(ctx, w, h, s) {
       const ang = Math.atan2(y - cy, x - cx);
       const R0 = Math.min(w, h) * 0.30, R1 = Math.min(w, h) * 0.44;
       const away = Math.min(1, r0.off / 180);
-      const foe = KINDS[t.kind]?.rams;
-      ctx.strokeStyle = foe ? HOT : (t.inRange ? FG : DIM);
-      ctx.lineWidth = Math.max(2, h * (foe ? 0.014 : 0.009));
+      // ★★★ v108 — **무리 색이 이긴다.** 「사거리 안/밖」은 굵기로 말한다 —
+      //   무엇인지가 먼저고 쏠 수 있나가 다음이다 (사장님 「적인지 물체인디」)
+      ctx.strokeStyle = hueOf(t.kind);
+      // ★ v108 — `foe` 는 무리 색이 대신한다. 굵기는 **적이면 굵게** —
+      //   색을 못 보는 사람도 「저건 급한 것」을 굵기로 안다
+      ctx.lineWidth = Math.max(2, h * (bandOf(t.kind).key === 'foe' ? 0.014 : 0.009));
       ctx.beginPath();
       ctx.moveTo(cx + Math.cos(ang) * R0, cy + Math.sin(ang) * R0);
       ctx.lineTo(cx + Math.cos(ang) * (R0 + (R1 - R0) * (0.35 + away)), cy + Math.sin(ang) * (R0 + (R1 - R0) * (0.35 + away)));
@@ -263,7 +269,10 @@ function draw(ctx, w, h, s) {
     const far = !t.inRange;
     // 가까울수록 크게 — 거리가 크기로 읽혀야 「기다렸다 쏜다」가 생긴다
     const r = Math.max(h * 0.035, h * 0.11 * (1 - t.dist / (TARGET.spawn[1] * 1.1)));
-    ctx.strokeStyle = far ? 'rgba(143,230,192,.28)' : FG;
+    // ★★★ v108 — **무리 색이 먼저다** (적 빨강 · 물건 초록 · 행성 파랑).
+    //   「무엇인지」가 「쏠 수 있나」보다 먼저 읽혀야 한다 —
+    //   사거리 밖은 **흐리게** 해서 말한다 (색을 뺏지 않는다)
+    ctx.strokeStyle = far ? `${hueOf(t.kind)}66` : hueOf(t.kind);
     glyph(ctx, t.kind, x, y, r);
     const d = r0.off;
     if (d < nearD) { nearD = d; near = { t, x, y, r, raz, rel }; }

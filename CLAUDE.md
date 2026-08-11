@@ -351,6 +351,7 @@ node tools/space-catch.js        스페이스워 — ★★★ **포획** · 따
 node tools/space-nav.js          스페이스워 — ★★★ **항법** · 고르면 갈 곳이 서나 · 수동에 길이 생기나 (뼈대만 · v104)
 node tools/space-pilot.js        스페이스워 — ★★★ **조종석 하나짜리 배** · 무엇이 죽고 사나 · 수리 단추 (뼈대만 · v106)
 node tools/space-parts.js        스페이스워 — ★★★ **부위 일곱 · 등급 다섯** · 달아야 오르나 · 개조가 공짜 아닌가 (뼈대만 · v107)
+node tools/space-legend.js       스페이스워 — ★★★ **범례** · 적/물건/행성이 도형과 색으로 갈리나 (뼈대만 · v108)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
