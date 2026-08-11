@@ -3230,6 +3230,11 @@ function systemsStep(dt, valveOpen, regionMult) {
     ship.optic.redraw({
       on: helmSat,
       target: ot ? { kind: ot.kind, dist: ot.dist, az: ot.az, el: ot.el } : null,
+      // ★★★ v103 — **진짜 메시가 있는 자리**를 같이 준다 (사장님 「광학으로
+      //   보는 hud 랑 타겟원 안에 보는거랑 위치가 다른 것 같은데?」).
+      //   각도로 다시 세면 v98 에서 표적 그룹이 눈에 붙은 만큼 어긋난다 —
+      //   three 가 이미 아는 값을 물어본다
+      at: ot ? ship.outside.targets.worldOf(ot.id) : null,
       zoom: ot ? autoZoom(ot.kind, ot.dist, w.key) : 1,
       push,
       my: myPower(),

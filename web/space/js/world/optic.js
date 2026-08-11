@@ -23,22 +23,25 @@
 import * as THREE from 'three';
 import { OPTIC, fovOf, readOut, blurOf, readable } from '../game/optic-table.js';
 import { oddsOf } from '../game/might-table.js';
+// ★★★ v103 — **자리를 아는 곳은 하나다** (v98 규약). 이 파일만 빠져 있었다
+import { pointOf } from '../game/frame.js';
 
 const GREEN = '#8fe6c0';
 const DIM = 'rgba(143,230,192,.45)';
 const WARN = '#ffcf6a';
 const BAD = '#ff8a72';
 
-const DEG = Math.PI / 180;
-
-/** 각도와 거리 → 자리. `targets.js` · `shots.js` 와 **같은 식**이다 */
+/**
+ * 각도와 거리 → 자리.
+ *
+ * ★★★ v103 — **여기 같은 식을 다시 적지 않는다.** v98 에 「자리를 아는
+ *   곳은 `game/frame.js` 하나다」로 못박아 놓고 이 파일만 빠져 있었다 —
+ *   글자까지 똑같은 사본이 여기 있었고, 그런 것은 한쪽만 고쳐도 아무도
+ *   안 운다. 그게 이 저장소가 세 판을 태운 방식이다
+ */
 export function atOf(az, el, dist) {
-  const a = az * DEG, e = el * DEG;
-  return new THREE.Vector3(
-    Math.sin(a) * Math.cos(e) * dist,
-    Math.sin(e) * dist,
-    -Math.cos(a) * Math.cos(e) * dist,
-  );
+  const p = pointOf({ az, el, dist });
+  return new THREE.Vector3(p.x, p.y, p.z);
 }
 
 /**
@@ -93,6 +96,21 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale =
 
   /** 지금 비추는 자리 (창밖 그룹 기준) */
   const aim = new THREE.Vector3(0, 0, -100);
+  /**
+   * ★★★ v103 — **진짜 메시가 있는 세상 자리** (있으면 이쪽을 쓴다).
+   *
+   *   ★ 사장님 「**광학으로 보는 hud랑 타겟원 안에 보는거랑 위치가 다른
+   *     것 같은데?**」 — 맞았다. 이 창은 `atOf(az, el, dist)` 로 **그룹
+   *     기준** 자리를 세서 겨눴는데, v98 에 표적 그룹이 **눈에 붙으면서**
+   *     (`cockpit.js` 가 `DOME` 을 복사한다) 그룹 원점이 8.5m 옮겨 갔다.
+   *     광학 카메라는 그 그룹 **밖**에 매달려 있으므로 그만큼 어긋난 곳을
+   *     비춘다 — 글자는 표적 것을 쓰고 그림은 딴 데를 본다.
+   *   ★★ 그래서 **세지 않고 물어본다**: 그 메시가 세상 어디에 있는지는
+   *     three 가 이미 안다 (`targets.worldOf`). `space-align.js` 가 쓰는
+   *     것과 같은 규약이고, **한쪽만 읽으면 「둘이 같나」를 못 묻는다**
+   */
+  const aimW = new THREE.Vector3();
+  let hasW = false;
   let zoom = 1;
   let shown = 1;
 
@@ -174,7 +192,8 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale =
     //    창에서까지 부풀리면 **커진 실루엣**일 뿐이라 당기는 뜻이 없어진다
     onScale?.(true);
     cam.updateProjectionMatrix();
-    cam.lookAt(cam.parent ? cam.parent.localToWorld(aim.clone()) : aim);
+    cam.lookAt(hasW ? aimW
+      : (cam.parent ? cam.parent.localToWorld(aim.clone()) : aim));
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(scene, cam);
@@ -185,6 +204,8 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale =
 
   /** 격추 — 이 자리를 이만큼 비춘다 */
   function killed(at, info) {
+    // ★ 격추 자리는 그룹 기준으로 온다 (`targets.posOf`) — 세상 자리를 끈다
+    hasW = false;
     aim.copy(at);
     dead = OPTIC.replay;
     deadInfo = info;
@@ -223,9 +244,14 @@ export function buildOptic(renderer, scene, hide, w = 0.336, h = 0.24, onScale =
     if (dead > 0) {
       // ★ 잔해는 밀려 나간다 — 한 점에 묶으면 곧 빈 우주를 비춘다
       if (s.deadAt) aim.copy(s.deadAt);
+    } else if (s.at) {
+      // ★★★ v103 — **진짜 메시를 본다.** 각도로 다시 세지 않는다
+      hasW = true;
+      aimW.copy(s.at);
     } else if (s.target) {
+      hasW = false;
       aim.copy(atOf(s.target.az, s.target.el, s.target.dist));
-    }
+    } else hasW = false;
 
     const blur = blurOf(shown, s.push ?? 0);
     const ok = readable(shown, s.push ?? 0);

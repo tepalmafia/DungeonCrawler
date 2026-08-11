@@ -535,6 +535,23 @@ export function buildTargets(parent) {
       const o = live.get(id);
       return o ? o.position.clone() : null;
     },
+    /**
+     * ★★★ v103 — **세상 자리** (그 메시가 정말 있는 곳).
+     *
+     *   ★ 사장님 「**광학으로 보는 hud랑 타겟원 안에 보는거랑 위치가 다른
+     *     것 같은데?**」 — 그 답이 여기다. `posOf` 는 **이 그룹 안의** 자리인데,
+     *     v98 에 그룹이 **눈에 붙으면서**(`cockpit.js` 가 `DOME` 을 복사한다)
+     *     그룹 원점과 세상 원점이 갈라졌다. 광학 카메라는 그룹 밖에 매달려
+     *     있으므로 `posOf` 를 보면 **8.5m 어긋난 곳**을 본다.
+     *   ★★ 그래서 **재지 않고 물어본다** — three 가 이미 아는 값이다.
+     *     `space-align.js` 가 쓰는 것과 같은 규약이다
+     */
+    worldOf(id) {
+      const o = live.get(id);
+      if (!o) return null;
+      o.updateWorldMatrix(true, false);
+      return o.getWorldPosition(new THREE.Vector3());
+    },
     /** 검사가 「창밖에 정말 있나」를 묻는다 */
     get seen() {
       return {
