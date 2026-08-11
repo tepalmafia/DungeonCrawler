@@ -2,6 +2,9 @@
 //  세 축 + 짐벌 — **순수 규칙.** 숫자는 `flight-table.js` 에 있다.
 // ══════════════════════════════════════════════════════════════════════════
 import { AXES, GIMBAL, OFF_WEIGHT, RCS } from './flight-table.js';
+// ★★★ v103 — **비행 보조** (사장님 「물리방향으로 움직이니 너무 어렵다」).
+//   자리를 아는 곳을 둘로 안 만든다 — 되돌리는 규칙은 `horizon-table.js` 하나다
+import { levelStep } from './horizon-table.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -23,8 +26,13 @@ export const makeFlight = () => ({
  * @param o.atSeat  조종간을 잡고 있나
  * @param o.push    { pitch, yaw, roll } 각 −1~1. 손이 미는 양
  * @param o.manual  수동인가. **수동이면 놓아도 안 돌아온다** (v55)
+ * @param o.assist  ★★★ v103 — **비행 보조.** 수동이어도 **롤만** 저절로
+ *                  수평으로 돌아온다. 왜 롤만인지는 `horizon-table.js` 에
+ *                  적어 뒀다: 뒤집는 축은 롤뿐이고, 롤은 겨냥에 안 쓰인다
  */
-export function stepFlight(f, dt, { atSeat = false, push = {}, manual = false, burst = false } = {}) {
+export function stepFlight(f, dt, {
+  atSeat = false, push = {}, manual = false, burst = false, assist = true,
+} = {}) {
   const before = { pitch: f.pitch, yaw: f.yaw, roll: f.roll };
 
   for (const k of ['pitch', 'yaw', 'roll']) {
@@ -52,6 +60,22 @@ export function stepFlight(f, dt, { atSeat = false, push = {}, manual = false, b
         f[k] -= step;
       }
     }
+  }
+  // ══ ★★★ v103 — **비행 보조: 롤만 저절로 수평으로** ═══════════════════
+  //
+  //  ★ 사장님 「**물리방향으로 움직이니 게임이 너무 어렵게 느껴지는데?**」
+  //
+  //  ★★ 위의 자동 항법(`!manual`)과 **겹치지 않는다**: 자동일 때는 이미
+  //    위에서 롤을 되돌렸으므로 여기서 할 일이 없고(0 이 나온다), 값이
+  //    같아서(`ASSIST.rate` = `AXES.roll.back`) 두 번 돌아도 속도가 안 는다.
+  //    이 줄이 사는 자리는 **수동인데 손을 뗀 때** — 사장님이 겪으신 그 상태다.
+  //
+  //  ★★★ **손이 Q/E 를 잡고 있으면 안 건드린다.** 안 그러면 배를 굴릴
+  //    수가 없고, 그러면 「보조」가 아니라 「금지」다
+  {
+    const hand = atSeat && (push.roll ?? 0) !== 0;
+    const d = levelStep(f.roll, dt, { hand, on: assist });
+    if (d !== 0) f.roll += d;
   }
   if (atSeat) f.seat += dt;
 

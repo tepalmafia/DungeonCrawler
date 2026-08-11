@@ -141,6 +141,8 @@ import {
 } from './game/slow.js';
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
+// ★★★ v103 — **비행 보조 · 수평의** (사장님 「물리방향으로 움직이니 너무 어렵다」)
+import { ASSIST, assistWord, rollWord, isOver, wrapDeg } from './game/horizon-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
@@ -261,7 +263,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 102;
+export const VERSION = 103;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -305,6 +307,11 @@ let focusK = 0;
 /** ★★ 조종석 좌석에 앉아 있나 (v61) · 그리고 얼마나 앉았나 0~1 */
 let helmSat = false;
 let helmSitK = 0;
+/**
+ * ★★★ v103 — **비행 보조가 켜져 있나** (자동 수평 · 기본 켜짐).
+ *   왜 기본이 켜짐인지, 왜 롤에만 거는지는 `game/horizon-table.js` 에 있다
+ */
+let assistOn = ASSIST.on;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
 scene.add(camera);
@@ -510,6 +517,26 @@ addEventListener('keydown', (e) => {
     //   두 단계로 두면 「놓았는데 안 나가진다」가 생긴다 — 없앤 상태를
     //   나가는 길에서만 되살리는 꼴이다
     if (helmSat) { yokeHeld = false; helmSat = false; say(ai, '조종석에서 일어납니다', 'tell'); }
+    return;
+  }
+  // ══ ★★★ v103 — **L · 비행 보조** (자동 수평) ══════════════════════════
+  //
+  //  ★ 사장님 「**물리방향으로 움직이니 게임이 너무 어렵게 느껴지는데?**」
+  //    「hud 를 만들어야하나? 아니면 **수평 유지 단축키**를 만들어야하나?」
+  //
+  //  ★★ **단축키가 아니다.** 「수평으로 돌려 주는 키」는 사람이 **뒤집힌 줄
+  //    알아야** 누른다. 그런데 사장님이 겪으신 것은 「뒤집혔다」가 아니라
+  //    「반대로 간다」였다 — 누를 생각 자체를 못 하는 상태다.
+  //    그래서 **저절로 도는 것**을 만들고 **기본을 켜짐**으로 둔다.
+  //    이 키는 그것을 **끄는** 키다 (360도를 원하는 사람용).
+  //
+  //  ★ 키를 붙이기 전에 **먼저 셌다** (v93 규약 · v103 은 이름도 센다).
+  //    쓰이는 것이 A B C D E F G H J M Q R S T V W X Z · Shift Space Tab ·
+  //    Digit 이라 I K L N O P U Y 가 비어 있었다. **L 은 level 이다**
+  if (!helpOpen && !paused && e.code === 'KeyL') {
+    e.preventDefault();
+    assistOn = !assistOn;
+    say(ai, assistWord(assistOn), assistOn ? 'tell' : 'warn');
     return;
   }
   if (e.code === 'F1') { e.preventDefault(); showHelp(!helpOpen); return; }
@@ -2820,7 +2847,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   //    겹쳐서 **위아래가 어느 쪽으로도 안 됐다.**
   //  ★★ 조종간을 잡는 것은 이제 **창이 열리고 화면이 커지는 것**의 뜻이지
   //    「조종을 켜는 스위치」가 아니다
-  stepFlight(fly3, dt, { atSeat: steering || helmSat, push: flyPush, manual: !helm.auto, burst });
+  stepFlight(fly3, dt, {
+    atSeat: steering || helmSat, push: flyPush, manual: !helm.auto, burst,
+    // ★★★ v103 — **비행 보조.** 롤만 저절로 수평으로 돌아온다 (L 로 끈다)
+    assist: assistOn,
+  });
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
   //   천천히 돌리면 반동휠이 공짜로 하고, 급하게 돌리면 추력기가 태운다.
   //   360도를 열어 준 값이 여기 있다 — 값이 없으면 조종이 버튼이 된다
@@ -4280,6 +4311,63 @@ window.SPACE = {
     o.getWorldPosition(v);
     v.project(camera);
     return { x: +v.x.toFixed(3), y: +v.y.toFixed(3), z: +v.z.toFixed(2) };
+  },
+  // ══ ★★★ v103 — **계기가 하늘을 얼마나 먹나** ═══════════════════════
+  //
+  //  ★ 사장님 「**광학창이랑 배 상태창이랑 레이더 등이 화면을 너무
+  //    가리는데?** 전투화면이 더 광할하고 방해되지 않는 선에서 재배치해줘」
+  //
+  //  ★★ `blocked()` 는 격자를 쏴서 「얼마나 막혔나」를 세지만 **어느 판이
+  //    화면의 어디를 차지하나**는 못 말한다. 여기서는 판의 **네 귀퉁이를
+  //    진짜 카메라로 투영**한다 — 자리와 크기가 한꺼번에 나온다.
+  //  ★★★ 재는 것과 고치는 것을 한 자리에 두지 않는다: 이 값을 읽고
+  //    **표**(`game/screen-table.js`)가 「어디까지 봐주나」를 정한다
+  panels() {
+    const list = [
+      ['조준경', ship.sight?.mesh], ['광학창', ship.optic?.mesh],
+      ['상태창', ship.statusHud?.mesh], ['레이더', ship.radarHud?.mesh],
+    ];
+    const out = {};
+    const v = new THREE.Vector3();
+    const eye = camera.getWorldPosition(new THREE.Vector3());
+    for (const [name, m] of list) {
+      if (!m || !m.visible) { out[name] = null; continue; }
+      // ★★ **판이 아니라 그룹일 수 있다** (광학창이 그렇다). 처음에
+      //   `geometry.parameters` 를 읽었더니 그룹은 값이 없어 1×1 로 떨어졌고,
+      //   그래서 광학창이 **화면의 95%**라는 거짓말이 나왔다.
+      //   `Box3` 는 둘 다 읽는다 — **재는 것이 화면과 다르면 그 숫자로
+      //   고치면 안 된다** (v92 의 조준 판정 상자와 같은 함정이다)
+      const box = new THREE.Box3().setFromObject(m);
+      if (box.isEmpty()) { out[name] = null; continue; }
+      let x0 = 9, x1 = -9, y0 = 9, y1 = -9, behind = 0;
+      for (const sx of [box.min.x, box.max.x]) {
+        for (const sy of [box.min.y, box.max.y]) {
+          for (const sz of [box.min.z, box.max.z]) {
+            v.set(sx, sy, sz).project(camera);
+            if (v.z > 1) { behind++; continue; }
+            x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x);
+            y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+          }
+        }
+      }
+      if (behind === 8) { out[name] = null; continue; }
+      const mid = box.getCenter(new THREE.Vector3());
+      out[name] = {
+        x0: +x0.toFixed(3), x1: +x1.toFixed(3), y0: +y0.toFixed(3), y1: +y1.toFixed(3),
+        // 화면 넓이의 몇 할인가 (정규화 좌표는 −1~1 이라 넓이가 4 다)
+        area: +(((x1 - x0) * (y1 - y0)) / 4).toFixed(4),
+        cx: +((x0 + x1) / 2).toFixed(3), cy: +((y0 + y1) / 2).toFixed(3),
+        /** ★ 눈에서 얼마나 떨어져 있나 (m) — 각을 낼 때 이것이 분모다 */
+        eye: +eye.distanceTo(mid).toFixed(3),
+        /** ★★ 실제로 **몇 도**를 덮나. 표가 적어 둔 각과 이것이 갈리면
+         *   눈금과 하늘이 어긋난다 (조준경이 그 자리다) */
+        degH: +(2 * Math.atan(Math.abs(x1 - x0) / 2 * Math.tan(camera.fov / 2 * Math.PI / 180)
+          * camera.aspect) * 180 / Math.PI).toFixed(1),
+        degV: +(2 * Math.atan(Math.abs(y1 - y0) / 2 * Math.tan(camera.fov / 2 * Math.PI / 180))
+          * 180 / Math.PI).toFixed(1),
+      };
+    }
+    return out;
   },
   /** ★ 크레이들이 **화면에** 무엇을 그리고 있나 — 「불이 켜졌나」는 여기서만 나온다 */
   get headSeen() { return ship.cradle?.seen ?? null; },
