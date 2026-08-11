@@ -61,6 +61,34 @@ import { FLY_VIEW } from '../game/helm-table.js';
  */
 const MFD_Y = 0.30;
 
+/**
+ * ══ ★★★ v102 — **곁판은 눈을 보게 돌린다** ═══════════════════════════
+ *
+ *  ★ 사장님 「**레이더가 내가 보는 시야각으로 기울어져 있어야 하는데
+ *    반대로 있어.** 블록아웃으로 테스트하고 수정해줘」
+ *
+ *  ★★ 재 보니(`tools/space-panel.js`) 이 판들에 **회전이 아예 없었다.**
+ *    눈에서 오른쪽으로 0.46m · 아래로 0.30m 치우쳐 있는데 판은 정면을
+ *    보고 서 있으니 **법선이 눈에서 40도** 벗어나 있었다 — 판이 사람을
+ *    안 보는 것이고, 그게 「반대로 기울어져 있다」의 실체다.
+ *
+ *  ★ 콘솔 대시 판(`cockpit.js`)은 멀쩡했다 (2.8도). 같은 「레이더」라도
+ *    **판이 둘**이라 한쪽만 틀려 있었다 — 블록아웃이 그 둘을 갈라 줬다.
+ *
+ *  ★★★ 실제 조종석의 곁계기도 이렇게 **사람 쪽으로 틀어서** 박는다.
+ *    정면으로 박으면 옆에 앉은 사람에게는 사다리꼴로 보인다
+ */
+function faceEye(mesh) {
+  // ★★ **`DEP` 는 눈이 아니라 조종석 원점이다.** 처음에 그리로 겨눴다가
+  //   화면을 찍어 보니 **더 기울었다** — 판이 엉뚱한 데를 보게 된 것이다.
+  //   앉은 눈은 좌석 자리(z −7.10)에 눈높이(`BODY.eye`)다
+  mesh.lookAt(new THREE.Vector3(0, SEAT_EYE.y, SEAT_EYE.z));
+}
+/** 앉았을 때 눈이 있는 자리 — `main.js` 가 카메라를 여기 놓는다 */
+const SEAT_EYE = { y: 1.62, z: -7.10 };
+
+
+
 const H = 2.7;          // 천장 높이
 const T = 0.16;         // 벽 두께
 // ★ 문 반폭은 **표가 갖는다.** 여기 따로 적으면 문짝과 문구멍이 갈라지고,
@@ -1133,6 +1161,7 @@ export function buildShip(scene, camera = null, renderer = null) {
   statusHud.mesh.position.set(
     -HUDV.w * 1.42, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
   );
+  faceEye(statusHud.mesh);          // ★ v102 — 사람을 보게 돌린다
   ship.add(statusHud.mesh);
   // ══ ★★★ **레이더 HUD** — 앉으면 눈앞에 뜬다 (v78) ═══════════════════
   //  사장님 「레이더가 **hud처럼 나와야지. 앉아있을때는 알 수가 없잔아**」.
@@ -1144,6 +1173,7 @@ export function buildShip(scene, camera = null, renderer = null) {
   radarHud.mesh.position.set(
     HUDV.w * 1.52, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
   );
+  faceEye(radarHud.mesh);          // ★ v102 — 사람을 보게 돌린다
   ship.add(radarHud.mesh);
 
   // ══ ★★★ **광학 창** — 당겨 보고, 부서지는 것을 본다 (v79) ═══════════
@@ -1186,6 +1216,7 @@ export function buildShip(scene, camera = null, renderer = null) {
     optic.mesh.position.set(
       -HUDV.w * 1.46, DEP.y + HUDV.h * 0.86, DEP.z - HUDV.dist - 0.01,
     );
+    faceEye(optic.mesh);        // ★ v102 — 사람을 보게 돌린다
     ship.add(optic.mesh);
     // ★ 카메라는 **창밖 그룹**에 매단다 — 표적 좌표가 그 그룹 기준이다
     optic.attachTo(outside.group ?? outside.out ?? scene);

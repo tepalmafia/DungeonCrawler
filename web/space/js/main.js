@@ -261,7 +261,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 101;
+export const VERSION = 102;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -5677,6 +5677,30 @@ function frame(now) {
     //   표적 위에 얹힌다 (사장님 「락온 위치가 완전 다르잔아」)
     lockAt: combat.radar.id !== null
       ? { az: combat.radar.atAz, el: combat.radar.atEl } : null,
+    // ══ ★★★ v102 — **발사관과 도킹을 계기에 낸다** (사장님 「계기에
+    //  표시되도록 해줘」) ═══════════════════════════════════════════════
+    //  ★ v100·v101 에 규칙만 만들고 화면에는 안 냈다. **규칙이 있는데
+    //    안 보이면 없는 것과 같다** — v82 에 락온 원으로 똑같이 겪었다
+    mount: (() => {
+      const a = aimedNow;
+      return {
+        ...mountSummary(mount, a ? { az: a.relAz, el: a.relEl } : null),
+        word: mountWord(mount),
+      };
+    })(),
+    dock: (() => {
+      const p0 = nearPack();
+      const why = whyNotDock({
+        has: !!p0, dist: p0?.dist ?? 999, close: closeRate, off: p0?.off ?? 0,
+        full: cargoLeft(cargo) <= 0, step: dockS.step,
+      });
+      return {
+        ...dockSummary(dockS), word: dockWord(dockS),
+        near: p0 ? { dist: Math.round(p0.dist), off: Math.round(p0.off) } : null,
+        close: closeRate, softAt: DOCK.softAt,
+        blocked: why, why: why ? DOCK_WHY[why] : null,
+      };
+    })(),
     on: helmSat, az: aimAz, el: aimEl, cool: combat.cool,
     list: skySummary(sky).list,
     // ★ v66 — 자국이 계기판에서 HUD 로 올라왔다. 계기판이 좁아지며
