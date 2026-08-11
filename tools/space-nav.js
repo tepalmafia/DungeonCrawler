@@ -120,5 +120,43 @@ console.log('\n[5] ★ 싸우다 잠깐 도는 것으로 **항로가 멎지는 �
     '★ 좌우 어느 쪽으로 돌아도 같게 잰다 (감아서 잰다)');
 }
 
+console.log('\n[6] ★★★ **미션을 고르면 갈아 끼워지고, 끝나면 돌아오나** (v104 ②)');
+{
+  //  ★★ 이걸 「거는 곳」과 「푸는 곳」으로 나눠 짜면 **푸는 자리를 하나만
+  //    빠뜨려도 끝난 미션을 계속 가리킨다** — 이 저장소가 문·에어록·
+  //    크레이들에서 세 번 밟은 함정이다 (건 곳은 다섯인데 푸는 곳은 넷).
+  //  ★★★ 그래서 게임은 **매 프레임 「지금 갈 곳이 어디여야 하나」를 다시
+  //    정한다.** 여기서는 그 규칙이 성립하는지만 본다
+  const n = makeNav();
+  /** 게임이 하는 것과 **같은 규칙** — 상태를 보고 답이 나온다 */
+  const want = (o) => (o.rescue ? 'rescue' : (o.land ? 'land' : 'fork'));
+  const put = (o, fork) => {
+    const w = want(o);
+    if (w === 'rescue') setMission(n, { key: 'rescue', name: '구조 신호' }, [0.9, 0.4]);
+    else if (w === 'land') setMission(n, { key: 'land', name: '행성' }, [0.2, 0.7]);
+    else setFork(n, fork, [0.55, 0.45]);
+    return w;
+  };
+  const f1 = forkOf('nebula'), f2 = forkOf('planet');
+  put({}, f1);
+  ok(n.to.kind === 'fork' && n.to.key === 'nebula', `★ 아무 일도 없으면 **갈래**다 — 「${n.to.name}」`);
+  put({ rescue: true }, f1);
+  ok(n.to.kind === 'mission' && n.to.key === 'rescue',
+    `★★★ 구조 신호에 응답하면 **그쪽으로 갈아 끼워진다** — 「${n.to.name}」`);
+  ok(Math.abs(n.to.az) > NAV.azSpread,
+    `★★ 그리고 **항로에서 벗어난 자리**다 (${n.to.az.toFixed(0)}°) — 들르는 값이 붙는다`);
+  put({ land: true }, f1);
+  ok(n.to.key === 'land', '★ 착륙을 고르면 행성으로 (구조가 끝났으므로)');
+  put({}, f1);
+  ok(n.to.kind === 'fork' && n.to.key === 'nebula',
+    '★★★ **미션이 끝나면 갈래로 저절로 돌아온다** — 푸는 코드가 한 줄도 없다');
+  put({}, f2);
+  ok(n.to.key === 'planet',
+    '★★ **구간이 바뀌면 갈래도 바뀐다** — 「fork → fork」라고 같다고 여기면'
+    + ' 지난 구간의 목적지를 계속 가리킨다 (첫 판에 그렇게 짰다가 잡았다)');
+  ok(want({ rescue: true, land: true }) === 'rescue',
+    '★ 둘이 겹치면 **지금 하고 있는 일**이 이긴다 (구조 > 착륙)');
+}
+
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');
 process.exit(bad ? 1 : 0);
