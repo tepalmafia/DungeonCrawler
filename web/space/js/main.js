@@ -181,6 +181,23 @@ import { relOf } from './game/frame.js';
 //  ★ 사장님 「적을 계속 타겟팅 하면서 회피 기동이 가능하도록 …
 //    동체는 회전해도 타겟팅이 불안정해지지만 **방향은 유지**하는걸로?」
 import { MOUNT, isGimbaled, mountWord, spreadOf } from './game/mount-table.js';
+// ══ ★★★ v101 — **스로틀(전진·역추진)** 과 **도킹 회수** ═══════════════
+//  ★ 사장님 「추력은 다른 키로 만들고 **역추진을 만들어**」
+//    「격추후에 … **도킹해서 회수** … 아이템을 먹을 방법이 없거나 어렵잔아」
+import { THROTTLE, throttleWord } from './game/throttle-table.js';
+import {
+  makeThrottle, stepThrottle, legOf, fuelMult as thrFuel, backHeat as thrHeat,
+  awayOf as thrAway, summary as thrSummary,
+} from './game/throttle.js';
+// ★★ **`DSTEP` 은 이미 정전(`blackout-table.js`)이 쓰고 있었다.**
+//   그대로 들여왔더니 게임이 통째로 안 떴다 (`Identifier 'DSTEP' has
+//   already been declared`) — 그리고 **`node --check` 는 이걸 안 잡는다.**
+//   키를 붙이기 전에 세는 것과 똑같이 **이름도 먼저 세야 한다**
+//   (v93 의 B 키 · v94 의 `altHeldWas` 와 같은 함정이다)
+import { DOCK, WHY as DOCK_WHY, SAY as DOCK_SAY, dockWord, whyNotDock } from './game/dock-table.js';
+import {
+  makeDock, tryDock as dockTry, undock, stepDock, docked, summary as dockSummary,
+} from './game/dock.js';
 import {
   makeMount, stepMount, errOf as mountErr, offOf as mountOff,
   summary as mountSummary,
@@ -244,7 +261,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 100;
+export const VERSION = 101;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -428,6 +445,32 @@ addEventListener('keydown', (e) => {
   //  ★★ **누르면 재기 시작 · 다시 누르면 내린다.** 누르고 있는 것이
   //    아니다 — 26초를 누르고 있으라고 하면 그 동안 조종을 못 한다.
   //    「재면서 버틴다」가 이 계통의 전부인데 그걸 없애는 셈이 된다
+  // ══ ★★★ v101 — **H · 도킹 회수** ═════════════════════════════════════
+  //
+  //  ★ 사장님 「격추후에 … **락온하고 다가가서 도킹** 해서 아이템을
+  //    회수할 수 있도록 해야지. **아이템을 먹을 방법이 없거나 어렵잔아**」
+  //
+  //  ★★ 키를 붙이기 전에 **먼저 셌다** (v93 규약). 회수 식구가 F(팔)·
+  //    G(그물)·B(로봇)이고 H 가 비어 있어 그 옆에 붙였다.
+  //  ★★★ 붙어 있는 동안 **못 움직이고** 자국이 오른다 — 그물과 같은
+  //    값이다. 대신 **여럿이 한 번에** 들어온다
+  if (!helpOpen && !paused && e.code === 'KeyH') {
+    e.preventDefault();
+    if (docked(dockS)) { undock(dockS); say(ai, DOCK_SAY.off, 'tell'); return; }
+    const p0 = nearPack();
+    const r = dockTry(dockS, {
+      has: !!p0, id: p0?.id ?? null,
+      dist: p0?.dist ?? 999,
+      close: closeRate,
+      off: p0?.off ?? 0,
+      full: cargoLeft(cargo) <= 0,
+    });
+    if (!r.ok) { say(ai, DOCK_WHY[r.why], 'warn'); return; }
+    say(ai, r.hard ? DOCK_SAY.hard : DOCK_SAY.close, r.hard ? 'alarm' : 'tell');
+    if (r.hard) faults.wear.hull = Math.min(1, faults.wear.hull + DOCK.hardWear);
+    audio?.event('latch');
+    return;
+  }
   if (!helpOpen && !paused && e.code === 'KeyJ') {
     e.preventDefault();
     if (charging(arcS)) { stopCharge(arcS); say(ai, ARC_SAY.stop, 'tell'); return; }
@@ -703,6 +746,10 @@ const arcS = makeArc();
  *   레이저는 기수 고정이고 유도탄·열추적만 여기에 실린다 (`GIMBALED`)
  */
 const mount = makeMount();
+/** ★★★ v101 — 스로틀. −0.45(역추진) ~ 1(전속). **가운데로 안 돌아온다** */
+const thr = makeThrottle();
+/** ★★★ v101 — 도킹 회수. 묶은 꾸러미에 붙어서 **여럿을 한 번에** 담는다 */
+const dockS = makeDock();
 /** 지난 프레임의 기수 — 동체가 초당 몇 도 도는지를 여기서 잰다 */
 let noseWas = { az: 0, el: 0 };
 /** 동체가 지금 도는 속도 (도/초) — 흔들림이 이것에 비례한다 */
@@ -853,6 +900,25 @@ function whyNotJumpNow() {
     landed: land.step !== LSTEP.NONE,
   });
 }
+
+/**
+ * ★★★ v101 — **지금 붙을 수 있는 꾸러미** (도킹 회수).
+ *   묶은 것이 있으면 그것, 없으면 **제일 가까운 것**을 준다.
+ *   자리는 `frame.js relOf` 가 잰다 — 여기서 다시 안 잰다
+ */
+function nearPack() {
+  const eye = { yaw: aimAz, pitch: aimEl };
+  let best = null;
+  for (const q of salvage.packs ?? []) {
+    const r = relOf(q, eye);
+    if (r.behind) continue;
+    if (!best || r.dist < best.dist) best = { id: q.id, dist: r.dist, off: r.off, has: q.has, part: q.part ?? null };
+  }
+  return best;
+}
+/** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
+let closeRate = 0;
+let packWas = new Map();
 
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
 function fireGun() {
@@ -1054,6 +1120,8 @@ const world = () => ({
   route, chase, supply, faults, hazard, move, carry, tutor, scenes, drift, helm, gun, rescue, lock, land, scars, suit, combat, warhead, loot, salvage, cargo,
   // ★ v99 — 아크 도약. `save-table.js FIELDS.arc` 가 칸을 고른다
   arc: arcS,
+  // ★ v101 — 스로틀·도킹. `save-table.js FIELDS` 가 칸을 고른다
+  throttle: thr, dock: dockS,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -2980,7 +3048,8 @@ function systemsStep(dt, valveOpen, regionMult) {
     heat,
     cooling: valveOpen && power.cool,
     speed: statusSpeed(CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
-      : (power.thrust ? 1 : LEG.coast))),
+      // ★ v101 — 스로틀이 배수를 정한다 (역추진이면 0)
+      : legOf(thr, LEG.coast))),
     power,
     sign: chase.sign,
     missiles: supply.missiles,
@@ -3228,6 +3297,31 @@ window.SPACE = {
       word: mountWord(mount),
       cone: MOUNT.cone,
     };
+  },
+  /** ★★★ v101 — 스로틀 (전진·역추진). 검사와 계기가 읽는다 */
+  get throttle() { return { ...thrSummary(thr), word: throttleWord(thr.v), away: +thrAway(thr).toFixed(1) }; },
+  /** 검사가 스로틀을 밀어 놓는다 — W/S 를 헤드리스로 오래 안 누르려고 */
+  putThrottle(v) { thr.v = Math.max(THROTTLE.min, Math.min(THROTTLE.max, v)); return thrSummary(thr); },
+  /** ★★★ v101 — 도킹 회수. 검사(`space-dock.js`)가 읽는다 */
+  get dock() {
+    const p0 = nearPack();
+    return {
+      ...dockSummary(dockS), word: dockWord(dockS),
+      near: p0 ? { id: p0.id, dist: +p0.dist.toFixed(0), off: +p0.off.toFixed(0) } : null,
+      close: +closeRate.toFixed(1),
+      blocked: whyNotDock({
+        has: !!p0, dist: p0?.dist ?? 999, close: closeRate, off: p0?.off ?? 0,
+        full: cargoLeft(cargo) <= 0, step: dockS.step,
+      }),
+    };
+  },
+  /** 검사가 H 를 누른 것과 같게 */
+  tryDock() {
+    const p0 = nearPack();
+    return dockTry(dockS, {
+      has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
+      close: closeRate, off: p0?.off ?? 0, full: cargoLeft(cargo) <= 0,
+    });
   },
   /** ★★★ v99 — 아크 도약. 검사(`space-arc.js`)와 점검 모드가 읽는다 */
   get arc() {
@@ -4722,9 +4816,13 @@ function frame(now) {
     //
     //  ★ 이 배에 **역추진은 없다.** S 는 추력을 끄는 것이고, 그러면
     //    타성으로 느려진다 (`LEG.coast`). 없는 것을 있는 척하지 않는다
-    if (input.keys.has('KeyW')) { if (!fwdHeld) { setThrustKey(true); fwdHeld = true; } }
-    else if (input.keys.has('KeyS')) { if (!fwdHeld) { setThrustKey(false); fwdHeld = true; } }
-    else fwdHeld = false;
+    // ★★★ v101 — **진짜 스로틀이다** (사장님 「추력은 다른 키로 만들고
+    //   **역추진을 만들어**」). v100 에는 켜기/끄기였는데, 두 자리뿐인
+    //   값은 고를 것이 없다 — 축으로 만들면 「얼마나」가 생긴다.
+    //   ★ 추력(주 엔진 켜고 끄기)은 **Space** 에 그대로 있다
+    stepThrottle(thr, dt, {
+      up: input.keys.has('KeyW'), down: input.keys.has('KeyS'), dry: isDry(supply.fuel),
+    });
     // ★★★ v88 — **A/D 는 좌우다.** 여태 「일어난다」였다 (v52 에 좌석에
     //   갇힌 적이 있어 비상구로 둔 것). 그런데 v88 에서 앉는 것이 곧 잡는
     //   것이 되고 나가는 길이 **X 와 좌석 다시 누르기 둘**로 분명해졌으므로,
@@ -4973,7 +5071,9 @@ function frame(now) {
       // ★ 이탈 거리는 **진짜 배 속도**로 채운다 — 화면만 빨라지고 실제로
       //   안 빠르면 그건 「가는 척하는 화면」이다 (v88 규약)
       speed: CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
-        : ((power.thrust && !thrustHeld(salvage)) ? 1 : LEG.coast)) * boostMult(boost),
+        // ★ v101 — 스로틀. 그물에 묶였거나 도킹 중이면 못 나아간다
+        : ((power.thrust && !thrustHeld(salvage) && !docked(dockS))
+          ? legOf(thr, LEG.coast) : LEG.coast)) * boostMult(boost),
     });
     if (ev === 'run') { say(ai, DSAY.run, 'alarm'); audio?.event('alarm'); }
     if (ev === 'window') {
@@ -4992,6 +5092,52 @@ function frame(now) {
     }
     if (ev === 'over') { clearRaw(); showEnd(); }
   }
+
+  // ══ ★★★ v101 — **도킹 회수** (붙어 있는 동안 계속 들어온다) ══════════
+  //
+  //  ★ 사장님 「아이템을 먹을 방법이 없거나 어렵잔아」. 그물은 하나씩이고
+  //    감는 내내 추진이 묶인다 — 도킹은 **여럿을 한 번에** 담는다.
+  //    대신 붙어 있는 동안 못 움직이고 자국이 오른다
+  {
+    // ★ 다가오는 속도를 잰다 — 걸쇠가 튕기는 기준이다 (`DOCK.softAt`)
+    const now = new Map();
+    for (const q of salvage.packs ?? []) now.set(q.id, q.dist);
+    const p0 = nearPack();
+    if (p0 && packWas.has(p0.id) && dt > 1e-6) {
+      closeRate = (packWas.get(p0.id) - p0.dist) / dt;
+    } else closeRate = 0;
+    packWas = now;
+
+    const held = (salvage.packs ?? []).find((q) => q.id === dockS.id) ?? null;
+    const ev = stepDock(dockS, dt, {
+      dist: held ? held.dist : (docked(dockS) ? 999 : 0),
+      room: cargoLeft(cargo) > 0,
+    });
+    if (ev === 'latch') { say(ai, DOCK_SAY.latch, 'tell'); }
+    if (ev === 'pull') { say(ai, DOCK_SAY.pull, 'tell'); }
+    if (ev === 'one' && held) {
+      // ★ **무엇이 들어오나는 꾸러미가 안다** — 여기서 새로 정하지 않는다
+      const keys = Object.keys(held.has ?? {}).filter((k) => (held.has[k] ?? 0) > 0);
+      if (keys.length) {
+        const k = keys[0];
+        held.has[k] -= 1;
+        const r = cargoPut(cargo, { [k]: 1 });
+        if (r.missed && Object.keys(r.missed).length) held.has[k] += 1;
+      } else {
+        // 다 담았다 — 꾸러미가 빈다
+        undock(dockS);
+        say(ai, DOCK_SAY.done, 'tell');
+        audio?.event('fixed');
+      }
+    }
+    if (ev === 'off') { say(ai, DOCK_SAY.off, 'tell'); }
+    // ★ 붙어 있는 동안 **자국이 오른다** — 가만히 붙어 있으면 훤하다
+    if (docked(dockS)) chase.sign = Math.min(SIGN.max, chase.sign + DOCK.sign * dt);
+  }
+
+  // ══ ★★★ v101 — **역추진의 값** — 열과 추진제 ═════════════════════════
+  //  ★ 새 계통을 안 만든다. 이미 있는 열·추진제 저울에 얹는다
+  heat = Math.min(HEAT.max, heat + thrHeat(thr, dt));
 
   // ══ ★★★ v99 — **아크 도약** (재기 → 뛰기 → 도착) ═══════════════════
   //
@@ -5050,7 +5196,8 @@ function frame(now) {
   //   전에」가 무서운 이유가 이 한 줄이다 (`salvage-table.js NET.holdsThrust`)
   const tied = thrustHeld(salvage);
   const cruise = route.phase === RPHASE.PORT ? 0.25
-    : ((power.thrust && !tied) ? 1 : LEG.coast);
+    // ★ v101 — 스로틀이 여기로 온다. 도킹 중이면 **못 움직인다**
+    : ((power.thrust && !tied && !docked(dockS)) ? legOf(thr, LEG.coast) : LEG.coast);
   // ★★ **착륙이 화면을 몬다** — 고도 하나가 별 흐름·하늘색·발광·지면을 다 정한다.
   //   `update` 보다 **먼저** 넣는다. 나중에 넣으면 이번 프레임은 옛 고도로
   //   그려지고, 그 한 프레임이 마디가 바뀌는 순간마다 툭 끊겨 보인다

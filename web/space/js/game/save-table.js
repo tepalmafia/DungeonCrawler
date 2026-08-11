@@ -43,7 +43,7 @@
 //          걸러졌다), 적 셋의 `gives` 에 `arc` 가 붙었다. 칸만 늘었으면
 //          안 올려도 됐겠지만 **표가 바뀌면 옛 저장은 뜻이 달라진다**
 //          (이 파일 맨 위 규약). 버리고 새로 시작하는 편이 낫다
-export const SAVE_VERSION = 19;   // v99 — 아크 도약 · 아크 전지가 떨어지기 시작
+export const SAVE_VERSION = 20;   // v99 — 아크 도약 · 아크 전지가 떨어지기 시작
 
 /** localStorage 열쇠 */
 export const SAVE_KEY = 'spacewar.save.v1';
@@ -195,6 +195,16 @@ export const FIELDS = {
    *   추진제에서 이미 두 번 밟은 함정이다 (위 `supply` 주석)
    */
   arc: ['phase', 't', 'cool', 'jumps', 'skipped'],
+  /**
+   * ★★ v101 — **스로틀.** 안 담으면 이어할 때 전속으로 돌아간다 —
+   *   「놓아도 안 돌아온다」(v55)가 저장 한 번에 무너진다
+   */
+  throttle: ['v', 'backSec'],
+  /**
+   * ★ 도킹 — **센 것만 잇는다.** 붙어 있던 것은 「자세는 안 잇는다」와
+   *   같은 규약으로 안 잇는다 (조종간·윈치와 같다)
+   */
+  dock: ['total', 'docks'],
   /** 사람이 서 있던 자리 */
   me: ['x', 'z', 'yaw', 'pitch'],
 };
