@@ -303,7 +303,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 111;
+export const VERSION = 112;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1967,8 +1967,9 @@ let yokeHeld = false;
  *   대시에 박힌 계기지 조종간이 아니다. 자리를 바로잡는다
  */
 let readGrip = false;
-/** ★ F(감압)가 연 미소운석이 아직 열려 있나 — 「저절로 낫는」 것을 막는다 */
-let leakOpen = false;
+// ★ v112 — 여기 `leakOpen`(F 감압이 연 미소운석)이 있었다. F 를 접으면서
+//   쓰는 곳이 없어졌다 — **이름만 남기지 않는다.** 남겨 두면 다음 사람이
+//   「이건 뭐지」를 물어야 하고, 꺼 둔 것은 언젠가 켜진다 (v110 의 교훈)
 let flakyT = 12;          // 배전 노후 — 다음에 제멋대로 내려갈 때까지
 let flash = 0;            // 경보 깜빡임
 /**
@@ -5597,30 +5598,11 @@ function frame(now) {
     say(ai, forever ? '자세 제어가 나갔습니다 — 예비가 없습니다' : '자세 제어가 나갔습니다', 'warn');
     audio?.event('caught');
   }
-  // ── ★★ F — 감압. **방이 진공이 된다** (v62 · 마지막 장면) ────
-  // ★ 여덟 장면 중 이것만 못 짓고 있었다. 「공기」가 계통이 아니었기
-  //   때문인데, v62 에 우주복이 생기면서 규칙이 됐다 (REAL.md §2-C).
-  // ★ **「흩뿌려 맞았다」(두 방)로 연다.** 한 방이면 가서 막으면 끝인데,
-  //   두 방이면 「막았는데 왜 아직 새지」가 나고 그게 이 장면이다
-  if (sev === 'act' && sceneOpen(scenes, 'F') && !leakOpen) {
-    if (openFault(faults, 'micrometeor', { branch: 'spray' })) {
-      // ★ **연 것을 기억해 둔다.** C(자세 제어)에서 배운 것이다 —
-      //   안 그러면 「다 고쳤나」와 「애초에 안 열렸나」가 구별이 안 돼서
-      //   못 연 판에서 **혼자 저절로 낫는다**
-      leakOpen = true;
-      say(ai, '기밀 경보 — 어딘가 벽이 뚫렸습니다', 'warn');
-      // ★★ v74 — **미소운석은 스치는 소리다** (`HULL.graze`). 높고 짧다.
-      //   벽을 뚫은 것은 티끌이지 포탄이 아니므로 배가 크게 안 운다 —
-      //   그런데 **결과는 제일 크다**. 그 어긋남이 이 장면의 무서움이다
-      audio?.event('hullGraze');
-    }
-  }
-  // ★ 두 방을 다 막았으면 장면이 닫힌다. **저절로 안 낫는다**
-  if (leakOpen && !faults.open.some((o) => o.key === 'micrometeor')) {
-    leakOpen = false;
-    sceneDone(scenes, 'F');
-  }
-
+  // ══ ★★★ v112 — **F(감압)를 걷어냈다** ═══════════════════════════
+  //  여기서 미소운석을 열어 방 둘을 진공으로 만들고, 우주복을 입고
+  //  문 너머로 들어가 메우게 했다. 그 셋(방·문·우주복)이 v109 에 다
+  //  없어졌으므로 이 가지는 **열려도 갈 데가 없는** 상태였다.
+  //  ★ 장면 표에서도 접었다 (`scene-table.js` — 왜 접었는지 거기 적었다)
   // ── 대응 시계가 다 됐다 — **계통에게 끝내라고 말한다** ──
   // ★ 조용히 해소로 넘기면 「장면은 끝났는데 적은 아직 붙어 있는」 상태가
   //   된다. 대응이 2~4분을 넘었다면 그건 지대를 다 지났다는 뜻이니
