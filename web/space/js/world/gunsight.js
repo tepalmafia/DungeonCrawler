@@ -49,7 +49,7 @@ import { relOf } from '../game/frame.js';
 import { azDiff } from '../game/target.js';
 // ★★★ v103 — **자리는 표에 있다** (사장님 「선이나 글이 의미하는 것은?」·
 //   「타겟 라인이 짤리는 문제도 수정해」). `h*0.95` 같은 것을 여기 안 적는다
-import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX } from '../game/hud-table.js';
+import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs, pitchWord } from '../game/hud-table.js';
 // ★★★ v103 — **수평의.** 「내가 지금 똑바로 유지하고 있는지」
 import { HORIZON, rollWord, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
 
@@ -438,30 +438,97 @@ function draw(ctx, w, h, s) {
     const rdeg = wrapDeg((s.roll ?? 0) * 180 / Math.PI);
     const over = isOver(rdeg), lv = isLevel(rdeg);
     const col = over ? HOT : (Math.abs(rdeg) > HORIZON.warnAt ? WARN : DIM);
-    // 수평선 — 복판을 지나는 긴 선. 가운데는 십자선 자리라 비운다
+    // ══ ★★★ v103 (두 번째 판) — **피치도 넣는다** ════════════════════
+    //
+    //  ★ 사장님 「**비행기 현재 회전 상때도 도입했어?**」
+    //
+    //  ★★ 첫 판은 절반이었다: 선을 **늘 복판**에 그려서 롤만 보였다.
+    //    실기 자세계는 「복판에 못박힌 기수 표시 + **오르내리는** 수평선」이
+    //    한 벌이고, **그 사이의 벌어짐이 곧 기수 각**이다. 선을 복판에
+    //    못박으면 그 정보가 통째로 사라진다.
+    //  ★ 접는 이유(`ADI.squeeze`)는 표에 적어 뒀다 — 판이 세로 20도라
+    //    참 크기로는 **기수 10도에 벌써 판 끝**이다
+    const eldeg = s.el ?? 0;
+    // 수평선이 판에서 얼마나 내려가 있나 (기수를 들면 아래로)
+    const drop0 = -pxV(Math.max(-79, Math.min(79, eldeg))) * ADI.squeeze;
+    // ★ 판을 넘으면 **가장자리에 붙여 남긴다** — 사라지면 「얼마나
+    //   들렸나」를 볼 방법이 없어진다
+    const lim = h * ADI.pin;
+    const pinned = Math.abs(drop0) > lim;
+    const drop = pinned ? Math.sign(drop0) * lim : drop0;
+    const ux = cr, uy = -sr;                    // 세상의 가로 방향
+    const vx = sr, vy = cr;                     // 세상의 위아래 방향
+    /** 수평선 기준으로 (앞으로 a, 아래로 b) 만큼 간 자리 */
+    const P = (a, b) => [cx + ux * a + vx * (drop + b), cy + uy * a + vy * (drop + b)];
+
+    // ── 수평선 — 가운데는 십자선 자리라 비운다 ─────────────
     // ★ 가운데를 **넉넉히** 비운다. 처음에 0.075 로 뒀더니 십자선이 선에
     //   묻혔다 — 화면으로 잡았다. 수평의는 거드는 것이지 주인공이 아니다
     const L = w * 0.32, G = w * 0.125;
-    const ux = cr, uy = -sr;                    // 세상의 가로 방향
     ctx.strokeStyle = col;
     ctx.lineWidth = Math.max(1.4, h * (lv ? 0.007 : 0.010));
     ctx.beginPath();
-    ctx.moveTo(cx - ux * L, cy - uy * L); ctx.lineTo(cx - ux * G, cy - uy * G);
-    ctx.moveTo(cx + ux * G, cy + uy * G); ctx.lineTo(cx + ux * L, cy + uy * L);
+    ctx.moveTo(...P(-L, 0)); ctx.lineTo(...P(-G, 0));
+    ctx.moveTo(...P(G, 0)); ctx.lineTo(...P(L, 0));
     // ★ 양 끝에 **아래로 꺾인 날개** — 어느 쪽이 하늘인지 선만으로는 모른다.
     //   실제 수평의의 눈금이 하는 일이 이것이다
     const dn = h * 0.035;
     for (const sgn of [-1, 1]) {
-      const ex = cx + ux * L * sgn, ey = cy + uy * L * sgn;
-      ctx.moveTo(ex, ey); ctx.lineTo(ex + sr * dn, ey + cr * dn);
+      ctx.moveTo(...P(L * sgn, 0)); ctx.lineTo(...P(L * sgn, dn));
     }
     ctx.stroke();
-    // ★★ 뒤집혔거나 많이 기울었을 때만 **말로도** 적는다. 늘 떠 있는
-    //   경고는 경고가 아니다 — 수평이면 선만 조용히 서 있는다
-    if (!lv) {
+
+    // ── ★★ 피치 사다리 — 10도마다 ────────────────────────
+    //  ★ 짧게 · 옅게 긋는다. 수평선보다 눈에 띄면 「지금 수평이 어디냐」가
+    //    안 읽힌다 — 사다리는 눈금이지 주인공이 아니다
+    //  ★★★ **꺾여 있으면 안 그린다.** 수평선이 판 밖이라 `drop` 을 붙여
+    //    놓은 상태에서 사다리를 그리면 눈금이 제자리가 아닌 곳에 **뭉친다** —
+    //    화면을 찍어 잡았다. 뜻이 없는 눈금은 눈금이 아니라 얼룩이다.
+    //    이때는 **가장자리 화살표**만 어느 쪽인지 말한다
+    ctx.strokeStyle = DIM;
+    ctx.lineWidth = Math.max(1, h * 0.004);
+    ctx.font = `600 ${Math.round(h * 0.030)}px ui-monospace, monospace`;
+    ctx.fillStyle = DIM;
+    ctx.textAlign = 'center';
+    const RL = w * 0.10, RG = w * 0.125;
+    if (pinned) {
+      // 붙은 쪽을 가리키는 꺾쇠 — 「수평선은 저 아래(위)에 있다」
+      const sgn = Math.sign(drop0);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(1.4, h * 0.008);
+      ctx.beginPath();
+      const a0 = w * 0.045, b0 = h * 0.030 * sgn;
+      ctx.moveTo(...P(-a0, 0)); ctx.lineTo(...P(0, b0)); ctx.lineTo(...P(a0, 0));
+      ctx.stroke();
+    } else for (const d of rungs()) {
+      // 눈금은 수평선에서 **d 도만큼 떨어진** 자리다 (같은 자로 접는다)
+      const b = pxV(d) * ADI.squeeze;
+      if (Math.abs(drop + b) > h * 0.46) continue;   // 판 밖은 안 그린다
+      ctx.beginPath();
+      for (const sgn of [-1, 1]) {
+        ctx.moveTo(...P(RG * sgn, b)); ctx.lineTo(...P((RG + RL) * sgn, b));
+        // ★ 아래쪽 눈금은 **끝을 위로 꺾는다** — 위아래를 모양으로 가른다
+        //   (실기 사다리의 규약이다. 색이나 굵기로 가르면 흐린 화면에서 진다)
+        if (d < 0) { ctx.moveTo(...P((RG + RL) * sgn, b)); ctx.lineTo(...P((RG + RL) * sgn, b - dn * 0.6)); }
+      }
+      ctx.stroke();
+      const [tx, ty] = P(-(RG + RL) - w * 0.028, b);
+      ctx.fillText(String(Math.abs(d)), tx, ty + h * 0.010);
+    }
+
+    // ── 말 — 기울기와 기수 각 ─────────────────────────────
+    // ★★ 조용할 때는 안 적는다. 늘 떠 있는 경고는 경고가 아니다 —
+    //   수평이고 기수도 평평하면 선과 사다리만 서 있는다
+    const pw = pitchWord(eldeg);
+    const bits = [];
+    if (!lv) bits.push(rollWord(rdeg));
+    if (pw !== '수평') bits.push(pw);
+    // ★ 「수평선이 화면 밖」은 **안 적는다** — 꺾쇠가 이미 말한다.
+    //   같은 것을 그림과 글로 두 번 말하면 줄만 길어지고 안 읽힌다
+    if (bits.length) {
       ctx.fillStyle = col;
       ctx.font = `700 ${Math.round(h * ROWS.level.size)}px system-ui, sans-serif`;
-      ctx.fillText(rollWord(rdeg), cx, h * ROWS.level.y);
+      ctx.fillText(bits.join(' · '), cx, h * ROWS.level.y);
     }
   }
 

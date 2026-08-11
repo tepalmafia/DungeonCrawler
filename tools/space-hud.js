@@ -14,7 +14,9 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   ROWS, COLS, SIGNBOX, SAFE, WOBMAX, MARKS, spanOf, rowsOverlap,
+  ADI, rungs, pitchWord,
 } from '../web/space/js/game/hud-table.js';
+import { hudFov } from '../web/space/js/game/view-table.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -76,6 +78,55 @@ console.log('\n[4] ★ 표가 **한 곳인가**');
     '★ 줄이 다 판 안의 값이다 (0~1)');
   ok(Object.values(ROWS).every((r) => typeof r.what === 'string' && r.what.length > 4),
     '★★ 줄마다 **무엇을 적는 줄인지**가 있다 — 이름 없는 자리를 안 만든다');
+}
+
+console.log('\n[5] ★★★ **자세계** — 「비행기 현재 회전 상태」가 다 보이나 (사장님 물음)');
+{
+  //  ★ 첫 판은 **절반**이었다: 수평선을 늘 화면 복판에 그려서 롤만 보였다.
+  //    실기의 자세계는 「고정된 기수 표시 + 움직이는 수평선」이 한 벌이고,
+  //    그 **벌어짐**이 곧 피치다. 선을 복판에 못박으면 그 정보가 사라진다.
+  const FOV = hudFov();
+  const TANV = Math.tan((FOV.v / 2) * Math.PI / 180);
+  /** 참 크기로는 판 세로의 어디에 오나 */
+  const raw = (el) => Math.tan(el * Math.PI / 180) / TANV;
+  /** 실제로 그리는 자리 — **접는다** (`ADI.squeeze`) */
+  const at = (el) => raw(el) * ADI.squeeze;
+  console.log(`   조준경이 세로로 ${FOV.v}도를 덮는다 — 그래서 사다리를 ${ADI.squeeze} 배로 접는다`);
+  console.log('   기수 각   참 크기면   접으면      말');
+  for (const el of [0, 5, 10, 20, 40, 45, -12]) {
+    const r0 = raw(el), y = at(el);
+    console.log(`   ${String(el).padStart(4)}도   ${r0.toFixed(2).padStart(6)}`
+      + `${Math.abs(r0) > 1 ? ' ★밖' : '    '}`
+      + `   ${y.toFixed(2).padStart(6)}${Math.abs(y) > 1 ? ' ★밖' : '    '}`
+      + `   ${pitchWord(el)}`);
+  }
+  ok(Math.abs(at(0)) < 1e-9, '★★★ **수평이면 수평선이 복판**에 온다 — 십자선과 겹친다');
+  ok(Math.abs(raw(ADI.step)) > 0.9,
+    `★★★ **참 크기로는 못 쓴다** — 기수 ${ADI.step}도에 벌써 판 끝(${raw(ADI.step).toFixed(2)})이다.`
+    + ' 360도를 도는 배에 ±10도짜리 계기를 다는 셈이 된다');
+  ok(Math.abs(at(ADI.span)) < 1,
+    `★★★ **접으면 ±${ADI.span}도가 다 들어온다** (${at(ADI.span).toFixed(2)}) —`
+    + ' 실기 HUD 가 사다리를 압축하는 것과 같은 이유의 같은 해법이다');
+  ok(at(10) > 0.1 && Math.abs(at(10)) < 1,
+    `★★★ **기수를 10도 들면 수평선이 ${at(10).toFixed(2)} 만큼 내려간다** —`
+    + ' 이 벌어짐이 곧 기수 각이고, 첫 판에는 이것이 통째로 없었다');
+  ok(at(-12) < 0, '★ 내리면 반대쪽으로 간다 (부호를 머리로 안 맞히고 잰다)');
+  ok(Math.abs(at(ADI.steep)) > Math.abs(at(ADI.span)),
+    `★★ ${ADI.steep}도는 ${ADI.span}도보다 더 밖이다 — 넘어가면 가장자리에 붙여 남긴다`
+    + ` (\`pin\` ${ADI.pin})`);
+  ok(ADI.pin < SAFE.y1 && ADI.pin > 0, '★ 붙는 자리가 판 안이다');
+  // 사다리
+  const r = rungs();
+  ok(r.length === (ADI.span / ADI.step) * 2,
+    `★★ 사다리가 ±${ADI.span}도까지 ${ADI.step}도마다 ${r.length} 칸`);
+  ok(!r.includes(0), '★ 0 은 안 넣는다 — 그건 수평선 자신이다');
+  ok(Math.abs(at(ADI.step)) > 0.12,
+    `★★★ 눈금 사이가 판의 ${Math.abs(at(ADI.step)).toFixed(2)} 이다 — 이보다 촘촘하면 못 읽는다`);
+  ok(MARKS.some(([, w]) => w.includes('피치 사다리'))
+    && MARKS.some(([, w]) => w.includes('수평선이 내려간다')),
+    '★★★ **표식 목록에 피치가 들어 있다** — 사장님 「선이나 글이 의미하는 것은?」의 답이 늘 따라와야 한다');
+  ok(pitchWord(0) === '수평' && pitchWord(14).includes('올림') && pitchWord(-14).includes('내림'),
+    `★ 말로도 말한다 — 「${pitchWord(14)}」 · 「${pitchWord(-14)}」`);
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');
