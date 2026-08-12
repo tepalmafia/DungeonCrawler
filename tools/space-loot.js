@@ -16,9 +16,10 @@
 //  ★ three 를 안 쓴다 — 게임을 안 부른다
 // ══════════════════════════════════════════════════════════════════════════
 import { ASK, CARD, shapeOf, toneOf, summaryOf, summaryLine, wayFor } from '../web/space/js/game/loot-table.js';
-import { makeLoot, broke, stepLoot, answer, gained, summary } from '../web/space/js/game/loot.js';
+import { makeLoot, broke, stepLoot, answer, gained, gainedPart, summary } from '../web/space/js/game/loot.js';
+import { makePart, TIER_BY } from '../web/space/js/game/parts-table.js';
 import { ITEMS } from '../web/space/js/game/cargo-table.js';
-import { WAYS } from '../web/space/js/game/cargo-table.js';
+import { WAYS, timeOf } from '../web/space/js/game/cargo-table.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -41,8 +42,16 @@ console.log('\n[①] 부수면 묻나 — 그리고 코앞의 것은 안 묻나'
   ok(s.ask.way === 'net', `★ 60m 는 **그물**이 골라진다 (${WAYS[s.ask.way].name}) — 「그래서 뭘 누르지」를 안 만든다`);
 
   const L2 = makeLoot();
-  ok(broke(L2, items, 8) === 'auto',
-    `★★★ ${ASK.auto}m 안(8m)은 **안 묻고 줍는다** — 코앞까지 물으면 질문이 잔소리가 된다`);
+  // ★★★ v125 — **8m 는 이제 묻는다.** 사장님 「너무 가까이 붙어서 **충돌하는
+  //   것 같아서 현실감이 떨어져**」 — 12m 는 부딪히기 직전이고, 그 거리에서
+  //   말없이 팔이 나가면 「회수」가 아니라 「들이받고 주웠다」로 보인다.
+  //   `ASK.auto` 를 12 → 4 로 줄였다. 안 묻는 자리는 **정말 코앞**만 남는다
+  ok(broke(L2, items, 8) === 'ask',
+    `★★★ 8m 는 **묻는다** (안 묻는 자리는 ${ASK.auto}m 안뿐) — 부딪히기 직전에`
+    + ' 말없이 팔이 나가면 그건 회수가 아니라 들이받고 줍는 것이다');
+  const L2b = makeLoot();
+  ok(broke(L2b, items, ASK.auto - 1) === 'auto',
+    `★ 그래도 ${ASK.auto}m 안이면 안 묻는다 — 코앞까지 물으면 질문이 잔소리가 된다`);
 
   const L3 = makeLoot();
   broke(L3, items, 60);
@@ -129,8 +138,42 @@ console.log('\n[⑥] 거리가 방법을 고른다');
   for (const d of [10, 20, 60, 150]) {
     console.log(`   ${String(d).padStart(3)}m → ${d <= ASK.auto ? '안 묻고 줍는다' : WAYS[wayFor(d)].name}`);
   }
-  ok(wayFor(20) === 'arm' && wayFor(60) === 'net' && wayFor(150) === 'bot',
-    '★★ 가까우면 팔 · 중간은 그물 · 멀면 로봇 — **이미 있는 셋**을 쓴다 (새 계통을 안 만든다)');
+  // ══ ★★★ v125 — **뒤집혔다.** 「가까우면 팔」이 낡은 것이다 ══════════
+  //
+  //  ★ 사장님 「**너무 가까이 붙이지 말고 … 물체가 보일 정도에서 회수**」
+  //
+  //  ★★ 옛 규칙은 `dist <= 25 ? 'arm'` 이라 **가까울수록 도킹 팔**이었고,
+  //    도킹 팔은 표에 적힌 그대로 「바짝 붙어야 한다 — **들이받힐 자리**」다.
+  //    물음에 「예」만 해도 그 방법이 골라지니 회수는 늘 부딪힐 만큼
+  //    다가가는 일이 됐다.
+  //  ★★★ 이제 **닿는 것 중 제일 멀리서 되는 것**을 고른다. 도킹 팔은
+  //    안 없앤다 — **F 로 일부러 고르는** 빠른 길로 남는다 (1.2초 vs
+  //    그물 1.4~5.7초). 「빠르지만 위험하다」가 그때 비로소 결심이 된다
+  ok(wayFor(20) === 'net' && wayFor(60) === 'net' && wayFor(150) === 'bot',
+    '★★★ **「예」는 안 붙어도 되는 방법을 고른다** — 그물이 닿으면 그물, 넘으면 로봇');
+  ok(WAYS.arm.reach > 0 && WAYS.arm.kb,
+    `★★ 도킹 팔은 **안 없앴다** — ${WAYS.arm.kb} 로 일부러 고르면 ${WAYS.arm.fixed}초다`
+    + ` (그물은 20m 에 ${timeOf('net', 20)}초). 빠른 대신 붙어야 한다는 것이 곧 결심이다`);
+}
+
+console.log('\n[⑦] ★★★ **파츠 카드 — 등급이 보이나** (v125 · 사장님 「등급도 나오게 해줘」)');
+{
+  const L = makeLoot();
+  gainedPart(L, makePart('gun', 'loot'));
+  const c = summary(L).cards[0];
+  console.log(`   「${c.name}」  등급 ${c.tier}  ·  ${c.gain}  ·  ${c.use}`);
+  ok(!!c.tier, `★★★ **등급이 제 칸으로 온다** (${c.tier}) — v124 까지 파츠는 배너 한 줄로`
+    + ' 스쳐 갔다. 회차에서 제일 귀한 것이 제일 안 보였다');
+  ok(c.tier === TIER_BY.loot.name, `★ 등급 이름을 **표에서** 가져온다 (${TIER_BY.loot.name})`);
+  ok(!!c.shape && !!c.use && !!c.gain,
+    '★★ 모양 · 쓰임 · 늘어나는 것이 다 있다 — 사장님이 말씀하신 셋');
+  const L2 = makeLoot();
+  gainedPart(L2, makePart('gun', 'stock'));
+  gainedPart(L2, makePart('gun', 'ace'));
+  ok(summary(L2).cards.length === 2,
+    '★★ 같은 부위라도 **등급이 다르면 안 묶는다** — 다른 물건이다');
+  ok(CARD.max === 2 && CARD.hold >= 4.5,
+    `★★ 카드가 커졌으므로 **${CARD.max} 장만 · ${CARD.hold}초** — 읽을 것이 늘면 읽을 시간도 늘어야 한다`);
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 묻고 · 고르고 · 주우면 형태와 요약이 뜬다');

@@ -115,7 +115,13 @@ export function stepSalvage(s, dt, { moving = true } = {}) {
     } else {
       s.net.t -= dt;
       // 감기는 만큼 **꾸러미가 다가온다** — 화면이 그걸 그린다
-      p.dist = Math.max(2, p.dist * Math.max(0, s.net.t) / Math.max(0.01, s.net.total));
+      // ★★★ v125 — **끝나는 자리가 눈앞 2m 가 아니다** (`NET.stopAt`).
+      //   2m 는 선체 안이나 마찬가지라 「실렸다」가 아니라 「부딪혔다」로
+      //   보였다 (사장님 「충돌하는 것 같아서 현실감이 떨어져」).
+      //   ★ 그리고 **처음 거리에서 `stopAt` 까지** 고르게 줄인다 — 예전엔
+      //     0 을 향해 줄이다 2 에서 잘렸으므로, 끝에서 **뚝 멎었다**
+      const k = Math.max(0, s.net.t) / Math.max(0.01, s.net.total);
+      p.dist = NET.stopAt + (s.net.from - NET.stopAt) * k;
       if (s.net.t <= 0) {
         s.packs = s.packs.filter((x) => x !== p);
         s.net = null;
@@ -162,6 +168,8 @@ export function fireNet(s, { az, el, seated = true, way = 'net' } = {}) {
   s.net = {
     pack: p.id, phase: 'out', t: p.dist / NET.outSpeed, total: 0,
     way: w.key, sec,
+    /** ★ v125 — **어디서 시작했나.** 끝 자리(`NET.stopAt`)까지 고르게 줄이려면 있어야 한다 */
+    from: p.dist,
   };
   return { ok: true, pack: p, way: w };
 }

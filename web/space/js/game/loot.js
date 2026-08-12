@@ -9,7 +9,9 @@
 //    곳이 둘**이 되고, 그게 이 저장소가 네 판을 태운 병이다.
 //    「예」는 `wayFor` 로 고른 방법을 **부탁만** 한다.
 // ══════════════════════════════════════════════════════════════════════════
-import { ASK, CARD, askLine, summaryOf, wayFor, shapeOf, toneOf } from './loot-table.js';
+import { ASK, CARD, PART_CARD, askLine, summaryOf, wayFor, shapeOf, toneOf } from './loot-table.js';
+// ★★★ v125 — **파츠는 등급이 있다** (사장님 「등급도 나오게 해줘」)
+import { TIER_BY, SLOT_BY } from './parts-table.js';
 import { WAYS } from './cargo-table.js';
 
 export const makeLoot = () => ({
@@ -82,9 +84,24 @@ export function answer(L, yes) {
  */
 export function gained(L, key, n = 1) {
   if (!key) return null;
-  const old = CARD.stack ? L.cards.find((c) => c.key === key) : null;
+  const old = CARD.stack ? L.cards.find((c) => c.key === key && !c.part) : null;
   if (old) { old.count += n; old.t = CARD.hold; return old; }
   L.cards.push({ key, count: n, t: CARD.hold });
+  while (L.cards.length > CARD.max) L.cards.shift();
+  return L.cards[L.cards.length - 1];
+}
+
+/**
+ * ★★★ **파츠를 주웠다** — 등급이 있는 것 (v125).
+ *
+ *   ★ 사장님 「**등급도 나오게** 해줘」. v124 까지 파츠는 배너 한 줄로
+ *     스쳐 갔다 (「★ 노획품 주포」) — 회차에서 제일 귀한 것이 제일 안
+ *     보였다. 재료와 **같은 카드**로 온다.
+ *   ★★ 파츠는 **안 묶는다** — 같은 부위라도 등급이 다르면 다른 물건이다
+ */
+export function gainedPart(L, part) {
+  if (!part?.slot) return null;
+  L.cards.push({ key: `part:${part.slot}:${part.tier}`, count: 1, t: CARD.hold, part });
   while (L.cards.length > CARD.max) L.cards.shift();
   return L.cards[L.cards.length - 1];
 }
@@ -100,13 +117,29 @@ export function summary(L) {
       wayName: WAYS[wayFor(L.ask.dist)]?.name ?? '',
       n: L.ask.items.length,
     } : null,
-    cards: L.cards.map((c) => ({
-      key: c.key, count: c.count, left: +c.t.toFixed(2),
-      // ★★ **형태와 색도 여기서 준다.** 화면이 `SHAPES` 를 따로 읽으면
-      //   물건을 하나 더할 때 한쪽만 고치게 된다
-      shape: shapeOf(c.key), tone: toneOf(c.key),
-      ...summaryOf(c.key, c.count),
-    })),
+    cards: L.cards.map((c) => {
+      // ★★★ **파츠는 재료와 다른 것을 말한다** — 이름·등급·부위 (v125)
+      if (c.part) {
+        const t = TIER_BY[c.part.tier];
+        return {
+          key: c.key, count: 1, left: +c.t.toFixed(2),
+          shape: PART_CARD.shape, tone: PART_CARD.tone,
+          name: `${t?.name ?? '?'} ${SLOT_BY[c.part.slot]?.name ?? c.part.slot}`,
+          /** ★ 등급 — 이름과 **따로** 준다. 화면이 크게 찍을 수 있게 */
+          tier: t?.name ?? '?', tierKey: c.part.tier, tierTone: t?.tone ?? 'dim',
+          gain: `힘 ×${(t?.mult ?? 1).toFixed(2)}`,
+          use: SLOT_BY[c.part.slot]?.what ?? '배에 단다 — I 창에서 갈아 끼운다',
+          mass: 0,
+        };
+      }
+      return {
+        key: c.key, count: c.count, left: +c.t.toFixed(2),
+        // ★★ **형태와 색도 여기서 준다.** 화면이 `SHAPES` 를 따로 읽으면
+        //   물건을 하나 더할 때 한쪽만 고치게 된다
+        shape: shapeOf(c.key), tone: toneOf(c.key),
+        ...summaryOf(c.key, c.count),
+      };
+    }),
     asked: L.asked, took: L.took, passed: L.passed, missed: L.missed,
   };
 }
