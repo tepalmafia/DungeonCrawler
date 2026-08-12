@@ -22,6 +22,9 @@
 //  ★ three.js 를 안 쓴다 — `tools/space-horizon.js` 가 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
 
+// ★ v121 — 보조의 세기를 **손에서 뽑으려면** 손을 읽어야 한다 (둘 다 순수 표다)
+import { AXES, RCS } from './flight-table.js';
+
 export const HORIZON = {
   /** 이 각을 넘으면 **뒤집힌 것**으로 본다 (도) */
   overAt: 90,
@@ -134,6 +137,64 @@ export const ASSIST = {
    */
   steep: 2.0,
   /**
+   * ══ ★★★ v121 — **손이 보조보다 빨랐다** ═══════════════════════════
+   *
+   *  ★ 사장님 (2026-08-12) 「**계속 회피하다 보니 또 뒤집혀서 정상적으로
+   *    안 돌아오는데**, 블록아웃으로 테스트하고 원인 찾아서 수정해줘」
+   *
+   *  ★★ 재 보니 둘이 겹쳐 있었다:
+   *      ① 급기동 롤이 **3.00 rad/s** (1.25 × `RCS.burst.mult` 2.4) 인데
+   *         보조의 제일 빠른 자리(180도)가 **2.55** 였다 — **손이 더 빠르다.**
+   *      ② 그리고 키를 잡고 있는 동안 보조가 **아예 0** 이었다.
+   *      → 0.6초 꺾고 0.6초 쉬는 회피를 되풀이하니 **60초 중 49%를
+   *        뒤집힌 채로** 보내고 85도에서 끝났다 (`tools/space-horizon.js`)
+   *
+   *  ★★★ 그래서 **숫자를 손으로 안 고친다.** 보조는 「제일 나쁜 자리에서
+   *    제일 빠른 손보다 이만큼 빠르다」로 **derive** 한다 — 나중에 급기동
+   *    배수를 바꾸면 보조가 **저절로 따라온다.** 손으로 적어 두면
+   *    그때 또 뒤집힌다
+   */
+  beat: 1.25,
+  /**
+   * ══ ★★★ v121 — **잡고 있어도 보조는 산다** (0 이 아니다) ═══════════
+   *
+   *  ★ 여태 손이 Q/E 를 잡으면 보조가 **완전히 꺼졌다.** 그러면 회피의
+   *    「잡는 몫」이 클수록 롤이 쌓이고, 놓는 짧은 틈으로는 못 갚는다.
+   *
+   *  ★★ 실제 **비행 보조(fly-by-wire)** 가 하는 일이 이것이다: 보조는
+   *    늘 수평으로 당기고 **손은 그걸 이겨서** 굴린다. 그래서 보조를
+   *    켜 두면 구르는 것이 조금 느리고, 놓으면 곧 돌아온다.
+   *    v103 이 「뒤집힌 채로 **머무를 수가 없어** 반대가 안 생긴다」라고
+   *    적어 둔 그 뜻이 이제야 서는 것이다 — `hand` 예외가 그걸 깨고 있었다.
+   *
+   *  ★ 0.45 인 까닭: 제일 나쁜 자리에서도 **손이 이겨야** 한다.
+   *    3.00 − 0.45 × 3.75 = **1.31 rad/s** — 잡고 있으면 여전히 구른다.
+   *    360도를 원하면 **L 로 보조를 끈다** (그 길은 그대로 있다)
+   */
+  handMult: 0,
+  /**
+   * ══ ★★★ v121 — **보조가 켜져 있으면 롤이 여기서 멈춘다** (도) ═══════
+   *
+   *  ★ 사장님 「계속 회피하다 보니 또 뒤집혀서 정상적으로 안 돌아오는데」
+   *
+   *  ★★ **속도 싸움으로는 못 푼다.** 재 봤다 (`tools/space-horizon.js`):
+   *      · 보조를 손보다 빠르게(3.75 > 3.00) 해도, 0.8초 꺾고 0.4초 쉬면
+   *        한 번에 2.4 rad 쌓이고 1.5 rad 밖에 못 갚는다 — **쌓인다**
+   *      · 잡은 동안에도 보조를 걸면(`handMult`) 이번엔 **보통 롤이
+   *        90도에서 막힌다** (남는 속도 0.21 → −0.44). 조종을 뺏는 것이다
+   *      → 어떤 값을 골라도 **하나를 고치면 하나가 깨진다.**
+   *
+   *  ★★★ 그래서 장르의 정석을 따른다: **비행 보조가 켜져 있으면 자세가
+   *    한계 안에서만 논다.** Elite·Star Citizen 계열의 「flight assist on」이
+   *    정확히 이것이고, 360도를 원하면 **끈다**(L). 그러면 v103 이 적어 둔
+   *    「뒤집힌 채로 **머무를 수가 없다**」가 비유가 아니라 **사실**이 된다 —
+   *    보조가 켜진 동안 「뒤집힘」은 **일어날 수가 없다.**
+   *
+   *  ★ 값을 손으로 안 적는다: **뒤집힘 문턱**(`HORIZON.overAt`)이 그 자리다.
+   *    거기서 멈추면 「조종이 반대입니다」가 뜰 일이 없다
+   */
+  capAtOver: true,
+  /**
    * ★ 이 안에 들면 딱 0 으로 물린다 (라디안). 안 물리면 0.3도쯤에서
    *   영영 떨고, 계기가 「우 0° 기움」이라고 적는다
    */
@@ -144,8 +205,41 @@ export const ASSIST = {
  * ★★ 지금 이만큼 기울었을 때 **초당 몇 라디안**으로 펴나 (v111).
  *   `t` 는 −π~π 로 감긴 기울기
  */
+/**
+ * ★★★ v121 — `steep` 을 **손에서 뽑는다.** 제일 나쁜 자리(180도)에서
+ *   제일 빠른 손(급기동 롤)보다 `beat` 배 빨라야 한다.
+ *   ★ 표에 박아 두면 급기동 배수를 바꿀 때 **조용히 뒤집힌다**
+ */
+export const steepOf = () => Math.max(
+  ASSIST.steep,
+  (AXES.roll.rate * RCS.burst.mult * ASSIST.beat) / ASSIST.rate - 1,
+);
+
 export const rateAt = (t) =>
-  ASSIST.rate * (1 + ASSIST.steep * Math.min(1, Math.abs(t) / Math.PI));
+  ASSIST.rate * (1 + steepOf() * Math.min(1, Math.abs(t) / Math.PI));
+
+/** 보조가 켜져 있을 때 롤이 갈 수 있는 최대 (라디안) */
+export const capOf = () => (HORIZON.overAt * Math.PI) / 180;
+
+/**
+ * ★★★ v121 — **보조가 켜져 있으면 여기서 멈춘다.**
+ *
+ *   @param roll 지금 롤 (라디안 · 몇 바퀴든)
+ *   @param on   보조가 켜져 있나 — 꺼져 있으면 **안 건드린다** (360도)
+ *   @returns 잘린 롤 (라디안)
+ *
+ *   ★ `wrap` 을 먼저 한다 — 720도를 돌아 온 것도 같은 자리로 본다.
+ *     안 그러면 「한 바퀴 돌면 cap 을 빠져나가는」 구멍이 생긴다
+ */
+export function clampRoll(roll, on = ASSIST.on) {
+  if (!on || !ASSIST.capAtOver) return roll;
+  const TWO = Math.PI * 2;
+  let t = roll % TWO;
+  if (t > Math.PI) t -= TWO;
+  if (t < -Math.PI) t += TWO;
+  const cap = capOf();
+  return Math.abs(t) <= cap ? t : Math.sign(t) * cap;
+}
 
 /**
  * ★★★ **한 프레임에 롤이 얼마나 되돌아오나** (라디안 · 부호 포함).
@@ -160,7 +254,11 @@ export const rateAt = (t) =>
  *     아니라 기다림이다 (`flight.js` 의 자동 항법과 같은 규약)
  */
 export function levelStep(roll, dt, { hand = false, on = ASSIST.on } = {}) {
-  if (!on || hand) return 0;
+  // ★★★ v121 — **잡고 있어도 0 이 아니다** (`handMult`). 0 으로 두면
+  //   회피의 「잡는 몫」이 클수록 롤이 쌓이고, 놓는 짧은 틈으로는 못 갚는다
+  if (!on) return 0;
+  const k = hand ? ASSIST.handMult : 1;
+  if (k <= 0) return 0;
   const TWO = Math.PI * 2;
   let t = roll % TWO;
   if (t > Math.PI) t -= TWO;
@@ -168,9 +266,11 @@ export function levelStep(roll, dt, { hand = false, on = ASSIST.on } = {}) {
   if (Math.abs(t) < 1e-6) return 0;
   // ★ 다 왔으면 **딱 0 으로 물린다.** 안 물리면 0.3도쯤에서 영영 떨고,
   //   계기가 「우 0° 기움」이라고 적는다 (경고가 안 꺼진다)
-  if (Math.abs(t) <= ASSIST.snap) return -t;
+  //   ★ 잡고 있을 때는 **딱 물리지 않는다** — 손이 미는 중에 0 으로
+  //     스냅하면 조종이 튄다
+  if (!hand && Math.abs(t) <= ASSIST.snap) return -t;
   // ★★★ v111 — 고정 속도가 아니라 **기운 만큼**이다 (위 `steep`)
-  const step = Math.min(Math.abs(t), rateAt(t) * dt);
+  const step = Math.min(Math.abs(t), rateAt(t) * k * dt);
   return -step * Math.sign(t);
 }
 

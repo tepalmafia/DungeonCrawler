@@ -4,7 +4,7 @@
 import { AXES, GIMBAL, OFF_WEIGHT, RCS } from './flight-table.js';
 // ★★★ v103 — **비행 보조** (사장님 「물리방향으로 움직이니 너무 어렵다」).
 //   자리를 아는 곳을 둘로 안 만든다 — 되돌리는 규칙은 `horizon-table.js` 하나다
-import { levelStep } from './horizon-table.js';
+import { levelStep, clampRoll } from './horizon-table.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -76,6 +76,19 @@ export function stepFlight(f, dt, {
     const hand = atSeat && (push.roll ?? 0) !== 0;
     const d = levelStep(f.roll, dt, { hand, on: assist });
     if (d !== 0) f.roll += d;
+    // ══ ★★★ v121 — **보조가 켜져 있으면 여기서 멈춘다** ═══════════════
+    //
+    //  ★ 사장님 「계속 회피하다 보니 또 뒤집혀서 정상적으로 안 돌아오는데」
+    //
+    //  ★★ 속도로는 못 푼다 — 재 봤다. 보조를 손보다 빠르게 해도 **꺾는
+    //    시간이 길면 쌓이고**, 잡은 동안에도 보조를 걸면 이번엔 **보통
+    //    롤이 90도에서 막힌다.** 하나를 고치면 하나가 깨진다.
+    //  ★★★ 그래서 자세를 **한계 안에서만** 놀게 한다 (장르의 정석).
+    //    그러면 보조가 켜진 동안 「뒤집힘」이 **일어날 수가 없다** —
+    //    v103 이 적어 둔 「뒤집힌 채로 머무를 수가 없다」가 사실이 된다.
+    //  ★ 끄면(L) 그대로 360도다. 자르는 것은 **보조가 하는 일**이지
+    //    이 배가 못 하는 일이 아니다
+    f.roll = clampRoll(f.roll, assist);
   }
   if (atSeat) f.seat += dt;
 

@@ -14,9 +14,9 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   HORIZON, wrapDeg, isOver, isLevel, rollWord, pitchWay,
-  ASSIST, levelStep, assistWord,
+  ASSIST, levelStep, assistWord, rateAt, steepOf, clampRoll,
 } from '../web/space/js/game/horizon-table.js';
-import { AXES, OFF_WEIGHT } from '../web/space/js/game/flight-table.js';
+import { AXES, OFF_WEIGHT, RCS } from '../web/space/js/game/flight-table.js';
 
 const DEG = 180 / Math.PI;
 
@@ -172,6 +172,66 @@ console.log('\n[8] ★ 그래서 **단축키를 만들 것인가** — 답: 안 
     + ` (「${rollWord(120)}」)`);
   ok(!rollWord(0).includes('뒤집힘') && isLevel(0),
     '★ 다 돌아오면 조용해진다 — 늘 떠 있는 경고는 경고가 아니다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[8b] ★★★ **회피를 되풀이해도 뒤집힌 채로 안 남나** (v121)');
+{
+  //  ★ 사장님 (2026-08-12) 「**계속 회피하다 보니 또 뒤집혀서 정상적으로
+  //    안 돌아오는데**, 블록아웃으로 테스트하고 원인 찾아서 수정해줘」
+  //
+  //  ★★ 여기가 v103·v111 이 **못 물어본 것**이다. 둘 다 「한 번 뒤집어
+  //    놓고 손을 떼면 펴지나」만 물었다. 그런데 사장님이 겪으신 것은
+  //    **되풀이**다 — 꺾고 · 조금 쉬고 · 또 꺾는다. 한 번은 펴지는데
+  //    되풀이하면 쌓인다.
+  const hand = (burst) => AXES.roll.rate * (burst ? RCS.burst.mult : 1);
+  console.log(`   손 — 보통 ${AXES.roll.rate} · 급기동 ${hand(true).toFixed(2)} rad/s`);
+  console.log(`   보조 — 잔 기울기 ${ASSIST.rate} · 180도 ${rateAt(Math.PI).toFixed(2)} rad/s`
+    + ` (steep ${steepOf().toFixed(2)} — **손에서 뽑는다**)`);
+  ok(rateAt(Math.PI) > hand(true),
+    `★★★ 보조가 제일 나쁜 자리에서 **제일 빠른 손보다 빠르다** (${rateAt(Math.PI).toFixed(2)} > ${hand(true).toFixed(2)}) —`
+    + ' v120 까지 2.55 대 3.00 으로 **손이 더 빨랐다**');
+
+  /** 꺾고 쉬기를 되풀이한다 — 60초 */
+  const loop = (hold, rest, burst, on = true) => {
+    let roll = 0, over = 0, t = 0, top = 0;
+    const dt = 1 / 60;
+    while (t < 60) {
+      const h = (t % (hold + rest)) < hold;
+      if (h) roll += hand(burst) * dt;
+      roll += levelStep(roll, dt, { hand: h, on });
+      roll = clampRoll(roll, on);
+      const d = Math.abs(wrapDeg((roll * 180) / Math.PI));
+      top = Math.max(top, d);
+      if (d > HORIZON.overAt) over += dt;
+      t += dt;
+    }
+    return { end: +wrapDeg((roll * 180) / Math.PI).toFixed(0), over: +((over / 60) * 100).toFixed(0), top: +top.toFixed(0) };
+  };
+
+  console.log('\n   꺾음/쉼    급기동으로 60초       보통으로 60초');
+  let worst = 0;
+  for (const [h, r] of [[0.42, 1.2], [0.5, 1.0], [0.6, 0.6], [0.8, 0.4], [1.0, 0.3], [3.0, 1.0]]) {
+    const a = loop(h, r, true); const b = loop(h, r, false);
+    worst = Math.max(worst, a.over, b.over);
+    console.log(`   ${h}초/${r}초   끝 ${String(a.end).padStart(4)}도 · 최대 ${String(a.top).padStart(3)}도 · 뒤집힘 ${String(a.over).padStart(3)}%`
+      + `   끝 ${String(b.end).padStart(4)}도 · 최대 ${String(b.top).padStart(3)}도 · 뒤집힘 ${String(b.over).padStart(3)}%`);
+  }
+  ok(worst === 0,
+    `★★★ **어떤 되풀이로도 뒤집히지 않는다** (제일 나쁜 자리에서 ${worst}%) —`
+    + ` 보조가 켜져 있으면 롤이 **${HORIZON.overAt}도에서 멈춘다** (\`clampRoll\`).`
+    + ' 속도로는 못 풀었다: 빠르게 하면 꺾는 시간이 길 때 쌓이고, 잡은 동안에도 걸면 보통 롤이 막힌다');
+
+  // ★★ 그런데 **손은 그대로 자유로워야** 한다 — 조종을 뺏으면 안 된다
+  ok(ASSIST.handMult === 0,
+    '★★★ 잡고 있는 동안에는 보조가 **손을 안 건드린다** — 걸었더니 보통 롤이'
+    + ' 90도에서 남는 속도 0.21, 180도에서 −0.44 가 됐다 (구를 수가 없다)');
+
+  // ★★★ 그리고 **끄면 360도가 그대로 산다**
+  const off = loop(1.0, 0.3, true, false);
+  ok(off.top > 170 && off.over > 20,
+    `★★★ **L 로 끄면 360도가 그대로다** (최대 ${off.top}도 · 뒤집힘 ${off.over}%) —`
+    + ' 자르는 것은 **보조가 하는 일**이지 이 배가 못 하는 일이 아니다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
