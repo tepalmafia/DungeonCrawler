@@ -45,8 +45,11 @@ import { DOOR } from '../game/door-table.js';
 // ★ v64 — 주포(포탑·사다리·조준석)를 걷어냈다. 조준경만 남는다
 import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
+import { buildLootHud } from './loothud.js';
 import { buildStatusHud } from './status.js';
-import { DEP, ROOF, HUD as HUDV } from '../game/view-table.js';
+// ★★★ v121 — 계기 셋의 자는 `MFD` 다. HUD 를 넓혔더니 계기까지 따라
+//   커져서 하늘을 덮은 일이 있었다 (`view-table.js MFD` 머리말)
+import { DEP, ROOF, HUD as HUDV, MFD } from '../game/view-table.js';
 // ★★★ v91 — HUD 는 **잡은 눈** 앞에 놓아야 한다 (아래 참조). 그 눈의 자리를 읽는다
 import { FLY_VIEW } from '../game/helm-table.js';
 
@@ -1169,13 +1172,13 @@ export function buildShip(scene, camera = null, renderer = null) {
   //    그건 안 가리는 것이 아니라 **없는 것**이다 (찍어 보고 알았다:
   //    셋을 합쳐 화면의 2.6% 였고 글자가 안 읽혔다).
   //  ★★ 예산(`screen-table.js BUDGET` 14%)은 그대로 지킨다
-  const statusHud = buildStatusHud(HUDV.w * 1.20, HUDV.h * 1.10);
-  statusHud.size = { w: HUDV.w * 1.20, h: HUDV.h * 1.10 };
+  const statusHud = buildStatusHud(MFD.w * 1.20, MFD.h * 1.10);
+  statusHud.size = { w: MFD.w * 1.20, h: MFD.h * 1.10 };
   // ★★ v92 — **셋을 계기판에 가로로 나란히** (왼쪽 상태 · 가운데 광학 ·
   //   오른쪽 레이더). 실제 전투기의 MFD 셋이 그 배치이고, 무엇보다
   //   **하늘을 안 먹는다** — 높이를 하나로 맞춰야 줄이 선다
   statusHud.mesh.position.set(
-    -HUDV.w * 1.42, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
+    -MFD.w * 1.42, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
   );
   faceEye(statusHud.mesh);          // ★ v102 — 사람을 보게 돌린다
   ship.add(statusHud.mesh);
@@ -1184,15 +1187,23 @@ export function buildShip(scene, camera = null, renderer = null) {
   //  ★ 상태창의 **반대쪽**에 둔다. 둘이 같은 쪽이면 하나가 하나를 가리고,
   //    가운데는 조준선·선도점·표적 지시선이 지나는 자리라 못 쓴다
   // ★★★ v103 — **0.82 배.** 넷 중 제일 컸다 (화면의 6.8% · 45.6°×34.8°)
-  const radarHud = buildRadarHud(HUDV.w * 1.22, HUDV.h * 1.22);
-  radarHud.size = { w: HUDV.w * 1.22, h: HUDV.h * 1.22 };
+  const radarHud = buildRadarHud(MFD.w * 1.22, MFD.h * 1.22);
+  radarHud.size = { w: MFD.w * 1.22, h: MFD.h * 1.22 };
   // ★ 화면을 찍어 자리를 잡았다 — 처음 자리는 **콘솔 기둥에 왼쪽 아래가
   //   물렸다.** 상태창이 왼쪽 위이므로 이쪽은 오른쪽 위로 올려 맞춘다
   radarHud.mesh.position.set(
-    HUDV.w * 1.52, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
+    MFD.w * 1.52, DEP.y - MFD_Y, DEP.z - HUDV.dist - 0.01,
   );
   faceEye(radarHud.mesh);          // ★ v102 — 사람을 보게 돌린다
   ship.add(radarHud.mesh);
+
+  // ══ ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** ═══════════════════════
+  //  ★ 사장님 「회수하겠습니까? 질문이 나오고」 · 「아이템을 먹으면 요약이」
+  //  ★★ **카메라의 자식**이다 (v118) — 둘러봐도 정면이고, 계기 셋과 달리
+  //    「잠깐 뜨는 것」이라 전투 원뿔을 피해 아래·오른쪽 위로 앉힌다
+  //  ★ 카메라가 없으면(검사가 배만 세울 때) **안 만든다** — 없는 것을
+  //    만들려다 죽으면 배가 통째로 안 선다
+  const lootHud = camera ? buildLootHud(camera, HUDV.dist + 0.02) : null;
 
   // ══ ★★★ **광학 창** — 당겨 보고, 부서지는 것을 본다 (v79) ═══════════
   //  사장님 「멀리있는 적을 레이더 말고 **확대**하거나 …」
@@ -1209,17 +1220,17 @@ export function buildShip(scene, camera = null, renderer = null) {
     // ★ v86 — 당겨 보는 동안 **참 크기**로 그리게 한다 (`targets.setTrueScale`)
     // ★★★ v103 — **0.75 배.** 넷 중 유일하게 **전투 원뿔을 건드리고**
     //   있었다 (복판에서 0.27 · 기준 0.45). 줄이고 아래에서 더 밀어낸다
-    ? buildOptic(renderer, scene, [ship], HUDV.w * 1.36, HUDV.h * 1.26,
+    ? buildOptic(renderer, scene, [ship], MFD.w * 1.36, MFD.h * 1.26,
       (on) => outside.targets.setTrueScale(on))
     : null;
   if (optic) {
-    optic.size = { w: HUDV.w * 1.36, h: HUDV.h * 1.26 };
+    optic.size = { w: MFD.w * 1.36, h: MFD.h * 1.26 };
     // ══ ★★★ v92 — **하늘에서 내려 계기판 위로** ═══════════════════════
     //
     //  사장님 「**전투에 방해되잔아**」. v90 이 아래(콘솔)를 치웠고, 화면을
     //  격자로 쏴서 재 보니(`SPACE.blocked()`) 남은 것은 **하늘 한복판**이었다:
     //  앉으면 배가 화면의 24.8% 를 먹는데 그중 **광학창이 35칸**이었다.
-    //  자리가 `DEP.y + HUDV.h*0.86` = **눈보다 위**였다 — 창의 왼쪽 위.
+    //  자리가 `DEP.y + MFD.h*0.86` = **눈보다 위**였다 — 창의 왼쪽 위.
     //
     //  ★ 고증도 같은 쪽이다. 실제 전투기에서 **하늘 위에 겹치는 것은 HUD
     //    하나**이고, 조준 포드 영상은 **MFD**(눈썹 차양 아래 계기판)다.
@@ -1247,7 +1258,7 @@ export function buildShip(scene, camera = null, renderer = null) {
     //    1.46 → 1.82, 그리고 판을 0.75 배로 줄였다. 계산이 아니라
     //    `space-screen.js` 가 재서 고른 값이다
     optic.mesh.position.set(
-      -HUDV.w * 1.82, DEP.y + HUDV.h * 1.17, DEP.z - HUDV.dist - 0.01,
+      -MFD.w * 1.82, DEP.y + MFD.h * 1.17, DEP.z - HUDV.dist - 0.01,
     );
     faceEye(optic.mesh);        // ★ v102 — 사람을 보게 돌린다
     ship.add(optic.mesh);
@@ -1271,6 +1282,9 @@ export function buildShip(scene, camera = null, renderer = null) {
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     turret, sight, statusHud, radarHud, optic, cradle, outerDoor, marks, byBay,
+    // ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** (`world/loothud.js`).
+    //   카메라의 자식이라 여기서 자리를 안 잡는다 — 둘러봐도 정면이다 (v118)
+    lootHud,
     /**
      * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
      *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —

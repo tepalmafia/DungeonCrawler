@@ -37,6 +37,8 @@ import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
 //   세운다 (docs/space/COMBAT.md). v64 가 숫자만 만들고 **보이는 것을
 //   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
 import { buildTargets } from './targets.js';
+// ★★★ v121 — 항로 문 (사장님 「항로가 목적지까지 희미하게 표시」)
+import { buildRoad } from './road.js';
 import { buildShots } from './shots.js';
 import { buildSalvage } from './salvage.js';
 import { DUST } from '../game/sky-table.js';
@@ -792,9 +794,24 @@ export function buildCockpit(parent, room, H) {
     pane(g, a, b, SILL, HEAD, GLASS);                 // 유리 — 천장까지
     pane(g, a, b, 0, SILL, PANEL, 0.14);              // 아래 선체
     rail(g, a, b, SILL - 0.06, FRAME, 0.2, 0.14);     // 아래 창틀
-    // ★ 띠조명을 **창턱으로 내렸다.** 위에 있으면 그게 곧 「위를 자르는 것」
-    //   이다 — 눈 아래에서 유리를 훑는 편이 실제 조종석 조명과도 맞다
-    rail(g, a, b, SILL + 0.05, stripMat(BLUE), 0.05, 0.035, 0.02);
+    // ══ ★★★ v120 — **창턱 띠조명을 걷어냈다** ═════════════════════════
+    //
+    //  ★ 사장님 (2026-08-12) 「**양끝에 비치는거 없애줘**」 (초광폭 화면
+    //    스크린샷 — 아래 양 구석에 파란 판이 상태창·레이더를 덮고 있었다)
+    //
+    //  ★★ v66 에 이 띠를 창턱으로 **내린** 것은 맞는 판단이었다 (위에
+    //    있으면 창의 위를 자른다). 그런데 내린 자리가 **화면의 아래
+    //    양끝**이고, 거기가 바로 v113~v118 이 계기 셋을 못박아 둔 구석이다.
+    //    16:9 에서는 프레임 아래로 빠져 안 보이지만, **화면이 넓어질수록**
+    //    가로 시야가 열려 바깥 칸의 띠가 구석으로 밀려 들어온다.
+    //    2000×560(3.6:1) 에서 재 보니 상태창과 레이더를 통째로 덮었다.
+    //
+    //  ★★★ 즉 **잘못 놓인 것이 아니라 놓을 자리가 없는 것**이다. 조종석
+    //    안을 밝히는 몫은 이미 천장 띠(`box(... H-0.19 ...)`)와 점광원
+    //    (`key`)이 하고 있으므로, 이 줄은 **밝기를 안 잃고 지울 수 있다.**
+    //    `tools/space-screen.js` 가 초광폭에서 구석을 다시 재서 지킨다
+    //  ★ 지우는 대신 남긴 것: **아래 창틀**(`rail(... FRAME ...)`) 은 그대로다.
+    //    그건 어두운 쇠라 구석에서 안 빛나고, 없으면 유리가 허공에 뜬다
   }
   // 창 사이 기둥(멀리언) — 없으면 창이 한 장짜리로 보인다.
   // ★★ **전부 `CLEAR.yaw`(60도) 밖에 선다** — 앞 것이 ±2.05 로 밀려난
@@ -1330,6 +1347,10 @@ export function buildOutside(scene, z) {
   const shots = buildShots(out);
   // ★★★ v81 — **회수.** 꾸러미·그물·줄. 창밖 그룹이라 배를 틀면 같이 흐른다
   const salvage = buildSalvage(out);
+  // ★★★ v121 — **항로 문** (사장님 「항로가 목적지까지 희미하게 표시」).
+  //   창밖 그룹이라 배를 틀면 같이 흐르고, 아래 `EYEG` 에 넣으므로
+  //   원점이 **눈**에 붙는다 — 표적과 같은 자리를 쓴다는 뜻이다
+  const road = buildRoad(out);
   // ══ ★★★ v94 — **표는 눈에서 잰다** (여기가 모든 어긋남의 뿌리였다) ══
   //
   //  사장님 「**화면에 보이는 물체와 레이더 표적이 나오는걸 왜 동일하게
@@ -1369,7 +1390,7 @@ export function buildOutside(scene, z) {
   //     시차가 있으니 **더더욱** 이래야 했다.
   //   ★ 여기 한 번 놓는 것은 **첫 프레임용**으로만 남긴다 (`update` 전에
   //     한 프레임 그려지는 일이 있다)
-  const EYEG = [targets.group, shots.group, salvage.group].filter(Boolean);
+  const EYEG = [targets.group, shots.group, salvage.group, road.group].filter(Boolean);
   for (const grp of EYEG) grp.position.set(DEP.x, DEP.y, DEP.z);
   const dust = buildDust(out, z);
   const Z_NEAR = z - DUST.near;
@@ -1844,6 +1865,8 @@ export function buildOutside(scene, z) {
     // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
     //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
     targets, shots, salvage,
+    /** ★★★ v121 — 항로 문 (`world/road.js`). `main.js` 가 매 프레임 먹인다 */
+    road,
     /** ★ v79 — 광학 창의 카메라가 여기 매달린다. 표적 좌표가 이 그룹 기준이라
      *   다른 데 매달면 배를 틀 때마다 좌표를 두 번 옮기게 된다 */
     group: out,

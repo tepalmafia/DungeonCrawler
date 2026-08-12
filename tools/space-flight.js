@@ -25,6 +25,7 @@ import { AXES, GIMBAL, OFF_WEIGHT, attitudeWord, rollDeg } from '../web/space/js
 import { makeFlight, stepFlight, offCourse, gimbalBusy } from '../web/space/js/game/flight.js';
 import { HAZARD } from '../web/space/js/game/hazard-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
+import { HORIZON } from '../web/space/js/game/horizon-table.js';
 
 
 let fail = 0;
@@ -32,13 +33,13 @@ const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail+
 const DT = 1 / 30;
 
 /** 손을 이렇게 두고 몇 초 */
-function hold(f, sec, push, { manual = true } = {}) {
-  for (let t = 0; t < sec; t += DT) stepFlight(f, DT, { atSeat: true, push, manual });
+function hold(f, sec, push, { manual = true, assist = true } = {}) {
+  for (let t = 0; t < sec; t += DT) stepFlight(f, DT, { atSeat: true, push, manual, assist });
   return f;
 }
 /** 놓고 몇 초 */
-function letGo(f, sec, { manual = true } = {}) {
-  for (let t = 0; t < sec; t += DT) stepFlight(f, DT, { atSeat: false, push: {}, manual });
+function letGo(f, sec, { manual = true, assist = true } = {}) {
+  for (let t = 0; t < sec; t += DT) stepFlight(f, DT, { atSeat: false, push: {}, manual, assist });
   return f;
 }
 
@@ -70,11 +71,29 @@ console.log('\n[1] ★★ **세 축이 다 먹나**');
 
 console.log('\n[2] ★★ **360도가 정말 한 바퀴 도나**');
 {
+  // ══ ★★★ v121 — **한 바퀴는 「보조를 끈」 이야기다** ═══════════════
+  //
+  //  ★ 사장님 「계속 회피하다 보니 또 뒤집혀서 정상적으로 안 돌아오는데」
+  //    → 비행 보조가 켜져 있으면 롤이 **뒤집힘 문턱에서 멈춘다**
+  //    (`horizon-table.js clampRoll`). 그래야 되풀이해도 안 쌓인다.
+  //
+  //  ★★ 그러니 「한 바퀴 도나」는 **보조를 끄고** 물어야 맞다. 켠 채로
+  //    물으면 **보조가 하는 일을 버그라고 부르게 된다** — 이 검사가
+  //    실제로 그렇게 빨개져서 알았다.
+  //  ★★★ 그리고 **둘 다 묻는다**: 끄면 돌고 · 켜면 멈춘다. 한쪽만 물으면
+  //    나중에 누가 반대쪽을 조용히 깬다
   const f = makeFlight();
-  hold(f, 10, { roll: 1 });
+  hold(f, 10, { roll: 1 }, { assist: false });
   const deg = (f.roll * 180) / Math.PI;
-  console.log(`   10초 비트니 ${deg.toFixed(0)}도 (${(deg / 360).toFixed(2)}바퀴)`);
+  console.log(`   보조 끄고 10초 비트니 ${deg.toFixed(0)}도 (${(deg / 360).toFixed(2)}바퀴)`);
   ok(deg > 360, `★ **한 바퀴를 넘긴다** (${deg.toFixed(0)}도) — 막히면 그건 회전이 아니라 기울기다`);
+  const fa = makeFlight();
+  hold(fa, 10, { roll: 1 }, { assist: true });
+  const degA = Math.abs(rollDeg(fa.roll));
+  console.log(`   보조 켜고 10초 비트니 ${degA.toFixed(0)}도`);
+  ok(degA <= HORIZON.overAt + 1,
+    `★★★ **보조를 켜면 ${HORIZON.overAt}도에서 멈춘다** (${degA.toFixed(0)}도) —`
+    + ' 그래서 회피를 되풀이해도 뒤집힌 채로 안 남는다 (v121). 360도가 필요하면 **L 로 끈다**');
   // ★ v69 — **둘이 끝이 없다.** 비틀기와 좌우. 위아래만 끝이 있다:
   //   기수를 위로 끝까지 젖히면 그건 선회가 아니라 공중제비고, 그러면
   //   짐벌이 감당 못 한다 (방이 뒤집힌다)
@@ -173,7 +192,18 @@ console.log('\n[4] ★★ **짐벌** — 배가 뒤집혀도 방은 수평인가
     `★ 놓으면 **4초 안에 바로 선다** (${f.tiltZ.toFixed(4)}) — 보조가 수평을`
     + ' 잡는 동안 그 보정이 다시 방을 기울이므로 v103 전보다 조금 길다.'
     + ' 기운 채로 **남으면** 그건 짐벌이 고장난 것이다');
-  ok(Math.abs(f.roll) > Math.PI, '그런데 **배는 여전히 뒤집혀 있다** — 방만 수평이다');
+  // ══ ★★★ v121 — **이 줄은 「보조를 끈」 이야기다** ═══════════════════
+  //
+  //  ★ 여기가 묻는 것은 「**짐벌은 방만 세우지 배는 안 세운다**」이다.
+  //    그런데 v121 부터 보조가 켜져 있으면 **배도 세워진다** (90도에서
+  //    멈추고 되돌아온다) — 그러면 이 줄은 보조가 하는 일을 버그라고
+  //    부르게 된다. 짐벌만 보려면 **보조를 꺼 놓고** 봐야 한다
+  const g = makeFlight();
+  hold(g, 3, { roll: 1 }, { assist: false });
+  letGo(g, 4, { manual: true, assist: false });
+  ok(Math.abs(g.roll) > Math.PI / 2,
+    `그런데 **배는 여전히 기울어 있다** (${rollDeg(g.roll).toFixed(0)}도) — 방만 수평이다`
+    + ' (보조를 끄고 본 것이다 — 켜면 배도 선다)');
 }
 
 console.log('\n[5] ★ **느낌은 나나** — 아무것도 안 기울면 눈으로만 안다');

@@ -14,9 +14,9 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   HORIZON, wrapDeg, isOver, isLevel, rollWord, pitchWay,
-  ASSIST, levelStep, assistWord,
+  ASSIST, levelStep, assistWord, rateAt, steepOf, clampRoll,
 } from '../web/space/js/game/horizon-table.js';
-import { AXES, OFF_WEIGHT } from '../web/space/js/game/flight-table.js';
+import { AXES, OFF_WEIGHT, RCS } from '../web/space/js/game/flight-table.js';
 
 const DEG = 180 / Math.PI;
 
@@ -172,6 +172,162 @@ console.log('\n[8] ★ 그래서 **단축키를 만들 것인가** — 답: 안 
     + ` (「${rollWord(120)}」)`);
   ok(!rollWord(0).includes('뒤집힘') && isLevel(0),
     '★ 다 돌아오면 조용해진다 — 늘 떠 있는 경고는 경고가 아니다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[8b] ★★★ **회피를 되풀이해도 뒤집힌 채로 안 남나** (v121)');
+{
+  //  ★ 사장님 (2026-08-12) 「**계속 회피하다 보니 또 뒤집혀서 정상적으로
+  //    안 돌아오는데**, 블록아웃으로 테스트하고 원인 찾아서 수정해줘」
+  //
+  //  ★★ 여기가 v103·v111 이 **못 물어본 것**이다. 둘 다 「한 번 뒤집어
+  //    놓고 손을 떼면 펴지나」만 물었다. 그런데 사장님이 겪으신 것은
+  //    **되풀이**다 — 꺾고 · 조금 쉬고 · 또 꺾는다. 한 번은 펴지는데
+  //    되풀이하면 쌓인다.
+  const hand = (burst) => AXES.roll.rate * (burst ? RCS.burst.mult : 1);
+  console.log(`   손 — 보통 ${AXES.roll.rate} · 급기동 ${hand(true).toFixed(2)} rad/s`);
+  console.log(`   보조 — 잔 기울기 ${ASSIST.rate} · 180도 ${rateAt(Math.PI).toFixed(2)} rad/s`
+    + ` (steep ${steepOf().toFixed(2)} — **손에서 뽑는다**)`);
+  ok(rateAt(Math.PI) > hand(true),
+    `★★★ 보조가 제일 나쁜 자리에서 **제일 빠른 손보다 빠르다** (${rateAt(Math.PI).toFixed(2)} > ${hand(true).toFixed(2)}) —`
+    + ' v120 까지 2.55 대 3.00 으로 **손이 더 빨랐다**');
+
+  /** 꺾고 쉬기를 되풀이한다 — 60초 */
+  const loop = (hold, rest, burst, on = true) => {
+    let roll = 0, over = 0, t = 0, top = 0;
+    const dt = 1 / 60;
+    while (t < 60) {
+      const h = (t % (hold + rest)) < hold;
+      if (h) roll += hand(burst) * dt;
+      roll += levelStep(roll, dt, { hand: h, on });
+      roll = clampRoll(roll, on);
+      const d = Math.abs(wrapDeg((roll * 180) / Math.PI));
+      top = Math.max(top, d);
+      if (d > HORIZON.overAt) over += dt;
+      t += dt;
+    }
+    return { end: +wrapDeg((roll * 180) / Math.PI).toFixed(0), over: +((over / 60) * 100).toFixed(0), top: +top.toFixed(0) };
+  };
+
+  console.log('\n   꺾음/쉼    급기동으로 60초       보통으로 60초');
+  let worst = 0;
+  for (const [h, r] of [[0.42, 1.2], [0.5, 1.0], [0.6, 0.6], [0.8, 0.4], [1.0, 0.3], [3.0, 1.0]]) {
+    const a = loop(h, r, true); const b = loop(h, r, false);
+    worst = Math.max(worst, a.over, b.over);
+    console.log(`   ${h}초/${r}초   끝 ${String(a.end).padStart(4)}도 · 최대 ${String(a.top).padStart(3)}도 · 뒤집힘 ${String(a.over).padStart(3)}%`
+      + `   끝 ${String(b.end).padStart(4)}도 · 최대 ${String(b.top).padStart(3)}도 · 뒤집힘 ${String(b.over).padStart(3)}%`);
+  }
+  ok(worst === 0,
+    `★★★ **어떤 되풀이로도 뒤집히지 않는다** (제일 나쁜 자리에서 ${worst}%) —`
+    + ` 보조가 켜져 있으면 롤이 **${HORIZON.overAt}도에서 멈춘다** (\`clampRoll\`).`
+    + ' 속도로는 못 풀었다: 빠르게 하면 꺾는 시간이 길 때 쌓이고, 잡은 동안에도 걸면 보통 롤이 막힌다');
+
+  // ★★ 그런데 **손은 그대로 자유로워야** 한다 — 조종을 뺏으면 안 된다
+  ok(ASSIST.handMult === 0,
+    '★★★ 잡고 있는 동안에는 보조가 **손을 안 건드린다** — 걸었더니 보통 롤이'
+    + ' 90도에서 남는 속도 0.21, 180도에서 −0.44 가 됐다 (구를 수가 없다)');
+
+  // ★★★ 그리고 **끄면 360도가 그대로 산다**
+  const off = loop(1.0, 0.3, true, false);
+  ok(off.top > 170 && off.over > 20,
+    `★★★ **L 로 끄면 360도가 그대로다** (최대 ${off.top}도 · 뒤집힘 ${off.over}%) —`
+    + ' 자르는 것은 **보조가 하는 일**이지 이 배가 못 하는 일이 아니다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ══ ★★★ v120 — **여기부터는 게임을 띄운다** ═══════════════════════════
+//
+//   node tools/space-horizon.js --see 8391     (serve.py 를 먼저 띄운다)
+//
+//  ★ 사장님 (2026-08-12) 「**뒤집혔는데 자동으로 돌아오지 않는데?** 방향키에
+//    손가락을 땠을때 돌아오도록 해줘」
+//
+//  ★★ 위의 여덟 절은 **전부 초록이었다.** 그런데 화면에서는 안 돌아왔다 —
+//    위는 `levelStep` 이 **0 이 아닌 값을 주나**만 물었고, 「그 값이 정말
+//    배에 더해지나 · 보조가 켜져 있나」는 **아무도 안 물었다.**
+//    이 저장소가 v98 에 적어 둔 그것이다: **한쪽만 읽는 검사는
+//    「둘이 같나」를 못 묻는다.**
+//
+//  ★★★ 재 보니 계통은 멀쩡했고, 안 돌아오는 경우는 **딱 하나** —
+//    보조가 꺼져 있을 때(L)다. 그리고 껐다는 말은 **누른 순간 한 번**
+//    뜨고 사라져서, 그 뒤로는 「고장」과 구별할 길이 없었다.
+//    그래서 v120 이 고친 것은 되돌리는 힘이 아니라 **말**이다
+// ══════════════════════════════════════════════════════════════════════════
+const port = (() => {
+  const i = process.argv.indexOf('--see');
+  return i >= 0 ? (process.argv[i + 1] ?? '8391') : null;
+})();
+
+if (port) {
+  let chromium = null;
+  for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs']) {
+    try { ({ chromium } = await import(m)); break; } catch { /* 다음 것 */ }
+  }
+  const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+  const p = await b.newPage({ viewport: { width: 1280, height: 760 } });
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  try {
+    await p.goto(`http://127.0.0.1:${port}/space/`, { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => !!globalThis.SPACE, null, { timeout: 60000 });
+    await p.evaluate(() => SPACE.clearSave());
+    await p.click('#btn-play').catch(() => {});
+    await p.evaluate(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor?.(); });
+    await p.waitForTimeout(2000);
+    const A = () => p.evaluate(() => SPACE.assist);
+    const said = () => p.evaluate(() => {
+      const e = document.getElementById('hud');
+      return e && !e.hidden ? e.textContent : '';
+    });
+
+    console.log('\n[9] ★★★ **게임이 정말 펴나** (진짜 브라우저)');
+    {
+      ok((await A()).on, '① ★★ 보조는 **기본이 켜짐**이다 — 어렵다는 말을 들었으면 기본값이 답이다');
+      await p.evaluate(() => SPACE.putRoll(170));
+      // ★ 머리 없는 시계는 실시간의 1/25 쯤이라 **넉넉히** 기다린다.
+      //   여기서 초를 빠듯하게 잡으면 「안 펴진다」는 거짓 빨강이 난다
+      let back = false;
+      for (let i = 0; i < 40; i++) {
+        await p.waitForTimeout(500);
+        if (!(await A()).over) { back = true; break; }
+      }
+      const a = await A();
+      ok(back, `② ★★★ **170도로 뒤집어 놓고 손을 떼니 저절로 펴진다** (지금 ${a.roll.toFixed(0)}도 · ${a.word})`);
+    }
+
+    console.log('\n[10] ★★★ **껐을 때 — 안 펴지는 것이 조용하지 않나**');
+    {
+      await p.keyboard.press('KeyL');
+      await p.waitForTimeout(300);
+      ok(!(await A()).on, '① L 로 껐다');
+      await p.evaluate(() => SPACE.putRoll(170));
+      await p.waitForTimeout(2500);
+      const a = await A();
+      ok(a.over && Math.abs(a.roll - 170) < 1,
+        `② ★★ 껐으니 **안 펴진다** (${a.roll.toFixed(1)}도 그대로) — 이건 고장이 아니라 고른 것이다`);
+      // ★★★ 여기가 v120 의 알맹이 — **되풀이해서 말하나**
+      let nag = false;
+      for (let i = 0; i < 30; i++) {
+        await p.waitForTimeout(500);
+        if ((await said()).includes('비행 보조가 꺼져 있습니다')) { nag = true; break; }
+      }
+      ok(nag,
+        '③ ★★★ **뒤집혀 있는 동안 「보조가 꺼져 있습니다 — L」 이라고 되풀이해 말한다** —'
+        + ' v119 까지는 누른 그 순간 한 번 뜨고 사라져서, 그 뒤로는 「고장났다」와 구별이 안 됐다');
+      // 다시 켜면 조용해지고 펴진다
+      await p.keyboard.press('KeyL');
+      let back2 = false;
+      for (let i = 0; i < 40; i++) {
+        await p.waitForTimeout(500);
+        if (!(await A()).over) { back2 = true; break; }
+      }
+      ok(back2, '④ ★★ 다시 켜면 **그 자리에서 펴진다** — 껐다 켜는 것이 되돌릴 수 있는 일이다');
+    }
+    ok(!errs.length, `콘솔에 오류가 없다 ${errs.slice(0, 2).join(' · ')}`);
+  } finally { await b.close(); }
+} else {
+  console.log('\n※ `--see 8391` 을 붙이면 **게임을 띄워서** 「정말 펴지나」까지 잽니다.');
+  console.log('   위의 여덟 절은 뼈대만 봅니다 — 그것만으로는 v120 의 병(보조가 꺼진 채');
+  console.log('   조용한 것)을 **못 잡습니다.**');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

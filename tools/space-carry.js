@@ -16,6 +16,12 @@
 //      [3] 놓으면 **되돌아가나** (배 안의 모든 「잡고 있기」와 같은 규약)
 //      [4] 고장이 물건을 주고 먹나 — 「챙긴다 → 갈아 넣는다」가 말뿐이 아닌가
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-carry');
+
 import { KINDS, SPOTS, CARRY, canGrab, carryPlan } from '../web/space/js/game/carry-table.js';
 import { makeCarry, carryStep, atSpot, spotsIn, give, take, summary } from '../web/space/js/game/carry.js';
 import { MISSIONS } from '../web/space/js/game/mission-table.js';

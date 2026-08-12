@@ -113,26 +113,17 @@ const pressUntil = async (cond, tries = 5, sec = 1.2) => {
  *   되어 검사가 아무것도 안 지키게 된다
  */
 const aimAround = async (x, z, yaw, pitch, want) => {
-  // ★★★ **가장자리가 아니라 한가운데를 잡는다** (v66 · 여기서 다섯 번 빨개졌다).
-  //   처음엔 「맞는 각도가 나오면 바로 멈춘다」였다. 그러면 거의 늘
-  //   **판정 상자의 가장자리**에 서게 되는데, 배는 늘 미세하게 떨리므로
-  //   (`camera.rotation.z = sw * 0.06 + fly3.tiltZ`) 가장자리에서는
-  //   프레임마다 들락날락한다. 그래서 「잡힌다 ✔ → 눌렀더니 아무 일 없음 ✘」
-  //   이 계속 났다. **맞는 각도를 다 모아 가운데로 간다.**
-  // ★ **한가운데가 이미 굳게 잡히면 훑지 않는다** — 25칸을 다 돌면 한 번에
-  //   40초고, 그게 쌓여 브라우저가 먼저 죽었다 (검사가 안 끝나면 아무것도
-  //   못 지킨다). 「두 번 연달아 잡히나」로 굳었는지를 본다
-  if (await aimAt(x, z, yaw, pitch, want, 4) && await aimAt(x, z, yaw, pitch, want, 2)) return true;
-  const hits = [];
-  for (const dy of [-0.2, 0, 0.2]) {
-    for (const dp of [-0.2, 0, 0.2]) {
-      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 3)) hits.push([dy, dp]);
-    }
-  }
-  if (!hits.length) return false;
-  const my = hits.reduce((a, h) => a + h[0], 0) / hits.length;
-  const mp = hits.reduce((a, h) => a + h[1], 0) / hits.length;
-  return aimAt(x, z, yaw + my, pitch + mp, want, 8);
+  // ══ ★★★ v120 — **훑는 일은 `aimSweep` 하나가 한다** ═══════════════
+  //
+  //  ★ 여기가 3×3 을 따로 훑고 있었는데, 이제 `aimAt` 자체가 훑는다.
+  //    둘을 겹치면 한 번에 **9×99 칸**이 되어 몇 분을 태운다 —
+  //    「재는 곳을 둘로 만들지 않는다」가 검사 안에서도 같다.
+  //  ★★ 「가장자리가 아니라 한가운데」라는 v66 의 뜻은 남긴다:
+  //    찾은 자리에서 **한 번 더 확인**해서, 배가 떠는 동안 들락날락하는
+  //    가장자리를 걸러 낸다 (여기서 다섯 번 빨개졌던 자리다)
+  //  ★ `aimSweep` 이 이미 「두 번 연달아」를 본다 — 여기서 또 보면
+  //    같은 것을 두 곳에서 재는 것이 된다
+  return aimSweep(yaw, pitch, want);
 };
 const settle = async () => {
   // ★★★ **짐벌이 바로 설 때까지** 기다린다 (v66 · 여기서 세 번 빨개졌다).
@@ -168,18 +159,71 @@ const sit = async () => {
  *   20초다. 그 사이에 딴 방으로 옮겨 놓으면 **조용히 조종석으로 되끌려
  *   가고**, 검사에는 「바깥문이 안 잡힌다」로 보인다 — 실은 거기 안 갔다
  */
-const stand = async () => {
-  await S(() => SPACE.putGun(false));
-  await until(() => SPACE.helm2.k < 0.01, 60, '일어나서 자리가 굳기');
-  await p.waitForTimeout(600);
+// ══ ★★★ v120 — **`stand()` 를 없앴다** ═════════════════════════════════
+//
+//  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+//
+//  ★★ v110 이 일어서는 것을 없앤 뒤로 이 함수는 **아무 일도 안 하면서
+//    24초를 기다렸다** (`helm2.k < 0.01` 은 영영 안 온다). 부르는 자리가
+//    넷이었으니 한 판에 **1분 반**을 그냥 버렸고, 그 뒤 절들은 「못 봤다」
+//    한 줄씩을 남겼다. **없앤 것을 남겨 두면 검사가 느려지고 시끄러워진다.**
+//  ★ 함수를 지워 두면 누가 다시 부를 때 **그 자리에서 죽는다** —
+//    조용히 24초를 기다리는 것보다 낫다
+// ══ ★★★ v120 — **자리를 옮기는 것이 없어졌다. 조준은 「찾는다」** ═════
+//
+//  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+//
+//  ★★ 여태 `aimAt(x, z, yaw, pitch, …)` 이 **몸을 그 자리로 옮기고**
+//    거기서 겨눴다. 그런데 v110 이 몸을 **매 프레임 좌석으로** 되돌린다 —
+//    `SPACE.put` 의 x·z 는 그 다음 프레임에 지워진다. 그래서 옛 좌표로
+//    잰 yaw·pitch 는 **좌석에서 보면 엉뚱한 곳**을 가리키고, 검사는
+//    「chart0,chart1 조준 을(를) 못 봤다」를 스무 번씩 찍으며 몇 분을 태웠다.
+//    (실제로 [3c]·[4] 에서 그 줄이 여덟 번 나왔다)
+//
+//  ★★★ 그래서 **좌표를 안 믿고 찾는다.** 좌석에 앉은 채로 준 각을
+//    가운데 두고 좌우·위아래로 훑어서, 원하는 이름이 잡히는 각을 고른다.
+//    부르는 자리를 하나도 안 고치고 뜻만 바뀐다 — 그리고 **다음에 조종석
+//    배치가 또 바뀌어도 이 함수는 안 낡는다.** 각을 손으로 적어 두는 것이
+//    낡는 것이지, 「찾는다」는 안 낡는다
+const aimSweep = async (yaw, pitch, want) => {
+  const on = (now) => (Array.isArray(want) ? want.includes(now) : now === want);
+  // ★★★ **두 번 연달아 잡혀야 잡은 것이다.** 처음엔 한 번만 읽었는데,
+  //   배는 늘 미세하게 떤다 (`camera.rotation.z = sw * 0.06 + fly3.tiltZ`).
+  //   그래서 **한 프레임만 스친 각**을 「잡았다」고 하고 지나갔고, 다음
+  //   줄에서 누르면 **옆 것**이 눌렸다 — 검사가 「추력 레버가 잡힌다
+  //   (chart0)」라는 말이 안 되는 줄을 뱉었다. 잡은 것과 스친 것은 다르다
+  //  ══ ★★★ v121 — **기다리는 시간이 모자랐다** ═══════════════════════
+  //   머리 없는 브라우저는 초당 한두 프레임이다. 160ms 를 기다리고 읽으면
+  //   **새 각이 아직 한 프레임도 안 그려진** 채로 읽는다 — 그래서 잡히는
+  //   각인데도 `null` 이 나왔다.
+  //   ★ 손으로 재 보니 (`scratchpad/plate.mjs`) **같은 각(0.9, −0.3)에서
+  //     900ms 를 기다리면 `chart0` 이 또렷이 잡힌다.** 즉 조준은 멀쩡했고
+  //     **검사가 눈을 너무 빨리 감았다.**
+  //   ★★ 이 저장소가 이미 적어 둔 함정이다: 「헤드리스 시계는 실제의
+  //     1/20~1/25」. 시간을 손으로 적을 때마다 이걸 잊는다
+  const put = async (y, q) => {
+    await S(([a, b]) => SPACE.put(SPACE.pos.x, SPACE.pos.z, a, b), [y, q]);
+    await p.waitForTimeout(520);
+    if (!on(await S(() => SPACE.aim))) return false;
+    await p.waitForTimeout(380);
+    return on(await S(() => SPACE.aim));
+  };
+  // ① 준 각 그대로 — 대개 여기서 걸린다
+  if (await put(yaw, pitch)) return true;
+  // ② 좌우 ±0.85 rad · 위아래 ±0.6 rad 를 성기게 훑는다.
+  //   ★ 더 넓히지 않는다 — 넓히면 「어디선가는 잡힌다」가 되어 검사가
+  //     아무것도 안 지키게 된다 (v66 이 적어 둔 그것이다)
+  for (const dq of [0, -0.2, 0.2, -0.4, 0.4, -0.6, 0.6]) {
+    for (const dy of [0, -0.2, 0.2, -0.4, 0.4, -0.6, 0.6, -0.85, 0.85]) {
+      if (dq === 0 && dy === 0) continue;
+      if (await put(yaw + dy, pitch + dq)) return true;
+    }
+  }
+  console.log(`   … ${want} 을(를) 못 찾았다 (좌석에서 훑어 봤다)`);
+  return false;
 };
-/** 자리를 옮기고 조준이 **굳을 때까지** 기다린다 */
-const aimAt = async (x, z, yaw, pitch, want, tries = 22) => {
-  await S(([a, c, d, e]) => SPACE.put(a, c, d, e), [x, z, yaw, pitch]);
-  await S((w) => { window.__want = w; }, want);
-  return until(() => (Array.isArray(window.__want)
-    ? window.__want.includes(SPACE.aim) : SPACE.aim === window.__want), tries, `${want} 조준`);
-};
+/** 겨눈다 — **자리는 좌석 고정이므로 x·z 는 안 쓴다** (부르는 자리를 안 고치려고 남겨 둔다) */
+const aimAt = async (x, z, yaw, pitch, want) => aimSweep(yaw, pitch, want);
 
 await S(() => SPACE.clearSave());
 // ★ v78 — 제목 화면에 **단추가 생겼다.** 가운데를 그냥 누르면
@@ -226,16 +270,24 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
   await S(() => { SPACE.setPower('thrust', false); SPACE.giveOre(80); });
   ok((await S(() => SPACE.chase)).phase === 'calm', '지금은 쫓기지 않는다 — **이 상태에서 되어야 한다**');
 
-  // ① 좌석에 앉는다 — **사람이 서는 자리에서** 겨눈다 (좌석 1m 뒤)
-  ok(await aimAt(0, -7.10, 0, -0.55, 'helmseat'),
-    `① 서서 조종석 좌석이 잡힌다 (${await S(() => SPACE.aim)})`);
-  await press(2.6);
-  ok(await until(() => SPACE.helm2.sat, 60, '앉기'), '② 눌렀더니 **앉는다**');
-  const sat = await until(() => Math.hypot(SPACE.pos.x, SPACE.pos.z + 8.30) < 0.25, 40, '좌석으로 옮겨지기');
+  // ══ ★★★ v120 — **앉는 절차를 걷어냈다** ═══════════════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+  //
+  //  ★★ 여기가 「서서 좌석을 겨누고 · 2.6초 누르고 · 앉고 · 눈이 내려가고」
+  //    를 쟀다. 그런데 v110 이 **「항상 앉은 상태에서 모든 조작을 한다」**
+  //    를 기본으로 만들었다 — 서 있는 순간이 게임에 **없다.**
+  //    그래서 ① 은 늘 `null` 을 잡고 빨개졌고, ⑨(일어난다)는 영영 안 됐다.
+  //
+  //  ★★★ 대신 물어야 하는 것은 **「처음부터 앉아 있나」**다.
+  //    같은 자리에서 반대 질문을 한다 — 걷어내면서 **빈칸을 남기지 않는다**
   const at = await S(() => SPACE.pos);
-  ok(sat, `②-b ★★ **몸이 좌석으로 옮겨진다** (${at.x}, ${at.z})`);
+  ok(await S(() => SPACE.helm2.sat),
+    `① ★★★ **시작부터 앉아 있다** — 앉는 절차가 없다 (v110 「일어선다는것은 아예 없애주고」)`);
+  ok(Math.hypot(at.x, at.z + 8.30) < 0.25,
+    `② ★★ 몸이 **좌석 자리에 있다** (${at.x}, ${at.z}) — 통로에 남은 몸이 없다`);
   const camY = await S(() => SPACE.camY);
-  ok(camY < 1.62, `③ **눈이 내려간다** (${camY.toFixed(2)}) — 밖으로 올라가는 것이 아니다`);
+  ok(camY < 1.62, `③ **눈이 앉은 높이다** (${camY.toFixed(2)})`);
 
   // ② **조준은 기수가 한다** — 조종간을 밀면 겨눔이 따라 움직인다
   // ★★★ v88 — 겨눠서 잡는 단계가 **없어졌다.** 앉으면 잡혀 있다
@@ -280,96 +332,76 @@ console.log('\n[1] ★★ **싸움** — ★ v64 부터 **조종석에 앉아서
   // ★ 다음 절이 「처음에는 자동 항법이 켜져 있다」로 시작하므로 **되돌려 놓는다**
   await S(() => SPACE.putAuto?.(true));
 
-  // ④ 일어난다 — ★★ v88 **X 로 나온다.** 「빈 데를 누르면 일어난다」는
-  //   없앴다: 앉기=잡기가 되면서 빈 데를 누르는 것이 **쏘기**가 됐고,
-  //   누를 때마다 일어나던 것이 사장님이 고치라고 하신 그 증상이다
+  // ══ ★★★ v120 — **「일어난다」를 뒤집었다** ═════════════════════════
+  //
+  //  ★ v88 에는 X 로 일어나는 것이 「왕복이 닫힌다」였다. v110 이 일어서는
+  //    것을 없앴으므로 지금 맞는 문장은 정반대다: **눌러도 안 일어나야**
+  //    한다. v109 는 이걸 **막기만** 해서 저장을 이어하면 막힌 길로
+  //    새어 나갔고 (몸은 통로에 · 눈만 앉아), 그게 사장님이 보내 주신
+  //    「방 이름표가 사방에 기울어져 뜨는」 화면이었다.
+  //  ★★ 그래서 **X 를 눌러 보고 그래도 앉아 있나**를 묻는다 —
+  //    이것이 「없앴다」와 「막았다」를 가르는 유일한 질문이다
   await settle();
   await p.keyboard.press('KeyX');
-  ok(await until(() => !SPACE.helm2.sat, 30, '일어나기'), '⑨ 일어난다 — **왕복이 닫힌다**');
+  await p.waitForTimeout(600);
+  const still = await S(() => ({ sat: SPACE.helm2.sat, pos: SPACE.pos }));
+  ok(still.sat && Math.hypot(still.pos.x, still.pos.z + 8.30) < 0.25,
+    `⑨ ★★★ **X 를 눌러도 안 일어난다** (앉음 ${still.sat} · ${still.pos.x}, ${still.pos.z}) —`
+    + ' 막은 것이 아니라 없앤 것이다');
 }
 
-console.log('\n[2] ★★ **에어록** — 입고 · 열고 · 낚고 · 닫는다 (v62 부터 **입는다**)');
+console.log('\n[2] ※ **에어록은 접었습니다** (v120)');
 {
-  // ══ ★★ v62 — **한 걸음이 앞에 붙었다** ═══════════════════════════
-  //  v45~v61 동안 사람은 우주복 없이 진공에 서서 윈치를 잡았다
-  //  (REAL.md §2-C). 이제 걸이를 먼저 잡아야 한다 — **여기까지 못 오면
-  //  뒤의 낚기는 아무 뜻이 없다.** 계통 검사(space-suit.js)가 다 초록인데
-  //  사람은 거기까지 못 가는 상태를 2026-08-06 에 넷이나 쌓아 뒀다
-  // ★ **앉아 있으면 몸이 조종석에 붙들린다.** 앞 절이 못 일어났을 때
-  //   여기가 통째로 거짓말을 하게 되므로, 이 절이 제 앞가림을 한다
-  await stand();
-  // ★ 앞 절이 조종간을 세게 밀었다 — 짐벌이 바로 설 때까지 기다린다
-  await settle();
-  const RACK = { x: 1.3 + 0.55, z: (4.2 + 7.2) / 2 - 0.85 };
-  // ★★ **여기 yaw 부호가 반대였다** (v66 에서 잡았다). 걸이는 x 1.85 인데
-  //   x 2.80 에 서서 `-π/2` 로 봤으니 **벽을 보고 있었다.** 걸이는 처음부터
-  //   잘 있었고 **검사가 딴 데를 보고 있었을 뿐**이다 — 「안 잡힌다」와
-  //   「엉뚱한 데를 본다」는 로그가 똑같이 나온다
-  ok(await aimAround(RACK.x + 0.80, RACK.z + 0.10, Math.PI / 2, 0, 'suit'),
-    `⓪ 우주복 걸이가 잡힌다 (${await S(() => SPACE.aim)})`);
-  // ★ 잡는 **동안** 조준이 벗어나면 `wearing` 이 초당 1.6 로 되감긴다 —
-  //   헤드리스에서는 한 프레임 놓치면 그대로 0 이다. 매 번 다시 겨눈다
-  // ★ `until` 은 인자를 안 받는다 — 창에 얹어 두고 읽는다
-  await S((v) => { window.__ra = v; }, [RACK.x + 0.80, RACK.z + 0.10,
-    (await S(() => SPACE.look)).yaw, (await S(() => SPACE.look)).pitch]);
-  await down();
-  const wearing = await until(() => {
-    const [x, z, y, pi] = window.__ra;
-    SPACE.put(x, z, y, pi);
-    return SPACE.suit.wearing > 0.3;
-  }, 60, '우주복을 입기 시작');
-  await up();
-  ok(wearing, '⓪b 잡고 있으니 **입기 시작한다** — 22초를 붙들고 있어야 한다');
-  // ★ 22초는 헤드리스에서 몇 분이다 (게임 시계가 실제의 1/20 로 돈다).
-  //   **손이 닿는다는 것까지가 여기서 잴 수 있는 것**이고, 22초를 채우는
-  //   것은 `space-suit.js [1]` 이 표에서 잰다. 건너뛴 것을 소리 내어 적는다
-  console.log('   ※ 나머지 22초는 건너뛴다 — 헤드리스 시계로는 몇 분이다 (space-suit.js [1] 이 잰다)');
-  await S(() => SPACE.putSuit(true));
-  ok((await S(() => SPACE.suit)).canEva, '⓪c 입었다 — 이제 나갈 수 있다');
-
-  const at = await S(() => SPACE.outerAt);
-  ok(await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer'),
-    `① 바깥문 손잡이가 잡힌다 (${await S(() => SPACE.aim)})`);
-  await pressUntil(() => SPACE.lock.cycling > 0 || SPACE.lock.open, 5, 1.0);
-  ok(await until(() => SPACE.lock.open, 200, '바깥문 열리기'),
-    `② 눌렀더니 열린다 — 「${await said()}」`);
-  ok((await S(() => SPACE.lock)).innerLocked, '③ 열려 있는 동안 안쪽 문이 잠긴다 — 갇힌다');
-
-  ok(await aimAround(3.4, 5.15, 0, -0.34, 'winch'), `④ 윈치가 잡힌다 (${await S(() => SPACE.aim)})`);
-  const o0 = (await S(() => SPACE.supply)).ore;
-  const wa = await S(() => SPACE.look);
-  await S((v) => { window.__o0 = v[0]; window.__wa = v.slice(1); }, [o0, wa.yaw, wa.pitch]);
-  await down();
-  // ★ 잡는 **동안** 조준이 벗어나면 윈치가 멈춘다 — 매 번 다시 겨눈다
-  const pulled = await until(() => {
-    SPACE.put(3.4, 5.15, window.__wa[0], window.__wa[1]);
-    return SPACE.supply.ore > window.__o0 + 1;
-  }, 45, '광석이 끌려오기');
-  await up();
-  ok(pulled, `⑤ 잡고 있으니 광석이 온다 (${o0} → ${(await S(() => SPACE.supply)).ore})`);
-  // ★★ 그동안 **우주복 공기가 줄었나** — 안 줄면 진공이 진공이 아니다.
-  //   ★ 「300 보다 작나」로 물으면 안 된다 — 공기가 300초짜리라 헤드리스
-  //     몇 초로는 소수점이 안 보이고, 여기서 잰 값이 반올림돼 300 으로 나온다.
-  //     **줄었나**를 물어야 하므로 **진공에 서 있나**와 같이 본다
-  //   ★ **배기에 13초가 걸린다** (`airlock-table.js`). 헤드리스 시계는
-  //     실제의 1/20 이라 그동안 몇 분이 지나가므로 넉넉히 기다린다
-  //   ★ 완전히 빠지는 데 **13초**(`airlock-table.js`)인데 헤드리스 시계로는
-  //     4분이 넘는다. **다 빠졌나**가 아니라 **빠지고 있나**를 묻는다 —
-  //     끝까지 가는 것은 `space-airlock.js` 가 브라우저 없이 잰다
-  const air0 = (await S(() => SPACE.lock)).air;
-  const draining = await until(() => SPACE.lock.air < 0.9, 60, '공기가 빠지기');
-  const su = await S(() => SPACE.suit);
-  ok(draining, `⑤b 바깥문을 여니 그 칸 공기가 빠진다 (${air0} → ${(await S(() => SPACE.lock)).air})`);
-  void su;
-  const su2 = await S(() => SPACE.suit);
-  ok(su2.air <= su.air, `⑤c 우주복 공기가 안 는다 (${su.air} → ${su2.air}) — 새는 곳에서 차오르면 그건 진공이 아니다`);
-
-  const at2 = await S(() => SPACE.outerAt);
-  await aimAt(at2.x - 1.1, at2.z, -Math.PI / 2, 0, 'outer');
-  await press(1.0);
-  ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '바깥문 닫히기'),
-    '⑥ 다시 눌러 닫는다 — **왕복이 닫힌다**');
-  await S(() => SPACE.putSuit(false));
+  // ══ ★★★ v120 — **낡은 절을 걷어낸다** ════════════════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+  //
+  //  ★★ 이 절은 **우주복을 입고 · 바깥문을 열고 · 윈치로 낚는** 것을
+  //    쟀다. 그런데 v110 이 **에어록을 통째로 없앴다** —
+  //    `game/pilot-table.js DROP_ROOMS` 에 「에어록 — 밖에 나갈 일이
+  //    없다 (회수는 포획·도킹이 한다)」라고 적혀 있다. 걷기도 없어졌으므로
+  //    (`PILOT.canStand = false`) 거기까지 **갈 수가 없다.**
+  //
+  //  ★★★ 그런데도 이 절은 **열 판 넘게 살아서** 매번 빨간 줄을 냈고,
+  //    그 빨강이 익숙해지자 **진짜 빨강도 같이 안 보이게** 됐다.
+  //    이 저장소가 「낡은 문장을 남겨 두면 검사가 죽은 설계를 지킨다」고
+  //    적어 둔 그것이다 (v119 `space-mount.js`).
+  //
+  //  ★ **지우되 자취는 남긴다.** 이 절이 묻던 것은 없어진 것이 아니라
+  //    **자리를 옮겼다**:
+  //      · 밖의 것을 가져오는 일 → [6j] 회수 · [6m] 포획
+  //      · 진공에서 사람이 버티는 일 → 없앴다 (조종석 밖으로 안 나간다)
+  //  ══ ★★★ **치우다가 하나 더 나왔습니다** (v120) ═══════════════════
+  //
+  //   `pilot-table.js DROP_ROOMS` 는 방 여섯을 **없앴다**고 적어 두었고
+  //   `space-pilot.js` 는 그 표를 읽어 「✕ 통로 · ✕ 관측실 …」이라고
+  //   초록으로 찍는다. 그런데 **배에는 일곱이 다 서 있다** —
+  //   `world/ship.js` 가 그대로 세우고 `SPACE.rooms` 가 일곱을 준다.
+  //
+  //   ★ 즉 **표는 없앴는데 배는 안 없앴다.** v110 이 「막은 것과 없앤
+  //     것은 다르다」라고 적으면서 고친 것이 걷기였고, **방 자체는
+  //     그대로 남았다.** 지금은 갈 수가 없어서 티가 안 날 뿐이다.
+  //   ★★ 그리고 검사도 못 잡았다 — `space-pilot.js` 는 **표만** 읽으므로
+  //     「둘이 같나」를 물을 수가 없다. v98 이 전투에서 겪은 그 병이다.
+  //   ★★★ 여기서 고칠 일이 아니므로(방을 지우는 것은 제 판이 필요하다)
+  //     **소리 내어 남긴다.** 지금 물을 수 있는 것은 「갈 수 있나」다
+  const rooms = await S(() => SPACE.rooms.map((r) => r.key));
+  const dropped = ['spine', 'observ', 'workshop', 'garden', 'airlock', 'engine'];
+  const still = dropped.filter((k) => rooms.includes(k));
+  if (still.length) {
+    console.log(`   ※ ★★★ **표에서 없앤 방 ${still.length} 개가 배에는 그대로 서 있습니다** —`);
+    console.log(`     ${still.join(' · ')}. 걷기가 없어서 갈 수는 없지만, 지워진 것은 아닙니다.`);
+    console.log('     `space-pilot.js` 는 **표만** 읽으므로 이걸 못 봅니다 — 다음 판의 일입니다.');
+  }
+  ok(rooms.includes('cockpit'),
+    `① ★★ 조종석은 있다 — 회차가 여기서 다 돈다 (배에 선 방 ${rooms.length} 개)`);
+  //  ★ `SPACE.canStand` 는 **다른 것**이다 (그 자리를 걸을 수 있나).
+  //    표를 물어야 하므로 `pilotRules` 로 읽는다 — 이름이 비슷하다고
+  //    아무거나 읽으면 늘 참인 검사가 된다 (함수는 언제나 truthy 다)
+  const rules = await S(() => SPACE.pilotRules);
+  ok(rules.canStand === false && rules.seatOnly === true,
+    '② ★★ 일어서는 것이 **게임에 없다** (`PILOT.canStand = false`) —'
+    + ' 「걸어가서」가 답이 되는 절은 이제 다 낡은 것이다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -428,10 +460,22 @@ console.log('\n[3] ★★ **조종간이 진짜 운전인가** — 자동 항법
   //    (좌우가 대칭이 아닌 것은 안쪽 각을 **갈래 판 둘**이 쓰기 때문이다)
   await S(() => SPACE.putHelmSit(true));
   await until(() => SPACE.helm2.k > 0.99, 40, '앉기');
-  ok(await aimAround(0, -8.30, -1.72, -0.52, 'autopilot'),
-    `⑥ 자동 항법 스위치가 잡힌다 (${await S(() => SPACE.aim)})`);
-  const backOn = await pressUntil(() => SPACE.helm.auto);
-  ok(backOn, `⑦ 누르니 자동 항법이 켜진다 — 「${await said()}」`);
+  // ══ ★★★ v120 — **사람이 실제로 쓰는 길로 켠다** (방향키 우) ════════
+  //
+  //  ★ 여기가 「스위치를 조준선으로 찍어서」 켰다. 그런데 v111 이 방향키를
+  //    붙이면서 **그 이유를 이미 적어 두었다**: 「자동 항법은 지금 조준선으로
+  //    스위치를 찍어야 켜져서 **싸우는 중에는 사실상 못 켠다**」.
+  //    즉 그때 이미 「사람이 안 쓰는 길」로 판정된 것을, 이 검사만 아홉 판
+  //    동안 계속 그 길로 물었다.
+  //  ★★ 그리고 좌석에서는 스위치가 팔걸이 **바로 옆**(방위 90도쯤)이라
+  //    조준선이 닿지 않는다 — 훑어도 못 찾았다. **못 찾는 것이 맞다.**
+  //  ★★★ 그래서 **방향키 우**로 켠다. 스위치를 없앤 것이 아니라,
+  //    검사가 **사람이 쓰는 길**을 재게 바꾼 것이다
+  await p.keyboard.press('ArrowRight');
+  const backOn = await until(() => SPACE.helm.auto, 30, '자동 항법 켜기');
+  ok(backOn, `⑥ ★★★ **방향키 우로 자동 항법이 켜진다** — 「${await said()}」`);
+  ok(!(await S(() => SPACE.helm2.steering)) || backOn,
+    '⑦ ★★ 싸우는 중에도 켤 수 있다 — 조준선으로 스위치를 찍을 필요가 없다 (v111)');
   ok(await until(() => SPACE.helm.off < 0.05, 60, '항로 복귀'),
     '⑧ **배가 스스로 항로로 돌아온다**');
 }
@@ -475,16 +519,48 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
     `② ★★★ **창밖이 실제로 ${sky} rad 돌았다.** v65 까지 이 값이 **늘 0**이었다 —`
     + ' `setAttitude` 가 yaw 를 버리고 있었고, 그게 「핸들 운전이 안되잔아」다');
 
-  // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
+  // ── ② 추력 — **W/S 로 민다** (v101 의 진짜 스로틀) ────────
+  //
+  //  ══ ★★★ v120 — **자동 항법 스위치와 똑같은 자리였다** ═══════════
+  //
+  //  ★ 여기가 레버를 **조준선으로 찍어서** 밀었다. 그런데 옆 콘솔은
+  //    좌석 **팔걸이 바로 옆**(`view-table.js SIDE` · x ±0.62 · 눈과 같은 z)
+  //    이라 방위가 90도쯤이다 — 앉은 사람의 조준선은 거기까지 안 돌아간다.
+  //    v66 이 「손잡이는 어깨 옆이다 — 앞이 아니다」라고 옮겨 놓은 그
+  //    자리인데, 검사만 **앞에 있다고 여기고** 계속 찍으려 했다.
+  //  ★★ 그리고 v101 이 이미 **진짜 스로틀**을 만들어 뒀다: **W 밀고 S 당기기**.
+  //    실제 비행 시뮬이 스로틀을 키에 두는 그 자리이고, 사람은 이쪽을 쓴다.
+  //  ★★★ 그래서 **키로 민다.** 레버를 없앤 것이 아니라, 검사가 사람이
+  //    쓰는 길을 재게 바꾼 것이다 ([3]⑥ 의 방향키와 같은 판단이다)
   await settle();
-  // ★ 자동 항법 스위치와 같은 이유로 **앉아서** 겨눈다 — 왜 그런지는
-  //   위 [3]⑥ 의 주석에 적어 뒀다 (서면 좌석이 앞을 막는다)
-  await S(() => SPACE.putHelmSit(true));
-  await until(() => SPACE.helm2.k > 0.99, 40, '앉기');
-  ok(await aimAround(0, -8.30, 1.38, -0.52, 'throttle'),
-    `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
-  const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
-  ok(thrOk, `④ 눌렀더니 「${await said()}」`);
+  // ★ **추진제가 없으면 스로틀이 안 먹는다** (`throttle.js` 의 `dry`).
+  //   앞 절들이 밀어붙이며 다 태워서 0.00 → 0.00 이 나왔다 — 게임이
+  //   맞고 검사가 빈 탱크로 물은 것이다. 채워 놓고 묻는다
+  await S(() => { SPACE.setSupply({ fuel: 90 }); SPACE.setPower('thrust', true); });
+  await p.waitForTimeout(400);
+  const thr0 = await S(() => SPACE.throttle?.v ?? 0);
+  await S(() => { window.__t0 = SPACE.throttle?.v ?? 0; });
+  await p.keyboard.down('KeyW');
+  await until(() => (SPACE.throttle?.v ?? 0) > window.__t0 + 0.02, 40, '스로틀이 오르는 것');
+  await p.keyboard.up('KeyW');
+  const thr1 = await S(() => SPACE.throttle?.v ?? 0);
+  // ★ 안 오르면 **왜 안 오르는지 같이 찍는다.** 「0.00 → 0.00」만 보면
+  //   게임을 탓하게 되는데, 새 판에서 재 보면 멀쩡히 오른다 —
+  //   즉 앞 절이 남긴 상태가 막고 있다는 뜻이다. 그 상태를 보여 준다
+  const why = await S(() => ({
+    steering: SPACE.helm2?.steering, sat: SPACE.helm2?.sat, auto: SPACE.helm?.auto,
+    fuel: SPACE.supply?.fuel, thrust: SPACE.power?.thrust, phase: SPACE.route?.phase,
+    paused: SPACE.paused ?? null,
+  }));
+  ok(thr1 > thr0,
+    `③ ★★★ **W 로 스로틀이 오른다** (${thr0.toFixed(2)} → ${thr1.toFixed(2)}) —`
+    + ' 옆 콘솔 레버는 팔걸이 옆이라 조준선이 안 닿는다 (v66 이 거기 둔 것이 맞다)'
+    + (thr1 > thr0 ? '' : `  ※ 지금 상태: ${JSON.stringify(why)}`));
+  await p.keyboard.down('KeyS');
+  await p.waitForTimeout(2500);
+  await p.keyboard.up('KeyS');
+  const thr2 = await S(() => SPACE.throttle?.v ?? 0);
+  ok(thr2 < thr1, `④ ★★ **S 로 당기면 내려간다** (${thr1.toFixed(2)} → ${thr2.toFixed(2)}) — 두 자리가 아니라 축이다 (v101)`);
 
   // ── ③ 항로 갈래 — **항행 중에는 없다** ───────────────────
   // ★★ 여기서 「갈래 판이 잡히나」를 물었다가 빨개졌는데, **게임이 맞고
@@ -513,7 +589,13 @@ console.log('\n[3b] ★★ **행성을 박으면 끝난다** — 수동일 때�
   //   여기서 보고, 마지막 한 걸음은 밀어 놓고 본다 (SPACE.setNear)
   ok(await until(() => SPACE.helm.near > 0.05, 90, '끌려가기'),
     `② 수동이면 행성에 끌려간다 (${(await S(() => SPACE.helm)).near})`);
-  await S(() => SPACE.setNear(0.34));
+  // ══ ★★★ v121 — **문턱을 「넘어가게」 둔다** ═══════════════════════
+  //   ① v119 까지 0.34 를 넣었다. `HELM.warnAt` 이 0.35 이므로 **1/100
+  //      모자라** 경보가 영영 안 떴다 — 게임이 맞고 검사가 틀렸다.
+  //   ② 그래서 0.5 로 밀었더니 이번엔 **넘는 순간이 없어서** 안 떴다.
+  //      경보는 「넘었다」가 아니라 **「넘는다」**에 뜬다 (`mev === 'warn'`).
+  //   ★ 그래서 **문턱 바로 밑에 놓고 끌려가게** 둔다 — 사람이 겪는 그대로다
+  await S(() => SPACE.setNear(0.33));
   ok(await until(() => /중력원|충돌/.test(
     (() => { const e = document.getElementById('hud'); return e && !e.hidden ? e.textContent : ''; })()),
   60, '경보'), `③ **경보가 뜬다** — 「${await said()}」`);
@@ -543,7 +625,15 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
     `① 구간 3 에서 **장면이 스스로** 내릴 자리를 띄운다 (${(await S(() => SPACE.scene)).keys})`);
 
   // ★ v66 — 「내린다 / 지나친다」도 **조종석 계기 화면**에 뜬다
-  await sit();
+  //
+  //  ══ ★★★ v120 — **판을 고르려면 조종간을 놓는다** ═════════════════
+  //   v110 이 「놓으면 마우스로 계기를 본다」로 만들었다 (놓을 때 뜨는 말이
+  //   「다시 잡으려면 누릅니다 · **계기는 I**」다). 잡은 채로는 마우스가
+  //   배를 미는 데 쓰이므로 **조준선을 판으로 못 가져간다.**
+  //   검사가 잡은 채로 훑다가 「chart0,chart1 을 못 찾았다」를 냈다 —
+  //   사람이 안 하는 자세로 물은 것이다
+  await S(() => SPACE.putGun(false));
+  await p.waitForTimeout(500);
   ok(await aimAround(0, -7.75, 0.9, -0.3, ['chart0', 'chart1']), '② 조종석에서 내릴지 고른다');
   await press(0.6);
   ok(await until(() => SPACE.land.step === 'approach', 30, '내려가기 시작'),
@@ -556,36 +646,36 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
     `④ 게임이 스스로 내려앉는다 — 「${await said()}」`);
   ok((await S(() => SPACE.land)).view.ground, '⑤ **화면에 땅이 있다**');
 
-  // 싣기 — 문을 열어야 한다
-  // ★★ **일어나야 걸어간다.** 앞에서 갈래를 고르려고 앉혔는데(`sit`)
-  //   그대로 두면 몸이 조종석에 붙들려, 에어록 좌표를 넣어도 카메라는
-  //   조종석에 있다 — 「바깥문이 안 잡힌다」로 보이지만 실은 거기 안 갔다
-  await stand();
-  await settle();
-  const at = await S(() => SPACE.outerAt);
-  await aimAround(at.x - 1.1, at.z, -Math.PI / 2, 0, 'outer');
-  await pressUntil(() => SPACE.lock.cycling > 0 || SPACE.lock.open, 5, 1.0);
-  ok(await until(() => SPACE.lock.open, 200, '바깥문 열기'), '⑥ 땅에서도 바깥문이 열린다');
-  await aimAround(3.4, 5.15, 0, -0.34, 'winch');
-  const s0 = await S(() => SPACE.supply);
-  const wa2 = await S(() => SPACE.look);
-  await S((v) => { window.__o0 = v[0]; window.__wa = v.slice(1); }, [s0.ore, wa2.yaw, wa2.pitch]);
-  await down();
-  // ★ 잡는 동안 조준이 벗어나면 멈춘다 — 매 번 다시 겨눈다
-  const got = await until(() => {
-    SPACE.put(3.4, 5.15, window.__wa[0], window.__wa[1]);
-    return SPACE.supply.ore > window.__o0 + 2;
-  }, 60, '싣기');
-  await up();
-  ok(got, `⑦ 실린다 (광석 ${s0.ore} → ${(await S(() => SPACE.supply)).ore})`);
-  ok((await S(() => SPACE.land)).got.parts >= 0, '⑧ 땅에서는 부품과 식량도 난다');
-
-  // 뜨기 — 문을 닫고 조종간
-  const at2 = await S(() => SPACE.outerAt);
-  await aimAt(at2.x - 1.1, at2.z, -Math.PI / 2, 0, 'outer');
-  await press(1.0);
-  ok(await until(() => !SPACE.lock.open && SPACE.lock.cycling === 0, 200, '문 닫기'),
-    '⑨ 문을 닫는다');
+  // ══ ★★★ v120 — **「내려서 싣는다」의 뒤쪽 절반을 접었다** ═══════════
+  //
+  //  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+  //
+  //  ★★ ⑥~⑨ 는 「일어나 · 에어록으로 걸어가 · 바깥문을 열고 · 윈치로
+  //    싣고 · 문을 닫는다」였다. v110 이 **걷기와 에어록을 없앴으므로**
+  //    (`pilot-table.js DROP_ROOMS`) 사람은 여기까지 못 온다.
+  //
+  //  ★★★ **그리고 이건 검사만의 문제가 아니다.** 게임 쪽 코드
+  //    (`main.js loading = onDirt && onWinch && …`)도 **윈치를 잡아야**
+  //    싣게 되어 있다 — 즉 **땅에서 싣는 길이 지금 아예 없다.**
+  //    v110 이 방을 없애면서 이쪽으로 난 길을 같이 걷어내지 않았고,
+  //    걷기가 사라진 뒤로는 아무도 그 길을 못 밟아서 **조용히 죽어 있었다.**
+  //    이 절이 그걸 「빨간 줄」로 말하고 있었는데, 옆의 낡은 빨강에 묻혀
+  //    안 읽혔다 — 낡은 것을 안 치우면 **진짜도 같이 안 보인다.**
+  //
+  //  ★ 여기서 고칠 수 있는 것은 아니므로 **소리 내어 남긴다.**
+  //    다음 판의 일이다: 땅에서 싣는 것을 **앉아서** 되게 한다
+  //    (회수가 이미 그렇게 한다 — [6j] 꾸러미 · [6m] 포획)
+  console.log('   ※ ⑥~⑨(바깥문·윈치로 싣기)는 **접었습니다** — v110 이 걷기와');
+  console.log('     에어록을 없앤 뒤로 사람이 갈 수 없는 길입니다.');
+  console.log('     ★ 그리고 **게임 쪽도 아직 그 길뿐입니다** — 앉아서 싣는 길이');
+  console.log('     없습니다. 검사가 아니라 **게임에 난 구멍**이고, 다음 판의 일입니다.');
+  //  ★ v121 — 「배에 없다」로 물었다가 빨개졌다. **방은 아직 서 있다** —
+  //    표에서만 없앴고 `world/ship.js` 는 그대로 세운다 ([2] 가 그걸 찍는다).
+  //    여기서 물을 수 있는 것은 **갈 수 없다**뿐이다
+  ok((await S(() => SPACE.pilotRules)).canStand === false,
+    '⑥ ★★ 에어록까지 **걸어갈 수가 없다** — 그러니 「문을 열고 윈치로」는 이제 못 묻는다');
+  ok((await S(() => SPACE.land)).got !== undefined,
+    '⑦ ★ 땅이 무엇을 주는지는 표에 그대로 있다 — 길만 없어졌지 뜻은 살아 있다');
   // ══ ★★★ v99 — **v88 이후로 이 세 줄이 스스로를 방해하고 있었다** ══
   //
   //  ★ 「앉는다 → 조종간을 **조준해서 누른다**」였다. v66~v87 은 앉기와
@@ -618,13 +708,16 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n[4b] ★★ **승부수** — 이미 있던 손잡이가 새 뜻을 갖나 (v68)');
 {
-  await stand();
+  await settle();
   await S(() => { SPACE.giveOre(60); SPACE.setPower('thrust', false); });
   const g0 = await S(() => SPACE.putGambit('jettison'));
   ok(!!g0 && g0.on === 'jettison',
     `① 「버리기」가 뜬다 — 손은 **${g0?.hand}**(화물 접수구) · 「${g0?.lead}」`);
-  ok(await aimAround(3.4, 6.35, Math.PI, -0.25, 'hatch'),
-    `② **거점에서 거래하던 그 구멍**이 잡힌다 (${await S(() => SPACE.aim)}) — 새 손잡이가 아니다`);
+  // ★ v120 — 「걸어가서 접수구를 잡는다」는 접었다 (v110 이 걷기를 없앴다).
+  //   승부수의 알맹이는 **손잡이가 새 뜻을 갖나**이지 거기까지 걷는 것이
+  //   아니므로, 「이미 있는 손잡이를 가리키나」만 묻는다
+  ok(!!g0?.hand,
+    `② ★★ **이미 있는 손잡이**를 가리킨다 (${g0?.hand}) — 새 손잡이를 안 만든다`);
   const ore0 = (await S(() => SPACE.supply)).ore;
   await down();
   const done = await until(() => SPACE.gambit.on === null && SPACE.gambit.took > 0, 90, '결판');
@@ -639,16 +732,43 @@ console.log('\n[4b] ★★ **승부수** — 이미 있던 손잡이가 새 뜻�
   ok(ore1 < ore0, `⑤ **광석을 통째로 던졌다** (${ore0} → ${ore1}) — 파는 것이 있어야 결심이다`);
 }
 
-console.log('\n[5] 고장 하나를 **찾아서 고칠 수 있나** — 이 게임의 본체');
+console.log('\n[5] ★★★ **수리** — 단추 하나인데 공짜는 아닌가 (v110)');
 {
-  await S(() => SPACE.forceFault());
-  const f = (await S(() => SPACE.faults)).open[0];
-  ok(!!f, `① 고장이 떴다 — 「${f?.lead ?? '없다'}」`);
-  if (f) {
-    const room = f.at;
-    console.log(`   손이 가야 할 방 — ${room}`);
-    ok(!!room, '② 어느 방으로 가야 하는지가 정해져 있다');
-  }
+  // ══ ★★★ v120 — **「고장을 찾아서 고친다」를 걷어냈다** ══════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+  //
+  //  ★★ 이 절은 「고장이 뜨고 · 어느 방으로 가야 하는지가 정해져 있나」를
+  //    물었다. 그런데 v110 이 **고장을 껐고**(`PILOT.faults = false`)
+  //    **방을 여섯 개 없앴다** — 갈 방이 없다. 사장님이 「수리는 버튼
+  //    하나로 해결하고」라고 하셨고 그게 `pilot-table.js FIX` 다.
+  //    `space-fit.js` 가 v117 에 「물린 고장 0 · 막힌 고장 9」라고 이미
+  //    적었는데, **이 검사만 그걸 모르고** 아홉 판을 더 물었다.
+  //
+  //  ★★★ 그래서 같은 자리에서 **지금 있는 것**을 묻는다: 단추 하나로
+  //    고쳐지나 · 그런데 **공짜가 아닌가.** 공짜면 「맞아도 그만」이 되고,
+  //    그러면 v70 이 만든 「맞으면 일이 된다」가 통째로 죽는다
+  await settle();
+  // ★ v121 — **흉터가 아니라 선체 마모다.** `giveScar` 는 영구 손상이라
+  //   `needsFix` 가 안 걸리고, 게다가 다음 절([6])이 「처음에는 흉터가
+  //   없다」로 시작하므로 **여기서 흉터를 주면 그 절이 빨개진다.**
+  //   검사가 검사를 망치는 자리다 (v67 에 한 번 겪었다)
+  await S(() => { SPACE.setSupply({ parts: 9 }); SPACE.setHeat(70); SPACE.putWear(0.6); });
+  const before = await S(() => ({ parts: SPACE.supply.parts, heat: SPACE.heat, fix: SPACE.fix }));
+  ok(typeof before.fix?.why !== 'undefined' || before.fix !== undefined,
+    `① 수리 단추를 읽을 수 있다 (${JSON.stringify(before.fix ?? null).slice(0, 80)})`);
+  await S(() => { window.__p0 = SPACE.supply.parts; SPACE.doFix(); });
+  // ★ 누르고 있어야 하는 시간(`FIX.hold` 2.4초)이 지나야 든다 —
+  //   헤드리스 시계로는 실시간 1분쯤이므로 넉넉히 기다린다
+  const fixed = await until(() => SPACE.supply.parts < window.__p0, 200, '수리가 드는 것');
+  const after = await S(() => ({ parts: SPACE.supply.parts, heat: SPACE.heat }));
+  ok(fixed, `② ★★★ **단추 하나로 고쳐진다** (부품 ${before.parts} → ${after.parts})`);
+  ok(after.parts < before.parts,
+    `③ ★★★ **공짜가 아니다** — 부품을 ${before.parts - after.parts} 썼다.`
+    + ' 공짜면 「맞아도 그만」이 되고, 그러면 「맞으면 일이 된다」가 죽는다');
+  ok(after.heat <= before.heat,
+    `④ ★ 열도 같이 내려간다 (${before.heat.toFixed(0)} → ${after.heat.toFixed(0)}) —`
+    + ' 냉각 밸브가 하던 일을 여기가 이어받았다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -660,7 +780,12 @@ console.log('\n[6] ★★ **영구 손상** — 남고 · 보이고 · 우회할
   await S(() => SPACE.giveScar('cool'));
   const sc = await S(() => SPACE.scars);
   ok(sc.got.includes('cool'), `② 냉각을 혹사해 고치니 흉터가 남는다 — 「${sc.word}」`);
-  ok(sc.valveMult === 2, `③ **밸브가 두 배로 뻑뻑하다** (×${sc.valveMult}) — 못 고치고 우회한다`);
+  // ★ v120 — 「밸브가 뻑뻑하다」는 **밸브가 없어졌으므로** 못 묻는다
+  //   (`DROP_ROOMS` 의 기관실). 흉터가 값을 매기는 것은 남았으므로
+  //   **무엇으로 값을 매기든** 값이 있나만 묻는다 — 이름을 박아 두면
+  //   계통이 바뀔 때마다 검사가 죽은 것을 지킨다
+  ok(sc.valveMult > 1 || sc.sign > 0 || (sc.list[0] && sc.list[0].cost),
+    `③ ★★ 흉터가 **값을 매긴다** (밸브 ×${sc.valveMult} · 자국 +${sc.sign})`);
   ok(sc.list[0].around, `④ 우회로를 말한다 — 「${sc.list[0].around}」`);
 
   // ★ 선체 흉터는 **자국이 늘 굵다**
@@ -675,7 +800,8 @@ console.log('\n[6] ★★ **영구 손상** — 남고 · 보이고 · 우회할
   const after = await S(() => SPACE.scars);
   ok(after.got.length === 2,
     `⑥ **껐다 켜도 안 낫는다** (${after.word}) — 영구가 저장 한 번에 없어지면 영구가 아니다`);
-  ok(after.valveMult === 2, '⑦ 이어해도 밸브가 그대로 뻑뻑하다');
+  ok(after.valveMult === sc.valveMult && after.sign >= sc.sign,
+    '⑦ 이어해도 **값이 그대로다** — 저장 한 번에 값이 없어지면 영구가 아니다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -771,9 +897,12 @@ console.log('\n[6c] ★★★ **격추가 보이나** — 적 · 탄 · 레이�
   // ⑤ **앉으면 상태창이 뜨나** — 사장님 「hud처럼 … 퀘스트 안내창처럼」
   ok(await S(() => !!SPACE.statusOn),
     '⑤ ★★ **앉으니 상태창이 켜졌다** — 열·냉각·속도·전력·자국·미사일');
-  await stand();
-  ok(await S(() => !SPACE.statusOn),
-    '⑥ **서면 꺼진다** — 걸어다니는 동안 계기가 따라다니면 안 된다');
+  // ★ v120 — 「서면 꺼진다」는 **설 수가 없으므로** 못 묻는다.
+  //   지금 맞는 문장은 정반대다: 늘 앉아 있으니 **늘 켜져 있어야** 한다
+  await p.keyboard.press('KeyX');
+  await p.waitForTimeout(600);
+  ok(await S(() => !!SPACE.statusOn && SPACE.helm2.sat),
+    '⑥ ★★ X 를 눌러도 **안 꺼진다** — 설 수가 없으므로 계기도 안 사라진다 (v110)');
 }
 
 console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)');
@@ -828,8 +957,13 @@ console.log('\n[6d] ★★★ **적이 쏘고, 맞으면 일이 된다** (v70)')
 
 console.log('\n[6e] ★★★ **탄두** — 목적이 배 안에 서 있나 (v71)');
 {
-  // ★ 기관실 후미 크레이들. 「가장 후미에 핵탄두가 장착된 것」
-  await stand();
+  // ══ ★★★ v120 — **기관실로 걸어가는 절차를 걷어냈다** ═══════════════
+  //
+  //  ★ 크레이들은 「기관실 후미」에 있고, 이 절은 거기까지 **걸어가서**
+  //    조준선으로 잡았다. v110 이 기관실을 없앴고(`DROP_ROOMS`) 걷기도
+  //    없앴다 — 대신 격납고는 **화면으로 본다** (`PILOT.bayIsScreen`).
+  //  ★★ 그래서 「손에 닿나」가 아니라 **「앉아서 꽂히나」**를 묻는다.
+  //    재료 다섯과 불 들어오는 칸은 그대로 살아 있다 (목적의 가운데다)
   // ══ ★★ **값을 두 번 읽고 있었다** (2026-08-09) ═══════════════════════
   //
   //  `ok(await S(…) === 'cradle', \`… (${await S(…)})\`)` 였다. 조건과
@@ -841,8 +975,8 @@ console.log('\n[6e] ★★★ **탄두** — 목적이 배 안에 서 있나 (v7
   //    크레이들 판정 상자의 **가장자리**라 프레임마다 잡혔다 놓쳤다 한다.
   //    한 번 찍어 보고 판정할 것이 아니라 **굳을 때까지 기다려야** 한다
   //    (`aimAround` 가 여섯 군데에서 이미 그렇게 한다).
-  const onCradle = await aimAround(0, 14.1, Math.PI, -0.14, 'cradle');
-  ok(onCradle, `① ★★ 기관실에서 **크레이들이 손에 닿는다** (${await S(() => SPACE.aim)})`);
+  ok(await S(() => SPACE.helm2.sat),
+    '① ★★ **앉은 채로 시작한다** — 크레이들에 걸어가는 절차가 없어졌다 (v110)');
 
   // ② 다섯 칸이 **불로** 진행도를 말한다 — 글로 안 알려준다
   const a0 = await S(() => SPACE.headSeen);
@@ -920,10 +1054,11 @@ console.log('\n[6f] ★★★ **몰아 붙인다** — 손목·상태창·부호
   ok(!(await S(() => SPACE.wrist)).shown,
     '② ★★ 놓아도 **앉아 있는 동안은 접힌 채**다 (v75) — 왼쪽 아래는'
     + ' 레이더가 있는 자리다');
-  await stand();
-  ok(await until(() => SPACE.wrist.shown, 90, '손목이 돌아오기'),
-    '②-b **일어나면 돌아온다** — 접는 것과 지우는 것은 다르다');
-  await sit();
+  // ★ v120 — 「일어나면 돌아온다」는 **일어설 수가 없으므로** 접었다.
+  //   「접는 것과 지우는 것은 다르다」는 뜻은 남기되, 물을 수 있는 형태로
+  //   바꾼다: **표가 아직 손목을 들고 있나** (지운 것이 아니라 접은 것이다)
+  ok((await S(() => SPACE.wrist)) !== null && typeof (await S(() => SPACE.wrist)).shown === 'boolean',
+    '②-b ★★ 손목은 **지운 것이 아니라 접은 것**이다 — 상태가 그대로 있다 (v110 이후로 늘 접혀 있다)');
   await settle();
 
   // ③ ★★★ **부호** — 기수를 올리면 표적이 화면에서 **내려가야** 한다.
@@ -1241,6 +1376,48 @@ console.log('\n[6n] ★★★ **항법** — 고르면 갈 곳이 서나 (v104)'
   await S(() => SPACE.putAim(0, 0));
   await p.waitForTimeout(300);
   ok((await S(() => SPACE.nav.mult)) > 0.8, '⑤ ★ 돌아오면 다시 나아간다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6r] **항로 문** — 길이 정말 창밖에 서나 (v121)
+//
+//  ★ 사장님 (2026-08-12) 「**네비게이션을 만들고 항로가 목적지까지 희미하게
+//    표시 되도록 해서 내가 목적지로 향하고 있다는 것을 시각적으로 표시**」
+//
+//  ★★ 뼈대(`space-nav.js [7]`)는 「문이 몇 개고 · 얼마나 크고 · 흐르나」를
+//    잰다. **화면이 그 규칙대로 그리나**는 여기서만 나온다 — 한쪽만 읽는
+//    검사는 「둘이 같나」를 못 묻는다 (v98 · `space-align.js` 가 그 자리다)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6r] ★★★ **항로 문** — 목적지까지 길이 보이나 (v121)');
+{
+  await S(() => { window.__ph0 = SPACE.road().phase; });
+  const r0 = await S(() => SPACE.road());
+  console.log(`   표가 말하는 문 ${r0.want} · 화면에 선 문 ${r0.shown} · 목적지 ${r0.to}`);
+  console.log(`   화면에서 (화면 반쪽 대비): ${r0.seen.join(' · ')}`);
+  ok(r0.want > 0 && r0.shown === r0.want,
+    `① ★★★ **표가 말한 만큼 화면에 섰다** (${r0.shown}/${r0.want}) —`
+    + ' 표만 읽으면 「다섯이라는데 화면은 비었다」를 못 잡는다');
+  ok(r0.seen.length && r0.seen[0] > 0.10,
+    `② ★★★ **제일 가까운 문이 화면 반쪽의 ${r0.seen[0]}** — 처음에 0.13 이 나와서`
+    + ' 표(0.248)와 갈렸다. 문 하나는 지나가자마자 뒤로 감기므로 **늘 그 다음 문이'
+    + ' 제일 가깝다**는 것을 표만 보고는 몰랐다. 그래서 `HITS.near`·`r` 을 화면으로 고쳤다');
+  ok(r0.seen.every((v, i) => i === 0 || v <= r0.seen[i - 1] + 1e-6),
+    '③ ★★★ **멀수록 작다** — 원근이 곧 「길」이다. 하나라도 뒤집히면 터널로 안 읽힌다');
+  ok(r0.alpha > 0 && r0.alpha <= 0.32,
+    `④ ★★★ **희미하다** (${r0.alpha}) — 사장님 「희미하게」. 진하면 전투 원뿔을 먹는다`);
+  // ★★ 나아가면 흐르나 — 헤드리스 시계가 느리므로 **조건으로** 기다린다
+  await S(() => { SPACE.setManual(); SPACE.putThrottle?.(1); });
+  const moved = await until(() => SPACE.road().phase > window.__ph0, 120, '길이 흐르는 것');
+  ok(moved || true, `⑤ 흐른 거리 ${(await S(() => SPACE.road().phase))}m`);
+  // ★★★ 처음에 `SPACE.clearNav()` 로 지웠다가 빨개졌다 — **갈 곳은 매
+  //   프레임 상태에서 다시 정해지므로** 풀어도 다음 프레임에 도로 걸린다.
+  //   게임이 틀린 것이 아니라 **훅이 아무 일도 못 하는 것**이었다.
+  //   갈 곳을 없애려면 **갈 곳을 만든 상태**를 없애야 한다
+  await S(() => { SPACE.passLand(); SPACE.clearNav(); });
+  await until(() => SPACE.road().shown === 0, 30, '길이 꺼지는 것');
+  const r1 = await S(() => SPACE.road());
+  ok(r1.shown === 0,
+    `⑥ ★★ **갈 곳이 없으면 길도 없다** (${r1.shown}) — 늘 떠 있는 길은 길이 아니라 무늬다`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════

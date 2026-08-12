@@ -21,6 +21,12 @@
 //     입고 있으면 수리가 두 배로 더디다. 그래서 「지금 입어야 하나」가
 //     결심이 되고, 그 결심이 없으면 우주복은 문 앞의 절차 하나일 뿐이다.
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-suit');
+
 import { SUIT, suitWord } from '../web/space/js/game/suit-table.js';
 import {
   makeSuit, stepWear, stepSuit, canEva, handMult, moveMult,

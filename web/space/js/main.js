@@ -77,6 +77,9 @@ import { KEYS, TAP, makeTap, tapStep, KEY_WORD } from './game/keys-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, LOCK_LOST, lockWord, PICK } from './game/combat-table.js';
+// ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** (사장님 「질문이 나오고」 · 「형태와 요약」)
+import { ASK as LOOT_ASK } from './game/loot-table.js';
+import { makeLoot, broke as lootBroke, stepLoot, answer as lootAnswer, gained as lootGained, summary as lootSummary } from './game/loot.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
 import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg, endingOf } from './game/warhead-table.js';
 import {
@@ -153,7 +156,7 @@ import {
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
 // ★★★ v103 — **비행 보조 · 수평의** (사장님 「물리방향으로 움직이니 너무 어렵다」)
-import { ASSIST, assistWord, rollWord, isOver, wrapDeg } from './game/horizon-table.js';
+import { ASSIST, assistWord, rollWord, isOver, wrapDeg, OFF_NAG, offNagWord } from './game/horizon-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
@@ -251,7 +254,11 @@ import {
 import { PILOT, FIX, FIX_WHY, needsFix, fixWord } from './game/pilot-table.js';
 // ══ ★★★ v104 — **항법** (사장님 「항로, 미션을 선택하면 네비게이션이
 //   나오도록 해줘. 그래야 **수동으로도 이동할 수 있게**」)
-import { NAV, navWord, navState } from './game/nav-table.js';
+import {
+  NAV, navWord, navState,
+  // ★★★ v121 — **항로 문** (사장님 「항로가 목적지까지 희미하게 표시」)
+  gatesOf,
+} from './game/nav-table.js';
 import {
   makeNav, setFork, setMission, clearNav, hasNav, stepNav,
   summary as navSummary,
@@ -325,7 +332,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 119;
+export const VERSION = 124;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -411,6 +418,8 @@ function sitAtHelm(snap = true) {
  *   왜 기본이 켜짐인지, 왜 롤에만 거는지는 `game/horizon-table.js` 에 있다
  */
 let assistOn = ASSIST.on;
+/** ★ v120 — 보조가 꺼진 채 뒤집혀 있을 때 다시 말할 때까지 (초) */
+let offNag = 0;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
 scene.add(camera);
@@ -727,6 +736,24 @@ addEventListener('keydown', (e) => {
   //  ★ 키를 붙이기 전에 **먼저 셌다** (v93 규약 · v103 은 이름도 센다).
   //    쓰이는 것이 A B C D E F G H J M Q R S T V W X Z · Shift Space Tab ·
   //    Digit 이라 I K L N O P U Y 가 비어 있었다. **L 은 level 이다**
+  // ══ ★★★ v121 — **Y / N — 회수하겠습니까** ═════════════════════════
+  //  ★ 사장님 「회수하겠습니까? **질문이 나오고** 회수하는 것으로」
+  //  ★★ 물음이 안 떠 있으면 **아무 일도 안 한다** — 키를 늘 살려 두면
+  //    「눌렀는데 왜 아무 일도 없지」가 되고, 이 배는 그걸 「고장」으로 읽는다
+  if (!helpOpen && !paused && (e.code === LOOT_ASK.yes || e.code === LOOT_ASK.no)) {
+    const r = lootAnswer(loot, e.code === LOOT_ASK.yes);
+    if (r) {
+      e.preventDefault();
+      if (r.passed) say(ai, '지나칩니다', 'tell');
+      else {
+        // ★ **이미 있는 회수 셋**을 쓴다 (도킹 팔 · 그물 · 로봇). 새 계통을
+        //   안 만든다 — 「예」는 거리에 맞는 하나를 골라 줄 뿐이다
+        const n = fireNet(salvage, { az: aimAz, el: aimEl, seated: helmSat, way: r.way });
+        if (!n?.ok) say(ai, SALV_WHY[n?.why] ?? '지금은 못 회수합니다', 'warn');
+      }
+      return;
+    }
+  }
   if (!helpOpen && !paused && e.code === 'KeyL') {
     e.preventDefault();
     assistOn = !assistOn;
@@ -1708,6 +1735,18 @@ function landShots(dt) {
     const part = (t.kind === 'convoy' && !warhead.in.includes('core')) ? 'core'
       : (t.kind === 'sat' && !warhead.in.includes('shell')) ? 'shell' : null;
     const pk = dropPack(salvage, t, part);
+    // ══ ★★★ v121 — **부수면 묻는다** (사장님 「회수하겠습니까? 질문이 나오고」)
+    //  ★ 새 결심을 만드는 것이 아니라 **이미 있던 결심을 드러내는 것**이다 —
+    //    꾸러미는 v80 부터 떨어졌지만 아는 사람만 F/G/B 를 눌렀다
+    if (pk) {
+      // ★ `pk.has` 는 **`{열쇠: 개수}` 꾸러미**다 (`salvage-table.js packOf`).
+      //   목록으로 여기고 `.map` 했다가 빈 배열이 나왔다 — 물음이 조용히
+      //   안 뜨는 자리였다. 표가 무엇을 주는지는 **표를 보고** 맞춘다
+      const items = Object.entries(pk.has ?? {}).map(([key, n]) => ({ key, n }));
+      const ev = lootBroke(loot, items, pk.dist ?? t.dist ?? 60);
+      // ★ 코앞이면 안 묻고 **바로 끌어온다** — 물으면 잔소리가 된다
+      if (ev === 'auto') fireNet(salvage, { az: t.az, el: t.el, seated: helmSat, way: 'arm' });
+    }
     const inS = callIn(t.kind);
     // ══ **격추 화면** — 광학 창이 부서지는 것을 비춘다 (v79) ═══════════
     //  ★ **아직 잔해가 없다.** 잔해는 `targets.update` 가 「목록에서 사라진
@@ -2119,6 +2158,8 @@ function takeSalvage(p) {
   //    드랍률을 낮췄으면 조금 늦게 같은 일이 났을 것이다.
   //  ★★★ **배가 더 받을 수 있는 만큼만** 삼킨다. 통이 꽉 차 있으면
   //    화물칸에 남고, 그게 진짜 짐이다 — 「무엇을 버릴지」가 여기서 산다
+  // ★★★ v121 — **주우면 요약 카드가 뜬다** (사장님 「형태와 요약」)
+  for (const [k, n] of Object.entries(r.took ?? {})) if (n > 0) lootGained(loot, k, n);
   const { ate: u } = cargoSettle(cargo, r.took, {
     food: FOOD.max - supply.food,
     parts: PARTS.max - supply.parts,
@@ -2229,6 +2270,8 @@ let burstNow = false;
 const thrustTap = makeTap();
 /** ★ 이번 프레임에 **꾹**인가 — `wantRush` 가 이걸 묻는다 */
 let rushWanted = false;
+/** ★★★ v121 — 「회수하겠습니까?」와 「무엇을 주웠나」 */
+const loot = makeLoot();
 /**
  * ★★★ v87 — **밟는 순간 눈이 뒤로 밀린다** (`boost-table.js KICK`).
  *   ★ 우주에서 등속은 아무 느낌이 없다 (고증). 느껴지는 것은 **가속**뿐이고
@@ -2413,6 +2456,8 @@ let mpsWas = 0, accK = 0;
  *   그물에 매달려 끌려가는 동안 「전속으로 이탈 중」이라고 뜬다
  */
 let mpsPure = 0;
+/** ★★★ v121 — 항로 문이 흐른 거리 (m). **정말 나아간 만큼**만 는다 */
+let roadPhase = 0;
 function placePanels() {
   if (!ship) return;
   const aspect = camera.aspect || 1;
@@ -3740,6 +3785,21 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★★★ v103 — **비행 보조.** 롤만 저절로 수평으로 돌아온다 (L 로 끈다)
     assist: assistOn,
   });
+  // ══ ★★★ v120 — **꺼져 있으면 뒤집힌 동안 되풀이해서 말한다** ═══════
+  //
+  //  ★ 사장님 「뒤집혔는데 자동으로 돌아오지 않는데?」 — 재 보니 계통은
+  //    멀쩡했고 (뒤집어 놓고 손을 떼면 1~2초에 편다), **보조가 꺼져 있을
+  //    때만** 안 펴졌다. 그런데 껐다는 말은 **누른 그 순간 한 번** 뜨고
+  //    사라진다. 그러면 「고장났다」로 읽힌다 — 이 저장소가 「조용한
+  //    무동작이 빨간 오류보다 나쁘다」라고 적어 둔 그 자리다
+  //  ★★ **삼켜지면 시계를 안 미룬다.** 처음엔 `say` 를 부르고 무조건
+  //    시계를 되감았는데, 등대는 「같은 말」(`MUTE` 22초)이거나 급한 말이
+  //    떠 있으면 **안 받는다.** 그러면 한 번 막힌 값에 22초가 더 붙어
+  //    정작 필요할 때 조용해진다 — 검사가 그걸로 빨개져서 알았다
+  if (!assistOn && isOver(rollDeg(fly3.roll))) {
+    offNag -= dt;
+    if (offNag <= 0 && say(ai, offNagWord(), 'warn').ok) offNag = OFF_NAG.every;
+  } else offNag = 0;
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
   //   천천히 돌리면 반동휠이 공짜로 하고, 급하게 돌리면 추력기가 태운다.
   //   360도를 열어 준 값이 여기 있다 — 값이 없으면 조종이 버튼이 된다
@@ -3973,6 +4033,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     speedWord: speedWord(mpsPure),
     power,
     sign: chase.sign,
+    // ★★★ v121 — **장갑** (사장님 「무기 보유량 **장갑** 등 상태창이」).
+    //   안에서는 `wear.hull` 이 **깎인 몫**으로 살지만, 계기는 「얼마나
+    //   남았나」를 그린다 — 띠가 줄면 나쁜 것이라는 규약을 열·냉각과 맞춘다
+    hull: Math.max(0, 1 - faults.wear.hull),
     missiles: supply.missiles,
     weapon: weaponOf(combat).name,
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
@@ -4883,6 +4947,13 @@ window.SPACE = {
   },
   /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /**
+   * ★★ v120 — **이 배가 무엇을 안 하는가** (`game/pilot-table.js PILOT`).
+   *   `SPACE.canStand(x, z)` 는 **다른 것**이다 (그 자리를 걸을 수 있나 ·
+   *   함수라 언제나 truthy). 낡은 절을 걷어내면서 검사가 그걸 읽고
+   *   늘 참이 되는 것을 한 번 겪어서, 표를 읽는 구멍을 따로 냈다
+   */
+  get pilotRules() { return { ...PILOT }; },
   /** ★ 에어록 바깥문 — 열면 갇히나 · 공기가 주나 */
   get lock() { return { ...lockSummary(lock), word: airWord(lock.air) }; },
   /** ★ 영구 손상 — 무엇이 남았나 · 무엇이 달라졌나 */
@@ -5052,6 +5123,17 @@ window.SPACE = {
   },
   /** 검사가 내릴 자리를 띄운다 */
   offerLand(hard = false) { offerPlanet(land, hard); return landSummary(land); },
+  /**
+   * ★ v121 — **행성을 지나친다** (검사가 「갈 곳이 없어지면」을 만들려고).
+   *
+   *   ★★ `clearNav()` 로는 안 된다. 갈 곳은 **매 프레임 상태에서 다시**
+   *     정해지므로(위 [6n] 머리말), 풀어 놓아도 다음 프레임에 도로 걸린다.
+   *     즉 `clearNav()` 는 **아무 일도 못 하는 훅**이다 — v104 에 만들어
+   *     두고 한 번도 안 썼다. 갈 곳을 없애려면 **갈 곳을 만든 상태**를
+   *     없애야 한다. 검사가 이걸 몰라서 한 번 빨개졌고, 게임이 아니라
+   *     검사가 틀린 자리였다
+   */
+  passLand() { passPlanet(land); return landSummary(land); },
   /**
    * 검사가 마디를 밀어 놓는다 — **화면을 찍으려고 낸 구멍.**
    * ★ `stepLand` 를 직접 부르지 않는다. 여기서 상태만 바꾸고 **게임이
@@ -5312,6 +5394,8 @@ window.SPACE = {
   //    **표**(`game/screen-table.js`)가 「어디까지 봐주나」를 정한다
   /** ★ v114 — 정렬을 고치는 동안 쓴 구멍. 판이 어디 있고 얼마나 큰가 */
   cam() { const v = camera.getWorldPosition(new THREE.Vector3()); return [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2), camera.fov, +camera.aspect.toFixed(3)]; },
+  /** ★ v121 — 검사와 점검 모드가 「물음·카드」를 읽는다 */
+  lootNow() { return lootSummary(loot); },
   panelDebug() {
     const out = {};
     for (const [n, o] of [['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud]]) {
@@ -5459,12 +5543,71 @@ window.SPACE = {
   },
   /** 검사가 P 를 누르고 있는 것과 같게 */
   doFix() { fix.hold = FIX.hold; return true; },
+  /**
+   * ★ v121 — **선체를 깎아 놓는다** (시험용). 수리를 재려면 고칠 것이
+   *   있어야 하는데(`needsFix`), 흉터(`giveScar`)는 **선체 마모가 아니라
+   *   영구 손상**이라 그걸로는 안 된다 — 종단 검사가 「부품 9 → 9」로
+   *   빨개져서 알았다. 둘을 헷갈리면 「고칠 것이 없습니다」만 뜬다
+   */
+  putWear(v = 0.6) { faults.wear.hull = Math.max(0, Math.min(1, v)); return faults.wear.hull; },
   /** ★★★ v104 — **항법.** 검사(`space-nav.js`)와 점검 모드가 읽는다 */
   get nav() { return { ...navSummary(nav, !!helm.auto), legMult: nav.mult }; },
+  /**
+   * ★★★ v121 — **항로 문이 정말 화면에 섰나** (`space-endtoend.js` 가 읽는다).
+   *
+   *   ★ 규칙(`gatesOf`)만 읽으면 「표는 다섯이라는데 화면은 비었다」를
+   *     못 잡는다. 그래서 **진짜 물체**를 세어서 준다 — 한쪽만 읽는
+   *     검사는 「둘이 같나」를 못 묻는다 (v98 의 가르침)
+   */
+  road() {
+    const g = ship?.outside?.road?.group;
+    const shown = g ? g.children.filter((o) => o.visible) : [];
+    return {
+      /** 표가 말하는 문 */
+      want: gatesOf(nav.to, roadPhase, nav.off ?? 0).length,
+      /** 화면에 정말 선 문 */
+      shown: shown.length,
+      phase: +roadPhase.toFixed(1),
+      /** 제일 가까운 문의 진하기 — 「희미한가」를 여기서 잰다 */
+      alpha: +(shown[0]?.children?.[0]?.material?.opacity ?? 0).toFixed(3),
+      to: nav.to ? nav.to.name : null,
+      /**
+       * ★★★ **화면에서 몇 할인가** — 진짜 카메라로 잰다 (−1~1 이라 반쪽 크기).
+       *
+       *   ★ 표가 「45m 앞의 12m 고리는 29.8도」라고 말해도, **화면이 정말
+       *     그만큼 그리는지는 다른 물음**이다. 한쪽만 읽는 검사는 「둘이
+       *     같나」를 못 묻는다 (v98 · `space-align.js` 가 그 자리다)
+       */
+      seen: (() => {
+        camera.updateMatrixWorld(true);
+        const v = new THREE.Vector3();
+        return shown.map((o) => {
+          const box = new THREE.Box3().setFromObject(o);
+          let y0 = 9, y1 = -9;
+          for (const sx of [box.min.x, box.max.x]) {
+            for (const sy of [box.min.y, box.max.y]) {
+              for (const sz of [box.min.z, box.max.z]) {
+                v.set(sx, sy, sz).project(camera);
+                if (v.z > 1) continue;
+                y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+              }
+            }
+          }
+          return y1 < y0 ? 0 : +((y1 - y0) / 2).toFixed(3);
+        });
+      })(),
+    };
+  },
   /** 검사가 미션 쪽으로 걸어 본다 */
   putNavMission(key = 'wreck', name = '표류선') {
     return setMission(nav, { key, name }, navSeed(`m${key}`));
   },
+  /**
+   * ★★ v121 — **이 훅은 한 프레임도 못 간다.** 갈 곳은 매 프레임 상태에서
+   *   다시 정해지므로 다음 프레임에 도로 걸린다. 남겨 두는 것은 점검
+   *   모드에서 「지금 걸린 것」을 잠깐 떼 보는 용도뿐이고, 검사는
+   *   **상태 쪽**을 건드려야 한다 (`passLand` 따위)
+   */
   clearNav() { return !!clearNav(nav); },
   /** ★★★ v103 — **포획.** 검사(`space-catch.js`)와 점검 모드가 읽는다 */
   get catch() {
@@ -5488,6 +5631,13 @@ window.SPACE = {
   /** ★★★ v103 — **비행 보조** (자동 수평). 검사와 점검 모드가 읽는다 */
   get assist() { return { on: assistOn, roll: rollDeg(fly3.roll), word: rollWord(wrapDeg(rollDeg(fly3.roll))), over: isOver(rollDeg(fly3.roll)) }; },
   setAssist(v) { assistOn = !!v; return assistOn; },
+  /**
+   * ★★★ v120 — **곧바로 뒤집어 놓는다** (시험용).
+   *   손으로 굴려서 180도를 만들려면 1.25 rad/s 로 2.5초인데, 머리 없는
+   *   시계가 1/25 이라 **실시간 60초**다. 그래서 「뒤집힌 뒤가 어떤가」를
+   *   검사가 물어본 적이 없었다 — `putLock` 과 같은 자리의 구멍이다
+   */
+  putRoll(deg) { fly3.roll = (deg * Math.PI) / 180; return { roll: rollDeg(fly3.roll), word: rollWord(wrapDeg(rollDeg(fly3.roll))) }; },
   /** ★ 크레이들이 **화면에** 무엇을 그리고 있나 — 「불이 켜졌나」는 여기서만 나온다 */
   get headSeen() { return ship.cradle?.seen ?? null; },
   /** 검사가 재료를 손에 쥐어 준다 — 구간 다섯을 다 돌 수는 없다 */
@@ -6053,9 +6203,6 @@ function frame(now) {
     //   **역추진을 만들어**」). v100 에는 켜기/끄기였는데, 두 자리뿐인
     //   값은 고를 것이 없다 — 축으로 만들면 「얼마나」가 생긴다.
     //   ★ 추력(주 엔진 켜고 끄기)은 **Space** 에 그대로 있다
-    stepThrottle(thr, dt, {
-      up: input.keys.has('KeyW'), down: input.keys.has('KeyS'), dry: isDry(supply.fuel),
-    });
     // ★★★ v88 — **A/D 는 좌우다.** 여태 「일어난다」였다 (v52 에 좌석에
     //   갇힌 적이 있어 비상구로 둔 것). 그런데 v88 에서 앉는 것이 곧 잡는
     //   것이 되고 나가는 길이 **X 와 좌석 다시 누르기 둘**로 분명해졌으므로,
@@ -6073,11 +6220,6 @@ function frame(now) {
     //    둔 자리였다 (v47 잡기/일어나기 · v66 누르기/일어나기).
     //  ★ 가르는 시간은 표가 든다 (`keys-table.js TAP`) — 여기서 또 세면
     //    재는 곳이 둘이 된다
-    const rk = tapStep(thrustTap, input.keys.has('KeyR'), dt);
-    if (rk.tap) setThrustKey(!power.thrust);
-    // ★ 꾹이면 **추력이 꺼져 있어도 켜면서** 민다 — 「켜고 밀기」가 한 동작
-    if (rk.rush && !power.thrust) setThrustKey(true);
-    rushWanted = rk.rush;
   } else {
     steerPush = 0;
     // ★★ v88 — **둘러보는 동안에는 스틱을 안 지운다.** 지우면 손을 떼는
@@ -6095,6 +6237,33 @@ function frame(now) {
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
     // 얼마나 둘러봤나 — 조종간을 잡고 있을 때는 안 센다. 그건 배를 민 것이다
     taught.turned += Math.abs(look.dx) * 0.0022;
+  }
+
+  // ══ ★★★ v120 — **왼손 것은 조종간을 놓아도 먹는다** ═══════════════════
+  //
+  //  ★ 스로틀(W/S)과 추력·급가속(R)이 **`if (steering …)` 안에** 있었다.
+  //    즉 조종간을 놓는 순간 **스로틀이 죽었다.** 종단 검사가 「W 를
+  //    눌러도 0.00 → 0.00」으로 잡아 줬고, 찍어 보니 `steering: false` 였다.
+  //
+  //  ★★ 고증이 답을 이미 갖고 있다: **스로틀은 왼손 · 조종간은 오른손**이다.
+  //    실제 조종석에서 스틱을 놓는다고 스로틀이 안 움직이지 않는다.
+  //    이 저장소도 바로 아래 `else` 가지에 「★ 키(W/S/A/D)는 그대로 먹는다 —
+  //    고개와 손은 다른 것이다」라고 **적어만 두고 안 지키고 있었다.**
+  //
+  //  ★★★ 그리고 이게 진짜로 물리는 자리다: v110 이 「놓으면 마우스로
+  //    계기를 본다」로 만들었으므로, 계기를 한 번 볼 때마다 **가속이
+  //    통째로 멈추는** 배였다. 「항상 앉아서 모든 조작」의 반대다.
+  //  ★ A/D(좌우)는 그대로 가지 안에 둔다 — 그건 **조종간이 하는 일**이라
+  //    놓은 채로 먹으면 「놓았다」가 뜻을 잃는다
+  if (helmSat) {
+    stepThrottle(thr, dt, {
+      up: input.keys.has('KeyW'), down: input.keys.has('KeyS'), dry: isDry(supply.fuel),
+    });
+    const rk = tapStep(thrustTap, input.keys.has('KeyR'), dt);
+    if (rk.tap) setThrustKey(!power.thrust);
+    // ★ 꾹이면 **추력이 꺼져 있어도 켜면서** 민다 — 「켜고 밀기」가 한 동작
+    if (rk.rush && !power.thrust) setThrustKey(true);
+    rushWanted = rk.rush;
   }
 
   walk(dt);
@@ -6278,6 +6447,18 @@ function frame(now) {
     const rel = to ? relOf({ az: to.az, el: to.el, dist: to.dist ?? 1000 },
       { yaw: aimAz, pitch: aimEl }) : null;
     stepNav(nav, dt, { off: rel ? rel.off : null, auto: !!helm.auto });
+    // ══ ★★★ v121 — **길을 그린다** (사장님 「항로가 목적지까지 희미하게
+    //   표시 되도록 해서 내가 목적지로 향하고 있다는 것을 시각적으로」) ══
+    //
+    //  ★ 여기서 **각을 다시 안 센다.** 위에서 이미 잰 `rel.off` 를 그대로
+    //    넘긴다 — 다시 세면 「마름모는 저기인데 길은 이리로」가 난다.
+    //  ★★ 흐르는 양은 **정말 나아간 거리**다 (`mpsPure`). 시계로 흘리면
+    //    멎었는데도 길이 흐르고, 그러면 「나아가고 있다」가 거짓말이 된다 —
+    //    항로가 시계였던 v103 까지의 병을 화면에 그대로 옮기는 셈이 된다
+    roadPhase += mpsPure * dt;
+    ship.outside.road?.update(to
+      ? gatesOf(to, roadPhase, rel ? rel.off : 0)
+      : []);
   }
   const rev = stepRoute(route, dt * helmLeg(helm), power,
     { hold: landBusy(land) || rescueHold(rescue), course: nav.mult });
@@ -7099,6 +7280,9 @@ function frame(now) {
   if (radEv === 'break') {
     say(ai, LOCK_LOST[combat.radar.why] ?? '놓쳤습니다', 'tell');
   }
+  // ★★★ v121 — 물음이 삭고 카드가 사라진다 · 화면에 그린다
+  if (stepLoot(loot, dt) === 'gone') say(ai, '지나쳤습니다 — 꾸러미는 남아 있습니다 (F/G/B)', 'tell');
+  ship.lootHud?.redraw({ ...lootSummary(loot), on: helmSat });
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
   stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다

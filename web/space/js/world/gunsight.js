@@ -38,7 +38,6 @@
 import * as THREE from 'three';
 import { KINDS, TARGET, rangeWord } from '../game/target-table.js';
 import { hudFov } from '../game/view-table.js';
-import { SIGN } from '../game/chase-table.js';
 // ★★★ v75 — 「왼쪽/오른쪽」을 **방위 + 고도**로 (사장님 요청 · 고증)
 import { callOut } from '../game/radar-table.js';
 import { RADAR } from '../game/combat-table.js';
@@ -49,7 +48,12 @@ import { relOf } from '../game/frame.js';
 import { azDiff } from '../game/target.js';
 // ★★★ v103 — **자리는 표에 있다** (사장님 「선이나 글이 의미하는 것은?」·
 //   「타겟 라인이 짤리는 문제도 수정해」). `h*0.95` 같은 것을 여기 안 적는다
-import { ROWS, COLS, SIGNBOX, SAFE, WOBMAX, ADI, rungs } from '../game/hud-table.js';
+import {
+  ROWS, COLS, SAFE, WOBMAX, ADI, rungs,
+  // ★★★ v121 — 고리 셋(락온 게이트 · 십자선 · 조준 띠 끝)이 표로 갔다.
+  //   사장님 「원이 작고 조잡해서 직관적이지 않는데?」
+  lockArcs, PIPPER, pipperAt, ringMax, PLATE,
+} from '../game/hud-table.js';
 // ★★★ v103 — **수평의.** 「내가 지금 똑바로 유지하고 있는지」
 import { HORIZON, isOver, isLevel, wrapDeg } from '../game/horizon-table.js';
 // ★★★ v104 — **항로점** (사장님 「항로, 미션을 선택하면 네비게이션이 나오도록」)
@@ -58,7 +62,7 @@ import { navState } from '../game/nav-table.js';
 //   사장님 「적인지 물체인디 행성인지 알 수 있도록 … 도형으로」
 import { hueOf, bandOf } from '../game/legend-table.js';
 // ★★★ v114 — **조준 띠** (사장님 「중앙 타겟 영역도 키우고」)
-import { RINGS } from '../game/aim-table.js';
+import { RINGS, SHOW_AT } from '../game/aim-table.js';
 
 /**
  * ★ **어느 쪽인가**를 한 마디로 (v69). 각도를 숫자로 안 띄운다 —
@@ -631,29 +635,72 @@ function draw(ctx, w, h, s) {
   //    허용 각이 표적 크기를 곱한 값이기 때문이다(`tolOf`). 고정 크기로
   //    그리면 「보이는 고리와 맞는 각」이 갈라지고, 그게 v98 의 병이다.
   //  ★ 반지름 비율도 여기서 안 정한다 — 표(`RINGS`)가 정한다
+  //  ══ ★★★ v121 — **넷을 셋으로, 서로 다른 모양으로** ═══════════════════
+  //
+  //  ★ 사장님 「**원이 작고 조잡해서 직관적이지 않는데?**」
+  //
+  //  ★★ 재 보니 「작다」가 아니라 **「너무 많다」**였다: 760화소 화면에서
+  //    파편 기준 지름이 **34 / 71 / 111 / 143** — 네 겹이 100화소 안에
+  //    포개져 있었다. 그리고 **화면에서의 크기는 못 키운다** (각을 그리는
+  //    판이라 판을 넓히면 고리는 판 대비 작아져 정확히 상쇄된다).
+  //    그래서 답은 「덜 그리고 · 안쪽을 **채우고** · 겨눌 때만」이다.
+  //  ★ 어느 모양인지는 **표가 정한다** (`aim-table.js` 의 `mark`)
+  /** 지금 그린 정중앙 띠 반지름 (판 높이 대비) — 십자선이 이 밖에서 시작한다 */
+  let bullR = 0;
   if (near && near.t.inRange) {
     const tolDeg = TARGET.aimTol * (KINDS[near.t.kind]?.size ?? 1);
     const nowK = nearD / Math.max(1e-6, tolDeg);
-    for (const ring of RINGS) {
-      const rr2 = pxH(tolDeg * ring.r);
-      // ★ **지금 든 띠만 진하다.** 넷을 다 진하게 그리면 과녁이 아니라
-      //   무늬가 되고, 그러면 「지금 어디인가」를 못 읽는다
-      const on = nowK <= ring.r && nowK > (RINGS[RINGS.indexOf(ring) - 1]?.r ?? 0);
-      ctx.strokeStyle = on
-        ? (ring.tone === 'hot' ? HOT : ring.tone === 'good' ? FG : WARN)
-        : 'rgba(143,230,192,.16)';
-      ctx.lineWidth = Math.max(1, h * (on ? 0.009 : 0.004));
-      ctx.beginPath(); ctx.arc(ax, ay, rr2, 0, Math.PI * 2); ctx.stroke();
+    // ★★ **겨누지도 않은 것 둘레에는 안 그린다** — 늘 떠 있는 고리는
+    //   계기가 아니라 배경이고, 배경은 읽을 것을 가린다
+    if (nowK <= SHOW_AT) {
+      for (const ring of RINGS) {
+        if (ring.mark === 'none') continue;
+        const rr2 = pxH(tolDeg * ring.r);
+        // ★ **판을 넘는 고리는 아예 안 그린다.** 난파선(0.70)·수송대(0.74)는
+        //   허용 각이 커서 통째로 잘리는데, 잘린 고리는 뜻을 잃는다.
+        //   크기를 줄여 그리면 「보이는 고리와 맞는 각」이 갈라진다 (v98 의 병)
+        if (rr2 > h * ringMax()) continue;
+        const tone = ring.tone === 'hot' ? HOT : ring.tone === 'good' ? FG : WARN;
+        // ★★★ **지금 든 띠 하나만 진하다.** 여기를 `nowK <= ring.r` 로 썼다가
+        //   화면을 찍어 보니 **셋이 한꺼번에 밝았다** — 안쪽에 들면 바깥 띠는
+        //   전부 참이 되기 때문이다. 그러면 「지금 어디인가」를 못 읽고,
+        //   밝은 고리 셋이 겹쳐 보이는 것이 곧 사장님이 보신 「조잡」이다.
+        //   ★ 안 그린 띠(`edge`)도 **경계로는 센다** — 안 세면 가장자리에
+        //     있을 때 문 고리가 밝아져 「스쳤는데 명중처럼」 보인다
+        const prev = RINGS[RINGS.indexOf(ring) - 1]?.r ?? 0;
+        const on = nowK <= ring.r && nowK > prev;
+        if (ring.mark === 'disc') {
+          // ★★★ **정중앙은 면이다.** 같은 크기라도 채운 면은 얇은 고리보다
+          //   훨씬 크게 읽힌다 — 「작다」에 대한 답이 여기다.
+          //   들어오면 진하게 차오르고, 아니면 아주 옅게 깔린다
+          ctx.fillStyle = on ? 'rgba(255,154,92,.30)' : 'rgba(143,230,192,.07)';
+          ctx.beginPath(); ctx.arc(ax, ay, rr2, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = on ? HOT : 'rgba(143,230,192,.22)';
+          ctx.lineWidth = Math.max(1.4, h * (on ? 0.008 : 0.004));
+          ctx.beginPath(); ctx.arc(ax, ay, rr2, 0, Math.PI * 2); ctx.stroke();
+          bullR = rr2 / h;
+        } else {
+          // 명중 고리 · 맞는 문 — 든 띠만 진하다
+          ctx.strokeStyle = on ? tone : 'rgba(143,230,192,.18)';
+          ctx.lineWidth = Math.max(1.2, h * (on ? 0.007 : 0.0035));
+          ctx.beginPath(); ctx.arc(ax, ay, rr2, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
     }
   }
+  // ── 십자선 — ★ v121 팔을 줄였다. `h*0.11` 이라 **제일 작은 표적의
+  //    정중앙 띠(0.064)를 덮고** 있었다. 기수 표시가 겨눌 곳을 가리면 안 된다
   ctx.strokeStyle = locked ? HOT : FG;
-  ctx.lineWidth = Math.max(1.6, h * 0.012);
-  const g2 = h * 0.055;
+  ctx.lineWidth = Math.max(1.6, h * 0.011);
+  // ★★ **정중앙 띠가 뜨면 그 밖에서 시작한다** — 못박아 두면 작은 표적의
+  //   띠를 덮고, 그렇다고 띠보다 작게 못박으면 십자선이 안 보인다
+  const pip = pipperAt(bullR);
+  const gIn = h * pip.inner, gOut = h * pip.outer;
   ctx.beginPath();
-  ctx.moveTo(ax - g2 * 2, ay); ctx.lineTo(ax - g2 * 0.5, ay);
-  ctx.moveTo(ax + g2 * 0.5, ay); ctx.lineTo(ax + g2 * 2, ay);
-  ctx.moveTo(ax, ay - g2 * 2); ctx.lineTo(ax, ay - g2 * 0.5);
-  ctx.moveTo(ax, ay + g2 * 0.5); ctx.lineTo(ax, ay + g2 * 2);
+  ctx.moveTo(ax - gOut, ay); ctx.lineTo(ax - gIn, ay);
+  ctx.moveTo(ax + gIn, ay); ctx.lineTo(ax + gOut, ay);
+  ctx.moveTo(ax, ay - gOut); ctx.lineTo(ax, ay - gIn);
+  ctx.moveTo(ax, ay + gIn); ctx.lineTo(ax, ay + gOut);
   ctx.stroke();
   // ══ ★★★ **락온 원을 보이게 한다** (v82) ═══════════════════════════
   //
@@ -673,19 +720,42 @@ function draw(ctx, w, h, s) {
     //   표적을 놓는 자(`pxH` · tan)와 다르다 — 즉 **원의 크기와 표적의
     //   자리가 서로 다른 자로** 그려지고 있었다. v98 에 선도점에서 고친
     //   그 자리이고, 락온 원만 남아 있었다. **찍는 자는 하나여야 한다**
+    // ══ ★★★ v121 — **연속 원에서 대각 네 토막으로** ═══════════════════
+    //
+    //  ★ 재 보니 이 원이 **계기 둘을 관통**하고 있었다: 반지름이 판
+    //    높이의 0.457 이라 위가 y=0.043, 아래가 y=0.957 인데, 자국 막대가
+    //    0.050~0.092 이고 아랫줄 글이 0.860~0.979 다. 사장님 사진에서
+    //    「자국 100」과 「파편 — 좌 120°」에 원이 겹쳐 보이던 것이 이것이다.
+    //  ★★ **크기는 안 줄인다.** 9도는 9도여야 「이 안에 두면 물린다」가
+    //    참말이 된다. 대신 **12시·6시 쪽을 안 그린다** — 거기가 그 둘의
+    //    자리다. 어디를 비우는지는 `hud-table.js lockArcs()` 가 정하고,
+    //    `tools/space-hud.js` 가 **정말 안 겹치는지 잰다**
     const rr = pxH(LOCK_CONE);
-    ctx.strokeStyle = locked ? HOT : 'rgba(143,230,192,.30)';
-    ctx.lineWidth = Math.max(1.2, h * 0.006);
-    ctx.setLineDash(locked ? [] : [h * 0.03, h * 0.03]);
-    ctx.beginPath(); ctx.arc(lx0, ly0, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = locked ? HOT : 'rgba(143,230,192,.42)';
+    ctx.lineWidth = Math.max(1.6, h * 0.008);
     ctx.setLineDash([]);
-    // ★ 물리는 중이면 **호가 차오른다** — 「얼마나 더 붙들고 있어야 하나」
+    for (const a of lockArcs()) {
+      ctx.beginPath();
+      ctx.arc(lx0, ly0, rr, a.a0 * RAD, a.a1 * RAD);
+      ctx.stroke();
+    }
+    // ★ 물리는 중이면 **차오른다** — 「얼마나 더 붙들고 있어야 하나」.
+    //   ★★ v121 — 여기도 **토막 안에서만** 찬다. 예전엔 12시에서 한 바퀴를
+    //     돌았고, 그러면 비워 둔 위아래를 이 호가 도로 덮었다
     if (!locked && (s.lockK ?? 0) > 0.02) {
       ctx.strokeStyle = WARN;
-      ctx.lineWidth = Math.max(2, h * 0.011);
-      ctx.beginPath();
-      ctx.arc(lx0, ly0, rr, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * s.lockK);
-      ctx.stroke();
+      ctx.lineWidth = Math.max(2.4, h * 0.012);
+      const arcs = lockArcs();
+      const total = arcs.reduce((a, x) => a + (x.a1 - x.a0), 0);
+      let left = total * Math.max(0, Math.min(1, s.lockK));
+      for (const a of arcs) {
+        if (left <= 0) break;
+        const take = Math.min(left, a.a1 - a.a0);
+        ctx.beginPath();
+        ctx.arc(lx0, ly0, rr, a.a0 * RAD, (a.a0 + take) * RAD);
+        ctx.stroke();
+        left -= take;
+      }
     }
   }
   if (locked) {
@@ -741,38 +811,11 @@ function draw(ctx, w, h, s) {
 //    **같은 구석에 둘**이라 글자가 막대를 뚫고 지나갔다 (사장님 사진).
 //  ★★ 자국은 「지금 얼마나 눈에 띄나」라 **늘 떠 있는 값**이고, 늘 떠
 //    있는 것은 구석으로 간다. 아랫줄은 바뀌는 값이라 눈이 가는 자리에 둔다
-function drawSign(ctx, w, h, s) {
-  ctx.textAlign = 'left';
-  if (!s.power?.sensor) {
-    ctx.fillStyle = 'rgba(255,154,92,.85)';
-    ctx.font = `600 ${Math.round(h * SIGNBOX.label)}px system-ui, sans-serif`;
-    ctx.fillText('탐지 꺼짐', w * SIGNBOX.x, h * (SIGNBOX.y + SIGNBOX.h));
-    ctx.textAlign = 'center';
-    return;
-  }
-  const at = s.contactAt ?? SIGN.contactAt;
-  const v = Math.max(0, Math.min(1, (s.sign ?? 0) / SIGN.max));
-  const over = (s.sign ?? 0) > at;
-  const bx = w * SIGNBOX.x, by = h * SIGNBOX.y, bw = w * SIGNBOX.w, bh = h * SIGNBOX.h;
-  ctx.strokeStyle = DIM; ctx.lineWidth = 1;
-  ctx.strokeRect(bx, by, bw, bh);
-  ctx.fillStyle = over ? HOT : FG;
-  ctx.fillRect(bx, by, bw * v, bh);
-  // 접촉 기준선 — 이 안쪽이면 안 붙는다
-  ctx.strokeStyle = HOT;
-  ctx.beginPath();
-  ctx.moveTo(bx + bw * (at / SIGN.max), by - h * 0.012);
-  ctx.lineTo(bx + bw * (at / SIGN.max), by + bh + h * 0.012);
-  ctx.stroke();
-  ctx.fillStyle = over ? HOT : DIM;
-  ctx.font = `600 ${Math.round(h * SIGNBOX.label)}px ui-monospace, monospace`;
-  ctx.fillText(`자국 ${Math.round(s.sign ?? 0)}`, bx, by - h * 0.014);
-  ctx.textAlign = 'center';
-}
-
 export function buildSight(width = 2.1, height = 1.5) {
   const cv = document.createElement('canvas');
-  cv.width = 1024; cv.height = 768;
+  // ★ v121 — 판 크기도 표에 있다. 도구가 **같은 자로** 재야 「도구는
+  //   초록인데 화면은 겹친다」가 안 난다 (`hud-table.js radiusOf`)
+  cv.width = PLATE.w; cv.height = PLATE.h;
   const ctx = cv.getContext('2d');
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -792,7 +835,6 @@ export function buildSight(width = 2.1, height = 1.5) {
     mesh,
     redraw(s) {
       draw(ctx, cv.width, cv.height, s || {});
-      if (s?.on) drawSign(ctx, cv.width, cv.height, s);
       tex.needsUpdate = true;
     },
   };

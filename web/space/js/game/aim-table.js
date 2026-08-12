@@ -66,7 +66,7 @@ export const TOL = TARGET.aimTol;
  */
 export const BANDS = [
   {
-    key: 'bull', upTo: 0.24, mult: 2.00, name: '정중앙', tone: 'hot',
+    key: 'bull', upTo: 0.24, mult: 2.00, name: '정중앙', tone: 'hot', mark: 'disc',
     /**
      * ★★★ 네 값은 **재서 고른 것**이다. 처음에 1.90/1.20/0.72/0.42 라고
      *   적었다가 `space-aim.js` 가 「보통 손의 기대 피해 **×1.71**」로
@@ -77,15 +77,15 @@ export const BANDS = [
     what: '**깊게 박힌다** — 반응로·탄약고가 여기 있다',
   },
   {
-    key: 'good', upTo: 0.50, mult: 0.80, name: '명중', tone: 'good',
+    key: 'good', upTo: 0.50, mult: 0.80, name: '명중', tone: 'good', mark: 'ring',
     what: '제대로 맞았다 — 옛 규칙의 「맞음」이 여기쯤이다',
   },
   {
-    key: 'edge', upTo: 0.78, mult: 0.30, name: '가장자리', tone: 'weak',
+    key: 'edge', upTo: 0.78, mult: 0.30, name: '가장자리', tone: 'weak', mark: 'none',
     what: '외판을 때렸다 — **옛 규칙이라면 아직 맞는 각**이다',
   },
   {
-    key: 'graze', upTo: 1.00, mult: 0.12, name: '스침', tone: 'weak',
+    key: 'graze', upTo: 1.00, mult: 0.12, name: '스침', tone: 'weak', mark: 'gate',
     /**
      * ★★★ **여기가 이 판의 핵심이다.** 옛 규칙이라면 **빗나감**이던 각이다.
      *   빗나감은 아무것도 안 가르쳐 주지만, 스침은 「조금 더 가운데로」를
@@ -149,8 +149,31 @@ export const multAt = (off, tol, seek = false, bullPlus = 0) =>
 /**
  * ★★ **조준경이 그리는 고리** — 띠마다 하나씩, 반지름은 비율 그대로.
  *   화면이 제 방식으로 다시 나누면 **보이는 고리와 맞는 각이 갈라진다**
+ *
+ * ★★★ v121 — `mark` 가 붙었다. 사장님 「**원이 작고 조잡해서 직관적이지
+ *   않는데?**」 — 재 보니 넷을 다 **같은 얇은 원**으로 그리고 있었고,
+ *   760화소 화면에서 파편 기준 지름이 **34 / 71 / 111 / 143** 이었다.
+ *   네 겹이 100화소 안에 포개지면 과녁이 아니라 무늬다.
+ *
+ *   ★ 그래서 **셋만, 서로 다른 모양으로** 그린다:
+ *       정중앙 `disc` — **채운 면.** 같은 크기라도 면은 고리보다 크게 읽힌다
+ *       명중   `ring` — 고리 하나
+ *       가장자리 `none` — **안 그린다.** 명중과 문 사이의 빈 자리가 이미 그 띠다
+ *       스침   `gate` — 제일 바깥, 「여기까지가 맞는 문」
+ *
+ *   ★★ **어느 모양인지도 표가 정한다.** 화면이 정하면 띠를 하나 더할 때
+ *     한쪽만 고치게 된다 — 이 저장소가 제일 자주 밟는 함정이다
  */
-export const RINGS = BANDS.map((b) => ({ key: b.key, r: b.upTo, tone: b.tone }));
+export const RINGS = BANDS.map((b) => ({ key: b.key, r: b.upTo, tone: b.tone, mark: b.mark }));
+
+/**
+ * ★★ **이만큼 벗어나 있으면 띠를 아예 안 그린다** (허용 각 대비).
+ *
+ *   ★ 겨누지도 않은 것 둘레에 고리 셋이 늘 떠 있으면 그게 「조잡」이다.
+ *     이 저장소의 오랜 규약 — **계기는 할 말이 있을 때만 말한다**
+ *     (`hud-table.js ADI.showFrom` 이 사다리에 대해 하는 일과 같다)
+ */
+export const SHOW_AT = 1.8;
 
 /** 사람이 읽는 한 마디 — 맞을 때마다 뜬다 */
 export const HIT_WORD = {

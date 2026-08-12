@@ -91,10 +91,13 @@ function run(drive, { sec = 20, dt = 1 / 60 } = {}) {
 //   표적은 얌전히 다가오는데 내가 좌우로 흔든다 — 개싸움에서 늘 있는 일
 console.log('\n[①] 물고 나서 기수를 ±45도로 휘저으면 (표적은 계속 다가온다)');
 {
+  //  ★ v121 — 유예가 1.1 → 1.88초가 되면서 **빠르게 흔드는 것으로는
+  //    안 끊긴다** (그게 이번 판의 요점이다). 「짐벌 밖으로 나가면 놓나」를
+  //    물으려면 **밖에 머물러야** 한다 — 느리게 흔들어 오래 나가 있게 한다
   const swing = (amp) => run((t) => ({
     tAz: 0, tEl: 0, tDist: 200 - t * 4,
     // 처음 4초는 겨누고 (묶는 데 2.6초), 그 뒤부터 흔든다
-    noseAz: t < 4 ? 0 : amp * Math.sin((t - 4) * 1.1),
+    noseAz: t < 4 ? 0 : amp * Math.sin((t - 4) * 0.42),
     noseEl: 0,
   }));
   for (const amp of [20, 45, 58, 75]) {
@@ -165,10 +168,13 @@ console.log('\n[④] 전(32도)과 지금(짐벌 60도) — 같은 개싸움 20�
   };
   const now = run(dogfight, { sec: 20 });
   // 옛 값 흉내 — `LOCK.gimbal` 을 잠깐 32 로 두고 같은 판을 돈다
-  const keep = LOCK.gimbal; const keepN = LOCK.notchSide;
-  LOCK.gimbal = 32; LOCK.notchSide = 1e9;        // 옛 판에는 노치가 없었다
+  const keep = LOCK.gimbal; const keepN = LOCK.notchSide; const keepG = LOCK.graceDodges;
+  // ★ v121 — **유예도 옛것으로** 되돌려야 견주는 것이 된다. 짐벌만 바꾸고
+  //   유예는 새것을 쓰면 「옛 판」이 새 유예로 버텨서 0 대 0 이 나온다 —
+  //   실제로 그렇게 나와서 알았다
+  LOCK.gimbal = 32; LOCK.notchSide = 1e9; LOCK.graceDodges = LOCK.graceWas / 0.42;
   const was = run(dogfight, { sec: 20 });
-  LOCK.gimbal = keep; LOCK.notchSide = keepN;
+  LOCK.gimbal = keep; LOCK.notchSide = keepN; LOCK.graceDodges = keepG;
   console.log(`   전 (32도 · 노치 없음) — 유지 ${was.heldPct}% · **다시 물어야 한 횟수 ${was.breaks}**`);
   console.log(`   지금 (짐벌 ${keep}도 · 노치)  — 유지 ${now.heldPct}% · **다시 물어야 한 횟수 ${now.breaks}**`);
   ok(now.breaks < was.breaks,
@@ -177,6 +183,59 @@ console.log('\n[④] 전(32도)과 지금(짐벌 60도) — 같은 개싸움 20�
     `★★ 물고 있는 시간이 **${was.heldPct}% → ${now.heldPct}%** (15%p 넘게 는다)`);
   ok(now.heldPct < 100,
     `★ 그래도 **100% 는 아니다** (${now.heldPct}%) — 늘 물려 있으면 조종이 할 일이 없다`);
+}
+
+// ══ ④b ★★★ **회피를 하면서도 물고 있나** (v121) ═══════════════════════
+console.log('\n[④b] 회피하면서 물고 있나 — 사장님 「회피 기동하니깐 놓치고 다시 타겟팅」');
+{
+  //  ★ 재 보니 **회피 한 번이 짐벌을 통째로 쓴다**: 급기동 요 143°/초 ×
+  //    회피 0.42초 = **60도**, 짐벌이 60도다. 두 번 연달아면 120도 —
+  //    밖이다. v119 는 「한 번으로는 안 놓친다」까지만 쟀다.
+  //  ★★ 고증의 답은 **coast**(관성 외삽)다: 안테나가 못 보는 동안 몇 초를
+  //    버티고, 돌아오면 이어 붙인다. 그 값이 `grace` 이고 1.1초는 한 번치였다
+  const RATE = 143;             // 급기동 요 (도/초)
+  const DODGE = 0.42;           // 회피 한 번
+  console.log(`   유예 ${LOCK.grace}초 → **${(DODGE * LOCK.graceDodges).toFixed(2)}초** (회피 ${DODGE}초 × ${LOCK.graceDodges})`);
+
+  /** 회피를 n 번 연달아 하고, 그 뒤 기수를 되돌린다 */
+  const evade = (n, graceDodges) => {
+    const keep = LOCK.graceDodges; LOCK.graceDodges = graceDodges;
+    let out = null;
+    const drive = (t) => {
+      // 0~3.4초 물기 (정면 · 다가온다)
+      if (t < 3.4) return { tAz: 0, tEl: 0, tDist: 200 - t * 6, noseAz: 0, noseEl: 0 };
+      const u = t - 3.4;
+      // ★ **꺾고 → 잠깐 그대로 → 되돌린다.** 처음엔 꺾자마자 되돌리게
+      //   짰는데, 그러면 짐벌 밖에 있는 시간이 거의 0 이라 **옛 유예로도
+      //   안 끊겼다** — 즉 아무것도 못 재는 판이었다. 실제로는 피하는
+      //   동안 그 자세로 조금 있는다 (그게 회피다)
+      const DWELL = 0.5;
+      const sweep = Math.min(u, DODGE * n) * RATE;         // 꺾는 동안
+      const back = Math.max(0, u - DODGE * n - DWELL) * RATE;  // 되돌리는 동안
+      return {
+        tAz: 0, tEl: 0, tDist: 180 - u * 4,
+        noseAz: Math.max(0, sweep - back), noseEl: 0,
+      };
+    };
+    out = run(drive, { sec: 12 });
+    LOCK.graceDodges = keep;
+    return out;
+  };
+  for (const n of [1, 2, 3]) {
+    const was = evade(n, 1.1 / DODGE);   // ★ 옛 1.1초치를 회피 수로 환산
+    const now = evade(n, LOCK.graceDodges);
+    console.log(`   회피 ${n}번 — 옛 유예(1.1초) 끊김 ${was.breaks}회${was.why ? ` (${was.why})` : ''}`
+      + `   ·   지금(${(DODGE * LOCK.graceDodges).toFixed(2)}초) 끊김 ${now.breaks}회${now.why ? ` (${now.why})` : ''}`);
+    if (n <= 2) {
+      ok(now.breaks === 0,
+        `★★★ **회피 ${n}번을 해도 안 놓친다** — 못 보는 동안 관성으로 외삽한다(coast).`
+        + ' 회피는 이 게임이 권하는 조작인데 그때마다 다시 물어야 하면 「타겟팅 하면서 회피」가 성립하지 않는다');
+    }
+  }
+  const many = evade(4, LOCK.graceDodges);
+  ok(many.breaks > 0,
+    `★★ 그런데 **네 번을 내리 돌면 놓친다** (${many.breaks}회) — 안 놓치면 그건 자석이다.`
+    + ' 「빙빙 돌면 안전」이 되면 회피가 회피가 아니다');
 }
 
 // ══ ⑤ **묶는 것은 여전히 어렵다** — 문을 넓힌 것이 아니다 ═════════════

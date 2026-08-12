@@ -33,8 +33,8 @@
 //      「20분 회차」·「회차 배수」 같은 낡은 목적의 낱말
 //   ⑤ **손이 셋을 넘나** — 조종석 하나짜리 배에서 손은 셋이다
 // ══════════════════════════════════════════════════════════════════════════
-import { readFileSync, readdirSync } from 'node:fs';
-import { PILOT } from '../web/space/js/game/pilot-table.js';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { PILOT, FOLDED_CHECKS, foldedWhy } from '../web/space/js/game/pilot-table.js';
 import { ROOMS } from '../web/space/js/game/rooms-table.js';
 import { wired, blocked } from '../web/space/js/game/mission-table.js';
 import { MISSIONS } from '../web/space/js/game/mission-table.js';
@@ -188,6 +188,41 @@ console.log('\n[5] ★★ **손이 셋을 넘나** — 조종석 하나짜리 �
   ok(HAND_MAX <= 3,
     `★★ 한 번에 잡는 것이 **${HAND_MAX} 개 이하**다 — 조종간·스로틀·방아쇠.`
     + ' 넷이 되면 그건 앉은 사람이 못 하는 배다');
+}
+
+console.log('\n[6] ★★★ **접힌 검사가 접힌 채로 있나** (v124 · 사장님 「낡은 절들 정리해줘」)');
+{
+  // ══ ★★★ 여기가 이 절의 요점이다 ══════════════════════════════════
+  //
+  //  v109·v110 이 걷기와 방 여섯을 없앴는데 그것을 재던 검사 아홉이
+  //  남아 있었다. 넷은 **빨갛게** 울고 있었고 (낡은 빨강은 새 빨강을
+  //  덮는다 — v120·v121 에 두 번 겪었다), 다섯은 **초록으로 거짓말**을
+  //  하고 있었다 — 「걸어오는 동안 문이 다 열린다」가 초록이었다.
+  //
+  //  ★ 지우지 않고 **접었다.** 그래서 이제 물어야 할 것이 생긴다:
+  //    ① 목록이 가리키는 파일이 정말 있나 (이름이 틀리면 안 접힌다)
+  //    ② 그 파일이 정말 **물러나게** 돼 있나 (`bailIfFolded`)
+  //    ③ 걷기가 돌아오면 **한꺼번에** 깨어나나
+  const missing = [], ungated = [];
+  for (const [name] of FOLDED_CHECKS) {
+    const f = `tools/${name}.js`;
+    if (!existsSync(f)) { missing.push(name); continue; }
+    if (!readFileSync(f, 'utf8').includes('bailIfFolded')) ungated.push(name);
+  }
+  console.log(`   접힌 검사 ${FOLDED_CHECKS.length} —`);
+  for (const [n, what, why] of FOLDED_CHECKS) console.log(`     ${n.padEnd(14)} ${what}\n${' '.repeat(21)}└ ${why}`);
+  ok(!missing.length,
+    `★★ **목록이 가리키는 파일이 다 있다** ${missing.length ? `— 없는 것 ${missing.join(' · ')}` : ''}`
+    + ' — 이름이 틀리면 접히지도 깨어나지도 않는다');
+  ok(!ungated.length,
+    `★★★ **아홉이 다 물러나게 돼 있다** ${ungated.length ? `— 안 물러나는 것 ${ungated.join(' · ')}` : ''}`
+    + ' — 목록에만 적고 파일에 안 물리면 그 검사는 계속 거짓말을 한다');
+  ok(FOLDED_CHECKS.every(([, , why]) => why && why.length > 4),
+    '★ 접은 **까닭**이 다 적혀 있다 — 까닭 없이 접으면 다음에 왜 접었는지 모른다');
+  ok(FOLDED_CHECKS.every(([n]) => foldedWhy(n)) === !PILOT.canStand,
+    `★★★ **canStand 하나가 아홉을 다 여닫는다** (지금 ${PILOT.canStand}) —`
+    + ' 도구마다 제 조건을 적으면 걷기가 돌아왔을 때 아홉 군데를 다 찾아 풀어야 하고,'
+    + ' 한 군데만 빠뜨려도 조용히 죽는다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데 — **장르와 어긋난 자리가 있습니다**`
