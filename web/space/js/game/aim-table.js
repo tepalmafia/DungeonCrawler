@@ -111,10 +111,18 @@ export const BULL = BANDS[0].upTo;
  */
 export const SEEK = 0.45;
 
-/** 이 오차(0~1 비율)가 어느 띠인가 */
-export function bandOfK(k) {
+/**
+ * 이 오차(0~1 비율)가 어느 띠인가.
+ *
+ * @param bullPlus ★★ v115 — **「사수」 특성이 정중앙 띠를 넓힌다**
+ *   (`growth-table.js TRAITS.gunner`). 표를 **고쳐 쓰지 않는다** — 표를
+ *   건드리면 특성을 안 고른 사람의 게임까지 바뀌고, 무엇보다 「지금 값이
+ *   무엇인가」의 답이 둘이 된다
+ */
+export function bandOfK(k, bullPlus = 0) {
   const kk = Math.max(0, Math.min(1, k));
-  for (const b of BANDS) if (kk <= b.upTo) return b;
+  const wide = Math.max(0, bullPlus);
+  for (const b of BANDS) if (kk <= b.upTo + (b.key === 'bull' ? wide : 0)) return b;
   return BANDS[BANDS.length - 1];
 }
 
@@ -126,16 +134,17 @@ export function bandOfK(k) {
  * @param seek 유도인가 — 참이면 `SEEK` 로 눌러서 본다
  * @returns 띠 · 못 맞히면 null
  */
-export function bandAt(off, tol, seek = false) {
+export function bandAt(off, tol, seek = false, bullPlus = 0) {
   const t = Math.max(1e-6, tol);
   let k = (off ?? 0) / t;
   if (k > 1) return null;                 // ★ 문 밖 — 이건 진짜 빗나감이다
   if (seek) k *= SEEK;
-  return bandOfK(k);
+  return bandOfK(k, bullPlus);
 }
 
 /** 이 발의 피해 배수 — 못 맞히면 0 */
-export const multAt = (off, tol, seek = false) => bandAt(off, tol, seek)?.mult ?? 0;
+export const multAt = (off, tol, seek = false, bullPlus = 0) =>
+  bandAt(off, tol, seek, bullPlus)?.mult ?? 0;
 
 /**
  * ★★ **조준경이 그리는 고리** — 띠마다 하나씩, 반지름은 비율 그대로.

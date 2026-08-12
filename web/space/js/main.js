@@ -186,6 +186,13 @@ import { bandAt, HIT_WORD } from './game/aim-table.js';
 import {
   RECIPES, RECIPE_LIST, canMake, costWord, WHY as CRAFT_WHY,
 } from './game/craft-table.js';
+// ══ ★★★ v115 — **사람이 크는 길** (사장님 「우주 비행전투 rpg야 우리 장르야」)
+//  ★ 기둥 다섯 중 성장의 절반이 비어 있었다 (`space-genre.js` 가 잡았다).
+//    배는 파츠로 크는데 **사람이 안 컸다** — 그건 장비 게임이다
+import {
+  XP, MAX_LV, TRAITS, TRAIT_BY, PICK_WHY, levelAt, xpForKill,
+  effectOf, makePilot, gain as gainXp, pick as pickTrait,
+} from './game/growth-table.js';
 import { ITEMS as CARGO_ITEMS, nameOf as nameOfItem, massOf as itemMass } from './game/cargo-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
@@ -313,7 +320,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 114;
+export const VERSION = 115;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -561,7 +568,7 @@ addEventListener('keydown', (e) => {
       dist: p0?.dist ?? 999,
       close: closeRate,
       off: p0?.off ?? 0,
-      full: cargoLeft(cargo) <= 0,
+      full: cargoLeft(cargo, grow.hold) <= 0,
     });
     if (!r.ok) { say(ai, DOCK_WHY[r.why], 'warn'); return; }
     say(ai, r.hard ? DOCK_SAY.hard : DOCK_SAY.close, r.hard ? 'alarm' : 'tell');
@@ -673,7 +680,7 @@ addEventListener('keydown', (e) => {
     const r = beginCatch(catchS, {
       has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
       seated: helmSat || steering,
-      dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+      dry: isDry(supply.fuel), full: cargoLeft(cargo, grow.hold) <= 0,
     });
     if (!r.ok) { say(ai, CWHY[r.why], 'warn'); return; }
     say(ai, '포획 — 따라붙습니다. 조종간이 잠깁니다', 'alarm');
@@ -762,7 +769,7 @@ for (const w of Object.values(WAYS)) {
         const c = beginCatch(catchS, {
           has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
           seated: helmSat || steering,
-          dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+          dry: isDry(supply.fuel), full: cargoLeft(cargo, grow.hold) <= 0,
         });
         say(ai, c.ok
           ? `${w.name} — ${Math.round(p0?.dist ?? 0)}m 는 멉니다. **따라붙습니다** (K 로 끊습니다)`
@@ -1236,6 +1243,19 @@ let bayOpen = false;
  *   ★★ 다만 **쫓기기 시작하면 멈춘다** (`stepCraft`) — 손이 조종간으로 간다
  */
 let craftJob = null;
+
+/**
+ * ★★★ v115 — **파일럿.** 배와 **다른 갈래**로 큰다:
+ *   배는 주워서(운이 섞이고 잃는다) · 사람은 해서(운이 안 섞이고 안 잃는다)
+ */
+const pilot = makePilot();
+/**
+ * ★★★ **고른 특성이 합쳐서 무엇을 바꾸나** — **여기 하나가 유일한 답이다.**
+ *   계통들이 제 방식으로 「내가 사수인가」를 물으면 그때부터 갈라진다
+ *   (`frame.js` 와 같은 규약). 고를 때마다 다시 낸다
+ */
+let grow = effectOf(pilot.picked);
+const regrow = () => { grow = effectOf(pilot.picked); };
 /** 기체 도해 — 부위 일곱이 어디에 붙나 (판 크기의 0~1) */
 const FIT_AT = {
   gun: [0.50, 0.15], tube: [0.26, 0.40], armor: [0.50, 0.50],
@@ -1253,7 +1273,7 @@ const bold = (t = '') => String(t)
 function drawBay() {
   const box = document.getElementById('bay');
   if (!box) return;
-  const s = fitSummary(fit);
+  const s = fitSummary(fit, grow.oreMult);
   // ── 도해 ──────────────────────────────────────────
   const W = 520, H = 200;
   const parts = [
@@ -1293,6 +1313,32 @@ function drawBay() {
     `<span>전투력</span><b class="might">${myPower()}</b><span></span>`
     + `<span>광석</span><b>${Math.round(supply.ore)}</b><span></span>` + rows;
 
+  // ══ ★★★ v115 — **성장** (`growth-table.js`) ══════════════════════════
+  //
+  //  ★ 사장님 「**우주 비행전투 rpg야 우리 장르야**」
+  //
+  //  ★★ 배 칸(기체) **바로 옆**에 둔다. 두 갈래가 나란히 있어야
+  //    「배는 주워서 크고 사람은 해서 큰다」가 한눈에 읽힌다 —
+  //    떨어뜨려 놓으면 둘이 같은 것인 줄 안다
+  {
+    const g = levelAt(pilot.xp);
+    document.getElementById('grow-bar').innerHTML =
+      `<div class="hold-gauge${pilot.owed ? ' full' : ''}">`
+      + `<i style="width:${Math.round(g.k * 100)}%"></i></div>`
+      + `<small style="color:#7d8b9c">Lv <b class="might">${g.lv}</b> / ${MAX_LV}`
+      + (g.need ? ` · 다음까지 ${Math.max(0, g.need - g.into)}` : ' · **다 컸습니다**')
+      + (pilot.owed ? ` · <b style="color:#e0a34a">고를 것 ${pilot.owed} 개</b>` : '')
+      + '</small>';
+    document.getElementById('grow-rows').innerHTML = TRAITS.map((t) => {
+      const had = pilot.picked.includes(t.key);
+      const can = !had && pilot.owed > 0;
+      return `<span>${t.name}</span>`
+        + `<b>${bold(t.how)}<br><small style="color:#5e6b7a">${bold(t.why)}</small></b>`
+        + `<button class="act" data-trait="${t.key}" ${can ? '' : 'disabled'}>`
+        + `${had ? '★ 골랐습니다' : (pilot.owed ? '고른다' : '레벨이 올라야')}</button>`;
+    }).join('');
+  }
+
   // ══ ★★★ v114 — **화물칸과 제조** ═══════════════════════════════════
   //
   //  ★ 사장님 「**인벤토리도 만들어야지. 제조하는 것도 만들고**」
@@ -1301,7 +1347,7 @@ function drawBay() {
   //    막아 놓고 화면이 없으면 사장님은 여전히 「왜 찼지」밖에 못 물으신다 —
   //    규칙이 있는데 화면에 없으면 없는 것과 같다 (v64~v82 락온 원)
   {
-    const cs = cargoSummary(cargo);
+    const cs = cargoSummary(cargo, grow.hold);
     const pct = Math.round((cs.used / cs.hold) * 100);
     document.getElementById('hold-bar').innerHTML =
       `<div class="hold-gauge${pct >= 90 ? ' full' : ''}">`
@@ -1363,24 +1409,33 @@ addEventListener('click', (ev) => {
     if (b.dataset.eq) {
       const r = equip(fit, b.dataset.eq);
       say(ai, r.ok ? `${partName(r.put)} 를 달았습니다` : PWHY[r.why], r.ok ? 'tell' : 'warn');
+    } else if (b.dataset.trait) {
+      const r = pickTrait(pilot, b.dataset.trait);
+      if (r.ok) {
+        // ★★ **고른 순간 효과를 다시 낸다.** 안 하면 목록에는 특성이
+        //   있는데 게임은 그대로 도는, 제일 찾기 어려운 어긋남이 난다
+        regrow();
+        say(ai, `★ ${r.trait.name} — ${r.trait.how.replace(/\*\*/g, '')}`, 'warn');
+      } else say(ai, PICK_WHY[r.why], 'warn');
     } else if (b.dataset.toss) {
       // ★ 버리는 것이 **이 창의 첫째 일**이다 (「무엇을 버릴지」 · v83)
       const n = cargoDrop(cargo, b.dataset.toss, 1);
       if (n) say(ai, `${nameOfItem(b.dataset.toss)} 를 버렸습니다`, 'tell');
     } else if (b.dataset.make) {
       const key = b.dataset.make;
-      const cs = cargoSummary(cargo);
+      const cs = cargoSummary(cargo, grow.hold);
       const c = canMake(key, { items: cs.items, calm: !chase.on, busy: !!craftJob });
       if (!c.ok) { say(ai, CRAFT_WHY[c.why] ?? '지금은 못 만듭니다', 'warn'); }
       else {
         // ★★ **재료를 지금 뺀다.** 다 만든 뒤에 빼면 그 사이에 버릴 수 있고,
         //   그러면 공짜가 된다 — 값을 먼저 치르는 것이 이 게임의 규약이다
         for (const [k, n] of Object.entries(RECIPES[key].cost)) cargoTake(cargo, k, n);
-        craftJob = { key, left: RECIPES[key].sec };
+        // ★ v115 — 「손재주」 특성이 제조를 빠르게 한다
+        craftJob = { key, left: RECIPES[key].sec * grow.craftMult };
         say(ai, `${RECIPES[key].name} — ${RECIPES[key].sec}초`, 'tell');
       }
     } else if (b.dataset.up) {
-      const r = upgrade(fit, b.dataset.up, { ore: supply.ore });
+      const r = upgrade(fit, b.dataset.up, { ore: supply.ore, oreMult: grow.oreMult });
       if (r.ok) {
         supply.ore = Math.max(0, supply.ore - r.ore);
         say(ai, `개조 — ${partName(r.to)}`, 'tell');
@@ -1389,6 +1444,7 @@ addEventListener('click', (ev) => {
       if (headPick(warhead, b.dataset.head) || warhead.carrying === b.dataset.head) {
         warhead.carrying = b.dataset.head;
         warhead.in.push(b.dataset.head);
+      upXp(XP.mat, '탄두 재료');
         warhead.carrying = null;
         say(ai, '탄두에 꽂았습니다', 'tell');
       } else say(ai, '그 재료가 없습니다', 'warn');
@@ -1401,7 +1457,8 @@ addEventListener('click', (ev) => {
   // ★ v114 — 칸이 **셋**이 됐다 (기체 · 화물·제조 · 탄두). 둘일 때 쓰던
   //   `fitOn` 같은 참거짓 하나로는 셋을 못 가른다 — 늘리면서 안 고치면
   //   「누르면 둘 다 열리는」 창이 된다
-  for (const [tab, pane] of [['tab-fit', 'pane-fit'], ['tab-hold', 'pane-hold'], ['tab-head', 'pane-head']]) {
+  for (const [tab, pane] of [['tab-fit', 'pane-fit'], ['tab-grow', 'pane-grow'],
+    ['tab-hold', 'pane-hold'], ['tab-head', 'pane-head']]) {
     const on = t.id === tab;
     document.getElementById(tab)?.classList.toggle('on', on);
     const el = document.getElementById(pane);
@@ -1434,7 +1491,8 @@ function fireGun() {
   //   탄약이 없는 대신 이쪽이 값이다: 쏠수록 뜨거워지고, 뜨거우면 못 숨고,
   //   식히려고 라디에이터를 열면 더 훤히 보인다 (v58 열 저장고와 물린다).
   //   미사일은 열을 덜 낸다 — 대신 재고가 준다
-  heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2));
+  // ★ v115 — 「냉정」 특성이 쏘는 열을 깎는다 (`grow.heatMult`)
+  heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2) * grow.heatMult);
   // ★ **쏘면 밝아진다** — 총구 섬광과 사출은 숨길 수 없다 (v44 규약)
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
   say(ai, `${w.name} 발사`, 'tell');
@@ -1461,6 +1519,25 @@ function fireGun() {
  *     아니고, 다시 조용해지면 이어진다 — 「동시에 두 곳에 못 있는다」가
  *     이 배의 축이고 제조도 거기서 벗어나지 않는다
  */
+/**
+ * ★★★ v115 — **경험을 준다** — 게임에서 이 함수 하나만 부른다.
+ *
+ *   ★ 레벨이 올라도 **창을 안 띄운다.** 싸우는 중일 수 있고, 그때 창이
+ *     뜨면 그건 보상이 아니라 방해다. 「고를 것이 있습니다」만 말하고
+ *     **빚으로 쌓아 둔다** — 사람이 I 를 눌러 열 때 고른다.
+ *     v109 이 없앤 「하던 일을 멈추고 뒤로 간다」와 같은 병을 안 만든다
+ */
+function upXp(n, why = '') {
+  const r = gainXp(pilot, n);
+  if (r.up > 0) {
+    say(ai, `★★ 레벨 ${pilot.lv} — 고를 것이 ${pilot.owed} 개 있습니다 (I)`, 'warn');
+    audio?.event('caught');
+  } else if (why && n >= XP.leg) {
+    say(ai, `${why} — 경험 +${Math.round(n)}`, 'tell');
+  }
+  if (bayOpen) drawBay();
+}
+
 function stepCraft(dt) {
   if (!craftJob) return;
   if (chase.on) return;                       // ★ 쫓기는 동안은 멈춘다
@@ -1473,7 +1550,7 @@ function stepCraft(dt) {
   } else if (r.to.item) {
     // ★ 만든 것도 **화물칸을 거친다** — 자리가 없으면 못 싣는다.
     //   여기서만 예외를 두면 「제조로 화물칸을 넘긴다」가 열린다
-    const got = cargoPut(cargo, { [r.to.item]: r.to.n });
+    const got = cargoPut(cargo, { [r.to.item]: r.to.n }, grow.hold);
     if (Object.keys(got.took).length === 0) {
       say(ai, `${r.name} 을 마쳤는데 **화물칸에 자리가 없습니다**`, 'warn');
       if (bayOpen) drawBay();
@@ -1511,7 +1588,8 @@ function landShots(dt) {
     //    **확실히** 갈린다). 둘을 곱하면 「잘 겨누면 핵심이 잘 나오고,
     //    나온 그 한 발도 더 아프다」가 된다
     //  ★ 배수를 여기서 안 정한다 — 표가 정하고 `space-aim.js` 가 잰다
-    const band = bandAt(d.shot.off, wpn.tol, !!wpn.seek);
+    // ★ v115 — 「사수」 특성이 정중앙 띠를 넓힌다 (`grow.bull`)
+    const band = bandAt(d.shot.off, wpn.tol, !!wpn.seek, grow.bull);
     const hp = hitPart(t, {
       off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg * (band?.mult ?? 1),
     });
@@ -1534,6 +1612,11 @@ function landShots(dt) {
     // 부쉈다
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
+    // ══ ★★★ v115 — **경험은 「했다」에서만 나온다** ═══════════════════
+    //  ★ 센 것을 잡으면 많이 (전투력 그대로) · **정중앙으로 마무리하면 더**.
+    //    이 한 줄이 「RPG 인데 실력 게임」을 만든다 — 같은 적을 잡아도
+    //    잘 맞힌 사람이 더 큰다 (`growth-table.js XP.bull`)
+    upXp(xpForKill(t.kind, band?.key === 'bull'), `${TKINDS[t.kind]?.name ?? '적'} 격추`);
     forgetLock(combat, t.id);
     // ══ ★★★ **부순 것과 얻는 것 사이에 일이 하나 있다** (v81) ═══════
     //
@@ -1688,6 +1771,8 @@ const world = () => ({
   arc: arcS,
   // ★ v101 — 스로틀·도킹. `save-table.js FIELDS` 가 칸을 고른다
   throttle: thr, dock: dockS,
+  // ★ v115 — 파일럿 (`save-table.js FIELDS.pilot`)
+  pilot,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -1720,6 +1805,9 @@ function loadOnce() {
   clock = box.ship.clock ?? clock;
   Object.assign(power, box.ship.power ?? {});
   coolOpen = box.ship.coolOpen ?? false;
+  // ★ v115 — 특성을 이어했으면 **효과를 다시 낸다.** 안 하면 목록에는
+  //   특성이 있는데 게임은 아무것도 안 바뀐 채로 돈다
+  regrow();
   // ★★ **손을 놓은 채 시작한다** (2026-08-06 · 사장님 「왜 자꾸 주포에서
   //   시작하고 움직여지지가 않아?」). 앉아 있으면 `gunBusy` 가 걸음을 막으므로
   //   앉은 채 이어하면 **못 걷는 자리에서 시작한다.** 표에서 `up` 을 뺐지만
@@ -1945,7 +2033,7 @@ function takeSalvage(p) {
   //  꾸러미가 든 것은 이제 덩어리가 아니라 **아이템**이다. 화물칸에는
   //  **무게 한도**가 있으므로 다 못 실을 수 있다 — 그게 「무엇을 줍고
   //  무엇을 버릴지」의 두 번째 층이다 (`docs/space/ITEMS.md §4`)
-  const r = cargoPut(cargo, p.has);
+  const r = cargoPut(cargo, p.has, grow.hold);
   // 실은 것만 배의 계통으로 들어간다 (`cargo-table.js ITEMS[k].use`)
   // ══ ★★★ v114 — **삼킨 것은 화물칸에서 뺀다** (`cargo.js settle`) ═════
   //
@@ -3525,11 +3613,13 @@ function systemsStep(dt, valveOpen, regionMult) {
       rushSaid = 2.5;
     }
     if (rushSaid > 0) rushSaid -= dt;
+    // ★ v115 — 「기관사」 특성이 급가속 추진제를 아낀다. `stepBoost` 가
+    //   낸 값에 곱한다 — 표를 고치면 특성을 안 고른 사람 것까지 바뀐다
     const bev = stepBoost(boost, dt, {
       on: wantRush && rushOk,
       fuel: supply.fuel,
     });
-    supply.fuel = Math.max(0, supply.fuel - boost.fuel);
+    supply.fuel = Math.max(0, supply.fuel - boost.fuel * grow.fuelMult);
     heat = Math.min(HEAT.max, heat + boost.heat);
     // ★★★ v87 — 급가속을 **밟는 순간** 눈이 뒤로 밀린다. 추력 켬(0.35배)
     //   보다 세게 — 주엔진을 배로 태우는 것이므로 몸이 더 눌린다
@@ -3789,7 +3879,7 @@ function systemsStep(dt, valveOpen, regionMult) {
     weapon: weaponOf(combat).name,
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
     //   획득 아이템이 … 조정석 화면에서 획득 리스트를」)
-    cargo: cargoSummary(cargo),
+    cargo: cargoSummary(cargo, grow.hold),
     // ══ ★★★ v99 — **아크 도약** (일곱째 줄) ═══════════════════════════
     //  ★ 여기에 안 넣고 있었다. `SPACE.arc` 는 8 을 말하는데 계기는
     //    「전지 0/6」을 그리고 있었고, **화면을 찍어서 잡았다** —
@@ -4060,7 +4150,7 @@ window.SPACE = {
       close: +closeRate.toFixed(1),
       blocked: whyNotDock({
         has: !!p0, dist: p0?.dist ?? 999, close: closeRate, off: p0?.off ?? 0,
-        full: cargoLeft(cargo) <= 0, step: dockS.step,
+        full: cargoLeft(cargo, grow.hold) <= 0, step: dockS.step,
       }),
     };
   },
@@ -5194,6 +5284,9 @@ window.SPACE = {
   /** ★ v114 — 점검용 구멍. 화물칸에 물건을 넣어 인벤토리·제조를 눌러 본다 */
   giveCargo(g) { const r = cargoPut(cargo, g); if (bayOpen) drawBay(); return r; },
   craftNow() { return craftJob ? { ...craftJob } : null; },
+  /** ★ v115 — 점검용 구멍. 성장을 눌러 보고 특성이 정말 먹나 잰다 */
+  giveXp(n) { upXp(n, '점검'); return { ...pilot, eff: grow }; },
+  pilotNow() { return { ...pilot, eff: { ...grow } }; },
   /** ★★★ v106 — **수리 단추.** 검사(`space-pilot.js`)와 점검 모드가 읽는다 */
   get fix() {
     return {
@@ -5228,7 +5321,7 @@ window.SPACE = {
     return beginCatch(catchS, {
       has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
       seated: helmSat || steering,
-      dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+      dry: isDry(supply.fuel), full: cargoLeft(cargo, grow.hold) <= 0,
     });
   },
   /** ★★★ v103 — **비행 보조** (자동 수평). 검사와 점검 모드가 읽는다 */
@@ -5254,6 +5347,7 @@ window.SPACE = {
     if (headPick(warhead, key) || warhead.carrying === key) {
       warhead.carrying = key;
       warhead.in.push(key);
+      upXp(XP.mat, '탄두 재료');
       warhead.carrying = null;
     }
     return headSummary(warhead);
@@ -6036,6 +6130,9 @@ function frame(now) {
     say(ai, '거점을 지나쳤습니다 — 항로로 돌아옵니다', 'tell');
     audio?.event('caught');
   } else if (rev === 'arrive' || rev === 'end') {
+    // ★ v115 — **뚫으면 오른다.** 목적 한 줄(뚫는다·채운다·떨군다)과
+    //   성장이 같은 길 위에 있게 하는 자리다
+    upXp(XP.leg, `구간 ${route.leg}/12 통과`);
     newLeg(hazard);
     // ★ 구간이 바뀌면 **다음 장면을 예약한다.** route.leg 는 0 부터 세고
     //   배치표는 1 부터 센다 — 여기서 한 번만 맞춘다
@@ -6224,7 +6321,8 @@ function frame(now) {
       if (!calmNow) say(ai, FIX_WHY.calm, 'warn');
     } else {
       fix.hold += dt;
-      if (fix.hold >= FIX.hold) {
+      // ★ v115 — 「정비」 특성이 수리를 빠르게 한다 (`grow.fixMult`)
+      if (fix.hold >= FIX.hold * grow.fixMult) {
         fix.hold = 0;
         fix.cool = FIX.cool;
         supply.parts = Math.max(0, supply.parts - FIX.parts);
@@ -6650,6 +6748,8 @@ function frame(now) {
   }
   const skyEv = stepSky(sky, dt, {
     evade,
+    // ★ v115 — 「반사」 특성이 회피 창을 넓힌다 (`grow.window`)
+    evadeWide: grow.window,
     // ══ ★★★ **항로는 자동항법에만 영향을 준다** (v82) ═══════════════
     //
     //  ★ 사장님 「**항로 설정이 안되면 운전할 수 없잔아.** 이것도 고쳐.
@@ -6755,7 +6855,8 @@ function frame(now) {
   //   **귀가 대신 본다** — 이게 「직관적으로 방향을 맞춘다」의 절반이다
   radarSeek = !combat.radar.on ? 0
     : combat.radar.id !== null ? 1
-      : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range)
+      // ★ v115 — 「눈」 특성이 레이더 사거리를 늘린다 (`grow.range`)
+      : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range + grow.range)
         ? 0.35 + 0.3 * (combat.radar.t / RADAR.lockFor) : 0;
   if (radEv === 'lock') { say(ai, '묶었습니다', 'tell'); audio?.event('latch'); }
   if (radEv === 'break') { say(ai, '놓쳤습니다', 'tell'); }
@@ -6802,7 +6903,7 @@ function frame(now) {
       const p0 = nearPack();
       const why = whyNotDock({
         has: !!p0, dist: p0?.dist ?? 999, close: closeRate, off: p0?.off ?? 0,
-        full: cargoLeft(cargo) <= 0, step: dockS.step,
+        full: cargoLeft(cargo, grow.hold) <= 0, step: dockS.step,
       });
       return {
         ...dockSummary(dockS), word: dockWord(dockS),

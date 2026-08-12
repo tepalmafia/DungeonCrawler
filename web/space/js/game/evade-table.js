@@ -98,8 +98,14 @@ export const FLY = ENEMY_FIRE.fly;
 /** 빗나가려면 쌓을 양 — 새 숫자를 안 만든다 */
 export const NEED = DODGE.need;
 
-/** 지금이 창 안인가 (`left` = 닿기까지 남은 초) */
-export const inWindow = (left) => left >= EVADE.window[0] && left <= EVADE.window[1];
+/**
+ * 지금이 창 안인가 (`left` = 닿기까지 남은 초).
+ * @param wide ★★ v115 — **「반사」 특성이 창을 넓힌다** (`growth-table.js`).
+ *   양쪽으로 벌린다 — 한쪽만 벌리면 「늦게 꺾어도 된다」나 「일찍 꺾어도
+ *   된다」 한쪽만 되어 특성의 뜻이 반쪽이 된다
+ */
+export const inWindow = (left, wide = 0) =>
+  left >= EVADE.window[0] - wide / 2 && left <= EVADE.window[1] + wide / 2;
 /** 지금이 완벽한 자리인가 */
 export const isPerfect = (left) => left >= EVADE.perfect[0] && left <= EVADE.perfect[1];
 
@@ -112,8 +118,8 @@ export const isPerfect = (left) => left >= EVADE.perfect[0] && left <= EVADE.per
  * @param burst 급기동인가
  * @returns 초당 쌓이는 양
  */
-export function gainAt(left, { push = 0, roll = 0, burst = false, burstMult = 2.4 } = {}) {
-  const win = inWindow(left);
+export function gainAt(left, { push = 0, roll = 0, burst = false, burstMult = 2.4, wide = 0 } = {}) {
+  const win = inWindow(left, wide);
   const per = isPerfect(left);
   const k = per ? EVADE.perfectMult : (win ? EVADE.mult : 1);
   // ══ ★★★ **배수는 굴리기에만 준다** ═══════════════════════════════════
@@ -150,9 +156,10 @@ export const hurtMult = (got) =>
  * @returns { r, band } r 은 고리 반지름 배수(1 → 크다 · 0 → 붙었다),
  *                      band 는 'wait' | 'now' | 'perfect' | 'late'
  */
-export function ringAt(left) {
+export function ringAt(left, wide = 0) {
   const r = Math.max(0, Math.min(1, left / EVADE.ringFrom));
-  const band = isPerfect(left) ? 'perfect' : (inWindow(left) ? 'now' : (left > EVADE.window[1] ? 'wait' : 'late'));
+  const band = isPerfect(left) ? 'perfect'
+    : (inWindow(left, wide) ? 'now' : (left > EVADE.window[1] + wide / 2 ? 'wait' : 'late'));
   return { r, band };
 }
 

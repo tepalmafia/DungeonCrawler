@@ -117,16 +117,35 @@ try {
       const P = await S(() => SPACE.panels());
       for (const n of Object.keys(PANELS)) {
         if (n === '조준경' || !P[n]) continue;
-        (seen[n] = seen[n] ?? []).push({ v, cx: P[n].cx, cy: P[n].cy });
+        // ══ ★★★ **못박은 것은 복판이 아니라 바깥 모서리다** ═════════════
+        //
+        //  ★ 처음에 복판(`cx`)을 쟀다가, 판을 1.6배로 키우니 흔들림이
+        //    0.05 → 0.09 로 늘어 빨개졌다. **정렬이 나빠진 것이 아니다** —
+        //    `centerFor` 가 「바깥 모서리를 구석에 대고 그만큼 안으로
+        //    민다」이므로, 복판은 **판의 반쪽 크기만큼** 화면비를 탄다.
+        //    판이 클수록 그 몫이 커진다.
+        //  ★★ 즉 **표가 약속한 것(`ANCHOR`)과 검사가 재던 것이 달랐다.**
+        //    약속은 「바깥 모서리가 늘 같은 자리」이고, 잘림도 가림도
+        //    모서리가 정한다. 재는 것을 약속에 맞춘다
+        const [sx, sy] = PANELS[n].corner;
+        (seen[n] = seen[n] ?? []).push({
+          v,
+          cx: sx < 0 ? P[n].x0 : P[n].x1,
+          cy: sy < 0 ? P[n].y0 : P[n].y1,
+          mx: P[n].cx, my: P[n].cy,
+        });
       }
     }
     for (const [n, rows] of Object.entries(seen)) {
       const dx = Math.max(...rows.map((r) => r.cx)) - Math.min(...rows.map((r) => r.cx));
       const dy = Math.max(...rows.map((r) => r.cy)) - Math.min(...rows.map((r) => r.cy));
-      console.log(`   ${n}  x ${rows.map((r) => r.cx.toFixed(2)).join(' ')}`
-        + `  · 흔들림 x ${dx.toFixed(3)} · y ${dy.toFixed(3)}`);
-      ok(dx < 0.08 && dy < 0.08,
-        `★★★ **${n} 이 창 크기와 상관없이 같은 자리**다 (흔들림 ${Math.max(dx, dy).toFixed(3)} < 0.08)`
+      const mdx = Math.max(...rows.map((r) => r.mx)) - Math.min(...rows.map((r) => r.mx));
+      console.log(`   ${n}  바깥 모서리 ${rows.map((r) => r.cx.toFixed(2)).join(' ')}`
+        + `  · 흔들림 x ${dx.toFixed(3)} · y ${dy.toFixed(3)}`
+        + `  (복판은 ${mdx.toFixed(3)} — 판 크기만큼 화면비를 탄다)`);
+      ok(dx < 0.03 && dy < 0.03,
+        `★★★ **${n} 의 바깥 모서리가 창 크기와 상관없이 같은 자리**다`
+        + ` (흔들림 ${Math.max(dx, dy).toFixed(3)} < 0.03)`
         + ' — v113 까지는 자리를 미터로 적어 둬서 넓은 화면일수록 복판으로 걸어 들어왔다');
     }
   }

@@ -61,6 +61,11 @@ export function equip(f, slot, idx = 0) {
  * @param have { ore }  갖고 있는 것 — **여기서 안 깎는다.** 깎는 것은
  *   게임이 한다 (`main.js`). 규칙과 곳간을 한 자리에 두면 검사가 못 돈다
  */
+/**
+ * @param have.oreMult ★★ v115 — **「손끝」 특성이 개조 광석을 깎는다**
+ *   (`growth-table.js TRAITS.tinker`). ★ 사람 갈래가 **배 갈래를 돕는**
+ *   유일한 자리다 — 완전히 남남이면 한 회차에 둘을 같이 키울 까닭이 없다
+ */
 export function upgrade(f, slot, have = {}) {
   const cur = f.on[slot];
   if (!cur) return { ok: false, why: 'slot' };
@@ -68,7 +73,7 @@ export function upgrade(f, slot, have = {}) {
   if (i >= tierIdx(UPGRADE.maxTier)) return { ok: false, why: 'max' };
   const spares = sparesFor(f, slot);
   if (spares.length < UPGRADE.spare) return { ok: false, why: 'spare' };
-  const ore = oreFor(cur.tier);
+  const ore = Math.round(oreFor(cur.tier) * (have.oreMult ?? 1));
   if ((have.ore ?? 0) < ore) return { ok: false, why: 'ore' };
   // 태운다 — **등급이 낮은 것부터** (아까운 것을 남긴다)
   for (let n = 0; n < UPGRADE.spare; n++) {
@@ -92,7 +97,8 @@ export function craft(f, slot, have = {}) {
 }
 
 /** 화면과 검사가 읽는다 — I 창이 그리는 것이 이것이다 */
-export function summary(f) {
+/** @param oreMult ★ v115 — 「손끝」 특성. 화면이 **깎인 값**을 보여야 한다 */
+export function summary(f, oreMult = 1) {
   return {
     might: mightOf(f),
     slots: SLOTS.map((s) => {
@@ -104,7 +110,7 @@ export function summary(f) {
         spares: sp.length,
         best: sp[0] ? partName(sp[0]) : null,
         canUp: tierIdx(p?.tier ?? 'stock') < tierIdx(UPGRADE.maxTier) && sp.length >= UPGRADE.spare,
-        oreUp: p ? oreFor(p.tier) : 0,
+        oreUp: p ? Math.round(oreFor(p.tier) * oreMult) : 0,
       };
     }),
     spare: f.spare.length,

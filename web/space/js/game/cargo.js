@@ -34,7 +34,13 @@ export function used(c) {
   for (const [k, n] of Object.entries(c.items)) m += massOf(k) * n;
   return m;
 }
-export const left = (c) => Math.max(0, HOLD - used(c));
+/**
+ * 남은 자리.
+ * @param extra ★★ v115 — **「짐꾼」 특성이 화물칸을 늘린다**
+ *   (`growth-table.js TRAITS.hauler`). `HOLD` 를 고쳐 쓰지 않는다 —
+ *   표를 건드리면 특성을 안 고른 사람의 화물칸까지 늘어난다
+ */
+export const left = (c, extra = 0) => Math.max(0, HOLD + Math.max(0, extra) - used(c));
 
 /**
  * ★★ **싣는다.**
@@ -45,9 +51,9 @@ export const left = (c) => Math.max(0, HOLD - used(c));
  *
  * @returns { took: {key:n}, missed: {key:n}, full }
  */
-export function put(c, gain) {
+export function put(c, gain, extra = 0) {
   const took = {}; const missed = {};
-  let room = left(c);
+  let room = left(c, extra);
   for (const [k, n0] of Object.entries(gain ?? {})) {
     if (!ITEMS[k] || !n0) continue;
     const m = massOf(k);
@@ -203,10 +209,10 @@ export function word(gain) {
 }
 
 /** 검사·화면이 읽는다 */
-export function summary(c) {
+export function summary(c, extra = 0) {
   return {
     items: { ...c.items },
-    used: used(c), left: left(c), hold: HOLD,
+    used: used(c), left: left(c, extra), hold: HOLD + Math.max(0, extra),
     log: c.log.map((l) => ({ key: l.key, name: nameOf(l.key), n: l.n, t: +l.t.toFixed(1) })),
     took: c.took, missed: c.missed,
   };

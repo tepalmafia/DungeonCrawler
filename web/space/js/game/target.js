@@ -197,6 +197,8 @@ export function setNose(sky, az, el = 0) { sky.noseAz = az; sky.noseEl = el; }
  */
 export function stepSky(sky, dt, {
   moving = true, quiet = false, close = 1, evade = null,
+  /** ★ v115 — 「반사」 특성이 넓힌 회피 창 (`growth-table.js`) */
+  evadeWide = 0,
 } = {}) {
   const want = wantCount(sky);
 
@@ -352,6 +354,9 @@ export function stepSky(sky, dt, {
       s.dodge += gainAt(s.t, {
         push: evadeGain(r.az, r.el, evade.x ?? 0, evade.y ?? 0),
         roll: Math.abs(evade.roll ?? 0),
+        // ★ v115 — 「반사」 특성이 창을 넓힌다. **여기서 안 정한다** —
+        //   `main.js` 가 `growth-table.js effectOf` 가 낸 값을 넘겨 준다
+        wide: evadeWide,
         // ★ 급기동 배수는 `main.js` 가 이미 `evade.x/y` 에 곱해서 준다 —
         //   여기서 또 곱하면 두 번 곱해진다. 굴리기 쪽만 따로 곱한다
         burst: false,
