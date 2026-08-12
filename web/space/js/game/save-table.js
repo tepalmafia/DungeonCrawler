@@ -55,6 +55,12 @@ export const SAVE_KEY = 'spacewar.save.v1';
  *   「왜 이건 안 이어지지」를 코드를 뒤지지 않고 여기서 답한다.
  */
 export const FIELDS = {
+  /**
+   * ★★★ v127 — **창 배치** (사장님 「마우스로 위치를 자유자재로 옮길 수 있게」).
+   *   안 담으면 껐다 켤 때마다 **다시 옮겨야 한다** — 그건 옮긴 것이 아니다.
+   *   ★ `at` 에는 **옮긴 것만** 들어 있다 (안 옮긴 창은 기본값을 따라간다)
+   */
+  layout: ['at'],
   route: ['phase', 'leg', 'press', 't', 'need', 'fork', 'overrun'],
   chase: ['phase', 'risk', 'dist', 'sign', 'runs', 't'],
   // ★ v62 — `fuel` 이 늘었다. 안 담으면 이어할 때마다 탱크가 가득 차서
