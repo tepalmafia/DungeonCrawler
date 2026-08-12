@@ -31,9 +31,41 @@ export const makeNav = () => ({
  * @param seed  0~1 짜리 값 둘 `[a, b]` — 회차 씨앗에서 뽑아 넘긴다
  */
 export function setFork(n, fork, seed = [0.5, 0.5]) {
-  if (!fork) { n.to = null; return null; }
-  n.to = {
-    kind: 'fork',
+  n.to = forkAt(fork, seed);
+  return n.to;
+}
+
+/**
+ * ★★★ v128 — **이 갈래는 하늘의 어디인가** — 걸지 않고 **묻기만** 한다.
+ *
+ *   ★ 사장님 (2026-08-12) 「**왜 항로 네비게이션이 안 나와?**」
+ *
+ *   ══ 재 보니 **거점에 서 있는 동안은 갈 곳이 없었다** ═══════════════
+ *
+ *   새 게임을 켜고 재면 이랬다:
+ *
+ *       nav.to = null · route.fork = null · phase = port
+ *
+ *   즉 항법이 고장난 것이 아니라 **가리킬 것이 없었다.** 갈래를 고르기
+ *   전까지는 목적지가 정해지지 않으므로 v104~v126 이 만든 것(마름모 ·
+ *   항로 문 · 가장자리 화살표)이 **셋 다 조용했다.** 그리고 회차는
+ *   **거점에서 시작한다** — 그래서 켜자마자 아무것도 안 나왔다.
+ *
+ *   ★★ 그런데 거점은 「갈 곳이 없는 곳」이 아니라 **갈림길**이다. 고를
+ *     것이 둘 있고, 둘 다 하늘의 어딘가다. 그것을 안 보여 준 것뿐이다.
+ *     그래서 **고르기 전에도 두 길을 보여 준다** — 고르는 일이
+ *     차림표 고르기에서 **방향 고르기**가 된다.
+ *
+ *   ★★★ 그러려면 「걸지 않고 자리만 묻는」 길이 있어야 한다. 여기다 —
+ *     `setFork` 도 이것을 쓰므로 **고른 뒤에도 자리가 안 옮겨간다.**
+ *     자리를 두 곳에서 내면 고르는 순간 목적지가 홱 움직인다
+ *
+ * @param kind `'fork'` 고른 것 · `'port'` 아직 고르기 전의 후보
+ */
+export function forkAt(fork, seed = [0.5, 0.5], kind = 'fork') {
+  if (!fork) return null;
+  return {
+    kind,
     key: fork.key ?? fork.region ?? '?',
     name: fork.name ?? '목적지',
     az: wrapDeg((seed[0] * 2 - 1) * NAV.azSpread),
@@ -42,7 +74,6 @@ export function setFork(n, fork, seed = [0.5, 0.5]) {
     //   여기 억지 숫자를 넣으면 두 곳이 「얼마나 남았나」를 말하게 된다
     dist: null,
   };
-  return n.to;
 }
 
 /**

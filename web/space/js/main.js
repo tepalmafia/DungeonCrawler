@@ -97,7 +97,7 @@ import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
 // ★★★ v114 — **계기 자리는 화면 좌표로** (사장님 「화면 uhd 정렬좀해」)
 import { centerFor, worldAt } from './game/screen-table.js';
 // ★★★ v127 — **창을 손으로 옮긴다** (사장님 「마우스로 위치를 자유자재로」)
-import { LAYOUT, MOVABLE, layoutWord } from './game/layout-table.js';
+import { LAYOUT, MOVABLE, PANE, defaultAt as paneHome, layoutWord } from './game/layout-table.js';
 import {
   makeLayout, setLayout, grab as layoutGrab, drop as layoutDrop,
   moveTo as layoutMove, atOf as layoutAt, resetLayout, summary as layoutSummary,
@@ -269,7 +269,7 @@ import {
   gatesOf,
 } from './game/nav-table.js';
 import {
-  makeNav, setFork, setMission, clearNav, hasNav, stepNav,
+  makeNav, setFork, forkAt, setMission, clearNav, hasNav, stepNav,
   summary as navSummary,
 } from './game/nav.js';
 // ══ ★★★ v103 — **포획** (사장님 「멀리 날아가버리잔아 … 자동으로 따라붙어서」)
@@ -341,7 +341,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 127;
+export const VERSION = 128;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -538,10 +538,19 @@ addEventListener('mousemove', (e) => {
   const g = layout.drag;
   if (!layout.open || !g) return;
   const { nx, ny } = ndcOf(e);
-  const o = panePicks.find(([n]) => n === g.name)?.[1];
-  layoutMove(layout, g.name, nx, ny, o?.halfW ?? 0, o?.halfH ?? 0);
+  const o = halfOf(g.name);
+  layoutMove(layout, g.name, nx, ny, o.halfW, o.halfH);
   fovWas = -1;                         // ★ 다음 프레임에 다시 놓는다
 });
+/**
+ * ★★ v128 — **판의 반쪽 크기** — 3D 판은 광선 목록에서, 범례는 딱지에서.
+ *   ★ 짐작하지 않고 **잰 것을 묻는다.** 짐작하면 큰 판이 가장자리에서 잘린다
+ */
+function halfOf(name) {
+  if (PANE[name]?.kind === 'dom') return legendHalf;
+  const o = panePicks.find(([n]) => n === name)?.[1];
+  return { halfW: o?.halfW ?? 0, halfH: o?.halfH ?? 0 };
+}
 addEventListener('mouseup', (e) => {
   if (!layout.open || e.button !== 0 || !layout.drag) return;
   const n = layoutDrop(layout);
@@ -803,14 +812,20 @@ addEventListener('keydown', (e) => {
   //  ★ 사장님 「**상태창 광학창 레이더 등 모든 창들을 마우스로 위치를
   //    자유자재로 옮길 수 있게** 해줘」
   //  ★★ 위 v103 의 셈에서 **U 가 비어 있었다** — 그 자리를 쓴다
-  if (!helpOpen && !paused && e.code === LAYOUT.key) {
+  // ★★ v128 — **열려 있으면 멈춰 있어도 닫힌다.** 「들어가는 길만 있고
+  //   나오는 길이 없으면 갇힌다」 — v127 에 정확히 그렇게 갇혔다 (멈춤이
+  //   먼저 걸려서 U 가 안 먹었다). 원인은 아래 `usingMouse` 에서 없앴지만,
+  //   나오는 길은 **원인과 상관없이** 열어 둔다
+  if (!helpOpen && (!paused || layout.open) && e.code === LAYOUT.key) {
     e.preventDefault();
     showLayout();
     return;
   }
-  // ★ 배치 중에는 **R 이 되돌리기**다. 평소의 R(추력)은 배치 모드에서
-  //   쓸 일이 없고, 되돌리기는 **여기서만** 필요하다
-  if (layout.open && e.code === 'KeyR') {
+  // ══ ★★★ v128 — **되돌리기는 Backspace 다** (사장님 「r은 추력 아냐?」) ══
+  //  ★ v127 은 여기에 R 을 뒀다. 「배치 중에는 R 을 쓸 일이 없다」고 적어
+  //    뒀는데 **틀렸다** — 배치 모드에서도 배는 계속 난다. 자세한 것은
+  //    `layout-table.js LAYOUT.resetKey`
+  if (layout.open && e.code === LAYOUT.resetKey) {
     e.preventDefault();
     const n = resetLayout(layout);
     fovWas = -1;                       // ★ 다시 놓게 만든다
@@ -2554,12 +2569,76 @@ function showLayout(on = null) {
   //   `input.js` 가 **단추를 누를 때마다 다시 잠그므로**, 창을 잡는 순간
   //   도로 잠겨 첫 이동만 먹고 안 끌렸다 (재서 잡았다)
   input.noLock = now;
+  // ══ ★★★ v128 — **닫으면 마우스를 돌려준다** ═══════════════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「**u로 ui 이동 시키면 방향 전환이 안돼.**」
+  //
+  //  ★★ v127 은 **여는 것만** 했다. 닫을 때 `noLock` 은 껐지만 **잠금을
+  //    다시 걸지는 않았고**, 이 게임의 조종간은 포인터 잠금의 `movementX`
+  //    로만 움직인다 — 즉 U 를 한 번 누른 뒤로는 **마우스로 배를 못 돌린다.**
+  //    화면을 한 번 누르면 `input.js` 가 도로 잠그지만, 사장님은 그걸
+  //    알 길이 없고 그 클릭은 **쏘기**이기도 하다.
+  //
+  //  ★★★ **여는 것과 닫는 것은 대칭이어야 한다.** 어떤 상태를 켜면서
+  //    무언가를 빼앗았으면, 끄면서 **그 자리에 돌려놔야** 한다. 이 저장소가
+  //    같은 병을 두 번 앓았다 (v49 점검 모드 · v88 조종간 걸쇠).
+  //  ★ 키를 눌러 닫는 것은 **사람의 동작**이라 브라우저가 잠금을 허락한다
   if (now) document.exitPointerLock?.();
+  else renderer.domElement.requestPointerLock?.()?.catch?.(() => {});
   say(ai, layoutWord(null, layoutSummary(layout).moved), now ? 'tell' : 'ok');
   return now;
 }
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v128 — **범례는 3D 판이 아니라 화면에 얹은 딱지다** (DOM)
+//
+//  ★ 사장님이 사진으로 가리키신 것이 이것이다 — 「**이 부분도 옮겨지게
+//    해야지**」. 그런데 이것만 잡는 법이 다르다: 3D 판은 광선을 쏘고,
+//    딱지는 **사각형을 견준다.** `layout-table.js PANE[].kind` 가 어느
+//    쪽인지 말해 주므로 여기서 짐작하지 않는다
+// ══════════════════════════════════════════════════════════════════════════
+const legendEl = () => document.getElementById('legend');
+/** 범례의 반쪽 크기 (정규 좌표) — 끌 때 화면 밖을 막는 데 쓴다 */
+let legendHalf = { halfW: 0.1, halfH: 0.1 };
+/**
+ * ★★ **바뀐 것이 없으면 안 잰다.** `offsetWidth` 를 읽으면 브라우저가 그
+ *   자리에서 배치를 다시 계산한다 (강제 리플로). 매 판 부르면 60번/초다 —
+ *   첫 판에 그렇게 짰다가 여기 적어 둔다. 딱지 크기는 **글이 빠질 때**와
+ *   **창이 바뀔 때**만 변하므로, 그 둘을 열쇠로 삼는다
+ */
+let legendKey = '';
+function placeLegend() {
+  const el = legendEl();
+  if (!el || el.hidden) return;
+  const put0 = layoutAt(layout, '범례');
+  const key = `${innerWidth}x${innerHeight}|${el.className}|${put0 ? `${put0.x},${put0.y}` : '-'}`;
+  if (key === legendKey) return;
+  legendKey = key;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  if (!w || !h) { legendKey = ''; return; }
+  legendHalf = { halfW: w / innerWidth, halfH: h / innerHeight };
+  const put = layoutAt(layout, '범례');
+  const c = put
+    ? { nx: put.x, ny: put.y }
+    : paneHome('범례', legendHalf.halfW, legendHalf.halfH);
+  // ★ 정규 좌표(−1~1) → 화소. `right` 를 쓰던 것을 `left` 로 바꾸므로 꺼 준다
+  el.style.right = 'auto';
+  el.style.left = `${((c.nx + 1) / 2) * innerWidth - w / 2}px`;
+  el.style.top = `${((1 - c.ny) / 2) * innerHeight - h / 2}px`;
+}
+/** 범례 사각형 안인가 (화면 정규 좌표) */
+function legendHit(nx, ny) {
+  const el = legendEl();
+  if (!el || el.hidden) return false;
+  const r = el.getBoundingClientRect();
+  const px = ((nx + 1) / 2) * innerWidth, py = ((1 - ny) / 2) * innerHeight;
+  return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
+}
 /** 화면 좌표(−1~1) 로 판을 찾는다 — **진짜 카메라로 광선을 쏜다** */
 function paneAt(nx, ny) {
+  // ★ 딱지가 먼저다 — 3D 판보다 **위에** 그려지므로 눈에도 먼저 든다
+  if (PANE.범례?.kind === 'dom' && legendHit(nx, ny)) {
+    return { name: '범례', obj: { halfW: legendHalf.halfW, halfH: legendHalf.halfH } };
+  }
   if (!panePicks.length) return null;
   const rc = new THREE.Raycaster();
   rc.setFromCamera(new THREE.Vector2(nx, ny), camera);
@@ -2638,8 +2717,16 @@ function placePanels() {
   put('상태창', ship.statusHud);
   put('레이더', ship.radarHud);
   // ★★★ v127 — 끌 때 광선을 쏠 대상. `put` 이 방금 재 둔 것을 그대로 쓴다
+  // ★★ v128 — **잠깐 뜨는 판 둘이 붙었다.** 그 둘은 크기를 `loothud.js` 가
+  //   그릴 때 재서 `userData` 에 넣어 두므로 여기서 짐작하지 않고 **묻는다**
+  const live = (mesh) => (mesh ? {
+    mesh,
+    get halfW() { return mesh.userData.halfW ?? 0; },
+    get halfH() { return mesh.userData.halfH ?? 0; },
+  } : null);
   panePicks = [
     ['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud],
+    ['획득창', live(ship.lootHud?.cardMesh)], ['회수 물음', live(ship.lootHud?.askMesh)],
   ].filter(([, o]) => o?.mesh);
 }
 
@@ -5077,12 +5164,24 @@ window.SPACE = {
   get pilotRules() { return { ...PILOT }; },
   /** ★★★ v127 — **창 배치** (검사와 점검 모드가 읽는다) */
   get layout() { return layoutSummary(layout); },
+  /**
+   * ★★★ v128 — **판이 정말 떠 있나** — 검사가 화면 쪽을 읽는 구멍.
+   *   표만 읽으면 「옮겼다고 적혀 있는데 안 뜬다」를 못 잡는다
+   *   (「한쪽만 읽는 검사는 둘이 같나를 못 묻는다」)
+   */
+  get panes() {
+    const out = {};
+    for (const [n, o] of panePicks) out[n] = !!o.mesh?.visible;
+    const lb = document.getElementById('legend');
+    out.범례 = !!lb && !lb.hidden;
+    return out;
+  },
   /** 검사가 배치 모드를 연다 — 진짜 마우스 없이 */
   showLayout(on = true) { showLayout(on); return layoutSummary(layout); },
   /** 검사가 창을 옮긴다 (화면 좌표 −1~1) */
   putPane(name, nx, ny) {
-    const o = panePicks.find(([n]) => n === name)?.[1];
-    const r = layoutMove(layout, name, nx, ny, o?.halfW ?? 0, o?.halfH ?? 0);
+    const o = halfOf(name);            // ★ v128 — 범례(딱지)도 여기로 온다
+    const r = layoutMove(layout, name, nx, ny, o.halfW, o.halfH);
     fovWas = -1;
     return r;
   },
@@ -6554,18 +6653,55 @@ function frame(now) {
   {
     const onRescue = radioOn(rescue) || rescueNear(rescue);
     const onLand = land.step !== LSTEP.NONE;
-    const want = onRescue ? 'rescue' : (onLand ? 'land' : 'fork');
-    const now = nav.to?.kind === 'mission' ? nav.to.key : (nav.to ? 'fork' : null);
+    // ══ ★★★ v128 — **거점에서는 두 길을 보여 준다** ═════════════════════
+    //
+    //  ★ 사장님 (2026-08-12) 「**왜 항로 네비게이션이 안 나와?**」
+    //
+    //  ★★ 재 보니 고장이 아니라 **가리킬 것이 없었다.** 회차는 거점에서
+    //    시작하고, 거점에서는 `route.fork` 가 null 이라 아래 `else` 가
+    //    `clearNav` 를 불렀다 — 즉 **켜자마자는 늘 항법이 없었다.**
+    //  ★★★ 거점은 「갈 곳이 없는 곳」이 아니라 **갈림길**이다. 고를 것이
+    //    둘 있고 둘 다 하늘의 어딘가다. 이제 **기수에 가까운 쪽**을
+    //    가리킨다 — 배를 돌리면 후보가 바뀌므로, 고르는 일이 차림표
+    //    고르기에서 **방향 고르기**가 된다
+    const atPort = !onRescue && !onLand && !route.fork && (route.offer?.length ?? 0) > 0;
+    const want = onRescue ? 'rescue' : (onLand ? 'land' : (atPort ? 'port' : 'fork'));
+    const now = nav.to?.kind === 'mission' ? nav.to.key
+      : (nav.to?.kind === 'port' ? 'port' : (nav.to ? 'fork' : null));
+    if (want === 'port') {
+      // ★ 후보 둘의 자리를 **고른 뒤와 같은 씨앗**으로 낸다 — 안 그러면
+      //   고르는 순간 목적지가 홱 옮겨 간다 (`navSeed` 에 갈래 이름을 섞는다)
+      let best = null, bestOff = Infinity;
+      for (const f of route.offer) {
+        const c = forkAt(f, navSeed(`fork${route.leg}${f.key}`), 'port');
+        const r = relOf({ az: c.az, el: c.el, dist: 1000 }, { yaw: aimAz, pitch: aimEl });
+        if (r.off < bestOff) { bestOff = r.off; best = c; }
+      }
+      // ★★ **한참 나아야 바꾼다** (8도). 그냥 「더 가까운 쪽」으로 두면 두
+      //   후보의 딱 가운데서 기수가 조금만 떨려도 **길이 좌우로 깜빡인다**
+      if (best && (nav.to?.kind !== 'port' || !nav.to.key)) nav.to = best;
+      else if (best && nav.to.key !== best.key) {
+        const cur = route.offer.find((f) => (f.key ?? f.region) === nav.to.key);
+        const c = cur ? forkAt(cur, navSeed(`fork${route.leg}${cur.key}`), 'port') : null;
+        const curOff = c
+          ? relOf({ az: c.az, el: c.el, dist: 1000 }, { yaw: aimAz, pitch: aimEl }).off : Infinity;
+        if (bestOff < curOff - 8) nav.to = best;
+      }
+    }
     // ★ **구간이 바뀌면 갈래도 바뀐다.** `want` 만 보면 「fork → fork」라
     //   같다고 여겨 **지난 구간의 목적지를 계속 가리킨다** — 첫 판에
     //   그렇게 짰다가 여기서 잡았다. 어느 갈래인지까지 견준다
     const same = want === now
       && (want !== 'fork' || nav.to?.key === (route.fork?.key ?? route.fork?.region));
-    if (!same) {
+    if (!same && want !== 'port') {
       if (want === 'rescue') setMission(nav, { key: 'rescue', name: '구조 신호' }, navSeed(`r${route.leg}`));
       else if (want === 'land') setMission(nav, { key: 'land', name: '행성' }, navSeed(`l${route.leg}`));
-      else if (route.fork) setFork(nav, route.fork, navSeed(`fork${route.leg}`));
-      else clearNav(nav);
+      // ★ v128 — 씨앗에 **갈래 이름**을 섞는다. 거점에서 후보로 보여 준
+      //   자리와 **같은 자리**여야 고르는 순간 목적지가 안 옮겨 간다
+      else if (route.fork) {
+        setFork(nav, route.fork,
+          navSeed(`fork${route.leg}${route.fork.key ?? route.fork.region}`));
+      } else clearNav(nav);
     }
   }
   // ══ ★★★ v104 — **항법이 구간 속도를 정한다** ═════════════════════
@@ -6820,7 +6956,12 @@ function frame(now) {
   legT += dt;
   {
     const lb = document.getElementById('legend');
-    if (lb) lb.classList.toggle('bare', legT > WORDS_FOR);
+    // ★★ v128 — 배치 중에는 **글을 도로 보여 준다.** 도형만 남은 딱지는
+    //   작아서 잡기가 어렵고, 무엇보다 「지금 무엇을 옮기는지」가 안 보인다
+    if (lb) lb.classList.toggle('bare', legT > WORDS_FOR && !layout.open);
+    // ★ 자리는 매 판 다시 잰다 — 글이 빠지면 딱지 크기가 **줄어들기** 때문이다.
+    //   크기가 변하는 것을 한 번만 재면 그때부터 구석에서 어긋난다
+    placeLegend();
   }
   if (fix.cool > 0) fix.cool = Math.max(0, fix.cool - dt);
   if (fix.hold > 0) {
@@ -7428,7 +7569,14 @@ function frame(now) {
   }
   // ★★★ v121 — 물음이 삭고 카드가 사라진다 · 화면에 그린다
   if (stepLoot(loot, dt) === 'gone') say(ai, '지나쳤습니다 — 꾸러미는 남아 있습니다 (F/G/B)', 'tell');
-  ship.lootHud?.redraw({ ...lootSummary(loot), on: helmSat });
+  // ★★★ v128 — 사람이 옮긴 자리를 같이 준다. 그리고 **배치 모드면 억지로
+  //   띄운다** (`show`) — 안 뜨면 잡을 것이 없어 옮길 수가 없다
+  ship.lootHud?.redraw({
+    ...lootSummary(loot),
+    on: helmSat,
+    show: layout.open,
+    at: { 획득창: layoutAt(layout, '획득창'), '회수 물음': layoutAt(layout, '회수 물음') },
+  });
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
   stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다
@@ -7845,8 +7993,23 @@ setInterval(() => {
 document.addEventListener('pointerlockchange', () => {
   document.body.classList.toggle('flying', !!document.pointerLockElement);
 });
+// ══ ★★★ v128 — **배치 모드도 「일부러 푼 잠금」이다** ═══════════════════
+//
+//  ★ 사장님 (2026-08-12) 「**u로 ui 이동 시키면 방향 전환이 안 돼.**」
+//
+//  ★★ 재 보니 원인이 여기였다. U 를 누르면 창을 끌려고 포인터 잠금을 푸는데,
+//    이 줄이 그 풀림을 「사람이 창 밖으로 나갔다」로 읽고 **게임을 멈췄다.**
+//    그러면 위 keydown 이 `!paused` 를 보고 있으므로 **U 로 닫을 수가 없고**,
+//    닫히지 않으니 잠금도 안 돌아오고, 잠금이 없으니 마우스가 배를 못 돌린다.
+//    사장님이 겪으신 것은 이 셋이 이어진 한 줄기다.
+//
+//  ★★★ `check.open` 이 이미 여기 예외로 적혀 있다 — **까닭이 똑같다.**
+//    점검 모드도 마우스를 쓰려고 일부러 푼다. 그때 배운 것을 새 모드에
+//    **안 물린 것**이 이번 실수다. 예외를 하나씩 손으로 늘리는 모양이라
+//    다음에 또 밟을 자리이므로, **「마우스를 쓰는 모드」를 한데 묶는다**
+const usingMouse = () => check.open || layout.open;
 document.addEventListener('pointerlockchange', () => {
-  if (wrecked || ended || check.open) return;
+  if (wrecked || ended || usingMouse()) return;
   if (!document.pointerLockElement && started && !paused) showPause(true);
 });
 

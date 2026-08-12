@@ -15,7 +15,7 @@
 //      ⑥ 배치 모드가 아니면 **안 집히나**
 // ══════════════════════════════════════════════════════════════════════════
 import {
-  LAYOUT, MOVABLE, FIXED, canMove, defaultAt, clampAt, snap, hitsCone, layoutWord,
+  LAYOUT, MOVABLE, PANE, FIXED, canMove, defaultAt, clampAt, snap, hitsCone, layoutWord, isLive,
 } from '../web/space/js/game/layout-table.js';
 import {
   makeLayout, setLayout, grab, drop, moveTo, atOf, resetLayout, saveLayout, loadLayout, summary,
@@ -33,14 +33,42 @@ console.log('\n[1] ★★★ **무엇을 옮길 수 있나 · 못 옮기는 것�
   console.log(`   옮길 수 있는 것 — ${MOVABLE.join(' · ')}`);
   for (const [k, why] of Object.entries(FIXED)) console.log(`   못 옮기는 것 — ${k}: ${why}`);
   ok(MOVABLE.length >= 3, `★ 사장님이 말씀하신 셋이 다 있다 (${MOVABLE.length})`);
-  ok(MOVABLE.every((n) => PANELS[n]), '★★ 옮길 수 있는 것이 다 **실재하는 판**이다 — 이름이 틀리면 조용히 아무 일도 안 난다');
+  ok(['광학창', '상태창', '레이더'].every((n) => PANELS[n] && canMove(n)),
+    '★★ 계기 셋은 다 **실재하는 판**이다 — 이름이 틀리면 조용히 아무 일도 안 난다');
+  // ══ ★★★ v128 — **잠깐 뜨는 창도 옮긴다** ═══════════════════════════
+  //  ★ 사장님 「u 누르면 **아이템 획득창 같은 일시적인 창** 위치도 옮길 수 있게」
+  const live = MOVABLE.filter((n) => isLive(n));
+  console.log(`   잠깐 뜨는 것 — ${live.join(' · ')}`);
+  ok(live.length >= 3,
+    `★★★ **잠깐 뜨는 창이 셋 다 든다** (${live.length}) — 계기 셋은 구석에 붙박여`
+    + ' 익숙해지지만, 범례와 획득 카드는 **싸우는 도중에 불쑥 뜬다.** 하필 그 자리가'
+    + ' 겨누던 곳이면 그 순간 앞이 안 보인다');
+  ok(MOVABLE.every((n) => PANE[n]?.at && typeof PANE[n].at.x === 'number'),
+    '★★★ **옮길 수 있는 것은 다 되돌아갈 자리를 안다** — 기본값이 없으면 되돌리기가'
+    + ' (0,0) 즉 **조준선 한복판**으로 간다');
+  ok(MOVABLE.every((n) => PANE[n].kind === '3d' || PANE[n].kind === 'dom'),
+    '★★ 판마다 **어떻게 잡는지**가 적혀 있다 — 3D 판은 광선으로, DOM 딱지는'
+    + ' 사각형으로 잡는다. 안 적어 두면 그리는 쪽이 짐작하게 된다');
   ok(!canMove('조준경') && FIXED.조준경,
     '★★★ **조준경은 못 옮긴다 — 그리고 까닭이 적혀 있다.** 표적 상자와 락온 고리를'
     + ' 하늘의 진짜 자리 위에 그리므로(`space-align.js` 가 0.01도로 지킨다), 판을 옮기면'
     + ' 그 그림이 통째로 어긋난다. 취향이 아니라 규칙이다');
+  // ══ ★★★ v128 — **키를 둘 쓰면 둘 다 재야 한다** ═══════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「**r은 추력 아냐?**」 — 맞았다. v127 이
+  //    되돌리기를 R 에 뒀고, R 은 추력·급가속이다 (`keys-table.js`).
+  //  ★★ 그런데 **이 절이 초록이었다.** 여는 키 하나만 `KEYS` 와 견주고
+  //    있었기 때문이다. **재는 것을 반만 재면 안 재는 것과 같다** —
+  //    이 저장소가 v124 에 접은 검사들이 딱 그 병이었다
   const taken = new Set(Object.values(KEYS).map((k) => k.code));
-  ok(!taken.has(LAYOUT.key),
-    `★★ 배치 키 ${LAYOUT.keyName} 가 **맡은 키와 안 겹친다** — 겹치면 배치하다 배가 움직인다`);
+  for (const [code, name] of [[LAYOUT.key, LAYOUT.keyName], [LAYOUT.resetKey, LAYOUT.resetName]]) {
+    ok(!taken.has(code),
+      `★★ ${name} 가 **맡은 키와 안 겹친다** — 겹치면 배치하다 배가 움직인다`);
+  }
+  ok(LAYOUT.key !== LAYOUT.resetKey, '★ 여는 키와 되돌리는 키가 **서로 다르다**');
+  ok(layoutWord(null, 0).includes(LAYOUT.resetName),
+    '★★★ **안내에 적힌 키가 진짜 키다** — 표만 고치고 안내를 안 고치면'
+    + ' 그건 안내가 아니라 거짓말이고, 사장님은 적힌 대로 누르신다');
 }
 
 console.log('\n[2] ★★ **끌면 거기로 가나**');

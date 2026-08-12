@@ -26,12 +26,27 @@
 //
 //  ★ three.js 를 안 쓴다 — `tools/space-layout.js` 가 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
-import { ANCHOR, PANELS, EDGE, centerFor } from './screen-table.js';
+import { ANCHOR, PANELS, EDGE } from './screen-table.js';
+import { LOOT_AT } from './loot-table.js';
+import { LEGEND_AT } from './legend-table.js';
 
 /** 배치 모드를 여닫는 키 — 맡은 키와 안 겹친다 (`keys-table.js` 확인함) */
 export const LAYOUT = {
   key: 'KeyU',
   keyName: 'U',
+  // ══ ★★★ v128 — **되돌리기가 R 이면 안 된다** ═════════════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「**r은 추력 아냐?**」 — 맞다. R 은 톡 치면
+  //    추력, 꾹 누르면 급가속이다 (v110 · `keys-table.js`).
+  //  ★★ v127 이 「배치 중에는 R 이 되돌리기」로 덮었다. 배치 모드에서도
+  //    **배는 계속 난다** — 창을 옮기는 동안 추력을 못 켜고, 켜려고 누르면
+  //    옮긴 창이 통째로 제자리로 돌아간다. 「배치 중에는 쓸 일이 없다」고
+  //    적어 뒀는데 **그 문장이 틀렸다.**
+  //  ★★★ 그리고 **검사가 안 잡았다** — `space-layout.js [1]` 이 여는 키
+  //    하나만 `KEYS` 와 견주고 있었다. 키를 **둘** 쓰면서 하나만 재면
+  //    나머지 하나는 안 재는 것과 같다. 이제 둘 다 잰다
+  resetKey: 'Backspace',
+  resetName: 'Backspace',
   /**
    * ★ 끌 때 이만큼씩 딱딱 붙는다 (정규 좌표). 0.005 는 1600화소 화면에서
    *   4화소다 — 손 떨림은 먹고 「거기 두고 싶다」는 살린다
@@ -45,8 +60,57 @@ export const LAYOUT = {
   what: '창 배치 — U 를 누르면 마우스가 풀리고 창을 끌 수 있다',
 };
 
-/** ★★★ 옮길 수 있는 창 — **읽는 창**만이다 */
-export const MOVABLE = ['광학창', '상태창', '레이더'];
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v128 — **잠깐 뜨는 창도 옮긴다**
+//
+//  ★ 사장님 (2026-08-12) 「**이 부분도 옮겨지게 해야지. u 누르면 아이템
+//    획득창 같은 일시적인 창 위치도 옮길 수 있게**」 (범례 사진과 함께)
+//
+//  ══ 왜 v127 이 셋만 했나 — 그리고 왜 그게 틀렸나 ═════════════════════
+//
+//  v127 은 **`screen-table.js PANELS` 에 있는 것**만 옮길 수 있게 했다.
+//  그 표는 「화면을 늘 먹고 있는 계기」의 표라 잠깐 뜨는 것은 애초에
+//  거기 없다. 즉 **옮길 수 있는 것의 목록을 남의 표에 물어본 것**이고,
+//  그러면 그 표의 목적이 이쪽의 한계가 된다.
+//
+//  ★★ 그런데 사장님이 가리키신 것은 **가장 거슬리는 쪽**이다: 계기 셋은
+//    구석에 붙박여 있어 익숙해지지만, 범례와 획득 카드는 **싸우는 도중에
+//    불쑥 뜬다.** 하필 그 자리가 겨누던 곳이면 그 순간 앞이 안 보인다.
+//
+//  ★★★ 그래서 **옮길 수 있는 것의 목록을 여기가 직접 든다.** 기본 자리는
+//    저마다 살던 표에서 읽어 온다 (`ANCHOR` · `LOOT_AT` · `LEGEND_AT`) —
+//    목록은 여기, 숫자는 저기. 숫자까지 여기로 옮기면 되돌리기가 원본과
+//    갈라진다
+//
+//  ★ `kind` 가 둘인 까닭: 범례는 **DOM 딱지**이고 나머지는 **3D 판**이다.
+//    잡는 방법이 다르다 (하나는 사각형 견주기, 하나는 광선 쏘기) —
+//    그리는 쪽이 그걸 알아야 하므로 표가 말해 준다
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * ★★★ 옮길 수 있는 창 — **읽는 창**만이다 (겨누는 창은 아래 `FIXED`).
+ *
+ *  @property at   **바깥 모서리**가 앉는 화면 좌표 — 저마다의 표에서 온다
+ *  @property kind `'3d'` 카메라에 붙은 판 · `'dom'` 화면에 얹은 딱지
+ *  @property live 참이면 **늘 떠 있는 것**이 아니라 잠깐 뜨는 것
+ */
+export const PANE = {
+  광학창: { at: ANCHOR.광학창, kind: '3d', what: PANELS.광학창.what },
+  상태창: { at: ANCHOR.상태창, kind: '3d', what: PANELS.상태창.what },
+  레이더: { at: ANCHOR.레이더, kind: '3d', what: PANELS.레이더.what },
+  범례: { at: LEGEND_AT, kind: 'dom', live: true, what: '무엇이 무슨 도형인가' },
+  획득창: { at: LOOT_AT.cards, kind: '3d', live: true, what: '무엇을 주웠나' },
+  '회수 물음': { at: LOOT_AT.ask, kind: '3d', live: true, what: '주울까요' },
+};
+
+export const MOVABLE = Object.keys(PANE);
+
+/**
+ * ★★ **잠깐 뜨는 창은 배치 모드에서 억지로 띄운다.**
+ *   안 그러면 「옮기고 싶은데 지금 안 떠 있어서 못 잡는」 상태가 된다 —
+ *   그건 옮길 수 있게 만든 것이 아니다
+ */
+export const isLive = (name) => !!PANE[name]?.live;
 
 /** 못 옮기는 것과 **그 까닭** — 까닭 없이 뺀 것이 없어야 한다 */
 export const FIXED = {
@@ -63,7 +127,13 @@ export const canMove = (name) => MOVABLE.includes(name);
  *     복판이 나온다. 사람이 끌 때는 **복판**을 잡으므로 여기서 한 번
  *     바꿔 둔다 — 두 좌표계를 오가면 반드시 어긋난다
  */
-export const defaultAt = (name, halfW = 0, halfH = 0) => centerFor(name, halfW, halfH);
+export function defaultAt(name, halfW = 0, halfH = 0) {
+  const a = PANE[name]?.at;
+  if (!a) return { nx: 0, ny: 0 };
+  // ★★ v128 — `screen-table.js centerFor` 와 **같은 셈**이되, 계기 셋
+  //   말고도 물어볼 수 있게 여기서 한다. 셈이 둘이 아니라 **자리가 늘었다**
+  return { nx: a.x - Math.sign(a.x) * halfW, ny: a.y - Math.sign(a.y) * halfH };
+}
 
 /** 격자에 붙인다 */
 export const snap = (v) => Math.round(v / LAYOUT.grid) * LAYOUT.grid;
@@ -95,7 +165,10 @@ export const hitsCone = (nx, ny, halfW = 0, halfH = 0) =>
 /** 사람이 읽는 한 줄 — 배치 모드에 뜬다 */
 export const layoutWord = (name = null, moved = 0) => (name
   ? `${name} 을(를) 끌고 있습니다 — 놓으면 그 자리입니다`
-  : `창 배치 — 끌어서 옮깁니다 · R 되돌리기 · ${LAYOUT.keyName} 닫기`
+  // ★ v128 — R 이 아니라 Backspace 다 (위 `resetKey` 참고). 안내에 적힌
+  //   키와 진짜 키가 갈라지면 그건 안내가 아니라 거짓말이다
+  : `창 배치 — 끌어서 옮깁니다 · ${LAYOUT.resetName} 되돌리기`
+    + ` · ${LAYOUT.keyName} 닫기`
     + (moved ? ` (옮긴 창 ${moved})` : ''));
 
 export { PANELS };
