@@ -535,9 +535,18 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
   await until(() => (SPACE.throttle?.v ?? 0) > window.__t0 + 0.02, 40, '스로틀이 오르는 것');
   await p.keyboard.up('KeyW');
   const thr1 = await S(() => SPACE.throttle?.v ?? 0);
+  // ★ 안 오르면 **왜 안 오르는지 같이 찍는다.** 「0.00 → 0.00」만 보면
+  //   게임을 탓하게 되는데, 새 판에서 재 보면 멀쩡히 오른다 —
+  //   즉 앞 절이 남긴 상태가 막고 있다는 뜻이다. 그 상태를 보여 준다
+  const why = await S(() => ({
+    steering: SPACE.helm2?.steering, sat: SPACE.helm2?.sat, auto: SPACE.helm?.auto,
+    fuel: SPACE.supply?.fuel, thrust: SPACE.power?.thrust, phase: SPACE.route?.phase,
+    paused: SPACE.paused ?? null,
+  }));
   ok(thr1 > thr0,
     `③ ★★★ **W 로 스로틀이 오른다** (${thr0.toFixed(2)} → ${thr1.toFixed(2)}) —`
-    + ' 옆 콘솔 레버는 팔걸이 옆이라 조준선이 안 닿는다 (v66 이 거기 둔 것이 맞다)');
+    + ' 옆 콘솔 레버는 팔걸이 옆이라 조준선이 안 닿는다 (v66 이 거기 둔 것이 맞다)'
+    + (thr1 > thr0 ? '' : `  ※ 지금 상태: ${JSON.stringify(why)}`));
   await p.keyboard.down('KeyS');
   await p.waitForTimeout(2500);
   await p.keyboard.up('KeyS');
