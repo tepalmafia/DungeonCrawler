@@ -37,6 +37,8 @@ import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
 //   세운다 (docs/space/COMBAT.md). v64 가 숫자만 만들고 **보이는 것을
 //   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
 import { buildTargets } from './targets.js';
+// ★★★ v121 — 항로 문 (사장님 「항로가 목적지까지 희미하게 표시」)
+import { buildRoad } from './road.js';
 import { buildShots } from './shots.js';
 import { buildSalvage } from './salvage.js';
 import { DUST } from '../game/sky-table.js';
@@ -1345,6 +1347,10 @@ export function buildOutside(scene, z) {
   const shots = buildShots(out);
   // ★★★ v81 — **회수.** 꾸러미·그물·줄. 창밖 그룹이라 배를 틀면 같이 흐른다
   const salvage = buildSalvage(out);
+  // ★★★ v121 — **항로 문** (사장님 「항로가 목적지까지 희미하게 표시」).
+  //   창밖 그룹이라 배를 틀면 같이 흐르고, 아래 `EYEG` 에 넣으므로
+  //   원점이 **눈**에 붙는다 — 표적과 같은 자리를 쓴다는 뜻이다
+  const road = buildRoad(out);
   // ══ ★★★ v94 — **표는 눈에서 잰다** (여기가 모든 어긋남의 뿌리였다) ══
   //
   //  사장님 「**화면에 보이는 물체와 레이더 표적이 나오는걸 왜 동일하게
@@ -1384,7 +1390,7 @@ export function buildOutside(scene, z) {
   //     시차가 있으니 **더더욱** 이래야 했다.
   //   ★ 여기 한 번 놓는 것은 **첫 프레임용**으로만 남긴다 (`update` 전에
   //     한 프레임 그려지는 일이 있다)
-  const EYEG = [targets.group, shots.group, salvage.group].filter(Boolean);
+  const EYEG = [targets.group, shots.group, salvage.group, road.group].filter(Boolean);
   for (const grp of EYEG) grp.position.set(DEP.x, DEP.y, DEP.z);
   const dust = buildDust(out, z);
   const Z_NEAR = z - DUST.near;
@@ -1859,6 +1865,8 @@ export function buildOutside(scene, z) {
     // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
     //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
     targets, shots, salvage,
+    /** ★★★ v121 — 항로 문 (`world/road.js`). `main.js` 가 매 프레임 먹인다 */
+    road,
     /** ★ v79 — 광학 창의 카메라가 여기 매달린다. 표적 좌표가 이 그룹 기준이라
      *   다른 데 매달면 배를 틀 때마다 좌표를 두 번 옮기게 된다 */
     group: out,
