@@ -40,9 +40,19 @@ await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
 await p.waitForTimeout(2200);
 const S = (fn, a) => p.evaluate(fn, a);
 
-/** ★ 기다림은 기다림일 뿐이고 **판정은 값이 한다** */
-const until = async (fn, tries, what) => {
-  for (let i = 0; i < tries; i++) { if (await S(fn)) return true; await p.waitForTimeout(400); }
+/**
+ * ★ 기다림은 기다림일 뿐이고 **판정은 값이 한다**
+ *
+ * ★★★ v128 — **`arg` 를 받는다.** 여기 넘기는 함수는 **브라우저 안에서**
+ *   도는 것이라, 이쪽(node)의 변수를 그냥 쓰면 `ReferenceError` 가 난다.
+ *   그리고 그 오류가 `until` 안에서 나므로 **검사가 그 자리에서 죽었다** —
+ *   `[6m] ⑤` 의 `d0` 와 `[6k] ⑤` 의 `b0` 가 그랬고, 그래서 **이 검사는
+ *   한동안 [6m] 에서 통째로 멎어 있었다** ([6n]·[6r]·[6o]·[6p]·[6q]·[6k]
+ *   가 아예 안 돌았다). 죽은 검사는 빨간 검사보다 나쁘다 — 아무 말도
+ *   안 하기 때문이다. 밖의 값이 필요하면 **인자로 건넨다**
+ */
+const until = async (fn, tries, what, arg) => {
+  for (let i = 0; i < tries; i++) { if (await S(fn, arg)) return true; await p.waitForTimeout(400); }
   console.log(`   … ${what} 을(를) 못 봤다`);
   return false;
 };
@@ -1341,7 +1351,9 @@ console.log('\n[6m] ★★★ **포획** — 멀리 날아간 것을 데려오�
   ok(await until(() => SPACE.catch.chasing === true, 20, '따라붙기'),
     '④ ★★ **따라붙기 시작한다**');
   const d0 = await S(() => SPACE.catch.dist);
-  ok(await until(() => SPACE.catch.dist < d0 - 6, 60, '다가가기'),
+  // ★ v128 — `d0` 는 **이쪽(node)** 값이라 인자로 건넨다. 그냥 쓰면 브라우저
+  //   안에서 `ReferenceError` 가 나고, 검사가 여기서 통째로 죽는다
+  ok(await until((d) => SPACE.catch.dist < d - 6, 60, '다가가기', d0),
     `⑤ ★★★ **정말 가까워진다** (${d0}m 에서 줄어든다)`);
   ok(await until(() => SPACE.catch.arrived === true || SPACE.dock.step !== 'none', 180, '닿기'),
     '⑥ ★★★ **닿으면 그대로 문다** — 여기서 H 를 또 누르라고 하면 그건 두 손이다');
@@ -1647,7 +1659,8 @@ console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져�
     `④ ★★ **전지를 지금 태운다** (8 → ${8 - go.cells}) — 다 재고 태우면 무르기가 공짜다`);
 
   // ⑤ 재는 동안 열이 저장고로 간다
-  await until(() => SPACE.sink.at > b0.sink + 0.005, 60, '열');
+  // ★ v128 — `b0` 도 이쪽 값이다 (위 `until` 의 까닭과 같다)
+  await until((s0) => SPACE.sink.at > s0 + 0.005, 60, '열', b0.sink);
   ok((await S(() => SPACE.sink.at)) > b0.sink,
     '⑤ ★★ 재는 동안 **열이 저장고에 쌓인다** — 뛴 값을 도착지에서 치른다');
 
