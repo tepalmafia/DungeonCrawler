@@ -335,7 +335,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 125;
+export const VERSION = 126;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -6453,7 +6453,7 @@ function frame(now) {
     const to = nav.to;
     const rel = to ? relOf({ az: to.az, el: to.el, dist: to.dist ?? 1000 },
       { yaw: aimAz, pitch: aimEl }) : null;
-    stepNav(nav, dt, { off: rel ? rel.off : null, auto: !!helm.auto });
+    stepNav(nav, dt, { off: rel ? rel.off : null, auto: !!helm.auto, rel });
     // ══ ★★★ v121 — **길을 그린다** (사장님 「항로가 목적지까지 희미하게
     //   표시 되도록 해서 내가 목적지로 향하고 있다는 것을 시각적으로」) ══
     //
@@ -6466,6 +6466,18 @@ function frame(now) {
     ship.outside.road?.update(to
       ? gatesOf(to, roadPhase, rel ? rel.off : 0)
       : []);
+    // ══ ★★★ v126 — **어느 쪽으로 틀어야 하나** ═══════════════════════
+    //
+    //  ★ 사장님 「비행선이 **가야할 방향. 우주라서 방향을 못 찾잖아**」
+    //
+    //  ★★ 항로점 마름모 · 항로 문 · 조준경 세모는 셋 다 **이미 대충
+    //    그쪽을 보고 있을 때**만 돕는다. 등을 돌리면 아무것도 안 남는다 —
+    //    우주에는 산도 길도 없으므로. 그 자리를 화살표가 메운다.
+    //  ★ 각은 **여기서 다시 안 잰다** — 바로 위에서 쓴 `rel` 그대로다
+    ship.navHud?.redraw({
+      on: helmSat, to, rel,
+      word: navWord(to, rel ? rel.off : null, rel),
+    });
   }
   const rev = stepRoute(route, dt * helmLeg(helm), power,
     { hold: landBusy(land) || rescueHold(rescue), course: nav.mult });

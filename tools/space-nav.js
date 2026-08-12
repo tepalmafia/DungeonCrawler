@@ -18,8 +18,11 @@ import {
   NAV, courseMult, navWord, navState, wrapDeg,
   // ★★★ v121 — **항로 문** (사장님 「항로가 목적지까지 희미하게 표시」)
   HITS, gatesOf,
+  // ★★★ v126 — **어느 쪽으로 틀어야 하나** (사장님 「우주라서 방향을 못 찾잖아」)
+  NAVHUD, navArrow, steerWord,
 } from '../web/space/js/game/nav-table.js';
 import { relOf } from '../web/space/js/game/frame.js';
+import { callOut } from '../web/space/js/game/radar-table.js';
 import { makeNav, setFork, setMission, clearNav, hasNav, stepNav, summary } from '../web/space/js/game/nav.js';
 import { forkOf, allForks, LEG } from '../web/space/js/game/route-table.js';
 import { RADAR, WEAPONS } from '../web/space/js/game/combat-table.js';
@@ -251,6 +254,40 @@ console.log('\n[7] ★★★ **길이 보이나** — 항로 문 (v121 · 사장
     '★★ **갈 곳이 없으면 안 그린다** — 늘 떠 있는 길은 길이 아니라 무늬다');
   ok(g0.every((g) => g.state === navState(0)) && gOff.every((g) => g.state === navState(NAV.dead + 5)),
     '★★ 색 갈래를 **항로점과 같은 말**로 쓴다 (`navState`) — 둘이 다른 색이면 같은 것으로 안 읽힌다');
+}
+
+console.log('\n[8] ★★★ **어느 쪽으로 틀어야 하나** (v126 · 사장님 「비행선이 가야할 방향. 우주라서 방향을 못 찾잖아」)');
+{
+  const to = { name: '행성' };
+  console.log('   벗어남   지금 뭐라고 하나');
+  for (const [off, az, el] of [[5, 4, 2], [30, -30, -6], [90, -88, -20], [150, 146, 22]]) {
+    console.log(`   ${String(off).padStart(4)}도   ${navWord(to, off, { az, el })}`);
+  }
+  ok(navWord(to, 30, { az: -30, el: -6 }).includes('좌'),
+    '★★★ **어느 쪽인지 말한다** — v125 까지 「30° 틀어졌습니다」였다. 얼마나만 있고'
+    + ' 어느 쪽이 없으면 우주에서는 아무 쓸모가 없다 (땅과 달리 산도 길도 없다)');
+  ok(navWord(to, 150, { az: 146, el: 22 }).includes('146'),
+    '★★★ **많이 벗어날수록 말이 늘어난다** — v125 까지는 반대였다. 78도를 넘으면'
+    + ' 각도마저 사라져 「벗어났습니다」만 남았고, 정작 그때가 제일 헤매는 때다');
+  ok(steerWord('행성', 146, 22) === callOut('행성', 146, 22),
+    '★★ **레이더와 같은 말**을 쓴다 (`callOut`) — 배 안에 방향 부르는 법이 둘이면'
+    + ' 「레이더의 저것」과 「항로의 저것」이 한 머리에 안 들어온다');
+
+  console.log('\n   화살표가 화면 어디에 서나 (−1~1)');
+  for (const [az, el, what] of [[30, 0, '오른쪽'], [-30, 0, '왼쪽'], [0, 40, '위'], [0, -40, '아래']]) {
+    const a = navArrow(az, el);
+    console.log(`   ${what.padEnd(4)}  nx ${a.nx.toFixed(2)}  ny ${a.ny.toFixed(2)}`);
+  }
+  const R = navArrow(30, 0), L = navArrow(-30, 0), U = navArrow(0, 40), D = navArrow(0, -40);
+  ok(R.nx > 0.7 && L.nx < -0.7, '★★★ **오른쪽이면 오른쪽 가장자리**에 선다');
+  ok(U.ny > 0.7 && D.ny < -0.7, '★★★ 위면 위 · 아래면 아래');
+  ok(NAVHUD.rx <= 0.9 && NAVHUD.ry <= 0.9,
+    `★★ 화면 안에 있다 (${NAVHUD.rx} · ${NAVHUD.ry}) — 가장자리에 딱 붙이면 잘린다`);
+  ok(NAVHUD.showFrom > 0 && NAVHUD.showFrom <= NAV.cone,
+    `★★ **항로 위일 때는 조용하다** (${NAVHUD.showFrom}도 넘게 벗어나야 나온다) —`
+    + ' 그때는 항로 문이 이미 말한다. 늘 떠 있는 화살표는 계기가 아니라 무늬다');
+  ok(Math.abs(navArrow(146, 22).rot) < Math.PI,
+    '★ 화살표가 도는 각도 준다 — 그리는 쪽이 다시 재면 「글자와 화살표가 딴 쪽」이 난다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

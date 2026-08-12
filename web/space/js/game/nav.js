@@ -15,6 +15,8 @@ export const makeNav = () => ({
   to: null,
   /** 마지막으로 잰 벗어남 (도) — 계기가 읽는다 */
   off: 0,
+  /** ★ v126 — 좌우·위아래로 몇 도 (부호가 있다). 「어느 쪽」이 여기서 나온다 */
+  rel: null,
   /** 이번 프레임의 배수 — `route.js` 가 곱한다 */
   mult: 1,
 });
@@ -73,9 +75,12 @@ export const hasNav = (n) => !!n.to;
  * @param o.auto  자동 항법인가 — **자동이면 늘 1** (장르를 안 바꾼다)
  * @returns 이번 프레임의 배수 (0~1)
  */
-export function stepNav(n, dt, { off = null, auto = false } = {}) {
-  if (!n.to) { n.off = 0; n.mult = 1; return 1; }
+export function stepNav(n, dt, { off = null, auto = false, rel = null } = {}) {
+  if (!n.to) { n.off = 0; n.mult = 1; n.rel = null; return 1; }
   if (off !== null) n.off = Math.abs(wrapDeg(off));
+  // ★★★ v126 — **어느 쪽인지를 들고 있는다.** 계기 셋(조준경 아랫줄 ·
+  //   항로 화살표 · 점검 모드)이 **같은 것**을 읽어야 한 쪽만 딴말을 안 한다
+  if (rel) n.rel = { az: wrapDeg(rel.az), el: rel.el };
   n.mult = courseMult(n.off, auto);
   return n.mult;
 }
@@ -87,7 +92,11 @@ export function summary(n, auto = false) {
     off: +(n.off ?? 0).toFixed(1),
     mult: +(n.mult ?? 1).toFixed(2),
     state: n.to ? navState(n.off) : null,
-    word: navWord(n.to, n.to ? n.off : null),
+    // ★★★ v126 — **어느 쪽인지도 담는다** (사장님 「우주라서 방향을 못 찾잖아」).
+    //   `rel` 은 `stepNav` 이 받은 것을 그대로 들고 있다 — 여기서 다시 재면
+    //   「화살표는 좌라는데 아랫줄은 우」가 난다
+    word: navWord(n.to, n.to ? n.off : null, n.rel),
+    rel: n.rel ? { az: +n.rel.az.toFixed(1), el: +n.rel.el.toFixed(1) } : null,
     auto: !!auto,
   };
 }
