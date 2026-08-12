@@ -192,11 +192,20 @@ const aimSweep = async (yaw, pitch, want) => {
   //   그래서 **한 프레임만 스친 각**을 「잡았다」고 하고 지나갔고, 다음
   //   줄에서 누르면 **옆 것**이 눌렸다 — 검사가 「추력 레버가 잡힌다
   //   (chart0)」라는 말이 안 되는 줄을 뱉었다. 잡은 것과 스친 것은 다르다
+  //  ══ ★★★ v121 — **기다리는 시간이 모자랐다** ═══════════════════════
+  //   머리 없는 브라우저는 초당 한두 프레임이다. 160ms 를 기다리고 읽으면
+  //   **새 각이 아직 한 프레임도 안 그려진** 채로 읽는다 — 그래서 잡히는
+  //   각인데도 `null` 이 나왔다.
+  //   ★ 손으로 재 보니 (`scratchpad/plate.mjs`) **같은 각(0.9, −0.3)에서
+  //     900ms 를 기다리면 `chart0` 이 또렷이 잡힌다.** 즉 조준은 멀쩡했고
+  //     **검사가 눈을 너무 빨리 감았다.**
+  //   ★★ 이 저장소가 이미 적어 둔 함정이다: 「헤드리스 시계는 실제의
+  //     1/20~1/25」. 시간을 손으로 적을 때마다 이걸 잊는다
   const put = async (y, q) => {
     await S(([a, b]) => SPACE.put(SPACE.pos.x, SPACE.pos.z, a, b), [y, q]);
-    await p.waitForTimeout(160);
+    await p.waitForTimeout(520);
     if (!on(await S(() => SPACE.aim))) return false;
-    await p.waitForTimeout(220);
+    await p.waitForTimeout(380);
     return on(await S(() => SPACE.aim));
   };
   // ① 준 각 그대로 — 대개 여기서 걸린다
@@ -580,10 +589,13 @@ console.log('\n[3b] ★★ **행성을 박으면 끝난다** — 수동일 때�
   //   여기서 보고, 마지막 한 걸음은 밀어 놓고 본다 (SPACE.setNear)
   ok(await until(() => SPACE.helm.near > 0.05, 90, '끌려가기'),
     `② 수동이면 행성에 끌려간다 (${(await S(() => SPACE.helm)).near})`);
-  // ★ v120 — **0.34 는 문턱 아래였다.** `helm-table.js HELM.warnAt` 이
-  //   0.35 이므로 0.34 로는 경보가 영영 안 뜬다 — 게임이 맞고 검사가
-  //   1/100 만큼 모자란 값을 넣고 있었다. 문턱 위로 넉넉히 민다
-  await S(() => SPACE.setNear(0.5));
+  // ══ ★★★ v121 — **문턱을 「넘어가게」 둔다** ═══════════════════════
+  //   ① v119 까지 0.34 를 넣었다. `HELM.warnAt` 이 0.35 이므로 **1/100
+  //      모자라** 경보가 영영 안 떴다 — 게임이 맞고 검사가 틀렸다.
+  //   ② 그래서 0.5 로 밀었더니 이번엔 **넘는 순간이 없어서** 안 떴다.
+  //      경보는 「넘었다」가 아니라 **「넘는다」**에 뜬다 (`mev === 'warn'`).
+  //   ★ 그래서 **문턱 바로 밑에 놓고 끌려가게** 둔다 — 사람이 겪는 그대로다
+  await S(() => SPACE.setNear(0.33));
   ok(await until(() => /중력원|충돌/.test(
     (() => { const e = document.getElementById('hud'); return e && !e.hidden ? e.textContent : ''; })()),
   60, '경보'), `③ **경보가 뜬다** — 「${await said()}」`);
@@ -657,8 +669,11 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
   console.log('     에어록을 없앤 뒤로 사람이 갈 수 없는 길입니다.');
   console.log('     ★ 그리고 **게임 쪽도 아직 그 길뿐입니다** — 앉아서 싣는 길이');
   console.log('     없습니다. 검사가 아니라 **게임에 난 구멍**이고, 다음 판의 일입니다.');
-  ok(!(await S(() => SPACE.rooms.map((r) => r.key))).includes('airlock'),
-    '⑥ ★★ 에어록이 배에 없다 — 그러니 「문을 열고 윈치로」는 이제 못 묻는다');
+  //  ★ v121 — 「배에 없다」로 물었다가 빨개졌다. **방은 아직 서 있다** —
+  //    표에서만 없앴고 `world/ship.js` 는 그대로 세운다 ([2] 가 그걸 찍는다).
+  //    여기서 물을 수 있는 것은 **갈 수 없다**뿐이다
+  ok((await S(() => SPACE.pilotRules)).canStand === false,
+    '⑥ ★★ 에어록까지 **걸어갈 수가 없다** — 그러니 「문을 열고 윈치로」는 이제 못 묻는다');
   ok((await S(() => SPACE.land)).got !== undefined,
     '⑦ ★ 땅이 무엇을 주는지는 표에 그대로 있다 — 길만 없어졌지 뜻은 살아 있다');
   // ══ ★★★ v99 — **v88 이후로 이 세 줄이 스스로를 방해하고 있었다** ══
@@ -734,7 +749,11 @@ console.log('\n[5] ★★★ **수리** — 단추 하나인데 공짜는 아닌
   //    고쳐지나 · 그런데 **공짜가 아닌가.** 공짜면 「맞아도 그만」이 되고,
   //    그러면 v70 이 만든 「맞으면 일이 된다」가 통째로 죽는다
   await settle();
-  await S(() => { SPACE.setSupply({ parts: 9 }); SPACE.setHeat(70); SPACE.giveScar?.('hull'); });
+  // ★ v121 — **흉터가 아니라 선체 마모다.** `giveScar` 는 영구 손상이라
+  //   `needsFix` 가 안 걸리고, 게다가 다음 절([6])이 「처음에는 흉터가
+  //   없다」로 시작하므로 **여기서 흉터를 주면 그 절이 빨개진다.**
+  //   검사가 검사를 망치는 자리다 (v67 에 한 번 겪었다)
+  await S(() => { SPACE.setSupply({ parts: 9 }); SPACE.setHeat(70); SPACE.putWear(0.6); });
   const before = await S(() => ({ parts: SPACE.supply.parts, heat: SPACE.heat, fix: SPACE.fix }));
   ok(typeof before.fix?.why !== 'undefined' || before.fix !== undefined,
     `① 수리 단추를 읽을 수 있다 (${JSON.stringify(before.fix ?? null).slice(0, 80)})`);

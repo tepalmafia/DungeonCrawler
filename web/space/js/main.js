@@ -5483,6 +5483,13 @@ window.SPACE = {
   },
   /** 검사가 P 를 누르고 있는 것과 같게 */
   doFix() { fix.hold = FIX.hold; return true; },
+  /**
+   * ★ v121 — **선체를 깎아 놓는다** (시험용). 수리를 재려면 고칠 것이
+   *   있어야 하는데(`needsFix`), 흉터(`giveScar`)는 **선체 마모가 아니라
+   *   영구 손상**이라 그걸로는 안 된다 — 종단 검사가 「부품 9 → 9」로
+   *   빨개져서 알았다. 둘을 헷갈리면 「고칠 것이 없습니다」만 뜬다
+   */
+  putWear(v = 0.6) { faults.wear.hull = Math.max(0, Math.min(1, v)); return faults.wear.hull; },
   /** ★★★ v104 — **항법.** 검사(`space-nav.js`)와 점검 모드가 읽는다 */
   get nav() { return { ...navSummary(nav, !!helm.auto), legMult: nav.mult }; },
   /** 검사가 미션 쪽으로 걸어 본다 */
