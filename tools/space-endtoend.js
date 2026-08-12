@@ -524,6 +524,11 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
   //  ★★★ 그래서 **키로 민다.** 레버를 없앤 것이 아니라, 검사가 사람이
   //    쓰는 길을 재게 바꾼 것이다 ([3]⑥ 의 방향키와 같은 판단이다)
   await settle();
+  // ★ **추진제가 없으면 스로틀이 안 먹는다** (`throttle.js` 의 `dry`).
+  //   앞 절들이 밀어붙이며 다 태워서 0.00 → 0.00 이 나왔다 — 게임이
+  //   맞고 검사가 빈 탱크로 물은 것이다. 채워 놓고 묻는다
+  await S(() => { SPACE.setSupply({ fuel: 90 }); SPACE.setPower('thrust', true); });
+  await p.waitForTimeout(400);
   const thr0 = await S(() => SPACE.throttle?.v ?? 0);
   await S(() => { window.__t0 = SPACE.throttle?.v ?? 0; });
   await p.keyboard.down('KeyW');
