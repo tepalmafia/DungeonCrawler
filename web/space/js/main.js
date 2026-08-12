@@ -96,6 +96,12 @@ import { BOOST, RUSH, KICK } from './game/boost-table.js';
 import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
 // ★★★ v114 — **계기 자리는 화면 좌표로** (사장님 「화면 uhd 정렬좀해」)
 import { centerFor, worldAt } from './game/screen-table.js';
+// ★★★ v127 — **창을 손으로 옮긴다** (사장님 「마우스로 위치를 자유자재로」)
+import { LAYOUT, MOVABLE, layoutWord } from './game/layout-table.js';
+import {
+  makeLayout, setLayout, grab as layoutGrab, drop as layoutDrop,
+  moveTo as layoutMove, atOf as layoutAt, resetLayout, summary as layoutSummary,
+} from './game/layout.js';
 // ★★★ v116 — **기체 도해 3D** (사장님 「3d로 기체도 나오고 각 파츠의 역할도」)
 import { buildBay3D } from './world/bay3d.js';
 import { sectionsFor } from './game/hull-table.js';
@@ -335,7 +341,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 126;
+export const VERSION = 127;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -460,6 +466,20 @@ function makeEnvironment(renderer) {
 scene.environment = makeEnvironment(renderer);
 scene.environmentIntensity = 0.75;
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v127 — **창 배치** (사장님 「마우스로 위치를 자유자재로 옮길 수 있게」)
+//
+//  ★ **여기가 제일 위인 까닭.** 처음에 다른 상태들 옆(1107줄)에 두었더니
+//    「Cannot access 'layout' before initialization」로 **게임이 통째로
+//    안 떴다** — `placePanels()` 가 473줄에서 이미 한 번 돈다.
+//    이 파일의 오랜 규약 그대로다: **여러 곳이 읽는 값은 읽는 곳들보다
+//    위에 있어야 한다** (`bad` 의 주석이 같은 말을 하고 있다)
+// ══════════════════════════════════════════════════════════════════════════
+const layout = makeLayout();
+/** ★ 배치 모드에서 광선을 쏠 판들 — `placePanels` 가 채운다.
+ *  ★★ 이것도 `placePanels` 보다 **위**에 있어야 한다 — 같은 이유로 한 번 더 데었다 */
+let panePicks = [];
+
 const ship = buildShip(scene, camera, renderer);
 // ★ 배가 선 **직후** 한 번 놓는다. `resize()` 는 배보다 먼저 도는데,
 //   그때는 `ship` 이 없어 그냥 지나간다 — 이 한 줄이 없으면 **첫 화면만**
@@ -494,6 +514,42 @@ if (audio) {
   audio.event = (name, at) => { if (audioSeen) audioSeen.push(name); return raw(name, at); };
 }
 addEventListener('mousedown', () => audio?.resume(), { passive: true });
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v127 — **창을 끌어 옮긴다** (사장님 「마우스로 자유자재로」)
+//
+//  ★ 배치 모드일 때만 듣는다. 평소에는 왼쪽 단추가 **쏘는** 단추다 —
+//    늘 살려 두면 싸우다 창이 딸려 온다.
+//  ★★ 자리는 **화면 좌표(−1~1)** 로 잡는다. 미터로 잡으면 창 크기가
+//    바뀔 때마다 어긋난다 (v113 까지 계기 셋이 그랬다)
+// ══════════════════════════════════════════════════════════════════════════
+const ndcOf = (e) => ({
+  nx: (e.clientX / innerWidth) * 2 - 1,
+  ny: 1 - (e.clientY / innerHeight) * 2,
+});
+addEventListener('mousedown', (e) => {
+  if (!layout.open || e.button !== 0) return;
+  const { nx, ny } = ndcOf(e);
+  const hit = paneAt(nx, ny);
+  if (!hit) return;
+  e.preventDefault();
+  if (layoutGrab(layout, hit.name)) say(ai, layoutWord(hit.name), 'tell');
+});
+addEventListener('mousemove', (e) => {
+  const g = layout.drag;
+  if (!layout.open || !g) return;
+  const { nx, ny } = ndcOf(e);
+  const o = panePicks.find(([n]) => n === g.name)?.[1];
+  layoutMove(layout, g.name, nx, ny, o?.halfW ?? 0, o?.halfH ?? 0);
+  fovWas = -1;                         // ★ 다음 프레임에 다시 놓는다
+});
+addEventListener('mouseup', (e) => {
+  if (!layout.open || e.button !== 0 || !layout.drag) return;
+  const n = layoutDrop(layout);
+  // ★★ **놓는 순간 저장한다.** 배치는 회차와 상관없는 것이라 구간이
+  //   끝날 때까지 기다릴 이유가 없고, 기다리면 껐을 때 사라진다
+  saveNow();
+  say(ai, `${n} 을(를) 여기 두었습니다`, 'ok');
+});
 // ★ 손목을 들어 올린다 — **누르는 동안**. 다른 손잡이가 전부 「잡고 있는 것」
 //   이라 여기도 같은 규약이다. 놓으면 곁눈 자리로 돌아간다
 // ══ ★★★ **Z — 광학 창을 화면 가득** (v79 · 조준 포드) ═════════════════
@@ -743,6 +799,25 @@ addEventListener('keydown', (e) => {
   //  ★ 사장님 「회수하겠습니까? **질문이 나오고** 회수하는 것으로」
   //  ★★ 물음이 안 떠 있으면 **아무 일도 안 한다** — 키를 늘 살려 두면
   //    「눌렀는데 왜 아무 일도 없지」가 되고, 이 배는 그걸 「고장」으로 읽는다
+  // ══ ★★★ v127 — **U — 창 배치** ═══════════════════════════════════
+  //  ★ 사장님 「**상태창 광학창 레이더 등 모든 창들을 마우스로 위치를
+  //    자유자재로 옮길 수 있게** 해줘」
+  //  ★★ 위 v103 의 셈에서 **U 가 비어 있었다** — 그 자리를 쓴다
+  if (!helpOpen && !paused && e.code === LAYOUT.key) {
+    e.preventDefault();
+    showLayout();
+    return;
+  }
+  // ★ 배치 중에는 **R 이 되돌리기**다. 평소의 R(추력)은 배치 모드에서
+  //   쓸 일이 없고, 되돌리기는 **여기서만** 필요하다
+  if (layout.open && e.code === 'KeyR') {
+    e.preventDefault();
+    const n = resetLayout(layout);
+    fovWas = -1;                       // ★ 다시 놓게 만든다
+    say(ai, n ? `창 ${n} 개를 제자리로 돌렸습니다` : '옮긴 창이 없습니다', 'tell');
+    saveNow();
+    return;
+  }
   if (!helpOpen && !paused && (e.code === LOOT_ASK.yes || e.code === LOOT_ASK.no)) {
     const r = lootAnswer(loot, e.code === LOOT_ASK.yes);
     if (r) {
@@ -1889,6 +1964,8 @@ const world = () => ({
   throttle: thr, dock: dockS,
   // ★ v115 — 파일럿 (`save-table.js FIELDS.pilot`)
   pilot,
+  // ★ v127 — 창 배치 (`save-table.js FIELDS.layout`)
+  layout,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -2465,6 +2542,33 @@ let mpsWas = 0, accK = 0;
 let mpsPure = 0;
 /** ★★★ v121 — 항로 문이 흐른 거리 (m). **정말 나아간 만큼**만 는다 */
 let roadPhase = 0;
+/**
+ * ★★★ **배치 모드를 여닫는다** (v127).
+ *
+ *   ★ 열면 **포인터 잠금을 푼다.** 안 풀면 커서가 없어서 무엇을 잡는지
+ *     안 보인다 — v49 에 점검 모드가 똑같은 자리에서 걸렸다
+ */
+function showLayout(on = null) {
+  const now = setLayout(layout, on);
+  // ★★★ **잠금을 풀고, 다시 안 잠기게 막는다.** 푸는 것만으로는 모자라다 —
+  //   `input.js` 가 **단추를 누를 때마다 다시 잠그므로**, 창을 잡는 순간
+  //   도로 잠겨 첫 이동만 먹고 안 끌렸다 (재서 잡았다)
+  input.noLock = now;
+  if (now) document.exitPointerLock?.();
+  say(ai, layoutWord(null, layoutSummary(layout).moved), now ? 'tell' : 'ok');
+  return now;
+}
+/** 화면 좌표(−1~1) 로 판을 찾는다 — **진짜 카메라로 광선을 쏜다** */
+function paneAt(nx, ny) {
+  if (!panePicks.length) return null;
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(nx, ny), camera);
+  for (const [name, o] of panePicks) {
+    if (!o.mesh?.visible) continue;
+    if (rc.intersectObject(o.mesh, true).length) return { name, obj: o };
+  }
+  return null;
+}
 function placePanels() {
   if (!ship) return;
   const aspect = camera.aspect || 1;
@@ -2497,8 +2601,14 @@ function placePanels() {
     // 판의 반쪽 크기를 **화면 좌표**로 — 가로만 aspect 로 나뉜다
     const halfW = lb.hw / (t * aspect);
     const halfH = lb.hh / t;
-    const c = centerFor(name, halfW, halfH);
+    // ★★★ v127 — **사람이 옮겼으면 그 자리다** (사장님 「마우스로 위치를
+    //   자유자재로 옮길 수 있게」). 안 옮긴 창은 아무것도 안 들고 있으므로
+    //   표의 기본값(`centerFor`)이 그대로 산다 — 기본값을 고치면 따라온다
+    const put = layoutAt(layout, name);
+    const c = put ? { nx: put.x, ny: put.y } : centerFor(name, halfW, halfH);
     const p = worldAt({ nx: c.nx, ny: c.ny, dist, fovDeg, aspect });
+    // ★ 판 크기를 기억해 둔다 — 끌 때 **반쪽 크기**를 세어 화면 밖을 막는다
+    obj.halfW = halfW; obj.halfH = halfH;
     // ══ ★★★ v118 — **판을 카메라에 붙인다** ═══════════════════════════
     //
     //  ★ 사장님 (2026-08-12) 「**화면에 나오는 정보창들 기울어져있어서 읽기
@@ -2527,6 +2637,10 @@ function placePanels() {
   put('광학창', ship.optic);
   put('상태창', ship.statusHud);
   put('레이더', ship.radarHud);
+  // ★★★ v127 — 끌 때 광선을 쏠 대상. `put` 이 방금 재 둔 것을 그대로 쓴다
+  panePicks = [
+    ['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud],
+  ].filter(([, o]) => o?.mesh);
 }
 
 function resize() {
@@ -4961,6 +5075,19 @@ window.SPACE = {
    *   늘 참이 되는 것을 한 번 겪어서, 표를 읽는 구멍을 따로 냈다
    */
   get pilotRules() { return { ...PILOT }; },
+  /** ★★★ v127 — **창 배치** (검사와 점검 모드가 읽는다) */
+  get layout() { return layoutSummary(layout); },
+  /** 검사가 배치 모드를 연다 — 진짜 마우스 없이 */
+  showLayout(on = true) { showLayout(on); return layoutSummary(layout); },
+  /** 검사가 창을 옮긴다 (화면 좌표 −1~1) */
+  putPane(name, nx, ny) {
+    const o = panePicks.find(([n]) => n === name)?.[1];
+    const r = layoutMove(layout, name, nx, ny, o?.halfW ?? 0, o?.halfH ?? 0);
+    fovWas = -1;
+    return r;
+  },
+  /** 검사가 되돌린다 */
+  resetPanes(name = null) { const n = resetLayout(layout, name); fovWas = -1; return n; },
   /** ★ 에어록 바깥문 — 열면 갇히나 · 공기가 주나 */
   get lock() { return { ...lockSummary(lock), word: airWord(lock.air) }; },
   /** ★ 영구 손상 — 무엇이 남았나 · 무엇이 달라졌나 */

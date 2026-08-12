@@ -39,6 +39,11 @@ export class Input {
     this.dx = 0;              // 이번 프레임의 시선 이동
     this.dy = 0;
     this.locked = false;
+    /**
+     * ★★★ v127 — **참이면 단추를 눌러도 안 잠근다.**
+     *   창 배치처럼 **커서가 살아 있어야 하는** 때에 켠다
+     */
+    this.noLock = false;
 
     addEventListener('keydown', (e) => {
       // 브라우저 단축키를 뺏지 않는다 — 새로고침이 막히면 개발이 지옥이 된다
@@ -87,8 +92,16 @@ export class Input {
       // ★ 둘러보기는 **C** 로 옮겼다 (아래 keydown). 오른쪽 단추는
       //   Elite · Star Citizen · Everspace 2 셋 다 **보조 무기**다
       if (e.button === 1) { this.mid = true; this.midPress = true; }  // ★ 표적
-      // 잠금이 막 풀린 직후에 다시 걸면 브라우저가 거절한다. 조용히 넘긴다
-      if (!this.locked) canvas.requestPointerLock?.()?.catch?.(() => {});
+      // ══ ★★★ v127 — **다시 잠그면 안 되는 때가 있다** ═══════════════
+      //
+      //  ★ 사장님 「창들을 마우스로 위치를 자유자재로 옮길 수 있게」.
+      //    창을 끌려고 단추를 누르는데 **여기서 포인터를 도로 잠갔다.**
+      //    잠기면 `clientX/Y` 가 안 움직이므로 **첫 이동만 먹고 그 뒤로는
+      //    창이 그 자리에 붙어 있다** — 재 보니 정확히 그랬다
+      //    (집히기는 하는데 안 끌린다).
+      //  ★★ 그래서 「지금 마우스를 써야 하는 때」를 밖에서 알려 준다.
+      //    여기서 게임 상태를 알 수는 없으므로 **한 칸만** 둔다
+      if (!this.locked && !this.noLock) canvas.requestPointerLock?.()?.catch?.(() => {});
     });
     addEventListener('mouseup', (e) => {
       if (e.button === 0) this.hold = false;
