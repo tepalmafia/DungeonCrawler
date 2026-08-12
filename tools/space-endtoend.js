@@ -1409,8 +1409,12 @@ console.log('\n[6r] ★★★ **항로 문** — 목적지까지 길이 보이�
   await S(() => { SPACE.setManual(); SPACE.putThrottle?.(1); });
   const moved = await until(() => SPACE.road().phase > window.__ph0, 120, '길이 흐르는 것');
   ok(moved || true, `⑤ 흐른 거리 ${(await S(() => SPACE.road().phase))}m`);
-  await S(() => SPACE.clearNav());
-  await p.waitForTimeout(500);
+  // ★★★ 처음에 `SPACE.clearNav()` 로 지웠다가 빨개졌다 — **갈 곳은 매
+  //   프레임 상태에서 다시 정해지므로** 풀어도 다음 프레임에 도로 걸린다.
+  //   게임이 틀린 것이 아니라 **훅이 아무 일도 못 하는 것**이었다.
+  //   갈 곳을 없애려면 **갈 곳을 만든 상태**를 없애야 한다
+  await S(() => { SPACE.passLand(); SPACE.clearNav(); });
+  await until(() => SPACE.road().shown === 0, 30, '길이 꺼지는 것');
   const r1 = await S(() => SPACE.road());
   ok(r1.shown === 0,
     `⑥ ★★ **갈 곳이 없으면 길도 없다** (${r1.shown}) — 늘 떠 있는 길은 길이 아니라 무늬다`);

@@ -332,7 +332,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 122;
+export const VERSION = 123;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -5124,6 +5124,17 @@ window.SPACE = {
   /** 검사가 내릴 자리를 띄운다 */
   offerLand(hard = false) { offerPlanet(land, hard); return landSummary(land); },
   /**
+   * ★ v121 — **행성을 지나친다** (검사가 「갈 곳이 없어지면」을 만들려고).
+   *
+   *   ★★ `clearNav()` 로는 안 된다. 갈 곳은 **매 프레임 상태에서 다시**
+   *     정해지므로(위 [6n] 머리말), 풀어 놓아도 다음 프레임에 도로 걸린다.
+   *     즉 `clearNav()` 는 **아무 일도 못 하는 훅**이다 — v104 에 만들어
+   *     두고 한 번도 안 썼다. 갈 곳을 없애려면 **갈 곳을 만든 상태**를
+   *     없애야 한다. 검사가 이걸 몰라서 한 번 빨개졌고, 게임이 아니라
+   *     검사가 틀린 자리였다
+   */
+  passLand() { passPlanet(land); return landSummary(land); },
+  /**
    * 검사가 마디를 밀어 놓는다 — **화면을 찍으려고 낸 구멍.**
    * ★ `stepLand` 를 직접 부르지 않는다. 여기서 상태만 바꾸고 **게임이
    *   굴리게** 둔다 — 안 그러면 「검사는 통과하는데 화면은 조용한」 상태가 된다
@@ -5591,6 +5602,12 @@ window.SPACE = {
   putNavMission(key = 'wreck', name = '표류선') {
     return setMission(nav, { key, name }, navSeed(`m${key}`));
   },
+  /**
+   * ★★ v121 — **이 훅은 한 프레임도 못 간다.** 갈 곳은 매 프레임 상태에서
+   *   다시 정해지므로 다음 프레임에 도로 걸린다. 남겨 두는 것은 점검
+   *   모드에서 「지금 걸린 것」을 잠깐 떼 보는 용도뿐이고, 검사는
+   *   **상태 쪽**을 건드려야 한다 (`passLand` 따위)
+   */
   clearNav() { return !!clearNav(nav); },
   /** ★★★ v103 — **포획.** 검사(`space-catch.js`)와 점검 모드가 읽는다 */
   get catch() {
