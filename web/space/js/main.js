@@ -6084,9 +6084,6 @@ function frame(now) {
     //   **역추진을 만들어**」). v100 에는 켜기/끄기였는데, 두 자리뿐인
     //   값은 고를 것이 없다 — 축으로 만들면 「얼마나」가 생긴다.
     //   ★ 추력(주 엔진 켜고 끄기)은 **Space** 에 그대로 있다
-    stepThrottle(thr, dt, {
-      up: input.keys.has('KeyW'), down: input.keys.has('KeyS'), dry: isDry(supply.fuel),
-    });
     // ★★★ v88 — **A/D 는 좌우다.** 여태 「일어난다」였다 (v52 에 좌석에
     //   갇힌 적이 있어 비상구로 둔 것). 그런데 v88 에서 앉는 것이 곧 잡는
     //   것이 되고 나가는 길이 **X 와 좌석 다시 누르기 둘**로 분명해졌으므로,
@@ -6104,11 +6101,6 @@ function frame(now) {
     //    둔 자리였다 (v47 잡기/일어나기 · v66 누르기/일어나기).
     //  ★ 가르는 시간은 표가 든다 (`keys-table.js TAP`) — 여기서 또 세면
     //    재는 곳이 둘이 된다
-    const rk = tapStep(thrustTap, input.keys.has('KeyR'), dt);
-    if (rk.tap) setThrustKey(!power.thrust);
-    // ★ 꾹이면 **추력이 꺼져 있어도 켜면서** 민다 — 「켜고 밀기」가 한 동작
-    if (rk.rush && !power.thrust) setThrustKey(true);
-    rushWanted = rk.rush;
   } else {
     steerPush = 0;
     // ★★ v88 — **둘러보는 동안에는 스틱을 안 지운다.** 지우면 손을 떼는
@@ -6126,6 +6118,33 @@ function frame(now) {
     me.pitch = Math.max(-1.35, Math.min(1.35, me.pitch - look.dy * 0.0022));
     // 얼마나 둘러봤나 — 조종간을 잡고 있을 때는 안 센다. 그건 배를 민 것이다
     taught.turned += Math.abs(look.dx) * 0.0022;
+  }
+
+  // ══ ★★★ v120 — **왼손 것은 조종간을 놓아도 먹는다** ═══════════════════
+  //
+  //  ★ 스로틀(W/S)과 추력·급가속(R)이 **`if (steering …)` 안에** 있었다.
+  //    즉 조종간을 놓는 순간 **스로틀이 죽었다.** 종단 검사가 「W 를
+  //    눌러도 0.00 → 0.00」으로 잡아 줬고, 찍어 보니 `steering: false` 였다.
+  //
+  //  ★★ 고증이 답을 이미 갖고 있다: **스로틀은 왼손 · 조종간은 오른손**이다.
+  //    실제 조종석에서 스틱을 놓는다고 스로틀이 안 움직이지 않는다.
+  //    이 저장소도 바로 아래 `else` 가지에 「★ 키(W/S/A/D)는 그대로 먹는다 —
+  //    고개와 손은 다른 것이다」라고 **적어만 두고 안 지키고 있었다.**
+  //
+  //  ★★★ 그리고 이게 진짜로 물리는 자리다: v110 이 「놓으면 마우스로
+  //    계기를 본다」로 만들었으므로, 계기를 한 번 볼 때마다 **가속이
+  //    통째로 멈추는** 배였다. 「항상 앉아서 모든 조작」의 반대다.
+  //  ★ A/D(좌우)는 그대로 가지 안에 둔다 — 그건 **조종간이 하는 일**이라
+  //    놓은 채로 먹으면 「놓았다」가 뜻을 잃는다
+  if (helmSat) {
+    stepThrottle(thr, dt, {
+      up: input.keys.has('KeyW'), down: input.keys.has('KeyS'), dry: isDry(supply.fuel),
+    });
+    const rk = tapStep(thrustTap, input.keys.has('KeyR'), dt);
+    if (rk.tap) setThrustKey(!power.thrust);
+    // ★ 꾹이면 **추력이 꺼져 있어도 켜면서** 민다 — 「켜고 밀기」가 한 동작
+    if (rk.rush && !power.thrust) setThrustKey(true);
+    rushWanted = rk.rush;
   }
 
   walk(dt);
