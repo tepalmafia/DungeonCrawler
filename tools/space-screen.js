@@ -150,6 +150,38 @@ try {
     }
   }
 
+  // ══ ★★★ v118 — **둘러봐도 판이 정면인가** ══════════════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「화면에 나오는 정보창들 기울어져있어서 읽기
+  //    불편해 수정해줘. **정면으로 나오도록**」
+  //
+  //  ★★ 위의 검사들은 **정면 한 자세**에서만 쟀다. 그런데 판이 기울어
+  //    보이는 것은 **둘러볼 때**다 — 판이 배의 자식이면 카메라만 돌고
+  //    판은 안 돌아 마름모로 찌그러진다. v114 가 회전을 0 으로 뒀는데
+  //    그건 **배 기준의 0** 이라 이걸 못 막았다.
+  //  ★★★ 재는 것은 **법선과 시선의 각** 하나다. −1 이면 딱 마주 본 것이고,
+  //    그때만 원근 투영이 판을 **직사각형**으로 그린다 (이미지 평면과
+  //    나란한 평면은 언제나 직사각형으로 투영된다 — 이건 정리다)
+  console.log('\n[★] **둘러봐도 판이 정면을 보나**');
+  {
+    await p.setViewportSize({ width: 1600, height: 900 });
+    await p.waitForTimeout(250);
+    const POSES = [[0, 0], [0.45, -0.18], [-0.70, 0.25], [1.10, 0.30]];
+    for (const [yaw, pitch] of POSES) {
+      await S((a) => SPACE.put(SPACE.pos.x, SPACE.pos.z, a[0], a[1]), [yaw, pitch]);
+      await p.waitForTimeout(220);
+      const D = await S(() => SPACE.panelDebug());
+      const off = Object.entries(D).filter(([, q]) => q)
+        .map(([n, q]) => [n, Math.abs(q.face + 1), q.onCam]);
+      const worst = Math.max(0, ...off.map((r) => r[1]));
+      console.log(`   yaw ${yaw.toFixed(2)} · pitch ${pitch.toFixed(2)}  `
+        + off.map(([n, d, c]) => `${n} ${d.toFixed(4)}${c ? '' : '(배에 붙음)'}`).join(' · '));
+      ok(worst < 0.001 && off.every((r) => r[2]),
+        `★★★ 이 자세에서 판 셋이 다 **정면**이다 (어긋남 ${worst.toFixed(4)})`);
+    }
+    await S(() => SPACE.put(SPACE.pos.x, SPACE.pos.z, 0, 0));
+  }
+
   ok(!errs.length, `콘솔에 오류가 없다 ${errs.length ? errs.slice(0, 2).join(' · ') : ''}`);
 } finally { await b.close(); }
 

@@ -325,7 +325,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 117;
+export const VERSION = 118;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -2403,10 +2403,6 @@ function placePanels() {
   const fovDeg = camera.fov;
   const dist = HUDV.dist + 0.01;                 // 눈 → 판 (계기 셋은 살짝 뒤)
   const t = Math.tan((fovDeg * Math.PI) / 360) * dist;
-  // ★★★ **눈은 `DEP` 다** — v91 이 그렇게 못박았다 (조준경과 같은 자리를
-  //   써야 「조준경은 맞는데 계기는 어긋나는」 것이 안 생긴다)
-  const eyeY = DEP.y + FLY_VIEW.rise;
-  const eyeZ = DEP.z - FLY_VIEW.lean;
   const put = (name, obj) => {
     if (!obj?.mesh) return;
     // ══ ★★★ **크기를 짐작하지 않고 판에게 묻는다** ═══════════════════
@@ -2435,15 +2431,29 @@ function placePanels() {
     const halfH = lb.hh / t;
     const c = centerFor(name, halfW, halfH);
     const p = worldAt({ nx: c.nx, ny: c.ny, dist, fovDeg, aspect });
-    // ★ 복판이 원점에서 밀려 있으면 그만큼 되돌린다
-    obj.mesh.position.set(p.x - lb.ox, eyeY + p.y - lb.oy, eyeZ - dist);
-    // ══ ★★★ **눕히지 않는다** (v114) ═══════════════════════════════
-    //  v102 가 `faceEye()` 로 판을 사람 쪽으로 **돌려 세웠다.** 물건으로는
-    //  맞는 말인데(진짜 계기판은 조종사를 본다), 이 셋은 눈앞 0.66m 에
-    //  떠 있는 **HUD 판**이라 30도씩 돌아가면 화면에서 **마름모로 찌그러져
-    //  보인다** — 사장님이 보내신 사진에서 상태창·레이더·광학창이 죄다
-    //  비스듬히 기울어 있던 것이 이것이다. 「정렬 좀 해」의 절반이 여기다.
-    //  ★ 조준경은 처음부터 안 눕혔다 (창과 나란하다). 넷을 같은 규약으로 맞춘다
+    // ══ ★★★ v118 — **판을 카메라에 붙인다** ═══════════════════════════
+    //
+    //  ★ 사장님 (2026-08-12) 「**화면에 나오는 정보창들 기울어져있어서 읽기
+    //    불편해 수정해줘. 정면으로 나오도록**」
+    //
+    //  ══ v114 에 「눕히지 않는다」로 고쳤는데 왜 또 기울었나 ═════════════
+    //
+    //  그때 판의 **회전을 0 으로** 두었다. 그건 **배 기준**의 0 이라,
+    //  창을 정면으로 보고 있을 때만 화면과 나란하다. **마우스로 둘러보면
+    //  카메라만 돌고 판은 배에 붙어 안 돈다** — 그 벌어진 각만큼
+    //  화면에서 **마름모로 찌그러진다.** 사장님 사진의 그것이다.
+    //
+    //  ★★★ 그래서 **판을 카메라의 자식으로 옮긴다.** 그러면 판이 늘
+    //    이미지 평면과 나란하고, 원근 투영은 **그런 판을 언제나 직사각형
+    //    으로** 그린다 (같은 z 의 평면은 균일하게 축소될 뿐이다).
+    //    즉 「정면으로」가 **규칙으로** 보장된다 — 값을 잘 골라서가 아니라.
+    //
+    //  ★ 이 배가 이미 쓰는 규약이다: 광학 전체화면 판도 **눈에 매단다**
+    //    (`optic.attachBig(camera)`) — 「화면 붙박이」는 카메라의 자식이다.
+    //  ★★ `scene.add(camera)` 가 되어 있어야 자식이 그려진다. 되어 있다
+    if (obj.mesh.parent !== camera) camera.add(obj.mesh);
+    // ★ 카메라 기준이라 눈이 원점이고, 카메라는 **−z** 를 본다
+    obj.mesh.position.set(p.x - lb.ox, p.y - lb.oy, -dist);
     obj.mesh.rotation.set(0, 0, 0);
   };
   put('광학창', ship.optic);
@@ -5291,11 +5301,21 @@ window.SPACE = {
     for (const [n, o] of [['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud]]) {
       if (!o?.mesh) { out[n] = null; continue; }
       const box = new THREE.Box3().setFromObject(o.mesh);
+      // ★★★ v118 — **정면인가**를 한 숫자로 (사장님 「정면으로 나오도록」).
+      //   판의 월드 법선과 카메라가 보는 방향을 견준다. 둘이 정확히
+      //   마주 보면 −1 이고, 그때만 원근 투영이 **직사각형**을 그린다.
+      //   ★ 자리(pos)만 봐서는 못 잡는다 — v114 가 회전을 0 으로 뒀는데
+      //     그건 **배 기준**의 0 이라, 마우스로 둘러보면 카메라만 돌아
+      //     판이 마름모로 찌그러졌다. 그 어긋남이 여기 숫자로 나온다
+      const nrm = new THREE.Vector3(0, 0, 1).applyQuaternion(o.mesh.getWorldQuaternion(new THREE.Quaternion()));
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
       out[n] = {
         pos: o.mesh.position.toArray().map((x) => +x.toFixed(3)),
         rot: o.mesh.rotation.toArray().slice(0, 3).map((x) => +(+x).toFixed(3)),
         size: o.size, box: box.getSize(new THREE.Vector3()).toArray().map((x) => +x.toFixed(2)),
         kids: o.mesh.children?.map((c) => `${c.name || c.type}${c.visible ? '' : '(숨음)'}`) ?? [],
+        onCam: o.mesh.parent === camera,
+        face: +nrm.dot(fwd).toFixed(4),      // −1 이면 정면으로 마주 본다
       };
     }
     return out;
