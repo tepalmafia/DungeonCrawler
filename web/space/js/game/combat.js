@@ -37,7 +37,12 @@ export function makeCombat() {
      */
     // ★ v97 — `atAz/atEl` 은 **표식이 지금 가리키는 자리** (기수 기준 도).
     //   표적을 쫓아간다 (`RADAR.slew`) — 즉각 안 붙는다
-    radar: { on: false, t: 0, id: null, grace: 0, was: null, chasing: false, seen: new Map(), atAz: 0, atEl: 0 },
+    // ★ v119 — `wasD` 는 **묶은 표적**의 지난 거리 (노치용 시선 속도) ·
+    //   `notch` 는 접근율이 죽어 있던 시간 · `why` 는 놓친 이유
+    radar: {
+      on: false, t: 0, id: null, grace: 0, was: null, chasing: false, seen: new Map(),
+      atAz: 0, atEl: 0, wasD: null, notch: 0, why: null,
+    },
     /** 날아가는 미사일들 */
     shots: [],
     /** 센 것 — 검사와 끝 화면이 읽는다 */
@@ -60,7 +65,11 @@ export const isLocked = (c, t) => !!(c.radar.on && c.radar.id !== null && t && t
  */
 export function stepRadar(c, dt, aimed) {
   const r = c.radar;
-  if (!r.on) { r.t = 0; r.id = null; r.grace = 0; r.atAz = 0; r.atEl = 0; return null; }
+  if (!r.on) {
+    r.t = 0; r.id = null; r.grace = 0; r.atAz = 0; r.atEl = 0;
+    r.notch = 0; r.wasD = null;
+    return null;
+  }
 
   const t = aimed?.t ?? null;
   const good = !!t
@@ -70,10 +79,23 @@ export function stepRadar(c, dt, aimed) {
 
   // 이미 묶었나
   if (r.id !== null) {
-    // ★★★ v94 — **묶은 뒤에는 넓게 잡는다** (`RADAR.holdCone`).
-    //   묶는 각과 유지하는 각이 같으면 적이 기동하는 순간 풀린다
+    // ══ ★★★ v119 — **도플러 두 성분**을 잰다 (노치 · frame.js LOCK) ══
+    //  ★ 거리는 내가 고개를 돌려도 안 변하므로 시선 속도는 그냥 재도 맞고,
+    //    옆 속도는 표적이 **제 힘으로** 흐르는 몫(`vaz`·`vel`, 세상 기준)
+    //    에서 온다. 이걸 눈 기준으로 재면 **내가 휘저을 때마다 노치**가
+    //    되어 사장님이 요청하신 것과 **정반대**의 게임이 된다
+    const closing = (t && r.wasD !== null && r.wasD !== undefined)
+      ? (r.wasD - t.dist) / Math.max(dt, 1e-6) : null;
+    r.wasD = t ? t.dist : null;
+    const side = t ? t.dist * Math.hypot(t.vaz ?? 0, t.vel ?? 0) * (Math.PI / 180) : 0;
+    if (closing !== null && Math.abs(closing) < RADAR.notch && side >= RADAR.notchSide) {
+      r.notch = (r.notch ?? 0) + dt;
+    } else r.notch = 0;
+    const notched = (r.notch ?? 0) >= RADAR.notchFor;
+    // ★★★ v119 — 유지 한계가 **짐벌**이다 (holdCone 32 → RADAR.gimbal 60).
+    //   조준선이 아니라 「안테나가 돌아갈 수 있나」를 묻는다
     const still = t && t.id === r.id && t.dist <= RADAR.breakRange
-      && aimed.off <= RADAR.holdCone;
+      && aimed.off <= RADAR.gimbal && !notched;
     if (still) {
       r.grace = RADAR.holdGrace;
       // ★★★ v97 — **표식이 표적을 쫓아간다** (`RADAR.slew` · frame.js 블록아웃).
@@ -88,7 +110,11 @@ export function stepRadar(c, dt, aimed) {
     //   깨져서 묶는 것이 벌이 된다 — 실제 레이더도 짧은 이탈은 외삽한다
     r.grace -= dt;
     if (r.grace > 0) return null;
-    r.id = null; r.t = 0;
+    // ★ v119 — **왜 놓쳤는지**를 남긴다. 「놓쳤습니다」만 뜨면 사람은
+    //   무엇을 고쳐야 하는지 모른다 — 짐벌 아웃과 노치는 답이 정반대다
+    //   (전자는 기수를 끌어와야 하고, 후자는 밀어붙여야 한다)
+    r.why = notched ? 'notch' : (!t || t.dist > RADAR.breakRange) ? 'range' : 'gimbal';
+    r.id = null; r.t = 0; r.notch = 0; r.wasD = null;
     return 'break';
   }
 
@@ -107,7 +133,11 @@ export function stepRadar(c, dt, aimed) {
   const chasing = t.dist <= C.closeIn && closing >= C.closing;
   r.chasing = chasing;
   r.t += dt * (chasing ? 1 / C.fast : 1);
-  if (r.t >= RADAR.lockFor) { r.id = t.id; r.t = RADAR.lockFor; r.grace = RADAR.holdGrace; return 'lock'; }
+  if (r.t >= RADAR.lockFor) {
+    r.id = t.id; r.t = RADAR.lockFor; r.grace = RADAR.holdGrace;
+    r.notch = 0; r.wasD = t.dist; r.why = null;
+    return 'lock';
+  }
   return null;
 }
 
@@ -232,12 +262,33 @@ export function forgetLock(c, id) {
 /**
  * ★ 쏜다.
  *
- * @param aimed 조준선이 잡은 것 · supply 보급 · rnd 난수
+ * @param aimed  조준선이 잡은 것 · supply 보급 · rnd 난수
+ * @param locked ★ v119 — **묶은 표적** `{ t, off, relAz, relEl }`.
+ *   `onLock` 무기는 조준선이 아니라 이것을 쏜다 (레이더 유도 고증)
  * @returns { ok, why, shot } — 못 쏘면 `why` 에 이유
  */
-export function fire(c, { aimed, supply, rnd = Math.random, mount = null }) {
+export function fire(c, {
+  aimed, locked = null, supply, rnd = Math.random, mount = null, mountAt = null,
+}) {
   const w = weaponOf(c);
-  const t = aimed?.t ?? null;
+  // ══ ★★★ v119 — **묶었으면 그놈을 쏜다** (조준선이 아니다) ══════════
+  //
+  //  ★ 사장님 「락온 시키면 자동으로 타겟을 따라가도록 해줘. 내가 타겟을
+  //    조준을 크게 벗어나면 **다시 조준해야 해서 불편해**」
+  //
+  //  ★★ 불편의 나머지 절반이 여기였다. v118 까지 락온은 **유지만** 됐고
+  //    (v94 가 표적을 id 로 따라가게 만들었다), **쏘는 순간에는 이 함수가
+  //    `aimed`(조준선)만 봤다.** 그래서 「묶여 있는데도 다시 겨눠야」
+  //    했고, 그게 사장님이 겪으신 그것이다.
+  //
+  //  ★★★ 고증: 레이더 유도탄은 **트랙 파일**을 쏜다 — 조준선이 아니라
+  //    레이더가 물고 있는 그놈이 표적이다. 기총(레이저)만 기수 고정이라
+  //    겨눠야 맞는다 (`onLock: false`). 그 차이가 **장르 안전핀**이기도
+  //    하다 — 전부 락온을 쏘면 v114 의 조준 띠가 통째로 죽는다
+  const useLock = !!(w.onLock && locked?.t && isLocked(c, locked.t)
+    && locked.off <= (w.onLockCone ?? RADAR.gimbal));
+  const src = useLock ? locked : aimed;
+  const t = src?.t ?? null;
   const why = whyNotFire({
     weapon: w, target: t, locked: isLocked(c, t),
     supply, cool: c.cool, radar: c.radar.on,
@@ -290,9 +341,13 @@ export function fire(c, { aimed, supply, rnd = Math.random, mount = null }) {
   const leadAz = w.lead ? t.vaz * flight : 0;
   const leadEl = w.lead ? t.vel * flight : 0;
   // 겨눠야 하는 자리는 표적이 아니라 **선도점**이다
+  // ★ v119 — **묶은 것을 쏘면 여기도 묶은 것에서 잰다.** `aimed` 로 재면
+  //   「락온으로 쐈는데 명중 판정은 조준선」이 되어 둘이 갈라진다 —
+  //   이 저장소가 v79·v85 에 두 번 겪은 「궤적과 격추 지점이 다르다」와
+  //   **같은 병**이다. 표적을 고른 곳과 재는 곳은 늘 같아야 한다
   let off = w.lead
-    ? Math.hypot((aimed.relAz ?? 0) - leadAz, (aimed.relEl ?? 0) - leadEl)
-    : aimed.off;
+    ? Math.hypot((src.relAz ?? 0) - leadAz, (src.relEl ?? 0) - leadEl)
+    : src.off;
   // ══ ★★★ v100 — **발사관에 실린 무기는 기수가 아니라 발사관에서 잰다** ══
   //
   //  ★ 사장님 「적을 계속 타겟팅 하면서 회피 기동이 가능하도록」.
@@ -304,7 +359,15 @@ export function fire(c, { aimed, supply, rnd = Math.random, mount = null }) {
   //    「피하면서 쏜다」가 되고, 대신 **정확도를 내준다.**
   //  ★ 레이저는 그대로 기수 고정이다 — 기총이므로 겨눠야 맞는다.
   //    그 둘의 차이가 「붙어서 훑을까 빼면서 물까」를 만든다
-  if (mount && isGimbaled(w.key)) off = mount.err ?? off;
+  // ★★★ v119 — **발사관의 오차도 「고른 그것」에서 잰다.** `mountAt` 을
+  //   받으면 `src` 로 다시 잰다 — 락온으로 쏘는데 오차는 조준선에서 재면
+  //   38도가 그대로 오차가 되어 **묶어 놓고도 100% 빗나간다.** 처음에
+  //   그렇게 짜 놓고 검사에서 「피해 0.00」을 보고 알았다.
+  //   발사관은 이미 묶은 표적을 쫓고 있으므로, 제대로 재면 남는 것은
+  //   **뒤처진 몫 + 흔들린 몫**뿐이다 — 그게 「피하면서 쏘면 정확도를
+  //   내준다」(v100)의 원래 뜻이다
+  const mnt = mountAt ? mountAt({ az: src.relAz ?? 0, el: src.relEl ?? 0 }) : mount;
+  if (mnt && isGimbaled(w.key)) off = mnt.err ?? off;
 
   const shot = {
     id: c.fired,
@@ -374,6 +437,12 @@ export function summary(c) {
     cool: +c.cool.toFixed(2),
     radar: { ...c.radar, t: +c.radar.t.toFixed(2), grace: +c.radar.grace.toFixed(2) },
     flying: c.shots.length,
+    /**
+     * ★ v119 — **날아가고 있는 것들.** 「어느 것에게 나갔나」를 밖에서
+     *   물을 길이 없었다 — 그래서 락온 사격이 정말 묶은 것으로 가는지를
+     *   브라우저로 재 볼 수가 없었다 (`tools/space-endtoend.js` 가 읽는다)
+     */
+    shotList: c.shots.map((s) => ({ id: s.id, weapon: s.weapon, target: s.target, off: +s.off.toFixed(1) })),
     fired: c.fired, hits: c.hits, kills: c.kills, misses: c.misses,
     seat: +c.seat.toFixed(1),
   };

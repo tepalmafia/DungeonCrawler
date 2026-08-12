@@ -149,18 +149,75 @@ export function nearestToAim(list, eye) {
  */
 export const LOCK = {
   lockCone: 9,
-  holdCone: 32,
+  /**
+   * ══ ★★★ v119 — **유지 한계는 「짐벌」이다** (32 → 60) ═══════════════
+   *
+   *  ★ 사장님 (2026-08-12) 「락온 시키면 **자동으로 타겟을 따라가도록**
+   *    해줘. 내가 타겟을 조준을 크게 벗어나면 다시 조준해야 해서 불편해.
+   *    무슨 말인지 모르면 **전투기 레이더 추적은 어떻게 하는지 고증**해서
+   *    적용하던지」
+   *
+   *  ★★ 고증: 기계식 주사 안테나의 STT 는 **안테나가 표적을 따라간다.**
+   *    조종사가 기수를 그쪽에 둘 필요가 없고, 끊기는 것은 안테나가
+   *    **더 못 돌아갈 때**다 — 그게 **짐벌 한계**이고 F-16 급이 ±60도다.
+   *    (그래서 조종사들이 「짐벌 아웃」이라고 부른다)
+   *
+   *  ★★★ 32 도는 **그 어느 것도 아닌 숫자**였다. 묶는 각(9)보다 넓다는
+   *    것 말고는 근거가 없었고, 붙어서 도는 개싸움에서는 45~90도를
+   *    예사로 넘기므로 **묶는 족족 풀렸다.** 사장님이 「다시 조준해야
+   *    해서 불편하다」고 하신 것의 절반이 이것이다
+   */
+  gimbal: 60,
   lockFor: 2.6,
   grace: 1.1,
   range: 260,
   /** 표식이 표적을 따라가는 속도 (도/초). 무한이면 자석이다 */
   slew: 90,
+
+  /**
+   * ══ ★★★ v119 — **노치** (빔 기동) ═════════════════════════════════
+   *
+   *  ★ 짐벌만 넓히면 「묶으면 끝」이 된다. 그러면 락온이 **결심이 아니라
+   *    절차**가 되고, 이 저장소가 계속 경계해 온 「늘 그게 답인 조작」이다.
+   *
+   *  ★★ 고증이 마침 그 자리를 채운다. 도플러 레이더는 **접근율**로
+   *    표적을 지면·잡음에서 갈라낸다. 표적이 내 시선에 **수직으로**
+   *    날면 접근율이 0 이 되어 필터가 걸러 버린다 — 이게 **노치(빔)**
+   *    기동이고, 실제 조종사가 락온을 떨구는 첫째 수단이다.
+   *
+   *  ★★★ 그래서 이 게임에서도 **적이 옆으로 빼면 놓친다.** 쫓는 쪽은
+   *    「각을 안 뺏기는 것」이 아니라 **「접근율을 살려 두는 것」**이
+   *    일이 된다 — 붙어서 밀어붙이면 유지되고, 겉돌면 떨어진다
+   *
+   *  ★★★ **가만히 있는 것은 노치가 아니다.** 처음에 「접근율이 작으면」
+   *    하나로만 재 봤더니, **제자리에서 쏘는 저격수**(`target-table` 의
+   *    standoff 종류 · 거리를 유지한다)가 통째로 못 물리는 것이 됐다.
+   *    그건 「빔 기동을 했다」가 아니라 **「안 움직였다」**다.
+   *
+   *  ★ 노치의 정의는 **「시선을 가로질러 빠르게 난다」**이다 — 시선
+   *    방향 속도는 0 인데 **옆 방향 속도는 크다.** 둘을 같이 봐야 한다.
+   *    (그리고 옆 속도는 **세상 기준**으로 잰다 — 내가 고개를 돌린 것은
+   *    표적의 도플러를 안 바꾼다. 이걸 눈 기준으로 재면 **내가 휘저을
+   *    때마다 노치**가 되어 정반대의 게임이 된다)
+   *
+   *  @property notch     시선 방향 속도가 이보다 작으면 (m/초 · 절대값)
+   *  @property notchSide **그리고** 옆 방향 속도가 이보다 커야 (m/초)
+   *  @property notchFor  그 상태가 이만큼 이어져야 놓는다 (초) — 한 번
+   *                      스치는 것으로 깨면 그건 노치가 아니라 잡음이다
+   */
+  notch: 4,
+  notchSide: 11,
+  notchFor: 1.4,
 };
 
 export const makeLock = () => ({
   id: null, t: 0, grace: 0,
   /** 표식이 지금 가리키는 자리 (도) — 표적을 **쫓아간다** */
   atAz: 0, atEl: 0,
+  /** ★ v119 — 접근율이 죽어 있던 시간 (초). `notchFor` 를 넘기면 놓는다 */
+  notch: 0,
+  /** 지난 프레임의 거리 — 접근율을 여기서 잰다 */
+  was: null,
 });
 
 /**
@@ -174,7 +231,22 @@ export function stepLock(L, dt, aim, find, eye) {
   if (L.id !== null) {
     const t = find(L.id);
     const s = t ? seen(t.p, eye) : null;
-    const ok = s && !s.behind && s.dist <= LOCK.range && s.off <= LOCK.holdCone;
+    // ══ ★★★ v119 — **도플러 두 성분**을 잰다 (노치의 재료) ═══════════
+    //  ★ 거리는 **내가 고개를 돌려도 안 변한다** — 그래서 시선 속도는
+    //    여기서 그냥 재도 맞는다. 옆 속도는 표적이 제 힘으로 흐르는 몫
+    //    (`vaz`·`vel`, 도/초 · 세상 기준)에서 온다 — 내 회전을 안 섞는다
+    const closing = (s && L.was !== null) ? (L.was - s.dist) / Math.max(dt, 1e-6) : null;
+    L.was = s ? s.dist : null;
+    const side = (s && t) ? s.dist * Math.hypot(t.vaz ?? 0, t.vel ?? 0) * DEG : 0;
+    // ★ 시선 속도가 죽어 **있으면서** 옆으로 빠르게 흐를 때만 시계가 돈다.
+    //   살아나면 **0 으로 돌아간다** — 쌓아 두면 「한 번 겉돌면 영영 못
+    //   문다」가 되어 벌이 너무 무겁다
+    if (closing !== null && Math.abs(closing) < LOCK.notch && side >= LOCK.notchSide) L.notch += dt;
+    else L.notch = 0;
+    const notched = L.notch >= LOCK.notchFor;
+    // ★★★ v119 — 유지 한계가 **짐벌**이다 (holdCone 32 → gimbal 60).
+    //   조준선이 아니라 **안테나가 돌아갈 수 있나**를 묻는다
+    const ok = s && !s.behind && s.dist <= LOCK.range && s.off <= LOCK.gimbal && !notched;
     if (ok) {
       L.grace = LOCK.grace;
       // ★ 표식이 **쫓아간다** — 한 번에 안 붙는다
@@ -185,7 +257,9 @@ export function stepLock(L, dt, aim, find, eye) {
     }
     L.grace -= dt;
     if (L.grace > 0) return null;
-    L.id = null; L.t = 0;
+    const why = notched ? 'notch' : (!s || s.dist > LOCK.range) ? 'range' : 'gimbal';
+    L.id = null; L.t = 0; L.notch = 0; L.was = null;
+    L.why = why;
     return 'break';
   }
   if (!aim || aim.s.behind || aim.s.off > LOCK.lockCone || aim.s.dist > LOCK.range) {
@@ -196,6 +270,7 @@ export function stepLock(L, dt, aim, find, eye) {
   if (L.t < LOCK.lockFor) return null;
   L.id = aim.t.id;
   L.atAz = aim.s.az; L.atEl = aim.s.el;
+  L.notch = 0; L.was = aim.s.dist;
   return 'lock';
 }
 

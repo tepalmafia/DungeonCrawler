@@ -60,6 +60,17 @@ const GROUPS = [
       return on ? '미사일 무한 **ON** — 안 닳고 재고도 안 봅니다 (시험용)'
         : '미사일 무한 OFF — 이제 진짜로 떨어집니다 (제조·거래로 채웁니다)';
     }],
+    /**
+     * ★★★ v119 — **락온을 기다리지 않고 곧바로 묶는다.** 묶는 데 2.6초가
+     *   걸리므로 「묶은 뒤가 어떤가」를 보려면 매번 겨누고 기다려야 했다.
+     *   새 길이 아니라 `stepRadar` 와 같은 자리에 `id` 를 꽂을 뿐이다
+     */
+    ['★ 지금 겨눈 것 곧바로 묶기', (S) => {
+      const r = S.putLock(true);
+      return r ? `${r.kind} (${r.dist}m) 를 묶었습니다 — 이제 조준선을 딴 데로 돌려 보십시오`
+        : '겨눈 것이 없습니다 — 적을 먼저 부릅니다';
+    }],
+    ['락온 놓기', (S) => { S.putLock(false); return '놓았습니다'; }],
     ['미사일 8발 채우기', (S) => { S.setSupply({ missiles: 8 }); return `미사일 ${S.supply.missiles}발`; }],
     ['미사일 0발로', (S) => { S.setSupply({ missiles: 0 }); return '미사일 0 — 「못 쏩니다」가 뜨는지 봅니다'; }],
     ['보급 가득', (S) => { S.setSupply({ food: 100, parts: 12, ore: 240, fuel: 100, missiles: 8 }); return '식량·부품·광석·추진제·미사일을 채웠습니다'; }],

@@ -76,7 +76,7 @@ import { HELM, HELM_SEAT, FLY_VIEW, STICK, deflect, YOKE, SIT_LOOK, offWord, hit
 import { KEYS, TAP, makeTap, tapStep, KEY_WORD } from './game/keys-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
-import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord, PICK } from './game/combat-table.js';
+import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, LOCK_LOST, lockWord, PICK } from './game/combat-table.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
 import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg, endingOf } from './game/warhead-table.js';
 import {
@@ -325,7 +325,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 118;
+export const VERSION = 119;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1524,6 +1524,14 @@ addEventListener('click', (ev) => {
   }
 });
 
+/**
+ * ★★★ v119 — **묶은 표적을 기수 기준으로 잰 것** (없으면 null).
+ *   프레임 루프가 한 번 재고 `fireGun()` 이 받아 간다 — **여기가 유일한
+ *   자리**다. 쏘는 쪽에서 다시 재면 「고르는 곳」과 「재는 곳」이 갈라지고,
+ *   그게 v79·v85 의 「궤적과 격추 지점이 다르다」와 같은 병이다
+ */
+let lockAimed = null;
+
 /** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
 let closeRate = 0;
 let packWas = new Map();
@@ -1533,9 +1541,13 @@ function fireGun() {
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
   // ★ v100 — **발사관이 잰 오차**를 같이 넘긴다 (짐벌 무기만 쓴다)
+  // ★★★ v119 — **묶었으면 그놈을 넘긴다.** 유도 무기는 조준선이 아니라
+  //   트랙 파일을 쏜다 (사장님 「락온 시키면 자동으로 타겟을 따라가도록」)
   const r = fireWeapon(combat, {
-    aimed, supply, rnd: Math.random,
-    mount: mountSummary(mount, aimed ? { az: aimed.relAz, el: aimed.relEl } : null),
+    aimed, locked: lockAimed, supply, rnd: Math.random,
+    // ★ v119 — 발사관 오차는 **`fire()` 가 고른 표적**에서 잰다. 여기서
+    //   `aimed` 로 미리 재 버리면 락온 사격의 오차가 조준선 기준이 된다
+    mountAt: (aim) => mountSummary(mount, aim),
   });
   if (!r.ok) { say(ai, CBT_WHY[r.why] ?? '지금은 못 쏩니다', 'tell'); return; }
   const w = r.weapon;
@@ -1557,7 +1569,11 @@ function fireGun() {
   // ★★★ **v69 — 쏘는 것이 보인다.** v68 까지 여기서 숫자만 줬다 (열이
   //   오르고 광석이 줄고 hp 가 빠졌다). 화면에서는 아무 일도 안 났고,
   //   격추 게임에서 그건 **쏘는 맛이 아예 없는 것**이다
-  ship.outside.shots.fire(w.key, aimed ? aimed.t : null);
+  // ★★★ v119 — **규칙이 고른 그놈에게 날아간다.** 여기서 `aimed.t` 를
+  //   쓰면 「락온으로 쐈는데 화면은 조준선 쪽으로 난다」가 되어, v79·v85 에
+  //   두 번 고친 「궤적과 격추 지점이 다르다」가 그대로 되살아난다.
+  //   `fire()` 가 돌려준 `shot.target` 이 유일한 답이다
+  ship.outside.shots.fire(w.key, sky.list.find((x) => x.id === r.shot.target) ?? null);
   // ══ ★★★ v84 — **사출되는 동안 시간이 느려진다** ═══════════════════
   //  ★ 사장님 「순간적으로 슬로우 모션으로 발사되어 **점점 가속화**」.
   //  ★★ 슬로우 길이가 **사출 구간과 같다** (`SLOW.launch.sec` =
@@ -5392,6 +5408,29 @@ window.SPACE = {
     MISSILES.infinite = on === undefined ? !MISSILES.infinite : !!on;
     return MISSILES.infinite;
   },
+  /**
+   * ══ ★★★ v119 — **지금 겨눈 것을 곧바로 묶는다** (시험용) ═══════════
+   *
+   *  ★ 락온에 2.6초가 걸리는데, **머리 없는 브라우저에서는 게임 시계가
+   *    실시간의 1/25 로 돈다** — 즉 검사가 65초를 기다려야 한다. 그래서
+   *    v118 까지 「묶은 뒤」를 브라우저로 재 본 적이 **한 번도 없었다.**
+   *  ★★ 이 구멍은 **새 길을 안 만든다** — `stepRadar` 가 하는 것과 똑같이
+   *    `id` 를 꽂을 뿐이다. 점검 모드(F2)에도 단추로 낸다
+   *
+   *  @param on false 를 주면 놓는다
+   */
+  putLock(on = true) {
+    if (!on) { combat.radar.id = null; combat.radar.t = 0; combat.radar.grace = 0; return null; }
+    const a = aimedAt(sky, aimAz, aimEl);
+    if (!a) return null;
+    combat.radar.on = true;
+    combat.radar.id = a.t.id;
+    combat.radar.t = RADAR.lockFor;
+    combat.radar.grace = RADAR.holdGrace;
+    combat.radar.notch = 0; combat.radar.wasD = a.t.dist; combat.radar.why = null;
+    combat.radar.atAz = a.relAz; combat.radar.atEl = a.relEl;
+    return { id: a.t.id, kind: a.t.kind, dist: +a.t.dist.toFixed(0) };
+  },
   /** ★ v115 — 점검용 구멍. 성장을 눌러 보고 특성이 정말 먹나 잰다 */
   giveXp(n) { upXp(n, '점검'); return { ...pilot, eff: grow }; },
   pilotNow() { return { ...pilot, eff: { ...grow } }; },
@@ -7014,11 +7053,16 @@ function frame(now) {
   //   `t.id === r.id` 가 깨지고 락온이 풀렸다. 실제 레이더는 물면
   //   **그것을 따라간다** — 조준선이 아니라 표적을 본다
   let radarAimed = aimedNow;
+  lockAimed = null;
   if (combat.radar.id !== null) {
     const lt = sky.list.find((x) => x.id === combat.radar.id);
     if (lt) {
       const rel = azDiff(lt.az, aimAz);
       radarAimed = { t: lt, off: Math.hypot(rel, lt.el - aimEl), relAz: rel, relEl: lt.el - aimEl };
+      // ★★★ v119 — **쏘는 쪽도 이걸 쓴다.** 여기서 한 번만 재고 `fireGun`
+      //   이 받아 간다 — 거기서 다시 재면 그 순간 두 곳이 되고, 그게 이
+      //   저장소가 네 판을 태운 병이다 (`CLAUDE.md` 「재는 곳을 둘로 안 만든다」)
+      lockAimed = radarAimed;
     }
   }
   const radEv = stepRadar(combat, dt, radarAimed);
@@ -7049,7 +7093,12 @@ function frame(now) {
       : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range + grow.range)
         ? 0.35 + 0.3 * (combat.radar.t / RADAR.lockFor) : 0;
   if (radEv === 'lock') { say(ai, '묶었습니다', 'tell'); audio?.event('latch'); }
-  if (radEv === 'break') { say(ai, '놓쳤습니다', 'tell'); }
+  // ★★★ v119 — **왜 놓쳤는지 말한다.** 「놓쳤습니다」만 뜨면 사람은 무엇을
+  //   고쳐야 하는지 모르고, 짐벌 아웃과 노치는 **답이 정반대**다 —
+  //   전자는 기수를 끌어와야 하고, 후자는 밀어붙여야 한다
+  if (radEv === 'break') {
+    say(ai, LOCK_LOST[combat.radar.why] ?? '놓쳤습니다', 'tell');
+  }
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
   stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다

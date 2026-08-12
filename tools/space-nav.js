@@ -80,9 +80,9 @@ console.log('\n[3] ★★★ **수동에 길이 생기나** — 향하면 가고
   ok(courseMult(50) >= NAV.minMult,
     `★ 딴 데를 봐도 ${NAV.minMult} 는 간다 — 0 이면 갈래를 고른 뒤`
     + ' **한 번도 못 돌아보게** 되고, 그러면 정비를 못 한다');
-  ok(NAV.cone > WEAPONS.laser.tol && NAV.cone < RADAR.holdCone,
+  ok(NAV.cone > WEAPONS.laser.tol && NAV.cone < RADAR.gimbal,
     `★★ ${NAV.cone}도는 **겨누기(${WEAPONS.laser.tol}°)보다 쉽고 락온 유지`
-    + `(${RADAR.holdCone}°)보다 어렵다` + ' — 항로는 조준이 아니라 방향이다');
+    + `(${RADAR.gimbal}°)보다 어렵다` + ' — 항로는 조준이 아니라 방향이다');
 }
 
 console.log('\n[4] ★★★ **장르를 안 바꾸나** — 자동이면 지금과 똑같은가');

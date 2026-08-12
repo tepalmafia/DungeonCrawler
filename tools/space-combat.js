@@ -93,23 +93,23 @@ console.log('\n[2] ★★ **묶는 데 시간이 들고, 벗어나면 깨지나*
   while (s < RADAR.lockFor + 0.3 && ev !== 'lock') { ev = stepRadar(c, DT, aim(t, 2)); s += DT; }
   ok(ev === 'lock' && isLocked(c, t), `★ ${RADAR.lockFor}초를 겨누고 있으면 **묶인다**`);
 
-  // ══ ★★★ v94 — **묶은 뒤에는 넓게 잡는다** (`RADAR.holdCone`) ═══════
+  // ══ ★★★ v94 — **묶은 뒤에는 넓게 잡는다** (`RADAR.gimbal`) ═══════
   //  사장님 「**락온이 되면 물체가 움직여서 타겟을 놓치더라도 일정 범위
   //          안에서는 자동 추격해서 공격이 가능하게**」
   //  ★ 여태 묶는 각과 유지하는 각이 같아서(둘 다 9도) **적이 기동하는
   //    순간 풀렸다.** 실제 STT 는 물면 안테나가 표적을 따라간다
   let e2 = null, g = 0;
-  const mid = (RADAR.lockCone + RADAR.holdCone) / 2;
+  const mid = (RADAR.lockCone + RADAR.gimbal) / 2;
   while (g < 6) { e2 = stepRadar(c, DT, aim(t, mid)); g += DT; }
   ok(e2 !== 'break' && isLocked(c, t),
     `★★★ 조준선(${RADAR.lockCone}도) 밖 **${mid.toFixed(0)}도에서 6초를 버텨도 안 놓는다** —`
-    + ` 유지하는 각이 ${RADAR.holdCone}도이기 때문이다`);
+    + ` 유지하는 각이 ${RADAR.gimbal}도이기 때문이다`);
   // 유지하는 각까지 벗어나면 그때는 깨진다
   let g2 = 0;
-  while (g2 < RADAR.holdGrace - 0.2 && e2 !== 'break') { e2 = stepRadar(c, DT, aim(t, RADAR.holdCone + 8)); g2 += DT; }
+  while (g2 < RADAR.holdGrace - 0.2 && e2 !== 'break') { e2 = stepRadar(c, DT, aim(t, RADAR.gimbal + 8)); g2 += DT; }
   ok(e2 !== 'break' && isLocked(c, t),
-    `★ ${RADAR.holdCone}도 밖으로 나가도 **잠깐(${(RADAR.holdGrace - 0.2).toFixed(1)}초)은 버틴다** — 짧은 이탈은 외삽한다`);
-  while (g2 < RADAR.holdGrace + 0.4 && e2 !== 'break') { e2 = stepRadar(c, DT, aim(t, RADAR.holdCone + 8)); g2 += DT; }
+    `★ ${RADAR.gimbal}도 밖으로 나가도 **잠깐(${(RADAR.holdGrace - 0.2).toFixed(1)}초)은 버틴다** — 짧은 이탈은 외삽한다`);
+  while (g2 < RADAR.holdGrace + 0.4 && e2 !== 'break') { e2 = stepRadar(c, DT, aim(t, RADAR.gimbal + 8)); g2 += DT; }
   ok(e2 === 'break' && !isLocked(c, t), '오래 벗어나면 **깨진다**');
 
   // 레이더를 끄면 놓는다
