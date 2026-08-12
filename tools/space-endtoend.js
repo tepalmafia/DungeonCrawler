@@ -510,16 +510,34 @@ console.log('\n[3c] ★★★ **조종석에서 다 되나** — 하늘·추력�
     `② ★★★ **창밖이 실제로 ${sky} rad 돌았다.** v65 까지 이 값이 **늘 0**이었다 —`
     + ' `setAttitude` 가 yaw 를 버리고 있었고, 그게 「핸들 운전이 안되잔아」다');
 
-  // ── ② 추력 레버 — 통로까지 안 가도 출발한다 ──────────────
+  // ── ② 추력 — **W/S 로 민다** (v101 의 진짜 스로틀) ────────
+  //
+  //  ══ ★★★ v120 — **자동 항법 스위치와 똑같은 자리였다** ═══════════
+  //
+  //  ★ 여기가 레버를 **조준선으로 찍어서** 밀었다. 그런데 옆 콘솔은
+  //    좌석 **팔걸이 바로 옆**(`view-table.js SIDE` · x ±0.62 · 눈과 같은 z)
+  //    이라 방위가 90도쯤이다 — 앉은 사람의 조준선은 거기까지 안 돌아간다.
+  //    v66 이 「손잡이는 어깨 옆이다 — 앞이 아니다」라고 옮겨 놓은 그
+  //    자리인데, 검사만 **앞에 있다고 여기고** 계속 찍으려 했다.
+  //  ★★ 그리고 v101 이 이미 **진짜 스로틀**을 만들어 뒀다: **W 밀고 S 당기기**.
+  //    실제 비행 시뮬이 스로틀을 키에 두는 그 자리이고, 사람은 이쪽을 쓴다.
+  //  ★★★ 그래서 **키로 민다.** 레버를 없앤 것이 아니라, 검사가 사람이
+  //    쓰는 길을 재게 바꾼 것이다 ([3]⑥ 의 방향키와 같은 판단이다)
   await settle();
-  // ★ 자동 항법 스위치와 같은 이유로 **앉아서** 겨눈다 — 왜 그런지는
-  //   위 [3]⑥ 의 주석에 적어 뒀다 (서면 좌석이 앞을 막는다)
-  await S(() => SPACE.putHelmSit(true));
-  await until(() => SPACE.helm2.k > 0.99, 40, '앉기');
-  ok(await aimAround(0, -8.30, 1.38, -0.52, 'throttle'),
-    `③ **추력 레버**가 왼쪽 콘솔에서 잡힌다 (${await S(() => SPACE.aim)}) — 고증대로 왼손이다`);
-  const thrOk = await pressUntil(() => /추력 레버/.test(document.getElementById('hud')?.textContent ?? ''));
-  ok(thrOk, `④ 눌렀더니 「${await said()}」`);
+  const thr0 = await S(() => SPACE.throttle?.v ?? 0);
+  await S(() => { window.__t0 = SPACE.throttle?.v ?? 0; });
+  await p.keyboard.down('KeyW');
+  await until(() => (SPACE.throttle?.v ?? 0) > window.__t0 + 0.02, 40, '스로틀이 오르는 것');
+  await p.keyboard.up('KeyW');
+  const thr1 = await S(() => SPACE.throttle?.v ?? 0);
+  ok(thr1 > thr0,
+    `③ ★★★ **W 로 스로틀이 오른다** (${thr0.toFixed(2)} → ${thr1.toFixed(2)}) —`
+    + ' 옆 콘솔 레버는 팔걸이 옆이라 조준선이 안 닿는다 (v66 이 거기 둔 것이 맞다)');
+  await p.keyboard.down('KeyS');
+  await p.waitForTimeout(2500);
+  await p.keyboard.up('KeyS');
+  const thr2 = await S(() => SPACE.throttle?.v ?? 0);
+  ok(thr2 < thr1, `④ ★★ **S 로 당기면 내려간다** (${thr1.toFixed(2)} → ${thr2.toFixed(2)}) — 두 자리가 아니라 축이다 (v101)`);
 
   // ── ③ 항로 갈래 — **항행 중에는 없다** ───────────────────
   // ★★ 여기서 「갈래 판이 잡히나」를 물었다가 빨개졌는데, **게임이 맞고
