@@ -121,12 +121,8 @@ const aimAround = async (x, z, yaw, pitch, want) => {
   //  ★★ 「가장자리가 아니라 한가운데」라는 v66 의 뜻은 남긴다:
   //    찾은 자리에서 **한 번 더 확인**해서, 배가 떠는 동안 들락날락하는
   //    가장자리를 걸러 낸다 (여기서 다섯 번 빨개졌던 자리다)
-  if (!(await aimSweep(yaw, pitch, want))) return false;
-  await p.waitForTimeout(250);
-  const now = await S(() => SPACE.aim);
-  const stuck = Array.isArray(want) ? want.includes(now) : now === want;
-  if (stuck) return true;
-  // 가장자리였다 — 한 번만 더 훑어 본다
+  //  ★ `aimSweep` 이 이미 「두 번 연달아」를 본다 — 여기서 또 보면
+  //    같은 것을 두 곳에서 재는 것이 된다
   return aimSweep(yaw, pitch, want);
 };
 const settle = async () => {
@@ -189,18 +185,27 @@ const sit = async () => {
 //    부르는 자리를 하나도 안 고치고 뜻만 바뀐다 — 그리고 **다음에 조종석
 //    배치가 또 바뀌어도 이 함수는 안 낡는다.** 각을 손으로 적어 두는 것이
 //    낡는 것이지, 「찾는다」는 안 낡는다
-const aimSweep = async (yaw, pitch, want, tries = 22) => {
+const aimSweep = async (yaw, pitch, want) => {
+  const on = (now) => (Array.isArray(want) ? want.includes(now) : now === want);
+  // ★★★ **두 번 연달아 잡혀야 잡은 것이다.** 처음엔 한 번만 읽었는데,
+  //   배는 늘 미세하게 떤다 (`camera.rotation.z = sw * 0.06 + fly3.tiltZ`).
+  //   그래서 **한 프레임만 스친 각**을 「잡았다」고 하고 지나갔고, 다음
+  //   줄에서 누르면 **옆 것**이 눌렸다 — 검사가 「추력 레버가 잡힌다
+  //   (chart0)」라는 말이 안 되는 줄을 뱉었다. 잡은 것과 스친 것은 다르다
   const put = async (y, q) => {
     await S(([a, b]) => SPACE.put(SPACE.pos.x, SPACE.pos.z, a, b), [y, q]);
-    await p.waitForTimeout(90);
-    const now = await S(() => SPACE.aim);
-    return Array.isArray(want) ? want.includes(now) : now === want;
+    await p.waitForTimeout(160);
+    if (!on(await S(() => SPACE.aim))) return false;
+    await p.waitForTimeout(220);
+    return on(await S(() => SPACE.aim));
   };
   // ① 준 각 그대로 — 대개 여기서 걸린다
   if (await put(yaw, pitch)) return true;
-  // ② 좌우 ±0.9 rad · 위아래 ±0.7 rad 를 성기게 훑는다
-  for (const dq of [0, -0.18, 0.18, -0.36, 0.36, -0.55, 0.55, -0.7, 0.7]) {
-    for (const dy of [0, -0.15, 0.15, -0.3, 0.3, -0.5, 0.5, -0.7, 0.7, -0.9, 0.9]) {
+  // ② 좌우 ±0.85 rad · 위아래 ±0.6 rad 를 성기게 훑는다.
+  //   ★ 더 넓히지 않는다 — 넓히면 「어디선가는 잡힌다」가 되어 검사가
+  //     아무것도 안 지키게 된다 (v66 이 적어 둔 그것이다)
+  for (const dq of [0, -0.2, 0.2, -0.4, 0.4, -0.6, 0.6]) {
+    for (const dy of [0, -0.2, 0.2, -0.4, 0.4, -0.6, 0.6, -0.85, 0.85]) {
       if (dq === 0 && dy === 0) continue;
       if (await put(yaw + dy, pitch + dq)) return true;
     }
