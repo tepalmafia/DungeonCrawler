@@ -580,7 +580,10 @@ console.log('\n[3b] ★★ **행성을 박으면 끝난다** — 수동일 때�
   //   여기서 보고, 마지막 한 걸음은 밀어 놓고 본다 (SPACE.setNear)
   ok(await until(() => SPACE.helm.near > 0.05, 90, '끌려가기'),
     `② 수동이면 행성에 끌려간다 (${(await S(() => SPACE.helm)).near})`);
-  await S(() => SPACE.setNear(0.34));
+  // ★ v120 — **0.34 는 문턱 아래였다.** `helm-table.js HELM.warnAt` 이
+  //   0.35 이므로 0.34 로는 경보가 영영 안 뜬다 — 게임이 맞고 검사가
+  //   1/100 만큼 모자란 값을 넣고 있었다. 문턱 위로 넉넉히 민다
+  await S(() => SPACE.setNear(0.5));
   ok(await until(() => /중력원|충돌/.test(
     (() => { const e = document.getElementById('hud'); return e && !e.hidden ? e.textContent : ''; })()),
   60, '경보'), `③ **경보가 뜬다** — 「${await said()}」`);
@@ -610,7 +613,15 @@ console.log('\n[4] ★★ **행성 착륙** — 발견 · 내리기 · 싣기 ·
     `① 구간 3 에서 **장면이 스스로** 내릴 자리를 띄운다 (${(await S(() => SPACE.scene)).keys})`);
 
   // ★ v66 — 「내린다 / 지나친다」도 **조종석 계기 화면**에 뜬다
-  await sit();
+  //
+  //  ══ ★★★ v120 — **판을 고르려면 조종간을 놓는다** ═════════════════
+  //   v110 이 「놓으면 마우스로 계기를 본다」로 만들었다 (놓을 때 뜨는 말이
+  //   「다시 잡으려면 누릅니다 · **계기는 I**」다). 잡은 채로는 마우스가
+  //   배를 미는 데 쓰이므로 **조준선을 판으로 못 가져간다.**
+  //   검사가 잡은 채로 훑다가 「chart0,chart1 을 못 찾았다」를 냈다 —
+  //   사람이 안 하는 자세로 물은 것이다
+  await S(() => SPACE.putGun(false));
+  await p.waitForTimeout(500);
   ok(await aimAround(0, -7.75, 0.9, -0.3, ['chart0', 'chart1']), '② 조종석에서 내릴지 고른다');
   await press(0.6);
   ok(await until(() => SPACE.land.step === 'approach', 30, '내려가기 시작'),
