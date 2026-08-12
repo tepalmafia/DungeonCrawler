@@ -13,6 +13,7 @@
 //      ④ ★★★ **장르를 안 바꾸나** — 자동이면 지금과 똑같은가
 //      ⑤ ★ 싸우다 잠깐 도는 것으로 항로가 멎지는 않나
 //      ⑦ ★★★ **길이 보이나** (v121) — 문이 늘어서고 · 흐르고 · 희미한가
+//      ⑨ ★★★ **거점에서도 나오나** (v128) — 고르기 전에도 길이 보이나
 // ══════════════════════════════════════════════════════════════════════════
 import {
   NAV, courseMult, navWord, navState, wrapDeg,
@@ -23,8 +24,10 @@ import {
 } from '../web/space/js/game/nav-table.js';
 import { relOf } from '../web/space/js/game/frame.js';
 import { callOut } from '../web/space/js/game/radar-table.js';
-import { makeNav, setFork, setMission, clearNav, hasNav, stepNav, summary } from '../web/space/js/game/nav.js';
-import { forkOf, allForks, LEG } from '../web/space/js/game/route-table.js';
+import {
+  makeNav, setFork, forkAt, setMission, clearNav, hasNav, stepNav, summary,
+} from '../web/space/js/game/nav.js';
+import { forkOf, allForks, offerFor, LEG } from '../web/space/js/game/route-table.js';
 import { RADAR, WEAPONS } from '../web/space/js/game/combat-table.js';
 
 let bad = 0;
@@ -288,6 +291,52 @@ console.log('\n[8] ★★★ **어느 쪽으로 틀어야 하나** (v126 · 사�
     + ' 그때는 항로 문이 이미 말한다. 늘 떠 있는 화살표는 계기가 아니라 무늬다');
   ok(Math.abs(navArrow(146, 22).rot) < Math.PI,
     '★ 화살표가 도는 각도 준다 — 그리는 쪽이 다시 재면 「글자와 화살표가 딴 쪽」이 난다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [9] **거점에서도 항법이 나오나** (v128)
+//
+//  ★ 사장님 (2026-08-12) 「**왜 항로 네비게이션이 안 나와?**」
+//
+//  ══ 고장이 아니라 **가리킬 것이 없었다** ══════════════════════════════
+//
+//  회차는 **거점에서 시작한다.** 거점에서는 `route.fork` 가 null 이라
+//  게임이 `clearNav` 를 불렀고, 그래서 v104~v126 이 지은 셋(마름모 ·
+//  항로 문 · 가장자리 화살표)이 **켜자마자 셋 다 조용했다.**
+//
+//  ★★ 그런데 거점은 「갈 곳이 없는 곳」이 아니라 **갈림길**이다. 이제
+//    고르기 전에도 후보를 가리킨다 — 고르는 일이 차림표 고르기에서
+//    **방향 고르기**가 된다
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[9] ★★★ **거점에서도 나오나** (v128 · 사장님 「왜 항로 네비게이션이 안 나와?」)');
+{
+  const f = forkOf('nebula');
+  const cand = forkAt(f, [0.2, 0.7], 'port');
+  console.log(`   후보 — ${cand.name} · 방위 ${cand.az.toFixed(1)}° · 고도 ${cand.el.toFixed(1)}°`);
+  ok(!!cand && cand.kind === 'port',
+    '① ★★★ **고르기 전에도 자리를 물을 수 있다** — 거는 것과 묻는 것을 가르지 않으면'
+    + ' 「후보를 보여 주기」가 곧 「골라 버리기」가 된다');
+  const n = makeNav();
+  setFork(n, f, [0.2, 0.7]);
+  ok(Math.abs(n.to.az - cand.az) < 1e-9 && Math.abs(n.to.el - cand.el) < 1e-9,
+    '② ★★★ **고르면 후보로 보여 준 바로 그 자리다** — 자리를 두 곳에서 내면'
+    + ' 고르는 순간 목적지가 홱 옮겨 가고, 그건 「아까 저기였는데」가 된다');
+  const g = gatesOf(cand, 0, 0);
+  ok(g.length === HITS.gates,
+    `③ ★★ 거점에서도 **길이 선다** (문 ${g.length}) — 켜자마자 아무것도 없던 것이 이 판의 병이었다`);
+  const w = navWord(cand, 40, { az: 40, el: 5 });
+  console.log(`   말 — 「${w}」`);
+  ok(w.includes('고르면') && !w.includes('항로 위'),
+    '④ ★★★ **아직 목적지가 아니라 후보라고 말한다** — 「항로 위」라고 하면 거짓말이다.'
+    + ' 아직 아무 데도 안 가고 있다');
+  // ★ 후보 둘이 **서로 다른 쪽**인가 — 같으면 「고를 것이 둘」이 화면에서 하나가 된다
+  const two = offerFor({ pick: (a) => a[0], next: () => 0.5 });
+  const spots = two.map((o, i) => forkAt(o, [i ? 0.85 : 0.15, 0.5], 'port'));
+  const gap = Math.abs(wrapDeg(spots[0].az - spots[1].az));
+  console.log(`   두 후보 사이 ${gap.toFixed(1)}°`);
+  ok(gap > NAV.cone,
+    `⑤ ★★ 두 후보가 **딴 쪽에 선다** (${gap.toFixed(1)}° > ${NAV.cone}°) — 겹쳐 서면`
+    + ' 「배를 돌려 고른다」가 성립하지 않는다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

@@ -40,9 +40,19 @@ await p.goto(`http://127.0.0.1:${PORT}/space/`, { waitUntil: 'networkidle' });
 await p.waitForTimeout(2200);
 const S = (fn, a) => p.evaluate(fn, a);
 
-/** ★ 기다림은 기다림일 뿐이고 **판정은 값이 한다** */
-const until = async (fn, tries, what) => {
-  for (let i = 0; i < tries; i++) { if (await S(fn)) return true; await p.waitForTimeout(400); }
+/**
+ * ★ 기다림은 기다림일 뿐이고 **판정은 값이 한다**
+ *
+ * ★★★ v128 — **`arg` 를 받는다.** 여기 넘기는 함수는 **브라우저 안에서**
+ *   도는 것이라, 이쪽(node)의 변수를 그냥 쓰면 `ReferenceError` 가 난다.
+ *   그리고 그 오류가 `until` 안에서 나므로 **검사가 그 자리에서 죽었다** —
+ *   `[6m] ⑤` 의 `d0` 와 `[6k] ⑤` 의 `b0` 가 그랬고, 그래서 **이 검사는
+ *   한동안 [6m] 에서 통째로 멎어 있었다** ([6n]·[6r]·[6o]·[6p]·[6q]·[6k]
+ *   가 아예 안 돌았다). 죽은 검사는 빨간 검사보다 나쁘다 — 아무 말도
+ *   안 하기 때문이다. 밖의 값이 필요하면 **인자로 건넨다**
+ */
+const until = async (fn, tries, what, arg) => {
+  for (let i = 0; i < tries; i++) { if (await S(fn, arg)) return true; await p.waitForTimeout(400); }
   console.log(`   … ${what} 을(를) 못 봤다`);
   return false;
 };
@@ -1341,7 +1351,9 @@ console.log('\n[6m] ★★★ **포획** — 멀리 날아간 것을 데려오�
   ok(await until(() => SPACE.catch.chasing === true, 20, '따라붙기'),
     '④ ★★ **따라붙기 시작한다**');
   const d0 = await S(() => SPACE.catch.dist);
-  ok(await until(() => SPACE.catch.dist < d0 - 6, 60, '다가가기'),
+  // ★ v128 — `d0` 는 **이쪽(node)** 값이라 인자로 건넨다. 그냥 쓰면 브라우저
+  //   안에서 `ReferenceError` 가 나고, 검사가 여기서 통째로 죽는다
+  ok(await until((d) => SPACE.catch.dist < d - 6, 60, '다가가기', d0),
     `⑤ ★★★ **정말 가까워진다** (${d0}m 에서 줄어든다)`);
   ok(await until(() => SPACE.catch.arrived === true || SPACE.dock.step !== 'none', 180, '닿기'),
     '⑥ ★★★ **닿으면 그대로 문다** — 여기서 H 를 또 누르라고 하면 그건 두 손이다');
@@ -1418,6 +1430,61 @@ console.log('\n[6r] ★★★ **항로 문** — 목적지까지 길이 보이�
   const r1 = await S(() => SPACE.road());
   ok(r1.shown === 0,
     `⑥ ★★ **갈 곳이 없으면 길도 없다** (${r1.shown}) — 늘 떠 있는 길은 길이 아니라 무늬다`);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6u] **창 배치** — U 로 옮기고, **닫으면 마우스가 돌아오나** (v128)
+//
+//  ★ 사장님 (2026-08-12) 「**u로 ui 이동 시키면 방향 전환이 안 돼.**」
+//
+//  ══ 뼈대는 초록이었는데 사람은 갇혔다 ═══════════════════════════════
+//
+//  `space-layout.js` 는 「끌면 가나 · 되돌려지나 · 저장에 남나」를 다 ✔ 로
+//  냈다. 그런데 그것은 **순수 규칙**이라 「포인터 잠금」이라는 말이 아예
+//  없다. 실제로 난 일은 이랬다:
+//
+//      U → 창을 끌려고 잠금을 푼다 → **게임이 「창 밖으로 나갔다」로 읽고
+//      멈춘다** → 멈췄으므로 U 가 안 먹는다 → 못 닫으니 잠금도 안 돌아온다
+//      → 잠금이 없으니 **마우스가 배를 못 돌린다**
+//
+//  ★★★ 넷이 이어진 한 줄기인데 **그중 셋이 뼈대 밖**이다. 그래서 여기다.
+//    「계통을 하나 만들면 이 검사에 한 절을 보탠다」가 v127 에 빠졌고,
+//    빠진 그 자리에서 정확히 이 일이 났다
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6u] ★★★ **창 배치** — 옮기고, 닫으면 마우스가 돌아오나 (v128)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  await p.keyboard.press('u');
+  await p.waitForTimeout(400);
+  const on = await S(() => ({ ...SPACE.layout, locked: SPACE.locked, panes: SPACE.panes }));
+  ok(on.open && !on.locked, '① ★★ 열면 **잠금이 풀린다** — 커서가 없으면 무엇을 잡는지 안 보인다');
+  ok(on.panes['획득창'] && on.panes['회수 물음'] && on.panes.범례,
+    '② ★★★ **잠깐 뜨는 창이 억지로 떠 있다** (범례 · 획득창 · 회수 물음) —'
+    + ' 사장님 「u 누르면 아이템 획득창 같은 일시적인 창 위치도 옮길 수 있게」.'
+    + ' 안 띄우면 「옮기고 싶은데 지금 안 떠 있어서 못 잡는」 상태가 된다');
+  // ③ ★★ R 은 **추력**이다 (사장님 「r은 추력 아냐?」) — 창을 안 되돌린다
+  await S(() => SPACE.putPane('레이더', 0.1, 0.1));
+  await p.keyboard.press('r');
+  await p.waitForTimeout(250);
+  ok((await S(() => SPACE.layout.moved)) === 1,
+    '③ ★★★ **R 은 창을 안 되돌린다** — v127 이 여기에 되돌리기를 뒀는데 R 은'
+    + ' 추력·급가속이고, 배치 중에도 배는 계속 난다');
+  await p.keyboard.press('Backspace');
+  await p.waitForTimeout(250);
+  ok((await S(() => SPACE.layout.moved)) === 0, '④ ★ Backspace 로 되돌아간다');
+  // ⑤ ★★★ 닫으면 마우스가 돌아오나 — 이 판의 알맹이
+  await p.keyboard.press('u');
+  await p.waitForTimeout(600);
+  const off = await S(() => ({ ...SPACE.layout, locked: SPACE.locked, paused: SPACE.pause.paused }));
+  ok(!off.open, '⑤ ★★ **U 로 닫힌다** — 들어가는 길만 있고 나오는 길이 없으면 갇힌다');
+  ok(!off.paused,
+    '⑥ ★★★ **배치는 멈춤이 아니다** — 잠금을 푸는 것을 「창 밖으로 나갔다」로'
+    + ' 읽으면 멈춤 화면이 뜨고, 그러면 U 가 안 먹어 못 나온다 (점검 모드가'
+    + ' 이미 그 예외에 적혀 있었는데 새 모드에 안 물렸다)');
+  ok(off.locked,
+    '⑦ ★★★ **닫으면 도로 잠긴다** — 이 배의 조종간은 잠금의 `movementX` 로만'
+    + ' 움직인다. 켜면서 빼앗은 것은 끄면서 **그 자리에 돌려놔야** 한다');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1592,7 +1659,8 @@ console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져�
     `④ ★★ **전지를 지금 태운다** (8 → ${8 - go.cells}) — 다 재고 태우면 무르기가 공짜다`);
 
   // ⑤ 재는 동안 열이 저장고로 간다
-  await until(() => SPACE.sink.at > b0.sink + 0.005, 60, '열');
+  // ★ v128 — `b0` 도 이쪽 값이다 (위 `until` 의 까닭과 같다)
+  await until((s0) => SPACE.sink.at > s0 + 0.005, 60, '열', b0.sink);
   ok((await S(() => SPACE.sink.at)) > b0.sink,
     '⑤ ★★ 재는 동안 **열이 저장고에 쌓인다** — 뛴 값을 도착지에서 치른다');
 

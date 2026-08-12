@@ -300,6 +300,13 @@ export function navWord(n, off = null, rel = null) {
   if (!n) return '';
   if (off === null) return `목적지 ${n.name}`;
   const a = Math.abs(off);
+  // ★★★ v128 — **아직 안 고른 갈래는 다르게 말한다** (사장님 「왜 항로
+  //   네비게이션이 안 나와?」). 거점에 서 있는 동안은 목적지가 아니라
+  //   **후보**라, 「항로 위」라고 하면 거짓말이 된다 — 아직 아무 데도 안 간다
+  if (n.kind === 'port') {
+    const w = rel ? ` — ${steerWord('', rel.az, rel.el).replace(/^\s*—\s*/, '')}` : '';
+    return a <= NAV.cone ? `${n.name} — 이쪽입니다 · 고르면 갑니다` : `${n.name} — 고르면 갑니다${w}`;
+  }
   if (a <= NAV.cone) return `${n.name} — 항로 위`;
   // ★★★ **벗어날수록 말이 늘어야 한다.** v125 까지는 반대였다 —
   //   78도를 넘으면 각도마저 사라져 「벗어났습니다」만 남았고,

@@ -21,13 +21,12 @@
 //    「재는 곳을 둘로 만들지 않는다」가 그림에도 같다
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
-import { toneOf } from '../game/loot-table.js';
+import { toneOf, LOOT_AT } from '../game/loot-table.js';
 
-/** 물음과 카드가 앉는 자리 (화면 정규 좌표 −1~1) */
-export const LOOT_AT = {
-  ask: { nx: 0, ny: -0.62 },
-  cards: { nx: 0.62, ny: 0.72 },
-};
+// ★ v128 — 자리는 **표로 내려갔다** (`game/loot-table.js LOOT_AT`).
+//   창 배치(`layout-table.js`)가 기본값을 알아야 되돌릴 수 있는데, 그 표는
+//   three 를 안 쓰므로 여기 것을 못 읽는다. 부르던 곳을 위해 다시 내보낸다
+export { LOOT_AT };
 
 /**
  * ★★★ **형태 하나를 그린다** — 네 가지.
@@ -112,11 +111,24 @@ export function buildLootHud(camera, dist) {
   const askMesh = paneMesh(A, dist * 0.62, dist * 0.104, 952);
   const cardMesh = paneMesh(C, dist * 0.42, dist * 0.303, 951);
 
-  const place = (mesh, nx, ny, halfW, halfH) => {
+  /**
+   * ★★★ v128 — **사람이 옮겼으면 그 자리다** (사장님 「일시적인 창 위치도
+   *   옮길 수 있게」).
+   *
+   *   @param at   `{x,y}` 면 **복판**이 거기다 (사람이 끈 자리) · `null` 이면
+   *               표의 기본값(`LOOT_AT`)을 **바깥 모서리**로 대고 놓는다
+   *   ★ 두 좌표계가 섞이는 자리라 한 함수 안에서만 오간다 — 밖으로 나가면
+   *     반드시 어긋난다 (`layout-table.js defaultAt` 과 같은 규약)
+   */
+  const place = (mesh, home, halfW, halfH, at = null) => {
     const t = Math.tan((camera.fov * Math.PI) / 360) * dist;
     const a = camera.aspect || 1;
-    mesh.position.set((nx - Math.sign(nx) * halfW) * t * a, (ny - Math.sign(ny) * halfH) * t, -dist);
+    const cx = at ? at.x : home.x - Math.sign(home.x) * halfW;
+    const cy = at ? at.y : home.y - Math.sign(home.y) * halfH;
+    mesh.position.set(cx * t * a, cy * t, -dist);
     mesh.rotation.set(0, 0, 0);
+    // ★ 끌 때 화면 밖을 막으려면 **판의 반쪽**이 든다. 여기서 잰 것을 그대로 준다
+    mesh.userData.halfW = halfW; mesh.userData.halfH = halfH;
   };
 
   function drawAsk(ask) {
@@ -196,13 +208,26 @@ export function buildLootHud(camera, dist) {
   return {
     askMesh,
     cardMesh,
-    /** @param s `game/loot.js summary()` + `on` (앉아 있나) */
+    /**
+     * @param s `game/loot.js summary()` + `on` (앉아 있나)
+     *   ★★★ v128 — `s.at` 은 **사람이 옮긴 자리** (`{ 획득창, '회수 물음' }`),
+     *     `s.show` 는 **배치 모드라 억지로 띄운다**. 안 띄우면 「옮기고 싶은데
+     *     지금 안 떠 있어서 못 잡는」 상태가 되고, 그건 옮길 수 있게 만든 것이 아니다
+     */
     redraw(s) {
       const on = !!s.on;
-      askMesh.visible = on && !!s.ask;
-      cardMesh.visible = on && !!s.cards?.length;
-      if (askMesh.visible) { drawAsk(s.ask); place(askMesh, LOOT_AT.ask.nx, LOOT_AT.ask.ny, 0, 0.052); }
-      if (cardMesh.visible) { drawCards(s.cards); place(cardMesh, LOOT_AT.cards.nx, LOOT_AT.cards.ny, 0.21, 0.152); }
+      const force = !!s.show;
+      askMesh.visible = on && (force || !!s.ask);
+      cardMesh.visible = on && (force || !!s.cards?.length);
+      if (askMesh.visible) {
+        drawAsk(s.ask ?? (force ? { line: '회수하겠습니까 — 여기 뜹니다', dist: 0, left: 6, wayName: '' } : null));
+        place(askMesh, LOOT_AT.ask, 0, 0.052, s.at?.['회수 물음'] ?? null);
+      }
+      if (cardMesh.visible) {
+        drawCards(s.cards?.length ? s.cards
+          : (force ? [{ name: '주운 것', key: 'ore', gain: '여기 뜹니다', count: 1, left: 9 }] : null));
+        place(cardMesh, LOOT_AT.cards, 0.21, 0.152, s.at?.획득창 ?? null);
+      }
     },
   };
 }
