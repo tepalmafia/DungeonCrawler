@@ -46,6 +46,7 @@ import { DOOR } from '../game/door-table.js';
 import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
 import { buildLootHud } from './loothud.js';
+import { buildNavHud } from './navhud.js';
 import { buildStatusHud } from './status.js';
 // ★★★ v121 — 계기 셋의 자는 `MFD` 다. HUD 를 넓혔더니 계기까지 따라
 //   커져서 하늘을 덮은 일이 있었다 (`view-table.js MFD` 머리말)
@@ -1204,6 +1205,9 @@ export function buildShip(scene, camera = null, renderer = null) {
   //  ★ 카메라가 없으면(검사가 배만 세울 때) **안 만든다** — 없는 것을
   //    만들려다 죽으면 배가 통째로 안 선다
   const lootHud = camera ? buildLootHud(camera, HUDV.dist + 0.02) : null;
+  // ★★★ v126 — **항로 화살표** (사장님 「비행선이 가야할 방향. 우주라서
+  //   방향을 못 찾잖아」). 조준경 밖, **화면 가장자리**에 선다
+  const navHud = camera ? buildNavHud(camera, HUDV.dist + 0.03) : null;
 
   // ══ ★★★ **광학 창** — 당겨 보고, 부서지는 것을 본다 (v79) ═══════════
   //  사장님 「멀리있는 적을 레이더 말고 **확대**하거나 …」
@@ -1282,6 +1286,7 @@ export function buildShip(scene, camera = null, renderer = null) {
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     turret, sight, statusHud, radarHud, optic, cradle, outerDoor, marks, byBay,
+    navHud,
     // ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** (`world/loothud.js`).
     //   카메라의 자식이라 여기서 자리를 안 잡는다 — 둘러봐도 정면이다 (v118)
     lootHud,
