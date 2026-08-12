@@ -36,7 +36,18 @@ const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsaf
 const p = await b.newPage();
 const errs = [];
 p.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message));
-p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+// ★★★ v124 — **그림이 아직 안 온 것은 오류가 아니다.**
+//   이 검사가 「콘솔 오류 66개」로 빨갰는데 **66개가 다 그림 404** 였다.
+//   이 저장소의 규약은 「그림은 사장님이 주신다 · 아직 없으면 기다린다」이고,
+//   기다리는 상태를 빨강으로 두면 **진짜 오류가 그 66줄에 묻힌다.**
+//   ★ 그렇다고 404 를 통째로 버리지는 않는다 — **코드 파일이 없는 404**는
+//     진짜 사고이므로 따로 센다 (`.js` · `.json` 은 그림이 아니다)
+const isArt = (t) => /404/.test(t) && !/\.(js|json|mjs|css|html)\b/.test(t);
+const art = [];
+p.on('console', (m) => {
+  if (m.type() !== 'error') return;
+  (isArt(m.text()) ? art : errs).push(m.text());
+});
 // confirm() 을 자동으로 받는다 — 「처음부터 다시」가 물어보기 때문
 p.on('dialog', (d) => d.accept());
 
@@ -107,8 +118,17 @@ const locked = () => p.evaluate(() => !!document.pointerLockElement);
 //   빨간 것은 무엇이 틀렸는지라도 말한다
 async function playAndLock() {
   if (await shown('#hint')) { await hit('#btn-play'); await p.waitForTimeout(400); }
-  await p.mouse.click(640, 400);
-  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
+  // ★★ **한 번 누르고 포기하지 않는다.** [3] 이 여기서 빨갰는데,
+  //   브라우저는 **잠금을 푼 직후 다시 잠그는 것을 잠깐 막는다** —
+  //   점검 모드를 닫자마자 누르면 그 창에 걸린다. 사람은 그럴 때
+  //   **한 번 더 누른다.** 게임을 고칠 일이 아니라 사람처럼 굴 일이다
+  for (let i = 0; i < 3; i++) {
+    await p.mouse.click(640, 400);
+    if (await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 4000 })
+      .then(() => true).catch(() => false)) return true;
+    await p.waitForTimeout(900);
+  }
+  return false;
 }
 /**
  * ★★★ v117 — **상태를 보고 여닫는다.** 여태 ` 를 눈 감고 눌러 「토글」
@@ -342,6 +362,7 @@ console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은
 }
 
 console.log('');
+if (art.length) console.log(`  (그림 ${art.length} 장이 아직 안 왔다 — 404. 오류로 안 센다)`);
 ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}개: ${errs[0]}` : '콘솔 오류 없음');
 console.log(fail ? `\n✘ ${fail} 군데` : '\n✔ 전부 통과 — 손이 닿는다');
 console.log('\n  ※ **코드로 `.click()` 을 부르면 이 검사는 의미가 없다.**');
