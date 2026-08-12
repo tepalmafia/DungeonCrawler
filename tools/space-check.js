@@ -99,9 +99,16 @@ const locked = () => p.evaluate(() => !!document.pointerLockElement);
  *     줄이 남아 있는 한 화면이 바뀔 때마다 또 걸린다.**
  *   ★ 그래서 **누를 것을 이름으로 부르고**, 그 다음에 빈 자리를 눌러 잠근다
  */
+// ★★★ 처음에 이 몸통이 **자기를 부르고** 있었다. 눈 감은 클릭 네 군데를
+//   문자열로 한꺼번에 갈아 끼웠는데, 갈아 끼우려던 두 줄이 **이 함수
+//   안에도 똑같이** 있었고 파일에서 그쪽이 먼저 나온다 — 첫 일치가
+//   호출부가 아니라 **정의부**였다. 그래서 [2] 가 빨개지지도 않고
+//   **10분을 매달렸다.** ★ 매다는 검사는 빨간 검사보다 나쁘다:
+//   빨간 것은 무엇이 틀렸는지라도 말한다
 async function playAndLock() {
   if (await shown('#hint')) { await hit('#btn-play'); await p.waitForTimeout(400); }
-  await playAndLock();
+  await p.mouse.click(640, 400);
+  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
 }
 /**
  * ★★★ v117 — **상태를 보고 여닫는다.** 여태 ` 를 눈 감고 눌러 「토글」
