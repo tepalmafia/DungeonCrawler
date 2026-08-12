@@ -153,7 +153,7 @@ import {
 // ★★ v60 — 세 축 + 짐벌 (사장님 「360도 회전 · 위아래 · 실제 우주선 개념」)
 import { AXES, attitudeWord, rollDeg, RCS } from './game/flight-table.js';
 // ★★★ v103 — **비행 보조 · 수평의** (사장님 「물리방향으로 움직이니 너무 어렵다」)
-import { ASSIST, assistWord, rollWord, isOver, wrapDeg } from './game/horizon-table.js';
+import { ASSIST, assistWord, rollWord, isOver, wrapDeg, OFF_NAG, offNagWord } from './game/horizon-table.js';
 import { makeFlight, stepFlight, offCourse, gimbalBusy, summary as flySummary }
   from './game/flight.js';
 import { VOID, isVoid } from './game/void-table.js';
@@ -325,7 +325,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 119;
+export const VERSION = 120;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -411,6 +411,8 @@ function sitAtHelm(snap = true) {
  *   왜 기본이 켜짐인지, 왜 롤에만 거는지는 `game/horizon-table.js` 에 있다
  */
 let assistOn = ASSIST.on;
+/** ★ v120 — 보조가 꺼진 채 뒤집혀 있을 때 다시 말할 때까지 (초) */
+let offNag = 0;
 // ★ 손목 장치가 카메라에 매달린다 — 그러려면 카메라가 장면에 있어야 한다.
 //   three 는 카메라를 장면에 안 넣어도 그리지만, **자식은 안 그린다**
 scene.add(camera);
@@ -3740,6 +3742,21 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★★★ v103 — **비행 보조.** 롤만 저절로 수평으로 돌아온다 (L 로 끈다)
     assist: assistOn,
   });
+  // ══ ★★★ v120 — **꺼져 있으면 뒤집힌 동안 되풀이해서 말한다** ═══════
+  //
+  //  ★ 사장님 「뒤집혔는데 자동으로 돌아오지 않는데?」 — 재 보니 계통은
+  //    멀쩡했고 (뒤집어 놓고 손을 떼면 1~2초에 편다), **보조가 꺼져 있을
+  //    때만** 안 펴졌다. 그런데 껐다는 말은 **누른 그 순간 한 번** 뜨고
+  //    사라진다. 그러면 「고장났다」로 읽힌다 — 이 저장소가 「조용한
+  //    무동작이 빨간 오류보다 나쁘다」라고 적어 둔 그 자리다
+  //  ★★ **삼켜지면 시계를 안 미룬다.** 처음엔 `say` 를 부르고 무조건
+  //    시계를 되감았는데, 등대는 「같은 말」(`MUTE` 22초)이거나 급한 말이
+  //    떠 있으면 **안 받는다.** 그러면 한 번 막힌 값에 22초가 더 붙어
+  //    정작 필요할 때 조용해진다 — 검사가 그걸로 빨개져서 알았다
+  if (!assistOn && isOver(rollDeg(fly3.roll))) {
+    offNag -= dt;
+    if (offNag <= 0 && say(ai, offNagWord(), 'warn').ok) offNag = OFF_NAG.every;
+  } else offNag = 0;
   // ★★★ v73 — **도는 데 추진제가 든다** (`flight-table.js RCS` · 고증).
   //   천천히 돌리면 반동휠이 공짜로 하고, 급하게 돌리면 추력기가 태운다.
   //   360도를 열어 준 값이 여기 있다 — 값이 없으면 조종이 버튼이 된다
@@ -4883,6 +4900,13 @@ window.SPACE = {
   },
   /** 장면 — 배치가 **게임 안에서도** 그대로인가를 검사가 본다 */
   get scene() { return { ...sceneSummary(scenes), choreOpen: allowChore(scenes) }; },
+  /**
+   * ★★ v120 — **이 배가 무엇을 안 하는가** (`game/pilot-table.js PILOT`).
+   *   `SPACE.canStand(x, z)` 는 **다른 것**이다 (그 자리를 걸을 수 있나 ·
+   *   함수라 언제나 truthy). 낡은 절을 걷어내면서 검사가 그걸 읽고
+   *   늘 참이 되는 것을 한 번 겪어서, 표를 읽는 구멍을 따로 냈다
+   */
+  get pilotRules() { return { ...PILOT }; },
   /** ★ 에어록 바깥문 — 열면 갇히나 · 공기가 주나 */
   get lock() { return { ...lockSummary(lock), word: airWord(lock.air) }; },
   /** ★ 영구 손상 — 무엇이 남았나 · 무엇이 달라졌나 */
@@ -5488,6 +5512,13 @@ window.SPACE = {
   /** ★★★ v103 — **비행 보조** (자동 수평). 검사와 점검 모드가 읽는다 */
   get assist() { return { on: assistOn, roll: rollDeg(fly3.roll), word: rollWord(wrapDeg(rollDeg(fly3.roll))), over: isOver(rollDeg(fly3.roll)) }; },
   setAssist(v) { assistOn = !!v; return assistOn; },
+  /**
+   * ★★★ v120 — **곧바로 뒤집어 놓는다** (시험용).
+   *   손으로 굴려서 180도를 만들려면 1.25 rad/s 로 2.5초인데, 머리 없는
+   *   시계가 1/25 이라 **실시간 60초**다. 그래서 「뒤집힌 뒤가 어떤가」를
+   *   검사가 물어본 적이 없었다 — `putLock` 과 같은 자리의 구멍이다
+   */
+  putRoll(deg) { fly3.roll = (deg * Math.PI) / 180; return { roll: rollDeg(fly3.roll), word: rollWord(wrapDeg(rollDeg(fly3.roll))) }; },
   /** ★ 크레이들이 **화면에** 무엇을 그리고 있나 — 「불이 켜졌나」는 여기서만 나온다 */
   get headSeen() { return ship.cradle?.seen ?? null; },
   /** 검사가 재료를 손에 쥐어 준다 — 구간 다섯을 다 돌 수는 없다 */

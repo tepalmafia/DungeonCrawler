@@ -174,5 +174,101 @@ console.log('\n[8] ★ 그래서 **단축키를 만들 것인가** — 답: 안 
     '★ 다 돌아오면 조용해진다 — 늘 떠 있는 경고는 경고가 아니다');
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ══ ★★★ v120 — **여기부터는 게임을 띄운다** ═══════════════════════════
+//
+//   node tools/space-horizon.js --see 8391     (serve.py 를 먼저 띄운다)
+//
+//  ★ 사장님 (2026-08-12) 「**뒤집혔는데 자동으로 돌아오지 않는데?** 방향키에
+//    손가락을 땠을때 돌아오도록 해줘」
+//
+//  ★★ 위의 여덟 절은 **전부 초록이었다.** 그런데 화면에서는 안 돌아왔다 —
+//    위는 `levelStep` 이 **0 이 아닌 값을 주나**만 물었고, 「그 값이 정말
+//    배에 더해지나 · 보조가 켜져 있나」는 **아무도 안 물었다.**
+//    이 저장소가 v98 에 적어 둔 그것이다: **한쪽만 읽는 검사는
+//    「둘이 같나」를 못 묻는다.**
+//
+//  ★★★ 재 보니 계통은 멀쩡했고, 안 돌아오는 경우는 **딱 하나** —
+//    보조가 꺼져 있을 때(L)다. 그리고 껐다는 말은 **누른 순간 한 번**
+//    뜨고 사라져서, 그 뒤로는 「고장」과 구별할 길이 없었다.
+//    그래서 v120 이 고친 것은 되돌리는 힘이 아니라 **말**이다
+// ══════════════════════════════════════════════════════════════════════════
+const port = (() => {
+  const i = process.argv.indexOf('--see');
+  return i >= 0 ? (process.argv[i + 1] ?? '8391') : null;
+})();
+
+if (port) {
+  let chromium = null;
+  for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs']) {
+    try { ({ chromium } = await import(m)); break; } catch { /* 다음 것 */ }
+  }
+  const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+  const p = await b.newPage({ viewport: { width: 1280, height: 760 } });
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  try {
+    await p.goto(`http://127.0.0.1:${port}/space/`, { waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => !!globalThis.SPACE, null, { timeout: 60000 });
+    await p.evaluate(() => SPACE.clearSave());
+    await p.click('#btn-play').catch(() => {});
+    await p.evaluate(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor?.(); });
+    await p.waitForTimeout(2000);
+    const A = () => p.evaluate(() => SPACE.assist);
+    const said = () => p.evaluate(() => {
+      const e = document.getElementById('hud');
+      return e && !e.hidden ? e.textContent : '';
+    });
+
+    console.log('\n[9] ★★★ **게임이 정말 펴나** (진짜 브라우저)');
+    {
+      ok((await A()).on, '① ★★ 보조는 **기본이 켜짐**이다 — 어렵다는 말을 들었으면 기본값이 답이다');
+      await p.evaluate(() => SPACE.putRoll(170));
+      // ★ 머리 없는 시계는 실시간의 1/25 쯤이라 **넉넉히** 기다린다.
+      //   여기서 초를 빠듯하게 잡으면 「안 펴진다」는 거짓 빨강이 난다
+      let back = false;
+      for (let i = 0; i < 40; i++) {
+        await p.waitForTimeout(500);
+        if (!(await A()).over) { back = true; break; }
+      }
+      const a = await A();
+      ok(back, `② ★★★ **170도로 뒤집어 놓고 손을 떼니 저절로 펴진다** (지금 ${a.roll.toFixed(0)}도 · ${a.word})`);
+    }
+
+    console.log('\n[10] ★★★ **껐을 때 — 안 펴지는 것이 조용하지 않나**');
+    {
+      await p.keyboard.press('KeyL');
+      await p.waitForTimeout(300);
+      ok(!(await A()).on, '① L 로 껐다');
+      await p.evaluate(() => SPACE.putRoll(170));
+      await p.waitForTimeout(2500);
+      const a = await A();
+      ok(a.over && Math.abs(a.roll - 170) < 1,
+        `② ★★ 껐으니 **안 펴진다** (${a.roll.toFixed(1)}도 그대로) — 이건 고장이 아니라 고른 것이다`);
+      // ★★★ 여기가 v120 의 알맹이 — **되풀이해서 말하나**
+      let nag = false;
+      for (let i = 0; i < 30; i++) {
+        await p.waitForTimeout(500);
+        if ((await said()).includes('비행 보조가 꺼져 있습니다')) { nag = true; break; }
+      }
+      ok(nag,
+        '③ ★★★ **뒤집혀 있는 동안 「보조가 꺼져 있습니다 — L」 이라고 되풀이해 말한다** —'
+        + ' v119 까지는 누른 그 순간 한 번 뜨고 사라져서, 그 뒤로는 「고장났다」와 구별이 안 됐다');
+      // 다시 켜면 조용해지고 펴진다
+      await p.keyboard.press('KeyL');
+      let back2 = false;
+      for (let i = 0; i < 40; i++) {
+        await p.waitForTimeout(500);
+        if (!(await A()).over) { back2 = true; break; }
+      }
+      ok(back2, '④ ★★ 다시 켜면 **그 자리에서 펴진다** — 껐다 켜는 것이 되돌릴 수 있는 일이다');
+    }
+    ok(!errs.length, `콘솔에 오류가 없다 ${errs.slice(0, 2).join(' · ')}`);
+  } finally { await b.close(); }
+} else {
+  console.log('\n※ `--see 8391` 을 붙이면 **게임을 띄워서** 「정말 펴지나」까지 잽니다.');
+  console.log('   위의 여덟 절은 뼈대만 봅니다 — 그것만으로는 v120 의 병(보조가 꺼진 채');
+  console.log('   조용한 것)을 **못 잡습니다.**');
+}
+
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');
 process.exit(bad ? 1 : 0);

@@ -379,7 +379,7 @@ node tools/space-throttle.js     스페이스워 — ★★★ **스로틀** · 
 node tools/space-dock.js         스페이스워 — ★★★ **도킹 회수** · 붙어서 여럿을 담나 · 값을 치르나 (뼈대만)
 node tools/space-panel.js        스페이스워 — ★★★ **계기 판이 눈을 보나** · 기울기 부호 (뼈대만)
 node tools/space-drop.js         스페이스워 — ★★★ **투하** · 마디 넷 · 결말 셋 · 이탈이 결심인가 (v93)
-node tools/space-horizon.js      스페이스워 — ★★★ **비행 보조 · 수평의** · 뒤집으면 왜 반대인가 (뼈대만 · v103)
+node tools/space-horizon.js      스페이스워 — ★★★ **비행 보조 · 수평의** · 뒤집으면 왜 반대인가 · ★ **게임이 정말 펴나 · 껐을 때 조용하지 않나** (--see 8391 · v120)
 node tools/space-screen.js       스페이스워 — ★★★ **계기가 하늘을 얼마나 먹나** · 전투 원뿔이 비었나 (진짜 카메라 · v103)
 node tools/space-hud.js          스페이스워 — ★★★ **조준경이 읽히나** · 글이 겹치나 · 판 밖으로 나가나 (뼈대만 · v103)
 node tools/space-catch.js        스페이스워 — ★★★ **포획** · 따라붙나 · 맞으면 풀리나 (뼈대만 · v103)
