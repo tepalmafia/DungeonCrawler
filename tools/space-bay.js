@@ -34,8 +34,17 @@ await p.waitForTimeout(1500);
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
 const S = (fn, a) => p.evaluate(fn, a);
-await p.mouse.move(320, 190);
-await p.mouse.click(320, 190);
+// ══ ★★★ v121 — **한복판을 눈 감고 누르지 않는다** ═══════════════════
+//
+//  ★ 여기가 `mouse.click(320, 190)` 이었다. 시작 화면이 생기기 전에 쓴
+//    줄인데, 지금은 한복판에 **단추가 서 있다.** 「처음부터 다시」를
+//    누르면 `location.reload()` 가 돌고, 그러면 검사가
+//    「Execution context was destroyed」로 통째로 죽는다.
+//  ★★ 그래서 **누를 것을 이름으로 부른다.** 좌표로 누르는 줄은 화면이
+//    바뀔 때마다 말없이 엉뚱한 것을 누르게 된다 — 이 저장소가
+//    `space-check.js` 를 만든 이유가 바로 그것이었다
+await p.click('#btn-play').catch(() => {});
+await p.waitForTimeout(600);
 await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
 // 배 안의 번호판을 전부 걷어 온다 — 이름이 `베이 …` 인 판들

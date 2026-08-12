@@ -328,7 +328,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 120;
+export const VERSION = 121;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
