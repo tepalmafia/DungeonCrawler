@@ -398,6 +398,7 @@ node tools/space-genre.js        스페이스워 — ★★★ **장르** · 우
 node tools/space-growth.js       스페이스워 — ★★★ **사람이 크나** · 회차에 딱 다 크나 · 잘하면 더 크나 · 다 못 고르나 (뼈대만 · v115)
 node tools/space-speed.js        스페이스워 — ★★★ **가속도** · 멈추면 멈추나 · 빨라지는 것이 따로 있나 · 붙으러 갈 때 흐르나 (뼈대만 · v116)
 node tools/space-hull.js         스페이스워 — ★★★ **기체 도해** · 파츠 일곱이 다 몸을 가졌나 · 안 파고드나 (뼈대만 · v116)
+node tools/space-fit.js          스페이스워 — ★★★ **장르에 안 맞는 설정이 남았나** · 조종석에서 닿나 · 뒤집힌 말이 남았나 (뼈대만 · v117)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)

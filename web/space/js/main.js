@@ -325,7 +325,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 116;
+export const VERSION = 117;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -5356,6 +5356,22 @@ window.SPACE = {
   /** ★ v114 — 점검용 구멍. 화물칸에 물건을 넣어 인벤토리·제조를 눌러 본다 */
   giveCargo(g) { const r = cargoPut(cargo, g); if (bayOpen) drawBay(); return r; },
   craftNow() { return craftJob ? { ...craftJob } : null; },
+  /**
+   * ★★★ v117 — **미사일 무한** (사장님 「f2테스트에 넣어서 테스트할 때
+   *   사용할 수 있도록」).
+   *
+   *   ★ v95~v116 내내 `supply-table.js MISSILES.infinite` 에 `true` 로
+   *     박혀 있던 것을 **점검 모드 스위치로** 옮겼다. 기본은 꺼짐이다.
+   *   ★★ **여기가 그 값을 바꾸는 유일한 곳이다.** 두 곳에서 만지면
+   *     「지금 무한인가」의 답이 둘이 된다 — 이 저장소가 `?v=`/`VERSION`
+   *     으로 스무 판을 어긋난 채 간 그 병이다
+   *
+   * @param on 안 주면 **뒤집는다** (단추 하나로 켜고 끈다)
+   */
+  setInfinite(on) {
+    MISSILES.infinite = on === undefined ? !MISSILES.infinite : !!on;
+    return MISSILES.infinite;
+  },
   /** ★ v115 — 점검용 구멍. 성장을 눌러 보고 특성이 정말 먹나 잰다 */
   giveXp(n) { upXp(n, '점검'); return { ...pilot, eff: grow }; },
   pilotNow() { return { ...pilot, eff: { ...grow } }; },
@@ -6208,14 +6224,18 @@ function frame(now) {
     { hold: landBusy(land) || rescueHold(rescue), course: nav.mult });
   // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
   //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
-  const missed = rev === 'arrive' && !tryDock(helm);
+  // ★★★ v117 — **조용한 거점도 도착이다** (`route-table.js QUIET`).
+  //   못 가는 것이 아니라 **거래를 못 하는** 것이라, 닿는 규칙은 똑같다.
+  //   여기서 안 이으면 「거점에 왔는데 아무 일도 안 나는」 판이 된다
+  const arrived = rev === 'arrive' || rev === 'quiet';
+  const missed = arrived && !tryDock(helm);
   if (missed) {
     // ★ 규칙은 route.js 가 갖는다 — 밖에서 `t` 만 만지면 leg 가 하나
     //   앞선 채로 남아서 「구간 7/12 인데 실제로는 6번째」가 된다
     missPort(route);
     say(ai, '거점을 지나쳤습니다 — 항로로 돌아옵니다', 'tell');
     audio?.event('caught');
-  } else if (rev === 'arrive' || rev === 'end') {
+  } else if (arrived || rev === 'end') {
     // ★ v115 — **뚫으면 오른다.** 목적 한 줄(뚫는다·채운다·떨군다)과
     //   성장이 같은 길 위에 있게 하는 자리다
     upXp(XP.leg, `구간 ${route.leg}/12 통과`);
@@ -6224,7 +6244,25 @@ function frame(now) {
     //   배치표는 1 부터 센다 — 여기서 한 번만 맞춘다
     sceneLeg(scenes, route.leg + 1);
   }
-  if (rev === 'arrive' && !missed) {
+  // ══ ★★★ v117 — **응답이 없는 거점** ═══════════════════════════════
+  //  ★ 갈래 둘 다 「거래를 못 한다」이고, 하나는 이득이 있고 하나는 벌이 있다.
+  //    새 계통을 안 만든다 — 보급을 그냥 주거나, 적을 하나 붙인다
+  if (rev === 'quiet' && !missed && route.quiet) {
+    const q = route.quiet;
+    say(ai, `★ ${q.name} — ${q.lead}`, 'warn');
+    audio?.event('alarm');
+    for (const [k, v] of Object.entries(q.take ?? {})) {
+      if (k === 'ore') supply.ore = Math.min(ORE.max, supply.ore + v);
+      if (k === 'parts') supply.parts = Math.min(PARTS.max, supply.parts + v);
+      if (k === 'food') supply.food = Math.min(FOOD.max, supply.food + v);
+    }
+    say(ai, q.what, q.foe ? 'warn' : 'tell');
+    // ★ 추격을 억지로 붙이지 않는다 — 거점에서는 추격이 안 돈다 (v22).
+    //   **적을 띄우는 것으로 충분하다**: 저쪽이 다가오므로 곧 붙는다.
+    //   여기서 `chase` 를 손대면 v22 가 세운 「거점은 쉬는 자리」가 깨진다
+    if (q.foe) spawnFoe(sky, q.foe);
+  }
+  if (arrived && !missed) {
     // ★ **여기서 저장한다.** 거점은 원래 숨 쉬는 자리이고, 12구간이면
     //   12번이다. 초마다 저장하면 「죽기 직전으로 되돌리기」가 된다
     if (SAVE.onLeg) saveNow();

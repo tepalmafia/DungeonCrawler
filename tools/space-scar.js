@@ -24,6 +24,31 @@ import { LOCK } from '../web/space/js/game/airlock-table.js';
 import { HELM, signMult as helmSign } from '../web/space/js/game/helm-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v117 — **고장 계통이 꺼져 있으면 여기서 멈춘다**
+//
+//  ★ 사장님 「우리 장르에 맞지 않는 설정들이 없는지 점검해봐」 →
+//    `tools/space-fit.js` 가 잡았다.
+//
+//  ★★ **v106 이 수리를 단추 하나로 바꾸며 고장을 껐다**
+//    (`pilot-table.js PILOT.faults = false` · 사장님 「수리는 버튼하나로
+//    해결하고」). 그런데 이 검사는 계속 고장이 나기를 기다렸다 —
+//    하나는 **끝나지도 않았다**(시간 초과).
+//
+//  ★★★ **없는 것을 재는 검사는 빨간 것보다 나쁘다.** 초록이면 「있다」고
+//    거짓말하고, 빨가면 멀쩡한 것을 틀렸다고 한다. 그래서 **껐다고 말하고
+//    멈춘다** — 다시 켜면 저절로 되살아난다
+// ══════════════════════════════════════════════════════════════════════════
+import { PILOT as FIT_PILOT } from '../web/space/js/game/pilot-table.js';
+if (!FIT_PILOT.faults) {
+  console.log('\n※ **고장 계통이 꺼져 있습니다** (`PILOT.faults = false` · v106).');
+  console.log('   사장님 「수리는 버튼하나로 해결하고」 — 맞으면 닳고 **P 로 고친다**.');
+  console.log('   그래서 이 검사는 잴 것이 없습니다. 고장을 다시 켜면 저절로 돌아옵니다.');
+  console.log('   지금 그 자리를 재는 것: `space-fit.js` (닿나) · `space-war.js` (맞으면 일이 되나)');
+  process.exit(0);
+}
+
+
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
 const DT = 1 / 3;

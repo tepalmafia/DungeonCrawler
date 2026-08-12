@@ -61,7 +61,11 @@ export const BAND_BY = Object.fromEntries(BANDS.map((b) => [b.key, b]));
  */
 export const BAND_OF = {
   raider: 'foe', fighter: 'foe', gunship: 'foe', drone: 'foe', turret: 'foe',
+  // ★ v117 — 얼음 덩어리·표류선도 **물건**이다 (부수면 재료가 나온다).
+  //   검사가 「빠진 것 ice · hulk」로 잡아 줬다 — 무리에 안 들면 창밖에서
+  //   **무슨 색 무슨 도형으로 그릴지**가 정해지지 않는다
   junk: 'thing', sat: 'thing', tank: 'thing', convoy: 'thing',
+  ice: 'thing', hulk: 'thing',
   planet: 'place', port: 'place',
 };
 

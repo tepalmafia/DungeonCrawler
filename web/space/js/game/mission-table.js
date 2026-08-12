@@ -20,6 +20,10 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 /** 언제 만들 수 있나. A 는 지금 있는 계통만으로 성립한다 */
+// ★ v117 — **지금 장르에서 닿나**를 물으려면 조종사의 상태를 알아야 한다
+//   (`reachable()` 이 읽는다). three 를 안 쓰는 표끼리라 도구가 그대로 읽는다
+import { PILOT } from './pilot-table.js';
+
 export const TIER = {
   NOW: 'now',        // 열·전력·자국·방 일곱만 있으면 된다
   SUPPLY: 'supply',  // 5단계(보급) — 채굴·선외 작업이 필요하다
@@ -258,7 +262,16 @@ export const MISSIONS = [
   // ── B. 밖에서 얻는 것 — 5단계(보급) ────────────────────────
   {
     key: 'iceRock', name: '얼음 덩어리', tier: TIER.SUPPLY,
-    where: ['airlock'],
+    /**
+     * ★★★ v117 — **지었다** (사장님 「표에만 있는 미션 셋도 만들어」).
+     *   다만 **에어록으로 걸어가 캐는** 설계로는 못 짓는다 — v109·v110 이
+     *   걷기를 없앴으므로 그대로 지으면 **닿을 수 없는 것**을 짓는 셈이다.
+     *   그래서 **떠도는 것**으로 옮겼다 (`target-table.js KINDS.ice`):
+     *   조종석에서 보고 · 쏘고 · 회수한다. 나오는 것은 원래 설계의
+     *   「물과 공기」를 지금 있는 아이템으로 옮긴 **냉각제와 비상 배급**이다
+     */
+    builtAs: '떠도는 것 — 얼음 덩어리 (target-table.js KINDS.ice · v117)',
+    where: ['cockpit'],
     lead: '얼음이 떠 있다',
     // **지루하지만 확실한 바닥.** 죽음의 나선을 막는 것이 이 항목의 일이다
     costs: { time: [40, 90], sign: 'stopped' },
@@ -287,12 +300,21 @@ export const MISSIONS = [
   },
   {
     key: 'derelict', name: '표류선', tier: TIER.SUPPLY,
+    /**
+     * ★★★ v117 — **지었다.** 얼음과 같은 이유로 **떠도는 것**으로 옮겼다
+     *   (`target-table.js KINDS.hulk`). 원래 설계의 「Hardspace 방식 —
+     *   속을 매번 다시 뽑는다」는 **파츠 드랍**이 대신한다: 부위와 등급이
+     *   매번 다르게 나오므로 속이 매번 다르다 (`farm-table.js`).
+     *   맷집 5 라 부수는 데 오래 걸리고, 그 시간이 원래 설계의
+     *   「멈춰서 뒤진다」가 하던 일이다
+     */
+    builtAs: '떠도는 것 — 표류선 (target-table.js KINDS.hulk · v117)',
     // ★★ **`'cargo'` 라고 적혀 있었다 — 배에 없는 방이다** (2026-08-07).
     //   방은 일곱이고 화물칸은 그중에 없다. 짐은 **에어록으로 들이고
     //   정비실에 쟁인다** — 실제로 그렇게 지었는데 표만 안 고쳤다.
     //   `space-missions.js` 가 방을 볼 때 `wired()` 만 훑어서, 아직 안
     //   물린 항목의 방 이름은 **아무도 안 보고 있었다** (space-real.js 가 잡았다)
-    where: ['airlock', 'workshop'],
+    where: ['cockpit'],
     lead: '배가 하나 떠 있다. 불이 꺼져 있다',
     // ★ Hardspace 방식 — **속을 매번 다시 뽑는다.** 같은 종류인데 안이 다르면
     //   항목 하나로 오래 간다. 그리고 Duskers 방식으로 **아무 설명도 안 붙인다**
@@ -339,6 +361,14 @@ export const MISSIONS = [
   },
   {
     key: 'quietPort', name: '조용한 거점', tier: TIER.STORY,
+    /**
+     * ★★★ v117 — **지었다** (`route-table.js QUIET`). 셋 중 **유일하게
+     *   원래 설계 그대로** 지을 수 있었다 — `where: ['cockpit']` 이라
+     *   장르에 이미 맞았기 때문이다.
+     *   거점 열둘 중 두 곳쯤이 응답을 안 하고, 갈래 둘 다 「거래를 못 한다」다:
+     *   **비었으면** 물자를 그냥 가져가고, **얼마 안 됐으면** 판 놈들이 남아 있다
+     */
+    builtAs: '조용한 거점 (route-table.js QUIET · route.js quiet · v117)',
     where: ['cockpit'],
     lead: '거점 신호가 잡히는데 응답이 없다',
     costs: { time: [90, 200] },
@@ -464,8 +494,64 @@ export const FAULT = {
  * ★ `sceneOnly` 가 붙은 것은 **뺀다** — 장면이 부를 때만 열린다.
  *   안 빼면 「자동 조종이 죽는다」가 아무 구간에서나 나와서 장면이 잔일이 된다
  */
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v117 — **표가 「물려 있다」고 거짓말을 하고 있었다**
+//
+//  ★ 사장님 (2026-08-12) 「**우리 장르에 맞지 않는 설정들이 없는지
+//    점검해봐**」 → `tools/space-fit.js` 가 잡았다.
+//
+//  ══ 무엇이 어긋나 있었나 ══════════════════════════════════════════
+//
+//  이 함수는 「`steps` 가 있으면 게임에 물린 것」이라고 셌다. 그런데
+//  `steps` 는 **「어느 방까지 가서 몇 초 잡고 있는다」**라는 뜻이고,
+//  그 걸음은 **이제 없다**. 즉 낡은 전제 위에서 세고 있었다:
+//
+//    · **v106** 이 수리를 단추 하나로 바꾸며 `PILOT.faults = false` 로
+//      **고장을 통째로 껐고**
+//    · **v109·v110** 이 걷기를 없애 `PILOT.canStand = false` 가 됐다
+//
+//  즉 고장 열 가지가 **켜지지도 않고 걸어갈 수도 없는데** 표는 계속
+//  「물려 있다」고 말했다. 그 목록을 읽는 검사(`space-missions.js`)도
+//  그 말을 믿었으므로, **아무도 그것을 못 물었다.**
+//
+//  ★★★ 「고쳐 놓고 안내를 안 고치면 안 고친 것과 같다」는 이 표가 v82 에
+//    스스로 적어 둔 말이다. 이번엔 **표 자신**이 그랬다.
+//
+//  ★ 그래서 **지우지 않고 조건을 붙인다** — 걷기가 돌아오거나 고장을
+//    다시 켜면 이 열 가지가 **저절로 되살아난다** (`farm-table.js RETIRED`
+//    와 같은 규약: 이유를 남기고 길을 막는다)
+// ══════════════════════════════════════════════════════════════════════════
+
+/** ★ 앉은 채로 손이 닿는 자리 — 조종석과 「어디든」 */
+const SEATED_OK = new Set(['cockpit', 'helm', 'screen', 'any']);
+
+/** 이 항목이 **지금 장르에서** 손에 닿나 */
+export function reachable(m) {
+  // ★ 고장 계통이 꺼져 있으면 `sys` 를 가진 것은 안 뜬다 (v106)
+  if (m.sys && !PILOT.faults) return false;
+  // ★★ 앉은 채라면 **다른 방을 요구하는 걸음**은 못 한다 (v109·v110)
+  if (!PILOT.canStand) {
+    if ((m.steps ?? []).some((st) => !SEATED_OK.has(st.at))) return false;
+    if ((m.branches ?? []).some((b) => b.at && !SEATED_OK.has(b.at))) return false;
+  }
+  return true;
+}
+
 export const wired = () => MISSIONS.filter(
-  (m) => m.tier === TIER.NOW && !m.sceneOnly && (m.steps || m.branches.some((b) => b.at)),
+  (m) => m.tier === TIER.NOW && !m.sceneOnly
+    && (m.steps || m.branches.some((b) => b.at))
+    && reachable(m),
+);
+
+/**
+ * ★★ **닿을 수 없게 된 것들** — 지운 것이 아니라 **막힌 것**이다.
+ *   왜 막혔는지가 `reachable()` 한 곳에 적혀 있고, 그 조건이 풀리면
+ *   저절로 돌아온다. 목록에서 지우면 다음에 같은 것을 또 만든다
+ */
+export const blocked = () => MISSIONS.filter(
+  (m) => m.tier === TIER.NOW && !m.sceneOnly
+    && (m.steps || m.branches.some((b) => b.at))
+    && !reachable(m),
 );
 
 /**

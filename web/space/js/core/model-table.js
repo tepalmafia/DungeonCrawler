@@ -92,6 +92,11 @@ export const SLOTS = {
   junk: { kind: 'junk', long: 3.0, what: '파편 — 모난 조각. 제일 흔하다' },
   sat: { kind: 'sat', long: 6.0, what: '죽은 위성 — 태양전지판이 접혀 있거나 부러져 있다' },
   tank: { kind: 'tank', long: 4.0, what: '버려진 연료통 — 길쭉한 통' },
+  // ★ v117 — 떠도는 것 둘이 늘었다 (`target-table.js KINDS.ice · hulk`).
+  //   검사가 「자리가 없는 종류」로 잡아 줬다 — 그림을 받을 자리를 안 만들면
+  //   주셔도 붙일 데가 없다
+  ice: { kind: 'ice', long: 7.0, what: '얼음 덩어리 — 울퉁불퉁한 덩어리. 표면이 희다' },
+  hulk: { kind: 'hulk', long: 16.0, what: '표류선 — 불이 꺼진 배. 부서진 데가 있다' },
 };
 export const SLOT_LIST = Object.values(SLOTS);
 

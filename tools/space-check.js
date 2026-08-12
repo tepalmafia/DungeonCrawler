@@ -83,9 +83,25 @@ async function hitText(label) {
   if (!at) throw new Error(`「${label}」 단추가 없습니다`);
   if (at.y < 0 || at.y > at.h) console.log(`   … 「${label}」 이 화면 밖이다 (y ${at.y.toFixed(0)} / ${at.h})`);
   await p.mouse.click(at.x, at.y);
-  await p.waitForTimeout(250);
+  await p.waitForTimeout(120);
 }
 const locked = () => p.evaluate(() => !!document.pointerLockElement);
+/**
+ * ★★★ v117 — **상태를 보고 여닫는다.** 여태 ` 를 눈 감고 눌러 「토글」
+ *   했는데, 그러면 앞 절이 열어 둔 채로 끝나는 순간 **열고 닫는 것이
+ *   뒤집힌다.** 그 상태로 화면 복판을 누르면 **패널 안의 단추**가
+ *   눌리고, v117 에 「처음부터 다시」가 첫 무리로 올라오면서 그게
+ *   **새로고침**이 됐다 — 검사가 그 자리에서 죽었다.
+ *   ★ 「토글」은 지금 상태를 알 때만 쓸 수 있는 말이다
+ */
+async function setCheck(want) {
+  for (let i = 0; i < 3; i++) {
+    if ((await shown('#check')) === want) return true;
+    await p.keyboard.press('`');
+    await p.waitForTimeout(120);
+  }
+  return (await shown('#check')) === want;
+}
 const shown = (sel) => p.evaluate((s) => {
   const el = document.querySelector(s);
   return !!el && !el.hidden && getComputedStyle(el).display !== 'none';
@@ -114,21 +130,19 @@ console.log('\n[1] ★ **여는 길이 둘 이상인가** — 하나가 막히�
 console.log('\n[2] ★★ **안의 항목이 정말 먹나** — 진짜 마우스로 누른다');
 {
   // 사장님이 겪은 그대로: 게임을 켜 놓고(잠금) → 열고 → 눌러 본다
-  await p.keyboard.press('`');                       // 일단 닫고
+  await setCheck(false);                             // ★ 확실히 닫는다
   await p.mouse.click(640, 400);                     // 화면을 눌러 시작
   await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
   ok(await locked(), '게임을 켰다 — 포인터가 잠겼다');
-  await p.keyboard.press('`');
+  await setCheck(true);
   ok(await shown('#check'), '노는 중에 열린다');
   ok(!(await locked()), '열면 **잠금이 풀린다** — 마우스를 써야 하니까');
 
   const ore0 = await p.evaluate(() => window.SPACE.supply.ore);
   // ★★ **v69 — 여기가 제 변경 전부터 빨간색이었다.** 점검 모드의 항목
-  //   이름이 「광석 60 싣기」에서 「광석 60 · 부품 8」로 바뀐 지 오래인데
-  //   검사만 옛 이름을 부르고 있었고, 그래서 **없는 단추를 찾다 죽었다.**
-  //   검사가 죽으면 그 뒤 줄은 하나도 안 돈다 — 즉 「단추가 먹나」를
-  //   여러 판 동안 아무도 안 지키고 있었다
-  await hitText('광석 60 · 부품 8 · 미사일 8');
+  //   이름이 바뀐 지 오래인데 검사만 옛 이름을 부르고 있었고, 그래서
+  //   **없는 단추를 찾다 죽었다.** 검사가 죽으면 그 뒤 줄은 하나도 안 돈다
+  await hitText('보급 가득');
   const ore1 = await p.evaluate(() => window.SPACE.supply.ore);
   ok(ore1 > ore0, `① 눌렀더니 정말 바뀐다 (광석 ${ore0.toFixed(0)} → ${ore1.toFixed(0)})`);
 
@@ -141,20 +155,79 @@ console.log('\n[2] ★★ **안의 항목이 정말 먹나** — 진짜 마우�
   const heat1 = await p.evaluate(() => window.SPACE.heat);
   ok(heat1 > heat0 && heat1 >= 85, `② **두 번째도 먹는다** (열 ${heat0.toFixed(0)} → ${heat1.toFixed(0)})`);
 
-  const p0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
-  await hitText('바깥문 앞으로');
-  const p1 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
-  ok(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 2,
-    `③ **세 번째도 먹는다** — 몸이 옮겨졌다 (${p0.map((v) => v.toFixed(1))} → ${p1.map((v) => v.toFixed(1))})`);
-
   // ★ 그리고 그 클릭이 **게임의 손짓으로 새지 않는다**
   ok(await p.evaluate(() => !window.SPACE.holdNow),
-    '④ 단추를 누른 것이 게임의 「집었다」로 안 샌다');
+    '③ 단추를 누른 것이 게임의 「집었다」로 안 샌다');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v117 — **단추를 하나도 빠짐없이 눌러 본다**
+//
+//  ★ 사장님 「기존 f2에 테스트 항목도 개선시켜주고 **테스트가 재대로
+//    가능하게**」
+//
+//  ══ 왜 이 절이 필요했나 ═══════════════════════════════════════════
+//
+//  여태 이 검사는 **단추 셋**만 눌러 봤다. 그런데 v109·v110 이 걷기와
+//  방들을 없앤 뒤로 점검 모드의 절반이 **조용히 아무 일도 안 하고**
+//  있었다 — 훅은 다 살아 있어서 **예외도 안 던졌다.**
+//
+//  ★★ 「게임이 고장난 건지 버튼이 고장난 건지 알 수가 없다」는 이
+//    파일이 스스로 적어 둔 말이고, 그 상태가 여러 판 갔다. 이제
+//    **전부 눌러 보고**, 눌러서 아무 말도 안 하거나 오류가 나면 잡는다.
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[2-b] ★★★ **모든 항목을 하나씩 눌러 본다** (v117)');
+{
+  await setCheck(true);
+  const labels = await p.evaluate(() =>
+    [...document.querySelectorAll('#check button')].map((b) => b.textContent));
+  console.log(`   항목 ${labels.length} 개`);
+  const SKIP = ['처음부터 다시', '바로 끝 화면', '떨궈 보기'];
+  const dead = []; const broke = []; const skipped = [];
+  for (const label of labels) {
+    // ══ ★★★ **끝내는 단추는 여기서 안 누른다** ═══════════════════════
+    //  ★ 「처음부터 다시」는 새로고침이고, 「끝 화면」·「떨궈 보기」는
+    //    회차를 끝낸다 — 누르면 그 뒤 단추들이 **없는 화면**에서 눌린다.
+    //    셋 다 제 검사가 따로 있다 ([4] · `space-end.js` · `space-drop.js`).
+    //  ★★ 이걸 몰라서 처음 돌렸을 때 검사가 **900초를 넘겨 안 끝났다** —
+    //    끝 화면이 뜨자 ` 가 안 먹어 점검 모드를 다시 못 열었기 때문이다
+    if (SKIP.some((k) => label.includes(k))) { skipped.push(label); continue; }
+    try {
+      await p.evaluate(() => { document.querySelector('#check .say').textContent = '—'; });
+      await hitText(label);
+      const said = await p.$eval('#check .say', (e) => e.textContent);
+      if (said === '—') dead.push(label);                 // 아무 말도 안 했다
+      else if (said.includes('안 됩니다')) broke.push(`${label} → ${said}`);
+    } catch (e) { broke.push(`${label} → ${e.message}`); }
+    // ★ 창이 열렸으면 닫는다 — I 창이 점검 모드를 덮으면 다음 단추를 못 누른다
+    await p.evaluate(() => { if (window.SPACE?.openBay) window.SPACE.openBay(false); });
+    await setCheck(true);
+  }
+  // ★ **안 누른 것을 말한다.** 조용히 건너뛰면 「다 눌러 봤다」가 거짓이 된다
+  console.log(`   안 누른 것 ${skipped.length} — ${skipped.join(' · ')} (제 검사가 따로 있다)`);
+  if (broke.length) for (const x of broke) console.log(`   ✘ ${x}`);
+  if (dead.length) for (const x of dead) console.log(`   ✘ 조용함 — ${x}`);
+  ok(!broke.length, `★★★ **오류를 내는 항목이 없다** (${broke.length})`);
+  ok(!dead.length,
+    `★★★ **조용히 아무 말도 안 하는 항목이 없다** (${dead.length})`
+    + ' — 조용한 무동작이 빨간 오류보다 나쁘다. 사장님은 그걸 「눌러도'
+    + ' 아무것도 변한게 없다」로 겪으신다');
+}
+
+console.log('\n[2-c] ★★ **미사일 무한이 스위치가 됐나** (v117)');
+{
+  await setCheck(true);
+  const was = await p.evaluate(() => window.SPACE.setInfinite(false));
+  ok(was === false, '★★ **기본은 꺼짐**이다 — 이제 미사일이 진짜로 떨어진다');
+  await hitText('★ 미사일 무한 켜기/끄기');
+  ok(await p.evaluate(() => window.SPACE.setInfinite(undefined) === false),
+    '★★★ **단추로 켜고 끈다** — 표에 박아 두지 않고 시험할 때만 켠다'
+    + ' (사장님 「f2테스트에 넣어서 테스트할 때 사용할 수 있도록」)');
 }
 
 console.log('\n[3] ★ **다시 놀 수 있나** — 점검하고 나서 돌아가야 한다');
 {
-  await p.keyboard.press('`');
+  await setCheck(false);
   ok(!(await shown('#check')), '닫힌다');
   await p.mouse.click(640, 400);
   await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
