@@ -20,6 +20,12 @@
 //    철사·유리는 손을 안 막는다. 하지만 그건 **확인해야 아는 것**이다 —
 //    덮개를 달고 크랭크가 안 잡히면 문 하나가 통째로 잠긴다.
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-guard');
+
 const PW = ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs'];
 let chromium = null;
 for (const m of PW) { try { ({ chromium } = await import(m)); break; } catch { /* 다음 것 */ } }

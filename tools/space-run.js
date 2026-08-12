@@ -12,6 +12,12 @@
 //    「어렵다」가 아니라 「고장났다」로 읽는다 — 이 저장소가 윈치·해도대·
 //    조종간에서 이미 세 번 겪은 것이다.
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-run');
+
 import { RUN, WHY, whyNotRun, isWinded } from '../web/space/js/game/move-table.js';
 import { makeMove, moveStep, bump, handMult, summary } from '../web/space/js/game/move.js';
 import { BODY } from '../web/space/js/game/systems-table.js';

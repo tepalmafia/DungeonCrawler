@@ -13,6 +13,12 @@
 //  ★ 그리고 [3] **넷이 정말 다른가.** 같은 주먹을 네 번 쥐면 그건
 //    손맛이 아니라 그냥 네 번 기다리는 것이다.
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-repair');
+
 import { ACTS, ACT_KEYS, actAt, poseAt } from '../web/space/js/game/repair-table.js';
 import { MISSIONS } from '../web/space/js/game/mission-table.js';
 

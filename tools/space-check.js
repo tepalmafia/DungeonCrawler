@@ -87,6 +87,23 @@ async function hitText(label) {
 }
 const locked = () => p.evaluate(() => !!document.pointerLockElement);
 /**
+ * ★★★ v124 — **화면 복판을 눈 감고 누르지 않는다** (사장님 「낡은 절들 정리해줘」).
+ *
+ *   ★ 여기가 `mouse.click(640, 400)` 네 군데였다. 그런데 그 자리에 지금은
+ *     **시작 화면 단추**가 서 있어서, 눌리는 것이 「시작」이 아니라
+ *     「처음부터 다시」거나 「점검 모드」다 — 포인터가 안 잠기고
+ *     [2] 부터 줄줄이 빨개졌다.
+ *   ★★ 이 파일은 **v117 에 똑같은 병을 한 번 앓았다** (점검 모드 패널이
+ *     열린 채로 복판을 눌러 「처음부터 다시」가 새로고침이 된 일).
+ *     그때는 패널이었고 지금은 시작 화면이다 — **복판을 눈 감고 누르는
+ *     줄이 남아 있는 한 화면이 바뀔 때마다 또 걸린다.**
+ *   ★ 그래서 **누를 것을 이름으로 부르고**, 그 다음에 빈 자리를 눌러 잠근다
+ */
+async function playAndLock() {
+  if (await shown('#hint')) { await hit('#btn-play'); await p.waitForTimeout(400); }
+  await playAndLock();
+}
+/**
  * ★★★ v117 — **상태를 보고 여닫는다.** 여태 ` 를 눈 감고 눌러 「토글」
  *   했는데, 그러면 앞 절이 열어 둔 채로 끝나는 순간 **열고 닫는 것이
  *   뒤집힌다.** 그 상태로 화면 복판을 누르면 **패널 안의 단추**가
@@ -131,8 +148,7 @@ console.log('\n[2] ★★ **안의 항목이 정말 먹나** — 진짜 마우�
 {
   // 사장님이 겪은 그대로: 게임을 켜 놓고(잠금) → 열고 → 눌러 본다
   await setCheck(false);                             // ★ 확실히 닫는다
-  await p.mouse.click(640, 400);                     // 화면을 눌러 시작
-  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
+  await playAndLock();                               // 시작 화면을 치우고 잠근다
   ok(await locked(), '게임을 켰다 — 포인터가 잠겼다');
   await setCheck(true);
   ok(await shown('#check'), '노는 중에 열린다');
@@ -229,8 +245,7 @@ console.log('\n[3] ★ **다시 놀 수 있나** — 점검하고 나서 돌아�
 {
   await setCheck(false);
   ok(!(await shown('#check')), '닫힌다');
-  await p.mouse.click(640, 400);
-  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
+  await playAndLock();
   ok(await locked(), '화면을 누르니 **다시 잠긴다** — 놀던 데로 돌아간다');
 }
 
@@ -248,8 +263,7 @@ console.log('\n[4] ★★ **새 게임** — 처음부터 시작하는 길이 �
   //   안 풀린 채로는 마우스 자리가 뜻을 잃어서 단추를 못 누른다. 그래서
   //   여기서만 잠금을 손으로 풀어 준다 — **멈춤 화면을 띄우는 것 자체는
   //   Esc 로 한다.** 이 두 줄을 없애려고 게임을 고치면 안 된다
-  await p.mouse.click(640, 400);
-  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
+  await playAndLock();
   await p.keyboard.press('Escape');
   await p.evaluate(() => document.exitPointerLock?.());
   await p.waitForTimeout(400);
@@ -273,61 +287,51 @@ console.log('\n[4] ★★ **새 게임** — 처음부터 시작하는 길이 �
 
 console.log('\n[5] ★★ **이어했는데 못 움직이지 않나** — 앉은 채 저장해 본다');
 {
-  // 사장님: 「왜 자꾸 주포에서 시작하고 **움직여지지가 않아**?」
-  // 앉은 채 저장하면 `gunBusy` 가 걸음을 막아 **켤 때마다 그 자리**였다
+  // ══ ★★★ v124 — **묻는 것을 지금 배로 옮겼다** ══════════════════════
+  //
+  //  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+  //
+  //  ★★ 원래 물음은 사장님이 겪으신 이것이었다: 「왜 자꾸 주포에서
+  //    시작하고 **움직여지지가 않아**?」 — 앉은 채 저장하면 걸음이 막혀
+  //    켤 때마다 그 자리였다. 그래서 「저절로 일어나나 · 걸어지나」를 쟀다.
+  //
+  //  ★★★ 그런데 **v110 이 일어서기와 걷기를 통째로 없앴다**
+  //    (`PILOT.canStand = false` · 「항상 앉은 상태에서 모든 조작을 한다」).
+  //    즉 「저절로 일어난다」는 이제 **틀린 답**이고, 그걸 재던 ②⑥⑦ 은
+  //    빨개지지도 않고 **`gun.up` 이라는 죽은 칸을 읽어 늘 통과**하고
+  //    있었다 (그 주석이 이 파일 안에 이미 적혀 있었다 — v64 에 죽은 칸).
+  //
+  //  ★ **물음 자체는 안 버린다.** 「이어했는데 못 움직이지 않나」는 지금도
+  //    유효하고, 다만 「움직인다」가 **걷기에서 조종으로** 바뀌었을 뿐이다.
+  //    그래서 같은 자리에서 **조종간과 스로틀이 먹나**를 묻는다
   await boot();
   await p.evaluate(() => { window.SPACE.putGun(true); window.SPACE.saveNow(); });
-  // ★★ **v69 — `gun.up` 은 v64 에 죽은 칸이다.** 그때 포탑을 걷어내고
-  //   조종석 좌석으로 옮겼는데(`putGun` 이 `helmSat` 을 켠다), 검사만
-  //   옛 칸을 읽어서 **늘 false** 였다. 이름이 `putGun` 그대로라 눈으로도
-  //   안 보였다 — 이 판에서 **네 번째로 나온 「검사가 없어진 것을 읽는다」**
   ok(await p.evaluate(() => window.SPACE.helm2.sat), '① 조종석에 앉은 채로 저장했다');
 
   await boot();
-  ok(!(await p.evaluate(() => window.SPACE.gun.up)),
-    '② ★ 이어하면 **일어나 있다** — 자세는 안 잇는다');
+  ok(await p.evaluate(() => window.SPACE.helm2.sat),
+    '② ★★★ **이어해도 앉아 있다** — v120 까지 여기는 「일어나 있다」를 물었다.'
+    + ' v110 이 일어서기를 없앴으므로 그건 이제 틀린 답이고, 그때도 죽은 칸'
+    + '(`gun.up`)을 읽어 **늘 통과**하고 있었다');
+  ok(!(await p.evaluate(() => window.SPACE.pilotRules.canStand)),
+    '③ ★★ 애초에 **설 수가 없다** — 「걸어가서」가 답이 될 수 있는 설계는 이제 틀린 설계다');
 
-  // 그리고 정말 걸어지나 — 이게 사장님이 겪은 것이다
-  await p.mouse.click(640, 400);
-  await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 8000 }).catch(() => {});
-  const w0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
+  // ★★ 그리고 **정말 움직여지나** — 사장님 물음의 알맹이는 여기다
+  await playAndLock();
+  const t0 = await p.evaluate(() => window.SPACE.throttle.v);
   await p.keyboard.down('KeyW');
-  await p.waitForFunction((s) => {
-    const q = window.SPACE.pos;
-    return Math.hypot(q.x - s[0], q.z - s[1]) > 0.3;
-  }, w0, { timeout: 15000 }).catch(() => {});
+  await p.waitForFunction((v) => window.SPACE.throttle.v > v + 0.05, t0, { timeout: 60000 })
+    .catch(() => {});
   await p.keyboard.up('KeyW');
-  const w1 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
-  ok(Math.hypot(w1[0] - w0[0], w1[1] - w0[1]) > 0.3,
-    `③ ★★ **W 를 누르니 걸어진다** (${w0.map((v) => v.toFixed(1))} → ${w1.map((v) => v.toFixed(1))})`);
-
-  // ★★ **어떤 이유로 앉아 있든 갇히지 않나.** 저장을 고쳤는데도 사장님이
-  //   「계속 그 자리에서 움직이질 못해」라고 하셨다. 앉으면 걸음이 막히는
-  //   것은 맞다 — 틀린 것은 **막힌 채로 아무 말도 안 한 것**이다
-  await p.evaluate(() => window.SPACE.putGun(true));
-  ok(await p.evaluate(() => window.SPACE.helm2.sat), '⑤ 일부러 다시 앉혔다');
-  const s0 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
-  await p.keyboard.down('KeyW');
-  await p.waitForFunction((s) => {
-    const q = window.SPACE.pos;
-    return !window.SPACE.gun.up && Math.hypot(q.x - s[0], q.z - s[1]) > 0.3;
-  }, s0, { timeout: 90000 }).catch(() => {});
-  await p.keyboard.up('KeyW');
-  const s1 = await p.evaluate(() => { const q = window.SPACE.pos; return [q.x, q.z]; });
-  ok(!(await p.evaluate(() => window.SPACE.gun.up)),
-    '⑥ ★★ **W 를 누르고 있으니 저절로 일어난다** — 일어나는 법을 몰라도 안 갇힌다');
-  ok(Math.hypot(s1[0] - s0[0], s1[1] - s0[1]) > 0.3,
-    `⑦ 그러고 **걸어진다** (${s0.map((v) => v.toFixed(1))} → ${s1.map((v) => v.toFixed(1))})`);
+  const t1 = await p.evaluate(() => window.SPACE.throttle.v);
+  ok(t1 > t0 + 0.05,
+    `④ ★★★ **W 를 누르니 스로틀이 오른다** (${t0.toFixed(2)} → ${t1.toFixed(2)}) —`
+    + ' 이어한 자리에서 갇히지 않는다. 「움직인다」가 걷기에서 조종으로 바뀌었을 뿐이다');
 
   // ★ 판본이 화면에 뜨나 — 「무엇이 떠 있는지」를 추측하지 않으려고
-  const ver = await p.$eval('#ver', (e) => e.textContent);
-  ok(/^v\d+$/.test(ver), `⑧ 시작 화면에 판본이 뜬다 (${ver}) — 옛 파일인지 화면만 보고 안다`);
-
-  // ★ 배 밖에 몸이 저장돼 있어도 갇히지 않나 — 옛 판본은 주포가 배 위였다
-  await p.evaluate(() => { window.SPACE.put(2.35, -1.0); window.SPACE.saveNow(); });
   await boot();
-  const back = await p.evaluate(() => window.SPACE.canStand(window.SPACE.pos.x, window.SPACE.pos.z));
-  ok(back, '⑨ 설 수 없는 자리에 저장돼 있으면 **되돌려 준다** — 갇히지 않는다');
+  const ver = await p.$eval('#ver', (e) => e.textContent);
+  ok(/^v\d+$/.test(ver), `⑤ 시작 화면에 판본이 뜬다 (${ver}) — 옛 파일인지 화면만 보고 안다`);
 }
 
 console.log('');

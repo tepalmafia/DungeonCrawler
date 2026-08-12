@@ -18,6 +18,12 @@
 //    **생동감이 느껴지나.** 문이 스르륵 열리는 것이 배를 살아 있게 하는지는
 //    직접 봐야 안다 — 그게 사장님이 이걸 넣자고 하신 이유다.
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-door');
+
 import { DOOR, canPass, nearDoor } from '../web/space/js/game/door-table.js';
 import { makeDoors, stepDoors, byKey, jammedOne, summary } from '../web/space/js/game/door.js';
 import { BODY } from '../web/space/js/game/systems-table.js';

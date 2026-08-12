@@ -16,6 +16,12 @@
 //
 //    [3] 이 이 검사의 이유다. 나머지 둘은 세 줄이면 끝난다.
 // ══════════════════════════════════════════════════════════════════════════
+// ★★★ v124 — **접혔으면 여기서 물러난다** (사장님 「낡은 절들 정리해줘」).
+//   브라우저를 띄우기 **전에** 부른다 — 띄운 뒤면 접힌 검사도 30초씩 먹는다.
+//   접힌 목록과 까닭은 `game/pilot-table.js FOLDED_CHECKS` 한 곳에 있다
+import { bailIfFolded } from './folded.js';
+bailIfFolded('space-bay');
+
 const PW = ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs'];
 let chromium = null;
 for (const m of PW) { try { ({ chromium } = await import(m)); break; } catch { /* 다음 것 */ } }

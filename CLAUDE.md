@@ -320,15 +320,23 @@ node tools/space-tutor.js        스페이스워 — 일곱을 다 만나나 · 
 node tools/space-first5.js       스페이스워 — ★ 아무것도 모르는 사람의 첫 5분 (못하는 사람 다섯)
 node tools/space-wrist.js        스페이스워 — 손목이 할 일을 말하나 · ★ 배의 상태가 안 새나
 node tools/space-guide.js        스페이스워 — 바닥 안내선 · ★ 튜토리얼에서만 켜지나
-node tools/space-door.js         스페이스워 — 문이 걸음을 막나 · 끼면 손으로 열리나
-node tools/space-walk.js         스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
-node tools/space-chase.js        스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
+node tools/space-door.js         ※ **접힘 (v124)** — 스페이스워 — 문이 걸음을 막나 · 끼면 손으로 열리나
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
+node tools/space-walk.js         ※ **접힘 (v124)** — 스페이스워 — 걸어서 갈 수 있나 · 물건을 뚫나
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
+node tools/space-chase.js        ※ **접힘 (v124)** — 스페이스워 — 차단기·밸브가 손에 닿나 (실제 브라우저)
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
 node tools/space-yoke.js         스페이스워 — 조종간이 ★보이고·잡히고·먹나 (셋을 따로 묻는다)
-node tools/space-bay.js          스페이스워 — 베이 번호가 붙었고·안 겹치고·★읽히나
-node tools/space-guard.js        스페이스워 — 덮개가 끼면 젖혀지나 · 가드가 손을 안 막나
-node tools/space-carry.js        스페이스워 — 물건이 손을 묶나 (--see 8391 로 화면까지)
-node tools/space-repair.js       스페이스워 — 수리 네 동작 · ★ 총 시간이 안 바뀌었나 (--see 8391)
-node tools/space-run.js          스페이스워 — 달리기 · ★ 늘 뛰는 게 답이 아닌가 (--see 8391)
+node tools/space-bay.js          ※ **접힘 (v124)** — 스페이스워 — 베이 번호가 붙었고·안 겹치고·★읽히나
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
+node tools/space-guard.js        ※ **접힘 (v124)** — 스페이스워 — 덮개가 끼면 젖혀지나 · 가드가 손을 안 막나
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
+node tools/space-carry.js        ※ **접힘 (v124)** — 스페이스워 — 물건이 손을 묶나 (--see 8391 로 화면까지)
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
+node tools/space-repair.js       ※ **접힘 (v124)** — 스페이스워 — 수리 네 동작 · ★ 총 시간이 안 바뀌었나 (--see 8391)
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
+node tools/space-run.js          ※ **접힘 (v124)** — 스페이스워 — 달리기 · ★ 늘 뛰는 게 답이 아닌가 (--see 8391)
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
 node tools/space-save.js         스페이스워 — ★ 닫았다 켜면 이어지나 · 멈추면 돌아오나 (--see 8391)
 node tools/space-2h.js           스페이스워 — ★ 긴장이 모양을 갖췄나 · 12구간 배치 (--see 8391)
 node tools/space-drift.js        스페이스워 — ★C 자동 조종 사망 · 셋 다 손해인가 (--see 8391)
@@ -337,14 +345,17 @@ node tools/space-gun.js          스페이스워 — ★ 주포 · 쏘는 게 �
 node tools/space-airlock.js      스페이스워 — ★ 에어록 바깥문 · 열면 갇히나 · 잊을 수 없나 (--see 8391)
 node tools/space-land.js         스페이스워 — ★ 행성 착륙 · 과정이 있나 · ★화면이 바뀌나 (--see 8391)
 node tools/space-scar.js         스페이스워 — ★ 영구 손상 · 혹사하면 남고 조심하면 안 남나 · 우회로가 있나
-node tools/space-check.js        스페이스워 — ★ 점검 모드(F2·`)·새 게임·★이어했을 때 **걸어지나** (진짜 마우스로)
+node tools/space-check.js        스페이스워 — ★ 점검 모드(F2·`)·새 게임·★이어했을 때 **조종간이 먹나** (진짜 마우스로)
+                                 · v124 [5] 를 「걸어지나」에서 「스로틀이 오르나」로 옮겼다 — 걷기가 없어졌고,
+                                   옛 절은 죽은 칸(`gun.up`)을 읽어 **늘 통과**하고 있었다
 node tools/space-end.js          스페이스워 — ★ H 성간 공백 · 끝 화면이 **점수가 아닌 목록인가**
 node tools/space-blackout.js     스페이스워 — ★ E 정전 · 어둠이 벌인가 · 갇히지 않나
 node tools/space-rescue.js       스페이스워 — ★ G 구조 신호 · 가는 것이 진짜 선택인가 (윈치와 견준다)
 node tools/space-flight.js       스페이스워 — ★★ 세 축(위아래·좌우·360도) + **짐벌** · 정비공인 채인가
 node tools/space-yoke.js         스페이스워 — ★ 조종간 · **앉아서** 보이고·잡히고·먹나 · ★★ **잡으면 창이 화면을 채우나** (v63)
 node tools/space-heat.js         스페이스워 — ★★ 열 저장고 · 냉각은 옮기고 라디에이터가 버린다 · 쳇바퀴가 아닌가
-node tools/space-suit.js         스페이스워 — ★★ 우주복 · 안 입고 열면 벌이 오나 · ★왜 늘 안 입나 (--see 8391)
+node tools/space-suit.js         ※ **접힘 (v124)** — 스페이스워 — ★★ 우주복 · 안 입고 열면 벌이 오나 · ★왜 늘 안 입나 (--see 8391)
+                                 돌리면 「접혀 있습니다」라고 말하고 물러납니다 (아래 ★★★ 참고)
 node tools/space-fuel.js         스페이스워 — ★★ 추진제 · 밟는 동안만 주나 · ★양쪽이 다 손해인가
 node tools/space-real.js         스페이스워 — ★★ **말이 되나** · 미션과 설정을 통째로 (docs/space/REAL.md)
 node tools/space-sky.js          스페이스워 — ★ 창밖 · **별이 흐르지 않나**(고증) · 행성에 낮과 밤이 있나 (--see 8391)
@@ -363,6 +374,24 @@ node tools/space-radar.js        스페이스워 — ★★★ **레이더 고�
                                    v109·v110 이 **걷기와 그 물건들을 통째로 없앴습니다.**
                                    지금 손이 닿아야 하는 것은 조종석 안에만 있고,
                                    그건 `space-yoke.js`(조종간)·`space-check.js`(진짜 마우스)가 봅니다
+
+★★★ **접힌 검사 아홉** (v124) — `space-walk` · `space-run` · `space-door` ·
+  `space-carry` · `space-bay` · `space-guard` · `space-chase` · `space-repair` ·
+  `space-suit`. 돌리면 **「접혀 있습니다」라고 말하고 물러납니다.**
+
+  · **왜.** v109·v110 이 걷기와 방 여섯을 없앴는데 이 아홉이 남아 두 갈래로
+    썩고 있었습니다. 넷(walk·bay·guard·chase)은 **빨갛게** 울었고 —
+    낡은 빨강은 새 빨강을 덮습니다 (v120 조종간 · v121 정렬이 그랬습니다) —
+    다섯(run·door·carry·repair·suit)은 **초록으로 거짓말**을 했습니다.
+    「걸어오는 동안 문이 다 열린다」·「9초를 뛰면 숨이 바닥난다」가
+    **초록**이었습니다. 걸을 몸이 자리에 없는데.
+  · **왜 안 지웠나.** `space-reach.js` 처럼 지우면 **걷기가 돌아와도 같이
+    안 돌아옵니다.** `space-fit.js` 가 고장 아홉을 두고 「지우지 않는다 —
+    걷기가 돌아오면 저절로 되살아난다」고 한 것과 같은 규약입니다.
+  · **어디를 고치면 깨어나나.** `game/pilot-table.js` 의 `PILOT.canStand`
+    한 곳입니다. 접힌 목록과 까닭은 같은 파일 `FOLDED_CHECKS` 에 있고,
+    `space-fit.js [6]` 이 **목록과 파일을 대조합니다** — 목록에만 적고
+    파일에 안 물리면 그 검사는 계속 거짓말을 하므로.
 node tools/space-target.js       스페이스워 — ★★ 떠도는 것 · **적이 계속 오나** · **사방에 있나** (v69)
 node tools/space-optic.js        스페이스워 — ★★★ **광학 창 · 전투력** · 당겨서 보나 · 격추가 보이나 · 「강하면 피한다」가 서나 (v79)
 node tools/space-salvage.js      스페이스워 — ★★★ **회수** · 부수면 저절로 들어오나 · 지원 시계가 도나 · 다 못 줍나 (v81)
