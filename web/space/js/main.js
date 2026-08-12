@@ -79,7 +79,10 @@ import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, LOCK_LOST, lockWord, PICK } from './game/combat-table.js';
 // ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** (사장님 「질문이 나오고」 · 「형태와 요약」)
 import { ASK as LOOT_ASK } from './game/loot-table.js';
-import { makeLoot, broke as lootBroke, stepLoot, answer as lootAnswer, gained as lootGained, summary as lootSummary } from './game/loot.js';
+import {
+  makeLoot, broke as lootBroke, stepLoot, answer as lootAnswer,
+  gained as lootGained, gainedPart as lootPart, summary as lootSummary,
+} from './game/loot.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
 import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg, endingOf } from './game/warhead-table.js';
 import {
@@ -332,7 +335,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 124;
+export const VERSION = 125;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -2187,6 +2190,10 @@ function takeSalvage(p) {
   if (p.fitPart) {
     gainPart(fit, p.fitPart.slot, p.fitPart.tier);
     partWord = ` · ★ ${partName(p.fitPart)}`;
+    // ★★★ v125 — **카드로도 띄운다** (사장님 「등급도 나오게 해줘」).
+    //   v124 까지 파츠는 이 배너 한 줄로 스쳐 갔다 — 회차에서 제일 귀한
+    //   것이 제일 안 보였다. 재료와 **같은 카드**로 온다
+    lootPart(loot, p.fitPart);
     // 랙이 넘치면 **제일 낮은 등급부터** 떨어진다. 싸우는 중에 고르게
     // 하면 창을 열어야 하고, 그건 v109 가 없앤 「뒤로 가서」와 같은 병이다
     const out = spareOverflow(fit.spare);

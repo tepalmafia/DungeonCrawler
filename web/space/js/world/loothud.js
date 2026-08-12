@@ -92,7 +92,9 @@ function makePane(w, h) {
  */
 export function buildLootHud(camera, dist) {
   const A = makePane(1024, 172);
-  const C = makePane(560, 420);
+  // ★★★ v125 — 560×420 → **860×620**. 사장님 「**뭘 했는지 창이 너무 작아.
+  //   더 크게 하고 물체나 아이템 모양도 나오고 어디에 쓰는건지도. 등급도**」
+  const C = makePane(860, 620);
 
   const paneMesh = ({ tex }, wm, hm, order) => {
     const m = new THREE.Mesh(
@@ -108,7 +110,7 @@ export function buildLootHud(camera, dist) {
   };
   // 미터 크기는 `dist` 에서 화면 몫으로 잡는다 — 창이 바뀌어도 같은 몫
   const askMesh = paneMesh(A, dist * 0.62, dist * 0.104, 952);
-  const cardMesh = paneMesh(C, dist * 0.26, dist * 0.195, 951);
+  const cardMesh = paneMesh(C, dist * 0.42, dist * 0.303, 951);
 
   const place = (mesh, nx, ny, halfW, halfH) => {
     const t = Math.tan((camera.fov * Math.PI) / 360) * dist;
@@ -144,27 +146,47 @@ export function buildLootHud(camera, dist) {
     const { ctx, cv, tex } = C;
     ctx.clearRect(0, 0, cv.width, cv.height);
     if (!cards?.length) { tex.needsUpdate = true; return; }
-    const rowH = 128;
-    cards.slice(-3).forEach((c, i) => {
-      const y = 12 + i * rowH;
+    // ★★ 한 장이 커졌으므로 **두 장**만 든다 (`CARD.max`). 셋이면 화면을 덮는다
+    const rowH = 300;
+    cards.slice(-2).forEach((c, i) => {
+      const y = 10 + i * rowH;
       const fade = Math.max(0.15, Math.min(1, c.left / 1.2));
       ctx.globalAlpha = fade;
-      ctx.fillStyle = 'rgba(6,12,16,.66)';
-      ctx.fillRect(0, y, cv.width, rowH - 12);
-      const tone = toneOf(c.key);
-      ctx.strokeStyle = tone; ctx.lineWidth = 2;
-      ctx.strokeRect(1, y + 1, cv.width - 2, rowH - 14);
-      drawShape(ctx, c.shape, 62, y + (rowH - 12) / 2, 34, tone);
+      // ★ 색은 **카드가 준다** (`c.tone`). 여기서 `toneOf` 를 다시 부르면
+      //   파츠 카드(등급 색)가 재료 색으로 덮인다 — 첫 판에 그랬다
+      const tone = c.tone ?? toneOf(c.key);
+      ctx.fillStyle = 'rgba(6,12,16,.78)';
+      ctx.fillRect(0, y, cv.width, rowH - 14);
+      ctx.strokeStyle = tone; ctx.lineWidth = 3;
+      ctx.strokeRect(2, y + 2, cv.width - 4, rowH - 18);
+      // ── 모양 — 크게 (사장님 「물체나 아이템 모양도 나오고」) ──
+      drawShape(ctx, c.shape, 92, y + 122, 66, tone);
+      // ── 이름 ──
       ctx.fillStyle = '#e8f6f2';
-      ctx.font = '700 34px system-ui, sans-serif';
-      ctx.fillText(`${c.name}${c.count > 1 ? ` ×${c.count}` : ''}`, 118, y + 46);
+      ctx.font = '700 52px system-ui, sans-serif';
+      ctx.fillText(`${c.name}${c.count > 1 ? ` ×${c.count}` : ''}`, 186, y + 74);
+      // ── ★★★ 등급 — 파츠에만 있다. **이름 옆이 아니라 제 칸**에 (v125) ──
+      if (c.tier) {
+        const w = ctx.measureText(`${c.name} `).width;
+        ctx.fillStyle = tone;
+        ctx.font = '700 34px system-ui, sans-serif';
+        ctx.fillText(`［${c.tier}］`, 186 + w, y + 74);
+      }
+      // ── 늘어나는 것 ──
       ctx.fillStyle = tone;
-      ctx.font = '600 26px system-ui, sans-serif';
-      ctx.fillText(c.gain, 118, y + 82);
+      ctx.font = '600 40px system-ui, sans-serif';
+      ctx.fillText(c.gain, 186, y + 138);
+      // ── ★ 어디에 쓰는가 (사장님 「어디에 쓰는건지도」) ──
       if (c.use) {
-        ctx.fillStyle = '#9fb6c8';
-        ctx.font = '500 22px system-ui, sans-serif';
-        ctx.fillText(c.use, 118, y + 110);
+        ctx.fillStyle = '#b9cbd8';
+        ctx.font = '500 34px system-ui, sans-serif';
+        ctx.fillText(c.use, 186, y + 196);
+      }
+      // ── 무게 — 화물칸이 차는 이유 ──
+      if (c.mass) {
+        ctx.fillStyle = '#7f93a3';
+        ctx.font = '500 28px system-ui, sans-serif';
+        ctx.fillText(`무게 ${c.mass}`, 186, y + 244);
       }
       ctx.globalAlpha = 1;
     });
@@ -180,7 +202,7 @@ export function buildLootHud(camera, dist) {
       askMesh.visible = on && !!s.ask;
       cardMesh.visible = on && !!s.cards?.length;
       if (askMesh.visible) { drawAsk(s.ask); place(askMesh, LOOT_AT.ask.nx, LOOT_AT.ask.ny, 0, 0.052); }
-      if (cardMesh.visible) { drawCards(s.cards); place(cardMesh, LOOT_AT.cards.nx, LOOT_AT.cards.ny, 0.13, 0.098); }
+      if (cardMesh.visible) { drawCards(s.cards); place(cardMesh, LOOT_AT.cards.nx, LOOT_AT.cards.ny, 0.21, 0.152); }
     },
   };
 }
