@@ -1327,35 +1327,33 @@ console.log('\n[6q] ★★★ **락온 추적** — 묶으면 따라가고, 묶�
   await p.waitForTimeout(600);
   ok((await S(() => SPACE.combat.radar.id)) === lock?.id,
     '② ★★★ **40도 옆으로 가도 안 놓는다** — 유지 한계가 조준선이 아니라 **짐벌(60도)**이다');
-  // ③ 조준선에 딴 것을 걸어 두고 쏜다 — 유도탄은 묶은 것으로 나가야 한다
+  // ③④ 조준선에 **딴 것**을 걸어 두고 무기 둘을 쏴 본다.
+  //   ★ **레이저를 먼저** 쏜다. 재장전(`c.cool`)은 무기끼리 나눠 쓰는데
+  //     유도탄이 6.5초라, 유도탄부터 쏘면 헤드리스 시계(1/25)로 **162초**를
+  //     기다려야 한다 — 그러면 레이저가 「재는 중」으로 조용히 안 나가고,
+  //     그걸 「락온을 쐈다」로 잘못 읽는다 (그렇게 짰다가 한 번 속았다)
   await S(() => SPACE.callFoe('raider', 1, 70));
+  const shoot = async (slot, key) => S(([s, k]) => {
+    SPACE.putWeapon(s);
+    const lockId = SPACE.combat.radar.id;
+    const aimId = SPACE.combat.target?.id ?? null;
+    const was = new Set((SPACE.combat.shotList ?? []).map((x) => x.id));
+    SPACE.fire();
+    const mine = (SPACE.combat.shotList ?? []).find((x) => !was.has(x.id) && x.weapon === k);
+    return { lockId, aimId, to: mine?.target ?? null };
+  }, [slot, key]);
+
   await until(() => SPACE.combat.cool <= 0, 40, '재장전');
-  const r = await S(() => {
-    SPACE.putWeapon(3);
-    const lockId = SPACE.combat.radar.id;
-    const aimId = SPACE.combat.target?.id ?? null;
-    const was = new Set((SPACE.combat.shotList ?? []).map((s) => s.id));
-    SPACE.fire();
-    const mine = (SPACE.combat.shotList ?? []).find((s) => !was.has(s.id) && s.weapon === 'arh');
-    return { lockId, aimId, to: mine?.target ?? null };
-  });
-  ok(r.to === r.lockId && r.aimId !== r.lockId,
-    `③ ★★★ **유도탄이 묶은 것(#${r.lockId})으로 나간다** — 조준선은 딴 것(#${r.aimId})을 보고 있는데도.`
-    + ' 사장님이 「다시 조준해야 해서 불편하다」고 하신 그것이다');
-  // ④ 그래도 기총은 겨눠야 한다 — 안 그러면 조준 띠(v114)가 죽는다
-  await until(() => SPACE.combat.cool <= 0, 60, '재장전');
-  const r2 = await S(() => {
-    SPACE.putWeapon(1);
-    const lockId = SPACE.combat.radar.id;
-    const aimId = SPACE.combat.target?.id ?? null;
-    const was = new Set((SPACE.combat.shotList ?? []).map((s) => s.id));
-    SPACE.fire();
-    const mine = (SPACE.combat.shotList ?? []).find((s) => !was.has(s.id) && s.weapon === 'laser');
-    return { lockId, aimId, to: mine?.target ?? null };
-  });
-  ok(r2.to === r2.aimId,
-    `④ ★★★ **레이저는 조준선(#${r2.aimId})으로 나간다** — 기총은 기수 고정이다.`
+  const r2 = await shoot(1, 'laser');
+  ok(r2.to !== null && r2.to === r2.aimId,
+    `③ ★★★ **레이저는 조준선(#${r2.aimId})으로 나간다** — 기총은 기수 고정이다.`
     + ' 전부 락온을 쏘면 겨누는 조작이 없어진다 (장르 안전핀)');
+
+  await until(() => SPACE.combat.cool <= 0, 90, '재장전');
+  const r = await shoot(3, 'arh');
+  ok(r.to !== null && r.to === r.lockId && r.aimId !== r.lockId,
+    `④ ★★★ **유도탄이 묶은 것(#${r.lockId})으로 나간다** — 조준선은 딴 것(#${r.aimId})을 보고 있는데도.`
+    + ' 사장님이 「다시 조준해야 해서 불편하다」고 하신 그것이다');
   await S(() => { SPACE.putLock(false); SPACE.clearSky(); SPACE.setInfinite(false); });
 }
 
