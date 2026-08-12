@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=115">
+<link rel="stylesheet" href="css/style.css?v=116">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -176,7 +176,9 @@
     </div>
     <div id="pane-fit">
       <h3>기체 &mdash; 부위 일곱</h3>
-      <div id="fit-diagram"></div>
+      <!-- ★★★ v116 — **3D 도해.** 자리는 `game/hull-table.js` 가 안다 -->
+      <canvas id="fit-canvas" width="640" height="260"></canvas>
+      <small class="hint-line">끌면 돌아갑니다 · 줄에 손을 얹으면 그 자리가 빛납니다</small>
       <div id="fit-rows" class="grid"></div>
     </div>
     <!-- ══ ★★★ v114 — **인벤토리와 제조** (사장님 「인벤토리도 만들어야지.
@@ -315,6 +317,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=115"></script>
+<script type="module" src="js/main.js?v=116"></script>
 </body>
 </html>

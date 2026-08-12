@@ -172,6 +172,16 @@ function 먼저하는사람({ t, route, power, me, atPort }) {
 function 시키는대로({ route, power, me, faults, tutor, supply, atPort }) {
   const k = nowKey(tutor);
   if (!k) return;
+  // ══ ★★★ v116 — **첫 가르침이 `walk` 에서 `look` 으로 바뀌었다** ═══════
+  //
+  //  ★ v110 이 걷기를 없애면서 첫 가르침을 **둘러보기**로 바꿨다
+  //    (사장님이 「WASD 로 걷고」 안내가 남아 있는 것을 보시고 고치라 하신
+  //    자리다). 그런데 **이 가짜 사람이 안 따라왔다** — `look` 을 만나면
+  //    아무 가지에도 안 걸려 **첫 줄에서 영영 멈췄고**, 검사는 그것을
+  //    「게임이 첫 줄에서 막는다」로 읽어 빨개졌다.
+  //  ★★ 「시키는 대로 하는 사람」이 **시키는 것을 못 알아듣는** 상태였다.
+  //    막힌 것은 게임이 아니라 흉내였다
+  if (k === 'look') { me.turned += 0.6; return; }
   if (k === 'walk') { me.walked += 0.4; me.turned += 0.1; return; }
   me.busy = WALK;
   if (k === 'route' && atPort && !route.fork) chooseFork(route, route.offer[0].key);

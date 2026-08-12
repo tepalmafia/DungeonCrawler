@@ -90,6 +90,11 @@ import { BOOST, RUSH, KICK } from './game/boost-table.js';
 import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
 // ★★★ v114 — **계기 자리는 화면 좌표로** (사장님 「화면 uhd 정렬좀해」)
 import { centerFor, worldAt } from './game/screen-table.js';
+// ★★★ v116 — **기체 도해 3D** (사장님 「3d로 기체도 나오고 각 파츠의 역할도」)
+import { buildBay3D } from './world/bay3d.js';
+import { sectionsFor } from './game/hull-table.js';
+// ★★★ v116 — **속도와 가속도** (사장님 「가속도가 안 느껴지고」)
+import { mpsAt, accOf, fadeAcc, feelOf, speedWord } from './game/speed-table.js';
 import {
   makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
 } from './game/boost.js';
@@ -320,7 +325,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 115;
+export const VERSION = 116;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1257,10 +1262,63 @@ const pilot = makePilot();
 let grow = effectOf(pilot.picked);
 const regrow = () => { grow = effectOf(pilot.picked); };
 /** 기체 도해 — 부위 일곱이 어디에 붙나 (판 크기의 0~1) */
-const FIT_AT = {
-  gun: [0.50, 0.15], tube: [0.26, 0.40], armor: [0.50, 0.50],
-  engine: [0.50, 0.86], sensor: [0.74, 0.40], sink: [0.22, 0.70], hold: [0.78, 0.70],
-};
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v116 — **SVG 쐐기를 3D 도해로 갈아 끼웠다**
+//
+//  ★ 사장님 「**너무 허접하잔아. 3d로 기체도 나오고 각 파츠의 역할도 나오고
+//    상세하게 예쁘게 꾸며, 인터넷에서 비행선 데이터를 참고해서**」
+//
+//  ★★ 여기 `FIT_AT` 라는 **화면 좌표 표**가 따로 있었다 — 파츠 일곱의
+//    자리를 0~1 비율로 손으로 적어 둔 것이다. 즉 **자리를 아는 곳이
+//    둘**이었고(파츠 표 · 이 표), 파츠가 늘면 조용히 갈라진다.
+//    이제 자리는 `game/hull-table.js` 한 곳이고 3D 가 그걸 읽는다.
+//  ★ 배치 근거(레이돔은 코 · 무기 베이는 안쪽 · 방열판은 넓은 판 …)도
+//    거기 적혀 있다 — 실제 기체와 우주선에서 가져왔다
+// ══════════════════════════════════════════════════════════════════════════
+/** ★ 도해는 창을 열 때 한 번 짓는다 — 매번 지으면 WebGL 문맥이 샌다 */
+let bay3d = null;
+let bay3dRaf = 0;
+let bay3dTouched = 0;
+
+function bay3dStop() {
+  if (bay3dRaf) cancelAnimationFrame(bay3dRaf);
+  bay3dRaf = 0;
+}
+
+function bay3dStart() {
+  const cv = document.getElementById('fit-canvas');
+  if (!cv) return;
+  if (!bay3d) {
+    try { bay3d = buildBay3D(cv); } catch (e) { console.warn('[도해] 못 세웠습니다', e); return; }
+    // ★★ 손으로 돌린다 — 「돌려 볼 수 있다」가 3D 인 이유의 절반이다
+    let drag = null;
+    cv.addEventListener('pointerdown', (ev) => {
+      drag = { x: ev.clientX, y: ev.clientY }; cv.setPointerCapture(ev.pointerId);
+    });
+    cv.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      bay3d.spin((ev.clientX - drag.x) * 0.01, (ev.clientY - drag.y) * 0.01);
+      drag = { x: ev.clientX, y: ev.clientY };
+      // ★ 손을 대면 **저절로 도는 것을 멈춘다** — 보려는 각을 뺏으면 안 된다
+      bay3dTouched = 6;
+    });
+    const up = () => { drag = null; };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+  }
+  const w = cv.clientWidth || 520; const h = cv.clientHeight || 240;
+  bay3d.resize(w, h);
+  bay3dStop();
+  let last = performance.now();
+  const loop = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (bay3dTouched > 0) bay3dTouched -= dt;
+    bay3d.render(dt, bay3dTouched <= 0);
+    bay3dRaf = requestAnimationFrame(loop);
+  };
+  bay3dRaf = requestAnimationFrame(loop);
+}
+
 /**
  * ★ v114 — 표의 `**굵게**` 를 화면에서 굵게. 표는 사람이 읽는 글이라
  *   저장소 규약대로 별표를 쓰는데, 그대로 뿌리면 **별표가 그냥 보인다**
@@ -1274,32 +1332,24 @@ function drawBay() {
   const box = document.getElementById('bay');
   if (!box) return;
   const s = fitSummary(fit, grow.oreMult);
-  // ── 도해 ──────────────────────────────────────────
-  const W = 520, H = 200;
-  const parts = [
-    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="기체 부위 배치도">`,
-    // 동체 — **쐐기**. 창밖 실루엣·조준경 표식과 같은 모양이라
-    // 「저게 내 배구나」가 한 번에 읽힌다
-    `<path class="hull" d="M${W * 0.5},12 L${W * 0.5 + 52},${H - 26}`
-    + ` L${W * 0.5},${H - 44} L${W * 0.5 - 52},${H - 26} Z"/>`,
-  ];
-  for (const sl of s.slots) {
-    const [fx, fy] = FIT_AT[sl.key] ?? [0.5, 0.5];
-    const x = fx * W, y = fy * H;
-    parts.push(`<rect class="slot-box${sl.canUp ? ' up' : ''}" x="${x - 32}" y="${y - 11}"`
-      + ' width="64" height="22" rx="3"/>');
-    parts.push(`<text class="slot-name" x="${x}" y="${y + 4}" text-anchor="middle">${sl.name}</text>`);
+  // ── 도해 — **3D** (`world/bay3d.js` 가 `hull-table.js` 를 읽는다) ──
+  bay3dStart();
+  if (bay3d) {
+    // 등급을 입힌다 — 좋은 파츠일수록 그 덩어리가 밝다
+    bay3d.setTiers(Object.fromEntries(s.slots.map((sl) => [sl.key, sl.tier])));
   }
-  parts.push('</svg>');
-  document.getElementById('fit-diagram').innerHTML = parts.join('');
 
   // ── 줄 일곱 ────────────────────────────────────────
   const rows = s.slots.map((sl) => {
     const canEquip = sl.spares > 0;
     const canUp = sl.canUp && supply.ore >= sl.oreUp;
-    return `<span>${sl.name}</span>`
-      + `<b><span class="tier-${sl.tier}">${sl.label}</span>`
+    // ★ v116 — **몸이 어디인지 적는다** (`hull-table.js`). 도해에 빛나는
+    //   덩어리와 이 이름이 같아야 「저게 저거구나」가 된다
+    const body = sectionsFor(sl.key).map((x) => x.name).join(' · ');
+    return `<span data-lit="${sl.key}">${sl.name}</span>`
+      + `<b data-lit="${sl.key}"><span class="tier-${sl.tier}">${sl.label}</span>`
       + `<small style="color:#5e6b7a"> &nbsp;${sl.what}</small>`
+      + ` <small style="color:#7d8b9c">— ${body}</small>`
       + (sl.spares
         ? `<br><small style="color:#7d8b9c">여분 ${sl.spares} · 제일 좋은 것 ${sl.best}</small>`
         : '')
@@ -1398,11 +1448,19 @@ function showBay(on) {
   bayOpen = !!on;
   const box = document.getElementById('bay');
   if (!box) return;
-  if (bayOpen) drawBay();
+  if (bayOpen) drawBay(); else bay3dStop();   // ★ v116 — 닫으면 도해도 멈춘다
   box.hidden = !bayOpen;
   // ★ 열면 마우스를 풀어 준다 — 안 풀면 단추를 못 누른다
   if (bayOpen) document.exitPointerLock?.();
 }
+// ★★★ v116 — **줄에 손을 얹으면 그 덩어리가 빛난다.** 이름만으로는
+//   「센서가 배의 어디인지」를 모른다 — 도해가 있는 이유의 절반이 이것이다
+addEventListener('pointerover', (ev) => {
+  if (!bayOpen || !bay3d) return;
+  const el = ev.target.closest?.('#fit-rows [data-lit]');
+  bay3d.highlight(el ? el.dataset.lit : null);
+});
+
 addEventListener('click', (ev) => {
   const b = ev.target.closest?.('#bay .act');
   if (b) {
@@ -2327,6 +2385,18 @@ composer.addPass(new OutputPass());
 // ══════════════════════════════════════════════════════════════════════════
 /** ★ 지난번에 놓을 때의 화각·비율 — 바뀔 때만 다시 놓는다 */
 let fovWas = -1, aspectWas = -1;
+/**
+ * ★★★ v116 — **가속도** (사장님 「가속도가 안 느껴지고」).
+ *   `mpsWas` 는 지난 프레임의 창밖 속도, `accK` 는 **삭아 가는 느낌** 0~1
+ */
+let mpsWas = 0, accK = 0;
+/**
+ * ★★ **끌려가는 몫을 뺀 순수한 배 속도** (m/초).
+ *   창밖은 「붙으러 가는 것」까지 보여야 하지만, **상태창과 투하 이탈은
+ *   배가 제 힘으로 얼마나 가나**를 물어야 한다 — 둘을 한 값으로 쓰면
+ *   그물에 매달려 끌려가는 동안 「전속으로 이탈 중」이라고 뜬다
+ */
+let mpsPure = 0;
 function placePanels() {
   if (!ship) return;
   const aspect = camera.aspect || 1;
@@ -3870,9 +3940,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   const shipStatus = {
     heat,
     cooling: valveOpen && power.cool,
-    speed: statusSpeed(CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
-      // ★ v101 — 스로틀이 배수를 정한다 (역추진이면 0)
-      : legOf(thr, LEG.coast))),
+    // ★★★ v116 — **재는 곳을 하나로.** 여기 `CRUISE.speed * legOf(...)` 를
+    //   손으로 다시 곱하고 있었다 — 창밖은 `speed-table.js` 로 옮겼는데
+    //   상태창만 옛 셈에 남으면 **계기가 창밖과 다른 말을 한다**
+    speed: statusSpeed(mpsPure),
+    speedWord: speedWord(mpsPure),
     power,
     sign: chase.sign,
     missiles: supply.missiles,
@@ -5287,6 +5359,20 @@ window.SPACE = {
   /** ★ v115 — 점검용 구멍. 성장을 눌러 보고 특성이 정말 먹나 잰다 */
   giveXp(n) { upXp(n, '점검'); return { ...pilot, eff: grow }; },
   pilotNow() { return { ...pilot, eff: { ...grow } }; },
+  /**
+   * ★★★ v116 — **창밖이 지금 얼마나 흐르나** (사장님 「가속도가 안 느껴지고」).
+   *   `space-speed.js` 는 표만 재고, **화면이 그 표대로 도나**는 여기로 묻는다
+   */
+  speedNow() {
+    return {
+      mps: +mpsWas.toFixed(2), pure: +mpsPure.toFixed(2), acc: +accK.toFixed(3),
+      fov: +camera.fov.toFixed(2),
+      streak: ship.outside?.view?.streak ?? null,
+      streakLen: ship.outside?.view?.streakLen ?? 0,
+      towing: catching(catchS),
+    };
+  },
+  setThrust(on) { setThrustKey(!!on); return power.thrust; },
   /** ★★★ v106 — **수리 단추.** 검사(`space-pilot.js`)와 점검 모드가 읽는다 */
   get fix() {
     return {
@@ -6191,10 +6277,10 @@ function frame(now) {
       armed: warhead.armed,
       // ★ 이탈 거리는 **진짜 배 속도**로 채운다 — 화면만 빨라지고 실제로
       //   안 빠르면 그건 「가는 척하는 화면」이다 (v88 규약)
-      speed: CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
-        // ★ v101 — 스로틀. 그물에 묶였거나 도킹 중이면 못 나아간다
-        : ((power.thrust && !thrustHeld(salvage) && !docked(dockS))
-          ? legOf(thr, LEG.coast) : LEG.coast)) * boostMult(boost),
+      // ★ v116 — **같은 값을 읽는다** (`mpsPure`). 여기도 손으로 다시
+      //   곱하고 있었고, 그래서 v116 이 창밖 바닥값을 고쳤을 때 **이탈
+      //   거리만 옛 셈으로 남을** 뻔했다
+      speed: mpsPure,
     });
     if (ev === 'run') { say(ai, DSAY.run, 'alarm'); audio?.event('alarm'); }
     if (ev === 'window') {
@@ -6396,9 +6482,23 @@ function frame(now) {
   //   그게 그물의 값이다: **주우려면 도망칠 수 없다.** 「지원이 오기
   //   전에」가 무서운 이유가 이 한 줄이다 (`salvage-table.js NET.holdsThrust`)
   const tied = thrustHeld(salvage);
-  const cruise = route.phase === RPHASE.PORT ? 0.25
-    // ★ v101 — 스로틀이 여기로 온다. 도킹 중이면 **못 움직인다**
-    : ((power.thrust && !tied && !docked(dockS)) ? legOf(thr, LEG.coast) : LEG.coast);
+  // ══ ★★★ v116 — **거점에서도 스로틀이 먹는다** ═══════════════════════
+  //
+  //  ★ 여기가 `route.phase === PORT ? 0.25 : ...` 였다 — 거점에 있는 동안
+  //    **스로틀이 아무것도 안 했다.** 그런데 **회차는 거점에서 시작한다.**
+  //    켜자마자 밀어 보면 화면이 한 톨도 안 바뀌고, 사장님이 말씀하신
+  //    「가속도가 안 느껴진다」의 첫인상이 정확히 거기서 난다.
+  //  ★★ 0.25 는 「정박 중에는 항로가 안 나아간다」는 **항로의 값**인데
+  //    **눈에도** 쓰고 있었다 — `LEG.coast` 와 똑같은 병이다.
+  //  ★ 이제 **천장만** 씌운다 (`speed-table.js SPEED.portCap`).
+  //    항로가 안 나아가는 것은 `stepRoute` 가 따로 지킨다
+  //  ★★★ 그리고 **눈은 `legOf` 를 쓰면 안 된다.** `legMult` 는 바닥이
+  //    `coast`(0.45)라 **스로틀을 0 으로 내려도 0.45 가 나온다** — 그게
+  //    「멈춰도 창밖이 흐른다」의 마지막 조각이었다. 브라우저로 재고서야
+  //    찾았다 (표만 고치고 게임은 옛 함수를 부르고 있었다).
+  //    `coast` 는 **항로가 관성으로 나아가는 몫**이지 눈의 값이 아니다
+  const atPort = route.phase === RPHASE.PORT;
+  const cruise = (power.thrust && !tied && !docked(dockS)) ? Math.max(0, thr.v) : 0;
   // ★★ **착륙이 화면을 몬다** — 고도 하나가 별 흐름·하늘색·발광·지면을 다 정한다.
   //   `update` 보다 **먼저** 넣는다. 나중에 넣으면 이번 프레임은 옛 고도로
   //   그려지고, 그 한 프레임이 마디가 바뀌는 순간마다 툭 끊겨 보인다
@@ -6411,10 +6511,34 @@ function frame(now) {
   // ★★★ v73 — **급가속이 창밖을 몬다.** 먼지가 쏟아지고 길어진다.
   //   속도(`cruise`)에도 곱한다 — 화면만 빨라지고 실제로 안 빠르면
   //   그건 속임수고, 이 저장소는 그런 것을 「가는 척하는 화면」이라 부른다
-  ship.outside.update(
-    dt, CRUISE.speed * cruise * boostMult(boost),
-    hazard.lane, incoming(hazard), camera, boost.k,
-  );
+  // ══ ★★★ v116 — **창밖 속도는 표가 낸다** (`speed-table.js mpsAt`) ═════
+  //
+  //  ★ 사장님 「**가속도가 안 느껴지고**, f로 붙으면 실제로 붙어야지.
+  //    **멀리서 그냥 가져오는게 아니고**」 — **두 마디가 같은 뿌리**다.
+  //    창밖이 「지금 얼마나 가고 있나」를 안 말하고 있었다.
+  //
+  //  ★★ 여기 `CRUISE.speed * cruise * boostMult(boost)` 를 **직접 곱하고**
+  //    있었는데, `cruise` 의 바닥이 `LEG.coast`(0.45)였다. 그건 「추진을
+  //    꺼도 항로는 관성으로 나아간다」는 **항로의 값**이지 **눈의 값**이
+  //    아니다 — 그래서 **멈춰도 창밖이 11.7 mps 로 흘렀고**, 전속(26)과
+  //    겨우 2.2배 차이였다. 밀어도 안 빨라진 것처럼 보이는 것이 당연하다.
+  //  ★★★ 그리고 **붙으러 가는 속도를 얹는다.** 포획이 거리를 줄이는 동안
+  //    창밖이 그대로면 **꾸러미가 날아오는** 것으로 보인다 — 실제로는
+  //    배가 가는 것이다. 그게 「멀리서 그냥 가져오는게 아니고」의 답이다
+  mpsPure = mpsAt({ leg: cruise, back: thr.v < 0, boost: boostMult(boost), port: atPort });
+  const mpsNow = mpsAt({
+    leg: cruise, back: thr.v < 0, boost: boostMult(boost), port: atPort,
+    // ★ 끄는 속도는 **포획 표가 이미 안다** (`catch-table.js CATCH.speed`).
+    //   여기서 새 숫자를 적으면 「화면은 이만큼 가는데 거리는 저만큼 준다」가 난다
+    tow: catching(catchS) ? CATCH.speed : 0,
+  });
+  // ══ ★★★ **가속도** — 「빠르다」와 「빨라진다」는 다른 신호다 ═══════════
+  //  ★ 화면에 이 항이 **아예 없었다.** 사장님이 말씀하신 것은 속도가
+  //    아니라 **속도의 변화**이고, 그건 등속이 되면 사라져야 읽힌다
+  accK = fadeAcc(accK, accOf((mpsNow - mpsWas) / Math.max(dt, 1e-4)), dt);
+  mpsWas = mpsNow;
+  const feel = feelOf(accK);
+  ship.outside.update(dt, mpsNow, hazard.lane, incoming(hazard), camera, boost.k, accK);
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
   // ★ **해도대가 어긋나면 눈금이 밀린다** (chartDrift). 다만 **거짓말인 줄은
@@ -6540,13 +6664,21 @@ function frame(now) {
     me.z += (s.z - me.z) * k;
     camera.position.y -= (BODY.eye - HELM_SEAT.eye) * helmSitK;
   }
+  // ★★ v116 — **좌석이 밀린다** — 몸으로 느끼는 몫. 눈을 뒤로(+z) 민다
+  //   (기수는 −z 를 본다). 아주 작은 값이라야 한다 — 크면 멀미가 난다
+  if (accK > 0.002) camera.position.z += feel.seat * accK;
   // ★ 화각 — 읽을 때는 좁히고(45) 몰 때는 넓힌다(94). 둘이 동시에 1 이
   //   될 수 없으므로(`wantFocus` 가 `steering` 을 뺀다) 그냥 더한다
   // ★★★ v73 — **급가속이면 화각이 열린다.** 가장자리가 빨리 흘러
   //   속도로 읽힌다 — 레이싱 게임이 다 쓰는 것이고, 눈이 실제로 그렇게
   //   느낀다. 「빛무리가 쏟아져오거나 속도감이 느껴지도록」의 절반이 이것
+  // ★★★ v116 — **가속도가 화각을 연다** (`speed-table.js feelOf`).
+  //   급가속(`RUSH.fov * boost.k`)과 **다른 것**이다: 저건 「밟는 동안」이고
+  //   이건 「빨라지는 동안」이라, 스로틀을 미는 1.4초에도 열렸다가 등속이
+  //   되면 삭는다. 둘을 더하는 것은 맞다 — 급가속의 앞 순간에는 둘 다 참이고,
+  //   그 겹치는 순간이 제일 세게 미는 순간이기 때문이다
   const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK
-    + (FLY_VIEW.fov - FOV_WIDE) * flyK + RUSH.fov * boost.k;
+    + (FLY_VIEW.fov - FOV_WIDE) * flyK + RUSH.fov * boost.k + feel.fov;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (focusK > 0.001) {
     // 보는 쪽으로 몸을 기울인다 — 자리는 그대로고 **눈만** 나아간다

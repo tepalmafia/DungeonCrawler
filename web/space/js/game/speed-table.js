@@ -61,6 +61,22 @@ export const SPEED = {
   streakFast: 95,
   /** 이보다 느리면 줄을 안 긋는다 (점으로 남는다) */
   streakMin: 3,
+
+  /**
+   * ★★★ **거점에서도 스로틀이 먹는다** (v116 · 재 보고 찾았다).
+   *
+   *   ★ `main.js` 에 `route.phase === PORT ? 0.25 : ...` 가 있었다 —
+   *     즉 **거점에 있는 동안은 스로틀이 아무것도 안 했다.** 그런데
+   *     **회차는 거점에서 시작한다** (`phase: 'port'` · 남은 거점 12).
+   *     사장님이 켜자마자 R 이나 W 를 밀어 보셨다면 **화면이 한 톨도
+   *     안 바뀌었을 것**이고, 「가속도가 안 느껴진다」의 첫인상이 거기서 난다.
+   *   ★★ `LEG.coast` 때와 **똑같은 병**이다: 0.25 는 「정박 중에는 항로가
+   *     안 나아간다」는 **항로의 값**인데 **눈에도** 쓰고 있었다.
+   *   ★★★ 그래서 **가르되 막지는 않는다** — 거점에서는 배수의 **천장**만
+   *     둔다. 밀면 반응하고(0.10 → 0.45, 눈으로 4.5배), 그래도 전속으로
+   *     떠나 버리지는 못한다. 「정박 중」과 「멈춰 있음」은 다르다
+   */
+  portCap: 0.45,
   /** 곡선의 휨 — 1 이면 곧다. 0.55 면 느린 쪽이 조금 더 민감하다 */
   streakBend: 0.55,
 
@@ -92,8 +108,10 @@ export const SPEED = {
  * @param boost 급가속 배수 (1 이면 안 씀)
  * @param tow   ★ 끌려가는 속도 (m/s) — 포획으로 **붙으러 갈 때**
  */
-export function mpsAt({ leg = 0, back = false, boost = 1, tow = 0 } = {}) {
-  const k = back ? SPEED.back : (SPEED.idle + (SPEED.full - SPEED.idle) * Math.max(0, Math.min(1, leg)));
+export function mpsAt({ leg = 0, back = false, boost = 1, tow = 0, port = false } = {}) {
+  // ★ 거점에서는 **천장만** 씌운다 — 못 움직이게 하는 것이 아니다
+  const lg = port ? Math.min(leg, SPEED.portCap) : leg;
+  const k = back ? SPEED.back : (SPEED.idle + (SPEED.full - SPEED.idle) * Math.max(0, Math.min(1, lg)));
   // ★★ **붙으러 가는 것도 가는 것이다** (사장님 「f로 붙으면 실제로 붙어야지」).
   //   포획이 거리를 줄이는 동안 창밖이 그대로면 **꾸러미가 날아오는** 것으로
   //   보인다. 실제로는 배가 가는 것이므로 그 속도를 여기에 얹는다

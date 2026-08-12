@@ -123,9 +123,12 @@ export function drawStatus(ctx, x, y, w, h, s, theme = 'hud') {
   row(ctx, T, x, at(), w, bh, '냉각', s.cooling ? 1 : 0, s.cooling ? '돈다' : '꺼짐', !s.cooling);
 
   // ③ 속도 — 「지금 얼마나 가고 있나」
+  // ★★ v116 — 말은 **표가 한다** (`speed-table.js speedWord`). 여기서
+  //   따로 「느리다/순항」을 정하고 있었는데, 창밖 속도 눈금이 v116 에
+  //   통째로 바뀌면서 **같은 속도를 두 곳이 다르게 부르게** 됐다
   const sp = clamp01(s.speed ?? 0);
   row(ctx, T, x, at(), w, bh, '속도', sp,
-    sp < 0.05 ? '섰다' : sp < 0.5 ? '느리다' : '순항', sp < 0.05);
+    s.speedWord ?? (sp < 0.05 ? '섰다' : sp < 0.5 ? '느리다' : '순항'), sp < 0.05);
 
   // ④ 전력 — **계기판에서 여기로 올라왔다** (v69).
   //    셋 중 켜진 것의 이름을 적는다. 띠로는 「어느 둘인가」를 못 말한다

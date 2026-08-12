@@ -358,7 +358,11 @@ node tools/space-combat.js       스페이스워 — ★★ 레이더 원뿔 · 
 node tools/space-bfm.js          스페이스워 — ★★★ **우주판 공중전** · 360도 · 회전 부하(고증) · 급기동 · **급가속** (v73)
 node tools/space-sound.js        스페이스워 — ★★★ **진공** · 밖은 조용한가 · 선체를 때린 것만 들리나 (v74)
 node tools/space-radar.js        스페이스워 — ★★★ **레이더 고증** · 위아래·접근율·RWR · 「왼쪽/오른쪽」이 없어졌나 (v75)
-node tools/space-reach.js        스페이스워 — ★★★ **손 닿는 것이 정말 닿나** · 누가 누구를 가리나 (v76)
+                                 ※ `space-reach.js` 는 **접었습니다** (v116) — 배 안을
+                                   걸어다니며 밸브·크랭크·차단기에 손이 닿나를 재던 도구인데,
+                                   v109·v110 이 **걷기와 그 물건들을 통째로 없앴습니다.**
+                                   지금 손이 닿아야 하는 것은 조종석 안에만 있고,
+                                   그건 `space-yoke.js`(조종간)·`space-check.js`(진짜 마우스)가 봅니다
 node tools/space-target.js       스페이스워 — ★★ 떠도는 것 · **적이 계속 오나** · **사방에 있나** (v69)
 node tools/space-optic.js        스페이스워 — ★★★ **광학 창 · 전투력** · 당겨서 보나 · 격추가 보이나 · 「강하면 피한다」가 서나 (v79)
 node tools/space-salvage.js      스페이스워 — ★★★ **회수** · 부수면 저절로 들어오나 · 지원 시계가 도나 · 다 못 줍나 (v81)
@@ -392,6 +396,8 @@ node tools/space-hold.js         스페이스워 — ★★★ **화물 · 인�
 node tools/space-screen.js       스페이스워 — ★★★ **UHD 정렬** · 창이 바뀌어도 계기가 같은 구석인가 (진짜 카메라 · v114)
 node tools/space-genre.js        스페이스워 — ★★★ **장르** · 우주 비행전투 RPG 의 기둥 다섯이 다 섰나 (뼈대만 · v115)
 node tools/space-growth.js       스페이스워 — ★★★ **사람이 크나** · 회차에 딱 다 크나 · 잘하면 더 크나 · 다 못 고르나 (뼈대만 · v115)
+node tools/space-speed.js        스페이스워 — ★★★ **가속도** · 멈추면 멈추나 · 빨라지는 것이 따로 있나 · 붙으러 갈 때 흐르나 (뼈대만 · v116)
+node tools/space-hull.js         스페이스워 — ★★★ **기체 도해** · 파츠 일곱이 다 몸을 가졌나 · 안 파고드나 (뼈대만 · v116)
 node tools/space-endtoend.js     스페이스워 — ★★ **처음부터 끝까지 되나** (손으로만 · 제일 먼저 돌린다)
 node tools/space-skin.js         스페이스워 — 그림을 넣으면 정말 물리나 (임시 무늬로 흘려 본다)
 node tools/space-audio.js        스페이스워 — 뿌리친 3초가 정말 조용해지나 (파형을 재 본다)
