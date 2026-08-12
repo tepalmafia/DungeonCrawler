@@ -113,26 +113,21 @@ const pressUntil = async (cond, tries = 5, sec = 1.2) => {
  *   되어 검사가 아무것도 안 지키게 된다
  */
 const aimAround = async (x, z, yaw, pitch, want) => {
-  // ★★★ **가장자리가 아니라 한가운데를 잡는다** (v66 · 여기서 다섯 번 빨개졌다).
-  //   처음엔 「맞는 각도가 나오면 바로 멈춘다」였다. 그러면 거의 늘
-  //   **판정 상자의 가장자리**에 서게 되는데, 배는 늘 미세하게 떨리므로
-  //   (`camera.rotation.z = sw * 0.06 + fly3.tiltZ`) 가장자리에서는
-  //   프레임마다 들락날락한다. 그래서 「잡힌다 ✔ → 눌렀더니 아무 일 없음 ✘」
-  //   이 계속 났다. **맞는 각도를 다 모아 가운데로 간다.**
-  // ★ **한가운데가 이미 굳게 잡히면 훑지 않는다** — 25칸을 다 돌면 한 번에
-  //   40초고, 그게 쌓여 브라우저가 먼저 죽었다 (검사가 안 끝나면 아무것도
-  //   못 지킨다). 「두 번 연달아 잡히나」로 굳었는지를 본다
-  if (await aimAt(x, z, yaw, pitch, want, 4) && await aimAt(x, z, yaw, pitch, want, 2)) return true;
-  const hits = [];
-  for (const dy of [-0.2, 0, 0.2]) {
-    for (const dp of [-0.2, 0, 0.2]) {
-      if (await aimAt(x, z, yaw + dy, pitch + dp, want, 3)) hits.push([dy, dp]);
-    }
-  }
-  if (!hits.length) return false;
-  const my = hits.reduce((a, h) => a + h[0], 0) / hits.length;
-  const mp = hits.reduce((a, h) => a + h[1], 0) / hits.length;
-  return aimAt(x, z, yaw + my, pitch + mp, want, 8);
+  // ══ ★★★ v120 — **훑는 일은 `aimSweep` 하나가 한다** ═══════════════
+  //
+  //  ★ 여기가 3×3 을 따로 훑고 있었는데, 이제 `aimAt` 자체가 훑는다.
+  //    둘을 겹치면 한 번에 **9×99 칸**이 되어 몇 분을 태운다 —
+  //    「재는 곳을 둘로 만들지 않는다」가 검사 안에서도 같다.
+  //  ★★ 「가장자리가 아니라 한가운데」라는 v66 의 뜻은 남긴다:
+  //    찾은 자리에서 **한 번 더 확인**해서, 배가 떠는 동안 들락날락하는
+  //    가장자리를 걸러 낸다 (여기서 다섯 번 빨개졌던 자리다)
+  if (!(await aimSweep(yaw, pitch, want))) return false;
+  await p.waitForTimeout(250);
+  const now = await S(() => SPACE.aim);
+  const stuck = Array.isArray(want) ? want.includes(now) : now === want;
+  if (stuck) return true;
+  // 가장자리였다 — 한 번만 더 훑어 본다
+  return aimSweep(yaw, pitch, want);
 };
 const settle = async () => {
   // ★★★ **짐벌이 바로 설 때까지** 기다린다 (v66 · 여기서 세 번 빨개졌다).
@@ -178,13 +173,43 @@ const sit = async () => {
 //    한 줄씩을 남겼다. **없앤 것을 남겨 두면 검사가 느려지고 시끄러워진다.**
 //  ★ 함수를 지워 두면 누가 다시 부를 때 **그 자리에서 죽는다** —
 //    조용히 24초를 기다리는 것보다 낫다
-/** 자리를 옮기고 조준이 **굳을 때까지** 기다린다 */
-const aimAt = async (x, z, yaw, pitch, want, tries = 22) => {
-  await S(([a, c, d, e]) => SPACE.put(a, c, d, e), [x, z, yaw, pitch]);
-  await S((w) => { window.__want = w; }, want);
-  return until(() => (Array.isArray(window.__want)
-    ? window.__want.includes(SPACE.aim) : SPACE.aim === window.__want), tries, `${want} 조준`);
+// ══ ★★★ v120 — **자리를 옮기는 것이 없어졌다. 조준은 「찾는다」** ═════
+//
+//  ★ 사장님 (2026-08-12) 「낡은 절들 정리해줘」
+//
+//  ★★ 여태 `aimAt(x, z, yaw, pitch, …)` 이 **몸을 그 자리로 옮기고**
+//    거기서 겨눴다. 그런데 v110 이 몸을 **매 프레임 좌석으로** 되돌린다 —
+//    `SPACE.put` 의 x·z 는 그 다음 프레임에 지워진다. 그래서 옛 좌표로
+//    잰 yaw·pitch 는 **좌석에서 보면 엉뚱한 곳**을 가리키고, 검사는
+//    「chart0,chart1 조준 을(를) 못 봤다」를 스무 번씩 찍으며 몇 분을 태웠다.
+//    (실제로 [3c]·[4] 에서 그 줄이 여덟 번 나왔다)
+//
+//  ★★★ 그래서 **좌표를 안 믿고 찾는다.** 좌석에 앉은 채로 준 각을
+//    가운데 두고 좌우·위아래로 훑어서, 원하는 이름이 잡히는 각을 고른다.
+//    부르는 자리를 하나도 안 고치고 뜻만 바뀐다 — 그리고 **다음에 조종석
+//    배치가 또 바뀌어도 이 함수는 안 낡는다.** 각을 손으로 적어 두는 것이
+//    낡는 것이지, 「찾는다」는 안 낡는다
+const aimSweep = async (yaw, pitch, want, tries = 22) => {
+  const put = async (y, q) => {
+    await S(([a, b]) => SPACE.put(SPACE.pos.x, SPACE.pos.z, a, b), [y, q]);
+    await p.waitForTimeout(90);
+    const now = await S(() => SPACE.aim);
+    return Array.isArray(want) ? want.includes(now) : now === want;
+  };
+  // ① 준 각 그대로 — 대개 여기서 걸린다
+  if (await put(yaw, pitch)) return true;
+  // ② 좌우 ±0.9 rad · 위아래 ±0.7 rad 를 성기게 훑는다
+  for (const dq of [0, -0.18, 0.18, -0.36, 0.36, -0.55, 0.55, -0.7, 0.7]) {
+    for (const dy of [0, -0.15, 0.15, -0.3, 0.3, -0.5, 0.5, -0.7, 0.7, -0.9, 0.9]) {
+      if (dq === 0 && dy === 0) continue;
+      if (await put(yaw + dy, pitch + dq)) return true;
+    }
+  }
+  console.log(`   … ${want} 을(를) 못 찾았다 (좌석에서 훑어 봤다)`);
+  return false;
 };
+/** 겨눈다 — **자리는 좌석 고정이므로 x·z 는 안 쓴다** (부르는 자리를 안 고치려고 남겨 둔다) */
+const aimAt = async (x, z, yaw, pitch, want) => aimSweep(yaw, pitch, want);
 
 await S(() => SPACE.clearSave());
 // ★ v78 — 제목 화면에 **단추가 생겼다.** 가운데를 그냥 누르면
