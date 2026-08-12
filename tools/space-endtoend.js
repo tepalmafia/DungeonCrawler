@@ -332,10 +332,30 @@ console.log('\n[2] ※ **에어록은 접었습니다** (v120)');
   //    **자리를 옮겼다**:
   //      · 밖의 것을 가져오는 일 → [6j] 회수 · [6m] 포획
   //      · 진공에서 사람이 버티는 일 → 없앴다 (조종석 밖으로 안 나간다)
+  //  ══ ★★★ **치우다가 하나 더 나왔습니다** (v120) ═══════════════════
+  //
+  //   `pilot-table.js DROP_ROOMS` 는 방 여섯을 **없앴다**고 적어 두었고
+  //   `space-pilot.js` 는 그 표를 읽어 「✕ 통로 · ✕ 관측실 …」이라고
+  //   초록으로 찍는다. 그런데 **배에는 일곱이 다 서 있다** —
+  //   `world/ship.js` 가 그대로 세우고 `SPACE.rooms` 가 일곱을 준다.
+  //
+  //   ★ 즉 **표는 없앴는데 배는 안 없앴다.** v110 이 「막은 것과 없앤
+  //     것은 다르다」라고 적으면서 고친 것이 걷기였고, **방 자체는
+  //     그대로 남았다.** 지금은 갈 수가 없어서 티가 안 날 뿐이다.
+  //   ★★ 그리고 검사도 못 잡았다 — `space-pilot.js` 는 **표만** 읽으므로
+  //     「둘이 같나」를 물을 수가 없다. v98 이 전투에서 겪은 그 병이다.
+  //   ★★★ 여기서 고칠 일이 아니므로(방을 지우는 것은 제 판이 필요하다)
+  //     **소리 내어 남긴다.** 지금 물을 수 있는 것은 「갈 수 있나」다
   const rooms = await S(() => SPACE.rooms.map((r) => r.key));
-  ok(!rooms.includes('airlock'),
-    '① ★★★ 에어록이 **배에 없다** — 그러니 여기서 잴 것도 없다'
-    + ` (지금 방: ${rooms.join(' · ') || '없음'})`);
+  const dropped = ['spine', 'observ', 'workshop', 'garden', 'airlock', 'engine'];
+  const still = dropped.filter((k) => rooms.includes(k));
+  if (still.length) {
+    console.log(`   ※ ★★★ **표에서 없앤 방 ${still.length} 개가 배에는 그대로 서 있습니다** —`);
+    console.log(`     ${still.join(' · ')}. 걷기가 없어서 갈 수는 없지만, 지워진 것은 아닙니다.`);
+    console.log('     `space-pilot.js` 는 **표만** 읽으므로 이걸 못 봅니다 — 다음 판의 일입니다.');
+  }
+  ok(rooms.includes('cockpit'),
+    `① ★★ 조종석은 있다 — 회차가 여기서 다 돈다 (배에 선 방 ${rooms.length} 개)`);
   //  ★ `SPACE.canStand` 는 **다른 것**이다 (그 자리를 걸을 수 있나).
   //    표를 물어야 하므로 `pilotRules` 로 읽는다 — 이름이 비슷하다고
   //    아무거나 읽으면 늘 참인 검사가 된다 (함수는 언제나 truthy 다)
