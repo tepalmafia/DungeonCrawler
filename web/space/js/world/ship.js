@@ -45,6 +45,7 @@ import { DOOR } from '../game/door-table.js';
 // ★ v64 — 주포(포탑·사다리·조준석)를 걷어냈다. 조준경만 남는다
 import { LADDER } from './turret.js';
 import { buildSight } from './gunsight.js';
+import { buildLootHud } from './loothud.js';
 import { buildStatusHud } from './status.js';
 import { DEP, ROOF, HUD as HUDV } from '../game/view-table.js';
 // ★★★ v91 — HUD 는 **잡은 눈** 앞에 놓아야 한다 (아래 참조). 그 눈의 자리를 읽는다
@@ -1194,6 +1195,14 @@ export function buildShip(scene, camera = null, renderer = null) {
   faceEye(radarHud.mesh);          // ★ v102 — 사람을 보게 돌린다
   ship.add(radarHud.mesh);
 
+  // ══ ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** ═══════════════════════
+  //  ★ 사장님 「회수하겠습니까? 질문이 나오고」 · 「아이템을 먹으면 요약이」
+  //  ★★ **카메라의 자식**이다 (v118) — 둘러봐도 정면이고, 계기 셋과 달리
+  //    「잠깐 뜨는 것」이라 전투 원뿔을 피해 아래·오른쪽 위로 앉힌다
+  //  ★ 카메라가 없으면(검사가 배만 세울 때) **안 만든다** — 없는 것을
+  //    만들려다 죽으면 배가 통째로 안 선다
+  const lootHud = camera ? buildLootHud(camera, HUDV.dist + 0.02) : null;
+
   // ══ ★★★ **광학 창** — 당겨 보고, 부서지는 것을 본다 (v79) ═══════════
   //  사장님 「멀리있는 적을 레이더 말고 **확대**하거나 …」
   //         「**격추시 적 기체가 부서지는 화면**도 … **화면 상단이나
@@ -1271,6 +1280,9 @@ export function buildShip(scene, camera = null, renderer = null) {
 
   return { group: ship, cock, outside, valve, wheel, breakers, chart, bench, panels, doors,
     turret, sight, statusHud, radarHud, optic, cradle, outerDoor, marks, byBay,
+    // ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** (`world/loothud.js`).
+    //   카메라의 자식이라 여기서 자리를 안 잡는다 — 둘러봐도 정면이다 (v118)
+    lootHud,
     /**
      * ★★ **정전** — 등을 한꺼번에 죽인다 (E 장면 · 7판).
      *   `k` 는 0~1. 0.14 면 실루엣은 보이고 글씨는 안 보인다 —

@@ -77,6 +77,9 @@ import { KEYS, TAP, makeTap, tapStep, KEY_WORD } from './game/keys-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
 import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, LOCK_LOST, lockWord, PICK } from './game/combat-table.js';
+// ★★★ v121 — **줍겠습니까 · 무엇을 주웠나** (사장님 「질문이 나오고」 · 「형태와 요약」)
+import { ASK as LOOT_ASK } from './game/loot-table.js';
+import { makeLoot, broke as lootBroke, stepLoot, answer as lootAnswer, gained as lootGained, summary as lootSummary } from './game/loot.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
 import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg, endingOf } from './game/warhead-table.js';
 import {
@@ -729,6 +732,24 @@ addEventListener('keydown', (e) => {
   //  ★ 키를 붙이기 전에 **먼저 셌다** (v93 규약 · v103 은 이름도 센다).
   //    쓰이는 것이 A B C D E F G H J M Q R S T V W X Z · Shift Space Tab ·
   //    Digit 이라 I K L N O P U Y 가 비어 있었다. **L 은 level 이다**
+  // ══ ★★★ v121 — **Y / N — 회수하겠습니까** ═════════════════════════
+  //  ★ 사장님 「회수하겠습니까? **질문이 나오고** 회수하는 것으로」
+  //  ★★ 물음이 안 떠 있으면 **아무 일도 안 한다** — 키를 늘 살려 두면
+  //    「눌렀는데 왜 아무 일도 없지」가 되고, 이 배는 그걸 「고장」으로 읽는다
+  if (!helpOpen && !paused && (e.code === LOOT_ASK.yes || e.code === LOOT_ASK.no)) {
+    const r = lootAnswer(loot, e.code === LOOT_ASK.yes);
+    if (r) {
+      e.preventDefault();
+      if (r.passed) say(ai, '지나칩니다', 'tell');
+      else {
+        // ★ **이미 있는 회수 셋**을 쓴다 (도킹 팔 · 그물 · 로봇). 새 계통을
+        //   안 만든다 — 「예」는 거리에 맞는 하나를 골라 줄 뿐이다
+        const n = fireNet(salvage, { az: aimAz, el: aimEl, seated: helmSat, way: r.way });
+        if (!n?.ok) say(ai, SALV_WHY[n?.why] ?? '지금은 못 회수합니다', 'warn');
+      }
+      return;
+    }
+  }
   if (!helpOpen && !paused && e.code === 'KeyL') {
     e.preventDefault();
     assistOn = !assistOn;
@@ -1710,6 +1731,18 @@ function landShots(dt) {
     const part = (t.kind === 'convoy' && !warhead.in.includes('core')) ? 'core'
       : (t.kind === 'sat' && !warhead.in.includes('shell')) ? 'shell' : null;
     const pk = dropPack(salvage, t, part);
+    // ══ ★★★ v121 — **부수면 묻는다** (사장님 「회수하겠습니까? 질문이 나오고」)
+    //  ★ 새 결심을 만드는 것이 아니라 **이미 있던 결심을 드러내는 것**이다 —
+    //    꾸러미는 v80 부터 떨어졌지만 아는 사람만 F/G/B 를 눌렀다
+    if (pk) {
+      // ★ `pk.has` 는 **`{열쇠: 개수}` 꾸러미**다 (`salvage-table.js packOf`).
+      //   목록으로 여기고 `.map` 했다가 빈 배열이 나왔다 — 물음이 조용히
+      //   안 뜨는 자리였다. 표가 무엇을 주는지는 **표를 보고** 맞춘다
+      const items = Object.entries(pk.has ?? {}).map(([key, n]) => ({ key, n }));
+      const ev = lootBroke(loot, items, pk.dist ?? t.dist ?? 60);
+      // ★ 코앞이면 안 묻고 **바로 끌어온다** — 물으면 잔소리가 된다
+      if (ev === 'auto') fireNet(salvage, { az: t.az, el: t.el, seated: helmSat, way: 'arm' });
+    }
     const inS = callIn(t.kind);
     // ══ **격추 화면** — 광학 창이 부서지는 것을 비춘다 (v79) ═══════════
     //  ★ **아직 잔해가 없다.** 잔해는 `targets.update` 가 「목록에서 사라진
@@ -2121,6 +2154,8 @@ function takeSalvage(p) {
   //    드랍률을 낮췄으면 조금 늦게 같은 일이 났을 것이다.
   //  ★★★ **배가 더 받을 수 있는 만큼만** 삼킨다. 통이 꽉 차 있으면
   //    화물칸에 남고, 그게 진짜 짐이다 — 「무엇을 버릴지」가 여기서 산다
+  // ★★★ v121 — **주우면 요약 카드가 뜬다** (사장님 「형태와 요약」)
+  for (const [k, n] of Object.entries(r.took ?? {})) if (n > 0) lootGained(loot, k, n);
   const { ate: u } = cargoSettle(cargo, r.took, {
     food: FOOD.max - supply.food,
     parts: PARTS.max - supply.parts,
@@ -2231,6 +2266,8 @@ let burstNow = false;
 const thrustTap = makeTap();
 /** ★ 이번 프레임에 **꾹**인가 — `wantRush` 가 이걸 묻는다 */
 let rushWanted = false;
+/** ★★★ v121 — 「회수하겠습니까?」와 「무엇을 주웠나」 */
+const loot = makeLoot();
 /**
  * ★★★ v87 — **밟는 순간 눈이 뒤로 밀린다** (`boost-table.js KICK`).
  *   ★ 우주에서 등속은 아무 느낌이 없다 (고증). 느껴지는 것은 **가속**뿐이고
@@ -3990,6 +4027,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     speedWord: speedWord(mpsPure),
     power,
     sign: chase.sign,
+    // ★★★ v121 — **장갑** (사장님 「무기 보유량 **장갑** 등 상태창이」).
+    //   안에서는 `wear.hull` 이 **깎인 몫**으로 살지만, 계기는 「얼마나
+    //   남았나」를 그린다 — 띠가 줄면 나쁜 것이라는 규약을 열·냉각과 맞춘다
+    hull: Math.max(0, 1 - faults.wear.hull),
     missiles: supply.missiles,
     weapon: weaponOf(combat).name,
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
@@ -5336,6 +5377,8 @@ window.SPACE = {
   //    **표**(`game/screen-table.js`)가 「어디까지 봐주나」를 정한다
   /** ★ v114 — 정렬을 고치는 동안 쓴 구멍. 판이 어디 있고 얼마나 큰가 */
   cam() { const v = camera.getWorldPosition(new THREE.Vector3()); return [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2), camera.fov, +camera.aspect.toFixed(3)]; },
+  /** ★ v121 — 검사와 점검 모드가 「물음·카드」를 읽는다 */
+  lootNow() { return lootSummary(loot); },
   panelDebug() {
     const out = {};
     for (const [n, o] of [['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud]]) {
@@ -7156,6 +7199,9 @@ function frame(now) {
   if (radEv === 'break') {
     say(ai, LOCK_LOST[combat.radar.why] ?? '놓쳤습니다', 'tell');
   }
+  // ★★★ v121 — 물음이 삭고 카드가 사라진다 · 화면에 그린다
+  if (stepLoot(loot, dt) === 'gone') say(ai, '지나쳤습니다 — 꾸러미는 남아 있습니다 (F/G/B)', 'tell');
+  ship.lootHud?.redraw({ ...lootSummary(loot), on: helmSat });
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
   stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다

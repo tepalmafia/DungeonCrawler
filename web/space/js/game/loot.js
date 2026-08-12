@@ -9,7 +9,8 @@
 //    곳이 둘**이 되고, 그게 이 저장소가 네 판을 태운 병이다.
 //    「예」는 `wayFor` 로 고른 방법을 **부탁만** 한다.
 // ══════════════════════════════════════════════════════════════════════════
-import { ASK, CARD, askLine, summaryOf, wayFor } from './loot-table.js';
+import { ASK, CARD, askLine, summaryOf, wayFor, shapeOf, toneOf } from './loot-table.js';
+import { WAYS } from './cargo-table.js';
 
 export const makeLoot = () => ({
   /** 지금 뜬 물음 — `{ id, items, dist, t }` (없으면 null) */
@@ -94,10 +95,17 @@ export function summary(L) {
     ask: L.ask ? {
       line: askLine(L.ask.items), left: +L.ask.t.toFixed(2),
       dist: Math.round(L.ask.dist), way: wayFor(L.ask.dist),
+      // ★ 화면이 「그물」이라고 적을 수 있게 **이름까지** 준다 —
+      //   화면에서 `WAYS` 를 또 읽으면 읽는 곳이 둘이 된다
+      wayName: WAYS[wayFor(L.ask.dist)]?.name ?? '',
       n: L.ask.items.length,
     } : null,
     cards: L.cards.map((c) => ({
-      key: c.key, count: c.count, left: +c.t.toFixed(2), ...summaryOf(c.key, c.count),
+      key: c.key, count: c.count, left: +c.t.toFixed(2),
+      // ★★ **형태와 색도 여기서 준다.** 화면이 `SHAPES` 를 따로 읽으면
+      //   물건을 하나 더할 때 한쪽만 고치게 된다
+      shape: shapeOf(c.key), tone: toneOf(c.key),
+      ...summaryOf(c.key, c.count),
     })),
     asked: L.asked, took: L.took, passed: L.passed, missed: L.missed,
   };
