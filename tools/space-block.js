@@ -140,7 +140,7 @@ head('[4] ★★★ **길에 있는 것이 맞는다** — 각도만 보면 코�
 // ══ ⑤ 락온 ═══════════════════════════════════════════════════════════
 head('[5] ★★★ **락온** — 묶기 · 유지 · 놓기가 다른가 · 따라가는가');
 {
-  console.log(`   묶기 ${LOCK.lockCone}도 · 유지 ${LOCK.holdCone}도 · 외삽 ${LOCK.grace}초`
+  console.log(`   묶기 ${LOCK.lockCone}도 · 유지 ${LOCK.gimbal}도 · 외삽 ${LOCK.grace}초`
     + ` · 따라가는 속도 ${LOCK.slew}도/초`);
   const eye = makeEye();
   const foe = { id: 1, p: at(3, 1, 90), size: 1 };
@@ -177,7 +177,7 @@ head('[5] ★★★ **락온** — 묶기 · 유지 · 놓기가 다른가 · �
   foe.p = at(70, 0, 90);
   let g = 0, e3 = null;
   while (g < LOCK.grace - 0.1 && e3 !== 'break') { e3 = stepLock(L, DT, null, find, eye); g += DT; }
-  ok(e3 !== 'break', `★ ${LOCK.holdCone}도 밖에서도 **${LOCK.grace}초는 외삽한다**`);
+  ok(e3 !== 'break', `★ ${LOCK.gimbal}도 밖에서도 **${LOCK.grace}초는 외삽한다**`);
   while (g < LOCK.grace + 0.4 && e3 !== 'break') { e3 = stepLock(L, DT, null, find, eye); g += DT; }
   ok(e3 === 'break' && L.id === null, '★ 오래 벗어나면 **놓는다**');
 }

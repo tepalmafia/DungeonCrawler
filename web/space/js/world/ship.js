@@ -1159,7 +1159,18 @@ export function buildShip(scene, camera = null, renderer = null) {
   //      바로 그 구석에 뜨므로 **셋이 서로 안 포갠다**
   // ★★★ v103 — **0.85 배로 줄인다** (사장님 「화면을 너무 가리는데?」).
   //   재 보니 화면의 5.3% 였고 아래끝이 잘려 있었다 — 줄이면 둘 다 풀린다
-  const statusHud = buildStatusHud(HUDV.w * 0.73, HUDV.h * 0.68);
+  // ★★★ v114 — 크기를 **판에 적어 둔다.** `main.js placePanels()` 가
+  //   창 크기가 바뀔 때마다 이 값으로 화면 좌표를 내서 다시 놓는다.
+  //   여기서 크기를 알고 저기서 또 짐작하면 **정렬이 판마다 어긋난다**
+  // ══ ★★★ v114 — **키운다** (0.73 → 1.20) ═══════════════════════════
+  //  ★ v103 은 「너무 가린다」는 말씀에 판을 **줄여서** 풀었다. v114 가
+  //    자리를 화면 구석에 못박고 나니 **줄일 이유가 없어졌다** — 가리는
+  //    것은 크기가 아니라 **자리**였다. 구석에 붙여 놓고 작기까지 하면
+  //    그건 안 가리는 것이 아니라 **없는 것**이다 (찍어 보고 알았다:
+  //    셋을 합쳐 화면의 2.6% 였고 글자가 안 읽혔다).
+  //  ★★ 예산(`screen-table.js BUDGET` 14%)은 그대로 지킨다
+  const statusHud = buildStatusHud(HUDV.w * 1.20, HUDV.h * 1.10);
+  statusHud.size = { w: HUDV.w * 1.20, h: HUDV.h * 1.10 };
   // ★★ v92 — **셋을 계기판에 가로로 나란히** (왼쪽 상태 · 가운데 광학 ·
   //   오른쪽 레이더). 실제 전투기의 MFD 셋이 그 배치이고, 무엇보다
   //   **하늘을 안 먹는다** — 높이를 하나로 맞춰야 줄이 선다
@@ -1173,7 +1184,8 @@ export function buildShip(scene, camera = null, renderer = null) {
   //  ★ 상태창의 **반대쪽**에 둔다. 둘이 같은 쪽이면 하나가 하나를 가리고,
   //    가운데는 조준선·선도점·표적 지시선이 지나는 자리라 못 쓴다
   // ★★★ v103 — **0.82 배.** 넷 중 제일 컸다 (화면의 6.8% · 45.6°×34.8°)
-  const radarHud = buildRadarHud(HUDV.w * 0.75, HUDV.h * 0.75);
+  const radarHud = buildRadarHud(HUDV.w * 1.22, HUDV.h * 1.22);
+  radarHud.size = { w: HUDV.w * 1.22, h: HUDV.h * 1.22 };
   // ★ 화면을 찍어 자리를 잡았다 — 처음 자리는 **콘솔 기둥에 왼쪽 아래가
   //   물렸다.** 상태창이 왼쪽 위이므로 이쪽은 오른쪽 위로 올려 맞춘다
   radarHud.mesh.position.set(
@@ -1197,10 +1209,11 @@ export function buildShip(scene, camera = null, renderer = null) {
     // ★ v86 — 당겨 보는 동안 **참 크기**로 그리게 한다 (`targets.setTrueScale`)
     // ★★★ v103 — **0.75 배.** 넷 중 유일하게 **전투 원뿔을 건드리고**
     //   있었다 (복판에서 0.27 · 기준 0.45). 줄이고 아래에서 더 밀어낸다
-    ? buildOptic(renderer, scene, [ship], HUDV.w * 0.84, HUDV.h * 0.78,
+    ? buildOptic(renderer, scene, [ship], HUDV.w * 1.36, HUDV.h * 1.26,
       (on) => outside.targets.setTrueScale(on))
     : null;
   if (optic) {
+    optic.size = { w: HUDV.w * 1.36, h: HUDV.h * 1.26 };
     // ══ ★★★ v92 — **하늘에서 내려 계기판 위로** ═══════════════════════
     //
     //  사장님 「**전투에 방해되잔아**」. v90 이 아래(콘솔)를 치웠고, 화면을

@@ -102,7 +102,16 @@ export const MOUNT = {
 };
 
 /** 이 무기가 발사관에 실리나 — **레이저는 기수 고정이다** */
-export const GIMBALED = { laser: false, seeker: true, arh: true };
+/**
+ * ★★ v119 — **`seeker` 는 없는 무기였다.** 무기 열쇠는 `laser`·`ir`·`arh`
+ *   인데 여기만 `seeker` 라고 적혀 있었다 (v100 에 이름을 정하기 전에
+ *   적어 둔 것이 그대로 남았다). `isGimbaled('ir')` 가 `undefined` →
+ *   false 였으므로 **열추적탄이 기수 고정으로 굴러가고 있었다** —
+ *   발사관에서 나가는 물건인데 회피하면 못 쏘는 상태였다.
+ *   ★ 표에만 있고 아무도 안 부르는 열쇠는 **조용히 죽는다.** v117 의
+ *     `space-fit.js` 가 잡는 병과 같은 것이고, 이번엔 락온을 고치다 걸렸다
+ */
+export const GIMBALED = { laser: false, ir: true, arh: true };
 export const isGimbaled = (key) => GIMBALED[key] === true;
 
 /**

@@ -520,3 +520,29 @@ body.flying #view { cursor: none; }
 #evade[data-band="perfect"] .tip { color: #6fd8a0; }
 #evade[data-band="late"]    .tip { color: #ff6a52; }
 #evade[data-band="perfect"] .tip::after { opacity: 1; border-width: 3px; }
+
+
+/* ══ ★★★ v114 — **화물칸 눈금** (사장님 「인벤토리도 만들어야지」) ══════
+   ★ 숫자만 적으면 「얼마나 찼나」가 안 읽힌다. 막대는 **한눈에** 말한다 —
+     이 저장소가 손목·상태창에서 이미 쓰는 규약이고, 90% 를 넘으면 색이
+     바뀌어 「곧 못 싣는다」를 미리 말한다 */
+.hold-gauge {
+  height: 10px; border-radius: 5px; background: #1b2430;
+  border: 1px solid #2b3644; overflow: hidden; margin: 2px 0 6px;
+}
+.hold-gauge > i { display: block; height: 100%; background: #6fd3a0; }
+.hold-gauge.full > i { background: #e0a34a; }
+
+
+/* ══ ★★★ v116 — **3D 기체 도해** (사장님 「3d로 기체도 나오고」) ════════
+   ★ 높이를 못박는다 — 창 크기에 따라 늘리면 WebGL 이 매번 다시 잡히고,
+     그러면 창을 열 때마다 한 번씩 툭 끊긴다 */
+#fit-canvas {
+  display: block; width: 100%; height: 260px;
+  border: 1px solid #2b3644; border-radius: 6px;
+  background: radial-gradient(120% 120% at 50% 20%, #16202c 0%, #0d141c 70%);
+  cursor: grab; touch-action: none;
+}
+#fit-canvas:active { cursor: grabbing; }
+#pane-fit .hint-line { display: block; color: #5e6b7a; margin: 4px 0 10px; }
+#fit-rows [data-lit] { cursor: default; }

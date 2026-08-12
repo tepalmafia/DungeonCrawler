@@ -1303,6 +1303,60 @@ console.log('\n[6p] ★★★ **손 배치** — Space 사격 · R 톡/꾹 (v110
   await S(() => SPACE.clearSky());
 }
 
+console.log('\n[6q] ★★★ **락온 추적** — 묶으면 따라가고, 묶은 것으로 나가나 (v119)');
+{
+  //  ★ 사장님 (2026-08-12) 「락온 시키면 **자동으로 타겟을 따라가도록**
+  //    해줘. 내가 타겟을 조준을 크게 벗어나면 다시 조준해야 해서 불편해」
+  //  ★★ 여기서만 물을 수 있는 것: **계통 검사가 다 초록인데도** 사람이
+  //    조종석에 앉아 그 순서를 밟을 수 있나. 특히 「묶은 뒤」는 v118 까지
+  //    브라우저로 한 번도 못 재 봤다 — 락온에 2.6초가 걸리는데 머리 없는
+  //    시계가 1/25 라 65초를 기다려야 했기 때문이다 (`SPACE.putLock` 이 그 자리)
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  await S(() => {
+    SPACE.setInfinite(true); SPACE.setPower('sensor', true);
+    SPACE.setSupply({ missiles: 8 }); SPACE.clearSky(); SPACE.putAim(0, 0);
+  });
+  const foe = await S(() => SPACE.callFoe('fighter', 0, 90));
+  await until(() => !!SPACE.combat.target, 20, '표적');
+  const lock = await S(() => SPACE.putLock(true));
+  ok(!!lock && (await S(() => SPACE.combat.radar.id)) !== null,
+    `① ★★ 겨눈 것을 **묶었다** (${lock?.kind} ${lock?.dist}m)`);
+  // ② 표적이 40도 옆으로 가도 안 놓는다 (옛 유지각 32도면 여기서 풀렸다)
+  await S(() => { const t = SPACE.sky.list.find((x) => x.id === SPACE.combat.radar.id); t.az = 40; });
+  await p.waitForTimeout(600);
+  ok((await S(() => SPACE.combat.radar.id)) === lock?.id,
+    '② ★★★ **40도 옆으로 가도 안 놓는다** — 유지 한계가 조준선이 아니라 **짐벌(60도)**이다');
+  // ③④ 조준선에 **딴 것**을 걸어 두고 무기 둘을 쏴 본다.
+  //   ★ **레이저를 먼저** 쏜다. 재장전(`c.cool`)은 무기끼리 나눠 쓰는데
+  //     유도탄이 6.5초라, 유도탄부터 쏘면 헤드리스 시계(1/25)로 **162초**를
+  //     기다려야 한다 — 그러면 레이저가 「재는 중」으로 조용히 안 나가고,
+  //     그걸 「락온을 쐈다」로 잘못 읽는다 (그렇게 짰다가 한 번 속았다)
+  await S(() => SPACE.callFoe('raider', 1, 70));
+  const shoot = async (slot, key) => S(([s, k]) => {
+    SPACE.putWeapon(s);
+    const lockId = SPACE.combat.radar.id;
+    const aimId = SPACE.combat.target?.id ?? null;
+    const was = new Set((SPACE.combat.shotList ?? []).map((x) => x.id));
+    SPACE.fire();
+    const mine = (SPACE.combat.shotList ?? []).find((x) => !was.has(x.id) && x.weapon === k);
+    return { lockId, aimId, to: mine?.target ?? null };
+  }, [slot, key]);
+
+  await until(() => SPACE.combat.cool <= 0, 40, '재장전');
+  const r2 = await shoot(1, 'laser');
+  ok(r2.to !== null && r2.to === r2.aimId,
+    `③ ★★★ **레이저는 조준선(#${r2.aimId})으로 나간다** — 기총은 기수 고정이다.`
+    + ' 전부 락온을 쏘면 겨누는 조작이 없어진다 (장르 안전핀)');
+
+  await until(() => SPACE.combat.cool <= 0, 90, '재장전');
+  const r = await shoot(3, 'arh');
+  ok(r.to !== null && r.to === r.lockId && r.aimId !== r.lockId,
+    `④ ★★★ **유도탄이 묶은 것(#${r.lockId})으로 나간다** — 조준선은 딴 것(#${r.aimId})을 보고 있는데도.`
+    + ' 사장님이 「다시 조준해야 해서 불편하다」고 하신 그것이다');
+  await S(() => { SPACE.putLock(false); SPACE.clearSky(); SPACE.setInfinite(false); });
+}
+
 console.log('\n[6o] ★★★ **파밍** — 부수면 파츠가 나오나 (v110)');
 {
   await S(() => { SPACE.putHelmSit(true); });

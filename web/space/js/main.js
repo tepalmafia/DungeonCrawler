@@ -76,7 +76,7 @@ import { HELM, HELM_SEAT, FLY_VIEW, STICK, deflect, YOKE, SIT_LOOK, offWord, hit
 import { KEYS, TAP, makeTap, tapStep, KEY_WORD } from './game/keys-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
-import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, lockWord, PICK } from './game/combat-table.js';
+import { RADAR, WEAPONS, WEAPON_LIST, WHY as CBT_WHY, LOCK_LOST, lockWord, PICK } from './game/combat-table.js';
 // ★★★ 탄두 (v71) — 기관실 후미 크레이들. `docs/space/WAR.md §3`
 import { PARTS5, BY_KEY as HEAD_BY, CRADLE, BAKE, partAtLeg, endingOf } from './game/warhead-table.js';
 import {
@@ -87,7 +87,14 @@ import { speedOf as statusSpeed } from './world/status.js';
 // ★★★ 급가속 (v73) — **따로 하는 조작.** Shift 는 기수를 돌리고, R 은 튀어나간다
 import { BOOST, RUSH, KICK } from './game/boost-table.js';
 // ★ v91 — HUD 판의 크기·거리와 **그림이 쓰는 각**. 둘이 갈라지면 표식이 어긋난다
-import { HUD as HUDV, hudFov } from './game/view-table.js';
+import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
+// ★★★ v114 — **계기 자리는 화면 좌표로** (사장님 「화면 uhd 정렬좀해」)
+import { centerFor, worldAt } from './game/screen-table.js';
+// ★★★ v116 — **기체 도해 3D** (사장님 「3d로 기체도 나오고 각 파츠의 역할도」)
+import { buildBay3D } from './world/bay3d.js';
+import { sectionsFor } from './game/hull-table.js';
+// ★★★ v116 — **속도와 가속도** (사장님 「가속도가 안 느껴지고」)
+import { mpsAt, accOf, fadeAcc, feelOf, speedWord } from './game/speed-table.js';
 import {
   makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
 } from './game/boost.js';
@@ -127,6 +134,7 @@ import {
 } from './game/arc.js';
 import {
   makeCargo, put as cargoPut, useOf, stepCargo, word as cargoWord, take as cargoTake,
+  settle as cargoSettle, drop as cargoDrop,
   summary as cargoSummary, used as cargoUsed, left as cargoLeft,
 } from './game/cargo.js';
 import {
@@ -177,6 +185,20 @@ import { TURRET_RISE } from './world/turret.js';
 import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/target-table.js';
 // ★★★ v111 — **회피 타이밍** (사장님 「타이밍을 어떻게 줄지」). 고리와 규칙이 한 표를 본다
 import { EVADE, ringAt, RING_WORD } from './game/evade-table.js';
+// ★★★ v114 — **조준 띠** (사장님 「정확히 안쪽을 맞출 수록 데이미지가」)
+import { bandAt, HIT_WORD } from './game/aim-table.js';
+// ★★★ v114 — **인벤토리와 제조** (사장님 「인벤토리도 만들어야지. 제조하는 것도」)
+import {
+  RECIPES, RECIPE_LIST, canMake, costWord, WHY as CRAFT_WHY,
+} from './game/craft-table.js';
+// ══ ★★★ v115 — **사람이 크는 길** (사장님 「우주 비행전투 rpg야 우리 장르야」)
+//  ★ 기둥 다섯 중 성장의 절반이 비어 있었다 (`space-genre.js` 가 잡았다).
+//    배는 파츠로 크는데 **사람이 안 컸다** — 그건 장비 게임이다
+import {
+  XP, MAX_LV, TRAITS, TRAIT_BY, PICK_WHY, levelAt, xpForKill,
+  effectOf, makePilot, gain as gainXp, pick as pickTrait,
+} from './game/growth-table.js';
+import { ITEMS as CARGO_ITEMS, nameOf as nameOfItem, massOf as itemMass } from './game/cargo-table.js';
 import {
   makeSky, setRegion as setSkyRegion, setNose, stepSky, shootSky, aimedAt, tolOf, inRange, spawnFoe,
   summary as skySummary,
@@ -303,7 +325,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 113;
+export const VERSION = 119;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -427,6 +449,10 @@ scene.environment = makeEnvironment(renderer);
 scene.environmentIntensity = 0.75;
 
 const ship = buildShip(scene, camera, renderer);
+// ★ 배가 선 **직후** 한 번 놓는다. `resize()` 는 배보다 먼저 도는데,
+//   그때는 `ship` 이 없어 그냥 지나간다 — 이 한 줄이 없으면 **첫 화면만**
+//   옛 자리에 그려지고 창을 한 번 흔들어야 정렬된다
+placePanels();
 // ── 옮길 수 있는 물건 ────────────────────────────────────────
 // ★ 벨크로 자리는 **베이 번호**로 찾는다 (game/carry-table.js SPOTS).
 //   좌표를 여기 또 적으면 랙을 옮길 때마다 자리가 허공에 남는다
@@ -547,7 +573,7 @@ addEventListener('keydown', (e) => {
       dist: p0?.dist ?? 999,
       close: closeRate,
       off: p0?.off ?? 0,
-      full: cargoLeft(cargo) <= 0,
+      full: cargoLeft(cargo, grow.hold) <= 0,
     });
     if (!r.ok) { say(ai, DOCK_WHY[r.why], 'warn'); return; }
     say(ai, r.hard ? DOCK_SAY.hard : DOCK_SAY.close, r.hard ? 'alarm' : 'tell');
@@ -659,7 +685,7 @@ addEventListener('keydown', (e) => {
     const r = beginCatch(catchS, {
       has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
       seated: helmSat || steering,
-      dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+      dry: isDry(supply.fuel), full: cargoLeft(cargo, grow.hold) <= 0,
     });
     if (!r.ok) { say(ai, CWHY[r.why], 'warn'); return; }
     say(ai, '포획 — 따라붙습니다. 조종간이 잠깁니다', 'alarm');
@@ -748,7 +774,7 @@ for (const w of Object.values(WAYS)) {
         const c = beginCatch(catchS, {
           has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
           seated: helmSat || steering,
-          dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+          dry: isDry(supply.fuel), full: cargoLeft(cargo, grow.hold) <= 0,
         });
         say(ai, c.ok
           ? `${w.name} — ${Math.round(p0?.dist ?? 0)}m 는 멉니다. **따라붙습니다** (K 로 끊습니다)`
@@ -1215,41 +1241,115 @@ function drawLegend() {
 let legT = 0;
 
 let bayOpen = false;
+/**
+ * ★★★ v114 — **지금 만들고 있는 것** (`craft-table.js`).
+ *   ★ 창을 닫아도 돈다 — 「걸어 놓고 다른 일을 한다」가 제조의 값이고,
+ *     창을 열어 둬야 도는 것이면 그건 그냥 긴 단추다
+ *   ★★ 다만 **쫓기기 시작하면 멈춘다** (`stepCraft`) — 손이 조종간으로 간다
+ */
+let craftJob = null;
+
+/**
+ * ★★★ v115 — **파일럿.** 배와 **다른 갈래**로 큰다:
+ *   배는 주워서(운이 섞이고 잃는다) · 사람은 해서(운이 안 섞이고 안 잃는다)
+ */
+const pilot = makePilot();
+/**
+ * ★★★ **고른 특성이 합쳐서 무엇을 바꾸나** — **여기 하나가 유일한 답이다.**
+ *   계통들이 제 방식으로 「내가 사수인가」를 물으면 그때부터 갈라진다
+ *   (`frame.js` 와 같은 규약). 고를 때마다 다시 낸다
+ */
+let grow = effectOf(pilot.picked);
+const regrow = () => { grow = effectOf(pilot.picked); };
 /** 기체 도해 — 부위 일곱이 어디에 붙나 (판 크기의 0~1) */
-const FIT_AT = {
-  gun: [0.50, 0.15], tube: [0.26, 0.40], armor: [0.50, 0.50],
-  engine: [0.50, 0.86], sensor: [0.74, 0.40], sink: [0.22, 0.70], hold: [0.78, 0.70],
-};
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v116 — **SVG 쐐기를 3D 도해로 갈아 끼웠다**
+//
+//  ★ 사장님 「**너무 허접하잔아. 3d로 기체도 나오고 각 파츠의 역할도 나오고
+//    상세하게 예쁘게 꾸며, 인터넷에서 비행선 데이터를 참고해서**」
+//
+//  ★★ 여기 `FIT_AT` 라는 **화면 좌표 표**가 따로 있었다 — 파츠 일곱의
+//    자리를 0~1 비율로 손으로 적어 둔 것이다. 즉 **자리를 아는 곳이
+//    둘**이었고(파츠 표 · 이 표), 파츠가 늘면 조용히 갈라진다.
+//    이제 자리는 `game/hull-table.js` 한 곳이고 3D 가 그걸 읽는다.
+//  ★ 배치 근거(레이돔은 코 · 무기 베이는 안쪽 · 방열판은 넓은 판 …)도
+//    거기 적혀 있다 — 실제 기체와 우주선에서 가져왔다
+// ══════════════════════════════════════════════════════════════════════════
+/** ★ 도해는 창을 열 때 한 번 짓는다 — 매번 지으면 WebGL 문맥이 샌다 */
+let bay3d = null;
+let bay3dRaf = 0;
+let bay3dTouched = 0;
+
+function bay3dStop() {
+  if (bay3dRaf) cancelAnimationFrame(bay3dRaf);
+  bay3dRaf = 0;
+}
+
+function bay3dStart() {
+  const cv = document.getElementById('fit-canvas');
+  if (!cv) return;
+  if (!bay3d) {
+    try { bay3d = buildBay3D(cv); } catch (e) { console.warn('[도해] 못 세웠습니다', e); return; }
+    // ★★ 손으로 돌린다 — 「돌려 볼 수 있다」가 3D 인 이유의 절반이다
+    let drag = null;
+    cv.addEventListener('pointerdown', (ev) => {
+      drag = { x: ev.clientX, y: ev.clientY }; cv.setPointerCapture(ev.pointerId);
+    });
+    cv.addEventListener('pointermove', (ev) => {
+      if (!drag) return;
+      bay3d.spin((ev.clientX - drag.x) * 0.01, (ev.clientY - drag.y) * 0.01);
+      drag = { x: ev.clientX, y: ev.clientY };
+      // ★ 손을 대면 **저절로 도는 것을 멈춘다** — 보려는 각을 뺏으면 안 된다
+      bay3dTouched = 6;
+    });
+    const up = () => { drag = null; };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+  }
+  const w = cv.clientWidth || 520; const h = cv.clientHeight || 240;
+  bay3d.resize(w, h);
+  bay3dStop();
+  let last = performance.now();
+  const loop = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (bay3dTouched > 0) bay3dTouched -= dt;
+    bay3d.render(dt, bay3dTouched <= 0);
+    bay3dRaf = requestAnimationFrame(loop);
+  };
+  bay3dRaf = requestAnimationFrame(loop);
+}
+
+/**
+ * ★ v114 — 표의 `**굵게**` 를 화면에서 굵게. 표는 사람이 읽는 글이라
+ *   저장소 규약대로 별표를 쓰는데, 그대로 뿌리면 **별표가 그냥 보인다**
+ *   (찍어 보고 잡았다). `<` 는 먼저 죽여 둔다 — 표에서 오는 글이다
+ */
+const bold = (t = '') => String(t)
+  .replace(/[<>]/g, '')
+  .replace(/\*\*(.+?)\*\*/g, '<b style="color:#b9c6d4">$1</b>');
+
 function drawBay() {
   const box = document.getElementById('bay');
   if (!box) return;
-  const s = fitSummary(fit);
-  // ── 도해 ──────────────────────────────────────────
-  const W = 520, H = 200;
-  const parts = [
-    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="기체 부위 배치도">`,
-    // 동체 — **쐐기**. 창밖 실루엣·조준경 표식과 같은 모양이라
-    // 「저게 내 배구나」가 한 번에 읽힌다
-    `<path class="hull" d="M${W * 0.5},12 L${W * 0.5 + 52},${H - 26}`
-    + ` L${W * 0.5},${H - 44} L${W * 0.5 - 52},${H - 26} Z"/>`,
-  ];
-  for (const sl of s.slots) {
-    const [fx, fy] = FIT_AT[sl.key] ?? [0.5, 0.5];
-    const x = fx * W, y = fy * H;
-    parts.push(`<rect class="slot-box${sl.canUp ? ' up' : ''}" x="${x - 32}" y="${y - 11}"`
-      + ' width="64" height="22" rx="3"/>');
-    parts.push(`<text class="slot-name" x="${x}" y="${y + 4}" text-anchor="middle">${sl.name}</text>`);
+  const s = fitSummary(fit, grow.oreMult);
+  // ── 도해 — **3D** (`world/bay3d.js` 가 `hull-table.js` 를 읽는다) ──
+  bay3dStart();
+  if (bay3d) {
+    // 등급을 입힌다 — 좋은 파츠일수록 그 덩어리가 밝다
+    bay3d.setTiers(Object.fromEntries(s.slots.map((sl) => [sl.key, sl.tier])));
   }
-  parts.push('</svg>');
-  document.getElementById('fit-diagram').innerHTML = parts.join('');
 
   // ── 줄 일곱 ────────────────────────────────────────
   const rows = s.slots.map((sl) => {
     const canEquip = sl.spares > 0;
     const canUp = sl.canUp && supply.ore >= sl.oreUp;
-    return `<span>${sl.name}</span>`
-      + `<b><span class="tier-${sl.tier}">${sl.label}</span>`
+    // ★ v116 — **몸이 어디인지 적는다** (`hull-table.js`). 도해에 빛나는
+    //   덩어리와 이 이름이 같아야 「저게 저거구나」가 된다
+    const body = sectionsFor(sl.key).map((x) => x.name).join(' · ');
+    return `<span data-lit="${sl.key}">${sl.name}</span>`
+      + `<b data-lit="${sl.key}"><span class="tier-${sl.tier}">${sl.label}</span>`
       + `<small style="color:#5e6b7a"> &nbsp;${sl.what}</small>`
+      + ` <small style="color:#7d8b9c">— ${body}</small>`
       + (sl.spares
         ? `<br><small style="color:#7d8b9c">여분 ${sl.spares} · 제일 좋은 것 ${sl.best}</small>`
         : '')
@@ -1263,6 +1363,79 @@ function drawBay() {
     `<span>전투력</span><b class="might">${myPower()}</b><span></span>`
     + `<span>광석</span><b>${Math.round(supply.ore)}</b><span></span>` + rows;
 
+  // ══ ★★★ v115 — **성장** (`growth-table.js`) ══════════════════════════
+  //
+  //  ★ 사장님 「**우주 비행전투 rpg야 우리 장르야**」
+  //
+  //  ★★ 배 칸(기체) **바로 옆**에 둔다. 두 갈래가 나란히 있어야
+  //    「배는 주워서 크고 사람은 해서 큰다」가 한눈에 읽힌다 —
+  //    떨어뜨려 놓으면 둘이 같은 것인 줄 안다
+  {
+    const g = levelAt(pilot.xp);
+    document.getElementById('grow-bar').innerHTML =
+      `<div class="hold-gauge${pilot.owed ? ' full' : ''}">`
+      + `<i style="width:${Math.round(g.k * 100)}%"></i></div>`
+      + `<small style="color:#7d8b9c">Lv <b class="might">${g.lv}</b> / ${MAX_LV}`
+      + (g.need ? ` · 다음까지 ${Math.max(0, g.need - g.into)}` : ' · **다 컸습니다**')
+      + (pilot.owed ? ` · <b style="color:#e0a34a">고를 것 ${pilot.owed} 개</b>` : '')
+      + '</small>';
+    document.getElementById('grow-rows').innerHTML = TRAITS.map((t) => {
+      const had = pilot.picked.includes(t.key);
+      const can = !had && pilot.owed > 0;
+      return `<span>${t.name}</span>`
+        + `<b>${bold(t.how)}<br><small style="color:#5e6b7a">${bold(t.why)}</small></b>`
+        + `<button class="act" data-trait="${t.key}" ${can ? '' : 'disabled'}>`
+        + `${had ? '★ 골랐습니다' : (pilot.owed ? '고른다' : '레벨이 올라야')}</button>`;
+    }).join('');
+  }
+
+  // ══ ★★★ v114 — **화물칸과 제조** ═══════════════════════════════════
+  //
+  //  ★ 사장님 「**인벤토리도 만들어야지. 제조하는 것도 만들고**」
+  //
+  //  ★★ 이 칸이 있어야 v114 의 화물 고침이 **눈에 보인다.** 새는 구멍을
+  //    막아 놓고 화면이 없으면 사장님은 여전히 「왜 찼지」밖에 못 물으신다 —
+  //    규칙이 있는데 화면에 없으면 없는 것과 같다 (v64~v82 락온 원)
+  {
+    const cs = cargoSummary(cargo, grow.hold);
+    const pct = Math.round((cs.used / cs.hold) * 100);
+    document.getElementById('hold-bar').innerHTML =
+      `<div class="hold-gauge${pct >= 90 ? ' full' : ''}">`
+      + `<i style="width:${Math.min(100, pct)}%"></i></div>`
+      + `<small style="color:#7d8b9c">${cs.used} / ${cs.hold} 짐 · 남은 자리 ${cs.left}`
+      + (cs.missed ? ` · <b style="color:#e0a34a">자리가 없어 놓친 것 ${cs.missed}</b>` : '')
+      + '</small>';
+    const items = Object.entries(cs.items).filter(([, n]) => n > 0);
+    document.getElementById('hold-rows').innerHTML = items.length
+      ? items.map(([k, n]) => {
+        const it = CARGO_ITEMS[k] ?? {};
+        return `<span>${nameOfItem(k)}</span>`
+          + `<b>${n} 개 · ${itemMass(k) * n} 짐`
+          + `<br><small style="color:#5e6b7a">${bold(it.need)}</small></b>`
+          + `<button class="act" data-toss="${k}">버린다</button>`;
+      }).join('')
+      // ★ 비어 있는 것이 **정상**이다 — 주운 것은 배가 삼킨다. 그 말을
+      //   안 적으면 「인벤토리가 고장났나」로 읽힌다
+      : '<span>비었습니다</span><b><small style="color:#5e6b7a">'
+        + '주운 것은 배가 바로 삼킵니다 — 통이 꽉 찼을 때만 여기 남습니다'
+        + '</small></b><span></span>';
+    // ── 제조 ─────────────────────────────────────────
+    const calm = !chase.on;
+    document.getElementById('craft-rows').innerHTML = RECIPE_LIST.map((r) => {
+      const c = canMake(r.key, { items: cs.items, calm, busy: !!craftJob });
+      const out = r.to.item ? `${nameOfItem(r.to.item)} ${r.to.n}` : `유도탄 ${r.to.n} 발`;
+      return `<span>${r.name}</span>`
+        + `<b>${out} &nbsp;<small style="color:#5e6b7a">${r.sec}초</small>`
+        + `<br><small style="color:#7d8b9c">${costWord(r)}</small>`
+        + `<br><small style="color:#5e6b7a">${bold(r.why)}</small></b>`
+        + `<button class="act" data-make="${r.key}" ${c.ok ? '' : 'disabled'}>`
+        + `${c.ok ? '만든다' : (CRAFT_WHY[c.why] ?? '못 만듭니다')}</button>`;
+    }).join('')
+      + (craftJob
+        ? `<span>만드는 중</span><b>${RECIPES[craftJob.key].name} — ${craftJob.left.toFixed(0)}초</b><span></span>`
+        : '');
+  }
+
   // ── 탄두 ───────────────────────────────────────────
   const hs = headSummary(warhead);
   document.getElementById('head-rows').innerHTML = PARTS5.map((p) => {
@@ -1275,19 +1448,52 @@ function showBay(on) {
   bayOpen = !!on;
   const box = document.getElementById('bay');
   if (!box) return;
-  if (bayOpen) drawBay();
+  if (bayOpen) drawBay(); else bay3dStop();   // ★ v116 — 닫으면 도해도 멈춘다
   box.hidden = !bayOpen;
   // ★ 열면 마우스를 풀어 준다 — 안 풀면 단추를 못 누른다
   if (bayOpen) document.exitPointerLock?.();
 }
+// ★★★ v116 — **줄에 손을 얹으면 그 덩어리가 빛난다.** 이름만으로는
+//   「센서가 배의 어디인지」를 모른다 — 도해가 있는 이유의 절반이 이것이다
+addEventListener('pointerover', (ev) => {
+  if (!bayOpen || !bay3d) return;
+  const el = ev.target.closest?.('#fit-rows [data-lit]');
+  bay3d.highlight(el ? el.dataset.lit : null);
+});
+
 addEventListener('click', (ev) => {
   const b = ev.target.closest?.('#bay .act');
   if (b) {
     if (b.dataset.eq) {
       const r = equip(fit, b.dataset.eq);
       say(ai, r.ok ? `${partName(r.put)} 를 달았습니다` : PWHY[r.why], r.ok ? 'tell' : 'warn');
+    } else if (b.dataset.trait) {
+      const r = pickTrait(pilot, b.dataset.trait);
+      if (r.ok) {
+        // ★★ **고른 순간 효과를 다시 낸다.** 안 하면 목록에는 특성이
+        //   있는데 게임은 그대로 도는, 제일 찾기 어려운 어긋남이 난다
+        regrow();
+        say(ai, `★ ${r.trait.name} — ${r.trait.how.replace(/\*\*/g, '')}`, 'warn');
+      } else say(ai, PICK_WHY[r.why], 'warn');
+    } else if (b.dataset.toss) {
+      // ★ 버리는 것이 **이 창의 첫째 일**이다 (「무엇을 버릴지」 · v83)
+      const n = cargoDrop(cargo, b.dataset.toss, 1);
+      if (n) say(ai, `${nameOfItem(b.dataset.toss)} 를 버렸습니다`, 'tell');
+    } else if (b.dataset.make) {
+      const key = b.dataset.make;
+      const cs = cargoSummary(cargo, grow.hold);
+      const c = canMake(key, { items: cs.items, calm: !chase.on, busy: !!craftJob });
+      if (!c.ok) { say(ai, CRAFT_WHY[c.why] ?? '지금은 못 만듭니다', 'warn'); }
+      else {
+        // ★★ **재료를 지금 뺀다.** 다 만든 뒤에 빼면 그 사이에 버릴 수 있고,
+        //   그러면 공짜가 된다 — 값을 먼저 치르는 것이 이 게임의 규약이다
+        for (const [k, n] of Object.entries(RECIPES[key].cost)) cargoTake(cargo, k, n);
+        // ★ v115 — 「손재주」 특성이 제조를 빠르게 한다
+        craftJob = { key, left: RECIPES[key].sec * grow.craftMult };
+        say(ai, `${RECIPES[key].name} — ${RECIPES[key].sec}초`, 'tell');
+      }
     } else if (b.dataset.up) {
-      const r = upgrade(fit, b.dataset.up, { ore: supply.ore });
+      const r = upgrade(fit, b.dataset.up, { ore: supply.ore, oreMult: grow.oreMult });
       if (r.ok) {
         supply.ore = Math.max(0, supply.ore - r.ore);
         say(ai, `개조 — ${partName(r.to)}`, 'tell');
@@ -1296,6 +1502,7 @@ addEventListener('click', (ev) => {
       if (headPick(warhead, b.dataset.head) || warhead.carrying === b.dataset.head) {
         warhead.carrying = b.dataset.head;
         warhead.in.push(b.dataset.head);
+      upXp(XP.mat, '탄두 재료');
         warhead.carrying = null;
         say(ai, '탄두에 꽂았습니다', 'tell');
       } else say(ai, '그 재료가 없습니다', 'warn');
@@ -1305,12 +1512,25 @@ addEventListener('click', (ev) => {
   }
   const t = ev.target.closest?.('#bay .tabs button');
   if (!t) return;
-  const fitOn = t.id === 'tab-fit';
-  document.getElementById('tab-fit').classList.toggle('on', fitOn);
-  document.getElementById('tab-head').classList.toggle('on', !fitOn);
-  document.getElementById('pane-fit').hidden = !fitOn;
-  document.getElementById('pane-head').hidden = fitOn;
+  // ★ v114 — 칸이 **셋**이 됐다 (기체 · 화물·제조 · 탄두). 둘일 때 쓰던
+  //   `fitOn` 같은 참거짓 하나로는 셋을 못 가른다 — 늘리면서 안 고치면
+  //   「누르면 둘 다 열리는」 창이 된다
+  for (const [tab, pane] of [['tab-fit', 'pane-fit'], ['tab-grow', 'pane-grow'],
+    ['tab-hold', 'pane-hold'], ['tab-head', 'pane-head']]) {
+    const on = t.id === tab;
+    document.getElementById(tab)?.classList.toggle('on', on);
+    const el = document.getElementById(pane);
+    if (el) el.hidden = !on;
+  }
 });
+
+/**
+ * ★★★ v119 — **묶은 표적을 기수 기준으로 잰 것** (없으면 null).
+ *   프레임 루프가 한 번 재고 `fireGun()` 이 받아 간다 — **여기가 유일한
+ *   자리**다. 쏘는 쪽에서 다시 재면 「고르는 곳」과 「재는 곳」이 갈라지고,
+ *   그게 v79·v85 의 「궤적과 격추 지점이 다르다」와 같은 병이다
+ */
+let lockAimed = null;
 
 /** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
 let closeRate = 0;
@@ -1321,9 +1541,13 @@ function fireGun() {
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
   // ★ v100 — **발사관이 잰 오차**를 같이 넘긴다 (짐벌 무기만 쓴다)
+  // ★★★ v119 — **묶었으면 그놈을 넘긴다.** 유도 무기는 조준선이 아니라
+  //   트랙 파일을 쏜다 (사장님 「락온 시키면 자동으로 타겟을 따라가도록」)
   const r = fireWeapon(combat, {
-    aimed, supply, rnd: Math.random,
-    mount: mountSummary(mount, aimed ? { az: aimed.relAz, el: aimed.relEl } : null),
+    aimed, locked: lockAimed, supply, rnd: Math.random,
+    // ★ v119 — 발사관 오차는 **`fire()` 가 고른 표적**에서 잰다. 여기서
+    //   `aimed` 로 미리 재 버리면 락온 사격의 오차가 조준선 기준이 된다
+    mountAt: (aim) => mountSummary(mount, aim),
   });
   if (!r.ok) { say(ai, CBT_WHY[r.why] ?? '지금은 못 쏩니다', 'tell'); return; }
   const w = r.weapon;
@@ -1337,14 +1561,19 @@ function fireGun() {
   //   탄약이 없는 대신 이쪽이 값이다: 쏠수록 뜨거워지고, 뜨거우면 못 숨고,
   //   식히려고 라디에이터를 열면 더 훤히 보인다 (v58 열 저장고와 물린다).
   //   미사일은 열을 덜 낸다 — 대신 재고가 준다
-  heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2));
+  // ★ v115 — 「냉정」 특성이 쏘는 열을 깎는다 (`grow.heatMult`)
+  heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2) * grow.heatMult);
   // ★ **쏘면 밝아진다** — 총구 섬광과 사출은 숨길 수 없다 (v44 규약)
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
   say(ai, `${w.name} 발사`, 'tell');
   // ★★★ **v69 — 쏘는 것이 보인다.** v68 까지 여기서 숫자만 줬다 (열이
   //   오르고 광석이 줄고 hp 가 빠졌다). 화면에서는 아무 일도 안 났고,
   //   격추 게임에서 그건 **쏘는 맛이 아예 없는 것**이다
-  ship.outside.shots.fire(w.key, aimed ? aimed.t : null);
+  // ★★★ v119 — **규칙이 고른 그놈에게 날아간다.** 여기서 `aimed.t` 를
+  //   쓰면 「락온으로 쐈는데 화면은 조준선 쪽으로 난다」가 되어, v79·v85 에
+  //   두 번 고친 「궤적과 격추 지점이 다르다」가 그대로 되살아난다.
+  //   `fire()` 가 돌려준 `shot.target` 이 유일한 답이다
+  ship.outside.shots.fire(w.key, sky.list.find((x) => x.id === r.shot.target) ?? null);
   // ══ ★★★ v84 — **사출되는 동안 시간이 느려진다** ═══════════════════
   //  ★ 사장님 「순간적으로 슬로우 모션으로 발사되어 **점점 가속화**」.
   //  ★★ 슬로우 길이가 **사출 구간과 같다** (`SLOW.launch.sec` =
@@ -1356,6 +1585,56 @@ function fireGun() {
 }
 
 /** ★★ 날아간 것이 닿았다 — 부수거나 빗나간다 */
+/**
+ * ★★★ v114 — **만드는 중인 것이 돈다** (`craft-table.js RECIPES`).
+ *
+ *   ★ 창을 닫아도 돈다 — 걸어 놓고 다른 일을 하는 것이 제조의 값이다.
+ *   ★★ 그런데 **쫓기기 시작하면 멈춘다.** 재료는 이미 뺐으므로 손해가
+ *     아니고, 다시 조용해지면 이어진다 — 「동시에 두 곳에 못 있는다」가
+ *     이 배의 축이고 제조도 거기서 벗어나지 않는다
+ */
+/**
+ * ★★★ v115 — **경험을 준다** — 게임에서 이 함수 하나만 부른다.
+ *
+ *   ★ 레벨이 올라도 **창을 안 띄운다.** 싸우는 중일 수 있고, 그때 창이
+ *     뜨면 그건 보상이 아니라 방해다. 「고를 것이 있습니다」만 말하고
+ *     **빚으로 쌓아 둔다** — 사람이 I 를 눌러 열 때 고른다.
+ *     v109 이 없앤 「하던 일을 멈추고 뒤로 간다」와 같은 병을 안 만든다
+ */
+function upXp(n, why = '') {
+  const r = gainXp(pilot, n);
+  if (r.up > 0) {
+    say(ai, `★★ 레벨 ${pilot.lv} — 고를 것이 ${pilot.owed} 개 있습니다 (I)`, 'warn');
+    audio?.event('caught');
+  } else if (why && n >= XP.leg) {
+    say(ai, `${why} — 경험 +${Math.round(n)}`, 'tell');
+  }
+  if (bayOpen) drawBay();
+}
+
+function stepCraft(dt) {
+  if (!craftJob) return;
+  if (chase.on) return;                       // ★ 쫓기는 동안은 멈춘다
+  craftJob.left -= dt;
+  if (craftJob.left > 0) { if (bayOpen) drawBay(); return; }
+  const r = RECIPES[craftJob.key];
+  craftJob = null;
+  if (r.to.field === 'missiles') {
+    supply.missiles = Math.min(MISSILES.max, (supply.missiles ?? 0) + r.to.n);
+  } else if (r.to.item) {
+    // ★ 만든 것도 **화물칸을 거친다** — 자리가 없으면 못 싣는다.
+    //   여기서만 예외를 두면 「제조로 화물칸을 넘긴다」가 열린다
+    const got = cargoPut(cargo, { [r.to.item]: r.to.n }, grow.hold);
+    if (Object.keys(got.took).length === 0) {
+      say(ai, `${r.name} 을 마쳤는데 **화물칸에 자리가 없습니다**`, 'warn');
+      if (bayOpen) drawBay();
+      return;
+    }
+  }
+  say(ai, `★ ${r.name} 을 마쳤습니다`, 'tell');
+  if (bayOpen) drawBay();
+}
+
 function landShots(dt) {
   const done = stepShots(combat, dt, {
     find: (id) => sky.list.find((t) => t.id === id) ?? null,
@@ -1373,7 +1652,21 @@ function landShots(dt) {
     //  ★★ 한가운데를 정확히 겨눌수록 **핵심**, 도망가는 놈을 쫓아 쏘면
     //    **엔진**, 정면으로 맞붙으면 **무기**가 나온다. 그냥 때리면 선체다
     const wpn = WEAPONS[d.shot.weapon] ?? WEAPONS.laser;
-    const hp = hitPart(t, { off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg });
+    // ══ ★★★ v114 — **정확히 안쪽일수록 아프다** (`aim-table.js BANDS`) ═══
+    //
+    //  ★ 사장님 「**중앙 타겟 영역도 키우고 정확히 안쪽을 맞출 수록
+    //    데이미지가 들어가도록**」
+    //
+    //  ★★ 부위(`PARTS`)와 **다른 물건**이다. 부위는 「무엇을 맞혔나」이고
+    //    (그래서 **확률**로 갈린다), 띠는 「얼마나 가운데였나」다 (그래서
+    //    **확실히** 갈린다). 둘을 곱하면 「잘 겨누면 핵심이 잘 나오고,
+    //    나온 그 한 발도 더 아프다」가 된다
+    //  ★ 배수를 여기서 안 정한다 — 표가 정하고 `space-aim.js` 가 잰다
+    // ★ v115 — 「사수」 특성이 정중앙 띠를 넓힌다 (`grow.bull`)
+    const band = bandAt(d.shot.off, wpn.tol, !!wpn.seek, grow.bull);
+    const hp = hitPart(t, {
+      off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg * (band?.mult ?? 1),
+    });
     t.flash = 0.5;
     // ★ 맞은 자리에서 터진다 — 「맞았나」를 숫자로만 알려주지 않는다
     ship.outside.shots.pop(shotAt(t.az, t.el, t.dist));
@@ -1382,13 +1675,22 @@ function landShots(dt) {
       //   모르면 겨누지 않는다 — 규칙이 있는데 화면에 없으면 없는 것과 같다
       const dead = hp.part.kills === 'move' ? ' · 엔진 정지'
         : hp.part.kills === 'shoot' ? ' · 무기 파괴' : '';
-      say(ai, `${TKINDS[t.kind].name} ${hp.part.name} 명중${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
-        hp.part.key === 'core' || dead ? 'warn' : 'tell');
+      // ★★★ v114 — **띠를 말한다.** 「스쳤습니다 — 조금 더 안쪽」이
+      //   이 계통의 전부다. 규칙이 있는데 화면에 없으면 없는 것과 같고,
+      //   특히 **스침은 옛 규칙이면 빗나감**이라 안 말하면 배울 것이 없다
+      const bw = band ? HIT_WORD[band.key] : '명중';
+      say(ai, `${TKINDS[t.kind].name} ${hp.part.name} ${bw}${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
+        band?.key === 'bull' || hp.part.key === 'core' || dead ? 'warn' : 'tell');
       continue;
     }
     // 부쉈다
     sky.list = sky.list.filter((x) => x !== t);
     sky.killed++; combat.kills++;
+    // ══ ★★★ v115 — **경험은 「했다」에서만 나온다** ═══════════════════
+    //  ★ 센 것을 잡으면 많이 (전투력 그대로) · **정중앙으로 마무리하면 더**.
+    //    이 한 줄이 「RPG 인데 실력 게임」을 만든다 — 같은 적을 잡아도
+    //    잘 맞힌 사람이 더 큰다 (`growth-table.js XP.bull`)
+    upXp(xpForKill(t.kind, band?.key === 'bull'), `${TKINDS[t.kind]?.name ?? '적'} 격추`);
     forgetLock(combat, t.id);
     // ══ ★★★ **부순 것과 얻는 것 사이에 일이 하나 있다** (v81) ═══════
     //
@@ -1543,6 +1845,8 @@ const world = () => ({
   arc: arcS,
   // ★ v101 — 스로틀·도킹. `save-table.js FIELDS` 가 칸을 고른다
   throttle: thr, dock: dockS,
+  // ★ v115 — 파일럿 (`save-table.js FIELDS.pilot`)
+  pilot,
   ship: { heat, sink, power, clock, seed, coolOpen },
   me,
 });
@@ -1575,6 +1879,9 @@ function loadOnce() {
   clock = box.ship.clock ?? clock;
   Object.assign(power, box.ship.power ?? {});
   coolOpen = box.ship.coolOpen ?? false;
+  // ★ v115 — 특성을 이어했으면 **효과를 다시 낸다.** 안 하면 목록에는
+  //   특성이 있는데 게임은 아무것도 안 바뀐 채로 돈다
+  regrow();
   // ★★ **손을 놓은 채 시작한다** (2026-08-06 · 사장님 「왜 자꾸 주포에서
   //   시작하고 움직여지지가 않아?」). 앉아 있으면 `gunBusy` 가 걸음을 막으므로
   //   앉은 채 이어하면 **못 걷는 자리에서 시작한다.** 표에서 `up` 을 뺐지만
@@ -1800,15 +2107,30 @@ function takeSalvage(p) {
   //  꾸러미가 든 것은 이제 덩어리가 아니라 **아이템**이다. 화물칸에는
   //  **무게 한도**가 있으므로 다 못 실을 수 있다 — 그게 「무엇을 줍고
   //  무엇을 버릴지」의 두 번째 층이다 (`docs/space/ITEMS.md §4`)
-  const r = cargoPut(cargo, p.has);
+  const r = cargoPut(cargo, p.has, grow.hold);
   // 실은 것만 배의 계통으로 들어간다 (`cargo-table.js ITEMS[k].use`)
-  const u = useOf(r.took);
+  // ══ ★★★ v114 — **삼킨 것은 화물칸에서 뺀다** (`cargo.js settle`) ═════
+  //
+  //  ★ 사장님 「**화물칸이 벌써 다 찼다는데?** 필요한 아이템 드랍률을 낮춰」
+  //
+  //  ★★ 재 보니 드랍률이 아니라 **새는 구멍**이었다: v113 까지 여기서
+  //    `useOf` 로 통에 붓기만 하고 **화물칸에서는 안 뺐다.** 이미 써 버린
+  //    것이 무게로 남아 있었고, 그래서 **5.6 마리면 100 짐이 꽉 찼다.**
+  //    드랍률을 낮췄으면 조금 늦게 같은 일이 났을 것이다.
+  //  ★★★ **배가 더 받을 수 있는 만큼만** 삼킨다. 통이 꽉 차 있으면
+  //    화물칸에 남고, 그게 진짜 짐이다 — 「무엇을 버릴지」가 여기서 산다
+  const { ate: u } = cargoSettle(cargo, r.took, {
+    food: FOOD.max - supply.food,
+    parts: PARTS.max - supply.parts,
+    ore: ORE.max - supply.ore,
+    // ★ 냉각제는 **열이 남아 있을 때만** 삼킨다 (시원하면 아껴 둔다)
+    sink,
+    // ★ 아크 전지는 자리를 안 준다 — 화물칸에 **실려 있는 개수 그대로**를
+    //   도약이 읽으므로(`cargo.items.arc`) 삼키면 그 자리 물건이 없어진다
+  });
   if (u.food) supply.food = Math.min(FOOD.max, supply.food + u.food);
   if (u.parts) supply.parts = Math.min(PARTS.max, supply.parts + u.parts);
   if (u.ore) supply.ore = Math.min(ORE.max, supply.ore + u.ore);
-  // ★ 아크 전지는 **화물칸에 실린 개수 그대로**를 도약이 읽는다
-  //   (`cargo.items.arc`). 그래서 여기서 옮길 것이 없다 — `use` 는
-  //   「떨어져도 되는 물건인가」의 표시로만 쓰인다 (`dropsNow`)
   if (u.sink) sink = Math.max(0, sink + u.sink);
   // ══ ★★★ v110 — **부위 파츠가 여기서 나온다** ══════════════════════
   //
@@ -2064,6 +2386,97 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.45, 0.76);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v114 — **계기를 화면 구석에 못박는다** (사장님 「화면 uhd 정렬좀해
+//     시야를 안가리게」)
+//
+//  ★ 계기 셋은 배에 박힌 3D 판이라 자리를 **미터**로 적어 두었는데,
+//    화면 가로 좌표에만 `aspect` 가 들어간다 — 즉 **화면이 넓어질수록
+//    판이 하늘 복판으로 걸어 들어온다.** v103 은 1280×760 한 창에서만
+//    재고 고쳤으므로 그 창에서만 맞았다.
+//  ★★ 그래서 자리를 **화면 좌표**(`screen-table.js ANCHOR`)로 적고,
+//    창이 바뀔 때마다 그때의 aspect 로 **미터를 다시 낸다.**
+//  ★ 셈은 표가 한다 (`worldAt` · `centerFor`) — 여기서 다시 곱하면
+//    「도구가 재는 자리」와 「그려지는 자리」가 갈라진다 (v98 의 병)
+// ══════════════════════════════════════════════════════════════════════════
+/** ★ 지난번에 놓을 때의 화각·비율 — 바뀔 때만 다시 놓는다 */
+let fovWas = -1, aspectWas = -1;
+/**
+ * ★★★ v116 — **가속도** (사장님 「가속도가 안 느껴지고」).
+ *   `mpsWas` 는 지난 프레임의 창밖 속도, `accK` 는 **삭아 가는 느낌** 0~1
+ */
+let mpsWas = 0, accK = 0;
+/**
+ * ★★ **끌려가는 몫을 뺀 순수한 배 속도** (m/초).
+ *   창밖은 「붙으러 가는 것」까지 보여야 하지만, **상태창과 투하 이탈은
+ *   배가 제 힘으로 얼마나 가나**를 물어야 한다 — 둘을 한 값으로 쓰면
+ *   그물에 매달려 끌려가는 동안 「전속으로 이탈 중」이라고 뜬다
+ */
+let mpsPure = 0;
+function placePanels() {
+  if (!ship) return;
+  const aspect = camera.aspect || 1;
+  const fovDeg = camera.fov;
+  const dist = HUDV.dist + 0.01;                 // 눈 → 판 (계기 셋은 살짝 뒤)
+  const t = Math.tan((fovDeg * Math.PI) / 360) * dist;
+  const put = (name, obj) => {
+    if (!obj?.mesh) return;
+    // ══ ★★★ **크기를 짐작하지 않고 판에게 묻는다** ═══════════════════
+    //
+    //  ★ 처음에 「지을 때 넘긴 폭·높이」(`obj.size`)로 쟀다가 찍어 보고
+    //    틀린 것을 알았다 — **레이더가 아래로 잘려 있었다.** 판은 그 크기의
+    //    사각형 하나가 아니라 테두리·글자판을 더 단 **그룹**이라, 진짜
+    //    덩치도 다르고 **복판이 원점에 있지도 않다.** 짐작한 크기로 구석에
+    //    대면 그 차이만큼 어긋난다.
+    //  ★★ `Box3` 로 **한 번 재서** 기억한다 (판 모양은 안 변한다).
+    //    이 저장소가 v103 에 광학창을 `geometry.parameters` 로 재다가
+    //    「화면의 95%」라는 거짓말을 얻은 그 자리이고, 답도 그때와 같다
+    if (!obj.localBox) {
+      obj.mesh.position.set(0, 0, 0);
+      obj.mesh.rotation.set(0, 0, 0);
+      obj.mesh.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(obj.mesh);
+      obj.localBox = {
+        hw: (bb.max.x - bb.min.x) / 2, hh: (bb.max.y - bb.min.y) / 2,
+        ox: (bb.max.x + bb.min.x) / 2, oy: (bb.max.y + bb.min.y) / 2,
+      };
+    }
+    const lb = obj.localBox;
+    // 판의 반쪽 크기를 **화면 좌표**로 — 가로만 aspect 로 나뉜다
+    const halfW = lb.hw / (t * aspect);
+    const halfH = lb.hh / t;
+    const c = centerFor(name, halfW, halfH);
+    const p = worldAt({ nx: c.nx, ny: c.ny, dist, fovDeg, aspect });
+    // ══ ★★★ v118 — **판을 카메라에 붙인다** ═══════════════════════════
+    //
+    //  ★ 사장님 (2026-08-12) 「**화면에 나오는 정보창들 기울어져있어서 읽기
+    //    불편해 수정해줘. 정면으로 나오도록**」
+    //
+    //  ══ v114 에 「눕히지 않는다」로 고쳤는데 왜 또 기울었나 ═════════════
+    //
+    //  그때 판의 **회전을 0 으로** 두었다. 그건 **배 기준**의 0 이라,
+    //  창을 정면으로 보고 있을 때만 화면과 나란하다. **마우스로 둘러보면
+    //  카메라만 돌고 판은 배에 붙어 안 돈다** — 그 벌어진 각만큼
+    //  화면에서 **마름모로 찌그러진다.** 사장님 사진의 그것이다.
+    //
+    //  ★★★ 그래서 **판을 카메라의 자식으로 옮긴다.** 그러면 판이 늘
+    //    이미지 평면과 나란하고, 원근 투영은 **그런 판을 언제나 직사각형
+    //    으로** 그린다 (같은 z 의 평면은 균일하게 축소될 뿐이다).
+    //    즉 「정면으로」가 **규칙으로** 보장된다 — 값을 잘 골라서가 아니라.
+    //
+    //  ★ 이 배가 이미 쓰는 규약이다: 광학 전체화면 판도 **눈에 매단다**
+    //    (`optic.attachBig(camera)`) — 「화면 붙박이」는 카메라의 자식이다.
+    //  ★★ `scene.add(camera)` 가 되어 있어야 자식이 그려진다. 되어 있다
+    if (obj.mesh.parent !== camera) camera.add(obj.mesh);
+    // ★ 카메라 기준이라 눈이 원점이고, 카메라는 **−z** 를 본다
+    obj.mesh.position.set(p.x - lb.ox, p.y - lb.oy, -dist);
+    obj.mesh.rotation.set(0, 0, 0);
+  };
+  put('광학창', ship.optic);
+  put('상태창', ship.statusHud);
+  put('레이더', ship.radarHud);
+}
+
 function resize() {
   const w = innerWidth, h = innerHeight;
   const dpr = Math.min(devicePixelRatio, 2);
@@ -2074,6 +2487,8 @@ function resize() {
   bloom.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // ★ 카메라가 바뀐 **뒤에** 놓는다 — 앞에 놓으면 한 판 늦은 aspect 로 놓인다
+  placePanels();
 }
 addEventListener('resize', resize);
 resize();
@@ -3294,11 +3709,13 @@ function systemsStep(dt, valveOpen, regionMult) {
       rushSaid = 2.5;
     }
     if (rushSaid > 0) rushSaid -= dt;
+    // ★ v115 — 「기관사」 특성이 급가속 추진제를 아낀다. `stepBoost` 가
+    //   낸 값에 곱한다 — 표를 고치면 특성을 안 고른 사람 것까지 바뀐다
     const bev = stepBoost(boost, dt, {
       on: wantRush && rushOk,
       fuel: supply.fuel,
     });
-    supply.fuel = Math.max(0, supply.fuel - boost.fuel);
+    supply.fuel = Math.max(0, supply.fuel - boost.fuel * grow.fuelMult);
     heat = Math.min(HEAT.max, heat + boost.heat);
     // ★★★ v87 — 급가속을 **밟는 순간** 눈이 뒤로 밀린다. 추력 켬(0.35배)
     //   보다 세게 — 주엔진을 배로 태우는 것이므로 몸이 더 눌린다
@@ -3549,16 +3966,18 @@ function systemsStep(dt, valveOpen, regionMult) {
   const shipStatus = {
     heat,
     cooling: valveOpen && power.cool,
-    speed: statusSpeed(CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
-      // ★ v101 — 스로틀이 배수를 정한다 (역추진이면 0)
-      : legOf(thr, LEG.coast))),
+    // ★★★ v116 — **재는 곳을 하나로.** 여기 `CRUISE.speed * legOf(...)` 를
+    //   손으로 다시 곱하고 있었다 — 창밖은 `speed-table.js` 로 옮겼는데
+    //   상태창만 옛 셈에 남으면 **계기가 창밖과 다른 말을 한다**
+    speed: statusSpeed(mpsPure),
+    speedWord: speedWord(mpsPure),
     power,
     sign: chase.sign,
     missiles: supply.missiles,
     weapon: weaponOf(combat).name,
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
     //   획득 아이템이 … 조정석 화면에서 획득 리스트를」)
-    cargo: cargoSummary(cargo),
+    cargo: cargoSummary(cargo, grow.hold),
     // ══ ★★★ v99 — **아크 도약** (일곱째 줄) ═══════════════════════════
     //  ★ 여기에 안 넣고 있었다. `SPACE.arc` 는 8 을 말하는데 계기는
     //    「전지 0/6」을 그리고 있었고, **화면을 찍어서 잡았다** —
@@ -3829,7 +4248,7 @@ window.SPACE = {
       close: +closeRate.toFixed(1),
       blocked: whyNotDock({
         has: !!p0, dist: p0?.dist ?? 999, close: closeRate, off: p0?.off ?? 0,
-        full: cargoLeft(cargo) <= 0, step: dockS.step,
+        full: cargoLeft(cargo, grow.hold) <= 0, step: dockS.step,
       }),
     };
   },
@@ -4891,6 +5310,32 @@ window.SPACE = {
   //    진짜 카메라로 투영**한다 — 자리와 크기가 한꺼번에 나온다.
   //  ★★★ 재는 것과 고치는 것을 한 자리에 두지 않는다: 이 값을 읽고
   //    **표**(`game/screen-table.js`)가 「어디까지 봐주나」를 정한다
+  /** ★ v114 — 정렬을 고치는 동안 쓴 구멍. 판이 어디 있고 얼마나 큰가 */
+  cam() { const v = camera.getWorldPosition(new THREE.Vector3()); return [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2), camera.fov, +camera.aspect.toFixed(3)]; },
+  panelDebug() {
+    const out = {};
+    for (const [n, o] of [['광학창', ship.optic], ['상태창', ship.statusHud], ['레이더', ship.radarHud]]) {
+      if (!o?.mesh) { out[n] = null; continue; }
+      const box = new THREE.Box3().setFromObject(o.mesh);
+      // ★★★ v118 — **정면인가**를 한 숫자로 (사장님 「정면으로 나오도록」).
+      //   판의 월드 법선과 카메라가 보는 방향을 견준다. 둘이 정확히
+      //   마주 보면 −1 이고, 그때만 원근 투영이 **직사각형**을 그린다.
+      //   ★ 자리(pos)만 봐서는 못 잡는다 — v114 가 회전을 0 으로 뒀는데
+      //     그건 **배 기준**의 0 이라, 마우스로 둘러보면 카메라만 돌아
+      //     판이 마름모로 찌그러졌다. 그 어긋남이 여기 숫자로 나온다
+      const nrm = new THREE.Vector3(0, 0, 1).applyQuaternion(o.mesh.getWorldQuaternion(new THREE.Quaternion()));
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+      out[n] = {
+        pos: o.mesh.position.toArray().map((x) => +x.toFixed(3)),
+        rot: o.mesh.rotation.toArray().slice(0, 3).map((x) => +(+x).toFixed(3)),
+        size: o.size, box: box.getSize(new THREE.Vector3()).toArray().map((x) => +x.toFixed(2)),
+        kids: o.mesh.children?.map((c) => `${c.name || c.type}${c.visible ? '' : '(숨음)'}`) ?? [],
+        onCam: o.mesh.parent === camera,
+        face: +nrm.dot(fwd).toFixed(4),      // −1 이면 정면으로 마주 본다
+      };
+    }
+    return out;
+  },
   panels() {
     const list = [
       ['조준경', ship.sight?.mesh], ['광학창', ship.optic?.mesh],
@@ -4944,6 +5389,65 @@ window.SPACE = {
   givePart(slot = 'gun', tier = 'loot') { return gainPart(fit, slot, tier); },
   /** 검사가 I 창을 연다 */
   openBay(on = true) { showBay(on); return bayOpen; },
+  /** ★ v114 — 점검용 구멍. 화물칸에 물건을 넣어 인벤토리·제조를 눌러 본다 */
+  giveCargo(g) { const r = cargoPut(cargo, g); if (bayOpen) drawBay(); return r; },
+  craftNow() { return craftJob ? { ...craftJob } : null; },
+  /**
+   * ★★★ v117 — **미사일 무한** (사장님 「f2테스트에 넣어서 테스트할 때
+   *   사용할 수 있도록」).
+   *
+   *   ★ v95~v116 내내 `supply-table.js MISSILES.infinite` 에 `true` 로
+   *     박혀 있던 것을 **점검 모드 스위치로** 옮겼다. 기본은 꺼짐이다.
+   *   ★★ **여기가 그 값을 바꾸는 유일한 곳이다.** 두 곳에서 만지면
+   *     「지금 무한인가」의 답이 둘이 된다 — 이 저장소가 `?v=`/`VERSION`
+   *     으로 스무 판을 어긋난 채 간 그 병이다
+   *
+   * @param on 안 주면 **뒤집는다** (단추 하나로 켜고 끈다)
+   */
+  setInfinite(on) {
+    MISSILES.infinite = on === undefined ? !MISSILES.infinite : !!on;
+    return MISSILES.infinite;
+  },
+  /**
+   * ══ ★★★ v119 — **지금 겨눈 것을 곧바로 묶는다** (시험용) ═══════════
+   *
+   *  ★ 락온에 2.6초가 걸리는데, **머리 없는 브라우저에서는 게임 시계가
+   *    실시간의 1/25 로 돈다** — 즉 검사가 65초를 기다려야 한다. 그래서
+   *    v118 까지 「묶은 뒤」를 브라우저로 재 본 적이 **한 번도 없었다.**
+   *  ★★ 이 구멍은 **새 길을 안 만든다** — `stepRadar` 가 하는 것과 똑같이
+   *    `id` 를 꽂을 뿐이다. 점검 모드(F2)에도 단추로 낸다
+   *
+   *  @param on false 를 주면 놓는다
+   */
+  putLock(on = true) {
+    if (!on) { combat.radar.id = null; combat.radar.t = 0; combat.radar.grace = 0; return null; }
+    const a = aimedAt(sky, aimAz, aimEl);
+    if (!a) return null;
+    combat.radar.on = true;
+    combat.radar.id = a.t.id;
+    combat.radar.t = RADAR.lockFor;
+    combat.radar.grace = RADAR.holdGrace;
+    combat.radar.notch = 0; combat.radar.wasD = a.t.dist; combat.radar.why = null;
+    combat.radar.atAz = a.relAz; combat.radar.atEl = a.relEl;
+    return { id: a.t.id, kind: a.t.kind, dist: +a.t.dist.toFixed(0) };
+  },
+  /** ★ v115 — 점검용 구멍. 성장을 눌러 보고 특성이 정말 먹나 잰다 */
+  giveXp(n) { upXp(n, '점검'); return { ...pilot, eff: grow }; },
+  pilotNow() { return { ...pilot, eff: { ...grow } }; },
+  /**
+   * ★★★ v116 — **창밖이 지금 얼마나 흐르나** (사장님 「가속도가 안 느껴지고」).
+   *   `space-speed.js` 는 표만 재고, **화면이 그 표대로 도나**는 여기로 묻는다
+   */
+  speedNow() {
+    return {
+      mps: +mpsWas.toFixed(2), pure: +mpsPure.toFixed(2), acc: +accK.toFixed(3),
+      fov: +camera.fov.toFixed(2),
+      streak: ship.outside?.view?.streak ?? null,
+      streakLen: ship.outside?.view?.streakLen ?? 0,
+      towing: catching(catchS),
+    };
+  },
+  setThrust(on) { setThrustKey(!!on); return power.thrust; },
   /** ★★★ v106 — **수리 단추.** 검사(`space-pilot.js`)와 점검 모드가 읽는다 */
   get fix() {
     return {
@@ -4978,7 +5482,7 @@ window.SPACE = {
     return beginCatch(catchS, {
       has: !!p0, id: p0?.id ?? null, dist: p0?.dist ?? 999,
       seated: helmSat || steering,
-      dry: isDry(supply.fuel), full: cargoLeft(cargo) <= 0,
+      dry: isDry(supply.fuel), full: cargoLeft(cargo, grow.hold) <= 0,
     });
   },
   /** ★★★ v103 — **비행 보조** (자동 수평). 검사와 점검 모드가 읽는다 */
@@ -5004,6 +5508,7 @@ window.SPACE = {
     if (headPick(warhead, key) || warhead.carrying === key) {
       warhead.carrying = key;
       warhead.in.push(key);
+      upXp(XP.mat, '탄두 재료');
       warhead.carrying = null;
     }
     return headSummary(warhead);
@@ -5778,20 +6283,45 @@ function frame(now) {
     { hold: landBusy(land) || rescueHold(rescue), course: nav.mult });
   // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
   //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
-  const missed = rev === 'arrive' && !tryDock(helm);
+  // ★★★ v117 — **조용한 거점도 도착이다** (`route-table.js QUIET`).
+  //   못 가는 것이 아니라 **거래를 못 하는** 것이라, 닿는 규칙은 똑같다.
+  //   여기서 안 이으면 「거점에 왔는데 아무 일도 안 나는」 판이 된다
+  const arrived = rev === 'arrive' || rev === 'quiet';
+  const missed = arrived && !tryDock(helm);
   if (missed) {
     // ★ 규칙은 route.js 가 갖는다 — 밖에서 `t` 만 만지면 leg 가 하나
     //   앞선 채로 남아서 「구간 7/12 인데 실제로는 6번째」가 된다
     missPort(route);
     say(ai, '거점을 지나쳤습니다 — 항로로 돌아옵니다', 'tell');
     audio?.event('caught');
-  } else if (rev === 'arrive' || rev === 'end') {
+  } else if (arrived || rev === 'end') {
+    // ★ v115 — **뚫으면 오른다.** 목적 한 줄(뚫는다·채운다·떨군다)과
+    //   성장이 같은 길 위에 있게 하는 자리다
+    upXp(XP.leg, `구간 ${route.leg}/12 통과`);
     newLeg(hazard);
     // ★ 구간이 바뀌면 **다음 장면을 예약한다.** route.leg 는 0 부터 세고
     //   배치표는 1 부터 센다 — 여기서 한 번만 맞춘다
     sceneLeg(scenes, route.leg + 1);
   }
-  if (rev === 'arrive' && !missed) {
+  // ══ ★★★ v117 — **응답이 없는 거점** ═══════════════════════════════
+  //  ★ 갈래 둘 다 「거래를 못 한다」이고, 하나는 이득이 있고 하나는 벌이 있다.
+  //    새 계통을 안 만든다 — 보급을 그냥 주거나, 적을 하나 붙인다
+  if (rev === 'quiet' && !missed && route.quiet) {
+    const q = route.quiet;
+    say(ai, `★ ${q.name} — ${q.lead}`, 'warn');
+    audio?.event('alarm');
+    for (const [k, v] of Object.entries(q.take ?? {})) {
+      if (k === 'ore') supply.ore = Math.min(ORE.max, supply.ore + v);
+      if (k === 'parts') supply.parts = Math.min(PARTS.max, supply.parts + v);
+      if (k === 'food') supply.food = Math.min(FOOD.max, supply.food + v);
+    }
+    say(ai, q.what, q.foe ? 'warn' : 'tell');
+    // ★ 추격을 억지로 붙이지 않는다 — 거점에서는 추격이 안 돈다 (v22).
+    //   **적을 띄우는 것으로 충분하다**: 저쪽이 다가오므로 곧 붙는다.
+    //   여기서 `chase` 를 손대면 v22 가 세운 「거점은 쉬는 자리」가 깨진다
+    if (q.foe) spawnFoe(sky, q.foe);
+  }
+  if (arrived && !missed) {
     // ★ **여기서 저장한다.** 거점은 원래 숨 쉬는 자리이고, 12구간이면
     //   12번이다. 초마다 저장하면 「죽기 직전으로 되돌리기」가 된다
     if (SAVE.onLeg) saveNow();
@@ -5844,10 +6374,10 @@ function frame(now) {
       armed: warhead.armed,
       // ★ 이탈 거리는 **진짜 배 속도**로 채운다 — 화면만 빨라지고 실제로
       //   안 빠르면 그건 「가는 척하는 화면」이다 (v88 규약)
-      speed: CRUISE.speed * (route.phase === RPHASE.PORT ? 0.25
-        // ★ v101 — 스로틀. 그물에 묶였거나 도킹 중이면 못 나아간다
-        : ((power.thrust && !thrustHeld(salvage) && !docked(dockS))
-          ? legOf(thr, LEG.coast) : LEG.coast)) * boostMult(boost),
+      // ★ v116 — **같은 값을 읽는다** (`mpsPure`). 여기도 손으로 다시
+      //   곱하고 있었고, 그래서 v116 이 창밖 바닥값을 고쳤을 때 **이탈
+      //   거리만 옛 셈으로 남을** 뻔했다
+      speed: mpsPure,
     });
     if (ev === 'run') { say(ai, DSAY.run, 'alarm'); audio?.event('alarm'); }
     if (ev === 'window') {
@@ -5974,7 +6504,8 @@ function frame(now) {
       if (!calmNow) say(ai, FIX_WHY.calm, 'warn');
     } else {
       fix.hold += dt;
-      if (fix.hold >= FIX.hold) {
+      // ★ v115 — 「정비」 특성이 수리를 빠르게 한다 (`grow.fixMult`)
+      if (fix.hold >= FIX.hold * grow.fixMult) {
         fix.hold = 0;
         fix.cool = FIX.cool;
         supply.parts = Math.max(0, supply.parts - FIX.parts);
@@ -6048,9 +6579,23 @@ function frame(now) {
   //   그게 그물의 값이다: **주우려면 도망칠 수 없다.** 「지원이 오기
   //   전에」가 무서운 이유가 이 한 줄이다 (`salvage-table.js NET.holdsThrust`)
   const tied = thrustHeld(salvage);
-  const cruise = route.phase === RPHASE.PORT ? 0.25
-    // ★ v101 — 스로틀이 여기로 온다. 도킹 중이면 **못 움직인다**
-    : ((power.thrust && !tied && !docked(dockS)) ? legOf(thr, LEG.coast) : LEG.coast);
+  // ══ ★★★ v116 — **거점에서도 스로틀이 먹는다** ═══════════════════════
+  //
+  //  ★ 여기가 `route.phase === PORT ? 0.25 : ...` 였다 — 거점에 있는 동안
+  //    **스로틀이 아무것도 안 했다.** 그런데 **회차는 거점에서 시작한다.**
+  //    켜자마자 밀어 보면 화면이 한 톨도 안 바뀌고, 사장님이 말씀하신
+  //    「가속도가 안 느껴진다」의 첫인상이 정확히 거기서 난다.
+  //  ★★ 0.25 는 「정박 중에는 항로가 안 나아간다」는 **항로의 값**인데
+  //    **눈에도** 쓰고 있었다 — `LEG.coast` 와 똑같은 병이다.
+  //  ★ 이제 **천장만** 씌운다 (`speed-table.js SPEED.portCap`).
+  //    항로가 안 나아가는 것은 `stepRoute` 가 따로 지킨다
+  //  ★★★ 그리고 **눈은 `legOf` 를 쓰면 안 된다.** `legMult` 는 바닥이
+  //    `coast`(0.45)라 **스로틀을 0 으로 내려도 0.45 가 나온다** — 그게
+  //    「멈춰도 창밖이 흐른다」의 마지막 조각이었다. 브라우저로 재고서야
+  //    찾았다 (표만 고치고 게임은 옛 함수를 부르고 있었다).
+  //    `coast` 는 **항로가 관성으로 나아가는 몫**이지 눈의 값이 아니다
+  const atPort = route.phase === RPHASE.PORT;
+  const cruise = (power.thrust && !tied && !docked(dockS)) ? Math.max(0, thr.v) : 0;
   // ★★ **착륙이 화면을 몬다** — 고도 하나가 별 흐름·하늘색·발광·지면을 다 정한다.
   //   `update` 보다 **먼저** 넣는다. 나중에 넣으면 이번 프레임은 옛 고도로
   //   그려지고, 그 한 프레임이 마디가 바뀌는 순간마다 툭 끊겨 보인다
@@ -6063,10 +6608,34 @@ function frame(now) {
   // ★★★ v73 — **급가속이 창밖을 몬다.** 먼지가 쏟아지고 길어진다.
   //   속도(`cruise`)에도 곱한다 — 화면만 빨라지고 실제로 안 빠르면
   //   그건 속임수고, 이 저장소는 그런 것을 「가는 척하는 화면」이라 부른다
-  ship.outside.update(
-    dt, CRUISE.speed * cruise * boostMult(boost),
-    hazard.lane, incoming(hazard), camera, boost.k,
-  );
+  // ══ ★★★ v116 — **창밖 속도는 표가 낸다** (`speed-table.js mpsAt`) ═════
+  //
+  //  ★ 사장님 「**가속도가 안 느껴지고**, f로 붙으면 실제로 붙어야지.
+  //    **멀리서 그냥 가져오는게 아니고**」 — **두 마디가 같은 뿌리**다.
+  //    창밖이 「지금 얼마나 가고 있나」를 안 말하고 있었다.
+  //
+  //  ★★ 여기 `CRUISE.speed * cruise * boostMult(boost)` 를 **직접 곱하고**
+  //    있었는데, `cruise` 의 바닥이 `LEG.coast`(0.45)였다. 그건 「추진을
+  //    꺼도 항로는 관성으로 나아간다」는 **항로의 값**이지 **눈의 값**이
+  //    아니다 — 그래서 **멈춰도 창밖이 11.7 mps 로 흘렀고**, 전속(26)과
+  //    겨우 2.2배 차이였다. 밀어도 안 빨라진 것처럼 보이는 것이 당연하다.
+  //  ★★★ 그리고 **붙으러 가는 속도를 얹는다.** 포획이 거리를 줄이는 동안
+  //    창밖이 그대로면 **꾸러미가 날아오는** 것으로 보인다 — 실제로는
+  //    배가 가는 것이다. 그게 「멀리서 그냥 가져오는게 아니고」의 답이다
+  mpsPure = mpsAt({ leg: cruise, back: thr.v < 0, boost: boostMult(boost), port: atPort });
+  const mpsNow = mpsAt({
+    leg: cruise, back: thr.v < 0, boost: boostMult(boost), port: atPort,
+    // ★ 끄는 속도는 **포획 표가 이미 안다** (`catch-table.js CATCH.speed`).
+    //   여기서 새 숫자를 적으면 「화면은 이만큼 가는데 거리는 저만큼 준다」가 난다
+    tow: catching(catchS) ? CATCH.speed : 0,
+  });
+  // ══ ★★★ **가속도** — 「빠르다」와 「빨라진다」는 다른 신호다 ═══════════
+  //  ★ 화면에 이 항이 **아예 없었다.** 사장님이 말씀하신 것은 속도가
+  //    아니라 **속도의 변화**이고, 그건 등속이 되면 사라져야 읽힌다
+  accK = fadeAcc(accK, accOf((mpsNow - mpsWas) / Math.max(dt, 1e-4)), dt);
+  mpsWas = mpsNow;
+  const feel = feelOf(accK);
+  ship.outside.update(dt, mpsNow, hazard.lane, incoming(hazard), camera, boost.k, accK);
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
   // ★ **해도대가 어긋나면 눈금이 밀린다** (chartDrift). 다만 **거짓말인 줄은
@@ -6192,13 +6761,21 @@ function frame(now) {
     me.z += (s.z - me.z) * k;
     camera.position.y -= (BODY.eye - HELM_SEAT.eye) * helmSitK;
   }
+  // ★★ v116 — **좌석이 밀린다** — 몸으로 느끼는 몫. 눈을 뒤로(+z) 민다
+  //   (기수는 −z 를 본다). 아주 작은 값이라야 한다 — 크면 멀미가 난다
+  if (accK > 0.002) camera.position.z += feel.seat * accK;
   // ★ 화각 — 읽을 때는 좁히고(45) 몰 때는 넓힌다(94). 둘이 동시에 1 이
   //   될 수 없으므로(`wantFocus` 가 `steering` 을 뺀다) 그냥 더한다
   // ★★★ v73 — **급가속이면 화각이 열린다.** 가장자리가 빨리 흘러
   //   속도로 읽힌다 — 레이싱 게임이 다 쓰는 것이고, 눈이 실제로 그렇게
   //   느낀다. 「빛무리가 쏟아져오거나 속도감이 느껴지도록」의 절반이 이것
+  // ★★★ v116 — **가속도가 화각을 연다** (`speed-table.js feelOf`).
+  //   급가속(`RUSH.fov * boost.k`)과 **다른 것**이다: 저건 「밟는 동안」이고
+  //   이건 「빨라지는 동안」이라, 스로틀을 미는 1.4초에도 열렸다가 등속이
+  //   되면 삭는다. 둘을 더하는 것은 맞다 — 급가속의 앞 순간에는 둘 다 참이고,
+  //   그 겹치는 순간이 제일 세게 미는 순간이기 때문이다
   const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK
-    + (FLY_VIEW.fov - FOV_WIDE) * flyK + RUSH.fov * boost.k;
+    + (FLY_VIEW.fov - FOV_WIDE) * flyK + RUSH.fov * boost.k + feel.fov;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (focusK > 0.001) {
     // 보는 쪽으로 몸을 기울인다 — 자리는 그대로고 **눈만** 나아간다
@@ -6400,6 +6977,8 @@ function frame(now) {
   }
   const skyEv = stepSky(sky, dt, {
     evade,
+    // ★ v115 — 「반사」 특성이 회피 창을 넓힌다 (`grow.window`)
+    evadeWide: grow.window,
     // ══ ★★★ **항로는 자동항법에만 영향을 준다** (v82) ═══════════════
     //
     //  ★ 사장님 「**항로 설정이 안되면 운전할 수 없잔아.** 이것도 고쳐.
@@ -6474,11 +7053,16 @@ function frame(now) {
   //   `t.id === r.id` 가 깨지고 락온이 풀렸다. 실제 레이더는 물면
   //   **그것을 따라간다** — 조준선이 아니라 표적을 본다
   let radarAimed = aimedNow;
+  lockAimed = null;
   if (combat.radar.id !== null) {
     const lt = sky.list.find((x) => x.id === combat.radar.id);
     if (lt) {
       const rel = azDiff(lt.az, aimAz);
       radarAimed = { t: lt, off: Math.hypot(rel, lt.el - aimEl), relAz: rel, relEl: lt.el - aimEl };
+      // ★★★ v119 — **쏘는 쪽도 이걸 쓴다.** 여기서 한 번만 재고 `fireGun`
+      //   이 받아 간다 — 거기서 다시 재면 그 순간 두 곳이 되고, 그게 이
+      //   저장소가 네 판을 태운 병이다 (`CLAUDE.md` 「재는 곳을 둘로 안 만든다」)
+      lockAimed = radarAimed;
     }
   }
   const radEv = stepRadar(combat, dt, radarAimed);
@@ -6505,12 +7089,19 @@ function frame(now) {
   //   **귀가 대신 본다** — 이게 「직관적으로 방향을 맞춘다」의 절반이다
   radarSeek = !combat.radar.on ? 0
     : combat.radar.id !== null ? 1
-      : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range)
+      // ★ v115 — 「눈」 특성이 레이더 사거리를 늘린다 (`grow.range`)
+      : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range + grow.range)
         ? 0.35 + 0.3 * (combat.radar.t / RADAR.lockFor) : 0;
   if (radEv === 'lock') { say(ai, '묶었습니다', 'tell'); audio?.event('latch'); }
-  if (radEv === 'break') { say(ai, '놓쳤습니다', 'tell'); }
+  // ★★★ v119 — **왜 놓쳤는지 말한다.** 「놓쳤습니다」만 뜨면 사람은 무엇을
+  //   고쳐야 하는지 모르고, 짐벌 아웃과 노치는 **답이 정반대**다 —
+  //   전자는 기수를 끌어와야 하고, 후자는 밀어붙여야 한다
+  if (radEv === 'break') {
+    say(ai, LOCK_LOST[combat.radar.why] ?? '놓쳤습니다', 'tell');
+  }
   stepCool(combat, dt, { atSeat: helmSat });
   landShots(dt);
+  stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다
 
   // 조준경 — **앉아 있을 때만 켜진다.** 늘 켜 두면 「지금 겨누는 중인가」가 안 읽힌다
   // ══ ★★★ v95 — **판은 안 굴린다. 판 안의 표식만 굴린다** ═══════════
@@ -6551,7 +7142,7 @@ function frame(now) {
       const p0 = nearPack();
       const why = whyNotDock({
         has: !!p0, dist: p0?.dist ?? 999, close: closeRate, off: p0?.off ?? 0,
-        full: cargoLeft(cargo) <= 0, step: dockS.step,
+        full: cargoLeft(cargo, grow.hold) <= 0, step: dockS.step,
       });
       return {
         ...dockSummary(dockS), word: dockWord(dockS),
@@ -6824,6 +7415,19 @@ function frame(now) {
   // ★★★ v79 — **광학 창을 먼저 그린다.** 렌더 타깃에 장면을 한 번 더
   //   그리는 일이라 주 렌더(합성기) **앞**이어야 한다 — 뒤에 두면 판에
   //   붙는 그림이 늘 **한 프레임 늦고**, 빠르게 도는 중에는 그게 보인다
+  // ══ ★★★ v114 — **화각이 바뀌면 계기를 다시 놓는다** ═══════════════
+  //
+  //  ★ 처음에 `resize()` 에서만 놓았다가 재 보고 틀린 것을 알았다:
+  //    이 배의 화각은 **고정이 아니다.** 앉아서 조종간을 잡으면 72 →
+  //    **93.4도**로 열리고(`FLY_VIEW`), 급가속이면 더 열린다(`SPEED.fovOpen`).
+  //    화각이 화면 좌표의 분모이므로, 창 크기가 그대로여도 **판이 걸어
+  //    다닌다** — 정렬을 창에만 걸어 두면 조종간을 잡는 순간 어긋난다.
+  //  ★★ 그래서 **바뀌었을 때만** 다시 놓는다. 매 프레임 놓아도 값은
+  //    같지만, 「무엇이 이걸 움직이나」가 코드에 안 남는다
+  if (Math.abs(camera.fov - fovWas) > 0.01 || Math.abs(camera.aspect - aspectWas) > 0.001) {
+    fovWas = camera.fov; aspectWas = camera.aspect;
+    placePanels();
+  }
   ship.optic?.render(helmSat);
   composer.render();
   lastCost = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles };

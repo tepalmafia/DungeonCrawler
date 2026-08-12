@@ -16,7 +16,12 @@
 //     장면의 조명 목록에 아무것도 안 보태면 실내로 샐 길이 없다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN }
+// ★★★ v116 — **별줄 눈금이 `speed-table.js` 로 옮겼다.** 옛 `streakLen` 은
+//   `STREAK.fast` 가 663 인데 실제로 나오는 속도가 2.6~88 이라 **곡선의
+//   13% 자리**에서만 놀았다 — 눈금이 통째로 안 맞았고, 그래서 멈춘 것과
+//   전속이 눈에 거의 같았다 (`space-speed.js` 가 잰다)
+import { streakAt } from '../game/speed-table.js';
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, PLANET, DOME_R, SUN }
   from '../game/sky-table.js';
 // ★ v73 — 급가속의 속도감. **숫자는 표에만** 있으므로 여기서 읽어 온다
 import { RUSH } from '../game/boost-table.js';
@@ -427,19 +432,28 @@ export function buildDust(parent, z) {
      *            켠다. `k` 로 켜면 R 을 안 누른 동안은 v73 이전과 같아서,
      *            사장님이 물으신 「정지인지 이동중인지」가 그대로 남는다
      */
-    setRush(k, mps = 0) {
+    /**
+     * @param acc ★★★ v116 — **가속도** 0~1 (`speed-table.js accOf`).
+     *   사장님 「**가속도가 안 느껴지고**」 — 「빠르다」와 「빨라진다」는
+     *   다른 신호다. 알갱이가 **더** 쏟아지는 몫이 이것이고, 등속이 되면
+     *   삭아 사라진다. 속도(`mps`)로만 그리면 그 항이 화면에 아예 없다
+     */
+    setRush(k, mps = 0, acc = 0) {
       const kk = Math.max(0, Math.min(1, k));
+      const ak = Math.max(0, Math.min(1, acc));
       // ★★★ v88 — **줄이 속도를 따라 자란다.** 대고 있으면(정박 6.5) 0 이라
       //   아예 안 그려지고, 미끄러지는 중(11.7)과 밟는 중(26)이 배로 다르다
-      sLen = streakLen(mps);
+      sLen = streakAt(mps);
       const on = sLen > 0.01;
       streak.visible = on;
       // 밝기도 길이를 따라간다 — 짧은 자국은 옅다 (노출이 짧으니까)
       smat.opacity = on ? STREAK.lum * Math.min(1, sLen / STREAK.len + 0.4) : 0;
-      mat.uniforms.uGrain.value = 1 + (RUSH.grain - 1) * kk;
+      // ★ 급가속(`kk`)과 가속도(`ak`) 중 **큰 쪽**을 쓴다. 더하면 급가속
+      //   중에 두 번 세어져서 화면이 하얗게 탄다 (v57 에 한 번 겪었다)
+      mat.uniforms.uGrain.value = 1 + (RUSH.grain - 1) * Math.max(kk, ak);
       // 밝기도 같이 — 쏟아지는 것은 밝게 보인다
       mat.uniforms.uCol.value.set(...DUST.rgb)
-        .multiplyScalar(DUST.lum * (1 + (RUSH.glow - 1) * kk));
+        .multiplyScalar(DUST.lum * (1 + (RUSH.glow - 1) * Math.max(kk, ak)));
     },
     /** @param d 이번 프레임에 몇 유닛 흘렀나 */
     flow(d) {

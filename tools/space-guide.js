@@ -56,9 +56,24 @@ console.log('\n[1] ★★ **튜토리얼에서만 켜진다** — 여기가 이 
     '`walk` 은 안 가리킨다 — 첫 30초부터 시키는 데로 가는 게임이면 안 된다');
   ok(!aimed.includes('fault'),
     '`fault` 는 안 가리킨다 — 그 가르침의 내용이 「소리로 찾는다」다 (헤매면 그때 main.js 가 잇는다)');
+  // ══ ★★★ v116 — **`look` 은 갈 데가 없는 가르침이다** ═══════════════
+  //
+  //  ★ 이 검사가 「`walk`·`fault` 말고는 전부 가리켜야 한다」고 물었는데,
+  //    v110 이 첫 가르침을 **둘러보기(`look`)**로 바꿨다 — 사장님이
+  //    「WASD 로 걷고」 안내가 남아 있는 것을 보시고 고치라 하신 자리다.
+  //    **둘러보는 데는 갈 데가 없다.** 바닥에 안내선을 그으면 「저기로
+  //    가라」가 되어 가르침의 내용과 정반대가 된다.
+  //  ★★ 그래서 빠진 것이 아니라 **없는 것이 맞다.** 검사가 v110 을
+  //    못 따라가서 빨갛던 것이고, 이 저장소가 v110 에 죽은 계통을 재던
+  //    도구를 스물두 개 찾은 것과 같은 병이다
+  ok(!aimed.includes('look'),
+    '★★ `look` 도 안 가리킨다 — **둘러보는 데는 갈 데가 없다.** 바닥에 선을'
+    + ' 그으면 「저기로 가라」가 되어 가르침의 내용과 정반대가 된다 (v110)');
   console.log(`  가리키는 것 ${aimed.length}개 / 가르침 ${KEYS.length}개 — ${aimed.join(', ')}`);
   // 나머지 둘(walk·fault)은 위에서 이유를 적었다. 그 밖에 빠진 게 있으면 안 된다
-  const missing = KEYS.filter((k) => !aimed.includes(k) && k !== 'walk' && k !== 'fault');
+  // ★ 갈 데가 없는 셋(`walk`·`fault`·`look`)은 위에서 각각 이유를 적었다
+  const NO_PLACE = ['walk', 'fault', 'look'];
+  const missing = KEYS.filter((k) => !aimed.includes(k) && !NO_PLACE.includes(k));
   ok(missing.length === 0, `갈 데가 있는 가르침은 전부 가리킨다 — 빠진 것 ${missing.join() || '없다'}`);
 }
 

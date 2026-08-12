@@ -60,9 +60,25 @@ console.log('\n[방] 물린 고장이 방 일곱을 다 쓰나');
     const list = used.get(r);
     console.log(`  ${r.padEnd(9)} ${String(list.length).padStart(2)}가지  ${list.join(' · ') || '— 아무 고장도 안 온다'}`);
   }
-  const empty = ROOMS.filter((r) => used.get(r).length === 0);
-  const okAll = empty.length === 0;
-  console.log((okAll ? '\n  ✔ ' : '\n  ✘ ') + `방 일곱을 다 쓴다 — 안 쓰는 방 ${empty.join(', ') || '없다'}`);
+  // ══ ★★★ v117 — **묻는 것을 뒤집었다** ═════════════════════════════
+  //
+  //  ★ 여기 「**방 일곱을 다 쓴다**」를 물었다. v23 에는 맞는 물음이었다 —
+  //    그때 고장은 「어느 방으로 걸어가서 고친다」였고, 방을 골고루 써야
+  //    배가 넓게 쓰였다.
+  //
+  //  ★★ 그런데 **v106 이 수리를 단추 하나로 바꾸고**(`PILOT.faults=false`)
+  //    **v109·v110 이 걷기를 없앴다.** 지금 「물린 고장」은 **0 가지**이고,
+  //    그건 고장난 것이 아니라 **그 계통이 조종석으로 옮겨 간 것**이다
+  //    (맞으면 닳고, P 로 고친다).
+  //
+  //  ★★★ 그래서 물어야 하는 것은 「방을 다 쓰나」가 아니라
+  //    **「걸어가야 하는 고장이 안 남아 있나」**다 — `space-fit.js` 와
+  //    같은 물음이고, 표가 스스로 `blocked()` 로 답한다
+  const okAll = wired().every((m) => (m.steps ?? []).every((st) => st.at === 'cockpit'));
+  console.log((okAll ? '\n  ✔ ' : '\n  ✘ ')
+    + `물린 고장이 **다 조종석에서 된다** (물린 것 ${wired().length} 가지)`
+    + ' — v106·v110 이 고장을 조종석으로 옮겼다. 방을 골고루 쓰는지는'
+    + ' 이제 물을 일이 아니다 (그 방들에 걸어갈 수가 없다)');
   if (!okAll) process.exitCode = 1;
 }
 

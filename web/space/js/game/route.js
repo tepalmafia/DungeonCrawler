@@ -12,7 +12,7 @@
 //    첫 화면에서 「항로를 고르십시오」가 뜨는 것이 이 게임의 첫 문장이다.
 // ══════════════════════════════════════════════════════════════════════════
 import { makeRng } from '../core/rng.js';
-import { LEG, PRESS, forkOf, offerFor, contactAtFor } from './route-table.js';
+import { LEG, PRESS, forkOf, offerFor, contactAtFor, quietAt } from './route-table.js';
 import { VOID, isVoid } from './void-table.js';
 
 /** 거점에 서 있나 · 구간을 가는 중인가 · 끝에 닿았나 */
@@ -28,6 +28,8 @@ export function makeRoute(seed = 'SPACE1') {
     need: 0,             // 이번 구간이 몇 초짜리인가
     fork: null,          // 지금 가고 있는 갈래
     offer: null,         // 거점에서 고를 두 갈래
+    /** ★ v117 — 이 거점이 조용한가 (`route-table.js QUIET.kinds` 중 하나) */
+    quiet: null,
     overrun: false,      // 이번 구간에서 압박이 넘쳤나
     rnd,
   };
@@ -144,7 +146,12 @@ export function stepRoute(rt, dt, power = {}, opt = {}) {
     }
     rt.phase = RPHASE.PORT;
     rt.offer = offerFor(rt.rnd);
-    return 'arrive';
+    // ★★★ v117 — **조용한 거점.** 가끔 응답이 없다 (`route-table.js QUIET`).
+    //   갈래 고르기(`offer`)는 그대로 둔다 — 못 가는 것이 아니라 **거래를
+    //   못 하는** 것이다. 그 둘을 같이 막으면 회차가 그 자리에서 멈춘다
+    // ★ 항로의 난수를 **안 넘긴다** — 넘기면 그 뒤 갈래 길이가 밀린다
+    rt.quiet = quietAt(rt.leg, rt.seed ?? 0);
+    return rt.quiet ? 'quiet' : 'arrive';
   }
   return null;
 }

@@ -1572,7 +1572,11 @@ export function buildOutside(scene, z) {
    * @param rush ★★★ v73 — **급가속** 0~1. 먼지가 쏟아지고 길어진다
    *             (`boost-table.js RUSH`). ★ 별은 안 흘린다 (v57 고증)
    */
-  function update(dt, speed, lane = 0, inc = null, camera = null, rush = 0) {
+  /**
+   * @param acc ★★★ v116 — **가속도** 0~1 (`speed-table.js accOf`).
+   *   사장님 「가속도가 안 느껴지고」 — 먼지가 **더** 쏟아지는 몫이다
+   */
+  function update(dt, speed, lane = 0, inc = null, camera = null, rush = 0, acc = 0) {
     camRef = camera;                          // ★ v88 — `view` 가 화소를 재려면 눈이 있어야 한다
     // ══ ★★★ v91 — **옆으로 밀던 것을 걷어냈다** ═══════════════════════
     //
@@ -1749,7 +1753,7 @@ export function buildOutside(scene, z) {
     //   동안 속도감이 통째로 없어졌다** (사장님 「반대로 가면 … 속도감이
     //   반대」의 나머지 절반이다). 길이는 빠르기가 정하고, **방향은
     //   `flow()` 가 정한다** — 둘을 한 값에 섞으면 이런 일이 난다
-    dust.setRush(rush, Math.abs(fd) / Math.max(dt, 1e-4));
+    dust.setRush(rush, Math.abs(fd) / Math.max(dt, 1e-4), acc);
     dust.flow(fd);
 
     // 잔해
