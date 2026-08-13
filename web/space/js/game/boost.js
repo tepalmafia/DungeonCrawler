@@ -21,14 +21,29 @@ export const makeBoost = () => ({
  *
  * @param on    급가속 키를 누르고 있나
  * @param fuel  지금 남은 추진제 — 모자라면 **안 걸린다**
- * @returns 'on' | 'off' | 'dry' | null   (한 순간에 하나만)
+ * @returns 'on' | 'off' | null   (한 순간에 하나만)
+ * ★ v136 — `'dry'` 는 **없앴다.** 추진제는 이제 급가속을 안 막는다
  */
 export function stepBoost(b, dt, { on = false, fuel = 100 } = {}) {
   const was = b.k;
   b.fuel = 0; b.heat = 0;
-  // ★ 마지막 한 방울까지 태우면 구간을 못 넘긴다 — 바닥을 남긴다
-  const canPush = on && fuel > BOOST.minFuel;
-  if (on && !canPush && was < 0.02) { b.starved = true; return 'dry'; }
+  // ══ ★★★ v136 — **추진제가 급가속을 막지 않는다** ═════════════════════
+  //
+  //  ★ 사장님 (2026-08-13) 「**추진제가 없다고 가속이 안되잔아.
+  //    스테미나 형식으로 변경하라고 했지?**」
+  //
+  //  ★★★ 맞는 말씀이고, v133 이 **절반만** 고친 자리다. 그때 여력(스태미나)을
+  //    만들어 `drive-table.js` 에 넣었는데, **옛 문지기를 안 걷어냈다** —
+  //    여기 `fuel > BOOST.minFuel` 이 그대로 남아서 문이 **둘**이 됐다.
+  //    그래서 여력이 가득해도 추진제가 6 아래면 「추진제가 모자라 못
+  //    밀어붙입니다」가 떴다. **새 계통을 얹으면서 옛 계통을 안 걷어내는
+  //    것**이 이 저장소가 제일 자주 밟는 함정이고, 이번에도 그랬다.
+  //
+  //  ★★ 이제 문은 **여력 하나**다 (`drive-table.js stepDrive` 가 지킨다).
+  //    추진제는 **여전히 준다** — v62 가 세운 10분 시계는 안 죽인다.
+  //    다만 **막지는 않는다**: 바닥이면 태울 것이 없어 그냥 0 이 나갈 뿐이다.
+  //  ★ 「없으면 못 한다」와 「없으면 안 준다」는 다르다. 앞은 문이고 뒤는 값이다
+  const canPush = on;
 
   if (canPush) {
     b.k = Math.min(1, b.k + dt / BOOST.spin);

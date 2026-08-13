@@ -326,8 +326,9 @@ import {
 } from './game/suit.js';
 // ★★ 추진제 — **10분 시계를 맞는 물건으로 옮겼다** (v62 · REAL.md §2-D)
 import { FUEL, fuelWord, isDry, legsLeftOnFuel } from './game/fuel-table.js';
-import { STEP as LSTEP, LAND, WHY as LAND_WHY, STEP_WORD, tiltWord, bandFor }
-  from './game/land-table.js';
+import { STEP as LSTEP, LAND, WHY as LAND_WHY, STEP_WORD, tiltWord, bandFor,
+  // ★★★ v136 — **착륙도 키로 고른다** (사장님 「착륙도 Enter로」)
+  LAND_PICK, landPickWord } from './game/land-table.js';
 // ★★ 승부수 — **쫓길 때의 결심 넷** (v68 · docs/space/GAMBIT.md).
 //   `mission-table.js` 에 적혀만 있던 넷이다 — 고장이 아니라 **결심**이라
 //   `steps` 를 적을 수 없었고, 그래서 몇 판을 조용히 걸러져 왔다
@@ -338,6 +339,8 @@ import {
   canLoad as canLoadLand, loadWhy, onGround as landDown, burning as landBurn,
   moving as landMoving, busy as landBusy, signOf as landSign, heatOf as landHeat,
   noCool as landNoCool, summary as landSummary,
+  // ★★★ v136 — 물음이 안 떠 있으면 `null` 을 준다 (`lootAnswer` 와 같은 모양)
+  landAnswer,
 } from './game/land.js';
 import {
   makeHelm, stepHelm, tryDock, legOf as helmLeg, signOf as helmSign,
@@ -371,7 +374,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 135;
+export const VERSION = 136;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -879,7 +882,14 @@ addEventListener('keydown', (e) => {
   //    ★ 다만 「1번 / 2번」이 아니라 **기수가 가리키는 쪽**이다. 거점에서
   //      두 후보가 하늘에 서 있으므로, 배를 돌려 고르고 키로 굳힌다 —
   //      차림표가 아니라 **방향**이고, v128 이 만든 것과 그래야 맞물린다
-  if (!helpOpen && !paused && e.code === FORK_PICK.key) {
+  //  ★★★ v136 — **내릴 자리가 떠 있으면 이 키는 착륙 몫이다.**
+  //   ★ 안 비켜 주면 여기서 `return` 해 버려서 **아래 착륙 처리기까지
+  //     Enter 가 영영 못 간다** — 만들고 나서 진짜 키로 눌러 보고 잡았다.
+  //     뼈대(`space-land.js`)는 `landAnswer` 만 부르므로 이걸 못 본다:
+  //     **한쪽만 읽는 검사는 「둘이 같나」를 못 묻는다**
+  //   ★★ 둘이 겹치는 때는 없다 — 갈래는 거점에서, 착륙은 구간 한복판에서
+  //     뜬다. 그래도 **순서를 못박아** 둔다. 「없을 것이다」는 규칙이 아니다
+  if (!helpOpen && !paused && e.code === FORK_PICK.key && !land.offered) {
     e.preventDefault();
     const cand = nav.to?.kind === 'port' ? nav.to.key : null;
     if (cand && chooseFork(route, cand)) {
@@ -913,6 +923,28 @@ addEventListener('keydown', (e) => {
     say(ai, n ? `창 ${n} 개를 제자리로 돌렸습니다` : '옮긴 창이 없습니다', 'tell');
     saveNow();
     return;
+  }
+  // ══ ★★★ v136 — **착륙도 키로 고른다** (사장님 「착륙도 Enter로 고를 수
+  //    있게 해줘」) ═══════════════════════════════════════════════════════
+  //
+  //  ★ v135 까지 「내린다 / 지나친다」는 대시의 **작은 판 둘**을 조준선으로
+  //    겨눠 눌러야 했다. 종단 검사가 좌석에서 격자로 훑어도 못 잡았고
+  //    (`[4]②`), 그 빨강을 두 판이나 「검사가 까다로운 것」으로 흘려 들었다.
+  //  ★★★ 이건 v131 에 **갈래에서 이미 고친 병**이다 — 그때 착륙을 같이
+  //    안 고쳤다. 같은 병을 같은 날 두 군데서 보고 한 군데만 고친 것이다.
+  //  ★ `landAnswer` 는 물음이 안 떠 있으면 `null` 을 준다 — 그래서 Enter 가
+  //    거점에서는 그대로 **갈래 고르기**로 흘러간다 (아래 `FORK_PICK`)
+  if (!helpOpen && !paused && (e.code === LAND_PICK.yes || e.code === LAND_PICK.no)) {
+    const r = landAnswer(land, e.code === LAND_PICK.yes, {
+      chase: chase.phase === PHASE.CHASE || chase.phase === PHASE.CAUGHT,
+    });
+    if (r) {
+      e.preventDefault();
+      if (r.passed) { sceneDone(scenes, 'B'); say(ai, '지나칩니다', 'tell'); audio?.event('click'); }
+      else if (r.took) { say(ai, STEP_WORD[LSTEP.APPROACH], 'tell'); audio?.event('latch'); }
+      else nag(LAND_WHY[r.blocked] ?? '지금은 못 내립니다');
+      return;
+    }
   }
   if (!helpOpen && !paused && (e.code === LOOT_ASK.yes || e.code === LOOT_ASK.no)) {
     const r = lootAnswer(loot, e.code === LOOT_ASK.yes);
@@ -4168,7 +4200,9 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★★★ v87 — 급가속을 **밟는 순간** 눈이 뒤로 밀린다. 추력 켬(0.35배)
     //   보다 세게 — 주엔진을 배로 태우는 것이므로 몸이 더 눌린다
     if (bev === 'on') { say(ai, '밀어붙입니다', 'tell'); kickT = KICK.kickFor; }
-    if (bev === 'dry') { say(ai, '추진제가 모자라 못 밀어붙입니다', 'warn'); }
+    // ★★★ v136 — 「추진제가 모자라 못 밀어붙입니다」는 **없앴다.**
+    //   막는 것이 여력 하나가 됐으므로 이 말은 이제 거짓말이다
+    //   (사장님 「추진제가 없다고 가속이 안되잔아」)
   }
   const burst = steering && (input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
   // ★★★ v84 — **회피가 이 값을 읽는다.** 급기동을 안 쓰면 0.9초에
@@ -5617,6 +5651,8 @@ window.SPACE = {
    * ★ `stepLand` 를 직접 부르지 않는다. 여기서 상태만 바꾸고 **게임이
    *   굴리게** 둔다 — 안 그러면 「검사는 통과하는데 화면은 조용한」 상태가 된다
    */
+  /** ★★★ v136 — 검사가 「무슨 키를 누르라고 하나」를 읽는다 */
+  get landPickWord() { return landPickWord(); },
   putLand(step, t = 0) { land.step = step; land.t = t; land.offered = step !== 'none'; return landSummary(land); },
   /** 검사가 문을 바로 열고 닫는다 */
   putLock(open) { lock.open = !!open; lock.cycling = 0; return lockSummary(lock); },
@@ -6785,8 +6821,13 @@ function frame(now) {
   // ── ★★ B — **행성을 발견한다** ────────────────────────
   // 「대응」 박자가 시작될 때 해도대에 내릴 자리가 뜬다. 예고 때는 아직
   // 「전방에 중력원」뿐이다 — 예고가 예고이려면 준비할 시간이 있어야 한다
+  // ★★★ v136 — 내릴 자리를 띄울 때 **누를 키를 같이 말한다**
   if (sev === 'act' && sceneOpen(scenes, 'B') && !land.offered && !landBusy(land)) {
     offerPlanet(land, !!scenes.hard);
+    // ★★★ v136 — **누를 키를 같이 말한다.** 「내릴 자리가 잡혔습니다」는
+    //   무엇을 하라는 말이 아니다 — v131 에 사장님이 갈래에서
+    //   「뭘 어떻게 고르라는거야? 단축키가 있어?」로 물으신 그 자리다
+    say(ai, `${STEP_WORD[LSTEP.FOUND]} — ${landPickWord()}`, 'warn');
     audio?.event('fault');
   }
   // ★ **대응 시계가 다 됐는데 아직 안 내렸으면 지나친 것이다.** 안 그러면
