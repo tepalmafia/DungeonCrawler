@@ -38,6 +38,7 @@ import {
 import { makeCombat, fire, weaponOf } from '../web/space/js/game/combat.js';
 import { WEAPONS } from '../web/space/js/game/combat-table.js';
 import { bandAt } from '../web/space/js/game/aim-table.js';
+import { makeAmmo } from '../web/space/js/game/ammo-table.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -263,7 +264,11 @@ console.log('\n[⑥] 묶어 놓고 조준선은 딴 데 — 그래도 쏴지나'
   // 조준선에는 **엉뚱한 것**이 걸려 있다 (사람이 다시 안 겨눈 상태)
   const other = { id: 9, kind: 'rock', dist: 90, vaz: 0, vel: 0 };
   const aimed = { t: other, off: 2, relAz: 2, relEl: 0 };
-  const supply = { ore: 99, parts: 99, missiles: 99 };
+  //  ★★★ v142 — **`ammo` 를 채운다.** v141 이 「탄 통이 없으면 없는 것으로
+  //    센다」로 고쳤는데(조용한 불발을 막으려고), 이 고정 자료는 그 전에
+  //    지은 것이라 통이 없어 **셋 다 `ammo` 로 막혔다.** 검사가 낡아서
+  //    **새 규칙을 못 보고 빨개진 것**이고, 낡은 빨강은 새 빨강을 덮는다
+  const supply = { ore: 99, parts: 99, missiles: 99, ammo: makeAmmo() };
 
   for (const slot of [3, 2, 1]) {
     c.slot = slot; c.cool = 0;
@@ -294,7 +299,11 @@ console.log('\n[⑦] 락온으로 쏘는 것이 겨누는 것보다 세면 조�
   // ★ 거리 60 — 레이저의 `rMax` 안이면서 유도탄의 `rMin`(45) 밖. 처음에
   //   100 으로 뒀다가 레이저가 「너무 멉니다」로 안 나갔다
   const foe = { id: 7, kind: 'fighter', dist: 60, vaz: 0, vel: 0 };
-  const supply = { ore: 99, parts: 99, missiles: 99 };
+  //  ★★★ v142 — **`ammo` 를 채운다.** v141 이 「탄 통이 없으면 없는 것으로
+  //    센다」로 고쳤는데(조용한 불발을 막으려고), 이 고정 자료는 그 전에
+  //    지은 것이라 통이 없어 **셋 다 `ammo` 로 막혔다.** 검사가 낡아서
+  //    **새 규칙을 못 보고 빨개진 것**이고, 낡은 빨강은 새 빨강을 덮는다
+  const supply = { ore: 99, parts: 99, missiles: 99, ammo: makeAmmo() };
   const shot = (slot, off) => {
     c.slot = slot; c.cool = 0;
     const r = fire(c, {

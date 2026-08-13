@@ -220,6 +220,21 @@ import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/ta
 import { UI } from './game/ui-table.js';
 // ★★★ v137 — **어스펙트** — 내가 적의 어느 쪽에 있나 (`docs/space/FIGHT.md`)
 import { aspectWord } from './game/aspect-table.js';
+// ══ ★★★ v142 — **가림** (사장님 「락온 했는데 앞에 장애물이 있으면?」) ══
+//  ★ 화면은 **묻기만** 한다 — 각은 `cover-table.js` 가 잰다. 여기서 다시
+//    재면 「계기는 가렸다는데 탄은 나간다」가 나고, 그게 이 저장소가
+//    v91~v98 에 네 판을 태운 병이다 (`docs/space/COVER.md`)
+import { coverOf, coverWord, holdLock } from './game/cover-table.js';
+// ══ ★★★ v143 — **방아쇠 앞의 문 전부가 한 표에 있다** ═══════════════════
+//  ★ 사장님 「발사가 안되잔아!!」 · 「근본적인 원인을 찾아. 그냥 찾지말고
+//    **블록아웃 실제로 만들어서 한번에 고쳐**」
+//  ★★ v133(사거리)·v141(탄 통)·v142(가림)에서 고친 것은 **다 `whyNotFire`**
+//    **안**이었는데, 문은 그 **앞**에도 있었고 거기엔 말이 없었다.
+//    이제 판정도 말도 한 곳이다 (`tools/space-trigger.js` 가 전 조합을 쓴다)
+import { triggerWhy, gateWord } from './game/trigger-table.js';
+/** 가림막 이름 — 「무엇에 막혔는지 이름을 댄다」에 쓴다 */
+const kindNames = Object.fromEntries(
+  Object.entries(TKINDS).map(([k, v]) => [k, v.name]));
 // ★★★ v135 — **회피는 「방향 + 창」이다** (`docs/space/DODGE.md`)
 import {
   // ★★ **이름이 둘 겹쳤다.** `WAYS` 는 `salvage-table.js`(회수하는 길 셋)가,
@@ -377,7 +392,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 141;
+export const VERSION = 143;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1844,12 +1859,27 @@ addEventListener('click', (ev) => {
  */
 let lockAimed = null;
 
+/** ★ v142 — 마지막으로 말한 「가려졌습니다 — N초」의 N. 초가 바뀔 때만 말한다 */
+let covSaid = -1;
+
 /** 지금 붙은 꾸러미가 얼마나 빨리 다가오나 (m/초) — 걸쇠가 튕기는 기준 */
 let closeRate = 0;
 let packWas = new Map();
 
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
 function fireGun() {
+  //  ══ ★★★ v143 — **앞쪽 문 셋을 여기서 묻는다** (`trigger-table.js`) ═══
+  //
+  //   ★ v142 까지 이 셋은 **입력 가지에서 조용히** 막았다 (`helmSat &&
+  //     steering && !aimName`). 그러면 방아쇠를 당겨도 이 함수까지 **오지를
+  //     않으므로**, 아래에 아무리 좋은 말을 적어 놔도 소용이 없었다.
+  //   ★★ 이제 **누르면 언제나 여기까지 온다.** 막을 것은 문이 막고,
+  //     막은 문은 제 이름으로 말한다. 그것이 「조용한 불발」이 안 나는
+  //     유일한 모양이다 (`tools/space-trigger.js [3]` 이 전 조합을 쓴다)
+  const gate = triggerWhy({
+    dead: wrecked || ended, paused, seat: helmSat, why: null,
+  });
+  if (gate) { say(ai, gateWord(gate), 'tell'); return; }
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
   // ★ v100 — **발사관이 잰 오차**를 같이 넘긴다 (짐벌 무기만 쓴다)
@@ -1860,6 +1890,9 @@ function fireGun() {
     // ★ v119 — 발사관 오차는 **`fire()` 가 고른 표적**에서 잰다. 여기서
     //   `aimed` 로 미리 재 버리면 락온 사격의 오차가 조준선 기준이 된다
     mountAt: (aim) => mountSummary(mount, aim),
+    // ★★★ v142 — **가림.** 하늘 목록을 넘기기만 한다 — 각은 `cover-table.js`
+    //   가 잰다. 여기서 다시 재면 「계기는 가렸다는데 탄은 나간다」가 난다
+    list: sky.list,
   });
   if (!r.ok) {
     // ══ ★★★ v133 — **다음 손을 말한다** (사장님 「공격이 안되는 이유는?」) ══
@@ -1874,7 +1907,18 @@ function fireGun() {
     const d = at?.t?.dist ?? at?.dist ?? null;
     const tip = (r.why === 'far' || r.why === 'near') && d !== null
       ? ` — ${reachWord(d, supply.ammo)}` : '';
-    say(ai, (CBT_WHY[r.why] ?? '지금은 못 쏩니다') + tip, 'tell');
+    // ★★★ v142 — **무엇에 막혔는지 이름을 댄다.** 「앞이 막혔습니다」만
+    //   뜨면 사람은 화면 어디를 봐야 할지 모른다 — 이름이 있어야 눈이
+    //   그것을 찾고, 찾아야 「옆으로 돌자」가 나온다
+    if (r.why === 'cover') {
+      const n = TKINDS[r.by?.kind]?.name ?? '무언가';
+      say(ai, `${n}에 막혔습니다 — 유도탄은 돌아갑니다`, 'tell');
+      return;
+    }
+    //  ★★★ v143 — 말은 **`trigger-table.js` 한 곳**에서 온다. 여기서 또
+    //    적으면 표와 화면이 갈라지고, 갈라지면 표가 초록인 채로 화면이
+    //    조용해진다 (이 저장소가 v133·v141·v142 에 세 번 밟은 자리다)
+    say(ai, gateWord(r.why) + tip, 'tell');
     return;
   }
   const w = r.weapon;
@@ -1893,6 +1937,14 @@ function fireGun() {
   // ★ **쏘면 밝아진다** — 총구 섬광과 사출은 숨길 수 없다 (v44 규약)
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
   say(ai, `${w.name} 발사`, 'tell');
+  // ★★★ v142 — **돌아가면 그렇다고 말한다.** 유도탄만 가림막을 피해 도는데,
+  //   그 값이 「시간」이다 (`COVER.weapon.arh.slow`). 말 안 하면 사람은
+  //   그냥 「느리게 맞았다」로 읽고, 그러면 **가림이 있었다는 것 자체**를
+  //   모른 채 지나간다 — 규칙이 있는데 안 보이면 없는 것과 같다 (v82)
+  if (r.slow > 0) {
+    const late = (r.shot.t ?? 0);
+    say(ai, `돌아갑니다 — ${late.toFixed(1)}초`, 'tell');
+  }
   // ★★★ **v69 — 쏘는 것이 보인다.** v68 까지 여기서 숫자만 줬다 (열이
   //   오르고 광석이 줄고 hp 가 빠졌다). 화면에서는 아무 일도 안 났고,
   //   격추 게임에서 그건 **쏘는 맛이 아예 없는 것**이다
@@ -3902,7 +3954,30 @@ function interactStep(dt) {
   //    **좌클릭은 오직 계기 누르기**라 가를 것이 없다.
   //  ★ 그래도 `!aimName` 을 남긴다 — 조준선이 계기에 가 있을 때 Space 를
   //    치면 「누르려던 것」과 「쏜 것」이 겹쳐 보인다. 남겨 두는 값이 싸다
-  const firePressed = steering && input.keys.has('Space') && !aimName;
+  //  ══ ★★★ v143 — **방아쇠 앞의 말 없는 문 둘을 걷어냈다** ═════════════
+  //
+  //   ★ 사장님 「**발사가 안되잔아!!**」 · 「근본적인 원인을 찾아. 그냥
+  //     찾지말고 **블록아웃 실제로 만들어서 한번에 고쳐**」 · 「진짜 몇번째야?」
+  //
+  //   ★★★ 여기가 `steering && … && !aimName` 이었다. 둘 다 **아무 말도**
+  //     **안 하고 막았다**:
+  //       · `steering` — 조종간을 **잡아야만** 쏜다. 그런데 v110 이
+  //         「항상 앉은 상태에서 모든 조작을 한다」를 기본으로 못박았고,
+  //         잡는 법을 모르면 **말 한마디 없이 영영 못 쏜다**
+  //       · `aimName`  — 조준선에 계기가 걸리면 막는다. 그런데 **조준경이**
+  //         **화면 복판에 있으므로 겨누는 자리가 곧 계기가 걸리는 자리**다.
+  //         즉 정확히 쏘려는 순간에만 막았다. v88 에 좌클릭이 발사였을 때
+  //         필요했던 문이고 v110 에 Space 로 옮기며 쓸 데가 없어졌는데,
+  //         「남겨 두는 값이 싸다」고 적어 놓고 남겼다. **싸지 않았다**
+  //
+  //   ★★ v133(사거리)·v141(탄 통)에서 고친 것은 둘 다 `whyNotFire` **안**
+  //     이었다. 그런데 문은 그 **앞**에도 있었고 거기엔 말이 없었다 —
+  //     같은 병을 세 판에 걸쳐 고치고 있었던 까닭이다. 이제 문 전부가
+  //     `game/trigger-table.js` 한 표에 서 있고, 규칙은 하나다:
+  //     **말 없는 문은 없다** (`tools/space-trigger.js`)
+  //   ★ 조종간 잡기는 **조종에만** 남는다 — 기수를 돌리는 것과 방아쇠를
+  //     당기는 것은 다른 일이고, 실제 전투기도 방아쇠는 앉으면 산다
+  const firePressed = input.keys.has('Space');
   // ══ ★★★ v94 — **오른쪽 단추 = 보조 무기 · 휠 클릭 = 표적** ═══════════
   //
   //  사장님 「**다른 비행시뮬레이션 게임을 찾아서 벤치마크해서 그대로 적용**」
@@ -3927,7 +4002,9 @@ function interactStep(dt) {
   //      한다. 위 둘은 알고 다른 것이다.
   //  ★ 무기 고르기(1·2·3)는 그대로 둔다 — 우클릭은 **지금 고른 유도탄**을
   //    쏜다. 그래야 손이 숫자열까지 안 간다
-  const altPressed = steering && input.alt && !aimName;
+  //  ★ v143 — 보조 무기는 **우클릭**이라 계기 누르는 손과 겹친다.
+  //    그래서 `aimName` 은 남기고 **잡기 문만** 뺀다 (위와 같은 까닭)
+  const altPressed = input.alt && !aimName;
   if (helmSat && altPressed && !altFireWas) {
     // ★ 레이저(1번)를 들고 있으면 **유도탄으로 바꿔서** 쏜다 —
     //   「보조 무기」의 뜻이 그것이다
@@ -3947,8 +4024,13 @@ function interactStep(dt) {
     say(ai, `${w.name} — ${w.what}`, 'tell');
     audio?.event('click');
   }
-  // ★★★ v64 — **조종석에 앉아 있으면 쏜다.** 포탑에 올라갈 필요가 없다
-  if (helmSat && firePressed && !fireHeldWas) fireGun();
+  // ══ ★★★ v143 — **당겼으면 반드시 답한다** (`trigger-table.js`) ═══════
+  //
+  //  ★ v142 까지 여기가 `if (helmSat && firePressed …)` 였다. 즉 **앉아**
+  //    **있지 않으면 방아쇠가 통째로 없는 것**이었고, 아무 말도 안 났다.
+  //  ★★ 이제 **누르면 언제나 `fireGun()` 까지 간다.** 막을 것은 문이 막고,
+  //    막은 문은 **제 이름으로 말한다.** 「조용한 불발」이 안 나는 유일한 모양이다
+  if (firePressed && !fireHeldWas) fireGun();
   fireHeldWas = firePressed;
 
   // ── ★ 바깥문 — 누르는 순간 돌기 시작한다 ──────────────
@@ -7911,7 +7993,10 @@ function frame(now) {
       lockAimed = radarAimed;
     }
   }
-  const radEv = stepRadar(combat, dt, radarAimed);
+  // ★★★ v142 — 하늘 목록을 같이 넘긴다. **가려지면 2.5초 버티다 놓는다**
+  //   (`cover-table.js COVER.hold`) — 즉시 놓으면 파편 하나가 스칠 때마다
+  //   끊겨서 전투가 **운**이 된다
+  const radEv = stepRadar(combat, dt, radarAimed, sky.list);
 
   // ══ ★★★ v100 — **발사관이 표적을 따라간다** ═══════════════════════════
   //
@@ -7945,6 +8030,20 @@ function frame(now) {
   if (radEv === 'break') {
     say(ai, LOCK_LOST[combat.radar.why] ?? '놓쳤습니다', 'tell');
   }
+  // ══ ★★★ v142 — **가려진 채 남은 초를 세어 준다** (`COVER.hold`) ═══════
+  //
+  //  ★ 세어 주지 않으면 락온이 **아무 예고 없이** 풀린다. 그러면 사람은
+  //    「왜 풀렸지」를 모르고, 모르면 대처(옆으로 돌아 들어간다)도 없다.
+  //  ★★ **초가 바뀔 때만** 말한다 — 매 프레임 말하면 배너가 흘러넘쳐서
+  //    다른 말(피격·고장)을 덮는다. 이 배가 v70 에 그걸로 한 번 뎄다
+  if (combat.radar.id !== null && (combat.radar.cov ?? 0) > 0) {
+    const left = Math.ceil(holdLock(combat.radar.cov).left);
+    if (left !== covSaid) {
+      covSaid = left;
+      const n = TKINDS[combat.radar.covBy?.kind]?.name ?? '무언가';
+      say(ai, `${n}에 가렸습니다 — ${left}초`, 'warn');
+    }
+  } else covSaid = -1;
   // ★★★ v121 — 물음이 삭고 카드가 사라진다 · 화면에 그린다
   if (stepLoot(loot, dt) === 'gone') say(ai, '지나쳤습니다 — 꾸러미는 남아 있습니다 (F/G/B)', 'tell');
   // ★★★ v128 — 사람이 옮긴 자리를 같이 준다. 그리고 **배치 모드면 억지로
@@ -8126,9 +8225,16 @@ function frame(now) {
       //   안 읽히고 배도 안 보인다. 잇는 선은 CSS 가 그린다
       const away = out ? 34 : Math.round(mk.tagDeg * k) + 12;
       pkTag.style.transform = `translate(calc(-50% + ${(x + (out ? 0 : away * 0.8)).toFixed(0)}px), ${(y + away).toFixed(0)}px)`;
+      // ══ ★★★ v142 — **가려졌으면 점선** (`docs/space/COVER.md §6`) ═════
+      //  ★ 상자를 지우면 「놓쳤나」로 읽히고, 그대로 두면 **가려진 줄을
+      //    모른 채 계속 쏜다.** 점선이 「거기 있는 건 아는데 안 보인다」다.
+      //  ★ 여기서 각을 다시 안 잰다 — `coverOf` 에게 **묻기만** 한다
+      const cv = coverOf(t, sky.list);
+      pkBox.classList.toggle('cov', (cv.k ?? 0) > 0);
+      const cw = cv.by ? ` · ${coverWord(cv, kindNames)}` : '';
       pkTag.textContent = out
         ? `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m — ${Math.round(off)}° 돌리십시오`
-        : `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m`;
+        : `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m${cw}`;
     }
   }
 

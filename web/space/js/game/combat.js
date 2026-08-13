@@ -20,6 +20,11 @@ import { flyTime, slowsOnLaunch } from './slow-table.js';
 import { MISSILES } from './supply-table.js';
 // ★★★ v100 — **발사관.** 기수 고정(레이저)과 짐벌(유도탄)을 가른다
 import { isGimbaled } from './mount-table.js';
+// ★★★ v142 — **가림.** 사이에 뭐가 있나 (`cover-table.js` · docs/space/COVER.md).
+//   ★ 여기서 **묻기만** 한다 — 각을 다시 재지 않는다. 재는 곳이 둘이 되면
+//     「계기는 가렸다는데 탄은 나간다」가 나고, 그게 이 저장소가 v91~v98 에
+//     네 판을 태운 병이다
+import { coverOf, throughCover, holdLock, isHidden } from './cover-table.js';
 
 export function makeCombat() {
   return {
@@ -42,6 +47,9 @@ export function makeCombat() {
     radar: {
       on: false, t: 0, id: null, grace: 0, was: null, chasing: false, seen: new Map(),
       atAz: 0, atEl: 0, wasD: null, notch: 0, why: null,
+      // ★ v142 — `cov` 는 **가려진 채 버틴 시간**(초) · `covBy` 는 가린 것.
+      //   계기가 「가려졌습니다 — 2초」로 세어 준다 (`COVER.hold`)
+      cov: 0, covBy: null,
     },
     /** 날아가는 미사일들 */
     shots: [],
@@ -61,13 +69,14 @@ export const isLocked = (c, t) => !!(c.radar.on && c.radar.id !== null && t && t
  * ★★ 레이더 한 걸음 — **탐색 → 묶는 중 → 묶었다.**
  *
  * @param aimed 지금 조준선이 잡은 것 `{ t, off }` (없으면 null)
+ * @param list  하늘에 떠 있는 것들 — **가림**을 묻는 데만 쓴다 (v142)
  * @returns 'lock' | 'break' | null
  */
-export function stepRadar(c, dt, aimed) {
+export function stepRadar(c, dt, aimed, list = []) {
   const r = c.radar;
   if (!r.on) {
     r.t = 0; r.id = null; r.grace = 0; r.atAz = 0; r.atEl = 0;
-    r.notch = 0; r.wasD = null;
+    r.notch = 0; r.wasD = null; r.cov = 0; r.covBy = null;
     return null;
   }
 
@@ -92,10 +101,22 @@ export function stepRadar(c, dt, aimed) {
       r.notch = (r.notch ?? 0) + dt;
     } else r.notch = 0;
     const notched = (r.notch ?? 0) >= RADAR.notchFor;
+    // ══ ★★★ v142 — **가려지면 버티다 놓는다** (`cover-table.js`) ═══════
+    //
+    //  ★ 사장님 「**락온 했는데 앞에 장애물이 있으면 어떻게 되지?**」
+    //    v141 까지 답은 「아무 일도 안 난다」였다 — 표류선 뒤에 숨은 적도
+    //    영원히 물려 있었고, 그래서 **「숨는다」가 이 게임에 없었다.**
+    //  ★★ 즉시 놓으면 파편 하나가 스칠 때마다 끊겨 **전투가 운**이 된다.
+    //    `COVER.hold`(2.5초)가 「일부러 숨은 것」과 「지나가는 것에 걸린 것」
+    //    을 가른다. 그 사이 계기가 남은 초를 세어 준다 (`r.cov`)
+    const cov = t ? coverOf(t, list) : { by: null, k: 0 };
+    if (t && isHidden(cov)) { r.cov = (r.cov ?? 0) + dt; r.covBy = cov.by; }
+    else { r.cov = 0; r.covBy = null; }
+    const hidden = holdLock(r.cov ?? 0).lost;
     // ★★★ v119 — 유지 한계가 **짐벌**이다 (holdCone 32 → RADAR.gimbal 60).
     //   조준선이 아니라 「안테나가 돌아갈 수 있나」를 묻는다
     const still = t && t.id === r.id && t.dist <= RADAR.breakRange
-      && aimed.off <= RADAR.gimbal && !notched;
+      && aimed.off <= RADAR.gimbal && !notched && !hidden;
     if (still) {
       r.grace = RADAR.holdGrace;
       // ★★★ v97 — **표식이 표적을 쫓아간다** (`RADAR.slew` · frame.js 블록아웃).
@@ -108,13 +129,21 @@ export function stepRadar(c, dt, aimed) {
     }
     // ★ **잠깐 벗어난 것으로는 안 깨진다.** 0 으로 두면 손이 한 번 떨릴 때마다
     //   깨져서 묶는 것이 벌이 된다 — 실제 레이더도 짧은 이탈은 외삽한다
-    r.grace -= dt;
-    if (r.grace > 0) return null;
+    // ★ v142 — **가려서 놓는 것에는 유예를 또 안 준다.** `COVER.hold`(2.5초)
+    //   가 이미 유예다. 여기서 `holdGrace` 를 한 번 더 태우면 사람이
+    //   세던 초가 0 이 됐는데도 안 풀려서 **계기가 거짓말**이 된다
+    if (!hidden) {
+      r.grace -= dt;
+      if (r.grace > 0) return null;
+    }
     // ★ v119 — **왜 놓쳤는지**를 남긴다. 「놓쳤습니다」만 뜨면 사람은
     //   무엇을 고쳐야 하는지 모른다 — 짐벌 아웃과 노치는 답이 정반대다
     //   (전자는 기수를 끌어와야 하고, 후자는 밀어붙여야 한다)
-    r.why = notched ? 'notch' : (!t || t.dist > RADAR.breakRange) ? 'range' : 'gimbal';
-    r.id = null; r.t = 0; r.notch = 0; r.wasD = null;
+    // ★ v142 — 가림이 제일 먼저다. 가려진 채 짐벌까지 벗어났으면 사람이
+    //   본 것은 **가림**이므로, 그걸 안 말하면 엉뚱한 대처를 하게 된다
+    r.why = hidden ? 'cover'
+      : notched ? 'notch' : (!t || t.dist > RADAR.breakRange) ? 'range' : 'gimbal';
+    r.id = null; r.t = 0; r.notch = 0; r.wasD = null; r.cov = 0; r.covBy = null;
     return 'break';
   }
 
@@ -269,6 +298,8 @@ export function forgetLock(c, id) {
  */
 export function fire(c, {
   aimed, locked = null, supply, rnd = Math.random, mount = null, mountAt = null,
+  // ★ v142 — 하늘에 뭐가 떠 있나. **가림**을 묻는 데만 쓴다
+  list = [],
 }) {
   const w = weaponOf(c);
   // ══ ★★★ v119 — **묶었으면 그놈을 쏜다** (조준선이 아니다) ══════════
@@ -294,6 +325,19 @@ export function fire(c, {
     supply, cool: c.cool, radar: c.radar.on,
   });
   if (why) return { ok: false, why };
+
+  // ══ ★★★ v142 — **사이에 뭐가 있나** (`cover-table.js`) ═══════════════
+  //
+  //  ★ 무기마다 다르게 막힌다: 레이저는 직진하는 빛이라 막히고, 열추적탄은
+  //    눈이 없어 막히고, **유도탄만 돌아간다 — 대신 느려진다.**
+  //  ★★ 셋이 다 막히면 「숨으면 무적」이 되고 그건 전투가 아니라
+  //    숨바꼭질이다. 돌아가는 길이 하나 있어야 **숨은 적을 꺼내는 값**이
+  //    생기고, 그 값이 「어느 무기를 쏘나」에 이유를 하나 더 얹는다.
+  //  ★★★ **막히면 반드시 말한다.** 값(탄·열)을 치르기 **전에** 돌려보내고
+  //    무엇에 막혔는지 이름을 댄다 — v141 에 「조용한 불발」로 한 번 뎄다
+  const cover = coverOf(t, list);
+  const thru = throughCover(w.key, cover);
+  if (thru.blocked) return { ok: false, why: 'cover', by: cover.by };
 
   // 값을 치른다.
   // ★★ v69 — 미사일은 **제 주머니**를 쓴다 (`supply-table.js MISSILES`).
@@ -343,7 +387,10 @@ export function fire(c, {
   //    **빛이 지나간 자리와 터지는 자리가 갈라졌다.**
   //  ★★ v79 에 고쳤던 바로 그 병(「궤적의 끝과 격추 지점이 다르다」)을
   //    **사출을 넣으면서 되살린 것**이다. 사출이 있는 것에만 씌운다
-  const flight = slowsOnLaunch(w.key) ? flyTime(t.dist, w.speed) : t.dist / w.speed;
+  // ★ v142 — **돌아가면 그만큼 늦게 닿는다** (`thru.slow`). 유도탄이 가림막을
+  //   피해 도는 값이 「시간」이다 — 그 사이 락온을 더 붙들어야 한다
+  const flight = (slowsOnLaunch(w.key) ? flyTime(t.dist, w.speed) : t.dist / w.speed)
+    * (1 + (thru.slow ?? 0));
   const leadAz = w.lead ? t.vaz * flight : 0;
   const leadEl = w.lead ? t.vel * flight : 0;
   // 겨눠야 하는 자리는 표적이 아니라 **선도점**이다
@@ -385,12 +432,14 @@ export function fire(c, {
     off, dist: t.dist,
     fireForget: !!w.fireForget,
     dmg: w.dmg,
-    pk: hitChance(w, t.dist),
+    // ★ v142 — **반쯤 가려지면 잘 안 맞는다** (`COVER.grazeHit`). 막지는
+    //   않는다 — 「가장자리로 쏜다」가 **되기는 하되 손해**여야 결심이 된다
+    pk: hitChance(w, t.dist) * (thru.hitMult ?? 1),
     rnd: rnd(),
     lost: false,
   };
   c.shots.push(shot);
-  return { ok: true, shot, weapon: w };
+  return { ok: true, shot, weapon: w, cover, slow: thru.slow ?? 0 };
 }
 
 /**
