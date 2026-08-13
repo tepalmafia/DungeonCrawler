@@ -17,6 +17,7 @@
 import { DRIVE, makeDrive, stepDrive, capOf, driveWord } from '../web/space/js/game/drive-table.js';
 import { THROTTLE } from '../web/space/js/game/throttle-table.js';
 import { BOOST } from '../web/space/js/game/boost-table.js';
+import { makeBoost, stepBoost } from '../web/space/js/game/boost.js';
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -111,6 +112,32 @@ console.log('\n[6] ★★ **한 번 태우는 것이 값이 있나**');
     + ' 아무도 안 쓰고, 안 오르면 과열이 영영 안 온다. **두세 번이면 뜨거워진다**');
   ok(BOOST.mult > 1.5,
     `★ 태우면 정말 빨라진다 (×${BOOST.mult}) — 값이 있어야 태울 이유가 생긴다`);
+}
+
+console.log('\n[7] ★★★ **추진제가 가속을 막지 않나** (v136)');
+{
+  //  ★ 사장님 (2026-08-13) 「**추진제가 없다고 가속이 안되잔아.
+  //    스테미나 형식으로 변경하라고 했지?**」
+  //  ★★★ v133 이 여력을 만들면서 **옛 문지기를 안 걷어냈다.** 그래서
+  //    문이 둘이 됐고, 여력이 가득해도 추진제가 6 아래면 못 밀었다.
+  //    「새 계통을 얹으면서 옛 계통을 안 걷어내는 것」이 이 저장소가
+  //    제일 자주 밟는 함정이라, **문이 하나인지**를 여기서 지킨다
+  const b = makeBoost();
+  let ev = null;
+  for (let i = 0; i < 30; i++) ev = stepBoost(b, DT, { on: true, fuel: 0 }) ?? ev;
+  console.log(`   추진제 0 으로 30판 밀었다 — 세기 ${b.k.toFixed(2)} · 마지막 소식 ${ev ?? '없음'}`);
+  ok(b.k > 0.2,
+    `★★★ **추진제가 0 이어도 밀린다** (${b.k.toFixed(2)}) — 막는 것은 **여력 하나**여야 한다.`
+    + ' 문이 둘이면 어느 쪽이 막았는지 사람이 알 수가 없고, 실제로 사장님이'
+    + ' 「추진제가 없다고 가속이 안되잔아」로 겪으셨다');
+  ok(ev !== 'dry',
+    '★★ **「추진제가 모자라다」는 소식이 안 온다** — 안 막는데 그 말을 하면 거짓말이다');
+  //  ★ 그래도 **값은 치른다** — v62 의 10분 시계를 안 죽인다
+  const b2 = makeBoost();
+  for (let i = 0; i < 30; i++) stepBoost(b2, DT, { on: true, fuel: 100 });
+  ok(b2.fuel > 0,
+    `★★ 그래도 **추진제를 쓰기는 한다** (${b2.fuel.toFixed(3)}/판) — 「없으면 못 한다」와`
+    + ' 「없으면 안 준다」는 다르다. 앞은 문이고 뒤는 값이다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

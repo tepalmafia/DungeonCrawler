@@ -15,11 +15,14 @@
 //
 //    ★ **화면이 바뀌나는 여기서 안 나온다.** 그건 `--see` 와 스크린샷이다.
 // ══════════════════════════════════════════════════════════════════════════
-import { STEP, LAND, WHY, whyNotLand, tiltWord, bandFor, pushFor, roundTrip, STEP_WORD }
-  from '../web/space/js/game/land-table.js';
+import { STEP, LAND, WHY, whyNotLand, tiltWord, bandFor, pushFor, roundTrip, STEP_WORD,
+  // ★★★ v136 — 착륙도 키로 고른다 (사장님 「착륙도 Enter로 고를 수 있게」)
+  LAND_PICK, landPickWord } from '../web/space/js/game/land-table.js';
+import { PICK as FORK_PICK } from '../web/space/js/game/route-table.js';
+import { ASK as LOOT_ASK } from '../web/space/js/game/loot-table.js';
 import {
   makeLand, offerPlanet, beginLand, liftOff, stepLand, loadStep, canLoad, loadWhy,
-  onGround, burning, signOf, heatOf, summary,
+  onGround, burning, signOf, heatOf, summary, landAnswer, passPlanet,
 } from '../web/space/js/game/land.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
@@ -398,6 +401,43 @@ if (see >= 0) {
 
   ok(errs.length === 0, errs.length ? `콘솔 오류 ${errs.length}: ${errs[0]}` : '콘솔 오류 없음');
   await b.close();
+}
+
+console.log('\n[N] ★★★ **키로도 고를 수 있나** (v136 · 사장님 「착륙도 Enter로」)');
+{
+  //  ★★★ v135 까지 「내린다 / 지나친다」는 대시의 **작은 판 둘**뿐이었다.
+  //    종단 검사가 좌석에서 각을 격자로 훑어도 못 잡았고(`[4]②`), 그
+  //    빨강을 두 판이나 「검사가 까다로운 것」으로 흘려 들었다.
+  //  ★★ 이건 v131 에 **갈래에서 이미 고친 병**이다 — 같은 병을 같은 날
+  //    두 군데서 보고 **한 군데만** 고친 것이다
+  ok(LAND_PICK.yes === FORK_PICK.key,
+    `★★★ **갈래와 같은 키다** (${LAND_PICK.yesName}) — 「고른다」가 두 자리에서`
+    + ' 다른 키면 배울 것이 둘이다. 갈래는 거점에서, 착륙은 구간 한복판에서'
+    + ' 뜨므로 한 키가 두 일을 해도 안 부딪힌다');
+  ok(LAND_PICK.no === LOOT_ASK.no,
+    `★★ **「아니오」도 이미 있는 낱말이다** (${LAND_PICK.noName}) — 회수 물음이 쓰던 것이다`);
+  const l0 = makeLand();
+  ok(landAnswer(l0, true) === null && landAnswer(l0, false) === null,
+    '★★★ **안 떴을 때는 null 을 준다** — 그래야 Enter 가 거점에서 갈래 고르기로'
+    + ' 흘러간다. 여기서 무언가를 하면 한 키가 두 일을 **동시에** 하게 된다');
+  const l1 = makeLand(); offerPlanet(l1);
+  const took = landAnswer(l1, true);
+  ok(took?.took === true && l1.step !== STEP.FOUND,
+    `★★★ **${LAND_PICK.yesName} 하나로 내려간다** (지금 ${l1.step}) — 판을 겨눌 필요가 없다`);
+  const l2 = makeLand(); offerPlanet(l2);
+  const passed = landAnswer(l2, false);
+  ok(passed?.passed === true && !l2.offered,
+    `★★ **${LAND_PICK.noName} 하나로 지나친다** — 「들어가는 길을 하나만 만들지 않는다」는`
+    + ' 「내린다」에만 걸리는 말이 아니다');
+  const l3 = makeLand(); offerPlanet(l3);
+  const no = landAnswer(l3, true, { chase: true });
+  ok(!no?.took && !!no?.blocked,
+    `★★★ **쫓기면 키로도 못 내린다** (${no?.blocked}) — 길을 하나 더 냈다고 규칙까지`
+    + ' 무르면 그건 길이 아니라 뒷문이다');
+  console.log(`   화면이 하는 말 — 「${landPickWord()}」`);
+  ok(/Enter/.test(landPickWord()) && /N/.test(landPickWord()),
+    '★★ **키를 글에 안 박고 표에서 읽는다** — v110 「WASD 로 걷습니다」 · v82'
+    + ' 「관측실 해도대」 · v131 「R 되돌리기」가 다 고쳐 놓고 안내를 안 고친 것이다');
 }
 
 console.log('');

@@ -217,3 +217,21 @@ export function summary(l) {
     onGround: onGround(l), burning: burning(l), busy: busy(l),
   };
 }
+
+/**
+ * ★★★ v136 — **키로 고른다** (사장님 「착륙도 Enter로 고를 수 있게 해줘」).
+ *
+ *   ★★ `loot.js` 의 `lootAnswer` 와 **같은 모양**이다: 물음이 안 떠 있으면
+ *     `null` 을 돌려주고, 그러면 키가 **그냥 흘러간다.** 그래야 같은 키를
+ *     다른 자리에서 써도 안 부딪힌다 (Enter 는 거점에서 갈래를 고른다).
+ *   ★ 여기서 판단만 하고 **말은 안 한다** — 화면에 뜨는 글은 `main.js` 가
+ *     맡는다. 규칙과 말이 한 자리에 있으면 도구가 규칙만 못 잰다
+ *
+ * @returns null(물음 없음) · `{ took }` · `{ passed }` · `{ blocked }`
+ */
+export function landAnswer(l, yes, { chase = false } = {}) {
+  if (!l?.offered || l.step !== STEP.FOUND) return null;
+  if (!yes) return passPlanet(l) ? { passed: true } : null;
+  if (beginLand(l, { chase })) return { took: true };
+  return { blocked: l.blocked };
+}
