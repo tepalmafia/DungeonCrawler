@@ -113,7 +113,7 @@ console.log('\n[6] ★★★ **어느 거리에서 무엇이 닿나** (사장님
   const reach = (d) => WEAPON_LIST.filter((w) => !['far', 'near'].includes(
     whyNotFire({
       weapon: w, target: { dist: d }, locked: true, radar: true, cool: 0,
-      supply: { missiles: 99, ore: 99, parts: 99 },
+      supply: { missiles: 99, ore: 99, parts: 99, ammo: { ir: 9, arh: 9 } },
     }) ?? '',
   ));
   for (const d of [30, 80, 110, 138, 200, 260]) {
