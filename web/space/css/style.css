@@ -602,3 +602,26 @@ body.flying #view { cursor: none; }
 @media (prefers-reduced-motion: reduce) {
   #onboard .card, #onboard .more { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ★★★ v138 — **가까우면 상자를 지우고 갈고리만** (사장님 「타겟 표시가
+   목표물을 가려서 뭐가 뭔지 모르는데」)
+
+   ★ 상자가 표적보다 크면 실루엣이 안 가려지지만, **가까울 때는 상자
+     자체가 가림막**이다. 그 거리에서는 눈이 이미 배를 보므로 **모서리
+     갈고리 넷**만 남긴다 (Ace Combat 이 쓰는 규약).
+   ★★ 지우는 것이 아니라 **비우는** 것이다 — 「지정돼 있다」는 알려 주되
+     가운데는 손대지 않는다
+   ══════════════════════════════════════════════════════════════════════ */
+#pick.hooks .box {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 0 0 / 26% 2px no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 0 0 / 2px 26% no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 100% 0 / 26% 2px no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 100% 0 / 2px 26% no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 0 100% / 26% 2px no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 0 100% / 2px 26% no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 100% 100% / 26% 2px no-repeat,
+    linear-gradient(var(--pick, #9fe8c4) 0 0) 100% 100% / 2px 26% no-repeat;
+}
