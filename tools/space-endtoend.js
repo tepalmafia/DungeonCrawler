@@ -1808,7 +1808,7 @@ console.log('\n[6x] ★★★ **어스펙트 · 적 기동** (v137)');
 //  ★★ 뼈대(`space-cover.js`)는 **판정**을 잰다 — 가리나 · 무기 셋이 다르게
 //    막히나 · 몇 초 버티나. 여기서만 나오는 것은 **게임이 그 판정을 정말
 //    꺼내 쓰나**이다: 조종석에 앉아 묶어 놓고, 사이에 표류선을 밀어 넣었을 때
-//    ① 레이저가 안 나가고 ② 유도탄은 나가고 ③ 락온이 버티다 풀리나.
+//    ① 열추적탄이 안 나가고 ② 유도탄은 나가고 ③ 락온이 버티다 풀리나.
 //  ★★★ 그리고 **말이 나오나**를 같이 본다 — 막혔는데 아무 말도 안 나면
 //    그건 v141 에 한 번 덴 **「조용한 불발」**이다
 // ══════════════════════════════════════════════════════════════════════════
@@ -1820,53 +1820,143 @@ console.log('\n[6y] ★★★ **가림** — 앞에 뭐가 있으면 (v142)');
     SPACE.setInfinite(true); SPACE.setPower('sensor', true);
     SPACE.setSupply({ missiles: 8 }); SPACE.clearSky(); SPACE.putAim(0, 0);
   });
-  // 적 하나를 정면 140m 에 세우고 묶는다
-  const foe = await S(() => SPACE.callFoe('fighter', 0, 140));
-  await S(([id]) => { SPACE.putSkyAt(id, 0, 0); SPACE.putSkyDist(id, 140); }, [foe?.id]);
+  //  ══ ★★★ **세우는 데만 세 번 틀렸다** — 다 적어 둔다 ═══════════════
+  //
+  //   ★ ① 처음에 적을 **140m** 에 뒀다. 레이저가 안 나가긴 했는데 까닭이
+  //     「가려서」가 아니라 **「너무 멀어서」**였다 (레이저는 90m). 검사는
+  //     **초록**이었고 그게 제일 나쁜 모양이다 — 「죽은 초록은 낡은 빨강보다
+  //     나쁘다」. 그래서 80m 로 당기고, **말까지 같이 본다**(③).
+  //   ★★ ② 가림막을 `callFoe('hulk')` 로 세웠더니 **조용히 사라졌다.**
+  //     떠도는 것(무게>0)은 하늘에 **정해진 수만** 떠 있고, 넘치면
+  //     `stepSky` 가 **뒤에서 잘라 낸다** (`drift.slice(want)`). 즉 불러
+  //     놓은 그 순간 잘리는 것이 그놈이었다. 그래서 **이미 떠 있는 것을
+  //     바꿔 쓴다** (`putTarget`) — 「없는 것을 더하지 말고 있는 것을 쓴다」.
+  //   ★★★ ③ 적은 **다가온다**(`stepEngage`) — 재장전을 기다리는 수십 초
+  //     동안 가림막보다 앞으로 나와 버렸다. 그래서 **묻기 직전마다 둘의
+  //     자리를 다시 박는다**(`pin`)
+  await until(() => SPACE.sky.list.length >= 2, 30, '하늘이 다시 차기');
+  await S(() => SPACE.putTarget('hulk'));            // 떠 있던 것 하나를 표류선으로
+  const hid = await S(() => SPACE.sky.list.find((t) => t.kind === 'hulk')?.id ?? null);
+  const foe = await S(() => SPACE.callFoe('fighter', 0, 80));
+  const ids = [foe?.id, hid];
+  //  ★★★ ④ **센서를 같이 켜 둔다.** 안 그러면 배가 알아서 레이더를 끌 때
+  //    락온이 **가림이 아니라 전원**으로 풀리고, 그러면 ⑥ 이 **엉뚱한
+  //    까닭으로 초록**이 된다 (처음에 `why` 가 null 로 나온 것이 그것이다)
+  const pin = ([f, h]) => {
+    SPACE.setPower('sensor', true);
+    SPACE.putSkyAt(f, 0, 0); SPACE.putSkyDist(f, 80);
+    SPACE.putSkyAt(h, 0, 0); SPACE.putSkyDist(h, 40);
+  };
+  //  ★ 가림막은 **처음에 옆으로 치워 둔다** — 조준선은 「먼저 만나는 것」을
+  //    잡으므로(v94), 앞에 둔 채로 묶으면 **가림막을 묶는다.** 사람이 겪는
+  //    순서도 「묶고 나서 사이에 뭐가 들어온다」이지 그 반대가 아니다
+  const aside = ([f, h]) => {
+    SPACE.setPower('sensor', true);
+    SPACE.putSkyAt(f, 0, 0); SPACE.putSkyDist(f, 80);
+    SPACE.putSkyAt(h, 70, 0); SPACE.putSkyDist(h, 40);
+  };
+  await S(aside, ids);
+  await p.waitForTimeout(600);
+  await S(aside, ids);
+  console.log(`   세운 것 — ${foe?.kind} 80m(#${foe?.id}) · 표류선(#${hid})은 아직 옆에`);
   await until(() => !!SPACE.combat.target, 20, '표적');
   const lk = await S(() => SPACE.putLock(true));
-  ok(!!lk && (await S(() => SPACE.combat.radar.id)) !== null,
-    `① ★★ 정면 140m 의 ${lk?.kind} 를 **묶었다** — 여기서부터 사이에 뭘 넣는다`);
+  ok(!!lk && (await S(() => SPACE.combat.radar.id)) === foe?.id,
+    `① ★★ ${foe?.kind} 를 **묶었다** — 여기서부터 사이에 표류선을 밀어 넣는다`);
+  await S(pin, ids); await p.waitForTimeout(500); await S(pin, ids);
 
-  // ── ② 사이에 **표류선**을 밀어 넣는다 ────────────────────
-  const blk = await S(() => SPACE.callFoe('hulk', 0, 70));
-  await S(([id]) => { SPACE.putSkyAt(id, 0, 0); SPACE.putSkyDist(id, 70); }, [blk?.id]);
-  await p.waitForTimeout(600);
+  // ── ② 열추적탄은 **막힌다** ─────────────────────────────
+  //   ★ 레이저가 아니라 **묶은 것을 쏘는 무기**로 묻는다. 레이저는 기수
+  //     고정이라 조준선이 **가림막 자체**를 잡고, 그러면 「막혔다」가
+  //     아니라 「가림막을 쐈다」가 된다 — 그건 아래 ④ 에서 따로 본다
+  await S(pin, ids);
   const f0 = await S(() => SPACE.combat.fired);
-  await S(() => { SPACE.putWeapon(1); SPACE.fire(); });          // 레이저
+  await S(() => { SPACE.putWeapon(2); SPACE.fire(); });          // 열추적탄
   const f1 = await S(() => SPACE.combat.fired);
-  console.log(`   레이저 — 쏜 수 ${f0} → ${f1} · 말 「${(await said()).slice(0, 40)}」`);
+  const word = await said();
+  console.log(`   열추적탄 — 쏜 수 ${f0} → ${f1} · 말 「${word.slice(0, 44)}」`);
   ok(f1 === f0,
-    '② ★★★ **레이저가 안 나간다** — 직진하는 빛은 표류선을 못 뚫는다.'
-    + ' v141 까지 레이저가 **바위를 통과했다** — 「숨는다」가 게임에 없었다');
-  ok((await said()).includes('막혔습니다'),
-    '③ ★★★ **무엇에 막혔는지 말한다** — 값(탄·열)을 치르기 **전에** 돌려보내고'
-    + ' 이름을 댄다. 안 말하면 그게 v141 에 덴 **「조용한 불발」**이다');
+    '② ★★★ **열추적탄이 안 나간다** — 눈이 없고 열만 보므로 표류선을 못 뚫는다.'
+    + ' v141 까지 탄이 **바위를 통과했다** — 「숨는다」가 게임에 없었다');
+  //  ══ ★★★ **「막혔습니다」를 콕 집어 묻지 않는다** — 까닭이 있다 ═══════
+  //
+  //   ★ 처음에 `'막혔습니다'` 를 찾게 했다가 빨갰다. 그런데 화면에 뜬 것은
+  //     **「표류선에 가렸습니다 — 3초」**였다 — 등대의 급수 규칙이 한 일이다
+  //     (`ai-table.js RANKS`): 락온이 곧 풀린다는 **warn** 이 「막혔습니다」
+  //     라는 **tell** 을 밀어낸다. 그리고 **그게 맞다** — 둘은 같은 말이고,
+  //     둘 중 더 급한 것은 「곧 놓친다」다. v83 에 말하는 구멍을 하나로 모은
+  //     까닭이 정확히 이것이다.
+  //   ★★ 그래서 묻는 것을 **「무엇에 막혔는지 이름을 대나」**로 바꾼다 —
+  //     그것이 원래 재려던 것이고, 두 말이 다 그 일을 한다.
+  //   ★★★ 다만 **「멉니다」가 아닌 것**을 같이 못박는다. 그게 빠지면
+  //     ② 가 사거리로 막힌 것을 「가려서 막혔다」로 읽는 **거짓 초록**이
+  //     된다 — 이 절이 처음에 정확히 그랬다
+  ok(word.includes('표류선') && !word.includes('멉니다'),
+    `③ ★★★ **무엇에 막혔는지 이름을 댄다** 「${word.slice(0, 30)}」 — 값(탄·열)을`
+    + ' 치르기 **전에** 돌려보내고 이름을 댄다. 안 말하면 그게 v141 에 덴'
+    + ' **「조용한 불발」**이다. ★ 「너무 멉니다」가 뜨면 그건 가림이 아니라'
+    + ' **사거리**로 막힌 것이고, 그때 ② 의 초록은 **거짓 초록**이다');
 
-  // ── ④ 유도탄은 **돌아간다** ─────────────────────────────
-  await until(() => SPACE.combat.cool <= 0, 60, '재장전');
-  const g0 = await S(() => SPACE.combat.fired);
-  await S(() => { SPACE.putWeapon(3); SPACE.fire(); });          // 유도탄
-  const g1 = await S(() => SPACE.combat.fired);
-  ok(g1 > g0,
-    '④ ★★★ **유도탄은 나간다** — 셋이 다 막히면 「숨으면 무적」이 되고,'
-    + ' 그건 전투가 아니라 숨바꼭질이다. 돌아가는 길 하나가 **숨은 적을'
-    + ' 꺼내는 값**이 되고 「어느 무기를 쏘나」에 이유를 하나 더 얹는다');
+  // ── ④ ★★ **가림막이 대신 맞는다** ─────────────────────
+  //
+  //   ★ 이건 v94 가 이미 만든 것이다(「탄이 지나가는 길에 있는 것이
+  //     맞는다」). 가림을 얹으면서 **그것이 안 깨졌나**를 같이 본다 —
+  //     새 계통이 옛 계통을 조용히 밟는 것이 이 저장소의 단골 사고다.
+  //   ★★ **쏘아서 안 본다.** 표류선을 쏘면 그 자리에서 부서지고, 그러면
+  //     아래 ⑤⑥⑦(가려진 채 버티다 풀리나)이 **가림막이 없어진 채로**
+  //     돌아 통째로 헛것이 된다. 그래서 **어디로 나갈지**만 묻는다
+  const aimId = await S(() => SPACE.combat.target?.id ?? null);
+  const lockId = await S(() => SPACE.combat.radar.id);
+  ok(aimId === hid && lockId === foe?.id,
+    `④ ★★ **조준선은 가림막(#${aimId})을, 레이더는 그 뒤의 적(#${lockId})을 잡는다** —`
+    + ' 기수 고정 무기(레이저)는 **먼저 만나는 것**으로 나가고(v94) 유도 무기는'
+    + ' 트랙 파일로 나간다. 「막힌다」와 「가림막이 대신 맞는다」는 같은 말이고,'
+    + ' 그래서 이 판은 어느 쪽으로도 **조용하지 않다**');
 
-  // ── ⑤ ★★★ 락온이 **버티다 풀린다** ─────────────────────
+  // ── ⑤⑥⑦ ★★★ 락온이 **버티다 풀린다** ─────────────────
+  //
+  //  ★★★ **쏘기 전에 잰다.** 처음에 유도탄을 먼저 쏘고 이걸 쟀다가
+  //    **거짓 초록**을 얻었다 — 탄이 적을 부숴서 락온이 「가려서」가 아니라
+  //    **표적이 없어져서** 풀렸는데, 「풀렸나」만 물었으니 초록이었다.
+  //    그래서 ⑦ 이 `why` 를 못박는다: **왜 풀렸는지를 안 물으면 안 된다**
+  await S(pin, ids);
   const held = await S(() => SPACE.combat.radar.cov ?? 0);
-  console.log(`   가려진 채 버틴 시간 ${held}초 (${2.5}초를 넘으면 놓는다)`);
+  console.log(`   가려진 채 버틴 시간 ${held}초 (2.5초를 넘으면 놓는다)`);
   ok(held > 0 && (await S(() => SPACE.combat.radar.id)) !== null,
-    '⑤ ★★★ **바로 안 놓는다** — 파편 하나가 스쳐 지나갈 때마다 끊기면'
+    '⑤ ★★★ **세면서 버틴다** — 파편 하나가 스쳐 지나갈 때마다 끊기면'
     + ' 그건 전투가 아니라 **운**이다');
-  ok(await until(() => SPACE.combat.radar.id === null, 90, '가려져서 놓치는 것'),
+  ok(await until(([f, h]) => {
+    SPACE.setPower('sensor', true);
+    SPACE.putSkyAt(f, 0, 0); SPACE.putSkyDist(f, 80);
+    SPACE.putSkyAt(h, 0, 0); SPACE.putSkyDist(h, 40);
+    return SPACE.combat.radar.id === null;
+  }, 90, '가려져서 놓치는 것', ids),
     '⑥ ★★★ **버티다 놓는다** — 안 풀리면 숨어도 소용이 없고, 그러면'
     + ' 가림을 만든 것이 **화면 장식**으로 끝난다');
   const why = await S(() => SPACE.combat.radar.why);
   ok(why === 'cover',
-    `⑦ ★★ **왜 놓쳤는지가 「가림」이다** (${why}) — 짐벌은 기수를 끌어오고,`
+    `⑦ ★★★ **왜 놓쳤는지가 「가림」이다** (${why}) — 짐벌은 기수를 끌어오고,`
     + ' 노치는 밀어붙이고, 가림은 **옆으로 돌아 들어가야** 한다. 셋의 대처가'
-    + ' 다르므로 이름을 틀리면 사람이 엉뚱한 것을 한다');
+    + ' 다르므로 이름을 틀리면 사람이 엉뚱한 것을 한다.'
+    + ' ★ `null` 이면 **다른 까닭으로 풀린 것**이고, 그때 ⑥ 의 초록은 거짓이다');
+
+  // ── ⑧ 유도탄은 **돌아간다** ─────────────────────────────
+  //   ★ 제일 뒤에 둔다 — 이것만 표적을 **부수므로**, 앞에 두면 위의 셋이
+  //     「가려서 풀렸나」를 물을 수가 없다. 다시 묶으려고 가림막을 잠깐
+  //     옆으로 치웠다가(조준선이 가림막을 잡으므로) 도로 밀어 넣는다
+  await S(aside, ids);
+  await p.waitForTimeout(500);
+  await S(aside, ids);
+  await S(() => SPACE.putLock(true));
+  await S(pin, ids);
+  const g0 = await S(() => SPACE.combat.fired);
+  await S(() => { SPACE.putWeapon(3); SPACE.fire(); });          // 유도탄
+  const g1 = await S(() => SPACE.combat.fired);
+  ok(g1 > g0,
+    `⑧ ★★★ **유도탄은 나간다** (${g0} → ${g1}) — 셋이 다 막히면 「숨으면 무적」이`
+    + ' 되고, 그건 전투가 아니라 숨바꼭질이다. 돌아가는 길 하나가 **숨은 적을'
+    + ' 꺼내는 값**이 되고 「어느 무기를 쏘나」에 이유를 하나 더 얹는다');
+
   await S(() => { SPACE.putLock(false); SPACE.clearSky(); SPACE.setInfinite(false); });
 }
 
