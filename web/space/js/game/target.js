@@ -26,6 +26,9 @@ import { wrap, relOf } from './frame.js';
 //    v84 부터 열두 판 어기고 있었다
 // ══════════════════════════════════════════════════════════════════════════
 import { wayFor, judge, DODGE2 } from './dodge-table.js';
+// ★★★ v137 — **어스펙트와 적 기동** (`docs/space/FIGHT.md`)
+import { aspectOf, aspectMult, partAt, multFor } from './aspect-table.js';
+import { makeFoe, stepFoe } from './foe-table.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
 
@@ -66,6 +69,12 @@ function spawnOne(rnd, id, kind = null) {
     flash: 0,
     /** ★ 부딪힌 뒤 잠깐 (한 번에 한 번만 부딪힌다) */
     bump: 0,
+    /**
+     * ★★★ v137 — **기동과 어스펙트** (`foe-table.js`).
+     *   v136 까지 적이 하는 일은 표류 두 줄이 전부였다 — 내가 뒤를 잡든
+     *   마주보든 **똑같았다.** 그건 전투가 아니라 과녁 쏘기다
+     */
+    foe: makeFoe(),
   };
 }
 
@@ -264,8 +273,31 @@ export function stepSky(sky, dt, {
   const hits = [];
   for (const t of sky.list) {
     const k = KINDS[t.kind];
-    t.az += t.vaz * dt;
-    t.el += t.vel * dt;
+    // ══ ★★★ v137 — **적이 기동한다** (`foe-table.js`) ═══════════════════
+    //  ★ 뒤를 물고 있으면 브레이크, 못 떼면 되꺾기, 죽을 판이면 이탈.
+    //    **꺾는 동안은 느려진다** — 안 그러면 계속 꺾는 것이 답이 되어
+    //    영영 못 잡는다 (EVE 의 각속도를 값 하나로 접었다)
+    //  ★★ `locked` 는 **내가 이 적의 뒤를 물고 있나**다. 「조준선에
+    //    들어와 있나」가 아니라 **어스펙트가 후미인가**로 본다 —
+    //    앞에서 겨누는 것은 무는 것이 아니다
+    {
+      const rear = aspectOf(t.foe?.aspect ?? 180) === 'rear';
+      const near = t.dist <= (ENGAGE?.lock ?? 240);
+      const fv = stepFoe(t.foe, dt, {
+        locked: rear && near && !!t.aimedByMe,
+        hp01: t.hp / Math.max(1, KINDS[t.kind]?.hits ?? 1),
+        dead: !!t.dead,
+      });
+      // ★ 기동이 어스펙트를 바꾼다 — 화면·판정·검사가 **같은 값**을 본다
+      t.aspect = fv.aspect;
+      t.moveNow = fv.move;
+      t.slowNow = fv.slow;
+      t.missNow = fv.miss;
+      if (fv.tell) t.tell = fv.tell;
+      // ★★ **꺾으면 느려진다.** 표류에 곱한다 — 새 축을 안 만든다
+      t.az += t.vaz * dt * fv.slow;
+      t.el += t.vel * dt * fv.slow;
+    }
     // ★★ v69 — 방위는 **감는다**, 고도는 **되돈다.**
     //   방위가 한 바퀴(±180)가 되면서 「끝」이 없어졌다. 180 에서 되돌리면
     //   등 뒤에 **보이지 않는 벽**이 생겨서 적이 거기 붙어 떠는데,
@@ -413,6 +445,23 @@ export function stepSky(sky, dt, {
     if (s.band === 'perfect') { sky.evaded++; hits.push({ miss: true, evaded: true }); continue; }
     if (s.roll > s.pk) { sky.dodged++; hits.push({ miss: true }); continue; }
     sky.tookHits++;
+    // ★★★ v137 — **어디를 맞았나는 어스펙트가 같이 정한다.**
+    //   v136 까지 `pickHit` 은 씨앗만 봤다 — 그래서 `PARTS` 주석이 v70 부터
+    //   약속한 「뒤를 잡으면 엔진이 나온다」가 **한 번도 성립한 적이 없다**
+    //  ══ ★★★ **적이 나를 때릴 때는 어스펙트를 안 쓴다** (v137) ═════════
+    //   ① 처음에 **적의** 어스펙트를 썼다가 태웠다. `foe.aspect` 는
+    //     「적 기수에서 나까지」의 각이라, 그걸 쓰면 **내가 뒤를 잡을수록
+    //     내가 급소를 맞는다** — 뜻이 정반대다.
+    //   ② 그래서 **내** 각으로 바꿨더니 이번엔 `space-combat.js` 가
+    //     「안 부수면 **0.2분**에 죽는다」로 빨개졌다 (목표 1.5~5분).
+    //     까닭은 `partAt` 의 무게가 **선체 말고도** 무기(×1.6)를 자주 내서,
+    //     적 탄 하나하나가 옛 `pickHit` 보다 아파진 것이다.
+    //   ★★★ 그래서 **받는 쪽은 옛 셈 그대로 둔다.** 어스펙트는 이번 판에
+    //     **때리는 쪽**의 일이고, 받는 쪽까지 같이 바꾸면 v70~v136 이
+    //     맞춰 둔 회차 저울이 통째로 흔들린다. 「새 계통을 얹으면서 옛
+    //     계통을 깨뜨리는 것」이 이 저장소가 제일 자주 밟는 함정이다.
+    //   ★ 받는 쪽 어스펙트는 `docs/space/FIGHT.md` 에 남겨 두고 **다음 판**
+    //     에 저울을 같이 재면서 넣는다 (그때 `space-combat.js` 도 같이 본다)
     const where = pickHit(sky.rnd);
     hits.push({
       miss: false, where,
@@ -515,6 +564,19 @@ export function aimingSoon(sky) {
  *     그건 사장님이 말씀하신 「도망가던지」와 맞물린다
  */
 export function behindOf(t) {
+  // ══ ★★★ v137 — **이제 진짜 각으로 잰다** ═══════════════════════════════
+  //  ★ 위 주석이 「방향으로 잴 수가 없다 — 대신 **무엇을 하고 있나**로
+  //    잰다」고 적어 두고 있었다. 그건 v86 에 **어스펙트가 없어서** 쓴
+  //    임시 방편이었고, v137 이 `foe-table.js` 로 진짜 각을 만들었다.
+  //  ★★ 임시 방편은 **그럴듯했지만 갈라져 있었다**: 「도망 중이면 뒤」라
+  //    했으므로 **도망 안 가는 적은 영영 뒤가 안 잡혔다.** 뒤로 돌아
+  //    들어가도 정면과 같은 판정이었다 — 사장님이 「후미를 공격햇을때
+  //    데미지」라고 하신 것이 정확히 이 자리다
+  if (typeof t.aspect === 'number') {
+    const z = aspectOf(t.aspect);
+    return z === 'rear' ? 1 : (z === 'side' ? 0.4 : 0);
+  }
+  // ★ 아직 기동 상태가 없는 것(파편 따위)은 옛 셈을 그대로 쓴다
   const k = KINDS[t.kind];
   if (t.fleeing || t.eng?.phase === 'out') return 1;
   if (k?.standoff && t.dist > k.standoff[1]) return 0;
@@ -526,9 +588,15 @@ export function behindOf(t) {
  *
  * @returns { part, dmg, killed } — `dmg` 는 부위 배수가 곱해진 값
  */
-export function hitPart(t, { off = 0, tol = 6, dmg = 1, rnd = Math.random } = {}) {
+export function hitPart(t, { off = 0, tol = 6, dmg = 1, rnd = Math.random, weapon = 'laser' } = {}) {
   const part = partOf(off, tol, behindOf(t), rnd);
-  const real = dmg * part.mult;
+  // ══ ★★★ v137 — **어느 쪽에서 때렸나가 피해를 정한다** ═════════════════
+  //  ★ 후미 ×1.45 · 측면 ×1.15 · **정면 ×0.75**. 정면이 손해라야
+  //    「뒤로 돌아 들어가는 30초」가 값을 갖는다 — 그게 이 판의 알맹이다.
+  //  ★★ 무기마다 다르게 탄다 (`aspect-table.js WEAPON_ASPECT`):
+  //    열추적탄은 후미에서 더 물고(열원이 분사구다), 유도탄은 각도를 덜 가린다
+  const asp = typeof t.aspect === 'number' ? t.aspect : 90;
+  const real = dmg * part.mult * multFor(weapon, asp);
   t.hp -= real;
   // ★ 부위가 깨지는 것은 **그 부위를 맞혔을 때만.** 선체를 아무리 때려도
   //   엔진이 안 죽는다 — 그래야 「어디를 겨눌까」가 남는다
@@ -639,6 +707,10 @@ export function summary(sky) {
       dist: +t.dist.toFixed(0), hp: +t.hp.toFixed(1), inRange: inRange(t),
       // ★ v86 — 부위가 깨졌나 · 도망 중인가 (화면과 검사가 읽는다)
       dead: t.dead ? { ...t.dead } : null, fleeing: !!t.fleeing,
+      // ★★★ v137 — **어느 쪽을 보고 있나 · 무슨 기동 중인가.**
+      //   화면·검사·판정이 **같은 값**을 본다 (「재는 곳을 둘로 안 만든다」)
+      aspect: typeof t.aspect === 'number' ? +t.aspect.toFixed(1) : null,
+      move: t.moveNow ?? null,
       vaz: +t.vaz.toFixed(2), vel: +t.vel.toFixed(2),
     })),
   };
