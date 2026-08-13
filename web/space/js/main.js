@@ -32,7 +32,9 @@ import { makeChase, stepChase, resetChase, heatRate, canTurnOn, PHASE } from './
 // ★★ v58 — 열이 두 칸이 됐다 (선체 온도 / 열 저장고). docs/space/REAL.md §4-A
 import { SINK, SINK_WORD, coolEfficiency } from './game/heat-table.js';
 import { stepHeat, sinkFull, sinkAt, hideLeft } from './game/heat.js';
-import { LEG, forkOf } from './game/route-table.js';
+// ★ v131 — `PICK` 은 무기 쪽에도 있다. **이름을 갈라 준다** — 같은 이름 둘이
+//   한 파일에 들어오면 나중에 고치는 사람이 반드시 헷갈린다
+import { LEG, forkOf, PICK as FORK_PICK } from './game/route-table.js';
 /** 자국은 열에 비례한다. 윈치의 자국 보탬을 열 단위로 환산하려고 쓴다 */
 const SIGN_PER_HEAT = SIGN.perHeat;
 import {
@@ -98,6 +100,9 @@ import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
 import { centerFor, worldAt } from './game/screen-table.js';
 // ★★★ v127 — **창을 손으로 옮긴다** (사장님 「마우스로 위치를 자유자재로」)
 import { LAYOUT, MOVABLE, PANE, defaultAt as paneHome, layoutWord } from './game/layout-table.js';
+// ★★★ v131 — **배가 떠는 모양** (사장님 「빠르게 떨리는데 … 눈 아프다」).
+//   빠르기·폭·겹은 표가 안다 — `tools/space-shake.js` 가 화소로 잰다
+import { shakeAt } from './game/shake-table.js';
 // ★★★ v129 — **마우스를 쓰는 모드 다섯** (`docs` 대신 표가 안다).
 //   여기서 「점검이면 …, 배치면 …」을 다시 세지 않는다 — 세는 곳이 둘이 되면
 //   그때부터 갈라진다 (`tools/space-mode.js` 가 규칙만 따로 잰다)
@@ -345,7 +350,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 130;
+export const VERSION = 131;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -828,6 +833,34 @@ addEventListener('keydown', (e) => {
   //  ★ 사장님 「**상태창 광학창 레이더 등 모든 창들을 마우스로 위치를
   //    자유자재로 옮길 수 있게** 해줘」
   //  ★★ 위 v103 의 셈에서 **U 가 비어 있었다** — 그 자리를 쓴다
+  // ══ ★★★ v131 — **Enter — 지금 가리키는 갈래로 간다** ═══════════════
+  //
+  //  ★ 사장님 (2026-08-13) 「**성운을 지난다. 뭘 어떻게 고르라는거야?
+  //    단축키가 있어? 선택지는?**」
+  //
+  //  ★★ 맞는 말씀이다. v128 이 거점에서 후보를 하늘에 세워 놓고
+  //    「고르면 갑니다」라고만 했다 — **무엇을 어떻게 하라는 말이 없었다.**
+  //    고르는 길은 조종석 대시의 작은 판을 겨눠 누르는 것 **하나뿐**이었고,
+  //    종단 검사도 「chart0,chart1 을 못 찾았다」로 두 번 적고 있었는데
+  //    그것을 검사의 잔소리로 흘려 들었다.
+  //  ★★★ 「들어가는 길을 하나만 만들지 않는다」 — 판은 그대로 두고 키를 낸다.
+  //    ★ 다만 「1번 / 2번」이 아니라 **기수가 가리키는 쪽**이다. 거점에서
+  //      두 후보가 하늘에 서 있으므로, 배를 돌려 고르고 키로 굳힌다 —
+  //      차림표가 아니라 **방향**이고, v128 이 만든 것과 그래야 맞물린다
+  if (!helpOpen && !paused && e.code === FORK_PICK.key) {
+    e.preventDefault();
+    const cand = nav.to?.kind === 'port' ? nav.to.key : null;
+    if (cand && chooseFork(route, cand)) {
+      ship.outside.setRegion(regionOf(route));
+      say(ai, `${route.fork.name} — ${(route.fork.seconds / 60).toFixed(0)}분`, 'tell');
+      audio?.event('latch');
+    } else {
+      nag(route.phase === RPHASE.PORT
+        ? '갈 쪽을 보고 누릅니다 — 후보가 하늘에 둘 있습니다'
+        : '거점에서 항로를 고릅니다');
+    }
+    return;
+  }
   // ★★ v128 — **열려 있으면 멈춰 있어도 닫힌다.** 「들어가는 길만 있고
   //   나오는 길이 없으면 갇힌다」 — v127 에 정확히 그렇게 갇혔다 (멈춤이
   //   먼저 걸려서 U 가 안 먹었다). 원인은 아래 `usingMouse` 에서 없앴지만,
@@ -7196,10 +7229,20 @@ function frame(now) {
   shakeMul = since < ESCAPE.total ? wantShake
     : shakeMul + (wantShake - shakeMul) * Math.min(1, dt * 2.2);
 
-  // 진동은 **아주 작게.** 1인칭에서 화면 흔들림은 조금만 넘겨도 멀미가 난다.
-  // 「느껴지는데 뭔지 모르겠는」 정도가 맞다.
-  const sh = CRUISE.shake * shakeMul * Math.sin(clock * CRUISE.shakeHz * Math.PI * 2);
-  const sw = CRUISE.sway * shakeMul * Math.sin(clock * CRUISE.swayHz * Math.PI * 2);
+  // ══ ★★★ v131 — **모양은 표가 안다** (`game/shake-table.js`) ══════════
+  //
+  //  ★ 사장님 (2026-08-13) 「**조준경이 빠르게 떨리는데 자연스럽게 바꿔줘.
+  //    눈 아프다. 현실감있게 하기 위해서 넣은건가?**」
+  //
+  //  ★★ 여기 사인 두 줄이 **11.3Hz** 였다. 조준경은 배에 붙어 있으므로
+  //    (`ship.add(sight.mesh)`) 눈이 밀린 만큼 화면에서 그대로 밀리고,
+  //    재 보니 **초당 11.3번 10화소**였다 — 진동이 아니라 깜빡임이다.
+  //  ★★★ 그리고 그건 **틀린 고증**이었다: 진짜 조종석에서는 머리가 배와
+  //    같이 떨어서 조준경이 눈에 대해 **가만히** 있다. 까닭은 표에 있다.
+  //  ★ 여기서 다시 사인을 쓰지 않는다 — 쓰기 시작하면 표와 갈라진다
+  const shk = shakeAt(clock, shakeMul);
+  const sh = shk.y;
+  const sw = shk.x;
   // ★ 포탑에 올라가 있으면 **눈이 배 위로 나온다.** 사다리를 타는 중에는
   //   그 사이를 부드럽게 — 툭 순간이동하면 「올라갔다」가 안 읽힌다
   // ★ v64 — 포탑이 없어졌으므로 **눈이 배 위로 안 나간다** (`TURRET_RISE` 삭제)
@@ -7209,7 +7252,7 @@ function frame(now) {
   camera.rotation.x = me.pitch;
   // ★★ **짐벌이 새는 만큼만** 방이 기운다 (v60 · flight-table.js GIMBAL).
   //   0 이면 배가 도는지 몸으로 모르고, 크면 걷다가 넘어지는 게임이 된다
-  camera.rotation.z = sw * 0.06 + fly3.tiltZ;
+  camera.rotation.z = shk.roll + fly3.tiltZ;
   camera.rotation.x += fly3.tiltX;
 
   // ══ ★★ **잡으면 들여다본다** (v59 · systems-table.js FOCUS) ══════
