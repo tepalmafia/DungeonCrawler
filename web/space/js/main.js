@@ -358,7 +358,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 133;
+export const VERSION = 134;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1789,7 +1789,12 @@ function fireGun() {
     //  ★ 138m 에서 레이저를 쏘시고 「너무 멉니다」를 보셨다. 맞는 말이지만
     //    **어느 무기가 닿는지는 안 알려 줬다** — 사거리를 외우고 있어야만
     //    알 수 있는 상태였다. 「안 된다」까지만 말하는 안내는 안내가 아니다
-    const d = (lockAimed ?? aimed)?.dist ?? null;
+    // ★★★ **`aimedAt` 은 `{t, off}` 를 준다** — 거리는 `.t.dist` 다.
+    //   처음에 `.dist` 로 읽었다가 늘 `null` 이 되어 **말이 안 붙었다.**
+    //   종단 검사 `[6v]④` 가 그것을 잡았다 — 뼈대는 다 초록이었는데
+    //   **게임이 그 값을 못 꺼내고 있었다** (한쪽만 읽으면 못 보는 자리)
+    const at = lockAimed ?? aimed;
+    const d = at?.t?.dist ?? at?.dist ?? null;
     const tip = (r.why === 'far' || r.why === 'near') && d !== null
       ? ` — ${reachWord(d, supply.ammo)}` : '';
     say(ai, (CBT_WHY[r.why] ?? '지금은 못 쏩니다') + tip, 'tell');
@@ -5303,6 +5308,8 @@ window.SPACE = {
    *   늘 참이 되는 것을 한 번 겪어서, 표를 읽는 구멍을 따로 냈다
    */
   get pilotRules() { return { ...PILOT }; },
+  /** ★ v132 — 검사가 툴팁을 억지로 띄운다 (새 게임을 다시 안 켜고) */
+  showOnboard(on = true) { showOnboard(on); return this.onboard; },
   /**
    * ★★★ v132 — **처음 켠 사람의 툴팁** (검사가 읽는다).
    *   ★ 헤드리스는 `dt` 가 0.05 로 잘려 **1초에 게임 시계가 0.05초**만 간다.
