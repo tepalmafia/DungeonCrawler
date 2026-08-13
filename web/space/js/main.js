@@ -270,7 +270,7 @@ import { PILOT, FIX, FIX_WHY, needsFix, fixWord } from './game/pilot-table.js';
 import {
   NAV, navWord, navState,
   // ★★★ v121 — **항로 문** (사장님 「항로가 목적지까지 희미하게 표시」)
-  gatesOf,
+  roadOf,
 } from './game/nav-table.js';
 import {
   makeNav, setFork, forkAt, setMission, clearNav, hasNav, stepNav,
@@ -345,7 +345,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 129;
+export const VERSION = 130;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -5810,49 +5810,68 @@ window.SPACE = {
   /** ★★★ v104 — **항법.** 검사(`space-nav.js`)와 점검 모드가 읽는다 */
   get nav() { return { ...navSummary(nav, !!helm.auto), legMult: nav.mult }; },
   /**
-   * ★★★ v121 — **항로 문이 정말 화면에 섰나** (`space-endtoend.js` 가 읽는다).
+   * ★★★ v130 — **길이 정말 화면에 섰나** (`space-endtoend.js` 가 읽는다).
    *
-   *   ★ 규칙(`gatesOf`)만 읽으면 「표는 다섯이라는데 화면은 비었다」를
-   *     못 잡는다. 그래서 **진짜 물체**를 세어서 준다 — 한쪽만 읽는
+   *   ★ 규칙(`roadOf`)만 읽으면 「표는 마디 열다섯이라는데 화면은 비었다」를
+   *     못 잡는다. 그래서 **진짜 물체**를 재서 준다 — 한쪽만 읽는
    *     검사는 「둘이 같나」를 못 묻는다 (v98 의 가르침)
    */
   road() {
-    const g = ship?.outside?.road?.group;
-    const shown = g ? g.children.filter((o) => o.visible) : [];
+    const list = roadOf(nav.to, roadPhase, nav.off ?? 0);
+    const mesh = ship?.outside?.road?.mesh;
+    const on = !!mesh?.visible;
+    // ★★ **화면에서 어디까지 뻗었나** — 진짜 카메라로 잰다 (−1~1).
+    //   v121 은 여기서 「제일 가까운 문의 크기」를 쟀다. 지금은 크기가
+    //   아니라 **길이와 복판까지의 거리**를 묻는다 — 사장님이 「가린다」고
+    //   하신 것이 크기였으므로, 그 자리를 그대로 재는 자를 바꾼다
+    let box = null;
+    if (on) {
+      camera.updateMatrixWorld(true);
+      const v = new THREE.Vector3();
+      const pos = mesh.geometry.attributes.position;
+      let x0 = 9, x1 = -9, y0 = 9, y1 = -9, near = 9, wide = 0, thin = 9;
+      // ★★ **굵기는 짝으로 잰다.** 띠는 마디마다 왼쪽·오른쪽 꼭짓점 둘이라,
+      //   그 둘 사이가 곧 그 자리의 굵기다 — 사장님 「**굵은** 한 줄」이
+      //   화면에서 정말 굵은지는 세상 크기(m)만 봐서는 모른다
+      const L = new THREE.Vector3(), R = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i += 2) {
+        L.fromBufferAttribute(pos, i); mesh.localToWorld(L).project(L.z > 1 ? camera : camera);
+        R.fromBufferAttribute(pos, i + 1); mesh.localToWorld(R).project(camera);
+        if (L.z > 1 || R.z > 1) continue;
+        for (const q of [L, R]) {
+          x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x);
+          y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+          near = Math.min(near, Math.hypot(q.x, q.y));
+        }
+        const w = Math.hypot(L.x - R.x, L.y - R.y);
+        wide = Math.max(wide, w); thin = Math.min(thin, w);
+      }
+      if (x1 >= x0) {
+        box = {
+          /** 화면에서 뻗은 길이 (정규 좌표) */
+          len: +Math.hypot(x1 - x0, y1 - y0).toFixed(3),
+          /** ★★★ **복판(십자선)까지 제일 가까운 거리** — 「가리나」가 여기서 나온다 */
+          gap: +near.toFixed(3),
+          /** ★★★ 가까운 끝의 **굵기** — 「굵은 한 줄」이 화면에서 정말 굵은가 */
+          wide: +wide.toFixed(4),
+          /** 먼 끝의 굵기 — 이것이 안 가늘어지면 원근이 죽은 것이다 */
+          thin: +thin.toFixed(4),
+        };
+      }
+    }
     return {
-      /** 표가 말하는 문 */
-      want: gatesOf(nav.to, roadPhase, nav.off ?? 0).length,
-      /** 화면에 정말 선 문 */
-      shown: shown.length,
+      /** 표가 말하는 마디 */
+      want: list.length,
+      /** 화면에 정말 섰나 */
+      shown: on ? 1 : 0,
       phase: +roadPhase.toFixed(1),
-      /** 제일 가까운 문의 진하기 — 「희미한가」를 여기서 잰다 */
-      alpha: +(shown[0]?.children?.[0]?.material?.opacity ?? 0).toFixed(3),
+      /** 제일 진한 마디 — 「희미한가」를 여기서 잰다 */
+      alpha: +Math.max(0, ...list.map((g) => g.alpha)).toFixed(3),
       to: nav.to ? nav.to.name : null,
-      /**
-       * ★★★ **화면에서 몇 할인가** — 진짜 카메라로 잰다 (−1~1 이라 반쪽 크기).
-       *
-       *   ★ 표가 「45m 앞의 12m 고리는 29.8도」라고 말해도, **화면이 정말
-       *     그만큼 그리는지는 다른 물음**이다. 한쪽만 읽는 검사는 「둘이
-       *     같나」를 못 묻는다 (v98 · `space-align.js` 가 그 자리다)
-       */
-      seen: (() => {
-        camera.updateMatrixWorld(true);
-        const v = new THREE.Vector3();
-        return shown.map((o) => {
-          const box = new THREE.Box3().setFromObject(o);
-          let y0 = 9, y1 = -9;
-          for (const sx of [box.min.x, box.max.x]) {
-            for (const sy of [box.min.y, box.max.y]) {
-              for (const sz of [box.min.z, box.max.z]) {
-                v.set(sx, sy, sz).project(camera);
-                if (v.z > 1) continue;
-                y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
-              }
-            }
-          }
-          return y1 < y0 ? 0 : +((y1 - y0) / 2).toFixed(3);
-        });
-      })(),
+      /** ★ 축에서 몇 도 아래인가 (가까운 끝 · 먼 끝) — 「눕혔나」 */
+      below: list.length ? [list[0].below, list[list.length - 1].below] : [],
+      /** 진짜 카메라가 잰 것 */
+      box,
     };
   },
   /** 검사가 미션 쪽으로 걸어 본다 */
@@ -6751,7 +6770,7 @@ function frame(now) {
     //    항로가 시계였던 v103 까지의 병을 화면에 그대로 옮기는 셈이 된다
     roadPhase += mpsPure * dt;
     ship.outside.road?.update(to
-      ? gatesOf(to, roadPhase, rel ? rel.off : 0)
+      ? roadOf(to, roadPhase, rel ? rel.off : 0)
       : []);
     // ══ ★★★ v126 — **어느 쪽으로 틀어야 하나** ═══════════════════════
     //
