@@ -217,6 +217,8 @@ import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/ta
 //   (지우지는 않는다 — 왜 접었는지가 `evade-table.js` 머리에 있다)
 // ★★★ v135 — **UI 크기는 한 곳에서 온다** (사장님 「전부 키워」)
 import { UI } from './game/ui-table.js';
+// ★★★ v137 — **어스펙트** — 내가 적의 어느 쪽에 있나 (`docs/space/FIGHT.md`)
+import { aspectWord } from './game/aspect-table.js';
 // ★★★ v135 — **회피는 「방향 + 창」이다** (`docs/space/DODGE.md`)
 import {
   // ★★ **이름이 둘 겹쳤다.** `WAYS` 는 `salvage-table.js`(회수하는 길 셋)가,
@@ -374,7 +376,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 136;
+export const VERSION = 137;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1990,6 +1992,10 @@ function landShots(dt) {
     const band = bandAt(d.shot.off, wpn.tol, !!wpn.seek, grow.bull);
     const hp = hitPart(t, {
       off: d.shot.off, tol: wpn.tol, dmg: d.shot.dmg * (band?.mult ?? 1),
+      // ★★★ v137 — **어느 무기로 어느 쪽에서 때렸나** (`aspect-table.js`).
+      //   무기를 안 넘기면 셋이 다 「있는 그대로」가 되어, 열추적탄이
+      //   후미에서 더 무는 것도 유도탄이 각도를 덜 가리는 것도 조용히 죽는다
+      weapon: wpn.key,
     });
     t.flash = 0.5;
     // ★ 맞은 자리에서 터진다 — 「맞았나」를 숫자로만 알려주지 않는다
@@ -1997,13 +2003,17 @@ function landShots(dt) {
     if (t.hp > 0) {
       // ★ **어디를 맞혔는지 말한다.** 안 말하면 「부위」가 있는 줄을 모르고,
       //   모르면 겨누지 않는다 — 규칙이 있는데 화면에 없으면 없는 것과 같다
+      // ★★★ v137 — **어디서 때렸는지 같이 말한다.** 안 말하면 어스펙트가
+      //   있는 줄을 모르고, 모르면 돌아 들어갈 이유가 없다 —
+      //   「규칙이 있는데 화면에 없으면 없는 것과 같다」
+      const zone = typeof t.aspect === 'number' ? `${aspectWord(t.aspect)} · ` : '';
       const dead = hp.part.kills === 'move' ? ' · 엔진 정지'
         : hp.part.kills === 'shoot' ? ' · 무기 파괴' : '';
       // ★★★ v114 — **띠를 말한다.** 「스쳤습니다 — 조금 더 안쪽」이
       //   이 계통의 전부다. 규칙이 있는데 화면에 없으면 없는 것과 같고,
       //   특히 **스침은 옛 규칙이면 빗나감**이라 안 말하면 배울 것이 없다
       const bw = band ? HIT_WORD[band.key] : '명중';
-      say(ai, `${TKINDS[t.kind].name} ${hp.part.name} ${bw}${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
+      say(ai, `${TKINDS[t.kind].name} ${zone}${hp.part.name} ${bw}${dead} — 맷집 ${Math.max(0, Math.round(t.hp))}`,
         band?.key === 'bull' || hp.part.key === 'core' || dead ? 'warn' : 'tell');
       continue;
     }
@@ -5592,6 +5602,20 @@ window.SPACE = {
    *   ★ 살아 있는 것을 만지는 구멍은 **따로 낸다** — 읽는 구멍과 쓰는
    *     구멍을 같은 이름으로 두면 이런 착각이 또 난다
    */
+  /** ★★★ v137 — 검사가 적을 **원하는 자리에** 놓는다 (기동을 재려면 필요하다) */
+  putSkyAt(id, az = 0, el = 0) {
+    const t = sky.list.find((x) => x.id === id);
+    if (!t) return null;
+    t.az = aimAz + az; t.el = aimEl + el; t.vaz = 0; t.vel = 0;
+    return { az: t.az, el: t.el };
+  },
+  /** ★★★ v137 — 검사가 어스펙트를 세워 놓는다 (후미 피해를 재려면 필요하다) */
+  putAspect(id, deg = 180) {
+    const t = sky.list.find((x) => x.id === id);
+    if (!t) return null;
+    t.aspect = deg; if (t.foe) t.foe.aspect = deg;
+    return t.aspect;
+  },
   putSkyDist(id, d) {
     const t = sky.list.find((x) => x.id === id);
     if (!t) return null;
@@ -7771,6 +7795,15 @@ function frame(now) {
       if (soon) say(ai, AI_LINES.aiming(sideWord(soon.relAz)), 'warn');
     }
     threat = th;
+  }
+  // ══ ★★★ v137 — **내가 지금 누구를 물고 있나** ═══════════════════════
+  //  ★ 적 기동(`foe-table.js`)이 이 값을 읽는다. 없으면 브레이크가 영영
+  //    안 들어오고, 그러면 v136 처럼 **적이 표류만 하는 과녁**으로 남는다.
+  //  ★★ 「조준선에 들어와 있나」가 아니라 **락온한 것 또는 지금 겨눈 것**이다 —
+  //    스쳐 지나가는 각까지 세면 적이 쉼 없이 꺾어서 사람이 못 읽는다
+  {
+    const holdId = lockAimed?.t?.id ?? aimedAt(sky, aimAz, aimEl)?.t?.id ?? null;
+    for (const t of sky.list) t.aimedByMe = (t.id === holdId);
   }
   const skyEv = stepSky(sky, dt, {
     evade,
