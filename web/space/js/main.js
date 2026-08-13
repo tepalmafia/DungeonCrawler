@@ -139,7 +139,9 @@ import {
   pickTarget, picked, dropPick,
   pickSlot, fire as fireWeapon, forgetLock, radarBlips, summary as cbtSummary,
 } from './game/combat.js';
-import { HULL, HITS } from './game/target-table.js';
+import { HULL, HITS, lenOf } from './game/target-table.js';
+// ★★★ v138 — **표적 표시가 표적을 안 가린다** (`docs/space/SCALE.md §3`)
+import { MARK, markAt } from './game/mark-table.js';
 // ══ ★★★ **전투력 · 광학 창** (v79) ═════════════════════════════════════
 //  사장님 「나보다 강한 상대나 많은 적들은 **피하거나 도망**가고 …
 //          흩어진 적이나 **전투력이 낮은 적은 파괴**하면서 진행」
@@ -376,7 +378,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 137;
+export const VERSION = 138;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -8095,7 +8097,29 @@ function frame(now) {
       const x = dAz * k, y = -dEl * k;
       const deg = out ? Math.atan2(y, x) * 180 / Math.PI : 0;
       pkTip.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) rotate(${deg.toFixed(0)}deg)`;
-      pkTag.style.transform = `translate(calc(-50% + ${x.toFixed(0)}px), ${(y + 34).toFixed(0)}px)`;
+      // ══ ★★★ v138 — **상자가 표적을 안 가린다** ═══════════════════════
+      //
+      //  ★ 사장님 「목표물을 **타겟팅할때 타겟 표시가 목표물을 가려서
+      //    뭐가 뭔지 모르는데**」
+      //
+      //  ★★★ 상자가 **고정 크기**라 1도짜리 표적을 삼키고 있었다. 이제
+      //    **표적의 각지름에 맞춰** 커지고 가운데는 늘 빈다 (Elite 의 규약).
+      //    그리고 **가까우면 아예 지운다** — 눈이 이미 보는데 상자를 두면
+      //    그건 표시가 아니라 가림막이다 (Ace Combat 의 규약).
+      //  ★ 숫자는 `mark-table.js` 가 갖는다. 여기서 다시 재면 갈라진다
+      const mk = markAt(lenOf(t.kind), t.dist, true);
+      if (!out) {
+        const px = Math.round(mk.boxDeg * k);
+        pkTip.style.width = `${px}px`;
+        pkTip.style.height = `${px}px`;
+        pkTip.style.margin = `${-px / 2}px 0 0 ${-px / 2}px`;
+        // ★★ 가까우면 **상자를 지우고 갈고리만** — 클래스 하나로 CSS 가 바꾼다
+        pkBox.classList.toggle('hooks', !mk.box);
+      }
+      // ★★★ **글은 표적에서 떨어뜨리고** 비스듬히 앉힌다 — 얹으면 글도
+      //   안 읽히고 배도 안 보인다. 잇는 선은 CSS 가 그린다
+      const away = out ? 34 : Math.round(mk.tagDeg * k) + 12;
+      pkTag.style.transform = `translate(calc(-50% + ${(x + (out ? 0 : away * 0.8)).toFixed(0)}px), ${(y + away).toFixed(0)}px)`;
       pkTag.textContent = out
         ? `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m — ${Math.round(off)}° 돌리십시오`
         : `${TKINDS[t.kind]?.name ?? ''} ${Math.round(t.dist)}m`;

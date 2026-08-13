@@ -21,7 +21,7 @@
 //    때까지의 임시**다 — 그림이 오면 통째로 걷어낸다.
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
-import { SEEN, WRECK, KINDS } from '../game/target-table.js';
+import { SEEN, WRECK, KINDS, lenOf } from '../game/target-table.js';
 // ★★★ v85 — 사장님이 주신 그림이 있으면 그것을 세운다 (없으면 아래 코드 도형)
 import { modelFor, engineAt } from '../core/models.js';
 // ★★★ v98 — 자리를 아는 곳 하나 (블록아웃). 각+거리 → 자리도 거기서 편다
@@ -342,7 +342,14 @@ export function buildTargets(parent) {
     //
     //  ★ 일부러 접는 것이다 (실제로는 멀면 점이다). 이 게임은 교전 거리를
     //    이미 100m 스케일로 접어 놨고, 그 접힘의 뒷값을 여기서 치른다
-    const base = (KINDS[t.kind]?.size ?? 1) * 1.6;
+    // ★★★ v138 — **길이는 표가 갖는다** (`target-table.js lenOf`).
+    //   여태 `size * 1.6` 이라는 **딴 자**를 썼고, 그래서 raider 가
+    //   표의 8.5m 가 아니라 1.84 로 그려졌다 — **4.6배 작았다.**
+    //   100m 에서 1.05° 였고 맞으면 4.87° 다 (사장님 「100m면 상당히
+    //   가까운 거리인데 비행기가 너무 작게 보이는데?」).
+    //  ★★ 3D 그림이 오면 게임이 `fitScale` 로 **이 길이에 맞춘다.**
+    //    코드 도형만 딴 자를 쓰고 있었으니, 그림이 오는 날 크기가 튀었을 것이다
+    const base = lenOf(t.kind);
     const deg = 2 * Math.atan(base / 2 / Math.max(1, d)) / DEG;
     // ══ ★★★ v86 — **당겨 보면 부풀림을 끈다** ═══════════════════════
     //

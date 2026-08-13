@@ -10,7 +10,7 @@
 import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
   // ★ v135 — `evadeGain` 은 **안 부른다.** 부호를 버리던 그 함수다
-  DODGE, evadeDir, ENGAGE, PARTS, partOf, FLEE,
+  DODGE, evadeDir, ENGAGE, PARTS, partOf, FLEE, comesBack,
 } from './target-table.js';
 // ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
 //   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
@@ -130,9 +130,25 @@ function stepEngage(t, k, dt, rnd) {
   //  ★ 큰 것만. 자폭정은 몸이 탄이라 안 뺀다. 그리고 **엔진이 살아
   //    있어야** 뺀다 — 안 그러면 「깎아 놓으면 다 도망가서 못 잡는」
   //    게임이 된다. 여기가 부위와 도망을 잇는 자리다
+  // ══ ★★★ v138 — **도망갔다 돌아온다** ═════════════════════════════════
+  //  ★ 사장님 「적이 자꾸 **도망만 가는데 도망가다가 돌아와서 공격**하도록
+  //    해. **도망만 가는건** 보급함이나 이런 함대들만」
+  //  ★★★ v137 까지 맷집이 32% 아래면 **영영** 등을 보였다. 그러면 싸움이
+  //    「깎다가 놓친다」로 끝나고, 무엇보다 **뒤를 잡는 재미(v137)가 벌이
+  //    된다** — 뒤를 잡으면 도망가 버리니까
   if ((k.hits ?? 1) >= FLEE.big && t.hp / (k.hits ?? 1) <= FLEE.at) {
-    t.fleeing = true;
+    if (!t.fleeing) { t.fleeing = true; t.fleeT = 0; t.runs = (t.runs ?? 0) + 1; }
+    t.fleeT = (t.fleeT ?? 0) + dt;
     t.dist += Math.abs(k.closes ?? 6) * ENGAGE.breakMult * dt;
+    // ★★ **숨을 고르고 되돌아선다.** 보급함 같은 것들은 안 돌아온다 —
+    //   싣고 다니는 것들이라 **쫓아가 잡는 것이 상**이기 때문이다
+    if (comesBack(t.kind) && t.fleeT >= FLEE.back && (t.runs ?? 1) <= FLEE.rounds) {
+      t.fleeing = false; t.fleeT = 0;
+      // ★ 숨을 고른 만큼 맷집이 조금 돌아온다 — 안 그러면 돌아오자마자
+      //   또 문턱 아래라 **한 걸음 만에 다시 도망간다** (덜덜 떠는 적이 된다)
+      t.hp = Math.min(k.hits ?? 1, t.hp + (k.hits ?? 1) * FLEE.heal);
+      t.cameBack = true;
+    }
     return;
   }
   if (!so) { t.dist -= k.closes * dt; return; }
@@ -707,6 +723,8 @@ export function summary(sky) {
       dist: +t.dist.toFixed(0), hp: +t.hp.toFixed(1), inRange: inRange(t),
       // ★ v86 — 부위가 깨졌나 · 도망 중인가 (화면과 검사가 읽는다)
       dead: t.dead ? { ...t.dead } : null, fleeing: !!t.fleeing,
+      // ★★★ v138 — 몇 번 도망쳤나 · 돌아왔나 (검사와 계기가 읽는다)
+      runs: t.runs ?? 0, cameBack: !!t.cameBack,
       // ★★★ v137 — **어느 쪽을 보고 있나 · 무슨 기동 중인가.**
       //   화면·검사·판정이 **같은 값**을 본다 (「재는 곳을 둘로 안 만든다」)
       aspect: typeof t.aspect === 'number' ? +t.aspect.toFixed(1) : null,
