@@ -215,6 +215,8 @@ import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/ta
 // ★★★ v111 — **회피 타이밍** (사장님 「타이밍을 어떻게 줄지」). 고리와 규칙이 한 표를 본다
 // ★★★ v135 — `EVADE`·`ringAt`·`RING_WORD` 는 **접혔다.** 안 부른다
 //   (지우지는 않는다 — 왜 접었는지가 `evade-table.js` 머리에 있다)
+// ★★★ v135 — **UI 크기는 한 곳에서 온다** (사장님 「전부 키워」)
+import { UI } from './game/ui-table.js';
 // ★★★ v135 — **회피는 「방향 + 창」이다** (`docs/space/DODGE.md`)
 import {
   // ★★ **이름이 둘 겹쳤다.** `WAYS` 는 `salvage-table.js`(회수하는 길 셋)가,
@@ -370,6 +372,13 @@ import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
 export const VERSION = 135;
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
+//    키워. 전부」). 숫자는 `ui-table.js` 가 갖는다 — CSS 에 박으면 도구가
+//    못 읽고, 그러면 「키웠나」를 잴 수가 없다
+// ══════════════════════════════════════════════════════════════════════════
+document.documentElement.style.setProperty('--ui-zoom', String(UI.zoom));
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');

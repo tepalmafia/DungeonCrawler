@@ -33,6 +33,9 @@
 //  ★ three.js 를 안 쓴다 — `tools/space-screen.js` 가 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
 
+// ★★★ v135 — **크기는 한 곳에서 온다** (`ui-table.js`)
+import { UI, panelSide } from './ui-table.js';
+
 /**
  * ★★★ **전투 원뿔** — 화면 복판 이 반지름 안은 **조준경만** 쓴다.
  *
@@ -52,7 +55,11 @@ export const EDGE = 0.99;
  *   지금이 17.9% 다. **14%** 로 조인다 — 셋을 다 지울 수는 없고
  *   (레이더 없이 못 싸운다) 셋 다 조금씩 줄이면 눈에 띄게 넓어진다
  */
-export const BUDGET = 0.14;
+//  ★★★ v135 — 사장님 「**UI를 전체적으로 크기를 키워. 전부**」. 14% 는
+//    v103 이 「전투화면을 넓게」로 **조인** 값인데, 이번엔 반대 지시다.
+//    **한 곳(`ui-table.js`)에서 푼다** — 여기 숫자를 직접 고치면 다음에
+//    「어디를 만져야 UI 가 커지나」가 또 흩어진다
+export const BUDGET = UI.budget;
 
 /**
  * 판마다 **어느 구석인가** · **얼마나 커도 되나**.
@@ -62,15 +69,15 @@ export const BUDGET = 0.14;
  * @property inCone  전투 원뿔 안에 들어와도 되나 — **조준경만 참**
  */
 export const PANELS = {
-  조준경: { corner: [0, 0], area: 0.050, inCone: true, what: 'HUD — 겨누는 곳' },
+  조준경: { corner: [0, 0], area: 0.050 * UI.panel, inCone: true, what: 'HUD — 겨누는 곳' },
   /**
    * ★★ **왼쪽 위.** v95 에 사장님이 「적을 확대해서 보는 화면이 아래로
    *   바뀌었는데 **화면이 안보이잔아 원래 자리로 복구해**」 하셨으므로
    *   하늘에 둔다. 다만 **구석으로 더 민다** — 지금은 복판에서 0.27 이다
    */
-  광학창: { corner: [-1, 1], area: 0.060, inCone: false, what: '당겨 본다' },
-  상태창: { corner: [-1, -1], area: 0.055, inCone: false, what: '배가 어떤가' },
-  레이더: { corner: [1, -1], area: 0.060, inCone: false, what: '어디에 무엇이' },
+  광학창: { corner: [-1, 1], area: 0.060 * UI.panel, inCone: false, what: '당겨 본다' },
+  상태창: { corner: [-1, -1], area: 0.055 * UI.panel, inCone: false, what: '배가 어떤가' },
+  레이더: { corner: [1, -1], area: 0.060 * UI.panel, inCone: false, what: '어디에 무엇이' },
 };
 
 // ══════════════════════════════════════════════════════════════════════════

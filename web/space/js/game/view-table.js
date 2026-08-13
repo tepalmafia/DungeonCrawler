@@ -47,6 +47,9 @@ const rad = (d) => (d * Math.PI) / 180;
  *
  * ★ v66 에서 0.45m 더 앞으로 (−7.85 → −8.30). 유리가 가까울수록 각이 크다
  */
+// ★★★ v135 — **크기는 한 곳에서 온다** (`ui-table.js`)
+import { panelSide } from './ui-table.js';
+
 export const DEP = { x: 0, y: 1.20, z: -8.30 };
 
 /** 천장 높이 — `world/ship.js` 의 H 와 같아야 한다 */
@@ -274,7 +277,12 @@ export const HUD = { dist: 0.65, w: 0.473, h: 0.355 };
  *     고치면 다른 쪽이 말없이 따라 움직이는, 이 저장소가 제일 자주
  *     밟는 그 함정이다. 값은 **v120 까지의 HUD 크기를 그대로** 옮겼다
  */
-export const MFD = { w: 0.30, h: 0.23 };
+//  ★★★ v135 — 사장님 「**UI를 전체적으로 크기를 키워. 전부**」.
+//    ★ 배율은 `ui-table.js` 한 곳에 있다. 여기 0.30·0.23 을 직접 고치면
+//      「어디를 만져야 UI 가 커지나」가 또 흩어진다 — v121 이 HUD 와
+//      계기가 **붙어 있는 줄 모르고** 같이 커진 그 함정과 같은 종류다.
+//    ★★ **넓이** 배율이므로 변에는 그 제곱근을 곱한다 (`panelSide`)
+export const MFD = { w: 0.30 * panelSide(), h: 0.23 * panelSide() };
 /** HUD 가 덮는 각 (도) — 검사가 이 값을 40 언저리로 지킨다 */
 export const hudFov = () => ({
   h: +(2 * Math.atan(HUD.w / 2 / HUD.dist) * 180 / Math.PI).toFixed(1),

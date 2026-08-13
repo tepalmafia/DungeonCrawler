@@ -46,8 +46,14 @@ const until = async (fn, sec = 40, note = '', arg, each = null) => {
   console.log(`     (${note} 기다리다 지침)`);
   return false;
 };
-await p.mouse.move(320, 190);
-await p.mouse.click(320, 190);
+// ══ ★★★ v135 — **좌표로 시작 단추를 누르지 않는다** ═══════════════════
+//  ★ 여태 `mouse.click(320, 190)` 이었다. v135 가 UI 를 ×1.30 으로 키우자
+//    그 자리에 **「처음부터 다시」**가 와서, 검사가 켜자마자 저장을 지우고
+//    새로고침했다 — 「실행 문맥이 사라졌다」로 죽은 것이 그것이다.
+//  ★★ **화면에 있는 것을 좌표로 가리키면 UI 가 바뀔 때마다 낡는다.**
+//    이름으로 누른다 (종단 검사가 v78 부터 그렇게 하고 있었다).
+//    ★ 좌표 누르기는 **뒤로** 남긴다 — 단추가 없는 옛 저장에서도 켜지게
+await p.click('#btn-play').catch(() => p.mouse.click(320, 190));
 await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
 
 // ★ **자리를 옮기고 기다리면 안 된다 — 카메라가 따라올 때까지 기다린다.**
