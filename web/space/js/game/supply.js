@@ -6,6 +6,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { FOOD, PARTS, ORE, MISSILES, SCOOP, WINCH, TRADE, isShaky } from './supply-table.js';
 import { FUEL, burnMult, isDry } from './fuel-table.js';
+// ★ v133 — 무기마다의 통 (사장님 「다른 무기들도 일정 비율로」)
+import { makeAmmo, farmRoll, gain as ammoGain } from './ammo-table.js';
 
 export function makeSupply() {
   return {
@@ -14,6 +16,11 @@ export function makeSupply() {
     ore: ORE.start,
     /** ★★ 미사일 — **제 주머니다** (v69). 부품과 갈라 놓았다 */
     missiles: MISSILES.start,
+    // ★★★ v133 — **무기마다 제 통** (`ammo-table.js` · 사장님 「다른 무기들도
+    //   일정 비율로 가지고 시작하고, 파밍을 통해서 적절히 구할 수 있도록」).
+    //   ★ 위 `missiles` 는 **거래·저장 호환**으로 남긴다 — 지우면 이어한
+    //     저장이 깨진다. 쏘는 것은 이제 아래 통에서 나간다
+    ammo: makeAmmo(),
     /** ★ 추진제 — **밟는 동안만** 준다 (v62 · fuel-table.js) */
     fuel: FUEL.start,
     /** 이번에 잡고 있는 윈치가 얼마나 끌어왔나 — 「한 통」을 세려고 */
@@ -94,9 +101,19 @@ export function buyMissiles(s) {
  * ★ **주워 온다** — 표류선·구조 신호에서. 사는 것보다 많다 (`perSalvage`).
  *   위험한 데를 뒤진 값이 커야 「가는 것이 진짜 선택」이 된다
  */
-export function salvageMissiles(s, n = MISSILES.perSalvage) {
+export function salvageMissiles(s, n = MISSILES.perSalvage, r = 0.5) {
   const before = s.missiles;
   s.missiles = Math.min(MISSILES.max, s.missiles + n);
+  // ══ ★★★ v133 — **파밍이 무기별 통에도 넣는다** ═══════════════════════
+  //  ★ 사장님 「**파밍을 통해서 적절히 구할 수 있도록** 해줘」
+  //  ★★ 무엇이 나오나는 `ammo-table.js farmRoll` 이 정한다 — 열추적탄이
+  //    흔하고 유도탄이 드물다. 여기서 무게를 다시 적으면 두 곳이 된다.
+  //  ★ `Math.random` 을 안 쓴다 — 부르는 쪽이 씨앗에서 뽑아 넘긴다
+  //    (같은 자리를 다시 뒤졌을 때 다른 것이 나오면 그건 저장이 아니다)
+  if (s.ammo) {
+    const got = farmRoll(r);
+    ammoGain(s.ammo, got.key, got.n);
+  }
   return s.missiles - before;
 }
 

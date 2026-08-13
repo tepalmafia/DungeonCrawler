@@ -105,6 +105,12 @@ import { LAYOUT, MOVABLE, PANE, defaultAt as paneHome, layoutWord } from './game
 import { shakeAt } from './game/shake-table.js';
 // ★★★ v132 — **처음 켠 사람의 툴팁** (사장님 「도움말이 자동으로 나오도록」)
 import { ONBOARD, CARDS, keyOf, moreWord } from './game/onboard-table.js';
+// ★★★ v133 — **무기마다 제 통 · 어느 무기가 닿나** (사장님 「다른 무기들도
+//   일정 비율로」 · 「공격이 안되는 이유는?」)
+import { AMMO, gain as ammoGain, farmRoll, ammoWord, reachWord } from './game/ammo-table.js';
+// ★★★ v133 — **전진은 기본, 가속은 스태미나** (사장님 「엔진 과열이 되서
+//   속도가 느려진다는 컨셉으로」)
+import { DRIVE, makeDrive, stepDrive, driveWord } from './game/drive-table.js';
 // ★★★ v129 — **마우스를 쓰는 모드 다섯** (`docs` 대신 표가 안다).
 //   여기서 「점검이면 …, 배치면 …」을 다시 세지 않는다 — 세는 곳이 둘이 되면
 //   그때부터 갈라진다 (`tools/space-mode.js` 가 규칙만 따로 잰다)
@@ -352,7 +358,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 132;
+export const VERSION = 133;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -1204,6 +1210,14 @@ let hullSpin = 0;
 /** ★★★ 급가속 (v73) — R 을 누르고 있으면 튀어나간다 */
 const boost = makeBoost();
 /**
+ * ★★★ v133 — **가속 여력과 과열** (사장님 「가속화는 스테미나 방식으로 …
+ *   엔진 과열이 되서 속도가 느려진다는 컨셉으로」).
+ *   모양과 숫자는 `game/drive-table.js` 가 안다 — 여기는 **묻기만** 한다
+ */
+const drive = makeDrive();
+/** 이번 프레임의 최대 스로틀 (과열이 깎는다) — 계기와 검사가 읽는다 */
+let driveNow = { throttle: DRIVE.base, cap: 1, stam: 1, over: 0, boosting: false, heatAdd: 0 };
+/**
  * ★★ 탐색기 소리의 세기 — 0 없음 · 0.5 잡았다 · 1 물었다 (v69).
  *   전투 셈은 프레임 뒷쪽에서 돌고 소리는 앞쪽에서 갱신되므로 여기 둔다.
  *   한 프레임 늦는데, 60분의 1초라 귀로는 못 듣는다
@@ -1770,7 +1784,17 @@ function fireGun() {
     //   `aimed` 로 미리 재 버리면 락온 사격의 오차가 조준선 기준이 된다
     mountAt: (aim) => mountSummary(mount, aim),
   });
-  if (!r.ok) { say(ai, CBT_WHY[r.why] ?? '지금은 못 쏩니다', 'tell'); return; }
+  if (!r.ok) {
+    // ══ ★★★ v133 — **다음 손을 말한다** (사장님 「공격이 안되는 이유는?」) ══
+    //  ★ 138m 에서 레이저를 쏘시고 「너무 멉니다」를 보셨다. 맞는 말이지만
+    //    **어느 무기가 닿는지는 안 알려 줬다** — 사거리를 외우고 있어야만
+    //    알 수 있는 상태였다. 「안 된다」까지만 말하는 안내는 안내가 아니다
+    const d = (lockAimed ?? aimed)?.dist ?? null;
+    const tip = (r.why === 'far' || r.why === 'near') && d !== null
+      ? ` — ${reachWord(d, supply.ammo)}` : '';
+    say(ai, (CBT_WHY[r.why] ?? '지금은 못 쏩니다') + tip, 'tell');
+    return;
+  }
   const w = r.weapon;
   // ══ ★★★ **쏘는 소리** (v74 · 진공 규칙) ═══════════════════════════
   //  v73 까지 레이저가 `caught`(잡혔다)를, 미사일이 `latch`(걸렸다)를
@@ -4068,10 +4092,23 @@ function systemsStep(dt, valveOpen, regionMult) {
     if (rushSaid > 0) rushSaid -= dt;
     // ★ v115 — 「기관사」 특성이 급가속 추진제를 아낀다. `stepBoost` 가
     //   낸 값에 곱한다 — 표를 고치면 특성을 안 고른 사람 것까지 바뀐다
+    // ══ ★★★ v133 — **가속은 스태미나다** (사장님 「스테미나 방식으로」) ══
+    //  ★ 여태 급가속은 추진제만 먹었다. 추진제는 회차 단위로 천천히 주는
+    //    값이라 **지금 이 순간의 결심**이 안 된다 — 「지금 태울까」가 안 생긴다.
+    //  ★★ 여력은 **초 단위**로 준다: 가득이면 2.4초, 바닥에서 6.6초에 찬다
+    driveNow = stepDrive(drive, dt, {
+      want: thr.v, boost: wantRush && rushOk, heat01: heat / HEAT.max,
+    });
     const bev = stepBoost(boost, dt, {
-      on: wantRush && rushOk,
+      on: wantRush && rushOk && driveNow.boosting,
       fuel: supply.fuel,
     });
+    // ★ 급가속이 **열을 올린다** — 그 열이 위 `cap` 으로 돌아와 속도를 깎는다.
+    //   고리가 닫혀야 「몰던 방식이 다음 구간에 남는다」가 된다
+    heat = Math.min(HEAT.max, heat + driveNow.heatAdd * HEAT.max);
+    if (wantRush && rushOk && !driveNow.boosting && drive.stam <= 0.02) {
+      nag('여력이 바닥났습니다 — 잠시 식힙니다');
+    }
     supply.fuel = Math.max(0, supply.fuel - boost.fuel * grow.fuelMult);
     heat = Math.min(HEAT.max, heat + boost.heat);
     // ★★★ v87 — 급가속을 **밟는 순간** 눈이 뒤로 밀린다. 추력 켬(0.35배)
@@ -5281,6 +5318,21 @@ window.SPACE = {
       more: box ? box.querySelector('.more')?.textContent ?? '' : '',
     };
   },
+  /**
+   * ★★★ v133 — **전진·가속 여력·과열** (검사와 계기가 읽는다).
+   *   사장님 「앞으로 이동은 기본 베이스로 … 엔진 과열이 되서 속도가 느려진다」
+   */
+  get drive() {
+    return {
+      ...driveNow,
+      base: DRIVE.base,
+      throttle: +thr.v.toFixed(3),
+      heat01: +(heat / HEAT.max).toFixed(3),
+      word: driveWord(driveNow),
+    };
+  },
+  /** ★★★ v133 — **무기마다의 통** (사장님 「다른 무기들도 일정 비율로」) */
+  get ammo() { return { ...(supply.ammo ?? {}), word: ammoWord(supply.ammo) }; },
   /** ★★★ v127 — **창 배치** (검사와 점검 모드가 읽는다) */
   get layout() { return layoutSummary(layout); },
   /**
@@ -6633,8 +6685,11 @@ function frame(now) {
   //  ★ A/D(좌우)는 그대로 가지 안에 둔다 — 그건 **조종간이 하는 일**이라
   //    놓은 채로 먹으면 「놓았다」가 뜻을 잃는다
   if (helmSat) {
+    // ★★★ v133 — **과열이 최대 스로틀을 깎는다** (`drive-table.js capOf`).
+    //   얼마나 깎이는지는 표 하나가 안다 — 여기서 다시 재면 갈라진다
     stepThrottle(thr, dt, {
       up: input.keys.has('KeyW'), down: input.keys.has('KeyS'), dry: isDry(supply.fuel),
+      cap: driveNow.cap,
     });
     const rk = tapStep(thrustTap, input.keys.has('KeyR'), dt);
     if (rk.tap) setThrustKey(!power.thrust);

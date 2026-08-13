@@ -302,7 +302,13 @@ export function fire(c, {
   if (!MISSILES.infinite) {
     supply.ore = Math.max(0, (supply.ore ?? 0) - (w.cost.ore ?? 0));
     supply.parts = Math.max(0, (supply.parts ?? 0) - (w.cost.parts ?? 0));
-    supply.missiles = Math.max(0, (supply.missiles ?? 0) - (w.cost.missiles ?? 0));
+    // ★★★ v133 — **제 통에서 뺀다** (`ammo-table.js`). 옛 저장(통이 없는
+    //   경우)은 지금까지처럼 `missiles` 를 쓴다 — 이어한 사람이 안 막히게
+    if (supply.ammo && supply.ammo[w.key] !== undefined) {
+      supply.ammo[w.key] = Math.max(0, supply.ammo[w.key] - 1);
+    } else {
+      supply.missiles = Math.max(0, (supply.missiles ?? 0) - (w.cost.missiles ?? 0));
+    }
   }
   c.cool = w.reload;
   c.fired++;

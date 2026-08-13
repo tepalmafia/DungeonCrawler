@@ -18,6 +18,8 @@ import {
   makeThrottle, stepThrottle, legOf, fuelMult, backHeat, awayOf, summary,
 } from '../web/space/js/game/throttle.js';
 import { LEG } from '../web/space/js/game/route-table.js';
+// ★ v133 — 기본 순항값 (사장님 「앞으로 이동은 기본 베이스로」)
+import { DRIVE } from '../web/space/js/game/drive-table.js';
 import { FUEL } from '../web/space/js/game/fuel-table.js';
 import { TARGET, KINDS } from '../web/space/js/game/target-table.js';
 
@@ -34,10 +36,17 @@ console.log(`   범위 ${THROTTLE.min} ~ ${THROTTLE.max} · ${THROTTLE.rate}/초
 
 head('[1] ★★ **축인가** — 켜기/끄기가 아니라 「얼마나」가 있나');
 {
+  // ★★★ v133 — **시작이 0 이 아니라 순항(`DRIVE.base`)이다** (사장님
+  //   「앞으로 이동은 기본 베이스로」). 그래서 「가만히 두고 0.4초 밀면
+  //   얼마인가」로 재던 이 절이 빨개졌다 — **게임이 아니라 재는 자가
+  //   낡은 것**이었다. 묻는 것은 「중간값이 있나」이므로 **0 에서** 민다
   const t = makeThrottle();
+  ok(Math.abs(t.v - DRIVE.base) < 1e-9,
+    `★★★ **아무것도 안 하면 ${t.v} 로 간다** — 0 이면 매 회차가 시동으로 시작한다`);
+  t.v = 0;
   hold(t, 0.4, { up: true });
   const half = t.v;
-  ok(half > 0.2 && half < 0.6, `★ 0.4초 밀면 ${half.toFixed(2)} — **중간값이 있다** (두 자리뿐이면 고를 것이 없다)`);
+  ok(half > 0.2 && half < 0.6, `★ 0 에서 0.4초 밀면 ${half.toFixed(2)} — **중간값이 있다** (두 자리뿐이면 고를 것이 없다)`);
   hold(t, 2, { up: true });
   ok(Math.abs(t.v - THROTTLE.max) < 1e-6, `★ 계속 밀면 전속 (${t.v.toFixed(2)}) · 「${throttleWord(t.v)}」`);
   hold(t, 3, { down: true });
