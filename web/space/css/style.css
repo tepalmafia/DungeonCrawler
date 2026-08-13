@@ -625,3 +625,16 @@ body.flying #view { cursor: none; }
     linear-gradient(var(--pick, #9fe8c4) 0 0) 100% 100% / 26% 2px no-repeat,
     linear-gradient(var(--pick, #9fe8c4) 0 0) 100% 100% / 2px 26% no-repeat;
 }
+
+/* ══ ★★★ v142 — **가려진 표적은 점선** (`docs/space/COVER.md §6`) ═══════
+   ★ 사장님 「락온 했는데 앞에 장애물이 있으면 어떻게 되지?」
+   ★★ 상자를 지우면 「놓쳤나」로 읽히고, 그대로 두면 **가려진 줄을 모른다.**
+     점선은 「거기 있는 건 아는데 안 보인다」를 한 눈에 말한다 —
+     실제 전술 화면이 추정 접촉(estimated track)을 쓰는 방식이기도 하다
+   ★ 색은 안 바꾼다 — 색까지 바꾸면 「적이 아니게 됐나」로 읽힌다 */
+#pick.cov .box {
+  border-style: dashed;
+  box-shadow: none;
+  opacity: .72;
+}
+#pick.cov .tag { color: #ffd8a8; }

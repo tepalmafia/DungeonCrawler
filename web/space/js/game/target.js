@@ -15,6 +15,8 @@ import {
 // ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
 //   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
 import { wrap, relOf } from './frame.js';
+// ★★★ v142 — **가림.** 여기서 각을 다시 안 잰다 — 묻기만 한다 (`COVER.md §4`)
+import { coverOf, isHidden, hideBehind, HIDE } from './cover-table.js';
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **회피가 누적에서 「한 번의 판정」이 됐다** (`dodge-table.js`).
 //
@@ -119,7 +121,7 @@ export function spawnRaider(sky) {
  *   ★ `standoff` 가 없는 것은 예전 그대로다: **자폭정**(몸이 탄이라
  *     끝까지 들어온다)과 **호송선**(`closes` 가 음수라 멀어진다)
  */
-function stepEngage(t, k, dt, rnd) {
+function stepEngage(t, k, dt, rnd, list = []) {
   const so = k.standoff;
   // ══ ★★★ v86 — **엔진이 깨지면 못 움직인다** ═══════════════════════
   //  ★ 사장님 「엔진을 정확히 타격하거나 핵심 시설을 타격해야 그나마
@@ -140,6 +142,21 @@ function stepEngage(t, k, dt, rnd) {
     if (!t.fleeing) { t.fleeing = true; t.fleeT = 0; t.runs = (t.runs ?? 0) + 1; }
     t.fleeT = (t.fleeT ?? 0) + dt;
     t.dist += Math.abs(k.closes ?? 6) * ENGAGE.breakMult * dt;
+    // ══ ★★★ v142 — **숨을 곳이 있으면 그리로 뺀다** (`COVER.md §4`) ══
+    //
+    //  ★ 가림이 **나만 쓰는 것**이면 규칙이 아니라 편의다. 여기가 그 자리다 —
+    //    맷집이 깎인 적이 표류선 뒤로 붙으면, v138 의 「도망갔다 돌아온다」가
+    //    **갈 곳**을 갖는다. 그냥 멀어지는 것과 저기로 숨는 것은 다른 일이다.
+    //  ★★ 그러면 사람이 할 일이 셋으로 는다: **돌아 들어가거나**(v137
+    //    어스펙트) · **유도탄을 쓰거나**(§2) · **기다리거나**
+    const hide = hideBehind(t, list);
+    if (hide) {
+      const step = HIDE.turn * dt;
+      const dAz = wrap(hide.az - t.az);
+      t.az = wrap(t.az + Math.max(-step, Math.min(step, dAz)));
+      const dEl = (hide.el ?? 0) - (t.el ?? 0);
+      t.el += Math.max(-step, Math.min(step, dEl));
+    }
     // ★★ **숨을 고르고 되돌아선다.** 보급함 같은 것들은 안 돌아온다 —
     //   싣고 다니는 것들이라 **쫓아가 잡는 것이 상**이기 때문이다
     if (comesBack(t.kind) && t.fleeT >= FLEE.back && (t.runs ?? 1) <= FLEE.rounds) {
@@ -330,7 +347,7 @@ export function stepSky(sky, dt, {
     //  ★ v83 까지 `t.dist -= k.closes * dt` 한 줄이었다 — 즉 **다섯 중
     //    넷이 선체에 닿을 때까지 곧장 들어왔다.** 「지금 붙을까 뺄까」를
     //    물으려면 저쪽도 거리를 골라야 한다
-    if (k?.closes) stepEngage(t, k, dt, sky.rnd);
+    if (k?.closes) stepEngage(t, k, dt, sky.rnd, sky.list);
     if (t.flash > 0) t.flash = Math.max(0, t.flash - dt);
     if (t.bump > 0) t.bump = Math.max(0, t.bump - dt);
 
@@ -372,6 +389,15 @@ export function stepSky(sky, dt, {
     // 우리를 겨누고 있나 — 적은 기수를 우리 쪽으로 돌려야 쏜다
     const onUs = Math.abs(azDiff(t.az, sky.noseAz ?? 0)) <= ENEMY_FIRE.aimCone;
     if (!onUs) { t.aim = 0; continue; }
+    // ══ ★★★ v142 — **가려져 있으면 저쪽도 못 쏜다** (`cover-table.js`) ══
+    //
+    //  ★ 가림이 **나만 쓰는 것**이면 그건 규칙이 아니라 편의다. 내가 표류선
+    //    뒤의 적을 못 쏘는 동안 저쪽은 나를 쏜다면, 숨은 적은 그냥 **공짜로
+    //    이기는** 자리가 된다.
+    //  ★★ 그래서 같은 자로 잰다 — `coverOf` 에게 **묻기만** 한다.
+    //    겨눔(`t.aim`)은 안 지운다: 가림막을 지나 다시 나오는 순간 첫 발이
+    //    나가야 「엄폐물 뒤에서 나오며 쏜다」가 된다
+    if (isHidden(coverOf(t, sky.list))) continue;
     // ★★★ **달려오면서 겨눈다** (v70 에 고쳤다).
     //
     //   처음엔 「사거리에 들어와야 겨누기 시작」이었다. 그랬더니 **빠르고
