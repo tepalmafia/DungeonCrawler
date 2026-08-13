@@ -437,10 +437,17 @@ export function whyNotFire(s = {}) {
   //   그러면 「고치는 것」과 「쏘는 것」이 한 주머니라 벌이 하나뿐이었다 —
   //   미사일을 아끼는 이유와 수리를 아끼는 이유가 같은 것이 되어 버린다
   // ★ v84 — 시험 동안은 **재고로 안 막는다** (`MISSILES.infinite`)
+  // ══ ★★★ v133 — **무기마다 제 통** (사장님 「다른 무기들도 일정 비율로」) ══
+  //  ★ v132 까지 열추적탄과 유도탄이 `sup.missiles` 한 통을 나눠 썼다.
+  //    그러면 무기가 셋이 아니라 **둘**이고, 「가까운 것을 쏠까 먼 것을
+  //    쏠까」가 「지금 뭘 쏘든 같은 통이 준다」가 된다.
+  //  ★★ 재고는 이제 `sup.ammo` 가 무기 이름으로 들고 있다 (`ammo-table.js`).
+  //    ★ 옛 저장을 위해 `sup.ammo` 가 없으면 **막지 않는다** — 저장을
+  //      이어한 사람이 갑자기 못 쏘게 되면 그건 고침이 아니라 사고다
+  if (sup.ammo && (sup.ammo[w.key] ?? Infinity) <= 0) return 'ammo';
   if (!MISSILES.infinite
     && ((w.cost.ore ?? 0) > (sup.ore ?? 0)
-      || (w.cost.parts ?? 0) > (sup.parts ?? 0)
-      || (w.cost.missiles ?? 0) > (sup.missiles ?? 0))) return 'ammo';
+      || (w.cost.parts ?? 0) > (sup.parts ?? 0))) return 'ammo';
   if ((s.cool ?? 0) > 0) return 'reload';
   if (!s.target) return 'none';
   if (w.needLock && !s.radar) return 'radar';
