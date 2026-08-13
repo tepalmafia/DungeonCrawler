@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=131">
+<link rel="stylesheet" href="css/style.css?v=132">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -61,6 +61,15 @@
      배너(위·주황)는 *일어난 일*, 가르침(아래·청록)은 *아직 안 한 일*.
      시간으로 안 사라지고 **하면** 사라진다 (docs/space/TUTORIAL.md §3-A) -->
 <div id="lesson" hidden></div>
+
+<!-- ★★★ v132 — **처음 켠 사람의 첫 3초** (사장님 「처음 시작시 툴팁 같은걸로
+     사용자가 이해할 수 있도록 도움말이 자동으로 나오도록」).
+     ★ 무엇이 적히는지는 `game/onboard-table.js` 가 안다 — **키를 여기 안 적는다.**
+       박아 두면 표를 고치는 날 조용히 거짓말이 된다 (v110·v82·v131 이 그랬다) -->
+<div id="onboard" data-ui hidden>
+  <div class="cards"></div>
+  <div class="more"></div>
+</div>
 
 <!-- ★ 여기가 **여덟 문단**이었다.
      기능이 늘 때마다 한 줄씩 붙여서 설명서가 됐고, 시작 화면의 설명서는
@@ -317,6 +326,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=131"></script>
+<script type="module" src="js/main.js?v=132"></script>
 </body>
 </html>

@@ -103,6 +103,8 @@ import { LAYOUT, MOVABLE, PANE, defaultAt as paneHome, layoutWord } from './game
 // ★★★ v131 — **배가 떠는 모양** (사장님 「빠르게 떨리는데 … 눈 아프다」).
 //   빠르기·폭·겹은 표가 안다 — `tools/space-shake.js` 가 화소로 잰다
 import { shakeAt } from './game/shake-table.js';
+// ★★★ v132 — **처음 켠 사람의 툴팁** (사장님 「도움말이 자동으로 나오도록」)
+import { ONBOARD, CARDS, keyOf, moreWord } from './game/onboard-table.js';
 // ★★★ v129 — **마우스를 쓰는 모드 다섯** (`docs` 대신 표가 안다).
 //   여기서 「점검이면 …, 배치면 …」을 다시 세지 않는다 — 세는 곳이 둘이 되면
 //   그때부터 갈라진다 (`tools/space-mode.js` 가 규칙만 따로 잰다)
@@ -350,7 +352,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 131;
+export const VERSION = 132;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -833,6 +835,10 @@ addEventListener('keydown', (e) => {
   //  ★ 사장님 「**상태창 광학창 레이더 등 모든 창들을 마우스로 위치를
   //    자유자재로 옮길 수 있게** 해줘」
   //  ★★ 위 v103 의 셈에서 **U 가 비어 있었다** — 그 자리를 쓴다
+  // ★★★ v132 — **아무 키나 누르면 툴팁이 접힌다** (`ONBOARD.anyKeyCloses`).
+  //   「들어가는 길만 있고 나오는 길이 없으면 갇힌다」 — 다만 **막지는
+  //   않는다**: 접기만 하고 그 키가 하려던 일은 그대로 흘려보낸다
+  if (onboardT >= 0 && ONBOARD.anyKeyCloses) showOnboard(false);
   // ══ ★★★ v131 — **Enter — 지금 가리키는 갈래로 간다** ═══════════════
   //
   //  ★ 사장님 (2026-08-13) 「**성운을 지난다. 뭘 어떻게 고르라는거야?
@@ -1408,6 +1414,47 @@ function drawLegend() {
 }
 /** 시작하고 얼마나 지났나 — 글이 빠지는 시계 */
 let legT = 0;
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v132 — **처음 켠 사람의 첫 3초** (툴팁)
+//
+//  ★ 사장님 (2026-08-13) 「**처음 시작시 툴팁 같은걸로 사용자가 이해할 수
+//    있도록 도움말이 자동으로 나오도록 해야겠어.**」
+//
+//  ★★ 가르침(`tutor-table.js`)은 **때맞춰 하나씩** 「무엇을 할까」를 말한다.
+//    이것은 그 앞이다 — **손이 어디에 있나.** F1 이 있다는 것조차 아무 데도
+//    안 적혀 있었다.
+//  ★★★ **키를 여기서 안 적는다.** 무엇이 적히는지는 `onboard-table.js` 가
+//    알고, 그 표는 `keys-table` · `route-table` 에서 읽어 온다 — 그래야
+//    키를 옮기는 날 툴팁이 **저절로** 따라온다 (v110·v82·v131 이 안 따라왔다)
+// ══════════════════════════════════════════════════════════════════════════
+let onboardT = -1;             // 음수면 안 뜬다
+function showOnboard(on) {
+  const box = document.getElementById('onboard');
+  if (!box) return;
+  onboardT = on ? 0 : -1;
+  box.hidden = !on;
+  if (!on) return;
+  box.querySelector('.cards').innerHTML = CARDS.map((c) => (
+    `<div class="card"><span class="k">${keyOf(c)}</span>`
+    + `<span class="t">${c.line}<span class="s">${c.tip}</span></span></div>`
+  )).join('');
+  box.querySelector('.more').textContent = moreWord();
+}
+/** 한 프레임 — 한 장씩 스르륵 들여보내고, 다 지나면 접는다 */
+function stepOnboard(dt) {
+  if (onboardT < 0) return;
+  const box = document.getElementById('onboard');
+  if (!box) return;
+  onboardT += dt;
+  const cards = box.querySelectorAll('.card');
+  // ★ **한 장씩** — 넉 장이 한꺼번에 뜨면 그건 툴팁이 아니라 설명서다
+  const shown = Math.min(cards.length, Math.floor(onboardT / 1.1) + 1);
+  cards.forEach((el, i) => el.classList.toggle('on', i < shown));
+  box.querySelector('.more').classList.toggle('on', shown >= cards.length);
+  // ★★ 다 보여 준 뒤 `hold` 만큼 더 두고 접는다
+  if (onboardT > cards.length * 1.1 + ONBOARD.hold) showOnboard(false);
+}
 
 let bayOpen = false;
 /**
@@ -5219,6 +5266,21 @@ window.SPACE = {
    *   늘 참이 되는 것을 한 번 겪어서, 표를 읽는 구멍을 따로 냈다
    */
   get pilotRules() { return { ...PILOT }; },
+  /**
+   * ★★★ v132 — **처음 켠 사람의 툴팁** (검사가 읽는다).
+   *   ★ 헤드리스는 `dt` 가 0.05 로 잘려 **1초에 게임 시계가 0.05초**만 간다.
+   *     그래서 「몇 초 기다렸다」로 재면 못 잡는다 — **게임 시계**를 준다
+   */
+  get onboard() {
+    const box = document.getElementById('onboard');
+    return {
+      open: onboardT >= 0,
+      t: +Math.max(0, onboardT).toFixed(2),
+      cards: box ? box.querySelectorAll('.card').length : 0,
+      shown: box ? box.querySelectorAll('.card.on').length : 0,
+      more: box ? box.querySelector('.more')?.textContent ?? '' : '',
+    };
+  },
   /** ★★★ v127 — **창 배치** (검사와 점검 모드가 읽는다) */
   get layout() { return layoutSummary(layout); },
   /**
@@ -6365,8 +6427,14 @@ window.SPACE = {
 // ★ **켜자마자 한 번.** 물어보지 않고 그냥 잇는다 — 칸이 하나뿐이라
 //   (`SAVE.slots === 1`) 고를 것이 없고, 「새로 시작할까요」를 물으면
 //   사람은 매번 그 물음을 지나야 한다. 대신 **이었다고 말해 준다.**
+/**
+ * ★★★ v132 — **이어한 사람인가** — 툴팁이 이것으로 갈린다.
+ *   켤 때마다 뜨면 도움말이 아니라 잔소리다 (`ONBOARD.newGameOnly`)
+ */
+let cameBack = false;
 {
   const back = loadOnce();
+  cameBack = !!back;
   if (back) {
     say(ai, `이어합니다 — ${back.text}`, 'tell');
     console.log(`[저장] 이어합니다 — ${back.text}`);
@@ -7030,6 +7098,7 @@ function frame(now) {
   //    **쫓기는 중에는 못 한다**
   // ★★★ v108 — **90초 뒤에는 도형만 남는다**
   legT += dt;
+  stepOnboard(dt);          // ★ v132 — 툴팁이 한 장씩 들어오고 저절로 접힌다
   {
     const lb = document.getElementById('legend');
     // ★★ v128 — 배치 중에는 **글을 도로 보여 준다.** 도형만 남은 딱지는
@@ -8158,6 +8227,9 @@ document.addEventListener('pointerlockchange', () => {
     drawLegend();          // ★ v108 — 시작하면 범례가 뜬다
     sitAtHelm();           // ★★★ v110 — **조종간을 잡은 채로 시작한다**
     renderer.domElement.requestPointerLock?.();
+    // ★★★ v132 — **처음 켠 사람에게만** 툴팁을 띄운다 (사장님 「도움말이
+    //   자동으로 나오도록」). 이어한 사람은 이미 안다
+    if (!ONBOARD.newGameOnly || !cameBack) showOnboard(true);
   });
   for (const id of ['btn-new', 'btn-new2']) wire(id, () => { if (ask()) SPACE.newGame(); });
   wire('btn-new3', () => SPACE.newGame());
