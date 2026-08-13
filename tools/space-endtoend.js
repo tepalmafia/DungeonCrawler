@@ -1648,6 +1648,74 @@ console.log('\n[6v] ★★★ **전진 기본 · 가속 스태미나 · 무기 �
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6w] **회피** — 경고 · 방향 · 창 (v135)
+//
+//  ★ 사장님 (2026-08-13) 「적이 미사일을 발사하고 내 화면에 **경고창**이
+//    뜨면서 **특정 방향으로 틀라는 네비게이션**이 나오고 **그거대로 누르면
+//    완벽 회피** … **늦거나 못 누르면 피해도가 커지도록**」
+//
+//  ★★ 뼈대(`space-dodge.js`)는 「규칙이 맞나」를 잰다. **화면이 정말 그
+//    지시를 띄우나 · 진짜 키가 먹나**는 여기서만 나온다 — v134 까지
+//    화면은 「좌현으로」라고 말하고 판정은 부호를 버리고 있었는데,
+//    **뼈대 검사는 그때도 다 초록이었다** (한쪽만 읽으면 못 묻는다)
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6w] ★★★ **회피** — 경고 · 방향 · 창 (v135)');
+{
+  await S(() => { SPACE.putHelmSit(true); SPACE.clearSky(); SPACE.putTarget('raider'); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+
+  // ── ① 쏘면 **화면에 뜨나** ─────────────────────────────
+  //   ★ 오른쪽에서 오게 둔다 — 그러면 지시는 「좌현(A)」이라야 한다
+  const shot = await S(() => SPACE.putShotAtMe(0.9, { daz: 40, del: 0 }));
+  await p.waitForTimeout(500);
+  const d0 = await S(() => SPACE.dodge);
+  console.log(`   오른쪽에서 왔다 — 지시 「${d0.say}」 (${shot.way})`);
+  ok(d0.shown, '① ★★ **경고가 화면에 뜬다** — 계기가 조용하면 그건 계통이 아니라 숫자다');
+  ok(shot.way === 'left',
+    `② ★★★ **오는 쪽의 반대를 시킨다** (${shot.way}) — 오른쪽에서 오는데 우현으로`
+    + ' 가라고 하면 그건 안내가 아니라 함정이다');
+  ok(/A/.test(d0.say),
+    `③ ★★★ **누를 키를 말한다** — 「${d0.say}」. v134 까지는 「좌현으로 빼십시오」였고`
+    + ' **무엇을 누르라는 말이 없었다** (v131 「뭘 어떻게 고르라는거야?」와 같은 병)');
+
+  // ── ④ ★★★ **틀린 키를 진짜로 눌러 본다** ────────────────
+  //   ★ 여기가 v134 까지 갈라져 있던 자리다. 화면은 「좌현」인데 D 를
+  //     눌러도 점수가 같았다 (`Math.abs` 가 부호를 버렸다)
+  await p.keyboard.press('KeyD');
+  await until(() => SPACE.dodge.shot?.band !== null, 30, '판정이 나기');
+  const wrong = await S(() => SPACE.dodge);
+  console.log(`   D 를 눌렀다 — ${wrong.shot?.band} · 피해 ×${wrong.shot?.hurt}`);
+  ok(wrong.shot?.band === 'wrong' && (wrong.shot?.hurt ?? 0) > 0,
+    '④ ★★★ **반대로 꺾으면 안 피해진다** — 뼈대만 보면 이 절은 v134 에도 초록이었다.'
+    + ' 게임이 그 규칙을 정말 쓰는지는 **진짜 키로 눌러야** 나온다');
+
+  // ── ⑤ ★★★ **맞는 키를 창 안에 누르면 완벽인가** ──────────
+  await S(() => { SPACE.clearSky(); SPACE.putTarget('raider'); });
+  const shot2 = await S(() => SPACE.putShotAtMe(0.4, { daz: -40, del: 0 }));
+  await p.waitForTimeout(300);
+  const say2 = (await S(() => SPACE.dodge)).say;
+  console.log(`   왼쪽에서 왔다 — 지시 「${say2}」 (${shot2.way})`);
+  ok(shot2.way === 'right', '⑤ ★★ 이번엔 우현(D)을 시킨다 — 지시가 **고정된 하나**가 아니다');
+  await p.keyboard.press('KeyD');
+  await until(() => SPACE.dodge.shot?.band !== null, 30, '판정이 나기');
+  const good = await S(() => SPACE.dodge);
+  console.log(`   D 를 눌렀다 — ${good.shot?.band} · 피해 ×${good.shot?.hurt}`);
+  ok(good.shot?.band === 'perfect' && good.shot?.hurt === 0,
+    '⑥ ★★★ **시킨 대로 누르니 피해가 0 이다** — 사장님 「그거대로 누르면 완벽 회피」.'
+    + ' v134 까지는 급기동(추진제)을 안 태우면 **원천적으로 못 피했다**');
+
+  // ── ⑦ ★★ **안 누르면 더 아픈가** ─────────────────────────
+  await S(() => { SPACE.clearSky(); SPACE.putTarget('raider'); });
+  await S(() => SPACE.putShotAtMe(0.9, { daz: 40, del: 0 }));
+  await until(() => (SPACE.sky.incoming?.length ?? 0) === 0, 60, '탄이 닿기');
+  const took = await S(() => SPACE.sky.tookHits);
+  ok(took > 0,
+    `⑦ ★★★ **아무것도 안 하면 맞는다** (맞은 횟수 ${took}) — 「피할 시간을 줬다」가`
+    + ' 아무 일도 안 하는 시간이면 그건 회피가 아니다');
+  await S(() => SPACE.clearSky());
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 //  ★★★ [6o] **파밍** — 부수면 파츠가 나오나 · 앉은 채로 다나 (v110)
 //
 //  ★ 사장님 「파밍은 **더 강한 무기, 더 강한 파츠, 더 강한 장갑, 보급품,
