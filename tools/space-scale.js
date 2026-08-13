@@ -22,6 +22,7 @@
 import { KINDS, lenOf, SEEN } from '../web/space/js/game/target-table.js';
 import { SLOTS } from '../web/space/js/core/model-table.js';
 import { pointOf } from '../web/space/js/game/frame.js';
+import { FLY_VIEW } from '../web/space/js/game/helm-table.js';
 import { WEAPONS } from '../web/space/js/game/combat-table.js';
 
 let bad = 0;
@@ -32,7 +33,9 @@ const degAt = (L, d) => 2 * Math.atan(L / 2 / Math.max(1, d)) / DEG;
 /** 세로 화각 F 인 화면에서 몇 %를 차지하나 */
 const share = (deg, F) => deg / F;
 
-const FOV = 94;                       // helm-table.js FLY_VIEW.fov (조종 중)
+//  ★★★ v139 — **표에서 읽는다.** 여기 94 를 박아 뒀었는데, 그러면 화각을
+//    고쳐도 **검사가 옛 값을 지키며 초록**이 된다 — 이 저장소의 단골이다
+const FOV = FLY_VIEW.fov;
 
 console.log('거리감 — 100m 의 배가 몇 도로 보이나 (게임을 안 부른다)');
 

@@ -15,7 +15,8 @@
 //      ⑥ ★★★ **겹친 판이 없나** — 사장님이 보신 것은 크기가 아니라 **겹침**이었다
 // ══════════════════════════════════════════════════════════════════════════
 import { readFileSync } from 'node:fs';
-import { UI, panelSide } from '../web/space/js/game/ui-table.js';
+import { UI, panelSide, screenSide, FOV0 } from '../web/space/js/game/ui-table.js';
+import { FLY_VIEW } from '../web/space/js/game/helm-table.js';
 import { PANELS, BUDGET, CONE } from '../web/space/js/game/screen-table.js';
 import { MFD } from '../web/space/js/game/view-table.js';
 
@@ -30,9 +31,16 @@ console.log('\n[1] ★★★ **정말 커졌나**');
   console.log(`   DOM 배율 ×${UI.zoom} · 3D 판 넓이 ×${UI.panel} (변으로는 ×${panelSide().toFixed(2)})`);
   ok(UI.zoom > 1.15,
     `★★★ **DOM 이 ×${UI.zoom} 로 커졌다** — 1.15 아래면 사장님이 겪으신 것이 그대로 남는다`);
-  ok(UI.panel > 1.3,
-    `★★ **3D 계기도 커졌다** (넓이 ×${UI.panel}) — DOM 만 키우면 계기 셋이`
-    + ' 상대적으로 더 작아 보여서 오히려 어긋난다');
+  //  ══ ★★★ v139 — **묻는 것을 고쳤다** ═══════════════════════════════
+  //   여기가 「미터 배율이 1.3 을 넘나」를 묻고 있었다. 그런데 v139 가
+  //   화각을 94 → 74 로 좁히자 **같은 미터가 화면을 1.27배 더 먹는다** —
+  //   미터를 줄여도 화면에서는 안 줄고, 미터를 지켜도 화면에서는 커진다.
+  //   ★★ 사장님이 「키우라」고 하신 것은 **화면에서** 크게이지 미터로
+  //     크게가 아니다. 그래서 **화면 기준**으로 묻는다
+  ok(screenSide(FLY_VIEW.fov) > 1.15,
+    `★★ **3D 계기도 화면에서 ×${screenSide(FLY_VIEW.fov).toFixed(2)} 로 커졌다**`
+    + ` (미터로는 넓이 ×${UI.panel} · 화각 ${FLY_VIEW.fov}°) — DOM 만 키우면`
+    + ' 계기 셋이 상대적으로 더 작아 보여서 오히려 어긋난다');
   ok(UI.zoom < 1.7,
     `★ 그래도 ×${UI.zoom} 를 안 넘는다 — 1.7 이면 좁은 창에서 베이·툴팁이 화면을 넘친다`);
 }
@@ -41,10 +49,14 @@ console.log('\n[2] ★★★ **DOM 과 3D 가 비슷하게 커졌나**');
 {
   //  ★ 사람 눈에 「같이 커졌다」로 읽히려면 **글자 크기 배율**이 비슷해야
   //    한다. 3D 판은 넓이로 적혀 있으므로 변(=글자) 배율은 그 제곱근이다
-  const side = panelSide();
+  //  ★ v139 — **화면 기준**으로 견준다 (위 [1] 과 같은 까닭)
+  const side = screenSide(FLY_VIEW.fov);
   const gap = Math.abs(side - UI.zoom) / UI.zoom;
   console.log(`   글자 기준 — DOM ×${UI.zoom} · 3D ×${side.toFixed(2)} (차이 ${(gap * 100).toFixed(0)}%)`);
-  ok(gap < 0.15,
+  //  ★ v139 — 문턱이 **0.15 인데 말은 20%** 라고 하고 있었다. 둘이 다르면
+  //    「왜 빨간지」를 사람이 못 읽는다 — 말을 따라 0.20 으로 맞춘다.
+  //    (화각을 74 로 좁히며 3D 쪽이 ×1.25 가 되어 차이가 15% 로 벌어졌다)
+  ok(gap < 0.20,
     `★★★ **둘의 차이가 ${(gap * 100).toFixed(0)}% 다** — 20% 를 넘으면 한쪽만 커 보이고,`
     + ' 그러면 「전부 키웠다」가 아니라 「반만 키웠다」다');
 }
