@@ -12,13 +12,13 @@
 //      ③ ★★ **수동에 길이 생기나** — 향하면 가고 딴 데 보면 느려지나
 //      ④ ★★★ **장르를 안 바꾸나** — 자동이면 지금과 똑같은가
 //      ⑤ ★ 싸우다 잠깐 도는 것으로 항로가 멎지는 않나
-//      ⑦ ★★★ **길이 보이나** (v121) — 문이 늘어서고 · 흐르고 · 희미한가
+//      ⑦ ★★★ **길이 보이나** (v130) — 굵은 한 줄이 뻗고 · 복판을 비우고 · 흐르나
 //      ⑨ ★★★ **거점에서도 나오나** (v128) — 고르기 전에도 길이 보이나
 // ══════════════════════════════════════════════════════════════════════════
 import {
   NAV, courseMult, navWord, navState, wrapDeg,
   // ★★★ v121 — **항로 문** (사장님 「항로가 목적지까지 희미하게 표시」)
-  HITS, gatesOf,
+  ROAD, roadOf,
   // ★★★ v126 — **어느 쪽으로 틀어야 하나** (사장님 「우주라서 방향을 못 찾잖아」)
   NAVHUD, navArrow, steerWord,
 } from '../web/space/js/game/nav-table.js';
@@ -170,92 +170,103 @@ console.log('\n[6] ★★★ **미션을 고르면 갈아 끼워지고, 끝나�
     '★ 둘이 겹치면 **지금 하고 있는 일**이 이긴다 (구조 > 착륙)');
 }
 
-console.log('\n[7] ★★★ **길이 보이나** — 항로 문 (v121 · 사장님 「항로가 목적지까지 희미하게 표시」)');
+console.log('\n[7] ★★★ **길이 보이나** — 굵은 한 줄 (v130 · 사장님 「희미한 굵은 한 줄로 표시해」)');
 {
-  // ══ ★ 먼저 **왜 선이 아닌지**를 검산한다 ═══════════════════════════
+  // ══ ★ 먼저 **왜 그냥 선이면 안 되는지**를 검산한다 ═══════════════════
   //   배에서 목적지로 잇는 선은 눈과 한 줄로 서 있다. 그 위의 자리는
-  //   거리가 달라도 **각이 같다** — 즉 화면에서 한 점이다. 그리기 전에
-  //   계산으로 알 수 있는 것이므로 검사가 먼저 말하게 둔다
+  //   거리가 달라도 **각이 같다** — 즉 화면에서 한 점이다. v121 이
+  //   고리를 고른 까닭이고, 그 셈은 지금도 맞다. **답은 눕히는 것이다**
   const to = { kind: 'fork', key: 'x', name: '성운', az: 20, el: -6, dist: null };
   const eye = { yaw: 20, pitch: -6 };          // 항로 위 — 기수가 목적지를 본다
-  const line = [40, 120, 260, 500].map((d) => relOf({ az: to.az, el: to.el, dist: d }, eye));
-  const spread = Math.max(...line.map((r) => r.off)) - Math.min(...line.map((r) => r.off));
-  console.log(`   곧은 선 위의 네 자리(40·120·260·500m)가 화면에서 벌어진 각 = **${spread.toFixed(3)}도**`);
+  const naive = [40, 120, 260, 500].map((d) => relOf({ az: to.az, el: to.el, dist: d }, eye));
+  const spread = Math.max(...naive.map((r) => r.off)) - Math.min(...naive.map((r) => r.off));
+  console.log(`   축 위에 그냥 그은 선 — 네 자리(40·120·260·500m)가 화면에서 벌어진 각 = **${spread.toFixed(3)}도**`);
   ok(spread < 0.01,
-    '★★★ **곧은 선은 화면에서 점이 된다** — 「목적지까지 선을 긋는다」를'
-    + ' 곧이곧대로 하면 아무것도 안 보인다. 그래서 굵기 있는 문을 늘어놓는다');
+    '★★★ **축 위의 곧은 선은 화면에서 점이 된다** — 「목적지까지 선을 긋는다」를'
+    + ' 곧이곧대로 하면 아무것도 안 보인다. 그리기 전에 셈으로 알 수 있는 것이다');
 
-  // ══ ① 늘어서나 · 원근이 있나 ══════════════════════════════════════
-  const g0 = gatesOf(to, 0, 0);
-  console.log(`\n   문 ${g0.length} 개 —`);
-  console.log('     거리(m)   각지름(도)   진하기');
-  for (const g of g0) {
-    console.log(`     ${String(Math.round(g.dist)).padStart(6)}   ${String(g.deg).padStart(8)}`
-      + `   ${String(g.alpha).padStart(6)}`);
+  // ══ ① 눕혔더니 정말 뻗나 ══════════════════════════════════════════
+  const r0 = roadOf(to, 0, 0);
+  console.log(`\n   마디 ${r0.length} 개 —`);
+  console.log('     거리(m)   축 아래(도)   굵기(도)   진하기');
+  for (const g of r0) {
+    console.log(`     ${String(Math.round(g.dist)).padStart(6)}   ${String(g.below).padStart(9)}`
+      + `   ${String(g.deg).padStart(7)}   ${String(g.alpha).padStart(6)}`);
   }
-  ok(g0.length === HITS.gates, `★ 문이 ${HITS.gates} 개다 — 늘리면 길이 아니라 벽이 된다`);
-  ok(g0[0].deg > g0[g0.length - 1].deg * 2,
-    `★★★ **가까운 문이 훨씬 크다** (${g0[0].deg}도 vs ${g0[g0.length - 1].deg}도) —`
-    + ' 이 벌어짐이 곧 「길」이다. 화면 크기로 못박으면 원근이 사라지고 겹친 원 다섯이 된다');
-  ok(g0.every((g, i) => i === 0 || g.dist > g0[i - 1].dist),
-    '★ 가까운 것부터 나온다 (그리는 쪽이 다시 정렬할 일이 없다)');
-  ok(g0.every((g, i) => i === 0 || g.alpha <= g0[i - 1].alpha + 1e-9),
-    '★★ **멀수록 삭는다** — 다 같은 진하기면 어느 것이 가까운지 색이 안 말한다');
+  const seen = r0.map((g) => relOf(g, eye).off);
+  const run = Math.max(...seen) - Math.min(...seen);
+  console.log(`\n   눕힌 선이 화면에서 뻗은 각 = **${run.toFixed(2)}도** (축 위 선은 ${spread.toFixed(3)}도였다)`);
+  ok(run > 10,
+    `★★★ **눕히니 한 줄로 뻗는다** (${run.toFixed(1)}도) — 가까운 끝은 발밑에, 먼 끝은`
+    + ' 목적지에 붙는다. 길이 눈높이가 아니라 발밑에 있는 것과 같은 까닭이다');
+  ok(r0[0].below > r0[r0.length - 1].below * 5,
+    `★★ **가까울수록 많이 내려간다** (${r0[0].below}도 vs ${r0[r0.length - 1].below}도) —`
+    + ' 이 벌어짐이 곧 원근이고, 없으면 그냥 비스듬한 막대가 된다');
+  // ★★★ v130 — **「고깔이 아니라 줄」.** 첫 판은 굵기를 세상 크기(m)로 두어
+  //   가까운 끝 5.3도 · 먼 끝 0.43도가 됐고, 화면에서 **고깔**로 보였다
+  //   (찍어서 알았다). 각을 못박으니 화면 굵기가 고르다
+  ok(r0[0].deg / r0[r0.length - 1].deg < 2,
+    `★★★ **굵기가 고르다** (${r0[0].deg}도 → ${r0[r0.length - 1].deg}도) — 「굵은 **한 줄**」이다.`
+    + ' 세상 크기(m)로 못박으면 열두 배로 벌어져 줄이 아니라 고깔이 된다');
+  ok(r0[r0.length - 1].deg < r0[0].deg,
+    '★★ 그래도 먼 쪽이 조금 가늘다 — 아주 고르면 깊이가 안 읽힌다');
 
-  // ══ ② 방향이 항로점과 **같은가** ═══════════════════════════════════
-  ok(g0.every((g) => g.az === to.az && g.el === to.el),
-    '★★★ **문의 방향이 항로점 그대로다** — 여기서 딴 방향을 만들면'
+  // ══ ② ★★★ **복판을 비웠나** — 이번 판의 알맹이 ══════════════════════
+  //   사장님 「너무 시야를 가리잖아」. v121 의 문은 제일 가까운 것이
+  //   화면 반쪽의 0.39 였다 — 전투 원뿔(0.45)을 거의 다 채웠다
+  const nearest = Math.min(...seen);
+  console.log(`   항로 위일 때 길이 십자선에 제일 가까이 온 각 = ${nearest.toFixed(1)}도`);
+  ok(nearest > 1.5,
+    `★★★ **항로 위여도 복판을 안 지난다** (${nearest.toFixed(1)}도) — 겨누는 눈이 있는 자리는`
+    + ' 비운 채로 「어디로 가는지」만 말한다. v121 이 못 지킨 것이 이것이다');
+  ok(r0.every((g) => g.el < to.el),
+    '★★ **모든 마디가 항로점보다 아래다** — 위로 올라오면 그것이 곧 가리는 것이다');
+
+  // ══ ③ 방향이 항로점과 **같은가** ═══════════════════════════════════
+  ok(r0.every((g) => g.az === to.az),
+    '★★★ **길의 방위가 항로점 그대로다** — 여기서 딴 방향을 만들면'
     + ' 「마름모는 저기인데 길은 이리로」가 된다 (v91~v98 을 태운 그 병)');
-  const onCourse = g0.map((g) => relOf(g, eye).off);
-  console.log(`\n   항로 위(기수 == 목적지)일 때 문 복판의 어긋남 = ${Math.max(...onCourse).toFixed(2)}도`);
-  ok(Math.max(...onCourse) < 0.01,
-    '★★★ **항로 위면 문이 십자선에 겹친다** — 동심원 안으로 들어가는 것이 곧 「항로 위」다');
   const off30 = { yaw: to.az + 30, pitch: to.el };
-  const drift = g0.map((g) => relOf(g, off30).off);
+  const drift = r0.map((g) => relOf(g, off30).off);
   console.log(`   30도 틀었을 때 = ${Math.min(...drift).toFixed(1)} ~ ${Math.max(...drift).toFixed(1)}도`);
-  ok(Math.min(...drift) > 25,
+  ok(Math.min(...drift) > 20,
     '★★★ **벗어나면 길이 통째로 옆으로 간다** — 어디로 틀어야 하는지가 길로 보인다');
 
-  // ══ ③ 흐르나 — 「나아가고 있다」가 눈에 보이나 ══════════════════════
-  const span = HITS.gates * HITS.step;
-  const g1 = gatesOf(to, 20, 0);
-  const at = (gs, i) => gs.find((g) => g.i === i);
-  console.log(`\n   20m 나아가면 3번 문이 ${Math.round(at(g0, 2).dist)}m → ${Math.round(at(g1, 2).dist)}m`);
-  ok(g1.length === g0.length,
-    `★★ **흘러도 개수가 안 변한다** (${g1.length}) — 변하면 「길이 짧아졌다」로 읽히는데,`
+  // ══ ④ 흐르나 — 「나아가고 있다」가 눈에 보이나 ══════════════════════
+  const r1 = roadOf(to, 20, 0);
+  ok(r1.length === r0.length,
+    `★★ **흘러도 마디 수가 안 변한다** (${r1.length}) — 변하면 「길이 짧아졌다」로 읽히는데,`
     + ' 남은 거리는 구간이 따로 말한다');
-  // ★★★ 처음에 「제일 가까운 문」끼리 견주다 빨개졌다 — **제일 가까운 문은
-  //   조금만 나아가도 지나가 버려서**, 다음 프레임의 「제일 가까운 것」은
-  //   아까 그 문이 아니다. 그건 길이 뒤로 간 것이 아니라 **검사가 다른
-  //   문을 본 것**이다. 그래서 문에 이름표(`i`)를 달고 **같은 문**을 좇는다
-  ok(Math.abs(at(g1, 2).dist - (at(g0, 2).dist - 20)) < 1e-6,
-    '★★★ **같은 문이 나아간 만큼 다가온다** — 멎으면 멎은 것이 보인다.'
-    + ' 항로가 시계였던 v103 까지의 문제(「기수를 어디로 돌려도 똑같이 흘렀다」)를'
-    + ' 화면에서 갚는 자리다');
-  const gPast = gatesOf(to, HITS.step + 1, 0);
-  ok(at(gPast, 0).dist > at(g0, 0).dist,
-    `★★ **지나간 문은 저 앞으로 돌아간다** (${Math.round(at(g0, 0).dist)}m → ${Math.round(at(gPast, 0).dist)}m)`
-    + ' — 지나갈 때마다 하나씩 없어지면 길이 닳는다');
-  const gWrap = gatesOf(to, span, 0);
-  ok(gWrap.every((g) => Math.abs(g.dist - at(g0, g.i).dist) < 1e-6),
-    `★★ 한 바퀴(${span}m) 흐르면 **문이 다 제자리로** 돌아온다`);
-  ok(new Set(g0.map((g) => g.i)).size === g0.length,
-    '★ 이름표가 안 겹친다 — 그려야 물체를 다시 안 만든다 (깜빡임이 그래서 난다)');
+  ok(r1.every((g, i) => Math.abs(g.dist - r0[i].dist) < 1e-9),
+    '★★★ **길은 제자리에 있고 흐르는 것은 물결이다** — 마디를 통째로 옮기면'
+    + ' 「길이 다가온다」가 아니라 「목적지가 도망간다」로 보인다');
+  const moved = r0.some((g, i) => Math.abs(g.alpha - r1[i].alpha) > 1e-4);
+  ok(moved,
+    '★★★ **나아가면 물결이 흐른다** — 도형을 하나도 안 더하고 「나아가고 있다」를 지킨다.'
+    + ' 항로가 시계였던 v103 까지의 문제를 화면에서 갚는 자리다');
+  const still = roadOf(to, 0, 0);
+  ok(still.every((g, i) => Math.abs(g.alpha - r0[i].alpha) < 1e-9),
+    '★★ **멎으면 멎은 것이 보인다** — 시계로 흘리면 멎었는데도 흘러서 거짓말이 된다');
 
-  // ══ ④ 희미한가 — 사장님 말씀 그대로 ═══════════════════════════════
+  // ══ ⑤ 희미한가 — 사장님 말씀 그대로 ═══════════════════════════════
   console.log('');
-  ok(Math.max(...g0.map((g) => g.alpha)) <= 0.35,
-    `★★★ **제일 진한 문도 ${Math.max(...g0.map((g) => g.alpha))} 다** — 사장님 「**희미하게**」.`
-    + ' 길은 보는 것이 아니라 곁눈에 있는 것이고, 진하게 그리면 전투 원뿔을 먹는다');
-  const gOff = gatesOf(to, 0, NAV.dead + 5);
-  ok(gOff.length === g0.length && gOff[0].alpha > 0,
+  const top = Math.max(...r0.map((g) => g.alpha));
+  // ★★★ **적는 값과 보이는 밝기가 다르다.** 선형에서 섞이고 화면에 나갈 때
+  //   `^(1/2.2)` 가 씌워지므로, 0.05 는 눈에 0.26 이다. 그래서 **둘 다** 잰다 —
+  //   「0.3 이하」만 재면 눈에 0.58 인 것을 통과시킨다 (첫 판이 그랬다)
+  const seenTop = +(top ** (1 / 2.2)).toFixed(3);
+  ok(top <= 0.09 && seenTop <= 0.36,
+    `★★★ **적는 값 ${top} · 눈에 보이는 밝기 ${seenTop}** — 사장님 「**희미한**」.`
+    + ' 이 둘을 같은 것으로 여기면 「희미하게 적었는데 화면은 진하다」가 난다 (찍어서 알았다)');
+  const rOff = roadOf(to, 0, NAV.dead + 5);
+  ok(rOff.length === r0.length && rOff[0].alpha > 0,
     '★★★ **벗어나도 길이 안 없어진다** — 벗어났을 때야말로 돌아갈 길이 필요하다.'
-    + ` 흐려지기만 한다 (×${HITS.offDim})`);
-  ok(gOff[0].alpha < g0[0].alpha,
-    `★ 대신 흐려진다 (${gOff[0].alpha} < ${g0[0].alpha}) — 「지금 이 길 위가 아니다」를 색이 말한다`);
-  ok(gatesOf(null, 0, 0).length === 0,
+    + ` 흐려지기만 한다 (×${ROAD.offDim})`);
+  ok(rOff[0].alpha < r0[0].alpha,
+    `★ 대신 흐려진다 (${rOff[0].alpha} < ${r0[0].alpha}) — 「지금 이 길 위가 아니다」를 색이 말한다`);
+  ok(roadOf(null, 0, 0).length === 0,
     '★★ **갈 곳이 없으면 안 그린다** — 늘 떠 있는 길은 길이 아니라 무늬다');
-  ok(g0.every((g) => g.state === navState(0)) && gOff.every((g) => g.state === navState(NAV.dead + 5)),
+  ok(r0.every((g) => g.state === navState(0)) && rOff.every((g) => g.state === navState(NAV.dead + 5)),
     '★★ 색 갈래를 **항로점과 같은 말**로 쓴다 (`navState`) — 둘이 다른 색이면 같은 것으로 안 읽힌다');
 }
 
@@ -321,9 +332,9 @@ console.log('\n[9] ★★★ **거점에서도 나오나** (v128 · 사장님 �
   ok(Math.abs(n.to.az - cand.az) < 1e-9 && Math.abs(n.to.el - cand.el) < 1e-9,
     '② ★★★ **고르면 후보로 보여 준 바로 그 자리다** — 자리를 두 곳에서 내면'
     + ' 고르는 순간 목적지가 홱 옮겨 가고, 그건 「아까 저기였는데」가 된다');
-  const g = gatesOf(cand, 0, 0);
-  ok(g.length === HITS.gates,
-    `③ ★★ 거점에서도 **길이 선다** (문 ${g.length}) — 켜자마자 아무것도 없던 것이 이 판의 병이었다`);
+  const g = roadOf(cand, 0, 0);
+  ok(g.length > 1,
+    `③ ★★ 거점에서도 **길이 선다** (마디 ${g.length}) — 켜자마자 아무것도 없던 것이 이 판의 병이었다`);
   const w = navWord(cand, 40, { az: 40, el: 5 });
   console.log(`   말 — 「${w}」`);
   ok(w.includes('고르면') && !w.includes('항로 위'),
