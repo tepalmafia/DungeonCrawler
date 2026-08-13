@@ -21,6 +21,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { KINDS, lenOf, SEEN } from '../web/space/js/game/target-table.js';
 import { SLOTS } from '../web/space/js/core/model-table.js';
+import { pointOf } from '../web/space/js/game/frame.js';
+import { FLY_VIEW } from '../web/space/js/game/helm-table.js';
 import { WEAPONS } from '../web/space/js/game/combat-table.js';
 
 let bad = 0;
@@ -31,7 +33,9 @@ const degAt = (L, d) => 2 * Math.atan(L / 2 / Math.max(1, d)) / DEG;
 /** 세로 화각 F 인 화면에서 몇 %를 차지하나 */
 const share = (deg, F) => deg / F;
 
-const FOV = 94;                       // helm-table.js FLY_VIEW.fov (조종 중)
+//  ★★★ v139 — **표에서 읽는다.** 여기 94 를 박아 뒀었는데, 그러면 화각을
+//    고쳐도 **검사가 옛 값을 지키며 초록**이 된다 — 이 저장소의 단골이다
+const FOV = FLY_VIEW.fov;
 
 console.log('거리감 — 100m 의 배가 몇 도로 보이나 (게임을 안 부른다)');
 
@@ -127,6 +131,48 @@ console.log('\n[6] ★★ **가까울 때 화면을 다 덮지 않나** — 커�
   ok(share(r, FOV) < 0.35,
     `★★ 흔한 적(raider)은 60m 에서도 화면의 ${(share(r, FOV) * 100).toFixed(0)}% 다 —`
     + ' 「크다」와 「덮는다」는 다르다');
+}
+
+console.log('\n[7] ★★★ **미터가 거짓말을 하나** (사장님 「보는것보다 m가 작게 표시된잔아」)');
+{
+  //  ══ ★★★ 사장님 말씀을 그대로 옮기면 두 가지다 ═══════════════════════
+  //   ① 「계기가 말하는 m 가 3D 의 자리와 다르다」  → **자릿수가 틀렸다**
+  //   ② 「그 m 에 있는 것치고 너무 작아 보인다」    → **렌즈가 틀렸다**
+  //   둘은 고치는 데가 완전히 다르므로 **따로 묻는다.**
+  //   ★ ① 은 `pointOf` 로 되짚으면 그 자리에서 나온다 (아래 첫 절)
+
+  // ── ① 계기의 m 와 3D 의 자리가 같나 ───────────────────
+  let same = true;
+  console.log('   계기가 말하는 m   3D 에 놓인 자리');
+  for (const d of [50, 100, 240]) {
+    const p = pointOf({ az: 0, el: 0, dist: d });
+    const r = Math.hypot(p.x, p.y, p.z);
+    console.log(`   ${String(d).padStart(9)}m   ${r.toFixed(1)} 단위`);
+    if (Math.abs(r - d) > 0.05) same = false;
+  }
+  ok(same,
+    '★★★ **계기의 m 가 3D 의 자리와 같다** — 숫자는 거짓말을 안 한다.'
+    + ' 100m 라고 적히면 정말 100 단위에 있고, 배는 표의 길이 그대로다');
+
+  // ── ② ★★★ 그런데 **렌즈**가 멀어 보이게 한다 ──────────
+  //   ★ 사람이 「저건 100m 쯤」이라고 느끼는 기준은 **눈에 익은 화각**이다.
+  //     사람의 편안한 세로 시야는 대략 50~60도이고, 게임 화면은 그것보다
+  //     넓게 잡으면 **같은 물건이 더 작게** 맺힌다.
+  //   ★★ 그래서 **「몇 m 처럼 보이나」**를 낼 수 있다:
+  //       보이는 거리 = 진짜 거리 × (지금 화각 ÷ 익숙한 화각)
+  const NATURAL = 60;
+  const looksAt = (d) => d * (FOV / NATURAL);
+  console.log(`\n   화각 ${FOV}° · 사람이 익숙한 ${NATURAL}° 로 견주면`);
+  console.log('   계기      그런데 눈에는');
+  for (const d of [50, 100, 240]) {
+    console.log(`   ${String(d).padStart(4)}m 인데   ${looksAt(d).toFixed(0)}m 처럼 보인다`);
+  }
+  const gap = FOV / NATURAL;
+  ok(gap < 1.25,
+    `★★★ **눈에는 ${gap.toFixed(2)}배 멀어 보인다** — 100m 가 ${looksAt(100).toFixed(0)}m 처럼`
+    + ' 보인다는 뜻이다. 사장님이 「**보는것보다 m가 작게 표시된잔아**」라고'
+    + ' 하신 것이 정확히 이 값이고, **숫자가 아니라 렌즈가 틀린 것**이다.'
+    + ' 고칠 곳은 `helm-table.js FLY_VIEW.fov` 하나다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

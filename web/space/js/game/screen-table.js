@@ -37,6 +37,17 @@
 import { UI, panelSide } from './ui-table.js';
 
 /**
+ * ★★★ v139 — **상한은 배율을 안 탄다.**
+ *   ★ v135~v138 은 `area` 에 `UI.panel` 을 곱했다. 그런데 `area` 는
+ *     「이만큼까지는 커도 된다」는 **화면 넓이의 상한**이지 실제 크기가
+ *     아니다 — 배율을 곱하면 **판을 줄일 때 상한도 같이 줄어서**,
+ *     예산이 남았는데도 「상한을 넘었다」가 된다 (v139 에 그렇게 빨개졌다).
+ *   ★★ 진짜 문지기는 **예산**이고 그것은 `space-screen.js` 가 카메라에
+ *     투영해서 지킨다. 여기 상한은 **넉넉히** 두면 된다
+ */
+const CAP = 2.0;
+
+/**
  * ★★★ **전투 원뿔** — 화면 복판 이 반지름 안은 **조준경만** 쓴다.
  *
  *   정규화 화면 좌표(−1~1)의 반지름이다. 0.45 는 재서 골랐다:
@@ -69,15 +80,15 @@ export const BUDGET = UI.budget;
  * @property inCone  전투 원뿔 안에 들어와도 되나 — **조준경만 참**
  */
 export const PANELS = {
-  조준경: { corner: [0, 0], area: 0.050 * UI.panel, inCone: true, what: 'HUD — 겨누는 곳' },
+  조준경: { corner: [0, 0], area: 0.050 * CAP, inCone: true, what: 'HUD — 겨누는 곳' },
   /**
    * ★★ **왼쪽 위.** v95 에 사장님이 「적을 확대해서 보는 화면이 아래로
    *   바뀌었는데 **화면이 안보이잔아 원래 자리로 복구해**」 하셨으므로
    *   하늘에 둔다. 다만 **구석으로 더 민다** — 지금은 복판에서 0.27 이다
    */
-  광학창: { corner: [-1, 1], area: 0.060 * UI.panel, inCone: false, what: '당겨 본다' },
-  상태창: { corner: [-1, -1], area: 0.055 * UI.panel, inCone: false, what: '배가 어떤가' },
-  레이더: { corner: [1, -1], area: 0.060 * UI.panel, inCone: false, what: '어디에 무엇이' },
+  광학창: { corner: [-1, 1], area: 0.060 * CAP, inCone: false, what: '당겨 본다' },
+  상태창: { corner: [-1, -1], area: 0.055 * CAP, inCone: false, what: '배가 어떤가' },
+  레이더: { corner: [1, -1], area: 0.060 * CAP, inCone: false, what: '어디에 무엇이' },
 };
 
 // ══════════════════════════════════════════════════════════════════════════
