@@ -98,6 +98,10 @@ import { HUD as HUDV, hudFov, DEP } from './game/view-table.js';
 import { centerFor, worldAt } from './game/screen-table.js';
 // ★★★ v127 — **창을 손으로 옮긴다** (사장님 「마우스로 위치를 자유자재로」)
 import { LAYOUT, MOVABLE, PANE, defaultAt as paneHome, layoutWord } from './game/layout-table.js';
+// ★★★ v129 — **마우스를 쓰는 모드 다섯** (`docs` 대신 표가 안다).
+//   여기서 「점검이면 …, 배치면 …」을 다시 세지 않는다 — 세는 곳이 둘이 되면
+//   그때부터 갈라진다 (`tools/space-mode.js` 가 규칙만 따로 잰다)
+import { autoPauseOK, wantLock, modeWord } from './game/mode-table.js';
 import {
   makeLayout, setLayout, grab as layoutGrab, drop as layoutDrop,
   moveTo as layoutMove, atOf as layoutAt, resetLayout, summary as layoutSummary,
@@ -341,7 +345,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 128;
+export const VERSION = 129;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -363,7 +367,9 @@ const pauseBox = document.getElementById('pause');
 // ★ 게임 오버 — 이 게임의 유일한 끝 (행성 충돌 · 수동 조작 중에만)
 const overBox = document.getElementById('over');
 const endBox = document.getElementById('end');
-const check = buildCheck();
+// ★★★ v129 — 점검 모드가 **닫혔다**고 알려 오면 잠금을 돌려준다.
+//   잠글지 말지는 `mode-table.js` 가 안다 (다른 창이 열려 있을 수 있다)
+const check = buildCheck(() => relock());
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x03040a);
@@ -580,7 +586,11 @@ function showHelp(on, page = null) {
   // ★★ **시계를 멈춘다.** 읽는 동안 얻어맞으면 그건 도움말이 아니라 함정이다.
   //   멈춤 화면(`showPause`)은 **안 띄운다** — 화면 둘이 겹치면 둘 다 안 읽힌다
   paused = helpOpen;
+  // ★★★ v129 — **닫으면 마우스를 돌려준다** (`mode-table.js wantLock`).
+  //   여태 여는 쪽만 있었다. F1 을 한 번 열었다 닫으면 화면을 눌러야
+  //   조종간이 살아났는데, 그 클릭은 **쏘기**이기도 하다
   if (helpOpen) document.exitPointerLock?.();
+  else relock();
 }
 function helpPage(which) {
   const on = which === 'fight';
@@ -719,7 +729,13 @@ addEventListener('keydown', (e) => {
   //
   //  ★ 사장님 「**i창을 통해 비행기 모양이 모이고 각 부분 별 파츠를 볼 수
   //    있게** 하자」 · 격납고를 **방에서 화면으로** 옮긴 자리다 (「b」)
-  if (!paused && (e.code === 'KeyI' || (e.code === 'Escape' && bayOpen))) {
+  // ★★★ v129 — **열려 있으면 멈춰 있어도 닫힌다** (`mode-table.js`
+  //   `closableWhileStopped`). 여태 `!paused` 하나가 여는 것과 닫는 것을
+  //   **같이** 막았고, 베이는 열면 잠금이 풀려 자동 멈춤이 걸리므로
+  //   **열자마자 못 닫는 창**이었다 — I 로도 Esc 로도 (재서 확인했다).
+  //   원인은 위 `autoPauseOK` 에서 없앴지만, **나오는 길은 원인과 상관없이**
+  //   열어 둔다. 원인은 또 생긴다
+  if ((!paused || bayOpen) && (e.code === 'KeyI' || (e.code === 'Escape' && bayOpen))) {
     e.preventDefault();
     showBay(!bayOpen);
     return;
@@ -1571,7 +1587,12 @@ function showBay(on) {
   if (bayOpen) drawBay(); else bay3dStop();   // ★ v116 — 닫으면 도해도 멈춘다
   box.hidden = !bayOpen;
   // ★ 열면 마우스를 풀어 준다 — 안 풀면 단추를 못 누른다
+  // ★★★ v129 — **닫으면 돌려준다.** 여는 것과 닫는 것은 대칭이어야 한다
+  //   (`mode-table.js wantLock`). 안 돌려주면 베이를 닫고 나서 마우스로
+  //   배를 못 돌린다 — 사장님이 배치(U)에서 겪으신 것과 **똑같은 병**이다.
+  //   ★ 다른 모드가 아직 열려 있으면 안 잠근다 — 표가 그것까지 안다
   if (bayOpen) document.exitPointerLock?.();
+  else relock();
 }
 // ★★★ v116 — **줄에 손을 얹으면 그 덩어리가 빛난다.** 이름만으로는
 //   「센서가 배의 어디인지」를 모른다 — 도해가 있는 이유의 절반이 이것이다
@@ -2583,8 +2604,11 @@ function showLayout(on = null) {
   //    무언가를 빼앗았으면, 끄면서 **그 자리에 돌려놔야** 한다. 이 저장소가
   //    같은 병을 두 번 앓았다 (v49 점검 모드 · v88 조종간 걸쇠).
   //  ★ 키를 눌러 닫는 것은 **사람의 동작**이라 브라우저가 잠금을 허락한다
+  //  ★ v129 — 잠글지는 **표가 정한다** (`mode-table.js wantLock`). 여기서
+  //    「내가 닫혔으니 잠근다」고 하면, 베이를 열어 둔 채 배치를 닫았을 때
+  //    도로 잠겨서 **베이 단추를 못 누른다**
   if (now) document.exitPointerLock?.();
-  else renderer.domElement.requestPointerLock?.()?.catch?.(() => {});
+  else relock();
   say(ai, layoutWord(null, layoutSummary(layout).moved), now ? 'tell' : 'ok');
   return now;
 }
@@ -8005,11 +8029,44 @@ document.addEventListener('pointerlockchange', () => {
 //
 //  ★★★ `check.open` 이 이미 여기 예외로 적혀 있다 — **까닭이 똑같다.**
 //    점검 모드도 마우스를 쓰려고 일부러 푼다. 그때 배운 것을 새 모드에
-//    **안 물린 것**이 이번 실수다. 예외를 하나씩 손으로 늘리는 모양이라
-//    다음에 또 밟을 자리이므로, **「마우스를 쓰는 모드」를 한데 묶는다**
-const usingMouse = () => check.open || layout.open;
+//    **안 물린 것**이 이번 실수다.
+//
+//  ══ ★★★ v129 — **예외를 손으로 늘리지 않는다** (사장님 「블록아웃으로
+//    테스트하고 구현하고 있지?」) ═════════════════════════════════════
+//
+//  v128 은 이 자리를 **화면에서 재서** 고쳤다. 답은 맞았지만 **순서를
+//  어겼다** — 뼈대 없이 계통을 고쳤다. 그래서 **같은 함정이 베이(I)에
+//  하나 더 있는 것을 못 봤다**: 열면 잠금이 풀리고 → 자동 멈춤이 걸리고
+//  → `!paused` 가 닫는 키를 막아서 **I 로도 Esc 로도 안 닫혔다.**
+//
+//  ★★ 뼈대를 세우고 나니 그건 **어긋날 수가 없는** 것이 됐다 —
+//    `game/mode-table.js` 가 「마우스를 쓰는 모드가 무엇이고, 그동안
+//    잠글지 · 멈출지」를 혼자 안다. 여기는 **묻기만** 한다
+//  ★ **함수 선언**으로 둔다 (화살표 상수가 아니라). `showBay` · `showLayout`
+//    이 이 줄보다 **위**에 있어서, 상수로 두면 그쪽에서 부를 때 이름이
+//    아직 없다. v127 에 `layout` · `panePicks` 를 늦게 선언해 **게임이
+//    통째로 안 켜진** 적이 있다 — 같은 자리다
+function modeOpen() {
+  return {
+    점검: check.open, 배치: layout.open, 베이: bayOpen, 도움말: helpOpen, 멈춤: !pauseBox.hidden,
+  };
+}
+/**
+ * ★★★ v129 — **잠금을 돌려준다** — 되잠그는 곳은 **여기 하나**다.
+ *
+ *   ★ `started` 를 안 보면 **시작 화면에서 저 혼자 게임이 켜진다.**
+ *     잠금이 걸리면 `beginOnce()` 가 돌아 제목 화면을 닫기 때문이다 —
+ *     점검 모드를 시작 화면에서 열었다 닫는 것만으로 그렇게 됐다
+ *     (`space-check.js [1]` 이 그 자리에서 빨개져 잡아 줬다).
+ *   ★★ 네 곳(점검 · 배치 · 베이 · 도움말)이 제각기 이 판단을 하면
+ *     넷 중 하나는 반드시 빠뜨린다 — 이번 판이 고치고 있는 병 그대로다
+ */
+function relock() {
+  if (!started || !wantLock(modeOpen())) return;
+  renderer.domElement.requestPointerLock?.()?.catch?.(() => {});
+}
 document.addEventListener('pointerlockchange', () => {
-  if (wrecked || ended || usingMouse()) return;
+  if (wrecked || ended || !autoPauseOK(modeOpen())) return;
   if (!document.pointerLockElement && started && !paused) showPause(true);
 });
 

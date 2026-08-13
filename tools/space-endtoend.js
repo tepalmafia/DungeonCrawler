@@ -1476,7 +1476,7 @@ console.log('\n[6u] ★★★ **창 배치** — 옮기고, 닫으면 마우스�
   // ⑤ ★★★ 닫으면 마우스가 돌아오나 — 이 판의 알맹이
   await p.keyboard.press('u');
   await p.waitForTimeout(600);
-  const off = await S(() => ({ ...SPACE.layout, locked: SPACE.locked, paused: SPACE.pause.paused }));
+  const off = await S(() => ({ ...SPACE.layout, locked: SPACE.locked, paused: SPACE.save.paused }));
   ok(!off.open, '⑤ ★★ **U 로 닫힌다** — 들어가는 길만 있고 나오는 길이 없으면 갇힌다');
   ok(!off.paused,
     '⑥ ★★★ **배치는 멈춤이 아니다** — 잠금을 푸는 것을 「창 밖으로 나갔다」로'
@@ -1485,6 +1485,31 @@ console.log('\n[6u] ★★★ **창 배치** — 옮기고, 닫으면 마우스�
   ok(off.locked,
     '⑦ ★★★ **닫으면 도로 잠긴다** — 이 배의 조종간은 잠금의 `movementX` 로만'
     + ' 움직인다. 켜면서 빼앗은 것은 끄면서 **그 자리에 돌려놔야** 한다');
+
+  // ══ ★★★ v129 — **나머지 세 모드도 같은가** ═══════════════════════
+  //
+  //  ★ 사장님 (2026-08-13) 「블록아웃으로 테스트하고 구현하고 있지?」
+  //
+  //  ★★ v128 은 배치 하나만 화면에서 재서 고쳤다. 뼈대(`mode-table.js`)를
+  //    세우고 다섯을 나란히 재 보니 **베이(I)에 같은 함정이 그대로**
+  //    있었다 — 열면 잠금이 풀리고, 자동 멈춤이 걸리고, `!paused` 가
+  //    닫는 키를 막아서 **I 로도 Esc 로도 안 닫혔다.**
+  //  ★★★ 하나만 재면 하나만 안다. 표에 적힌 것을 **전부** 돌린다
+  for (const [name, key, sel] of [['베이', 'i', '#bay'], ['도움말', 'F1', '#help'], ['점검', '`', '#check']]) {
+    await p.keyboard.press(key); await p.waitForTimeout(500);
+    const on2 = await S((q) => ({
+      shown: !document.querySelector(q).hidden,
+      locked: !!SPACE.locked, pause: !document.getElementById('pause').hidden,
+    }), sel);
+    ok(on2.shown && !on2.locked, `⑧-${name} 열면 **잠금이 풀린다**`);
+    ok(!on2.pause,
+      `⑨-${name} ★★★ **자동 멈춤이 안 걸린다** — 걸리면 닫는 키가 \`!paused\` 에 막혀 못 나온다`);
+    await p.keyboard.press(key); await p.waitForTimeout(700);
+    const off2 = await S((q) => ({ shown: !document.querySelector(q).hidden, locked: !!SPACE.locked }), sel);
+    ok(!off2.shown, `⑩-${name} ★★★ **같은 키로 닫힌다** — 나오는 길이 있다`);
+    ok(off2.locked, `⑪-${name} ★★★ **닫으면 마우스가 돌아온다**`);
+    if (!off2.locked) { await p.mouse.click(360, 210); await p.waitForTimeout(600); }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════

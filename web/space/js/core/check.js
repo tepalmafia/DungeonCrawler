@@ -190,7 +190,13 @@ const GROUPS = [
   ]],
 ];
 
-export function buildCheck() {
+/**
+ * @param onShut ★★★ v129 — **닫혔다**고 알린다. 잠금을 다시 걸지는
+ *   **여기서 못 정한다** — 다른 모드(베이 · 배치 · 도움말)가 아직 열려
+ *   있으면 잠그면 안 되고, 그것을 아는 것은 `game/mode-table.js` 다.
+ *   ★ 그래서 여기는 **알리기만** 한다 — 「재는 곳을 둘로 만들지 않는다」
+ */
+export function buildCheck(onShut = null) {
   const box = document.createElement('div');
   box.id = 'check';
   box.hidden = true;
@@ -236,9 +242,15 @@ export function buildCheck() {
 
   /** 열고 닫는다 — 키로도, 단추로도 같은 이 함수를 부른다 */
   const toggle = (on) => {
+    const was = !box.hidden;
     box.hidden = on === undefined ? !box.hidden : !on;
     // 열려 있는 동안은 마우스를 써야 하므로 포인터 잠금을 푼다
     if (!box.hidden && document.pointerLockElement) document.exitPointerLock();
+    // ★★★ v129 — **닫힐 때 알린다.** 여는 것만 있고 닫는 것이 없어서,
+    //   점검 모드를 닫고 나면 화면을 눌러야 조종간이 살아났다 —
+    //   사장님이 배치(U)에서 겪으신 것과 같은 병이다 (`space-check.js [3]`
+    //   이 「화면을 누르니 다시 잠긴다」로 오래 빨갰던 자리이기도 하다)
+    if (was && box.hidden) onShut?.();
   };
 
   // ★ **F2 하나로는 못 연다.** 노트북에서 F2 는 Fn 을 같이 눌러야 하는
