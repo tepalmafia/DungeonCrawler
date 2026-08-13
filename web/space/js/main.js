@@ -232,6 +232,8 @@ import { coverOf, coverWord, holdLock } from './game/cover-table.js';
 //    **안**이었는데, 문은 그 **앞**에도 있었고 거기엔 말이 없었다.
 //    이제 판정도 말도 한 곳이다 (`tools/space-trigger.js` 가 전 조합을 쓴다)
 import { triggerWhy, gateWord } from './game/trigger-table.js';
+// ★★★ v144 — **속도감**: 빠르기 하나가 창밖과 화각을 민다 (`docs` 는 표 머리에)
+import { feelAt, speedOf } from './game/rush-table.js';
 /** 가림막 이름 — 「무엇에 막혔는지 이름을 댄다」에 쓴다 */
 const kindNames = Object.fromEntries(
   Object.entries(TKINDS).map(([k, v]) => [k, v.name]));
@@ -392,7 +394,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 143;
+export const VERSION = 144;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -7532,7 +7534,12 @@ function frame(now) {
   accK = fadeAcc(accK, accOf((mpsNow - mpsWas) / Math.max(dt, 1e-4)), dt);
   mpsWas = mpsNow;
   const feel = feelOf(accK);
-  ship.outside.update(dt, mpsNow, hazard.lane, incoming(hazard), camera, boost.k, accK);
+  //  ★★★ v144 — **빠르기 하나를 넘긴다** (`rush-table.js speedOf`).
+  //    v143 까지 여기가 `boost.k` 였다 — 즉 창밖은 「급가속인가」만 알았고,
+  //    스로틀은 먼지가 흐르는 **거리**에만 닿았다. 그래서 전속으로 밀어도
+  //    화면이 순항과 같았다 (사장님 「그냥 정지한 상태 같아」)
+  ship.outside.update(dt, mpsNow, hazard.lane, incoming(hazard), camera,
+    speedOf(thr.v, boost.k), accK);
 
   // 해도대 — 관측실에 있든 없든 계속 그린다. 걸어 들어갔을 때 이미 맞아 있어야 한다
   // ★ **해도대가 어긋나면 눈금이 밀린다** (chartDrift). 다만 **거짓말인 줄은
@@ -7681,8 +7688,14 @@ function frame(now) {
   //   이건 「빨라지는 동안」이라, 스로틀을 미는 1.4초에도 열렸다가 등속이
   //   되면 삭는다. 둘을 더하는 것은 맞다 — 급가속의 앞 순간에는 둘 다 참이고,
   //   그 겹치는 순간이 제일 세게 미는 순간이기 때문이다
+  //  ★★★ v144 — **스로틀도 화각을 연다** (`rush-table.js RUSHF.fov`).
+  //    급가속만 열면 순항~전속이 화면에서 같아진다. 다만 **작게** 연다 —
+  //    화각은 `ui-table.js screenSide` 를 타고 계기 크기까지 흔들므로
+  //    (v139 에 그걸로 「계기가 전투 원뿔에 들어왔다」가 났다), 늘 켜져
+  //    있는 구간은 +5도 안에서만 논다. 급가속은 그 곡선의 끝이다
   const fov = FOV_WIDE + (FOCUS.fov - FOV_WIDE) * focusK
-    + (FLY_VIEW.fov - FOV_WIDE) * flyK + RUSH.fov * boost.k + feel.fov;
+    + (FLY_VIEW.fov - FOV_WIDE) * flyK
+    + feelAt(speedOf(thr.v, boost.k)).fov * flyK + feel.fov;
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   if (focusK > 0.001) {
     // 보는 쪽으로 몸을 기울인다 — 자리는 그대로고 **눈만** 나아간다

@@ -52,6 +52,13 @@ import {
   MARK, LEGEND, PLAIN,
 } from '../game/radar-table.js';
 import { RUSH } from '../game/boost-table.js';
+// ══ ★★★ v144 — **속도감이 곡선이 된다** (`rush-table.js`) ═══════════════
+//  ★ 사장님 「추력이 켜진 상태인데 **그냥 정지한 상태 같아**」
+//  ★★ v143 까지 `RUSH` 는 **급가속 전용 곱하기**였다 — 순항~전속 구간에는
+//    곡선이 아예 없어서, 스로틀을 끝까지 올려도 화면이 안 바뀌었다
+//    (재 보니 줄 길이 8.09 → 8.92, 화각은 그대로). 이제 **빠르기 하나**가
+//    흐름·줄·밝기·화각 넷을 연속으로 민다 (`tools/space-rush.js`)
+import { feelAt } from '../game/rush-table.js';
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ **유리가 두 번 얹히고 있었다** (v125)
@@ -1619,7 +1626,9 @@ export function buildOutside(scene, z) {
    * @param inc   다가오는 덩어리 { in, lane } 또는 null
    */
   /**
-   * @param rush ★★★ v73 — **급가속** 0~1. 먼지가 쏟아지고 길어진다
+   * @param rush ★★★ v144 — **빠르기** 0 정지 · 1 전속 · 1.75 급가속.
+   *             v143 까지 이 자리는 「급가속인가」라는 **이진값**이었고,
+   *             그래서 순항~전속 구간이 통째로 죽어 있었다 (`rush-table.js`)
    *             (`boost-table.js RUSH`). ★ 별은 안 흘린다 (v57 고증)
    */
   /**
@@ -1797,13 +1806,21 @@ export function buildOutside(scene, z) {
     //   급가속은 이 값을 올릴 뿐이라 저절로 따라온다 — 축이 하나다.
     //   v87 에 `rush` 로 켰다가 화면을 찍고 잡았다: R 을 안 누르면
     //   **등속 화면이 한 톨도 안 바뀌어** 있었다 (사장님이 물으신 그 상태)
-    const fd = d * (1 + rush * (RUSH.dust - 1));
+    //  ★★★ v144 — **곡선에서 읽는다.** `rush` 는 이제 급가속 여부가 아니라
+    //    **빠르기**(0 정지 · 1 전속 · 1.75 급가속)다. 여기서 다시 재지 않고
+    //    표에 묻기만 한다 — 두 곳에서 재면 화면과 계기가 갈라진다
+    const F = feelAt(rush);
+    const fd = d * F.flow;
     // ★★★ v103 — **절댓값이다.** 역추진(v101)이면 `fd` 가 음수라
     //   `streakLen` 의 `mps > STREAK.min` 이 안 서고, 그래서 **뒤로 가는
     //   동안 속도감이 통째로 없어졌다** (사장님 「반대로 가면 … 속도감이
     //   반대」의 나머지 절반이다). 길이는 빠르기가 정하고, **방향은
     //   `flow()` 가 정한다** — 둘을 한 값에 섞으면 이런 일이 난다
-    dust.setRush(rush, Math.abs(fd) / Math.max(dt, 1e-4), acc);
+    //  ★ 밝기·알갱이 굵기는 0~1 로 넘긴다. 곡선의 `glow` 를 **급가속을 1 로**
+    //    하는 몫으로 바꿔서 주므로, `sky.js` 는 여태 쓰던 식을 그대로 쓴다 —
+    //    갈아 끼우면서 **받는 쪽을 안 흔드는** 것이 이 저장소의 규약이다
+    const glowK = Math.max(0, Math.min(1, (F.glow - 1) / Math.max(1e-6, RUSH.glow - 1)));
+    dust.setRush(glowK, Math.abs(fd) / Math.max(dt, 1e-4), acc);
     dust.flow(fd);
 
     // 잔해
