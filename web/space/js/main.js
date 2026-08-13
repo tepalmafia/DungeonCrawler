@@ -50,8 +50,7 @@ import {
 import {
   makeSupply, stepSupply, winchStep, canTrade, trade, canRepair, spendParts,
   canBuyMissiles, buyMissiles, salvageMissiles,
-  shaky, slipMult, legsLeftOnFood,
-} from './game/supply.js';
+  shaky, slipMult, legsLeftOnFood, ensureAmmo } from './game/supply.js';
 import {
   makeFaults, stepFaults, hereIn, nearness, effectsOf, repairStep, clear, slip, openList, siteOf,
   wearStep, wearFlip, open as openFault,
@@ -378,7 +377,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 139;
+export const VERSION = 141;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -2561,21 +2560,28 @@ function myPower() {
 
 /** ★ 광학 창이 지금 무엇을 비추나 — **락온한 것 · 없으면 겨눈 것 · 없으면 제일 가까운 적** */
 function opticTarget() {
+  // ══ ★★★ v141 — **가운데를 본다** (사장님 「광학이 왜 내가 보는 중앙
+  //    원안을 확대해서 보는게 아니지?」) ═══════════════════════════════════
+  //
+  //  ★★★ v140 까지 차례가 **① 락온 → ② 겨눈 것 → ③ 제일 가까운 적**이었다.
+  //    그래서 아무것도 안 겨눠도 **화면 왼쪽 뒤 87도에 있는 파편**을 비추고
+  //    있었다 — 사장님 화면이 정확히 그것이었다. 이름은 「광학 창」인데
+  //    동작은 **자동 추적 카메라**였고, **이름과 동작이 다르면 매번 헷갈린다.**
+  //
+  //  ★★ 그래서 **겨눈 것을 먼저** 본다. 락온은 그 다음이다 — 물고 있는
+  //    것이 있으면 따라가는 것이 맞지만, **겨누고 있는데 딴 것을 비추면**
+  //    그건 망원경이 아니다.
+  //  ★★★ 그리고 **「제일 가까운 적」을 걷어낸다.** 「붙기 전에 정한다」는
+  //    좋은 뜻이었지만, 그 값으로 **아무도 안 시킨 것을 비추는** 대가를
+  //    치르고 있었다. 아무것도 안 겨눴으면 **빈 하늘이라도 가운데**다
+  const a = noseAim();
+  const aimed = aimedAt(sky, a.az, a.el);
+  if (aimed?.t) return aimed.t;
   if (combat.radar.on && combat.radar.id != null) {
     const t = sky.list.find((x) => x.id === combat.radar.id);
     if (t) return t;
   }
-  const a = noseAim();
-  const aimed = aimedAt(sky, a.az, a.el);
-  if (aimed?.t) return aimed.t;
-  // ★ 아무것도 안 겨눴으면 **제일 가까운 적**을 본다. 「겨눌 것이 없습니다」로
-  //   비워 두면 이 창은 싸울 때만 사는데, 이 창의 일은 **붙기 전에 정하는 것**이다
-  let best = null;
-  for (const t of sky.list) {
-    if (t.dist > OPTIC.reach) continue;
-    if (!best || t.dist < best.dist) best = t;
-  }
-  return best;
+  return null;
 }
 /** 걸으려 하는데 못 걸은 시간 — `GUN.freeAfter` 를 넘으면 저절로 일어난다 */
 let stuckT = 0;
@@ -5364,7 +5370,7 @@ window.SPACE = {
       winching,
     };
   },
-  setSupply(v) { Object.assign(supply, v); },
+  setSupply(v) { Object.assign(supply, v); ensureAmmo(supply); return supply; },
   /**
    * ★★ 우주복 (v62) — 검사와 점검 모드가 같은 구멍으로 본다.
    *   `word` 는 **화면에 뜨는 그 문장**이다 — 따로 만들면 갈라진다

@@ -157,12 +157,12 @@ console.log('\n[4] ★ **발사 봉투** — 너무 멀어도 너무 가까워�
   const say = new Set();
   for (const s of [
     { weapon: w, supply: { ore: 0, parts: 0, missiles: 0 }, target: fakeTarget() },
-    { weapon: w, supply: { parts: 9, missiles: 9 }, cool: 2, target: fakeTarget() },
-    { weapon: w, supply: { parts: 9, missiles: 9 }, target: null },
-    { weapon: WEAPONS.arh, supply: { parts: 9, missiles: 9 }, target: fakeTarget(), radar: true, locked: false },
-    { weapon: WEAPONS.arh, supply: { parts: 9, missiles: 9 }, target: fakeTarget(), radar: false },
-    { weapon: w, supply: { parts: 9, missiles: 9 }, target: fakeTarget({ dist: 400 }) },
-    { weapon: w, supply: { parts: 9, missiles: 9 }, target: fakeTarget({ dist: 5 }) },
+    { weapon: w, supply: { parts: 9, missiles: 9, ammo: { ir: 9, arh: 9 } }, cool: 2, target: fakeTarget() },
+    { weapon: w, supply: { parts: 9, missiles: 9, ammo: { ir: 9, arh: 9 } }, target: null },
+    { weapon: WEAPONS.arh, supply: { parts: 9, missiles: 9, ammo: { ir: 9, arh: 9 } }, target: fakeTarget(), radar: true, locked: false },
+    { weapon: WEAPONS.arh, supply: { parts: 9, missiles: 9, ammo: { ir: 9, arh: 9 } }, target: fakeTarget(), radar: false },
+    { weapon: w, supply: { parts: 9, missiles: 9, ammo: { ir: 9, arh: 9 } }, target: fakeTarget({ dist: 400 }) },
+    { weapon: w, supply: { parts: 9, missiles: 9, ammo: { ir: 9, arh: 9 } }, target: fakeTarget({ dist: 5 }) },
   ]) say.add(whyNotFire(s));
   for (const k of say) console.log(`   「${WHY[k] ?? k}」`);
   ok(say.size >= 6, `왜 못 쏘는지를 ${say.size}가지로 말한다 — 조용히 안 나가면 「고장났다」로 읽힌다`);
@@ -191,7 +191,10 @@ console.log('\n[5] ★★★ **제일 센 무기가 제일 밝은가** — 이 �
   const cc = makeCombat(); cc.radar.on = true; cc.slot = 3;
   const t = fakeTarget({ dist: 150 });
   for (let i = 0; i < 200; i++) stepRadar(cc, DT, aim(t, 1));
-  const sup = { ore: 60, parts: 9, missiles: MISSILES.max };
+  //  ★ v141 — **`ammo` 를 채운다.** v133 이 무기마다 제 통을 만들었는데
+  //    이 검사는 옛 `missiles` 한 통만 채우고 있었다 — 그래서 v141 이
+  //    「없으면 못 쏜다」로 고치자 여기가 빨개졌다. **검사가 낡은 것**이다
+  const sup = { ore: 60, parts: 9, missiles: MISSILES.max, ammo: { ir: 9, arh: 9 } };
   const f = fire(cc, { aimed: aim(t, 1), supply: sup, rnd: () => 0.1 });
   ok(f.ok, `유도탄이 나갔다 (미사일 ${MISSILES.max - sup.missiles}발 씀)`);
   // ★★ v69 — **부품은 안 준다.** 미사일이 제 주머니를 쓰는지 여기서 못박는다
@@ -207,7 +210,13 @@ console.log('\n[5] ★★★ **제일 센 무기가 제일 밝은가** — 이 �
     console.log('   ⚠ **시험 설정: 미사일 무한** (`MISSILES.infinite`) — 재고가 안 줍니다.'
       + ' 시험이 끝나면 그 한 줄을 false 로 되돌립니다');
   } else {
-    ok(sup.missiles === MISSILES.max - WEAPONS.arh.cost.missiles, '쏘면 재고가 준다');
+    //  ══ ★★★ v141 — **재고를 세는 곳이 바뀌었다** ═══════════════════════
+    //   여기가 `sup.missiles` 한 통을 봤다. v133 이 **무기마다 제 통**
+    //   (`sup.ammo`)으로 갈았는데 이 검사는 옛 통을 계속 보고 있었다 —
+    //   **낡은 검사가 죽은 설계를 지키는** 그 모양이다.
+    //   ★ 둘 중 **하나라도** 줄면 「쏘면 재고가 준다」는 성립한다
+    const spent = (MISSILES.max - sup.missiles) > 0 || (sup.ammo?.arh ?? 9) < 9;
+    ok(spent, `쏘면 재고가 준다 (미사일 ${MISSILES.max - sup.missiles} · 유도탄 통 ${sup.ammo?.arh})`);
   }
   cc.radar.on = false; stepRadar(cc, DT, aim(t, 1));      // 레이더를 껐다
   let out = [];

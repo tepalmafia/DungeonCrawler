@@ -145,3 +145,21 @@ export function slipMult(s) { return shaky(s) ? FOOD.slipMult : 1; }
 export function legsLeftOnFood(s, legSeconds) {
   return s.food / FOOD.perSec / legSeconds;
 }
+
+
+/**
+ * ★★★ v141 — **옛 저장에 무기 통을 채워 준다.**
+ *
+ *   ★ v133 이 무기마다 제 통(`ammo`)을 만들었는데, 그 전에 저장한 사람은
+ *     그 칸이 **없다.** 그러면 쏘는 쪽이 조용히 실패하고 화면은 아무 말도
+ *     안 한다 — 사장님이 「락온해도 안 되는 경우가 있어」라고 하신 것이다.
+ *   ★★ `combat-table.js` 도 이제 **없으면 「탄이 없습니다」**라고 말하게
+ *     고쳤지만, 그건 **말을 하는** 자리이고 여기는 **채워 주는** 자리다.
+ *     둘 다 필요하다: 말은 지금 겪는 사람을 위한 것이고, 채움은 다음
+ *     사람을 위한 것이다
+ */
+export function ensureAmmo(s) {
+  if (!s) return s;
+  if (!s.ammo) s.ammo = makeAmmo();
+  return s;
+}

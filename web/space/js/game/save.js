@@ -12,6 +12,9 @@ import { LEG } from './route-table.js';
  * 지금 상태에서 **적어 둘 칸만** 골라 담는다.
  * @param world { route, chase, supply, faults, hazard, move, carry, tutor, ship, me }
  */
+// ★★★ v141 — 옛 저장에 새 칸을 채워 준다
+import { ensureAmmo } from './supply.js';
+
 export function pack(world) {
   const out = { v: SAVE_VERSION, at: null };
   for (const [key, fields] of Object.entries(FIELDS)) {
@@ -51,6 +54,14 @@ export function apply(world, raw) {
         ? JSON.parse(JSON.stringify(src[f])) : src[f];
     }
   }
+  //  ══ ★★★ v141 — **옛 저장에 무기 통을 채워 준다** ═══════════════════
+  //   ★ v133 이 무기마다 제 통(`supply.ammo`)을 만들었는데, 그 전에 저장한
+  //     사람은 그 칸이 **없다.** 그러면 쏘는 쪽이 조용히 실패하고 화면은
+  //     아무 말도 안 했다 — 사장님이 「**락온해도 안 되는 경우가 있어**」라고
+  //     하신 것이 이것이다.
+  //   ★★ **이어하기가 새 계통을 못 따라오면 그건 저장이 아니라 함정**이다.
+  //     새 칸을 만들 때마다 여기서 채워 주는 것이 규약이 되어야 한다
+  if (world.supply) ensureAmmo(world.supply);
   return true;
 }
 
