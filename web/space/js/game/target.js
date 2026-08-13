@@ -9,13 +9,23 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
-  DODGE, evadeGain, evadeDir, ENGAGE, PARTS, partOf, FLEE,
+  // ★ v135 — `evadeGain` 은 **안 부른다.** 부호를 버리던 그 함수다
+  DODGE, evadeDir, ENGAGE, PARTS, partOf, FLEE,
 } from './target-table.js';
 // ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
 //   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
 import { wrap, relOf } from './frame.js';
-// ★★★ v111 — **회피 타이밍** (사장님 「q e를 써서 회피기동 … 타이밍을 어떻게」)
-import { gainAt, hurtMult } from './evade-table.js';
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v135 — **회피가 누적에서 「한 번의 판정」이 됐다** (`dodge-table.js`).
+//
+//  ★ v111 의 `gainAt`·`hurtMult` 는 **접었다** (지우지 않는다 — 왜 접었는지가
+//    `evade-table.js` 머리에 남아 있고, 되살릴 일이 있으면 거기서 시작한다).
+//  ★★ 접은 까닭은 하나다: **그 모형에는 방향이 없었다.** `evadeGain` 이
+//    `Math.abs` 로 부호를 버려서, 화면이 「좌현으로」라고 말한 다음 사람이
+//    **오른쪽으로 밀어도 점수가 같았다** — 「재는 곳을 둘로 만들지 않는다」를
+//    v84 부터 열두 판 어기고 있었다
+// ══════════════════════════════════════════════════════════════════════════
+import { wayFor, judge, DODGE2 } from './dodge-table.js';
 
 const span = ([a, b], rnd) => a + rnd() * (b - a);
 
@@ -199,6 +209,17 @@ export function stepSky(sky, dt, {
   moving = true, quiet = false, close = 1, evade = null,
   /** ★ v115 — 「반사」 특성이 넓힌 회피 창 (`growth-table.js`) */
   evadeWide = 0,
+  /**
+   * ★★★ v135 — **이번 걸음에 「새로」 눌린 회피 키들** (`dodge-table.js WAYS`).
+   *
+   *   ★★ **누른 순간(edge)만** 온다. 눌러 「놓고 있는 것」을 매 걸음 세면
+   *     A 를 처음부터 잡고 있는 것이 답이 되고, 그러면 타이밍이 없어진다 —
+   *     v111 이 굴리기를 창 안에서만 센 것과 같은 까닭이고, 이번에는
+   *     아예 **한 번의 결심**으로 만든다
+   */
+  dodgeKeys = null,
+  /** 급기동 중인가 — 창이 넓어진다 (v84 의 급기동을 안 죽인다) */
+  agile = false,
 } = {}) {
   const want = wantCount(sky);
 
@@ -326,8 +347,23 @@ export function stepSky(sky, dt, {
       t: ENEMY_FIRE.fly,
       pk: enemyHitChance(t.dist),
       roll: sky.rnd(),
-      /** ★★★ v84 — **여태 옆으로 뺀 양.** `DODGE.need` 를 넘기면 빗나간다 */
+      /** ★★★ v84 — **여태 옆으로 뺀 양.** ※ v135 에 접혔다 (아래 `way` 를 본다) */
       dodge: 0,
+      /**
+       * ★★★ v135 — **어느 쪽으로 빼라고 했나.** 쏘는 순간에 굳힌다.
+       *
+       *   ★★ **굳히는 것이 핵심이다.** 매 걸음 다시 재면 기수를 돌리는
+       *     동안 지시가 뒤집히고, **뒤집히는 지시는 못 따른다.**
+       *     사장님이 「**특정** 방향으로 틀라는 네비게이션」이라고 하신 것이
+       *     그 뜻이다 — 「특정」은 **안 바뀐다**는 말이다
+       */
+      way: wayFor(
+        wrap((t.az ?? 0) - (sky.noseAz ?? 0)),
+        (t.el ?? 0) - (sky.noseEl ?? 0),
+      ),
+      /** 판정 — 첫 결심 한 번만 들어간다 (`null` 이면 아직 안 눌렀다) */
+      band: null,
+      hurt: null,
       /** 이 탄이 맞을 것인가 — **주사위는 쏘는 순간 이미 던져졌다.**
        *  ★ 화면이 이걸 읽어서 **맞을 것에만** 경고와 화살표를 낸다.
        *    빗나갈 탄에까지 경고하면 그건 거짓말이고, 한 번 거짓말한
@@ -342,25 +378,24 @@ export function stepSky(sky, dt, {
     // ══ ★★★ v84 — **옆으로 뺀 만큼 쌓인다** ═══════════════════════════
     //  ★ 정면으로 파고들거나 뒤로 물러나는 것은 회피가 아니다 (빔 기동).
     //    `evade` 는 이미 급기동 배수가 곱해져서 온다 (`main.js`)
-    if (evade) {
-      // ★ v98 — 기수 기준으로 옮기는 일도 `frame.js` 가 한다
-      const r = relOf(s, { yaw: sky.noseAz ?? 0, pitch: sky.noseEl ?? 0 });
-      // ══ ★★★ v111 — **굴리기(Q/E)와 타이밍이 붙었다** ═══════════════
-      //  ★ 사장님 「미사일이 날아올때 **q e를 써서 회피기동**을 하면 높은
-      //    확률로 회피하거나 **피해를 줄일 수** 있도록」
-      //  ★★ 얼마나 쌓이나는 **표가 정한다** (`evade-table.js gainAt`) —
-      //    남은 시간이 창 안이면 굴리기가 크게 쌓이고, 밖이면 0 이다.
-      //    여기서 또 세면 화면의 고리와 규칙이 갈라진다
-      s.dodge += gainAt(s.t, {
-        push: evadeGain(r.az, r.el, evade.x ?? 0, evade.y ?? 0),
-        roll: Math.abs(evade.roll ?? 0),
-        // ★ v115 — 「반사」 특성이 창을 넓힌다. **여기서 안 정한다** —
-        //   `main.js` 가 `growth-table.js effectOf` 가 낸 값을 넘겨 준다
-        wide: evadeWide,
-        // ★ 급기동 배수는 `main.js` 가 이미 `evade.x/y` 에 곱해서 준다 —
-        //   여기서 또 곱하면 두 번 곱해진다. 굴리기 쪽만 따로 곱한다
-        burst: false,
-      }) * dt;
+    // ══ ★★★ v135 — **한 번의 결심** ═══════════════════════════════════
+    //  ★ 사장님 「**그거대로 누르면 완벽 회피** … **늦거나 못 누르면
+    //    피해도가 커지도록**」
+    //
+    //  ★★★ **첫 누름 하나만 센다.** 두 번째부터 안 세는 까닭:
+    //    ① 안 그러면 **연타가 답**이 되어 「특정 타이밍」이 없어진다
+    //    ② 그리고 지시가 「특정 방향」이므로, 여러 번 눌러 맞히는 것은
+    //       지시를 따른 것이 아니라 **훑은** 것이다
+    //  ★ 이르게 누른 것도 **결심으로 친다** — 실기에서 일찍 꺾으면 유도가
+    //    다시 문다. 「일단 눌러 놓고 본다」가 공짜면 타이밍이 다시 없어진다
+    if (s.willHit && s.band === null && dodgeKeys?.length) {
+      const r = judge(s.way, dodgeKeys, s.t, { agile, wide: evadeWide });
+      if (r.band !== 'none') {
+        s.band = r.band;
+        // ★ 이른 것은 「너무 일렀다」로 굳고, 벌은 반대로 꺾은 것과 같다 —
+        //   둘 다 **지시를 안 따른 것**이라 값이 같아야 앞뒤가 맞는다
+        s.hurt = r.band === 'early' ? DODGE2.hurt.wrong : r.hurt;
+      }
     }
     if (s.t > 0) continue;
     sky.incoming.splice(i, 1);
@@ -371,16 +406,24 @@ export function stepSky(sky, dt, {
     //  ★ 「빗나갔다」와 「피했다」를 **이름부터 가른다.** v83 까지 둘이
     //    같은 칸(`dodged`)이었고, 그래서 「피할 시간을 줬다」는 말이
     //    실제로는 「주사위를 늦게 굴렸다」였다
-    if (s.dodge >= DODGE.need) { sky.evaded++; hits.push({ miss: true, evaded: true }); continue; }
+    //  ★★★ v135 — **완벽하게 맞췄으면 빗나간다.** v134 까지는 쌓은 양이
+    //    `DODGE.need` 를 넘느냐였고, 그 양은 **급기동(추진제) 없이는
+    //    원천적으로 못 채웠다.** 사장님 「그거대로 누르면 완벽 회피」로
+    //    그 저울이 뒤집혔다 (`docs/space/DODGE.md §9`)
+    if (s.band === 'perfect') { sky.evaded++; hits.push({ miss: true, evaded: true }); continue; }
     if (s.roll > s.pk) { sky.dodged++; hits.push({ miss: true }); continue; }
     sky.tookHits++;
     const where = pickHit(sky.rnd);
     hits.push({
       miss: false, where,
-      // ★★★ v111 — **못 피해도 덜 맞는다** (사장님 「피해를 줄일 수」).
-      //   다 못 채워도 쌓은 만큼 준다 — 되거나 안 되거나 둘뿐이면
-      //   「거의 피했다」가 없어지고, 그러면 아깝지가 않다
-      soft: +hurtMult(s.dodge).toFixed(2),
+      // ══ ★★★ v135 — **늦거나 틀리거나 안 눌렀거나** ═══════════════════
+      //   ★ 사장님 「늦거나 못 누르면 **피해도가 커지도록**」.
+      //   ★★ 이름은 `soft` 그대로 둔다 (읽는 자리가 여럿이다) — 다만 뜻이
+      //     **뒤집혔다**: v134 까지는 「1 보다 작아지는 경감」이었고, 이제는
+      //     **1 보다 커질 수 있는 배수**다. 안 누르면 ×1.8 이다
+      soft: +(s.hurt ?? DODGE2.hurt.none).toFixed(2),
+      /** 화면이 왜 아팠는지 말할 수 있게 — 「늦었습니다」 · 「반대입니다」 */
+      band: s.band ?? 'none',
       // ★ 포함은 한 발이 더 아프다 (`punch`) — 「두껍고 세다」의 뒷절반
       punch: KINDS[s.kind]?.punch ?? 1,
       // ★ 세 번에 한 번만 고장이 난다 — 매번이면 회차가 고장 목록이 된다
@@ -422,7 +465,9 @@ export function stepSky(sky, dt, {
 export function threatNow(sky, sx = 0, sy = 0) {
   let best = null;
   for (const s of sky.incoming) {
-    if (!s.willHit || s.dodge >= DODGE.need) continue;
+    // ★★★ v135 — 이미 **결심이 끝난** 탄은 안 돌려준다. 완벽하게 피했으면
+    //   화면에서 곧 사라져야 「해냈다」가 되고, 틀렸으면 더 시킬 것이 없다
+    if (!s.willHit || s.band !== null) continue;
     if (!best || s.t < best.t) best = s;
   }
   if (!best) return null;
@@ -430,9 +475,16 @@ export function threatNow(sky, sx = 0, sy = 0) {
   const relAz = r.az, relEl = r.el;
   return {
     id: best.id, t: +best.t.toFixed(2), relAz, relEl,
-    dodge: best.dodge, need: DODGE.need,
-    /** 0~1 — 얼마나 뺐나. 화면이 막대로 그린다 */
-    k: Math.max(0, Math.min(1, best.dodge / DODGE.need)),
+    /**
+     * ★★★ v135 — **쏘는 순간에 굳은 지시**를 그대로 돌려준다.
+     *   ★ 여기서 다시 재면 기수를 돌리는 동안 지시가 뒤집히고, **뒤집히는
+     *     지시는 못 따른다.** 사장님이 「**특정** 방향」이라고 하신 뜻이 그것이다.
+     *   ★★ 그리고 이것이 「재는 곳을 둘로 만들지 않는다」의 자리다 —
+     *     화면·판정·검사가 **같은 `way`** 를 본다
+     */
+    way: best.way,
+    band: best.band,
+    /** 옛 화살표를 쓰는 자리가 있어 남긴다 — **뜻은 `way` 가 갖는다** */
     dir: evadeDir(relAz, relEl, sx, sy),
   };
 }
@@ -578,6 +630,8 @@ export function summary(sky) {
       //   「맞을 것에만」 경고와 화살표를 낸다
       willHit: !!s.willHit, dodge: +(s.dodge ?? 0).toFixed(2),
       need: DODGE.need,
+      /** ★★★ v135 — **어느 쪽으로 빼라고 했나 · 결심이 어떻게 났나** */
+      way: s.way ?? null, band: s.band, hurt: s.hurt,
     })),
     tookHits: sky.tookHits, dodged: sky.dodged, evaded: sky.evaded,
     list: sky.list.map((t) => ({

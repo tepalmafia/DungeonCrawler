@@ -213,7 +213,18 @@ import { TURRET_RISE } from './world/turret.js';
 // ★ 떠도는 것들 — 우주 쓰레기와 죽은 위성 (사장님 요청 · game/target-table.js)
 import { KINDS as TKINDS, TARGET, ENEMY_FIRE, DODGE, evadeWord } from './game/target-table.js';
 // ★★★ v111 — **회피 타이밍** (사장님 「타이밍을 어떻게 줄지」). 고리와 규칙이 한 표를 본다
-import { EVADE, ringAt, RING_WORD } from './game/evade-table.js';
+// ★★★ v135 — `EVADE`·`ringAt`·`RING_WORD` 는 **접혔다.** 안 부른다
+//   (지우지는 않는다 — 왜 접었는지가 `evade-table.js` 머리에 있다)
+// ★★★ v135 — **회피는 「방향 + 창」이다** (`docs/space/DODGE.md`)
+import {
+  // ★★ **이름이 둘 겹쳤다.** `WAYS` 는 `salvage-table.js`(회수하는 길 셋)가,
+  //   `bandAt` 은 `aim-table.js`(조준 띠)가 이미 쓴다. v131 의 `PICK` 충돌과
+  //   같은 자리라 같은 답을 쓴다 — **별명**을 준다.
+  //  ★ 짐작해서 「안 겹치겠지」로 넘기지 않았다: 브라우저가 「이미
+  //    선언됐다」로 그 자리에서 잡았고, **게임이 통째로 안 떴다.**
+  //    이런 것은 뼈대 검사가 못 잡는다 — 뼈대는 표 하나만 읽으니까
+  WAYS as DWAYS, WAY_KEYS, wayWord, BAND_WORD, bandAt as dodgeBandAt, ringAt2, arrowOf, wayFor,
+} from './game/dodge-table.js';
 // ★★★ v114 — **조준 띠** (사장님 「정확히 안쪽을 맞출 수록 데이미지가」)
 import { bandAt, HIT_WORD } from './game/aim-table.js';
 // ★★★ v114 — **인벤토리와 제조** (사장님 「인벤토리도 만들어야지. 제조하는 것도」)
@@ -358,7 +369,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 134;
+export const VERSION = 135;
 
 const canvas = document.getElementById('view');
 const cross = document.getElementById('cross');
@@ -990,6 +1001,28 @@ addEventListener('keydown', (e) => {
   audio.setMuted(!audio.muted);
   say(ai, audio.muted ? '소리 꺼짐 (M)' : '소리 켜짐 (M)', 'tell');
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v135 — **회피 키를 「누른 순간」만 모은다** (`dodge-table.js`)
+//
+//  ★ 사장님 「특정 방향으로 틀라는 네비게이션이 나오고 **그거대로 누르면
+//    완벽 회피** … 특정 타이밍 안에 **늦거나 못 누르면 피해도가 커지도록**」
+//
+//  ★★★ **눌러 놓고 있는 것을 세면 안 된다.** 매 걸음 「지금 A 가 눌려
+//    있나」를 보면 **A 를 처음부터 잡고 있는 것이 답**이 되고, 그러면
+//    「특정 타이밍」이 없어진다. 그래서 `keydown` 의 **모서리**만 담고,
+//    한 걸음이 읽어 가면 비운다.
+//  ★ `e.repeat` 를 거른다 — 브라우저가 눌린 키를 되풀이해 보내면 그것도
+//    「계속 누르고 있는 것」이고, 세면 같은 함정이다
+// ══════════════════════════════════════════════════════════════════════════
+let dodgeEdge = [];
+addEventListener('keydown', (e) => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  const way = WAY_KEYS.find((k) => DWAYS[k].key === e.code);
+  if (way && !dodgeEdge.includes(way)) dodgeEdge.push(way);
+});
+// ★ 창 밖으로 나가면 손을 뗀 것으로 친다 — 안 비우면 돌아왔을 때 옛 누름이 산다
+addEventListener('blur', () => { dodgeEdge = []; });
 
 // ── 상태 ────────────────────────────────────────────────────
 const me = {
@@ -2077,8 +2110,15 @@ function takeHits(list) {
     hitNow = true;
     faults.wear.hull = Math.min(1, faults.wear.hull + w.hull * punch);
     heat = Math.min(HEAT.max, heat + w.heat * punch);
-    // ★ 반쯤 피한 것은 **말해 준다** — 안 말하면 노력이 있었는지 모른다
-    if ((h.soft ?? 1) < 0.9) say(ai, `빗겨 맞았습니다 — 피해 ${Math.round((1 - h.soft) * 100)}% 감소`, 'tell');
+    // ══ ★★★ v135 — **왜 아팠는지 말한다** ═══════════════════════════
+    //  ★ 사장님 「늦거나 못 누르면 **피해도가 커지도록**」. 커지기만 하고
+    //    **왜 커졌는지 안 말하면** 그건 벌이 아니라 그냥 운 나쁜 일이다 —
+    //    「안 된다」까지만 말하는 안내는 안내가 아니다 (v133 의 그 자리).
+    //  ★★ `soft` 는 이제 **1 보다 클 수 있다** (안 누르면 ×1.8). 뜻이
+    //    뒤집혔으므로 옛 「피해 N% 감소」 문구는 낡은 것이다
+    if ((h.soft ?? 1) > 1.05) {
+      say(ai, `${BAND_WORD[h.band] ?? ''} — 피해 ${Math.round((h.soft - 1) * 100)}% 증가`, 'warn');
+    }
     // ══ ★★★ **맞은 소리** (v74 · 진공 규칙) ═══════════════════════════
     //  밖에서 터지는 것은 안 들린다. **선체에 닿은 것만** 들린다 —
     //  공기가 아니라 금속을 타고 들어온 소리다 (구조전달음).
@@ -4722,13 +4762,31 @@ window.SPACE = {
    *   회피 타이밍(고리)을 화면에서 보려면 탄이 날아오고 있어야 하는데,
    *   실제로 적이 쏠 때까지 기다리면 헤드리스로 몇 분이다 (시계가 1/25)
    */
-  putShotAtMe(sec = null) {
+  //  ★★★ v135 — **어느 쪽에서 오는지도 넣는다.** 회피는 이제 「방향」이
+  //    있으므로, 늘 정면에서만 오면 지시가 늘 같은 것 하나가 된다
+  putShotAtMe(sec = null, { daz = 0, del = 0 } = {}) {
+    const az = aimAz + daz, el = aimEl + del;
     sky.incoming.push({
       id: sky.next++, from: sky.list[0]?.id ?? 0, kind: sky.list[0]?.kind ?? 'raider',
-      az: aimAz, el: aimEl, dist: 60,
+      az, el, dist: 60,
       t: sec ?? ENEMY_FIRE.fly, pk: 1, roll: 0, dodge: 0, willHit: true,
+      // ★ 게임이 쏠 때와 **같은 자를 쓴다** — 여기서 따로 정하면 검사가
+      //   게임과 다른 것을 보게 된다 (「재는 곳을 둘로 만들지 않는다」)
+      way: wayFor(daz, del), band: null, hurt: null,
     });
-    return sky.incoming.length;
+    return { n: sky.incoming.length, way: sky.incoming[sky.incoming.length - 1].way };
+  },
+  /** ★★★ v135 — 검사가 **회피 키를 누른 것으로** 친다 (진짜 키도 먹는다) */
+  putDodgeKey(way) { if (WAY_KEYS.includes(way)) dodgeEdge.push(way); return dodgeEdge.slice(); },
+  /** ★★★ v135 — 회피가 어떻게 됐나 (검사와 화면이 같은 것을 읽는다) */
+  get dodge() {
+    const s = sky.incoming[0] ?? null;
+    return {
+      ways: WAY_KEYS.map((k) => ({ key: k, code: DWAYS[k].key, word: DWAYS[k].word })),
+      shot: s ? { t: +s.t.toFixed(2), way: s.way, band: s.band, hurt: s.hurt } : null,
+      say: evSay?.textContent ?? '',
+      shown: !!evBox && !evBox.hidden,
+    };
   },
   /**
    * ══ ★★★ v113 — **쏜 것이 어느 쪽을 보나** (사장님 「모양이 이상하게」) ══
@@ -7652,7 +7710,11 @@ function frame(now) {
     // ══ ★★★ **등대가 말한다 — 그리고 말만 한다** ═════════════════════
     //  ★ 조종간은 손이 잡는다. 등대는 **어느 쪽인지**까지다.
     //    「최종 결정은 플레이어가」가 이 두 줄에 걸려 있다
-    if (th) say(ai, AI_LINES.evade(evadeWord(th.dir)), 'alarm');
+    // ★★★ v135 — **누를 키까지 말한다.** 「좌현으로 빼십시오」는 무엇을
+    //   하라는 말이 아니다 — 사장님이 v131 에 「뭘 어떻게 고르라는거야?
+    //   단축키가 있어?」로 겪으신 것과 **같은 병**이라, 같은 답을 쓴다:
+    //   키를 글에 안 박고 표(`wayWord`)에서 읽어 온다
+    if (th) say(ai, AI_LINES.evade(wayWord(th.way)), 'alarm');
     else {
       // 아직 안 쐈다 — **겨누는 동안** 알린다 (쏘고 알리면 늦다)
       const soon = steering ? aimingSoon(sky) : null;
@@ -7664,6 +7726,11 @@ function frame(now) {
     evade,
     // ★ v115 — 「반사」 특성이 회피 창을 넓힌다 (`grow.window`)
     evadeWide: grow.window,
+    // ══ ★★★ v135 — **이번 걸음에 새로 눌린 회피 키** ═══════════════════
+    //  ★ 모서리만 넘기고 **여기서 비운다.** 한 걸음이 읽어 간 누름을
+    //    다음 걸음이 또 읽으면 그건 「누르고 있는 것」을 세는 것이다
+    dodgeKeys: dodgeEdge,
+    agile: burstNow,
     // ══ ★★★ **항로는 자동항법에만 영향을 준다** (v82) ═══════════════
     //
     //  ★ 사장님 「**항로 설정이 안되면 운전할 수 없잔아.** 이것도 고쳐.
@@ -7685,6 +7752,9 @@ function frame(now) {
     //   「눌러도 안 빨라진다」가 맞았다
     close: 1 + (RUSH.close - 1) * (boost.k ?? 0),
   }) ?? {};
+  // ★★★ v135 — **읽었으면 비운다.** 안 비우면 한 번 누른 것이 매 걸음
+  //   다시 세어져 「누르고 있으면 된다」가 된다 (위 `dodgeEdge` 참고)
+  if (dodgeEdge.length) dodgeEdge = [];
   takeBumps(skyEv.bumps ?? []);
   // ══ ★★★ **회수 한 걸음** (v81) — 꾸러미가 흩어지고 그물이 감기고
   //   지원이 다가온다. `stepSky` 바로 뒤여야 꾸러미가 **같은 프레임의**
@@ -7953,7 +8023,10 @@ function frame(now) {
     const show = !!threat && steering && !paused;
     evBox.hidden = !show;
     if (show) {
-      const d = threat.dir;
+      // ★★★ v135 — **화살표도 지시에서 나온다.** 옛 `threat.dir` 은 매
+      //   프레임 다시 재는 값이라, 기수를 돌리면 **글은 「좌현으로」인데
+      //   화살표가 오른쪽**을 가리키는 일이 났다. 둘이 한 표에서 나온다
+      const d = arrowOf(threat.way);
       const R = 132;
       const deg = Math.atan2(-d.y, d.x) * 180 / Math.PI;
       evTip.style.transform = `translate(${(d.x * R).toFixed(0)}px, ${(-d.y * R).toFixed(0)}px) rotate(${deg.toFixed(0)}deg)`;
@@ -7968,15 +8041,24 @@ function frame(now) {
       //  ★ 고리와 규칙이 **같은 표**를 본다 (`evade-table.js ringAt`) —
       //    화면이 「지금」이라고 했는데 규칙이 아니면 그 계기는 그 뒤로
       //    아무도 안 믿는다 (이 배의 오랜 규약)
-      const ring = ringAt(threat.t ?? 0);
-      evBox.dataset.band = ring.band;
-      evTip.style.setProperty('--ring', `${(28 + ring.r * 92).toFixed(0)}px`);
-      // ★ v111 — 처음에 여기서 「— Q · E」를 덧붙였다가 태웠다.
-      //   `RING_WORD.now` 가 이미 그 말을 들고 있어서 **두 번** 나왔다
-      //   (「★ 지금 — Q · E — Q · E」). 말은 표 한 곳에만 둔다
-      evSay.textContent = `${evadeWord(d)} · ${RING_WORD[ring.band]}`;
+      // ══ ★★★ v135 — **고리와 판정이 같은 창을 본다** ═══════════════════
+      //  ★ v134 까지 고리는 `evade-table.js` 의 창을 보고, 판정은 **누적**을
+      //    봤다. 그래서 「★ 지금」이 뜬 순간에 눌러도 안 피해지는 일이
+      //    있었다 — 「재는 곳을 둘로 만들지 않는다」를 어긴 자리다
+      const band = dodgeBandAt(threat.t ?? 0, { agile: burstNow, wide: grow.window });
+      evBox.dataset.band = band;
+      evTip.style.setProperty('--ring', `${(28 + ringAt2(threat.t ?? 0) * 92).toFixed(0)}px`);
+      // ══ ★★★ **어느 키를 누를지 화면이 말한다** ═══════════════════════
+      //  ★ 사장님 「**특정 방향으로 틀라는 네비게이션**이 나오고 그거대로
+      //    누르면 완벽 회피」. 여태 화면은 「좌현으로 빼십시오」라고만 했고
+      //    **누를 키를 안 말했다** — 이 저장소가 세 번 덴 그 자리다
+      //    (v110 「WASD 로 걷습니다」 · v82 「관측실 해도대」 · v131 「R 되돌리기」).
+      //  ★★ 그래서 키를 **글에 안 박고** 표에서 읽는다 (`wayWord`)
+      evSay.textContent = `${wayWord(threat.way)} · ${BAND_WORD[band]}`;
       evSay.style.transform = `translate(calc(-50% + ${(d.x * R).toFixed(0)}px), ${(-d.y * R + 74).toFixed(0)}px)`;
-      evBar.style.width = `${Math.round(threat.k * 100)}%`;
+      // ★ 막대는 이제 「얼마나 뺐나」가 아니라 **남은 시간**이다 — 누적이
+      //   접혔으므로 잴 것이 시간뿐이고, 그게 사장님이 물으신 「타이밍」이다
+      evBar.style.width = `${Math.round(ringAt2(threat.t ?? 0) * 100)}%`;
     }
   }
 

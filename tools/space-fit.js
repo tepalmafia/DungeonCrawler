@@ -131,7 +131,15 @@ console.log('\n[3] ★★★ **장르 기둥 어디에도 안 붙는 표가 있�
    *   둘 다 **검사가 게임을 견주는 자**다 (게임이 읽으면 오히려 이상하다)
    */
   const BY_TOOLS = ['genre-table.js', 'story-table.js'];
-  const orphan = files.filter((f) => !BY_TOOLS.includes(f)
+  // ══ ★★★ v135 — **일부러 접은 표는 비켜 간다** ═════════════════════════
+  //  ★ 표시를 **접힌 파일 자신**이 들게 했다 (`export const FOLDED`). 목록을
+  //    다른 곳에 두면 목록과 파일이 갈라진다 — 「접힌 검사 아홉」이
+  //    `FOLDED_CHECKS` 와 파일을 **대조**해야 했던 까닭이 그것이다.
+  //  ★★ 그래도 이 절은 안 죽는다: **잊고 안 물린 표**는 표시가 없으므로
+  //    여전히 빨개진다. 접은 것과 빠뜨린 것을 가르는 것이 이 한 줄이다
+  const folded = files.filter((f) => /export const FOLDED\b/.test(read(f)));
+  if (folded.length) console.log(`   일부러 접은 표 — ${folded.join(' · ')}`);
+  const orphan = files.filter((f) => !BY_TOOLS.includes(f) && !folded.includes(f)
     && !bodies.includes(`/${f}`) && !bodies.includes(`'./${f}`));
   if (orphan.length) console.log(`   아무도 안 쓰는 표 — ${orphan.join(' · ')}`);
   ok(!orphan.length,
