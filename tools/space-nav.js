@@ -27,7 +27,7 @@ import { callOut } from '../web/space/js/game/radar-table.js';
 import {
   makeNav, setFork, forkAt, setMission, clearNav, hasNav, stepNav, summary,
 } from '../web/space/js/game/nav.js';
-import { forkOf, allForks, offerFor, LEG } from '../web/space/js/game/route-table.js';
+import { forkOf, allForks, offerFor, LEG, PICK } from '../web/space/js/game/route-table.js';
 import { RADAR, WEAPONS } from '../web/space/js/game/combat-table.js';
 
 let bad = 0;
@@ -259,11 +259,24 @@ console.log('\n[7] ★★★ **길이 보이나** — 굵은 한 줄 (v130 · �
     `★★★ **적는 값 ${top} · 눈에 보이는 밝기 ${seenTop}** — 사장님 「**희미한**」.`
     + ' 이 둘을 같은 것으로 여기면 「희미하게 적었는데 화면은 진하다」가 난다 (찍어서 알았다)');
   const rOff = roadOf(to, 0, NAV.dead + 5);
-  ok(rOff.length === r0.length && rOff[0].alpha > 0,
+  // ★★★ v131 — **제일 밝은 마디로 견준다.** 양 끝이 0 으로 삭게 되면서
+  //   (사장님 「스르륵 사라지고 나타나고」) 0번 마디는 늘 0 이 됐다 —
+  //   「첫 마디」로 재던 검사가 그 자리에서 빨개졌고, **게임이 아니라
+  //   재는 자가 낡은 것**이었다
+  const topOff = Math.max(...rOff.map((g) => g.alpha));
+  ok(rOff.length === r0.length && topOff > 0,
     '★★★ **벗어나도 길이 안 없어진다** — 벗어났을 때야말로 돌아갈 길이 필요하다.'
     + ` 흐려지기만 한다 (×${ROAD.offDim})`);
-  ok(rOff[0].alpha < r0[0].alpha,
-    `★ 대신 흐려진다 (${rOff[0].alpha} < ${r0[0].alpha}) — 「지금 이 길 위가 아니다」를 색이 말한다`);
+  ok(topOff < top,
+    `★ 대신 흐려진다 (${topOff} < ${top}) — 「지금 이 길 위가 아니다」를 색이 말한다`);
+  // ★★ 점멸 — 마루와 골이 **뚜렷이** 갈리나 (사장님 「자연스럽게 점멸」)
+  const lows = r0.map((g) => g.alpha).filter((a2) => a2 > 0);
+  ok(top > Math.min(...lows) * 4,
+    `★★★ **점멸한다** (제일 밝은 마디 ${top} vs 제일 어두운 ${Math.min(...lows)}) —`
+    + ' 밝기가 반쯤 오르내리는 것은 눈이 「깜빡인다」로 안 읽는다. 골이 거의 0 까지 내려가야 한다');
+  ok(r0[0].alpha === 0 && r0[r0.length - 1].alpha === 0,
+    '★★★ **양 끝이 0 이다** — v130 은 먼 끝이 뭉툭하게 잘려 있었다 (찍어서 봤다).'
+    + ' 끝이 각지면 「그려 놓은 막대」이고, 삭으면 「저 멀리 이어진 길」이다');
   ok(roadOf(null, 0, 0).length === 0,
     '★★ **갈 곳이 없으면 안 그린다** — 늘 떠 있는 길은 길이 아니라 무늬다');
   ok(r0.every((g) => g.state === navState(0)) && rOff.every((g) => g.state === navState(NAV.dead + 5)),
@@ -337,9 +350,12 @@ console.log('\n[9] ★★★ **거점에서도 나오나** (v128 · 사장님 �
     `③ ★★ 거점에서도 **길이 선다** (마디 ${g.length}) — 켜자마자 아무것도 없던 것이 이 판의 병이었다`);
   const w = navWord(cand, 40, { az: 40, el: 5 });
   console.log(`   말 — 「${w}」`);
-  ok(w.includes('고르면') && !w.includes('항로 위'),
-    '④ ★★★ **아직 목적지가 아니라 후보라고 말한다** — 「항로 위」라고 하면 거짓말이다.'
-    + ' 아직 아무 데도 안 가고 있다');
+  // ★★★ v131 — **어떻게 고르는지까지 말해야 한다** (사장님 「뭘 어떻게
+  //   고르라는거야? 단축키가 있어?」). v128 은 「고르면 갑니다」라고만 했고,
+  //   그건 **무엇을 하라는 말이 아니다** — 키가 적혀야 길이 된다
+  ok(w.includes(PICK.name) && !w.includes('항로 위'),
+    `④ ★★★ **후보라고 말하고, 무슨 키로 고르는지까지 말한다** (${PICK.name}) —`
+    + ' 「항로 위」라고 하면 거짓말이고, 키가 없으면 안내가 아니라 감탄이다');
   // ★ 후보 둘이 **서로 다른 쪽**인가 — 같으면 「고를 것이 둘」이 화면에서 하나가 된다
   const two = offerFor({ pick: (a) => a[0], next: () => 0.5 });
   const spots = two.map((o, i) => forkAt(o, [i ? 0.85 : 0.15, 0.5], 'port'));

@@ -43,6 +43,8 @@
 
 // ★★★ v126 — **방향 부르는 법은 이미 배에 있다** (레이더가 쓰는 것)
 import { callOut } from './radar-table.js';
+// ★ v131 — 갈래를 고르는 키 (사장님 「단축키가 있어?」). 이름을 여기서 또 적지 않는다
+import { PICK } from './route-table.js';
 
 export const NAV = {
   /**
@@ -188,9 +190,32 @@ export const ROAD = {
    *   마디가 하나도 안 오고, 흐름이 먼 쪽에서만 보인다
    */
   seg: 14,
-  /** 흐름 — 마디 진하기가 물결치는 파장 (m) 과 깊이 (0~1) */
-  flowLen: 60,
-  flowDepth: 0.45,
+  /**
+   * ★★★ **점멸하며 목적지 쪽으로 흘러간다** (v131).
+   *
+   *   ★ 사장님 (2026-08-13) 「**선이 너무 허접하잖아. 자연스럽게 점멸
+   *     되면서 방향쪽으로 스르륵 사라지고 나타나고 해줘.**」
+   *
+   *   ★★ v130 은 물결이 얕아서(0.45) **그냥 균일한 막대**로 보였다.
+   *     점멸로 읽히려면 **골이 거의 0 까지** 내려가야 한다 — 밝기가
+   *     반쯤 오르내리는 것은 눈이 「깜빡인다」로 안 읽는다.
+   *   ★★★ 그리고 **마루가 좁아야** 한다. 파장이 길고 깊이가 얕으면
+   *     「전체가 숨쉰다」가 되고, 짧고 깊으면 **빛 한 토막이 지나간다**
+   *     가 된다 — 사장님이 말씀하신 「스르륵」이 뒤쪽이다
+   */
+  flowLen: 130,
+  flowDepth: 0.95,
+  /**
+   * ★★ 마루의 좁기 (1 이면 사인, 클수록 좁고 뾰족하다).
+   *   3 이면 한 파장의 3분의 1쯤만 밝다 — 「지나가는 빛」이 된다
+   */
+  flowSharp: 3,
+  /**
+   * ★★★ **양 끝은 0 으로 삭는다.** v130 은 먼 끝이 뭉툭하게 잘려 있었다
+   *   (찍어서 봤다) — 끝이 각지면 「그려 놓은 막대」로 보이고, 삭으면
+   *   「저 멀리 이어진 길」로 보인다. 사장님 「스르륵 사라지고 나타나고」
+   */
+  endFade: 0.22,
   what: '항로 — 목적지까지 뻗는 희미한 한 줄. 복판을 비우려고 아래로 눕혔다',
 };
 
@@ -220,8 +245,14 @@ export function roadOf(to, phase = 0, off = 0) {
     // ★ 물결 — 나아가면 흘러 보인다. 도형을 더하지 않고 흐름만 얻는다
     // ★ 각폭은 못박되 먼 쪽만 조금 좁힌다 — 고르면 깊이가 안 읽힌다
     const degWide = ROAD.wide * (1 + (ROAD.farNarrow - 1) * k);
-    const wave = 1 - ROAD.flowDepth * 0.5
-      * (1 - Math.cos((2 * Math.PI * (d - phase)) / ROAD.flowLen));
+    // ══ ★★★ v131 — **점멸하며 흘러간다** (사장님 「스르륵 사라지고 나타나고」)
+    //  ★ 마루를 좁혀 **빛 한 토막**으로 만든다. `(코사인+1)/2` 를 거듭제곱하면
+    //    마루만 남고 골이 넓어진다 — 사인 그대로면 「전체가 숨쉰다」가 된다
+    const ph = (2 * Math.PI * (d - phase)) / ROAD.flowLen;
+    const bump = ((Math.cos(ph) + 1) / 2) ** ROAD.flowSharp;
+    const wave = 1 - ROAD.flowDepth * (1 - bump);
+    // ★★ **양 끝은 삭는다** — 각지게 끊기면 「길」이 아니라 「막대」다
+    const ends = Math.min(1, Math.min(k, 1 - k) / ROAD.endFade);
     out.push({
       i,
       az: to.az,
@@ -236,7 +267,7 @@ export function roadOf(to, phase = 0, off = 0) {
       deg: +degWide.toFixed(3),
       /** 축에서 몇 도 아래인가 — 「복판을 비웠나」를 검사가 여기서 본다 */
       below: +(((Math.atan(ROAD.drop / d) * 180) / Math.PI)).toFixed(2),
-      alpha: +(ROAD.alpha * (1 + (ROAD.fade - 1) * k) * wave * dim).toFixed(4),
+      alpha: +(ROAD.alpha * (1 + (ROAD.fade - 1) * k) * wave * ends * dim).toFixed(4),
       /** 계기가 쓰는 색 갈래 — 항로점과 **같은 말**을 쓴다 */
       state: navState(off),
     });
@@ -348,8 +379,13 @@ export function navWord(n, off = null, rel = null) {
   //   네비게이션이 안 나와?」). 거점에 서 있는 동안은 목적지가 아니라
   //   **후보**라, 「항로 위」라고 하면 거짓말이 된다 — 아직 아무 데도 안 간다
   if (n.kind === 'port') {
+    // ★★★ v131 — **어떻게 고르는지를 말한다** (사장님 「뭘 어떻게 고르라는거야?
+    //   단축키가 있어?」). v128 은 「고르면 갑니다」라고만 했는데, 그건
+    //   **무엇을 하라는 말이 아니다** — 키를 적어야 길이 된다
     const w = rel ? ` — ${steerWord('', rel.az, rel.el).replace(/^\s*—\s*/, '')}` : '';
-    return a <= NAV.cone ? `${n.name} — 이쪽입니다 · 고르면 갑니다` : `${n.name} — 고르면 갑니다${w}`;
+    return a <= NAV.cone
+      ? `${n.name} — 이쪽입니다 · ${PICK.name} 로 갑니다`
+      : `${n.name} — ${PICK.name} 로 갑니다${w}`;
   }
   if (a <= NAV.cone) return `${n.name} — 항로 위`;
   // ★★★ **벗어날수록 말이 늘어야 한다.** v125 까지는 반대였다 —
