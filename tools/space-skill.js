@@ -15,13 +15,22 @@
 //      ⑥ ★★ **화면을 안 가리나** — 전투 원뿔 밖 · 0.6초 안
 //      ⑦ ★★★ **이미 있는 계통에 물렸나** — 아무것도 안 가리키면 그건
 //         손잡이가 아니라 **새 계통을 하나 더 얹은 것**이다
+//
+//  ★★★ v146 — 사장님 「**스킬 세기랑 쿨 밸런스 확인해봐**」
+//      ⑩ ★★★ **다섯의 세기가 서로 비슷한가** — 하나가 두 배 넘게 세면
+//         **그 하나만 쓴다.** 그러면 「다섯 중 둘」이 뜻을 잃는다
+//      ⑪ ★★★ **쓰면 손해인 것이 없나** · **환산에 쓰는 숫자가 진짜 표와 같나**
 // ══════════════════════════════════════════════════════════════════════════
 import { readFileSync } from 'node:fs';
 import {
   SKILLS, BY_KEY, SLOTS, LANES, FX,
   makeSkills, opensAt, slotsAt, whyNotSkill, skillWhyWord,
   useSkill, stepSkills, isLive, setLane, laneEffect, dmgMult, muted,
+  YARD, dpsLaser, worthOf, usesPerRun,
 } from '../web/space/js/game/skill-table.js';
+import { WEAPONS } from '../web/space/js/game/combat-table.js';
+import { HEAT } from '../web/space/js/game/systems-table.js';
+import { ENEMY_FIRE } from '../web/space/js/game/target-table.js';
 import { KEYS } from '../web/space/js/game/keys-table.js';
 import { MAX_LV } from '../web/space/js/game/growth-table.js';
 import { CONE } from '../web/space/js/game/screen-table.js';
@@ -231,6 +240,66 @@ console.log('\n[9] ★★★ **게임이 이 표를 정말 쓰나**');
     ok(typeof l.name === 'string' && typeof l.what === 'string',
       `★ 전력 갈래 「${l.name}」이 **무엇이 좋아지는지**를 말한다 — ${l.what}`);
   }
+}
+
+
+console.log('\n[10] ★★★ **다섯의 세기가 서로 비슷한가** (v146)');
+{
+  //  ★★★ 「12~30초 안인가」는 **범위**이지 밸런스가 아니다. 밸런스는
+  //    **「한 번 쓰면 얼마를 벌고 얼마나 자주 쓰나」**이고, 그러려면
+  //    다섯을 **하나의 자**로 환산해야 한다 — 레이저 초당 피해
+  console.log(`   자 = 레이저 초당 피해 ${dpsLaser().toFixed(2)}`);
+  console.log('   스킬        쿨    번다   치른다   순이득   **초당**   회차에');
+  const rows = SKILLS.map((k) => ({ k, w: worthOf(k.key), n: usesPerRun(k.key) }));
+  for (const { k, w, n } of rows) {
+    console.log(`   ${k.name.padEnd(6)} ${String(k.cool).padStart(3)}초 ${String(w.gain).padStart(7)}`
+      + ` ${String(w.cost).padStart(7)} ${String(w.net).padStart(8)}   ${String(w.per).padStart(6)}`
+      + `   ${n === Infinity ? '늘' : n}`);
+  }
+  const per = rows.map((r) => r.w.per);
+  const hi = Math.max(...per); const lo = Math.min(...per);
+  const spread = hi / Math.max(1e-6, lo);
+  console.log(`   제일 센 것 / 제일 약한 것 = **${spread.toFixed(2)} 배**`);
+  ok(lo > 0,
+    '★★★ **쓰면 손해인 스킬이 없다** — v145 에 재 보니 **과부하가 초당 −0.178**'
+    + ' 이었다. 열을 두 번 물린 셈이 섞여 있었고(쏘는 열은 과부하가 아니어도'
+    + ' 드는 값이다), 값도 과했다. **쓰면 손해인 것은 스킬이 아니라 함정**이다');
+  ok(spread <= 2.2,
+    `★★★ **제일 센 것이 제일 약한 것의 ${spread.toFixed(2)} 배다** — 2.2 배를 넘으면`
+    + ' **그 하나만 쓴다.** 그러면 다섯을 만든 뜻(「다섯 중 둘」)이 사라진다.'
+    + ' v145 에 재 보니 **14 배**였다');
+  ok(rows.every((r) => r.n >= 8),
+    '★★ **회차에 여덟 번 이상 쓴다** — 2시간 중 전투가 35% 라 치고 센 값이다.'
+    + ' 그보다 적으면 「있는 줄도 모르고 끝나는」 스킬이 된다');
+}
+
+console.log('\n[11] ★★★ **환산에 쓰는 숫자가 진짜 표와 같나**');
+{
+  //  ★★★ `YARD` 는 **딴 표에서 베껴 온 값**이다. 베낀 값은 원본이 바뀌면
+  //    조용히 낡는다 — 그러면 밸런스를 **낡은 자**로 재게 되고, 그게 제일
+  //    나쁘다 (재는 자가 틀리면 답이 다 틀린다). 그래서 여기서 대조한다
+  const pairs = [
+    ['레이저 피해', YARD.laserDmg, WEAPONS.laser.dmg],
+    ['레이저 재장전', YARD.laserReload, WEAPONS.laser.reload],
+    ['레이저 열', YARD.laserHeat, WEAPONS.laser.heat],
+    ['열 상한', YARD.heatMax, HEAT.max],
+    ['열 시작', YARD.heatStart, HEAT.start],
+    ['열 식는 속도', YARD.heatFall, HEAT.fall],
+    ['적 사격 간격', YARD.foeEvery, ENEMY_FIRE.every],
+    ['적 명중률', YARD.foeHit, ENEMY_FIRE.hit[0]],
+  ];
+  let off = 0;
+  for (const [name, mine, real] of pairs) {
+    if (mine !== real) { off++; console.log(`   ★ ${name} — 환산 ${mine} · 진짜 ${real}`); }
+  }
+  console.log(`   대조한 값 ${pairs.length} 개 · 어긋난 것 ${off} 개`);
+  ok(off === 0,
+    '★★★ **환산에 쓰는 숫자가 진짜 표와 하나도 안 어긋난다** — 베낀 값은'
+    + ' 원본이 바뀌면 **조용히 낡는다.** 낡은 자로 재면 답이 다 틀리고,'
+    + ' 그런데 검사는 초록이다 (이 저장소가 제일 무서워하는 모양)');
+  ok(BY_KEY.overdrive.heat < HEAT.max - HEAT.start,
+    `★★★ **과부하의 열(${BY_KEY.overdrive.heat})이 남은 여유(${HEAT.max - HEAT.start})보다 작다** —`
+    + ' 넘으면 **가만히 있다 써도 그 자리에서 과열**이다. 그건 값이 아니라 벌이다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');
