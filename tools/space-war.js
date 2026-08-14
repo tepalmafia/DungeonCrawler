@@ -28,6 +28,8 @@ import {
 import { MISSIONS } from '../web/space/js/game/mission-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
 import { WEAPONS } from '../web/space/js/game/combat-table.js';
+// ★★★ v151 — 「잴 것이 없으면 멈춘다」는 **한 곳에** 있다 (`folded.js` 옆)
+import { measuring } from './unmeasured.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -58,9 +60,102 @@ const RUN = LEG.count * LEG.seconds;
 const killSec = (kind) => (KINDS[kind]?.hits ?? 6) * (WEAPONS.laser.dmg ?? 1)
   * WEAPONS.laser.reload * 1.6;
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v151 — **잴 것이 없으면 통과가 아니라 「측정 불가」다**
+//
+//  ★ 사장님이 `space-screen.js` 에서 잡으신 병이 여기에도 있었다. 이 검사의
+//    알맹이가 **「없어야 한다」 꼴**이기 때문이다:
+//
+//      ok(bad.length === 0, '설계에 없는 고장이 없다')     ← [4]
+//      ok(side === 0,       '옆으로 빼면 한 발도 안 온다')  ← [3]
+//      ok(landed === 0,     '죽은 놈의 탄은 안 온다')       ← [6]
+//
+//  ★★ **`HITS` 가 비면 [4] 가 통째로 저절로 참이 된다** — `[].filter(…)` 는
+//    빈 목록이고, `new Set([]).size === [].length` 는 `0 === 0` 이다.
+//    「맞으면 일이 되나 — 이 판의 심장」이라고 적어 놓고 **심장이 없을 때
+//    제일 크게 초록**이 되는 셈이다. 실제로 `HITS` 를 비우고 돌려 보니
+//    [4] 에 닿기도 전에 게임 쪽이 터졌는데(`target.js` 가 `where.fault` 를
+//    읽는다), **터지는 것도 「못 쟀다」가 아니라 그냥 1** 이었다 —
+//    자동으로 돌리는 쪽에서는 「검사가 하나 실패했다」로만 보인다.
+//
+//  ★★★ 값 하나가 없어져도 같은 일이 난다. `ENEMY_FIRE.aimCone` 을 없애고
+//    돌려 봤더니 이렇게 나왔다:
+//
+//      ✘ 정면이면 맞는다
+//      ✔ **옆으로 빼면 한 발도 안 온다** (원뿔 **undefined**도)
+//
+//    ★ 처음에 여기 「**둘 다 초록**이 된다」고 적었다가 **재 보고 고쳤다** —
+//      앞줄은 빨갛다. 그래도 병은 그대로다: **한 발도 안 쏘는 판에서
+//      「안 온다」가 초록**이고, 게다가 「원뿔 undefined도」라고 **말하면서**
+//      초록이다. 빨강 하나가 옆에 있다고 이 초록이 참이 되지는 않는다.
+//    ★★ 그리고 이런 자리는 **1(불합격)이 아니라 2(못 쟀다)**라야 한다.
+//      값이 없어진 것은 「게임이 나쁘다」가 아니라 **잴 수가 없다**이고,
+//      1 로 나가면 다음 사람이 「[3] 이 깨졌구나」 하고 엉뚱한 데를 판다.
+//
+//  ★ 여기는 **순수 도구**라 닫을 브라우저가 없다. 그래도 모양은 같다:
+//    던지고 · 담고 · **합격/불합격을 찍기 전에** 끝낸다.
+//
+//  ★★ 재는 것이 한 가지가 아니라서 **이름을 나눠 부른다** (`must.as`).
+//    「자리」와 「값」과 「적 종류」를 한 이름으로 찍으면 틀린 말이 나간다 —
+//    v150 에 스킬 줄을 「계기」라고 부른 것이 그 예다.
+// ══════════════════════════════════════════════════════════════════════════
+const must = measuring({
+  tool: 'space-war',
+  what: '맞는 자리',
+  weak: '이 검사의 알맹이는 **「없어야 한다」 꼴**입니다\n'
+    + '(설계에 없는 고장이 없다 · 옆으로 빼면 한 발도 안 온다 ·\n'
+    + ' 죽은 놈의 탄은 안 온다).\n'
+    + '그래서 **표가 비면 그 판정들이 저절로 참**이 됩니다 —\n'
+    + '특히 `HITS` 가 비면 「맞으면 일이 되나」가 통째로 초록입니다.',
+  look: '`game/target-table.js` 의 `HITS`·`KINDS`·`ENEMY_FIRE` ·'
+    + ' `game/mission-table.js` 의 `MISSIONS`',
+});
+
 console.log('\n긴박한가 — 격추 게임의 숫자');
 console.log(`   회차 ${(RUN / 60).toFixed(0)}분 · 적 사거리 ${ENEMY_FIRE.range}m ·`
   + ` ${ENEMY_FIRE.every}초마다 한 발 · 비행 ${ENEMY_FIRE.fly}초`);
+
+// ══ ★★★ **재기 전에 잴 것이 있나부터** ═══════════════════════════════════
+//
+//  ★ 여기서 묻는 것은 전부 **표에서 온 상수**다. 그래서 한자리에 모아
+//    둘 수 있고, 어느 절을 지키는지 옆에 적어 둔다. 시늉이 시작된 뒤에
+//    나오는 값(`head` · `s.incoming`)은 **여기로 안 옮긴다** — 그건
+//    「못 쟀다」가 아니라 **게임이 틀린 것**이라 빨간불이 맞다
+try {
+  // [4] — 이 판의 심장. 둘 중 하나라도 비면 [4] 가 통째로 저절로 참이 된다
+  must.some(HITS, '맞는 자리별 고장을 훑으려는데');
+  must.as('고장 열쇠').some(MISSIONS, '설계에 있는 고장을 세려는데');
+  must.as('값').value(FAULT_CHANCE, 'FAULT_CHANCE', '몇 번에 한 번 일이 되나를 재려는데');
+
+  // [1]·[3]·[6] — 적 하나를 띄워 쏘게 한다
+  must.as('적 종류').some(
+    Object.values(KINDS).filter((k) => k.shoots || k.rams),
+    '쏘거나 들이받는 것을 세려는데',
+  );
+  //  ★ `spawnRaider` 가 이것 하나를 집어 온다. 없으면 [1]·[3]·[6] 이
+  //    **아무것도 안 띄운 채로** 「안 온다」를 재게 된다
+  must.as('적 종류').has(KINDS, 'raider', '적 표에서');
+  //  ★ `killSec` 안의 `?? 6` 이 이 자리를 조용히 메운다 — 기본값은
+  //    **못 잰 것을 잰 것처럼** 보이게 하므로 여기서 먼저 못박는다
+  must.as('값').value(KINDS.raider?.hits, 'raider.hits', '부수는 데 걸리는 초를 셈하려는데');
+  must.as('값').all(ENEMY_FIRE, ['every', 'range', 'aimCone', 'fly', 'hit'], '적 사격 표에서');
+
+  // [2] — 사거리 견줌
+  must.as('값').value(TARGET.range, 'TARGET.range', '우리 사거리와 견주려는데');
+
+  // [5] — 회차 하나를 통째로 시늉한다
+  must.as('값').all(LEG, ['count', 'seconds'], '회차 길이를 뽑으려는데');
+  must.as('값').value(TARGET.wave?.gap?.[1], 'wave.gap 위쪽', '싸움 한 판이 끝났나를 가르려는데');
+  const laser = must.as('무기').has(WEAPONS, 'laser', '무기 표에서');
+  must.as('값').all(laser, ['dmg', 'reload', 'rMax'], '레이저로 부수는 시간을 셈하려는데');
+} catch (e) {
+  //  ★ 딴 오류는 **다시 던진다** — 여기서 삼키면 진짜 고장이
+  //    「측정 불가」로 위장된다
+  if (!must.caught(e)) throw e;
+}
+//  ★ 담긴 것이 있으면 여기서 **2**(못 쟀다)로 끝난다. 아래 절들은 아예
+//    안 돈다 — 잴 것이 없는 채로 도는 것이 바로 거짓 초록의 시작이다
+must.bail();
 
 console.log('\n[1] ★★★ **적이 정말 쏘나** — v69 까지 들이받기만 했다');
 {
@@ -120,6 +215,8 @@ console.log('\n[3] ★★★ **옆으로 빠지면 사격 각이 죽나** — �
 
 console.log('\n[4] ★★★ **맞으면 일이 되나** — 이 판의 심장');
 {
+  //  ★★★ 아래 둘은 **`HITS` 가 비면 저절로 참**이다 (`[].filter(…)` 는 빈
+  //    목록이고 `0 === 0` 이다). 위의 「재기 전에」 절이 그래서 있다
   const KEYS = new Set(MISSIONS.map((m) => m.key));
   const bad = HITS.filter((h) => h.fault && !KEYS.has(h.fault));
   ok(bad.length === 0,
@@ -246,6 +343,10 @@ console.log('\n[6] ★ **죽은 놈의 탄은 안 온다** — 부순 다음 순
   t.az = 0; t.el = 0; t.dist = 60;
   let u = 0;
   while (u < 10 && !s.incoming.length) { stepSky(s, DT, { moving: false }); t.dist = 60; u += DT; }
+  //  ★ `landed === 0` 도 「없어야 한다」 꼴이라 **날아오는 탄이 없으면
+  //    저절로 참**이다. 그런데 그 자리는 「못 쟀다」로 안 돌린다 —
+  //    적이 한 발도 안 쏘는 것은 표가 빈 것이 아니라 **게임이 틀린 것**이고,
+  //    그건 아래 한 줄이 **빨갛게** 잡아야 할 몫이다
   ok(s.incoming.length > 0, '한 발이 날아오는 중이다');
   // 그 사이에 부순다
   s.list = s.list.filter((x) => x !== t);
