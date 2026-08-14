@@ -2025,6 +2025,32 @@ console.log('\n[6z] ★★★ **스킬** — 더 화려한 전투 (v145)');
   ok(kept === 1,
     '⑦ ★★ **저장에 남는다** — 안 담으면 닫았다 켤 때마다 슬롯이 비고, 그러면'
     + ' 「미리 정해 두는 것」이라는 뜻이 회차마다 지워진다 (v141 규약)');
+
+  // ══ ★★★ v147 — **화면이 정말 말하나** ═════════════════════════════
+  //
+  //  ★ 사장님 (2026-08-14) 「스킬 쓸 때 화면 효과 스크린샷 찍어서 보여줘」
+  //    → 찍어 보니 **넷 중 EMP 하나만 읽혔다.** 위 ⑤ 는 「계기 줄이 뜨나」만
+  //    물었고, **화면 효과가 뜨나는 아무도 안 물었다.**
+  //  ★★ 그리고 그 계기 줄은 **배의 상태를 덮고 있었다** — ⑤ 는 「떠 있나」만
+  //    보므로 덮고 있어도 초록이다. **뜨는 것과 읽히는 것은 다르다.**
+  await S(() => { SPACE.putHelmSit(true); SPACE.useSkillNow(SPACE.skills.on[0]); });
+  await p.waitForTimeout(500);
+  ok(await S(() => {
+    const e = document.getElementById('skillfx');
+    return !!e && !e.hidden && !!e.dataset.key;
+  }), '⑧ ★★★ **쓰면 화면 효과가 정말 뜬다** — v145 는 효과가 켜져 있어도'
+    + ' 너무 옅어서(관성 정지 알파 **0.20**) 사장님 화면에 안 보였다.'
+    + ' 얼마나 진한가는 `space-skill.js --see` 가 화소로 잰다');
+  const chip = await S(() => SPACE.chips()['스킬줄']);
+  const pan = await S(() => SPACE.panels());
+  const laps = Object.entries(pan)
+    .filter(([, q]) => q && chip && chip.x0 < q.x1 && q.x0 < chip.x1
+      && chip.y0 < q.y1 && q.y0 < chip.y1).map(([n]) => n);
+  ok(!!chip && !laps.length,
+    `⑨ ★★★ **스킬 줄이 계기를 안 덮는다**${laps.length ? ` — ${laps.join('·')}` : ''}`
+    + ' — v145~v146 은 `left:14px; bottom:92px` 였고 그 자리는 **3D 상태창이**'
+    + ' **이미 쓰고 있었다.** 계기는 3D 판이고 스킬 줄은 DOM 이라 좌표계가'
+    + ' 달랐고, 그래서 **아무 검사도 둘을 나란히 놓지 못했다**');
 }
 
 // ══════════════════════════════════════════════════════════════════════════

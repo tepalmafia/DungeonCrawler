@@ -20,6 +20,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import {
   CONE, BUDGET, PANELS, VIEWS, hitsCone, isCut, overlaps, inCorner,
+  // ★★★ v147 — DOM 딱지 (스킬 줄 · 범례)
+  CHIPS, chipHits,
 } from '../web/space/js/game/screen-table.js';
 
 const PORT = process.env.PORT ?? '8391';
@@ -180,6 +182,64 @@ try {
         `★★★ 이 자세에서 판 셋이 다 **정면**이다 (어긋남 ${worst.toFixed(4)})`);
     }
     await S(() => SPACE.put(SPACE.pos.x, SPACE.pos.z, 0, 0));
+  }
+
+  // ══ ★★★ v147 — **화면에 얹은 딱지가 계기를 덮나** ═══════════════════
+  //
+  //  ★ 사장님이 스킬 효과 화면을 찍어 보시고 잡으신 것: **스킬 줄이
+  //    「배의 상태」 위에 얹혀 있었다** (「4 EMP 방출 19초」가 전력·자국 줄 위).
+  //
+  //  ★★★ 이 검사가 **여태 그것을 못 물었다.** 위의 절들은 전부
+  //    `SPACE.panels()` 만 읽는데, 그건 **3D 판**만 안다. 스킬 줄은
+  //    `position: fixed` 인 DOM 이라 다른 좌표계에 있었고, **한쪽만 읽는
+  //    검사는 「둘이 같나」를 못 묻는다** (v98 규약 그대로다).
+  //    `SPACE.chips()` 가 DOM 사각형을 같은 자(−1~1)로 옮겨 준다.
+  console.log('\n[★] **딱지가 계기를 덮나** (DOM × 3D — 좌표계를 하나로 놓고)');
+  {
+    for (const v of VIEWS) {
+      await p.setViewportSize({ width: v.w, height: v.h });
+      await p.waitForTimeout(300);
+      //  ★ 스킬 줄은 **열린 스킬이 있어야** 뜬다 — 안 띄우고 재면
+      //    「없으니 안 겹친다」로 **초록이 된다.** 그게 죽은 초록이다.
+      //  ★★ 그리고 **슬롯을 채워야 제일 넓다.** 빈 줄로 재면 딱지가 1/3
+      //    폭이라 「안 겹친다」가 나오고, 사람이 쓰는 상태에서는 겹칠 수
+      //    있다 — **제일 나쁜 경우로 재지 않으면 재나 마나다**
+      await S(() => { SPACE.putHelmSit(); SPACE.giveXp(60000); });
+      await p.waitForTimeout(700);
+      await p.keyboard.press('KeyI');
+      await p.waitForTimeout(500);
+      await p.click('#tab-grow', { timeout: 4000 }).catch(() => {});
+      //  ★ **이미 넣은 것은 다시 안 누른다.** 처음에 「안 막힌 단추는 다
+      //    누른다」로 적었더니 창 크기를 바꿀 때마다 **넣었다 뺐다**를
+      //    되풀이해서, 두 번째 창부터 줄이 도로 좁아졌다 (±0.191 → ±0.075).
+      //    그러면 「제일 나쁜 경우로 잰다」가 깨진다
+      await S(() => {
+        for (const b of document.querySelectorAll('#skill-rows button[data-skill]')) {
+          if (!b.disabled && !b.textContent.includes('뺀다')) b.click();
+        }
+      });
+      await p.waitForTimeout(300);
+      await p.keyboard.press('KeyI');
+      await p.waitForTimeout(700);
+      const C = await S(() => SPACE.chips());
+      const P = await S(() => SPACE.panels());
+      for (const [name, spec] of Object.entries(CHIPS)) {
+        const c = C[name];
+        if (!c) { console.log(`   ${v.w}×${v.h}  ${name} — 안 떠 있다`); continue; }
+        const hits = chipHits(c, P);
+        const line = `${v.w}×${v.h}  ${name} x ${c.x0.toFixed(3)}~${c.x1.toFixed(3)}`
+          + ` · y ${c.y0.toFixed(3)}~${c.y1.toFixed(3)}`;
+        if (spec.must) {
+          ok(!hits.length, `★★★ ${line} — ${hits.length ? `**${hits.join('·')} 를 덮는다**` : '아무것도 안 덮는다'}`);
+        } else {
+          console.log(`   ${line} — ${hits.length ? `※ ${hits.join('·')} 와 겹침 (옮길 수 있는 창이라 안 막는다)` : '안 겹침'}`);
+        }
+      }
+    }
+    //  ★★ 스킬 줄이 **떠 있기는 하나** — 위 검사는 「안 뜨면 안 겹친다」로
+    //    지나가므로 여기서 한 번 못을 박는다
+    ok(!!(await S(() => SPACE.chips()))['스킬줄'],
+      '★ 스킬 줄이 **실제로 떠 있다** — 안 떠 있으면 위 절이 죽은 초록이 된다');
   }
 
   ok(!errs.length, `콘솔에 오류가 없다 ${errs.length ? errs.slice(0, 2).join(' · ') : ''}`);
