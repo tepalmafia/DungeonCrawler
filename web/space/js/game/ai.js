@@ -52,14 +52,24 @@ export function say(ai, text, rank = 'tell') {
 
   const k = keyOf(line);
   const last = ai.said.get(k);
-  if (last !== undefined && ai.ran - last < MUTE) { ai.held++; return { ok: false, why: 'same' }; }
+  //  ★★★ v148 — **답은 되풀이를 안 막는다** (`ai-table.js RANKS.answer`).
+  //   방아쇠를 세 번 당기면 세 번 다 답해야 한다. `MUTE`(22초)가 두 번째부터
+  //   삼키고 있었고, 그러면 사람은 「아까는 말해 줬는데 지금은 조용하네 —
+  //   이번엔 되는 건가?」로 읽는다. 그게 제일 나쁜 침묵이다
+  if (!r.always && last !== undefined && ai.ran - last < MUTE) {
+    ai.held++; return { ok: false, why: 'same' };
+  }
 
   if (ai.t > 0) {
     const cur = RANKS[ai.rank] ?? RANKS.tell;
     // ★★ **급한 것이 덜 급한 것을 밀어낸다.** 같은 급이면 새것이 이기되,
     //   앞엣것이 `minShow` 만큼은 읽히고 나서 밀린다
-    if (r.w < cur.w) { ai.held++; return { ok: false, why: 'rank' }; }
-    if (r.w === cur.w && ai.shown < VOICE.minShow) { ai.held++; return { ok: false, why: 'hold' }; }
+    //  ★ 답은 **무엇에도 안 밀린다.** 「지금 왜 안 되나」는 주변 알림보다
+    //    늘 급하다 — 사람이 방금 손을 움직였기 때문이다
+    if (!r.always) {
+      if (r.w < cur.w) { ai.held++; return { ok: false, why: 'rank' }; }
+      if (r.w === cur.w && ai.shown < VOICE.minShow) { ai.held++; return { ok: false, why: 'hold' }; }
+    }
   }
 
   ai.line = line;

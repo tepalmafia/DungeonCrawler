@@ -409,7 +409,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 147;
+export const VERSION = 148;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1131,7 +1131,21 @@ let regionPin = null;
 //   물리적으로도 이상했다. 지금은 열이 내려가고(-0.9/초),
 //   **「추진을 켠다」가 항로를 고른 뒤의 첫 행동**이 된다.
 //   센서는 그대로 꺼 둔다 — 「상대가 안 보인다」를 처음부터 몸으로 알게.
-const power = { thrust: false, cool: true, sensor: false };
+// ══ ★★★ v148 — **능동 탐지를 기본 켜짐으로** ═══════════════════════════
+//
+//  ★ 사장님 「게임을 원활히 하는데 **사소한 제약이 많은지** 확인해보고」
+//
+//  ★★★ 여태 `sensor: false` 였다. 그런데 **레이더가 꺼져 있으면**
+//    락온이 안 되고, 락온이 없으면 **유도탄이 안 나간다.** 그때 뜨는 말이
+//    「레이더가 꺼져 있습니다 — **센서 차단기를 올립니다**」인데,
+//    그 차단기는 **통로 벽**에 있고 v109·v110 이 걷기를 없앴다. 즉
+//    **따를 수 없는 안내**를 하고 있었다 — 처음 켠 사람은 유도탄이
+//    영영 안 나가는 배로 시작한다.
+//  ★★ 켜 두는 값도 그대로다 (자국이 20 늘어 더 잘 들킨다 · `chase-table.js
+//    SIGN.sensor`). **끄는 것이 선택**이지 켜는 것이 숙제가 아니다 —
+//    v148 에 조종석에 스위치를 달았지만, 기본값이 틀리면 스위치가 있어도
+//    「왜 안 되지」로 시작한다
+const power = { thrust: false, cool: true, sensor: true };
 const chase = makeChase();
 // ── 항로 ────────────────────────────────────────────────────
 // ★ **거점에서 시작한다.** 첫 화면이 「항로를 고르십시오」다 —
@@ -1939,7 +1953,7 @@ let skillFx = { key: null, t: 0 };
  */
 function fireSkill(key) {
   const r = useSkill(skills, key, { seat: helmSat, fuel: supply.fuel ?? 0 });
-  if (!r.ok) { say(ai, skillWhyWord(r.why), 'tell'); return; }
+  if (!r.ok) { say(ai, skillWhyWord(r.why), 'answer'); return; }
   const k = SKILL_BY[key];
   skillFx = { key, t: 0 };
   audio?.event(key === 'emp' ? 'latch' : 'tube');
@@ -1984,11 +1998,11 @@ function fireGun() {
   const gate = triggerWhy({
     dead: wrecked || ended, paused, seat: helmSat, why: null,
   });
-  if (gate) { say(ai, gateWord(gate), 'tell'); return; }
+  if (gate) { say(ai, gateWord(gate), 'answer'); return; }
   //  ★★★ v145 — **관성 정지 중에는 못 쏜다** (`skill-table.js drift.mute`).
   //    그것이 이 스킬의 값이다 — 공짜면 늘 이 상태로 다닌다.
   //    ★ 여기도 **말을 한다** — 조용히 막는 문을 또 만들지 않는다 (v143)
-  if (skillMuted(skills)) { say(ai, '관성 정지 중입니다 — 도는 동안은 못 쏩니다', 'tell'); return; }
+  if (skillMuted(skills)) { say(ai, '관성 정지 중입니다 — 도는 동안은 못 쏩니다', 'answer'); return; }
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
   // ★ v100 — **발사관이 잰 오차**를 같이 넘긴다 (짐벌 무기만 쓴다)
@@ -2025,13 +2039,13 @@ function fireGun() {
     //   그것을 찾고, 찾아야 「옆으로 돌자」가 나온다
     if (r.why === 'cover') {
       const n = TKINDS[r.by?.kind]?.name ?? '무언가';
-      say(ai, `${n}에 막혔습니다 — 유도탄은 돌아갑니다`, 'tell');
+      say(ai, `${n}에 막혔습니다 — 유도탄은 돌아갑니다`, 'answer');
       return;
     }
     //  ★★★ v143 — 말은 **`trigger-table.js` 한 곳**에서 온다. 여기서 또
     //    적으면 표와 화면이 갈라지고, 갈라지면 표가 초록인 채로 화면이
     //    조용해진다 (이 저장소가 v133·v141·v142 에 세 번 밟은 자리다)
-    say(ai, gateWord(r.why) + tip, 'tell');
+    say(ai, gateWord(r.why) + tip, 'answer');
     return;
   }
   const w = r.weapon;
@@ -3286,6 +3300,8 @@ function interactStep(dt) {
     // ★ v64 — 주포 손잡이 셋(좌석·발판·손잡이)이 여기 있었다. 걷어냈다
     ship.cock.helmSeatHit,
     ship.outerDoor.hit, ship.cock.autoHit, ship.cock.thrHit, ship.radio.hit, ship.mainBreaker.hit,
+    // ★★★ v148 — 조종석으로 온 차단기 둘 (냉각 · 능동 탐지)
+    ship.cock.coolHit, ship.cock.sensorHit,
     ...(ship.suitRack ? [ship.suitRack.hit] : [])];
   const hit = ray.intersectObjects(targets, true)[0];
   const near = hit && hit.distance <= BODY.reach;
@@ -3299,6 +3315,8 @@ function interactStep(dt) {
   let onSuit = false;
   let onHelmSeat = false;
   let onOuter = false, onAuto = false, onThr = false;
+  /** ★ v148 — 냉각 · 능동 탐지 (조종석 스위치) */
+  let onCool = false, onSensor = false;
   let onCrank = null;
   let onSpot = null;
   /** ★★ v71 — 탄두 크레이들 (기관실 후미) */
@@ -3332,6 +3350,8 @@ function interactStep(dt) {
       if (o === ship.cock.helmSeatHit) { onHelmSeat = !helmSat; break; }
       if (o === ship.cock.autoHit) { onAuto = true; break; }
       if (o === ship.cock.thrHit) { onThr = true; break; }
+      if (o === ship.cock.coolHit) { onCool = true; break; }
+      if (o === ship.cock.sensorHit) { onSensor = true; break; }
 
 
       if (o === ship.outerDoor.hit) { onOuter = true; break; }
@@ -3912,6 +3932,27 @@ function interactStep(dt) {
     } else if (canTurnOn(power)) {
       power.thrust = true; wearFlip(faults); taught.flips++;
       say(ai, '추력 레버를 밉니다', 'tell');
+      audio?.event('click');
+    } else {
+      say(ai, '전력이 모자랍니다', 'warn'); audio?.event('deny');
+    }
+  } else if ((onCool || onSensor) && pressed) {
+    // ══ ★★★ v148 — **냉각 · 능동 탐지 스위치** ═══════════════════════
+    //
+    //  ★ 사장님 「게임을 원활히 하는데 **사소한 제약이 많은지** 확인해보고
+    //    수정해줘」 — 재 보니 이 둘은 **손이 아예 없었다.** 통로 벽의
+    //    차단기가 유일한 길인데 v109·v110 이 걷기를 없앴다.
+    //  ★★ 규칙은 아래 `breaker` 가지와 **똑같다** — 자리만 조종석으로
+    //    옮겼다. 규칙을 여기서 새로 쓰면 두 곳이 갈라진다
+    const key = onCool ? 'cool' : 'sensor';
+    const name = onCool ? '냉각' : '능동 탐지';
+    if (power[key]) {
+      power[key] = false; wearFlip(faults); taught.flips++;
+      say(ai, `${name}를 내립니다`, 'tell'); audio?.event('click');
+    } else if (canTurnOn(power)) {
+      power[key] = true; wearFlip(faults); taught.flips++;
+      say(ai, onCool ? '냉각을 올립니다 — 열이 내려갑니다'
+        : '능동 탐지를 올립니다 — 레이더가 돕니다 (자국이 늡니다)', 'tell');
       audio?.event('click');
     } else {
       say(ai, '전력이 모자랍니다', 'warn'); audio?.event('deny');
@@ -7936,7 +7977,35 @@ function frame(now) {
     }
   }
 
-  const valveOpen = interactStep(dt);
+  // ══ ★★★ v148 — **냉각 밸브는 조종석에서 안 닿는다** ═══════════════
+  //
+  //  ★ 사장님 (2026-08-14) 「**뜨거워서 레이저도 안나가는데?** 게임을
+  //    원활히 하는데 사소한 제약이 많은지 확인해보고 수정해줘」
+  //
+  //  ★★★ 재 보니 **막다른 길**이었다. 다만 **처음 잰 숫자가 틀렸다** —
+  //    브라우저로 재고 「34 까지 27분」이라고 적었는데, 머리 없는 브라우저는
+  //    1~2fps 라 **실시간 30초가 게임 시간 1초**였다. 하마터면 그 숫자로
+  //    고칠 뻔했다 (v92 규약: 재는 것이 화면과 다르면 그 숫자로 고치면 안 된다).
+  //    ★ 그래서 **순수 규칙을 직접 굴렸다** (`game/heat.js stepHeat`):
+  //
+  //      밸브가 닫혀 있어도 **짧게는 식는다** — 95 → 34 가 28.6초.
+  //      냉각 회로가 선체의 열을 **저장고로 옮기기** 때문이다.
+  //      그런데 밸브는 **저장고를 우주로 버리는** 유일한 길이고,
+  //      **6.7분을 밟으면 저장고(840)가 꽉 찬다.** 그 뒤로는 옮길 데가
+  //      없어 선체가 100 에 붙고 **영영 안 내려간다.**
+  //
+  //    까닭은 하나다: 밸브가 **기관실 벽**에 붙은 크랭크인데
+  //    (`world/ship.js valve: { x: engine.x0+1.15, z: 13.8 }`)
+  //    v109·v110 이 **걷기와 방 여섯을 통째로 없앴다.** 즉 `valveOpen` 은
+  //    이제 **영영 false** 이고, 회차 7분째부터 열은 되돌릴 수 없다.
+  //
+  //  ★★ 이건 「제약」이 아니라 **낡은 것**이다 — `space-reach.js` 를 접고
+  //    `space-walk` 아홉을 접은 것과 **똑같은 자리**다 (CLAUDE.md).
+  //    걷기가 돌아오면 밸브도 같이 살아나야 하므로 **지우지 않는다.**
+  //  ★ 값은 안 없어진다: 열은 여전히 **최대 속도를 깎고**(v133),
+  //    전력 몰기(v145)로 무기에 몰면 덜 오른다. 손이 있는 값만 남는다
+  const valveHand = interactStep(dt);
+  const valveOpen = PILOT.canStand ? valveHand : true;
   // ★ 벗어나 있으면 **자국이 준다** — 쫓는 쪽이 내 항로를 예측하고
   //   따라오는데, 예측을 벗어나면 다시 찾는 데 시간이 걸린다
   //   (CHASE2 §2-2 「실제로는 총질이 아니라 궤도다」)
@@ -8364,6 +8433,12 @@ function frame(now) {
     //   표적 위에 얹힌다 (사장님 「락온 위치가 완전 다르잔아」)
     lockAt: combat.radar.id !== null
       ? { az: combat.radar.atAz, el: combat.radar.atEl } : null,
+    //  ★★★ v148 — **묶은 놈이 누구인지**를 같이 준다 (`spot-table.js CLEAR`).
+    //   사장님 「타겟 모습이 나오도록 … **뭘 맞추는지도 모르겠어**」.
+    //   조준경이 표적 **자리에** 도형을 그리고 있어서 실물 대신 그림을
+    //   보게 됐다. 물린 놈의 자리는 **비워야** 하고, 비우려면 그리는 쪽이
+    //   「이놈이 그놈이다」를 알아야 한다 — 각으로 다시 재면 갈라진다
+    lockId: combat.radar.id ?? null,
     // ══ ★★★ v102 — **발사관과 도킹을 계기에 낸다** (사장님 「계기에
     //  표시되도록 해줘」) ═══════════════════════════════════════════════
     //  ★ v100·v101 에 규칙만 만들고 화면에는 안 냈다. **규칙이 있는데
