@@ -244,6 +244,9 @@ import {
   makeSkills, opensAt as skillOpensAt, slotsAt as skillSlotsAt,
   whyNotSkill, skillWhyWord, useSkill, stepSkills, isLive as skillLive,
   setLane as setPipLane, laneEffect as pipEffect, dmgMult as skillDmg, muted as skillMuted,
+  //  ★★★ v147 — 화면 효과의 길이는 **표가 안다** (`FXSHAPE`). 여기서
+  //    if 로 갈라 적으면 그 순간 「재는 곳이 둘」이 된다 — v145 가 그랬다
+  fxSecOf as skillFxSec, blinded as skillBlind,
   FX as SKILL_FX,
 } from './game/skill-table.js';
 /** 가림막 이름 — 「무엇에 막혔는지 이름을 댄다」에 쓴다 */
@@ -406,7 +409,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 146;
+export const VERSION = 147;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -6213,6 +6216,34 @@ window.SPACE = {
     }
     return out;
   },
+  /**
+   * ★★★ v147 — **화면에 얹은 딱지의 자리** (−1~1 · `screen-table.js CHIPS`).
+   *
+   *  ★ 계기 셋은 3D 판이라 `panels()` 가 투영해서 재는데, 스킬 줄은
+   *    `position: fixed` 인 DOM 이라 **아무도 안 쟀다.** 좌표계가 다르니
+   *    「겹치나」를 물으려면 먼저 같은 자로 옮겨야 하고, 그 자가 없어서
+   *    스킬 줄이 배의 상태를 덮는 동안 `space-screen.js` 는 초록이었다.
+   *  ★★ y 를 뒤집는다 — DOM 은 아래로 커지고 화면 좌표는 위로 커진다
+   */
+  chips() {
+    const W = innerWidth || 1; const H = innerHeight || 1;
+    const out = {};
+    for (const [name, id] of [['스킬줄', 'skillbar'], ['범례', 'legend']]) {
+      const el = document.getElementById(id);
+      //  ★ **속이 빈 것은 없는 것으로 친다.** 안 그러면 내용이 안 들어간
+      //    딱지가 화면 밖에 걸쳐 있는 값으로 잡혀 검사가 헛것을 센다
+      const q = el && !el.hidden && el.textContent.trim() ? el.getBoundingClientRect() : null;
+      if (!q || !q.width || !q.height) { out[name] = null; continue; }
+      const x0 = q.left / W * 2 - 1; const x1 = q.right / W * 2 - 1;
+      const y0 = 1 - q.bottom / H * 2; const y1 = 1 - q.top / H * 2;
+      out[name] = {
+        x0: +x0.toFixed(4), x1: +x1.toFixed(4), y0: +y0.toFixed(4), y1: +y1.toFixed(4),
+        cx: +((x0 + x1) / 2).toFixed(4), cy: +((y0 + y1) / 2).toFixed(4),
+        area: +(((x1 - x0) * (y1 - y0)) / 4).toFixed(4),
+      };
+    }
+    return out;
+  },
   panels() {
     const list = [
       ['조준경', ship.sight?.mesh], ['광학창', ship.optic?.mesh],
@@ -8147,7 +8178,14 @@ function frame(now) {
   // ── ★★ 레이더 · 락온 ────────────────────────────────
   //  ★ 레이더를 **새로 안 만든다** — 능동 탐지 차단기가 이미 그것이다.
   //    켜면 보이고, 켜면 보인다 (자국 20 · chase-table SIGN.sensor)
-  combat.radar.on = power.sensor;
+  //  ★★★ v147 — **EMP 를 쏘면 내 눈도 감긴다** (`skill-table.js blind`).
+  //   ★ v145 는 「내 계기도 2초 꺼집니다」라고 **말만 했다.** `blind` 를
+  //     읽는 줄이 게임에 한 곳도 없어서 적만 멈추고 나는 멀쩡했고,
+  //     그러면 EMP 는 양날이 아니라 **그냥 좋은 것**이다. v146 의 밸런스는
+  //     그 값을 빼고 셈했으므로 표까지 같이 틀렸던 셈이다.
+  //   ★★ 새 계통을 안 만든다 — **이 한 줄**이 이미 「센서가 꺼지면 안 보인다」
+  //     이고, 꺼졌을 때의 화면(「센서 꺼짐」)도 이미 지어져 있다
+  combat.radar.on = power.sensor && !skillBlind(skills);
   const aimedNow = aimedAt(sky, aimAz, aimEl);
   // ★ 이름을 `rev` 로 썼다가 **같은 함수 안의 항로 `rev` 와 부딪혀 게임이
   //   통째로 안 떴다.** `node --check` 는 통과한다 — 한 함수가 워낙 길어
@@ -8287,8 +8325,11 @@ function frame(now) {
     //    EMP 고리만 0.6초를 넘는다 (기획 §6 에 그렇게 적어 뒀다)
     const fx = document.getElementById('skillfx');
     if (fx) {
-      const span = skillFx.key === 'emp' ? 0.9
-        : (skillFx.key === 'overdrive' ? SKILL_BY.overdrive.sec : SKILL_FX.maxSec * 2);
+      //  ★★★ v147 — **길이를 표에서 읽는다** (`FXSHAPE[key].sec`).
+      //    여기 if 세 갈래로 적혀 있었고, 그래서 CSS 의 애니 길이와
+      //    **갈라져 있었다** — 과부하는 버프가 3.5초인데 화면이 3초에
+      //    꺼졌다. 재는 곳을 둘로 만들면 반드시 이렇게 된다
+      const span = skillFxSec(skillFx.key);
       const on = skillFx.key && skillFx.t < span;
       if (!on && skillFx.key) { skillFx.key = null; fx.hidden = true; fx.removeAttribute('data-key'); }
       else if (on && fx.dataset.key !== skillFx.key) {
