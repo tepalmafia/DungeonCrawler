@@ -39,6 +39,18 @@
  *     그건 배치가 아니라 시험이다
  */
 export const KEYS = {
+  //  ══ ★★★ v145 — **스킬 셋** (`docs/space/SKILL.md`) ═══════════════════
+  //   ★ 손이 이미 꽉 차서(HAND_MAX 3) **키를 셋만** 늘린다. 그리고 셋 다
+  //     **숫자열과 그 옆**이라 「고르는 자리」라는 규칙이 하나로 유지된다.
+  //   ★★★ 기획서에는 전력 몰기를 `Ctrl+1/2/3` 이라고 적었는데 **물리려다**
+  //     **막혔다**: ① Ctrl+숫자는 **브라우저 탭 전환**이고 ② `core/input.js`
+  //     가 첫 줄에서 `ctrlKey` 를 통째로 버린다(「브라우저 단축키를 안 뺏는다」).
+  //     그래서 **마지막 빈 키 O 하나로 셋을 돌린다** — 전력은 미리 정해 두는
+  //     것이라 급할 때 정확히 고를 필요가 없다
+  skill1: { code: 'Digit4', hand: 'L', finger: '검지', what: '★ 스킬 1번 슬롯' },
+  skill2: { code: 'Digit5', hand: 'L', finger: '검지', what: '★ 스킬 2번 슬롯' },
+  pips: { code: 'KeyO', hand: 'R', finger: '약지', what: '★ 전력 몰기 — 무기 → 기동 → 센서' },
+
   fire: { code: 'Space', hand: 'L', finger: '엄지', what: '쏜다 — 지금 고른 무기' },
   alt: { code: 'Mouse2', hand: 'R', finger: '검지', what: '보조 무기 (유도탄)' },
   thrust: { code: 'KeyR', hand: 'L', finger: '검지', what: '★ 톡 — 추력을 켜고 끈다' },

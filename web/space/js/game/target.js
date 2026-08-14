@@ -128,6 +128,8 @@ function stepEngage(t, k, dt, rnd, list = []) {
   //    빨리 승리」. 그 값이 여기다 — 엔진을 깨면 **못 도망가고 못 온다.**
   //    그래서 「엔진부터 깰까」가 결심이 된다
   if (t.dead?.move) return;
+  //  ★ v145 — EMP 를 맞은 동안은 **못 움직인다** (엔진이 죽은 것과 같다)
+  if ((t.emp ?? 0) > 0) return;
   // ══ ★★★ v86 — **맞으면 도망간다** (사장님 「더 버티던지 도망가던지」) ══
   //  ★ 큰 것만. 자폭정은 몸이 탄이라 안 뺀다. 그리고 **엔진이 살아
   //    있어야** 뺀다 — 안 그러면 「깎아 놓으면 다 도망가서 못 잡는」
@@ -386,6 +388,10 @@ export function stepSky(sky, dt, {
     if (!KINDS[t.kind]?.shoots) continue;
     // ★★ v86 — **무기를 깨면 안 쏜다.** 부위를 노리는 값의 절반이 여기다
     if (t.dead?.shoot) { t.aim = 0; continue; }
+    //  ★★★ v145 — **EMP 를 맞으면 못 쏜다** (`skill-table.js emp`).
+    //    ★ 겨눔(`aim`)까지 지운다 — 「멈췄다」는 뜻이므로 풀린 뒤 다시
+    //      세어야 한다. 안 지우면 4초 뒤에 **모아 둔 것이 한꺼번에** 나간다
+    if ((t.emp ?? 0) > 0) { t.aim = 0; continue; }
     // 우리를 겨누고 있나 — 적은 기수를 우리 쪽으로 돌려야 쏜다
     const onUs = Math.abs(azDiff(t.az, sky.noseAz ?? 0)) <= ENEMY_FIRE.aimCone;
     if (!onUs) { t.aim = 0; continue; }

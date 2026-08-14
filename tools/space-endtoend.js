@@ -1961,6 +1961,73 @@ console.log('\n[6y] ★★★ **가림** — 앞에 뭐가 있으면 (v142)');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+//  ★★★ [6z] **스킬** — 더 화려한 전투 (v145 · `docs/space/SKILL.md`)
+//
+//  ★ 사장님 (2026-08-14) 「더 화려한 전투를 하고 싶은데, 우주 전투에 있을
+//    법한 스킬들을 기획해봐」 → 「기획대로 구현해」
+//
+//  ★★ 뼈대(`space-skill.js`)는 **규칙**을 잰다. 여기서만 나오는 것은
+//    **사람이 거기까지 갈 수 있나**이다: 레벨이 열어 주나 · 창에서 넣나 ·
+//    4·5 를 누르면 정말 나가나 · 화면에 계기가 뜨나
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n[6z] ★★★ **스킬** — 더 화려한 전투 (v145)');
+{
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+  //  ① 레벨이 열어 준다 — 경험을 밀어 넣고 본다
+  await S(() => SPACE.giveXp(9999));
+  await p.waitForTimeout(500);
+  const sk = await S(() => SPACE.skills);
+  console.log(`   열린 스킬 ${sk?.open?.length ?? 0} 개 · 슬롯에 ${sk?.on?.length ?? 0} 개`);
+  ok((sk?.open?.length ?? 0) >= 5,
+    `① ★★★ **레벨이 다섯을 다 연다** (${sk?.open?.length}) — 성장의 사람 갈래가`
+    + ' 여태 **전부 수동 보정**이라 레벨이 올라도 화면이 안 바뀌었다. 그 자리다');
+  ok((sk?.on?.length ?? 0) === 0,
+    '② ★★★ **열렸다고 저절로 장착되지 않는다** — 다섯 중 둘을 **고르는 것**이'
+    + ' 결심이다. 다 켜져 있으면 그건 성장이 아니라 해금표다');
+  //  ③ 성장 창에서 넣는다 — **손으로만** (I → 단추)
+  await p.keyboard.press('KeyI');
+  await p.waitForTimeout(400);
+  const put = await S(() => {
+    const b = document.querySelector('#skill-rows button[data-skill]:not([disabled])');
+    if (!b) return null;
+    const key = b.dataset.skill; b.click(); return key;
+  });
+  await p.waitForTimeout(300);
+  ok(!!put && (await S(() => SPACE.skills.on.length)) === 1,
+    `③ ★★★ **창에서 단추로 넣는다** (${put}) — 창이 없으면 「열렸는데 못 쓴다」가 되고,`
+    + ' 그건 v143 에 덴 「손이 거기 못 간다」와 같은 모양이다');
+  await p.keyboard.press('KeyI');
+  await p.waitForTimeout(400);
+  //  ④ 4 를 누르면 정말 나간다 — **손으로만**
+  const c0 = await S(() => SPACE.skills.cool[SPACE.skills.on[0]] ?? 0);
+  await p.keyboard.press('Digit4');
+  await p.waitForTimeout(700);
+  const c1 = await S(() => SPACE.skills.cool[SPACE.skills.on[0]] ?? 0);
+  ok(c0 === 0 && c1 > 0,
+    `④ ★★★ **4 를 누르니 쿨이 돌기 시작한다** (${c0} → ${c1.toFixed(1)}초) — 표에만`
+    + ' 적고 게임이 그 키를 안 들으면 「표는 초록인데 사람은 못 쓴다」가 된다');
+  //  ⑤ 화면에 계기가 뜬다 — 규칙이 있는데 안 보이면 없는 것과 같다 (v82·v64)
+  ok(await S(() => { const e = document.getElementById('skillbar'); return !!e && !e.hidden && e.textContent.length > 2; }),
+    '⑤ ★★★ **계기 한 줄이 뜬다** — 쿨이 얼마 남았는지를 화면이 말해야'
+    + ' 「지금 쓸까 아낄까」가 결심이 된다');
+  //  ⑥ O 로 전력을 돌린다
+  const lane0 = await S(() => SPACE.skills.lane);
+  await p.keyboard.press('KeyO');
+  await p.waitForTimeout(600);
+  const lane1 = await S(() => SPACE.skills.lane);
+  ok(lane0 !== lane1,
+    `⑥ ★★ **O 로 전력이 옮겨 간다** (${lane0} → ${lane1}) — 기획서에는 Ctrl+1/2/3`
+    + ' 이라고 적었는데 **브라우저 탭 전환**이라 못 쓴다. 물리다 잡혔다');
+  //  ⑦ 닫았다 켜도 남는다
+  await S(() => SPACE.saveNow());
+  const kept = await S(() => SPACE.skills.on.length);
+  ok(kept === 1,
+    '⑦ ★★ **저장에 남는다** — 안 담으면 닫았다 켤 때마다 슬롯이 비고, 그러면'
+    + ' 「미리 정해 두는 것」이라는 뜻이 회차마다 지워진다 (v141 규약)');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 console.log('\n[6p] ★★★ **손 배치** — Space 사격 · R 톡/꾹 (v110)');
 {
   await S(() => { SPACE.putHelmSit(true); });

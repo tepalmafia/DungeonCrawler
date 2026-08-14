@@ -300,6 +300,8 @@ export function fire(c, {
   aimed, locked = null, supply, rnd = Math.random, mount = null, mountAt = null,
   // ★ v142 — 하늘에 뭐가 떠 있나. **가림**을 묻는 데만 쓴다
   list = [],
+  // ★ v145 — 과부하 배수 (`skill-table.js dmgMult`). 여기서 안 재고 받는다
+  dmgMult = 1,
 }) {
   const w = weaponOf(c);
   // ══ ★★★ v119 — **묶었으면 그놈을 쏜다** (조준선이 아니다) ══════════
@@ -431,7 +433,9 @@ export function fire(c, {
     /** 쏠 때 잰 것 — 명중 판정에 쓴다. 선도 무기는 **선도점 기준**이다 */
     off, dist: t.dist,
     fireForget: !!w.fireForget,
-    dmg: w.dmg,
+    //  ★ v145 — **과부하가 배수를 얹는다.** 규칙이 든 자리는 여기 하나다 —
+    //    화면(굵은 빔)은 이 값을 안 보고 `skillFx` 를 본다
+    dmg: w.dmg * dmgMult,
     // ★ v142 — **반쯤 가려지면 잘 안 맞는다** (`COVER.grazeHit`). 막지는
     //   않는다 — 「가장자리로 쏜다」가 **되기는 하되 손해**여야 결심이 된다
     pk: hitChance(w, t.dist) * (thru.hitMult ?? 1),
