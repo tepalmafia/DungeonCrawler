@@ -22,6 +22,8 @@
 // ══════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { SEEN, WRECK, KINDS, lenOf } from '../game/target-table.js';
+// ★★★ v148 — **밖의 해** (사장님 「타겟 모습이 나오도록」)
+import { SUN, SKIN } from '../game/spot-table.js';
 // ★★★ v85 — 사장님이 주신 그림이 있으면 그것을 세운다 (없으면 아래 코드 도형)
 import { modelFor, engineAt } from '../core/models.js';
 // ★★★ v98 — 자리를 아는 곳 하나 (블록아웃). 각+거리 → 자리도 거기서 편다
@@ -42,15 +44,15 @@ const DEG = Math.PI / 180;
 //    우주가 아니게 된다
 const METAL = () => new THREE.MeshStandardMaterial({
   color: 0x6a6f78, roughness: 0.72, metalness: 0.62,
-  emissive: 0x38414f, emissiveIntensity: 0.85,
+  emissive: 0x38414f, emissiveIntensity: SKIN.emissive,
 });
 const DARKM = () => new THREE.MeshStandardMaterial({
   color: 0x2f343c, roughness: 0.9, metalness: 0.3,
-  emissive: 0x232a35, emissiveIntensity: 0.8,
+  emissive: 0x232a35, emissiveIntensity: SKIN.emissive * 0.95,
 });
 const PANELM = () => new THREE.MeshStandardMaterial({
   color: 0x25406b, roughness: 0.35, metalness: 0.55,
-  emissive: 0x152944, emissiveIntensity: 0.7,
+  emissive: 0x152944, emissiveIntensity: SKIN.emissive * 0.85,
 });
 const GLOW = (hex) => new THREE.MeshBasicMaterial({ color: hex });
 
@@ -297,6 +299,38 @@ export function buildTargets(parent) {
   g.name = '떠도는것들';
   parent.add(g);
 
+  // ══ ★★★ v148 — **밖에 해를 놓는다** (`game/spot-table.js SUN`) ═══════
+  //
+  //  ★ 사장님 「타겟 모습이 나오도록 할 수는 없어? **뭘 맞추는지도**
+  //    **모르겠어**」. 55m 정면에 요격기를 세우고 찍어 보니 몸통이
+  //    **한 덩어리 어두운 얼룩**이었다.
+  //
+  //  ★★ 까닭은 v87 이 이미 적어 놨다 — 「우주에서 물체가 보이는 길은 셋:
+  //    ① 햇빛 받는 면 ② 제 엔진 불 ③ 항법등」. 그런데 **③ 만 했다.**
+  //    자체발광은 **모든 면을 똑같이** 밝히므로 「저기 있다」는 만들어도
+  //    **모양은 못 만든다** — 오히려 실루엣을 뭉갠다.
+  //
+  //  ★★★ v82 에 태양을 놓았다가 **배 안까지 밝아진** 사고가 있었고
+  //    (`sky-table.js PLANET` 주석) 그 뒤로 밖에 빛을 안 놓았다. 이번에는
+  //    **층(layer)** 을 쓴다 — three 의 빛은 층이 겹치는 것만 비추므로
+  //    해를 층 2 에만 두고 창밖의 것만 층 2 를 켜면 실내로 샐 길이 없다.
+  //    ★ 짐작 안 하고 **브라우저에서 재 봤다**: 표적은 밝아지고 조종석은
+  //      그대로였다. 안 그랬으면 셰이더로 갔어야 한다
+  const sun = new THREE.DirectionalLight(SUN.color, SUN.lit);
+  sun.position.set(...SUN.dir).normalize().multiplyScalar(300);
+  sun.layers.set(SUN.layer);
+  sun.name = '해';
+  g.add(sun);
+  //  ★★ 채움 빛 — **반대쪽에서 아주 약하게.** 0 이면 그림자 쪽이 완전히
+  //    까매서 배가 반쪽으로 잘려 보인다. 실제로도 별빛·행성반사가 조금 있다
+  const fill = new THREE.DirectionalLight(SUN.fillColor, SUN.fill);
+  fill.position.set(...SUN.dir).normalize().multiplyScalar(-300);
+  fill.layers.set(SUN.layer);
+  fill.name = '채움';
+  g.add(fill);
+  /** ★ 창밖에 새로 선 것은 **반드시 층을 켠다** — 안 켜면 해가 안 닿는다 */
+  const litOutside = (o) => o.traverse((x) => x.layers.enable(SUN.layer));
+
   /** id → { group, kind } */
   const live = new Map();
   /** 터진 조각들 */
@@ -401,6 +435,7 @@ export function buildTargets(parent) {
         GLOW(i % 3 === 0 ? 0xffd27a : 0xff8a4a),
       );
       m.position.copy(at);
+      litOutside(m);
       const s = (big ? 26 : 16) * (0.4 + Math.random());
       bits.push({
         m,
@@ -450,6 +485,9 @@ export function buildTargets(parent) {
           //   값**을 쓴다. 눈에 큰 것이 맞히기도 쉬워야 한다
           const k = KINDS[t.kind];
           o.scale.setScalar((k?.size ?? 1) * 1.6);
+          //  ★★★ v148 — **층을 켠다.** 안 켜면 해가 안 닿아 v147 까지처럼
+          //    한 덩어리 얼룩으로 보인다. 새로 서는 자리마다 부른다
+          litOutside(o);
           g.add(o);
           live.set(t.id, o);
         }

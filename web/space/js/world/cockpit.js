@@ -1258,6 +1258,43 @@ export function buildCockpit(parent, room, H) {
   g.add(autoHit);
   const setAuto = (on) => { autoLamp.color.set(on ? 0x6fd8a0 : 0xff9a3c); };
 
+  // ══ ★★★ v148 — **냉각 · 능동 탐지 스위치가 조종석으로 왔다** ═════════
+  //
+  //  ★ 사장님 「게임을 원활히 하는데 **사소한 제약이 많은지** 확인해보고」
+  //
+  //  ★★★ 재 보니 「제약」이 아니라 **막다른 길**이었다: 차단기 셋 중
+  //    추력만 v66 에 조종석으로 왔고, 나머지 둘은 **통로 벽에 남았다.**
+  //    v109·v110 이 걷기를 없앴으니 그 둘은 **켤 수도 끌 수도 없다** —
+  //    능동 탐지는 처음부터 꺼져 있는데 켤 손이 없고, 그래서
+  //    「레이더가 꺼져 있습니다 — **센서 차단기를 올립니다**」라는
+  //    **따를 수 없는 안내**가 뜬다. 냉각도 같아서 열이 안 내려간다.
+  //
+  //  ★ 추력 레버와 **같은 모양·같은 크기**로 만든다 (v69 에 상자 크기로
+  //    한 번 덴 자리라 그 값을 그대로 쓴다). 규칙은 안 바꾼다 —
+  //    자국이 늘고 전력을 먹는 것은 그대로다. **자리만** 옮긴 것이다
+  const twoSw = [];
+  const mkSwitch = (at, name, onColor) => {
+    const lamp = new THREE.MeshBasicMaterial({ color: 0x2a2f36 });
+    const bx = box(g, 0.24, 0.15, 0.15, DARK, at.x, at.y, at.z);
+    bx.name = name;
+    const li = box(g, 0.15, 0.05, 0.09, lamp, at.x, at.y + 0.08, at.z + 0.02);
+    li.name = `${name}등`;
+    box(g, 0.08, at.y - 0.55, 0.08, FRAME, at.x, (0.55 + at.y) / 2, at.z);
+    const hit = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.40, 0.26),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    hit.position.set(at.x, at.y, at.z);
+    hit.name = name;
+    g.add(hit);
+    const set = (on) => lamp.color.set(on ? onColor : 0x2a2f36);
+    set(false);
+    twoSw.push({ hit, set });
+    return { hit, set };
+  };
+  const coolSw = mkSwitch(SIDE.cool, '냉각 스위치', 0x7fd0ff);
+  const sensorSw = mkSwitch(SIDE.sensor, '능동 탐지 스위치', 0x6fd8a0);
+
   // ══ ★★★ **항로 갈래 판 둘 — 조종석으로 왔다** (v66) ═══════════════
   //  사장님: 「항로도 조정석에서 해야하는거 아냐?? 왜 다른곳에 있어?」
   //
@@ -1306,6 +1343,10 @@ export function buildCockpit(parent, room, H) {
     //   조종석에 들어서는 순간 알아야 한다
     setAuto(state.auto !== false);
     setThrust(!!state.thrust);
+    //  ★ v148 — 새 스위치 둘도 **불로 말한다.** 안 하면 「눌렀는데 바뀐
+    //    줄 모르겠다」가 되고, 그건 스위치가 아니라 장식이다
+    coolSw.set(!!state.power?.cool);
+    sensorSw.set(!!state.power?.sensor);
     // ★★ 갈래 판 — 해도대에 있던 규약을 그대로 가져왔다
     const land = !state.atPort && state.land?.offered ? state.land : null;
     plates.forEach((p, i) => {
@@ -1323,6 +1364,9 @@ export function buildCockpit(parent, room, H) {
   }
   return {
     update, yokeHit, autoHit, helmSeatHit, thrHit, plates,
+    // ★★★ v148 — 조종석으로 온 차단기 둘 (`view-table.js SIDE.cool/sensor`)
+    coolHit: coolSw.hit, sensorHit: sensorSw.hit,
+    setCool: coolSw.set, setSensor: sensorSw.set,
     /** 조준선이 어느 갈래 판에 걸렸나 — 밖에서 넣어 준다 */
     setAim(i) { aimedPlate = i; },
     keyAt(i) { return plates[i]?.fork?.key ?? null; },

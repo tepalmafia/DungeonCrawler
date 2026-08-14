@@ -61,6 +61,8 @@ import { navState } from '../game/nav-table.js';
 // ★★★ v108 — **무리 색** (적 빨강 · 물건 초록 · 행성 파랑).
 //   사장님 「적인지 물체인디 행성인지 알 수 있도록 … 도형으로」
 import { hueOf, bandOf } from '../game/legend-table.js';
+// ★★★ v148 — **표적 자리를 비운다** (사장님 「뭘 맞추는지도 모르겠어」)
+import { CLEAR } from '../game/spot-table.js';
 // ★★★ v114 — **조준 띠** (사장님 「중앙 타겟 영역도 키우고」)
 import { RINGS, SHOW_AT } from '../game/aim-table.js';
 
@@ -279,7 +281,17 @@ function draw(ctx, w, h, s) {
     //   「무엇인지」가 「쏠 수 있나」보다 먼저 읽혀야 한다 —
     //   사거리 밖은 **흐리게** 해서 말한다 (색을 뺏지 않는다)
     ctx.strokeStyle = far ? `${hueOf(t.kind)}66` : hueOf(t.kind);
-    glyph(ctx, t.kind, x, y, r);
+    // ══ ★★★ v148 — **물린 놈 자리에는 도형을 안 그린다** ═══════════════
+    //
+    //  ★ 사장님 「타겟 모습이 나오도록 할 수는 없어? **뭘 맞추는지도**
+    //    **모르겠어**」. 55m 정면에 요격기를 세우고 찍어 보니, 몸통이
+    //    있어야 할 자리에 **쐐기 도형과 사거리 고리가 겹쳐** 있었다 —
+    //    즉 **실물 대신 그림을 보고 있었다.**
+    //  ★★ 안 문 것에는 그대로 그린다. 거기는 아직 실루엣이 안 읽히므로
+    //    도형이 「저기 뭐가 있다」를 대신해야 한다. **물었을 때만** 비운다 —
+    //    무엇을 왜 접는지는 `spot-table.js FOLDED` 에 적어 뒀다
+    const isLocked = s.lockId != null && t.id === s.lockId;
+    if (!isLocked) glyph(ctx, t.kind, x, y, r);
     const d = r0.off;
     if (d < nearD) { nearD = d; near = { t, x, y, r, raz, rel }; }
     // ══ ★★ **쏠 수 있나를 색으로** (v82) ═══════════════════════════
@@ -287,7 +299,10 @@ function draw(ctx, w, h, s) {
     //    잇게 하는 방법은? **색깔로 구분**하던가」
     //  ★★ 지금 든 무기의 사거리로 가른다 — 무기를 바꾸면 **색이 바뀐다.**
     //    그게 「무기를 왜 셋이나 두었나」를 눈으로 말해 준다
-    if (s.wMax) {
+    //  ★ v148 — 물었으면 **사거리 고리도 접는다.** 「닿나 안 닿나」는
+    //    아랫줄이 글로 이미 말한다 (v133 「너무 멉니다 — 유도탄은 닿습니다」).
+    //    같은 말을 고리로 한 번 더 하면서 그 고리가 몸통을 두른다
+    if (s.wMax && !isLocked) {
       const canHit = t.dist <= s.wMax;
       ctx.strokeStyle = canHit ? SHOOT : FAR;
       ctx.lineWidth = Math.max(1.4, h * 0.007);
@@ -369,7 +384,9 @@ function draw(ctx, w, h, s) {
     ctx.moveTo(mx, my - r0); ctx.lineTo(mx + r0, my);
     ctx.lineTo(mx, my + r0); ctx.lineTo(mx - r0, my);
     ctx.closePath(); ctx.stroke();
-    if (wob > 0.4) {
+    //  ★ v148 — **물었으면 접는다.** 게이트 상자가 이미 「이 안 어딘가」를
+    //    말하므로, 겹치면 뜻이 느는 게 아니라 고리만 하나 는다
+    if (wob > 0.4 && s.lockId == null) {
       // 흔들림 고리 — 이 안 어딘가로 간다는 뜻이다
       ctx.strokeStyle = 'rgba(255,180,120,.35)';
       ctx.lineWidth = 1.2;
@@ -759,8 +776,23 @@ function draw(ctx, w, h, s) {
     }
   }
   if (locked) {
-    // 물렸다 — **표적 지시자 상자(TD box)**. 실제 HUD 와 같은 약속이다
-    ctx.strokeRect(near.x - near.r * 1.5, near.y - near.r * 1.5, near.r * 3, near.r * 3);
+    // ══ ★★★ v148 — **네 변이 아니라 귀퉁이 네 토막** ══════════════════
+    //
+    //  ★ 실기 HUD 의 표적 지시 상자(TD box)가 그렇다. 변을 다 그리면
+    //    그 변이 **실루엣을 가로지르고**, 특히 위아래 변이 날개 자리를
+    //    지난다. 귀퉁이만 두면 「여기다」는 그대로 말하면서 **안이 뚫린다.**
+    //  ★ 얼마나 뚫나는 `spot-table.js CLEAR.corner` 가 정한다 — 여기서
+    //    숫자를 적으면 검사가 「정말 뚫렸나」를 못 묻는다
+    const R = near.r * 1.5 * CLEAR.inner;
+    const c = R * 2 * CLEAR.corner;
+    ctx.lineWidth = Math.max(1.8, h * 0.010);
+    ctx.beginPath();
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const px = near.x + sx * R; const py = near.y + sy * R;
+      ctx.moveTo(px - sx * c, py); ctx.lineTo(px, py);
+      ctx.lineTo(px, py - sy * c);
+    }
+    ctx.stroke();
   }
 
   // ── 아래 한 줄 — **숫자로 안 띄운다** ────────────────────
