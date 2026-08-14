@@ -123,7 +123,9 @@ import {
 import { buildBay3D } from './world/bay3d.js';
 import { sectionsFor } from './game/hull-table.js';
 // ★★★ v116 — **속도와 가속도** (사장님 「가속도가 안 느껴지고」)
-import { mpsAt, accOf, fadeAcc, feelOf, speedWord } from './game/speed-table.js';
+//  ★ v152 — `closeK` 를 같이 부른다. **세상이 다가오는 속도를 창밖 속도에서
+//    낸다** — 재는 곳을 둘로 만들지 않으려고 (`speed-table.js` 머리말)
+import { mpsAt, closeK, accOf, fadeAcc, feelOf, speedWord } from './game/speed-table.js';
 import {
   makeBoost, stepBoost, boostMult, boostSign, boosting, summary as boostSummary,
 } from './game/boost.js';
@@ -409,7 +411,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 148;
+export const VERSION = 152;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1145,7 +1147,22 @@ let regionPin = null;
 //    SIGN.sensor`). **끄는 것이 선택**이지 켜는 것이 숙제가 아니다 —
 //    v148 에 조종석에 스위치를 달았지만, 기본값이 틀리면 스위치가 있어도
 //    「왜 안 되지」로 시작한다
-const power = { thrust: false, cool: true, sensor: true };
+// ══ ★★★ v152 — **켜자마자 나아간다** (`drive-table.js` 「전진이 기본」) ═══
+//
+//  ★ 사장님 (2026-08-14) 「**앞으로 이동 중인데 적은 그대로 뒤에 있는데?**」
+//
+//  ★★★ `thrust` 가 **`false`** 로 시작하고 있었다. 그런데 창밖 속도를 내는
+//    `cruise` 가 `power.thrust ? max(0, thr.v) : 0` 이라서, 꺼진 동안은
+//    **W 를 끝까지 밀어도 `cruise` 가 0** 이었다 — 스로틀 막대는 오르고
+//    계기는 「순항」이라 적는데 배는 서 있는 상태.
+//
+//  ★★ v133 이 표에는 「**서 있는 것이 기본이면 매 회차 첫 동작이 「출발」이
+//    되고, 그건 여정이 아니라 시동이다**」라고 **바르게** 적어 놨다.
+//    표를 고치고 **게임을 안 고친** 것이라, 검사는 전부 초록이었다.
+//
+//  ★ 끄는 길은 그대로 둔다 (R 톡 · 추진제 고갈 · 착륙). 「끌 수 있다」와
+//    「꺼진 채로 시작한다」는 다른 말이다
+const power = { thrust: true, cool: true, sensor: true };
 const chase = makeChase();
 // ── 항로 ────────────────────────────────────────────────────
 // ★ **거점에서 시작한다.** 첫 화면이 「항로를 고르십시오」다 —
@@ -8193,13 +8210,29 @@ function frame(now) {
     //  ★★★ 항로는 **어디로 가는가**이지 **가고 있는가**가 아니다.
     //    가고 있는가는 **추력**이 정한다. 구간이 나아가는 것(자동항법의
     //    일)만 `phase` 가 정하면 된다 — 그게 사장님 말씀 그대로다
-    moving: power.thrust && !landBusy(land),
+    // ★★★ v152 — **추진을 껐다고 세상이 멎지 않는다.** 멎느냐는 이제
+    //   `close` 가 말한다 (아래) — 껐으면 `cruise` 가 0 이 되어 `mpsPure` 가
+    //   바닥(`SPEED.idle`)으로 내려가고, 그만큼만 다가온다. 여기서 한 번 더
+    //   막으면 **「별은 조금 흐르는데 세상은 완전히 멎은」** 화면이 난다
+    moving: !landBusy(land),
     // ★ 거점에 대고 있는 동안은 적이 안 온다 — 사는 일이 벌이 되면 안 된다
     quiet: route.phase === RPHASE.PORT,
-    // ★★★ v81 — **급가속이 정말 다가가게** 한다. v80 까지 R 은 화면만
-    //   바꿨다 (먼지·화각·흔들림) — 다가오는 속도는 손도 안 댔으므로
-    //   「눌러도 안 빨라진다」가 맞았다
-    close: 1 + (RUSH.close - 1) * (boost.k ?? 0),
+    // ══ ★★★ v152 — **창밖과 같은 값을 쓴다** (`speed-table.js closeK`) ═══
+    //
+    //  ★ 사장님 「앞으로 이동 중인데 적은 그대로 뒤에 있는데? 추력을 써도」
+    //
+    //  ★★★ 여기가 `1 + (RUSH.close - 1) * boost.k` 였다 — **급가속만 알고
+    //    스로틀을 몰랐다.** 그래서 순항이든 전속이든 다가오는 속도가 똑같이
+    //    5.5 m/s 였고, 밀어도 안 빨라졌다.
+    //
+    //  ★★ v81 이 「급가속이 정말 다가가게」를 고치면서 **급가속 하나만**
+    //    이 줄에 꽂았고, 그 바람에 「스로틀도 마찬가지 아닌가」가 안 물어졌다.
+    //    한 손잡이만 고치면 **나머지 손잡이가 죽은 채로 남는다.**
+    //
+    //  ★★★ 이제 제 숫자를 안 갖는다. `mpsPure` 는 창밖 별·먼지·속도계가
+    //    쓰는 **바로 그 값**이므로 둘이 갈라질 수가 없다. 급가속 배수도
+    //    거기 이미 들어 있어 `RUSH.close` 를 따로 곱하면 두 번 세는 것이다
+    close: closeK(mpsPure),
   }) ?? {};
   // ★★★ v135 — **읽었으면 비운다.** 안 비우면 한 번 누른 것이 매 걸음
   //   다시 세어져 「누르고 있으면 된다」가 된다 (위 `dodgeEdge` 참고)
