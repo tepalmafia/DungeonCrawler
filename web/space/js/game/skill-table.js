@@ -41,7 +41,7 @@
  */
 export const SKILLS = [
   {
-    key: 'chaff', name: '기만체', slot: true, cool: 12, sec: 0.8,
+    key: 'chaff', name: '기만체', slot: true, cool: 16, sec: 0.8,
     ammo: 3, opens: 2, hooks: 'lock', costs: ['ammo'],
     /** 나를 문 락온이 풀린다 · 날아오던 탄이 이 각만큼 빗나간다 */
     breaks: true, bend: 26,
@@ -56,33 +56,41 @@ export const SKILLS = [
     key: 'pips', name: '전력 몰기', slot: false, cool: 0, sec: 0,
     opens: 3, hooks: 'heat', costs: ['time'],
     /** 몰아준 쪽이 이만큼 좋아지고 나머지 둘이 이만큼 나빠진다 */
-    gain: 0.35, lose: 0.2, swap: 1.5,
+    gain: 0.20, lose: 0.14, swap: 1.5,
     why: '쿨이 **없는** 대신 **늘 하나만** 고를 수 있다. 그게 값이다 —'
       + ' 무기에 몰면 센서가 짧아지고, 센서에 몰면 열이 빨리 오른다',
     fx: '계기 막대가 옮겨 붙고 창 테두리 색이 바뀐다',
   },
   {
-    key: 'drift', name: '관성 정지', slot: true, cool: 18, sec: 1.2,
+    key: 'drift', name: '관성 정지', slot: true, cool: 12, sec: 0.9,
     opens: 4, hooks: 'flight', costs: ['fuel', 'time'],
     /** 추진제를 이만큼 태우고, 도는 동안 **못 쏜다** */
-    fuel: 14, mute: true, spin: 3.4,
+    fuel: 10, mute: true, spin: 3.4,
+    /**
+     * ★★★ **뒤를 잡은 자세가 이어지는 시간** (초) — 이 스킬의 **세기 손잡이**다.
+     *   ★ 처음에 이 값을 바깥 가정(`YARD.rearSec`)에 뒀다가, 밸런스를 재면서
+     *     「관성 정지만 유독 약하다」가 나왔다. 그런데 **기수를 얼마나 홱
+     *     돌려 주느냐**는 바깥 사정이 아니라 **이 스킬이 하는 일**이다 —
+     *     `spin` 이 빠를수록 오래 물고 있는다. 가정이 아니라 손잡이다
+     */
+    rear: 7,
     why: '**제일 「우주다운」 기동**이다 — 공기가 없으니 기수와 진행 방향이'
       + ' 따로 논다. 뒤를 잡힌 채로 **기수만 돌려 쏘고 다시 도망**갈 수 있고,'
       + ' 그러면 v137 의 어스펙트(뒤가 아프다)가 **양쪽으로** 성립한다',
     fx: '별이 옆으로 흐르는데 기수는 딴 데를 본다 (v144 속도감이 그대로 산다)',
   },
   {
-    key: 'overdrive', name: '과부하', slot: true, cool: 25, sec: 3,
+    key: 'overdrive', name: '과부하', slot: true, cool: 22, sec: 3.5,
     opens: 6, hooks: 'laser', costs: ['heat'],
     /** 레이저 피해 배수 · 끝나면 이만큼 열이 얹힌다 (과열) */
-    dmg: 3, heat: 38,
+    dmg: 3, heat: 20,
     why: '레이저는 **탄이 무한이고 열이 값**이다 (v141). 그 저울을 잠깐 크게'
       + ' 기울인다 — 포함(맷집 22)을 12초 → 5초에 깎지만, 끝나면 과열이라'
       + ' **한동안 못 숨는다**',
     fx: '총열이 하얗게 달아오르고 빔이 굵어진다',
   },
   {
-    key: 'emp', name: 'EMP 방출', slot: true, cool: 30, sec: 4,
+    key: 'emp', name: 'EMP 방출', slot: true, cool: 20, sec: 5,
     opens: 7, hooks: 'dark', costs: ['time'],
     /** 이 반경 안의 적이 멈춘다 · **내 계기도 이만큼 꺼진다** */
     r: 120, blind: 2,
@@ -241,3 +249,106 @@ export const dmgMult = (st) => (isLive(st, 'overdrive') ? BY_KEY.overdrive.dmg :
 
 /** 관성 정지 중에는 **못 쏜다** — 그것이 값이다 */
 export const muted = (st) => isLive(st, 'drift');
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ **밸런스 — 세기와 쿨을 같은 자로 잰다** (v146)
+//
+//  ★ 사장님 (2026-08-14) 「**스킬 세기랑 쿨 밸런스 확인해봐**」
+//
+//  ★★★ **「12~30초 안인가」는 밸런스가 아니다.** 그건 범위이고, 밸런스는
+//    **「한 번 쓰면 얼마를 벌고, 얼마나 자주 쓰나」**다. 그래서 다섯을
+//    **하나의 자**로 환산한다 — **레이저 초당 피해**(1/0.55 = 1.82).
+//
+//  ★★ 환산이 정확할 필요는 없다. **다섯이 서로 몇 배나 벌어지나**만
+//    맞으면 된다 — 넷은 쓸 만한데 하나가 4배면 **그 하나만 쓴다.**
+//    그러면 다섯을 만든 뜻이 사라진다 (「다 못 가지나」가 무의미해진다).
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * ★★★ 환산에 쓰는 **바깥 숫자들.** 여기서 다시 안 잰다 — 딴 표에서 온 값을
+ *   적어 두는 자리다. 그 표가 바뀌면 이 값도 같이 고쳐야 하므로
+ *   `tools/space-skill.js [10]` 이 **진짜 표와 대조**한다
+ */
+export const YARD = {
+  /** 레이저 한 발 피해 · 재장전 (`combat-table.js WEAPONS.laser`) */
+  laserDmg: 1, laserReload: 0.55,
+  /** 레이저 한 발이 올리는 열 · 열 상한·시작·식는 속도 (`systems-table.js HEAT`) */
+  laserHeat: 4.5, heatMax: 100, heatStart: 34, heatFall: 7.4,
+  /** 적이 몇 초마다 쏘나 · 맞을 확률 · 한 발이 깎는 선체 (`target-table.js`) */
+  foeEvery: 3.4, foeHit: 0.62, foeHull: 0.03,
+  /** 교전에 보통 몇 대가 붙나 — 회차 기준 (`space-war.js` 가 재는 값에 맞췄다) */
+  foes: 3,
+  /** 뒤를 잡으면 피해 배수 (`aspect-table.js` rear) · 그 자세가 이어지는 시간 */
+  rearMult: 1.45, rearSec: 5,
+  /** 선체 1 을 레이저 피해 몇 점으로 칠까 — 「안 맞는 것」과 「깎는 것」의 환율 */
+  hullWorth: 120,
+};
+
+/** 레이저 초당 피해 — **모든 환산의 자** */
+export const dpsLaser = () => YARD.laserDmg / YARD.laserReload;
+
+/**
+ * ★★★ **스킬 하나가 초당 얼마를 버나** (레이저 dps 환산).
+ *
+ *   ★ 「한 번 쓰면 버는 것」 ÷ 쿨. 지속인 것(전력 몰기)은 **늘 켜져 있으므로**
+ *     그대로 초당 이득이다.
+ *   ★★ 값(열·못 쏘는 시간)은 **빼서** 넣는다 — 그래야 「세다」가 「공짜로
+ *     세다」와 안 섞인다
+ *
+ * @returns { gain, cost, net, per } — per 가 **초당 순이득**이다
+ */
+export function worthOf(key) {
+  const k = BY_KEY[key];
+  if (!k) return { gain: 0, cost: 0, net: 0, per: 0 };
+  const dps = dpsLaser();
+  let gain = 0; let cost = 0;
+  if (key === 'overdrive') {
+    //  버는 것: 3초 동안 배수가 는 몫. 치르는 것: 쏜 열 + 끝나고 얹히는 열을
+    //  **식히는 데 걸리는 시간**만큼 못 쏘는 것으로 친다
+    const shots = k.sec / YARD.laserReload;
+    gain = shots * YARD.laserDmg * (k.dmg - 1);
+    //  ★★★ **쏘는 열은 값이 아니다** — 과부하를 안 써도 그 3초를 쏘면 같은
+    //    열이 난다. 여기서 그걸 같이 세면 **값을 두 번 물리는 것**이고,
+    //    처음에 그렇게 셌다가 「과부하는 쓰면 손해」(초당 −0.178)라는
+    //    엉뚱한 답이 나왔다. **과부하가 추가로 지우는 것은 `heat` 하나**다
+    cost = (k.heat / YARD.heatFall) * dps;
+  } else if (key === 'chaff') {
+    //  버는 것: 붙은 적들이 겨눔을 잃어 **한 사이클을 다시 센다**
+    gain = YARD.foes * YARD.foeHit * YARD.foeHull * YARD.hullWorth;
+    cost = 0;                                   // 값은 통(3발)이지 시간이 아니다
+  } else if (key === 'emp') {
+    //  버는 것: 반경 안의 적이 `sec` 동안 못 쏜다. 치르는 것: 내 눈이 감긴다
+    gain = YARD.foes * (k.sec / YARD.foeEvery) * YARD.foeHit * YARD.foeHull * YARD.hullWorth;
+    cost = k.blind * dps;                       // 안 보이는 동안은 못 겨눈다
+  } else if (key === 'drift') {
+    //  버는 것: 뒤를 잡아 그 자세가 이어지는 동안 피해가 는 몫
+    //  ★ 뒤를 무는 시간은 **이 스킬의 값**에서 읽는다 (바깥 가정이 아니다)
+    gain = ((k.rear ?? YARD.rearSec) / YARD.laserReload) * YARD.laserDmg * (YARD.rearMult - 1);
+    cost = k.sec * dps;                         // 도는 동안 못 쏜다
+  } else if (key === 'pips') {
+    //  ★ 지속이다 — 무기에 몰면 **같은 열로 더 쏜다.** 열 한 사이클에 는 발수
+    const room = YARD.heatMax - YARD.heatStart;
+    const was = room / YARD.laserHeat;
+    const now = room / (YARD.laserHeat * (1 - k.gain));
+    const cycle = room / YARD.heatFall;         // 그 사이클이 도는 데 걸리는 시간
+    return {
+      gain: +(now - was).toFixed(2), cost: 0,
+      net: +(now - was).toFixed(2),
+      per: +((now - was) / cycle).toFixed(3),
+    };
+  }
+  const net = gain - cost;
+  return {
+    gain: +gain.toFixed(2), cost: +cost.toFixed(2), net: +net.toFixed(2),
+    per: +(net / Math.max(1, k.cool)).toFixed(3),
+  };
+}
+
+/** 회차(2시간) 동안 몇 번 쓸 수 있나 — 전투가 회차의 이만큼이라 치고 */
+export const usesPerRun = (key, runSec = 7200, fightShare = 0.35) => {
+  const k = BY_KEY[key];
+  if (!k || k.cool <= 0) return Infinity;
+  const n = Math.floor((runSec * fightShare) / k.cool);
+  //  ★ 통이 있는 것은 **통이 먼저 바닥난다** — 쿨이 아니라 그쪽이 한계다
+  return k.ammo !== undefined ? Math.min(n, k.ammo * 4) : n;
+};
