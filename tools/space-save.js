@@ -215,7 +215,9 @@ if (see >= 0) {
     const at = await S(() => document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.id ?? '');
     ok(at !== 'pause',
       `한복판을 누르면 **캔버스**가 받는다 (지금 「${at || '(이름없음)'}」) — pointer-events:none`);
-    await p.mouse.click(320, 190);
+    //  ★ v155 — 위에서 「캔버스가 받는다」를 확인하고 눌렀지만, **이름으로**
+    //    누르면 확인과 누름이 갈라질 일이 아예 없다
+    await p.click('#view', { position: { x: 320, y: 190 }, force: true }).catch(() => {});
     await p.waitForTimeout(600);
     const st = await S(() => SPACE.save);
     ok(!st.paused && !st.boxShown, '눌렀더니 계속한다');

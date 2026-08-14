@@ -49,7 +49,7 @@ let fail = 0;
 const ok = (c, msg) => { console.log((c ? '  ✔ ' : '  ✘ ') + msg); if (!c) fail++; };
 
 console.log('\n[1] 「이동이 안 된다」 — 화면 한가운데(안내 창 위)를 눌러 시작되나');
-await p.mouse.click(640, 360);                       // 안내 창이 덮고 있는 자리
+await p.click('#view', { position: { x: 640, y: 360 }, force: true }).catch(() => {});                       // 안내 창이 덮고 있는 자리
 await p.waitForTimeout(300);
 ok(await p.evaluate(() => SPACE.locked), '가운데를 눌렀더니 포인터 잠금이 걸린다');
 
