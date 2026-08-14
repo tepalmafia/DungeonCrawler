@@ -622,7 +622,9 @@ console.log('\n[3b] ★★ **행성을 박으면 끝난다** — 수동일 때�
   await p.reload({ waitUntil: 'networkidle' });
   await p.waitForTimeout(2200);
   await S(() => { document.getElementById('hint')?.remove(); SPACE.skipTutor(); });
-  await p.mouse.click(360, 210);
+  //  ★ v155 — 좌표가 아니라 **캔버스를 이름으로** (`space-audio` 가 시작 화면
+  //    정중앙의 「처음부터 다시」를 눌러 매번 터지고 있었다)
+  await p.click('#view', { position: { x: 360, y: 210 }, force: true }).catch(() => {});
   await S(() => { const o = SPACE.route.offer; if (o.length) SPACE.pick(o[0]); });
   ok(!(await S(() => SPACE.helm)).wrecked, '⑥ 새로고침하면 새 배로 다시 시작한다');
 }
@@ -1541,7 +1543,11 @@ console.log('\n[6u] ★★★ **창 배치** — 옮기고, 닫으면 마우스�
     const off2 = await S((q) => ({ shown: !document.querySelector(q).hidden, locked: !!SPACE.locked }), sel);
     ok(!off2.shown, `⑩-${name} ★★★ **같은 키로 닫힌다** — 나오는 길이 있다`);
     ok(off2.locked, `⑪-${name} ★★★ **닫으면 마우스가 돌아온다**`);
-    if (!off2.locked) { await p.mouse.click(360, 210); await p.waitForTimeout(600); }
+    //  ★ v155 — 캔버스를 이름으로 (위와 같은 까닭)
+    if (!off2.locked) {
+      await p.click('#view', { position: { x: 360, y: 210 }, force: true }).catch(() => {});
+      await p.waitForTimeout(600);
+    }
   }
 }
 

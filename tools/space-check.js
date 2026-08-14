@@ -123,7 +123,10 @@ async function playAndLock() {
   //   점검 모드를 닫자마자 누르면 그 창에 걸린다. 사람은 그럴 때
   //   **한 번 더 누른다.** 게임을 고칠 일이 아니라 사람처럼 굴 일이다
   for (let i = 0; i < 3; i++) {
-    await p.mouse.click(640, 400);
+    //  ★ v155 — 좌표가 아니라 **캔버스를 이름으로** 누른다. 이 파일이 위에
+    //    「여기가 `mouse.click(640, 400)` 네 군데였다」고 적어 놓고 한 군데를
+    //    남겼다. `space-audio` 가 같은 함정으로 **매번 터지고 있었다**
+    await p.click('#view', { position: { x: 640, y: 400 }, force: true }).catch(() => {});
     if (await p.waitForFunction(() => window.SPACE.locked, null, { timeout: 4000 })
       .then(() => true).catch(() => false)) return true;
     await p.waitForTimeout(900);
