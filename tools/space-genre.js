@@ -18,16 +18,54 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { existsSync } from 'node:fs';
 import { GENRE, PILLARS, AXES, NOT } from '../web/space/js/game/genre-table.js';
+// ★★★ v151 — 「잴 것이 없으면 멈춘다」는 **한 곳에** 있다 (`folded.js` 옆)
+import { measuring } from './unmeasured.js';
 
 const DIR = new URL('../web/space/js/game/', import.meta.url);
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
 const has = (f) => existsSync(new URL(f, DIR));
 
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v151 — **잴 것이 없으면 통과가 아니라 「측정 불가」다**
+//
+//  ★ 이 도구는 목록 A 열아홉 중 **병이 제일 심한 축**이었다. 다른 도구는
+//    적어도 「없어야 한다」 판정이 **거짓말로** 참이 되는 것인데, 여기는
+//    **판정이 아예 안 불린다**:
+//
+//        for (const p of PILLARS) { … ok(…) }
+//
+//    `PILLARS` 가 비면 이 `for` 는 **한 번도 안 돌고**, `ok()` 가 단 한 번도
+//    안 불린 채 `bad === 0` 으로 끝난다. 즉 **판정 0개로 「✔ 기둥 다섯이 다
+//    섰습니다」**가 찍힌다. 「검사를 안 했으니 불합격이 없다」다.
+//
+//  ★★ `AXES.every((a) => has(a.by))` 도 같다 — `[].every(…)` 는 언제나 참이라
+//    **성장의 두 갈래가 통째로 사라져도** 「두 갈래가 다 있다」가 초록이다.
+//    이 저장소가 「RPG 라는 말이 더하는 기둥은 성장 하나뿐」이라고 못박아 둔
+//    바로 그 자리라, 여기가 조용히 뚫리면 장르 검사가 통째로 뜻을 잃는다.
+//
+//  ★ 다만 바로 아래 `AXES.some(…)` 은 **빈 목록에서 거짓**이라 저절로 빨개진다.
+//    그렇다고 기대면 안 된다 — 그 줄을 손보는 날 뚫린다 (다른 도구에서도
+//    같은 판단을 했다: 「우연히 막아 주는 것에 기대지 않는다」).
+// ══════════════════════════════════════════════════════════════════════════
+const must = measuring({
+  tool: 'space-genre',
+  what: '기둥',
+  weak: '이 검사는 **판정을 `for` 안에서** 부릅니다 —\n'
+    + '`PILLARS`·`AXES` 가 비면 `ok()` 가 **한 번도 안 불리고**,\n'
+    + '`bad === 0` 이라 「✔ 기둥 다섯이 다 섰습니다」가 찍힙니다.\n'
+    + '「검사를 안 했으니 불합격이 없다」가 되는 자리입니다.',
+  look: '`web/space/js/game/genre-table.js` 의 `PILLARS` · `AXES`',
+});
+
 console.log(`장르 — **${GENRE}** (뼈대만 · 게임을 안 부른다)`);
+
+try {
 
 console.log('\n[1] ★★★ **기둥 다섯이 다 서 있나** — 표가 정말 있나');
 {
+  //  ★ 판정이 이 `for` 안에만 있다 — 표가 비면 **아무것도 안 재고** 통과한다
+  must.as('기둥 표').some(PILLARS, '[1] 기둥이 서 있나를 재려는데');
   for (const p of PILLARS) {
     const missing = p.by.filter((f) => !has(f));
     console.log(`   ${p.rpg ? '★' : ' '} ${p.name.padEnd(3)} ${p.need}`);
@@ -40,6 +78,9 @@ console.log('\n[1] ★★★ **기둥 다섯이 다 서 있나** — 표가 정�
 
 console.log('\n[2] ★★★ **RPG 라는 말이 값을 하나** — 성장이 두 갈래인가');
 {
+  //  ★★ 여기도 같다. 게다가 아래 `AXES.every(…)` 는 빈 목록에서 **참**이라
+  //    「두 갈래가 다 있다」가 갈래 0개에서 초록이 된다
+  must.as('성장 갈래 표').some(AXES, '[2] 성장이 두 갈래인가를 재려는데');
   for (const a of AXES) {
     const there = has(a.by);
     console.log(`   ${a.name.padEnd(3)} ${a.from.padEnd(12)} 운 ${a.luck ? '섞임' : '없음'}`
@@ -57,6 +98,15 @@ console.log('\n[2] ★★★ **RPG 라는 말이 값을 하나** — 성장이 �
 
 console.log('\n[3] ★ **안 하는 것 다섯** — 기둥은 세우는 것보다 안 무너뜨리는 것이 어렵다');
 for (const n of NOT) console.log(`   · ${n.what}\n     ${n.why}`);
+
+} catch (e) {
+  // ★ 우리 것이 아니면 **다시 던진다.** 딴 오류까지 삼키면 진짜 고장이
+  //   「측정 불가」로 위장된다
+  if (!must.caught(e)) throw e;
+}
+
+// ★★★ 합격/불합격을 찍기 **전에** 묻는다 — 못 쟀으면 여기서 2 로 끝난다
+must.bail();
 
 console.log(bad ? `\n✘ ${bad} 군데 — **${GENRE} 라고 하기에 빈 자리가 있습니다**`
   : `\n✔ 기둥 다섯이 다 섰습니다 — ${GENRE}`);
