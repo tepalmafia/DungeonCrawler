@@ -10,7 +10,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>스페이스워</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2303040a'/><circle cx='8' cy='8' r='3' fill='none' stroke='%236fd8a0' stroke-width='1.4'/></svg>">
-<link rel="stylesheet" href="css/style.css?v=144">
+<link rel="stylesheet" href="css/style.css?v=145">
 <script type="importmap">
 { "imports": {
   "three": "./vendor/three/three.module.min.js",
@@ -173,6 +173,12 @@
      적인지 물체인디 행성인지 알 수 있도록」 · 「글씨가 아닌 … 도형으로」)
      ★ 90초 뒤에는 글이 빠지고 **도형만** 남는다 -->
 <div id="legend" data-ui hidden></div>
+<!-- ══ ★★★ v145 — **스킬** (사장님 「더 화려한 전투를 하고 싶은데」) ══════
+     ★ 계기는 **왼쪽 아래 구석**이다 — 전투 원뿔(0.45)을 안 먹는다.
+       「키운 것이 가린 것이 되면 안 된다」(v103) 와 같은 규약
+     ★★ 효과는 **테두리에서만** 논다. 복판을 덮으면 v87 의 「흰 공」이 된다 -->
+<div id="skillbar" data-ui hidden></div>
+<div id="skillfx" hidden></div>
 
 <div id="bay" data-ui hidden>
   <div class="sheet">
@@ -203,6 +209,12 @@
       <div id="grow-bar"></div>
       <h3>특성 &mdash; 레벨마다 하나</h3>
       <div id="grow-rows" class="grid"></div>
+      <!-- ★★★ v145 — **스킬** (사장님 「더 화려한 전투를 하고 싶은데」).
+           ★ 특성 **바로 아래**에 둔다. 「수동을 더 올릴까 · 스킬을 열까」가
+             한 화면에서 갈려야 그것이 결심이 된다 -->
+      <h3>스킬 &mdash; 다섯 중 둘만</h3>
+      <div id="skill-bar"></div>
+      <div id="skill-rows" class="grid"></div>
     </div>
     <div id="pane-hold" hidden>
       <h3>화물칸 &mdash; 실린 것</h3>
@@ -326,6 +338,6 @@
   </div>
 </div>
 
-<script type="module" src="js/main.js?v=144"></script>
+<script type="module" src="js/main.js?v=145"></script>
 </body>
 </html>

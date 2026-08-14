@@ -74,6 +74,7 @@ import { DRIFT } from './game/drift-table.js';
 import { HELM, HELM_SEAT, FLY_VIEW, STICK, deflect, YOKE, SIT_LOOK, offWord, hitWord } from './game/helm-table.js';
 // ══ ★★★ v110 — **손 배치** (사장님 「공격도 스페이스로 … r을 누르면 추력이
 //   켜지고 꾹 누르면 가속되는 걸로」). 톡과 꾹을 가르는 것은 표가 한다
+// ★ v145 — 손 배치는 **이 표 하나**가 갖는다. 스킬 키(4·5·O)도 여기서 읽는다
 import { KEYS, TAP, makeTap, tapStep, KEY_WORD } from './game/keys-table.js';
 import { GUN, SEAT as GUN_SEAT, WHY as GUN_WHY } from './game/gun-table.js';
 // ★★★ v64 — 조종석 전투 (레이더 · 락온 · 미사일)
@@ -234,6 +235,17 @@ import { coverOf, coverWord, holdLock } from './game/cover-table.js';
 import { triggerWhy, gateWord } from './game/trigger-table.js';
 // ★★★ v144 — **속도감**: 빠르기 하나가 창밖과 화각을 민다 (`docs` 는 표 머리에)
 import { feelAt, speedOf } from './game/rush-table.js';
+// ══ ★★★ v145 — **스킬 다섯** (사장님 「더 화려한 전투를 하고 싶은데」) ═══
+//  ★ 새 계통 다섯이 아니라 **이미 있는 다섯에 능동 손잡이**를 하나씩 단다:
+//    기만체→락온(v119) · 전력 몰기→열(v58) · 관성 정지→비행(v73) ·
+//    과부하→레이저(v141) · EMP→정전(장면 E). 기획은 `docs/space/SKILL.md`
+import {
+  SKILLS as SKILL_LIST, BY_KEY as SKILL_BY, SLOTS as SKILL_SLOTS, LANES as PIP_LANES,
+  makeSkills, opensAt as skillOpensAt, slotsAt as skillSlotsAt,
+  whyNotSkill, skillWhyWord, useSkill, stepSkills, isLive as skillLive,
+  setLane as setPipLane, laneEffect as pipEffect, dmgMult as skillDmg, muted as skillMuted,
+  FX as SKILL_FX,
+} from './game/skill-table.js';
 /** 가림막 이름 — 「무엇에 막혔는지 이름을 댄다」에 쓴다 */
 const kindNames = Object.fromEntries(
   Object.entries(TKINDS).map(([k, v]) => [k, v.name]));
@@ -394,7 +406,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 144;
+export const VERSION = 145;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1270,6 +1282,8 @@ const arcS = makeArc();
 const mount = makeMount();
 /** ★★★ v101 — 스로틀. −0.45(역추진) ~ 1(전속). **가운데로 안 돌아온다** */
 const thr = makeThrottle();
+/** ★★★ v145 — 스킬 한 벌 (장착·쿨·통·전력 갈래). 저장에 그대로 들어간다 */
+const skills = makeSkills();
 /** ★★★ v101 — 도킹 회수. 묶은 꾸러미에 붙어서 **여럿을 한 번에** 담는다 */
 const dockS = makeDock();
 /**
@@ -1713,6 +1727,34 @@ function drawBay() {
     }).join('');
   }
 
+  // ══ ★★★ v145 — **스킬** — 레벨이 열고, 슬롯 둘에 넣는다 ══════════════
+  //
+  //  ★ 사장님 「더 화려한 전투를 하고 싶은데」. 성장의 사람 갈래가 여태
+  //    **전부 수동 보정**이라 레벨이 올라도 화면이 안 바뀌었다 — 그 자리를
+  //    이것이 메운다 (`docs/space/SKILL.md §0-②`)
+  {
+    const lv = levelAt(pilot.xp).lv;
+    const room = skillSlotsAt(lv);
+    const box = document.getElementById('skill-rows');
+    if (box) {
+      document.getElementById('skill-bar').innerHTML =
+        `<small style="color:#7d8b9c">슬롯 <b class="might">${skills.on.length}</b> / ${room}`
+        + ` · 전력 <b>${PIP_LANES.find((l) => l.key === skills.lane)?.name ?? '무기'}</b>`
+        + ` (${KEYS.pips.code.replace('Key', '')} 로 돌립니다)</small>`;
+      box.innerHTML = SKILL_LIST.map((k) => {
+        const open = skills.open.includes(k.key);
+        const on = skills.on.includes(k.key);
+        const full = skills.on.length >= room;
+        const btn = !k.slot
+          ? `<button class="act" disabled>${open ? '늘 켜짐' : `Lv ${k.opens}`}</button>`
+          : `<button class="act" data-skill="${k.key}" ${open && (on || !full) ? '' : 'disabled'}>`
+            + `${on ? '★ 뺀다' : (open ? (full ? '슬롯이 찼습니다' : '넣는다') : `Lv ${k.opens}`)}</button>`;
+        return `<span>${k.name}${on ? ` <b class="might">${skills.on.indexOf(k.key) + 4}</b>` : ''}</span>`
+          + `<b>${bold(k.why)}<br><small style="color:#5e6b7a">${bold(k.fx)}</small></b>${btn}`;
+      }).join('');
+    }
+  }
+
   // ══ ★★★ v114 — **화물칸과 제조** ═══════════════════════════════════
   //
   //  ★ 사장님 「**인벤토리도 만들어야지. 제조하는 것도 만들고**」
@@ -1804,6 +1846,17 @@ addEventListener('click', (ev) => {
         regrow();
         say(ai, `★ ${r.trait.name} — ${r.trait.how.replace(/\*\*/g, '')}`, 'warn');
       } else say(ai, PICK_WHY[r.why], 'warn');
+    } else if (b.dataset.skill) {
+      //  ★★★ v145 — **넣고 뺀다.** 다섯 중 둘뿐이라 이것이 결심이다
+      const key = b.dataset.skill;
+      const at = skills.on.indexOf(key);
+      if (at >= 0) { skills.on.splice(at, 1); say(ai, `${SKILL_BY[key].name} 를 뺐습니다`, 'tell'); }
+      else if (skills.on.length >= skillSlotsAt(levelAt(pilot.xp).lv)) {
+        say(ai, '슬롯이 찼습니다 — 하나를 빼야 넣습니다', 'warn');
+      } else {
+        skills.on.push(key);
+        say(ai, `★ ${SKILL_BY[key].name} — ${(4 + skills.on.length - 1)}번 슬롯`, 'warn');
+      }
     } else if (b.dataset.toss) {
       // ★ 버리는 것이 **이 창의 첫째 일**이다 (「무엇을 버릴지」 · v83)
       const n = cargoDrop(cargo, b.dataset.toss, 1);
@@ -1868,6 +1921,53 @@ let covSaid = -1;
 let closeRate = 0;
 let packWas = new Map();
 
+/** ★ v145 — 스킬 키를 뗐다 눌렀나 (톡 한 번에 한 번만) · 전력 키도 같이 */
+let skillHeld = [false, false];
+let pipHeld = false;
+/** ★★★ v145 — 화면이 그리는 스킬 효과 (`world/skillfx.js` 가 읽는다) */
+let skillFx = { key: null, t: 0 };
+
+/**
+ * ★★★ **스킬을 쓴다** (v145 · `docs/space/SKILL.md`).
+ *
+ *  ★ 다섯이 각자 **이미 있는 계통에게 묻거나 그 계통을 흔든다.** 새 규칙을
+ *    여기서 만들지 않는다 — 만들면 그 순간 「재는 곳이 둘」이 된다.
+ *  ★★ 못 쓰면 **반드시 까닭을 말한다** (v143 규약)
+ */
+function fireSkill(key) {
+  const r = useSkill(skills, key, { seat: helmSat, fuel: supply.fuel ?? 0 });
+  if (!r.ok) { say(ai, skillWhyWord(r.why), 'tell'); return; }
+  const k = SKILL_BY[key];
+  skillFx = { key, t: 0 };
+  audio?.event(key === 'emp' ? 'latch' : 'tube');
+  say(ai, `${k.name} — ${k.fx}`, 'warn');
+  if (key === 'chaff') {
+    //  ★★★ **락온을 떼어 낸다** — 나를 문 것이 풀린다. 그리고 날아오던
+    //    탄이 빗나간다 (v70 의 `sky.incoming` 을 흔든다)
+    let off = 0;
+    for (const t of sky.list) { if (t.aim > 0) { t.aim = 0; off++; } }
+    for (const inc of sky.incoming) {
+      inc.az += (Math.random() < 0.5 ? -1 : 1) * k.bend;
+      inc.decoyed = true;
+    }
+    say(ai, off ? `기만체 — ${off} 대가 겨눔을 잃었습니다` : '기만체를 뿌렸습니다', 'warn');
+  } else if (key === 'drift') {
+    //  ★★ **속도는 그대로, 기수만 홱 돈다.** 추진제를 태우고, 도는 동안
+    //    못 쏜다 (`skillMuted` 가 방아쇠 앞에서 막는다)
+    supply.fuel = Math.max(0, (supply.fuel ?? 0) - k.fuel);
+  } else if (key === 'emp') {
+    //  ★★★ **적이 멈추고 나도 눈을 감는다.** 「내 계기가 꺼진다」는 이미
+    //    지어져 있다 (장면 E · 정전) — 그 스위치를 잠깐 당긴다
+    let hit = 0;
+    for (const t of sky.list) {
+      if (t.dist > k.r) continue;
+      t.aim = 0; t.emp = k.sec; hit++;
+    }
+    say(ai, `EMP — ${hit} 대가 멈췄습니다 · 내 계기도 ${k.blind}초 꺼집니다`, 'alarm');
+  }
+  //  ★ 과부하는 여기서 아무것도 안 한다 — `skillDmg()` 를 **쏘는 쪽이 묻는다**
+}
+
 /** 한 발 쏜다 — **왜 못 쏘는지도 말한다.** 조용히 안 나가면 「고장」으로 읽힌다 */
 function fireGun() {
   //  ══ ★★★ v143 — **앞쪽 문 셋을 여기서 묻는다** (`trigger-table.js`) ═══
@@ -1882,6 +1982,10 @@ function fireGun() {
     dead: wrecked || ended, paused, seat: helmSat, why: null,
   });
   if (gate) { say(ai, gateWord(gate), 'tell'); return; }
+  //  ★★★ v145 — **관성 정지 중에는 못 쏜다** (`skill-table.js drift.mute`).
+  //    그것이 이 스킬의 값이다 — 공짜면 늘 이 상태로 다닌다.
+  //    ★ 여기도 **말을 한다** — 조용히 막는 문을 또 만들지 않는다 (v143)
+  if (skillMuted(skills)) { say(ai, '관성 정지 중입니다 — 도는 동안은 못 쏩니다', 'tell'); return; }
   const a = noseAim();
   const aimed = aimedAt(sky, a.az, a.el);
   // ★ v100 — **발사관이 잰 오차**를 같이 넘긴다 (짐벌 무기만 쓴다)
@@ -1892,6 +1996,10 @@ function fireGun() {
     // ★ v119 — 발사관 오차는 **`fire()` 가 고른 표적**에서 잰다. 여기서
     //   `aimed` 로 미리 재 버리면 락온 사격의 오차가 조준선 기준이 된다
     mountAt: (aim) => mountSummary(mount, aim),
+    //  ★★★ v145 — **과부하 중에는 피해가 ×3** (`skill-table.js dmgMult`).
+    //    ★ 배수만 올린다 — **여전히 겨눠야 맞는다.** 「세게 만든다」와
+    //      「대신 겨눠 준다」는 다른 말이고, 뒤엣것은 v114 의 조준 띠를 죽인다
+    dmgMult: skillDmg(skills),
     // ★★★ v142 — **가림.** 하늘 목록을 넘기기만 한다 — 각은 `cover-table.js`
     //   가 잰다. 여기서 다시 재면 「계기는 가렸다는데 탄은 나간다」가 난다
     list: sky.list,
@@ -1935,7 +2043,11 @@ function fireGun() {
   //   식히려고 라디에이터를 열면 더 훤히 보인다 (v58 열 저장고와 물린다).
   //   미사일은 열을 덜 낸다 — 대신 재고가 준다
   // ★ v115 — 「냉정」 특성이 쏘는 열을 깎는다 (`grow.heatMult`)
-  heat = Math.min(HEAT.max, heat + (w.heat ?? GUN.heatPerShot * 2) * grow.heatMult);
+  //  ★★★ v145 — **전력 몰기가 열을 바꾼다** (`skill-table.js laneEffect`).
+  //    무기에 몰면 덜 오르고, 딴 데 몰면 더 오른다 — 몰아주는 것은
+  //    **뺏어 오는 것**이다. 여기서 다시 재지 않고 표에 **묻기만** 한다
+  heat = Math.min(HEAT.max,
+    heat + (w.heat ?? GUN.heatPerShot * 2) * grow.heatMult * pipEffect(skills).heatMult);
   // ★ **쏘면 밝아진다** — 총구 섬광과 사출은 숨길 수 없다 (v44 규약)
   gun.flash = Math.max(gun.flash ?? 0, w.signFor);
   say(ai, `${w.name} 발사`, 'tell');
@@ -2252,7 +2364,7 @@ const world = () => ({
   // ★ v99 — 아크 도약. `save-table.js FIELDS.arc` 가 칸을 고른다
   arc: arcS,
   // ★ v101 — 스로틀·도킹. `save-table.js FIELDS` 가 칸을 고른다
-  throttle: thr, dock: dockS,
+  throttle: thr, dock: dockS, skills,
   // ★ v115 — 파일럿 (`save-table.js FIELDS.pilot`)
   pilot,
   // ★ v127 — 창 배치 (`save-table.js FIELDS.layout`)
@@ -4026,6 +4138,48 @@ function interactStep(dt) {
     say(ai, `${w.name} — ${w.what}`, 'tell');
     audio?.event('click');
   }
+  // ══ ★★★ v145 — **스킬** — 4 · 5 로 쓰고 Ctrl+1/2/3 으로 전력을 몬다 ══
+  //
+  //  ★ 사장님 「더 화려한 전투를 하고 싶은데」. 손이 이미 꽉 찼으므로
+  //    (`keys-table.js HAND_MAX 3`) **키를 둘만** 늘린다 — 그리고 지속인
+  //    전력 몰기는 Ctrl 조합이라 **급할 때 못 바꾼다**(그것이 값이다).
+  //  ★★ 못 쓰면 **반드시 까닭을 말한다** — v143 에 「말 없는 문」으로 덴 규약
+  //  ★ 키는 **`keys-table.js` 가 갖는다** — 여기서 문자열을 만들면 손 배치가
+  //    두 곳이 되고, 그러면 검사가 「게임이 그 키를 듣나」를 못 묻는다
+  for (let i = 0; i < SKILL_SLOTS; i++) {
+    const code = [KEYS.skill1.code, KEYS.skill2.code][i];
+    if (!input.keys.has(code)) { skillHeld[i] = false; continue; }
+    if (skillHeld[i]) continue;
+    skillHeld[i] = true;
+    const key = skills.on[i] ?? null;
+    if (!key) { say(ai, `${i + 1}번 슬롯이 비었습니다 — I 를 눌러 넣습니다`, 'tell'); continue; }
+    fireSkill(key);
+  }
+  //  ══ ★★★ **전력 몰기는 O 하나로 돌려 가며 고른다** ═══════════════════
+  //
+  //   ★★★ 기획서에는 `Ctrl + 1/2/3` 이라고 적었는데, 물리려고 보니 **둘 다**
+  //     **막혀 있었다**:
+  //       ① `Ctrl+1/2/3` 은 **브라우저 탭 전환**이다 — 뺏으면 안 된다
+  //       ② `core/input.js` 가 첫 줄에서 `ctrlKey` 를 통째로 버린다
+  //          (「브라우저 단축키를 뺏지 않는다 — 새로고침이 막히면 지옥」)
+  //   ★★ 그래서 **마지막 빈 키 O 하나**로 셋을 돌린다. 키를 셋 쓰는 것보다
+  //     오히려 낫다 — 손이 셋뿐이고(HAND_MAX), 전력은 **미리 정해 두는 것**
+  //     이라 급할 때 정확히 고를 필요가 없다
+  if (helmSat && input.keys.has(KEYS.pips.code)) {
+    if (!pipHeld) {
+      pipHeld = true;
+      if (!skills.open.includes('pips')) say(ai, skillWhyWord('locked'), 'tell');
+      else {
+        const at = PIP_LANES.findIndex((l) => l.key === skills.lane);
+        const next = PIP_LANES[(at + 1) % PIP_LANES.length];
+        const r = setPipLane(skills, next.key);
+        say(ai, r.ok ? `전력을 ${next.name}에 몹니다 — ${next.what}`
+          : '전력을 옮기는 중입니다', 'tell');
+        if (r.ok) audio?.event('click');
+      }
+    }
+  } else pipHeld = false;
+
   // ══ ★★★ v143 — **당겼으면 반드시 답한다** (`trigger-table.js`) ═══════
   //
   //  ★ v142 까지 여기가 `if (helmSat && firePressed …)` 였다. 즉 **앉아**
@@ -4839,6 +4993,15 @@ window.SPACE = {
     };
   },
   /** ★★★ v101 — 스로틀 (전진·역추진). 검사와 계기가 읽는다 */
+  /** ★ v145 — 스킬 상태를 밖에서 읽는다 (검사·점검 모드). **쓰기는 안 준다** */
+  get skills() {
+    return {
+      on: [...skills.on], open: [...skills.open], lane: skills.lane,
+      cool: { ...skills.cool }, live: { ...skills.live }, ammo: { ...skills.ammo },
+    };
+  },
+  /** ★ 검사가 스킬을 한 번 쓴다 — 새 길을 안 만든다 (`fireSkill` 그대로) */
+  useSkillNow(key) { fireSkill(key); return this.skills; },
   get throttle() { return { ...thrSummary(thr), word: throttleWord(thr.v), away: +thrAway(thr).toFixed(1) }; },
   /** 검사가 스로틀을 밀어 놓는다 — W/S 를 헤드리스로 오래 안 누르려고 */
   putThrottle(v) { thr.v = Math.max(THROTTLE.min, Math.min(THROTTLE.max, v)); return thrSummary(thr); },
@@ -8034,7 +8197,9 @@ function frame(now) {
   radarSeek = !combat.radar.on ? 0
     : combat.radar.id !== null ? 1
       // ★ v115 — 「눈」 특성이 레이더 사거리를 늘린다 (`grow.range`)
-      : (aimedNow && aimedNow.off <= RADAR.lockCone && aimedNow.t.dist <= RADAR.range + grow.range)
+      //  ★ v145 — 센서에 전력을 몰면 **멀리 본다** (`laneEffect.radarAdd`)
+      : (aimedNow && aimedNow.off <= RADAR.lockCone
+        && aimedNow.t.dist <= RADAR.range + grow.range + pipEffect(skills).radarAdd)
         ? 0.35 + 0.3 * (combat.radar.t / RADAR.lockFor) : 0;
   if (radEv === 'lock') { say(ai, '묶었습니다', 'tell'); audio?.event('latch'); }
   // ★★★ v119 — **왜 놓쳤는지 말한다.** 「놓쳤습니다」만 뜨면 사람은 무엇을
@@ -8068,6 +8233,69 @@ function frame(now) {
     at: { 획득창: layoutAt(layout, '획득창'), '회수 물음': layoutAt(layout, '회수 물음') },
   });
   stepCool(combat, dt, { atSeat: helmSat });
+  //  ══ ★★★ v145 — **레벨이 스킬을 연다** (프레임에서 한다) ═════════════
+  //   ★ 처음에 이 두 줄을 **성장 창을 그리는 자리**에 뒀다. 그랬더니
+  //     **I 를 한 번도 안 누르면 스킬이 영영 안 열렸다** — 레벨 7 인데
+  //     `open` 이 빈 채였다. 진짜 브라우저로 재다가 그 자리에서 잡혔다.
+  //   ★★ 이 저장소가 여러 번 밟은 모양이다: **여는 일을 그리는 자리에**
+  //     **두면, 안 보고 있을 때는 안 열린다**
+  {
+    const lv = levelAt(pilot.xp).lv;
+    skills.open = skillOpensAt(lv);
+    const room = skillSlotsAt(lv);
+    if (skills.on.length > room) skills.on = skills.on.slice(0, room);
+  }
+  //  ★★★ v145 — 스킬 쿨·지속이 흐른다. **끝나면 말해 준다** — 안 말하면
+  //    언제 끝났는지 모르고, 모르면 다음 손을 못 정한다
+  for (const done of stepSkills(skills, dt)) {
+    const k = SKILL_BY[done];
+    if (done === 'overdrive') {
+      //  ★★ **끝나고 열이 얹힌다** — 이것이 과부하의 값이다 (v58 열 계통)
+      heat = Math.min(HEAT.max, heat + k.heat);
+      say(ai, '과부하가 끝났습니다 — 열이 치솟습니다', 'warn');
+    } else if (done === 'emp') say(ai, '계기가 돌아왔습니다', 'tell');
+    else if (done === 'drift') say(ai, '기수가 잡혔습니다', 'tell');
+  }
+  //  ★ 적이 EMP 로 멈춰 있는 동안 시계를 깎는다 (`target.js` 가 `emp` 를 본다)
+  for (const t of sky.list) if (t.emp > 0) t.emp = Math.max(0, t.emp - dt);
+  //  ══ ★★★ v145 — **화면** — 계기 한 줄과 가장자리 효과 ══════════════
+  //   ★ 「규칙이 있는데 화면에 안 보이면 없는 것과 같다」 (v82 락온 원 ·
+  //     v64 격추에서 두 번 겪었다). 스킬은 **화려하라고** 만든 것이므로
+  //     여기가 특히 그렇다
+  skillFx.t += dt;
+  {
+    const box = document.getElementById('skillbar');
+    if (box) {
+      const show = helmSat && !paused && skills.open.length > 0;
+      box.hidden = !show;
+      if (show) {
+        const lane = PIP_LANES.find((l) => l.key === skills.lane);
+        box.innerHTML = skills.on.map((key, i) => {
+          const k = SKILL_BY[key];
+          const c = skills.cool[key] ?? 0;
+          const live = skillLive(skills, key);
+          const n = k.ammo !== undefined ? ` ${skills.ammo[key] ?? 0}` : '';
+          return `<span class="s${live ? ' live' : (c > 0 ? ' cool' : '')}">`
+            + `<b>${4 + i}</b> ${k.name}${n}${c > 0 ? ` ${c.toFixed(0)}초` : ''}</span>`;
+        }).join('')
+          + (skills.open.includes('pips')
+            ? `<span class="s lane"><b>${KEYS.pips.code.replace('Key', '')}</b> 전력 ${lane?.name ?? ''}`
+              + `${skills.swapT > 0 ? ' …' : ''}</span>` : '');
+      }
+    }
+    //  ★★ 효과는 **테두리에서만** 논다 — 복판을 덮으면 v87 의 「흰 공」이다.
+    //    EMP 고리만 0.6초를 넘는다 (기획 §6 에 그렇게 적어 뒀다)
+    const fx = document.getElementById('skillfx');
+    if (fx) {
+      const span = skillFx.key === 'emp' ? 0.9
+        : (skillFx.key === 'overdrive' ? SKILL_BY.overdrive.sec : SKILL_FX.maxSec * 2);
+      const on = skillFx.key && skillFx.t < span;
+      if (!on && skillFx.key) { skillFx.key = null; fx.hidden = true; fx.removeAttribute('data-key'); }
+      else if (on && fx.dataset.key !== skillFx.key) {
+        fx.hidden = false; fx.dataset.key = skillFx.key;
+      }
+    }
+  }
   landShots(dt);
   stepCraft(dt);           // ★ v114 — 제조는 창을 닫아도 돈다
 
