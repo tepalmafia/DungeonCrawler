@@ -95,6 +95,29 @@ export const DODGE2 = {
    *   v84 의 급기동을 안 죽인다 — 상이 「피한다」에서 **「쉬워진다」**로 바뀐다
    */
   agileWide: 0.08,
+
+  /**
+   * ★★★ v153 — **서 있으면 못 뺀다** (사장님 「**그대로 서 있는 자세에서
+   *   뒤집는거면 문제가 있는거 아냐?**」).
+   *
+   *  ★★★ 맞는 말씀이다. v152 까지 이 판정에 **속도가 한 글자도 안 들어갔다** —
+   *    맞는 키를 창 안에 눌렀나만 봤으므로 **멈춰 선 채로도 완벽 회피**가
+   *    됐다. 회피는 **방향을 바꾸는 일이 아니라 자리를 옮기는 일**이고,
+   *    옮길 속도가 없으면 굴려 봐야 그 자리에 그대로 있다.
+   *
+   *  ★★ 그런데 **못 하게 막지는 않는다.** 이 배의 오랜 규약이 「**벌은
+   *    미뤄지지 없어지지 않는다**」이고, 막으면 갇힌다. 그래서 느리면
+   *    「완벽」이 **「스쳤다」**가 된다 — 피해가 0 에서 이만큼으로 는다.
+   *
+   *  ★ 그리고 **왜 안 됐는지 말한다.** 「말 없는 문은 없다」(v143) —
+   *    아무 말 없이 안 되면 사람은 조작을 의심하지 자기 속도를 의심하지
+   *    않는다.
+   *
+   *  @property need 이 배수(순항=1)보다 느리면 완벽이 「스쳤다」가 된다.
+   *                 0.6 은 스로틀 **0.18** 언저리다 — 거의 멈춰 선 때만 걸린다
+   *  @property hurt 그때의 피해 배수 — 「늦음」의 아래쪽(1.0)보다 조금 아프다
+   */
+  slow: { need: 0.6, hurt: 1.25 },
 };
 
 /**
@@ -140,7 +163,7 @@ export const wayWord = (way) => {
  * @returns { band, hurt, why }
  *          band 'perfect' | 'late' | 'wrong' | 'none' | 'early'
  */
-export function judge(way, pressed = [], left = 0, { agile = false, wide = 0 } = {}) {
+export function judge(way, pressed = [], left = 0, { agile = false, wide = 0, speed = 1 } = {}) {
   const w = (agile ? DODGE2.agileWide : 0) + wide / 2;
   const [lo, hi] = DODGE2.perfect;
   const list = Array.isArray(pressed) ? pressed : [pressed].filter(Boolean);
@@ -168,7 +191,15 @@ export function judge(way, pressed = [], left = 0, { agile = false, wide = 0 } =
     };
   }
   if (left > hi + w) return { band: 'early', hurt: null, why: '너무 이르다 — 유도가 다시 문다' };
-  if (left >= lo - w) return { band: 'perfect', hurt: DODGE2.hurt.perfect, why: '완벽' };
+  if (left >= lo - w) {
+    //  ★★★ v153 — 맞게 눌렀어도 **자리를 옮길 속도**가 있어야 빠진다.
+    //    `speed` 는 순항이 1 인 배수다 (`speed-table.js closeK` 가 내는 값) —
+    //    **여기서 새로 재지 않는다.** 재는 곳이 둘이 되면 v152 가 그대로 돌아온다
+    if (speed < DODGE2.slow.need) {
+      return { band: 'slow', hurt: DODGE2.slow.hurt, why: '속도가 없어 못 뺐다' };
+    }
+    return { band: 'perfect', hurt: DODGE2.hurt.perfect, why: '완벽' };
+  }
   // ★★ **늦음은 범위다** — 막 늦은 것과 다 늦은 것이 같으면 그건 벌이 아니다
   const k = Math.max(0, Math.min(1, 1 - left / Math.max(1e-6, lo - w)));
   const [a, b] = DODGE2.hurt.late;
@@ -212,6 +243,9 @@ export const BAND_WORD = {
   now: '★ 지금',
   early: '기다립니다',
   perfect: '★★ 완벽 회피',
+  //  ★ v153 — **왜 안 됐는지 말한다.** 아무 말 없이 안 되면 사람은
+  //    조작을 의심하지 제 속도를 의심하지 않는다 (「말 없는 문은 없다」 v143)
+  slow: '스쳤습니다 — 속도가 없으면 못 뺍니다',
   late: '늦었습니다',
   wrong: '반대입니다',
   none: '★ 지금',

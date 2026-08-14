@@ -20,6 +20,11 @@ import {
   WAYS, WAY_KEYS, DODGE2, wayFor, wayWord, judge, BAND_WORD,
 } from '../web/space/js/game/dodge-table.js';
 import { ENEMY_FIRE } from '../web/space/js/game/target-table.js';
+//  ★ v153 — 「게임이 정말 속도를 넘기나」를 보려고 소스를 읽는다.
+//    표만 재는 검사는 「규칙이 맞나」는 물어도 「게임이 그 규칙대로 도나」는 못 묻는다
+import { readFileSync } from 'node:fs';
+
+const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 let bad = 0;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
@@ -164,6 +169,40 @@ console.log('\n[8] ★★ **급기동은 안 죽었나** — 상이 「피한다
     + ' 「급기동이라야 피한다」에서 **「급기동이면 쉽다」**로 바뀐다 (뒤집힌 것 · DODGE.md §9)');
   ok(DODGE2.agileWide > 0 && DODGE2.agileWide < 0.2,
     `★ 넓히는 양이 ${DODGE2.agileWide}초다 — 너무 넓히면 급기동이 다시 **정답**이 된다`);
+}
+
+console.log('\n[9] ★★★ **서 있으면 못 빼나** — 사장님 「그대로 서 있는 자세에서 뒤집는거면 문제가 있는거 아냐?」 (v153)');
+{
+  //  ★★★ v152 까지 이 판정에 **속도가 한 글자도 안 들어갔다.** 맞는 키를
+  //    창 안에 눌렀나만 봤으므로 **멈춰 선 채로도 완벽 회피**가 됐다.
+  //    회피는 방향을 바꾸는 일이 아니라 **자리를 옮기는 일**이다
+  //    (`frame.js flyBy` · `space-move.js [4]` 가 그 자리를 재 놨다)
+  const way = 'left';
+  const mid = (DODGE2.perfect[0] + DODGE2.perfect[1]) / 2;
+  const fast = judge(way, [way], mid, { speed: 1 });
+  const still = judge(way, [way], mid, { speed: 0 });
+  console.log(`   순항(1.0)으로 : ${BAND_WORD[fast.band]} · 피해 ×${fast.hurt}`);
+  console.log(`   서서(0.0)     : ${BAND_WORD[still.band]} · 피해 ×${still.hurt}`);
+  ok(fast.band === 'perfect' && fast.hurt === 0,
+    '★ **가고 있으면 그대로 완벽이다** — 이 판은 회피를 어렵게 만드는 판이 아니다');
+  ok(still.band !== 'perfect' && still.hurt > 0,
+    '★★★ **서 있으면 완벽이 안 나온다** — 굴려도 자리가 안 바뀌니까. 옮길 속도가'
+    + ' 없으면 그건 회피가 아니라 그냥 기수를 돌린 것이다');
+  ok(still.hurt < DODGE2.hurt.none,
+    `★★ 그래도 **안 누른 것보다는 낫다** (×${still.hurt} < ×${DODGE2.hurt.none}) —`
+    + ' 「벌은 미뤄지지 없어지지 않는다」. 못 하게 막으면 갇힌다');
+  ok(BAND_WORD[still.band] && /속도/.test(BAND_WORD[still.band]),
+    '★★★ **왜 안 됐는지 말한다** — 아무 말 없이 안 되면 사람은 조작을 의심하지'
+    + ' 제 속도를 의심하지 않는다 (「말 없는 문은 없다」 v143)');
+  //  ★ 문턱이 어디인가 — 늘 걸리면 그건 벌이 아니라 고장이다
+  ok(DODGE2.slow.need > 0 && DODGE2.slow.need < 1,
+    `★★ 문턱이 순항의 ${DODGE2.slow.need} 배다 — 순항으로 가고 있으면 안 걸린다.`
+    + ' 1 을 넘게 두면 「밀지 않으면 늘 스친다」가 되고 그건 다른 게임이다');
+  //  ★★★ 게임이 정말 넘기나 — 표만 고치고 안 넘기면 표는 초록인데 사람은 그대로다
+  const t = read('../web/space/js/game/target.js');
+  ok(/judge\([^)]*speed:/s.test(t),
+    '★★★ **`stepSky` 가 속도를 정말 넘긴다** — 표에 `slow` 를 적어 놓고 안 넘기면'
+    + ' 기본값(1)이 들어가 **늘 완벽**이다. v152 가 정확히 그 모양이었다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전부 맞습니다 — 게임에 붙일 자격이 생겼다');

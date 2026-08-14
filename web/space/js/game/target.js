@@ -469,7 +469,12 @@ export function stepSky(sky, dt, {
     //  ★ 이르게 누른 것도 **결심으로 친다** — 실기에서 일찍 꺾으면 유도가
     //    다시 문다. 「일단 눌러 놓고 본다」가 공짜면 타이밍이 다시 없어진다
     if (s.willHit && s.band === null && dodgeKeys?.length) {
-      const r = judge(s.way, dodgeKeys, s.t, { agile, wide: evadeWide });
+      //  ★★★ v153 — **얼마나 빨리 가고 있나를 같이 넘긴다.** 회피는 방향을
+      //    바꾸는 일이 아니라 **자리를 옮기는 일**이라 속도가 없으면 못 뺀다
+      //    (사장님 「그대로 서 있는 자세에서 뒤집는거면 문제가 있는거 아냐?」).
+      //  ★★ `close` 는 창밖 속도에서 나온 그 배수다 (v152 `speed-table.js closeK`) —
+      //    **여기서 새로 안 잰다.** 새로 재면 그게 곧 v152 의 되풀이다
+      const r = judge(s.way, dodgeKeys, s.t, { agile, wide: evadeWide, speed: moving ? close : 0 });
       if (r.band !== 'none') {
         s.band = r.band;
         // ★ 이른 것은 「너무 일렀다」로 굳고, 벌은 반대로 꺾은 것과 같다 —
