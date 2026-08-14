@@ -32,7 +32,72 @@ for (const m of ['playwright', '/opt/node22/lib/node_modules/playwright/index.mj
 if (!chromium) { console.log('playwright 가 없습니다'); process.exit(0); }
 
 let bad = 0;
+/** ★ v149 — 못 쟀으면 여기에 까닭이 담긴다 (담기면 합격/불합격을 안 찍는다) */
+let 못잰까닭 = null;
 const ok = (c, m) => { console.log(`  ${c ? '✔' : '✘'} ${m}`); if (!c) bad++; };
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v149 — **잴 것이 없으면 통과가 아니라 「측정 불가」다**
+//
+//  ★ 사장님 (2026-08-14) 검사 도구를 훑다가 잡혔다: `SPACE.panels()` 가
+//    **빈 값을 주면 이 도구가 통째로 초록**이었다. 실제로 확인했다 —
+//    계기 넷을 다 없앤 척하고 돌리니 **「✔ 전투 화면이 비어 있다」**가 나왔다.
+//
+//  ══ 왜 그랬나 — 이 도구의 판정이 **전부 「없어야 한다」 꼴**이기 때문 ═══
+//
+//      ok(!intruders.length, '전투 원뿔이 비었다')
+//      ok(!cut.length,       '잘린 판이 없다')
+//      ok(!laps.length,      '판끼리 안 겹친다')
+//      ok(sum <= BUDGET,     '계기 셋이 화면의 N%')
+//
+//    판이 하나도 없으면 **넷이 다 참**이 된다. 불량품 상자가 비었는데
+//    「불량이 없다」고 도장을 찍는 것과 같다 — 생산 라인이 멈춰서 빈 것인데도.
+//    그리고 구석 검사(`inCorner`)는 `if (!P[name]) continue` 로 **아예 건너뛴다.**
+//
+//  ══ ★★ 접힘(folded)과는 **다른 상황**이라 다르게 끝낸다 ═══════════════
+//
+//    `tools/folded.js` 는 「**설계가 바뀌어 잴 것이 없어졌다**」를 다룬다 —
+//    걷기가 없어졌으니 걷기 검사는 재는 게 맞지 않다. 그건 정상이므로 **0** 으로 끝난다.
+//
+//    여기는 반대다. 계기는 **있어야 하는 것**이다. 없으면 그건 설계가 바뀐 게
+//    아니라 **게임이나 구멍(`SPACE.panels()`)이 고장 난 것**이고, 그때
+//    필요한 답은 「합격」도 「불합격」도 아닌 **「못 쟀다」**이다.
+//    그래서 **종료 코드 2** 를 쓴다 — 이 저장소가 「playwright 가 없다」에
+//    이미 쓰는 그 코드다 (설비가 없어 못 쟀다는 뜻).
+//
+//  ★ 지금은 이 도구 하나만 고친다 (사장님 「파일 하나만 고쳐」). 같은 병이
+//    다른 도구에도 있으므로, **두 번째 도구에 붙일 때** 이 함수를
+//    `tools/folded.js` 옆으로 옮기는 것이 맞다 — 한 곳에 두는 규약대로
+// ══════════════════════════════════════════════════════════════════════════
+
+/** 못 쟀다 — 브라우저를 닫고 나서 알리려고 예외로 던진다 */
+class 못잼 extends Error {}
+
+/**
+ * ★★★ **판이 다 있나** — 하나라도 없으면 여기서 멈춘다.
+ *
+ *   ★ 「하나라도」로 잡는 것이 맞다. 판 하나가 빠질 때마다 위 판정 넷이
+ *     **그만큼씩 조용히 약해진다** — 「셋 중 둘만 재고 통과」는 통과가 아니다.
+ *
+ * @param P     `SPACE.panels()` 가 준 것
+ * @param where 어느 대목에서 재려다 못 쟀나 (사람이 읽는 말)
+ */
+function 재야한다(P, where) {
+  const want = Object.keys(PANELS);
+  const got = want.filter((n) => P && P[n]);
+  if (got.length === want.length) return P;
+  const miss = want.filter((n) => !(P && P[n]));
+  throw new 못잼(
+    `${where} — 계기 ${want.length} 개 중 **${got.length} 개만** 보입니다`
+    + `\n     안 보이는 것: ${miss.join(' · ')}`,
+  );
+}
+
+/** ★ 딱지(DOM)도 같다 — 안 떠 있으면 「안 덮는다」가 저절로 참이 된다 */
+function 딱지도재야한다(C, name, where) {
+  if (C && C[name]) return C[name];
+  throw new 못잼(`${where} — 딱지 「${name}」 가 화면에 없습니다`);
+}
 
 console.log('화면을 누가 얼마나 먹나 — 진짜 카메라 · 진짜 메시');
 
@@ -72,7 +137,9 @@ try {
   for (const v of VIEWS) {
     await p.setViewportSize({ width: v.w, height: v.h });
     await p.waitForTimeout(350);
-    const P = await S(() => SPACE.panels());
+    //  ★★★ v149 — **재기 전에 잴 것이 있나부터** (아래 판정이 전부
+    //    「없어야 한다」 꼴이라, 판이 없으면 통째로 초록이 된다)
+    const P = 재야한다(await S(() => SPACE.panels()), `${v.w}×${v.h} 에서`);
     console.log(`\n══ ${v.w}×${v.h} (${(v.w / v.h).toFixed(2)}:1) — ${v.what}`);
     console.log('   판        복판 (x, y)      넓이     덮는 각      원뿔  잘림');
     let sum = 0;
@@ -116,7 +183,7 @@ try {
     for (const v of VIEWS) {
       await p.setViewportSize({ width: v.w, height: v.h });
       await p.waitForTimeout(300);
-      const P = await S(() => SPACE.panels());
+      const P = 재야한다(await S(() => SPACE.panels()), `${v.w}×${v.h} 의 모서리를 재려는데`);
       for (const n of Object.keys(PANELS)) {
         if (n === '조준경' || !P[n]) continue;
         // ══ ★★★ **못박은 것은 복판이 아니라 바깥 모서리다** ═════════════
@@ -222,7 +289,12 @@ try {
       await p.keyboard.press('KeyI');
       await p.waitForTimeout(700);
       const C = await S(() => SPACE.chips());
-      const P = await S(() => SPACE.panels());
+      const P = 재야한다(await S(() => SPACE.panels()), `${v.w}×${v.h} 에서 딱지를 견주려는데`);
+      //  ★ 딱지가 안 떠 있으면 「아무것도 안 덮는다」가 **저절로** 참이 된다.
+      //    `must` 인 딱지는 떠 있어야 재는 뜻이 있다
+      for (const [nm, sp] of Object.entries(CHIPS)) {
+        if (sp.must) 딱지도재야한다(C, nm, `${v.w}×${v.h} 에서`);
+      }
       for (const [name, spec] of Object.entries(CHIPS)) {
         const c = C[name];
         if (!c) { console.log(`   ${v.w}×${v.h}  ${name} — 안 떠 있다`); continue; }
@@ -243,7 +315,30 @@ try {
   }
 
   ok(!errs.length, `콘솔에 오류가 없다 ${errs.length ? errs.slice(0, 2).join(' · ') : ''}`);
+} catch (e) {
+  //  ★★★ v149 — 「못 쟀다」는 여기서 잡아 **브라우저를 닫고 나서** 알린다.
+  //    `process.exit()` 를 바로 부르면 `finally` 가 안 돌아 브라우저가 남는다
+  if (e instanceof 못잼) 못잰까닭 = e.message;
+  else throw e;
 } finally { await b.close(); }
+
+if (못잰까닭) {
+  console.log(`\n■ **측정 불가** — 통과도 실패도 아닙니다\n`);
+  console.log(`   ${못잰까닭}`);
+  console.log('');
+  console.log('   ★ 이 검사의 판정은 전부 **「없어야 한다」** 꼴입니다');
+  console.log('     (원뿔이 비었나 · 잘린 것이 없나 · 겹치는 것이 없나).');
+  console.log('     그래서 **잴 판이 없으면 넷이 다 저절로 참**이 됩니다 —');
+  console.log('     v148 까지 그 상태였고, 계기 넷을 없앤 척하고 돌리니');
+  console.log('     **「✔ 전투 화면이 비어 있다」** 가 나왔습니다.');
+  console.log('');
+  console.log('   ※ 접힌 검사(`tools/folded.js`)와는 다릅니다. 그건');
+  console.log('     「설계가 바뀌어 잴 것이 없어졌다」라 **0** 으로 끝나고,');
+  console.log('     이건 「있어야 할 것이 없다」라 **2**(못 쟀다)로 끝납니다.');
+  console.log('');
+  console.log('   먼저 볼 곳: `main.js` 의 `SPACE.panels()` · `world/cockpit.js` 의 계기 셋');
+  process.exit(2);
+}
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 전투 화면이 비어 있다');
 process.exit(bad ? 1 : 0);
