@@ -47,8 +47,37 @@ console.log('\n[1] **가만히 있는 과녁이 아닌가**');
   const moved = s.list.filter((x, i) => a0[i] && Math.abs(x.az - a0[i].az) > 0.5).length;
   console.log(`   12초 뒤 — 자리를 옮긴 것 ${moved}/${a0.length}`);
   ok(moved >= Math.floor(a0.length * 0.6), '대부분이 흘러간다 — 세워 둔 과녁이 아니다');
-  const closer = s.list.filter((x, i) => a0[i] && x.dist < a0[i].d).length;
-  ok(closer >= Math.floor(a0.length * 0.6), '다가온다 — 배가 가고 있으니까');
+  // ══ ★★★ v154 — **「다 다가온다」는 이제 낡은 말이다** ═══════════════════
+  //
+  //  ★ 여기가 `closer >= 6할` 이었다 — 「다가온다 — 배가 가고 있으니까」.
+  //    배가 **자리를 안 가질 때만** 맞는 말이었다. v153 까지 「앞으로
+  //    간다」가 실제로는 「**모두의 거리를 똑같이 깎는다**」였으므로
+  //    등 뒤의 것도 다가왔고, 그래서 이 판정이 초록이었다.
+  //
+  //  ★★★ v154 에 `frame.js flyBy` 를 물리면서 그게 뒤집혔다. 사장님이
+  //    「**앞으로 이동 중인데 적은 그대로 뒤에 있는데?**」로 짚으신 것이
+  //    바로 이 낡은 규칙이다. 이제 **앞은 다가오고 뒤는 멀어진다.**
+  //
+  //  ★★ 그래서 판정을 **방위로 갈라서** 묻는다. 「몇 할이 다가오나」로
+  //    물으면 새 규칙에서는 영영 안 맞고, 낡은 빨강은 새 빨강을 덮는다
+  {
+    const front = [], back = [];
+    for (let i = 0; i < a0.length; i++) {
+      const x = s.list[i]; if (!x || !a0[i]) continue;
+      (Math.abs(a0[i].az) < 60 ? front : (Math.abs(a0[i].az) > 120 ? back : []))
+        .push(x.dist - a0[i].d);
+    }
+    const mean = (v) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
+    const f = mean(front), b = mean(back);
+    console.log(`   앞(±60°) ${front.length}개 평균 ${f === null ? '—' : f.toFixed(1)}m`
+      + ` · 뒤(120°~) ${back.length}개 평균 ${b === null ? '—' : b.toFixed(1)}m`);
+    ok(f === null || f < 0,
+      '★★★ **앞에 있는 것은 다가온다** — 배가 그리로 가고 있으니까');
+    ok(b === null || b > 0,
+      '★★★ **뒤에 있는 것은 멀어진다** — v153 까지 여기가 **앞과 똑같이 다가왔다.**'
+      + ' 진짜 브라우저에서 재니 정면도 등 뒤도 전부 −19m 였고, 그게'
+      + ' 사장님 「앞으로 이동 중인데 적은 그대로 뒤에 있는데?」의 정체다');
+  }
 
   // 서 있으면 안 다가온다
   const s2 = fresh();

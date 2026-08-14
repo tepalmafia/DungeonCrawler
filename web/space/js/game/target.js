@@ -14,7 +14,9 @@ import {
 } from './target-table.js';
 // ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
 //   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
-import { wrap, relOf } from './frame.js';
+//  ★ v154 — `flyBy` 를 같이 부른다. **배가 나아가는 일도 「자리를 아는 곳」
+//    하나에서** 나온다 (`frame.js` 머리말 · v98 이 이 파일을 만든 까닭)
+import { wrap, relOf, flyBy } from './frame.js';
 // ★★★ v142 — **가림.** 여기서 각을 다시 안 잰다 — 묻기만 한다 (`COVER.md §4`)
 import { coverOf, isHidden, hideBehind, HIDE } from './cover-table.js';
 // ══════════════════════════════════════════════════════════════════════════
@@ -170,6 +172,31 @@ function stepEngage(t, k, dt, rnd, list = []) {
     }
     return;
   }
+  // ══ ★★★ v154 — **쫓아온다** (거리만이 아니라 **각도** · `ENGAGE.turn`) ══
+  //
+  //  ★★★ v153 에 배가 자리를 갖자 전투가 거의 사라졌다 (`space-war` 가
+  //    「회차에 12대 (목표 20~90)」로 잡았다). 여기가 **거리만 만지고
+  //    방위는 손도 안 댔기** 때문이다 — 옛 모형에서는 방위가 저절로 안
+  //    바뀌었으니 그래도 됐는데, 내가 나아가기 시작하면 적의 방위가
+  //    **옆으로 밀려나** 그대로 스쳐 지나간다.
+  //
+  //  ★★ 즉 적은 「다가오기」만 하고 **쫓아오지는 않았다.** 그건 추격이
+  //    아니라 끌려오는 것이다. 각을 안 잡으면 아무리 빨라도 못 문다.
+  //
+  //  ★ **틀 때 흔들림의 기준선(`az0`)도 같이 끈다.** 안 그러면 몸은 따라
+  //    오는데 흔들림만 옛 자리로 되돌아가서 **덜덜 떤다**
+  {
+    const off = wrap(t.az);
+    if (Math.abs(off) > ENGAGE.aimSlack) {
+      const step = Math.max(-ENGAGE.turn * dt, Math.min(ENGAGE.turn * dt, -off));
+      t.az = wrap(t.az + step);
+      if (t.eng?.az0 !== undefined) t.eng.az0 = wrap(t.eng.az0 + step);
+    }
+    const offEl = t.el ?? 0;
+    if (Math.abs(offEl) > ENGAGE.aimSlack) {
+      t.el = offEl + Math.max(-ENGAGE.turn * dt, Math.min(ENGAGE.turn * dt, -offEl));
+    }
+  }
   if (!so) { t.dist -= k.closes * dt; return; }
   if (!t.eng) t.eng = { phase: 'in', held: 0, holdFor: span(ENGAGE.hold, rnd), way: rnd() < 0.5 ? -1 : 1 };
   const e = t.eng;
@@ -198,7 +225,26 @@ function stepEngage(t, k, dt, rnd, list = []) {
   //    탄이 오는 방위는 매번 다르되, 싸움에서 이탈하지는 않는다
   if (e.az0 === undefined) e.az0 = t.az;
   e.ph = (e.ph ?? 0) + ENGAGE.weaveRate * dt;
-  t.az = e.az0 + Math.sin(e.ph) * ENGAGE.weave * e.way;
+  // ══ ★★★ v154 — **덮어쓰지 않고 「그리로 튼다」** ══════════════════════
+  //
+  //  ★★★ 여기가 `t.az = e.az0 + sin(…)` 이었다 — **방위를 통째로 덮어썼다.**
+  //    옛 모형에서는 그래도 됐다: 내가 나아가도 적의 방위가 안 바뀌었으니
+  //    덮어쓸 것이 없었다. 그런데 배가 자리를 갖자(v153 `flyBy`) 이 한 줄이
+  //    **내가 지나간 몫을 매 프레임 지워 버린다** — 즉 아무리 밀고 나가도
+  //    적이 **같은 방위에 붙박여** 있다. 옛날보다 오히려 더 달라붙었다.
+  //
+  //  ★★ 재 보니 그게 「회차에 94~130대 맞는다 (목표 20~90)」의 정체였다.
+  //    `far`·`turn`·`aimSlack` 을 아무리 쓸어도 안 내려간 까닭이기도 하다 —
+  //    **손잡이가 그 셋이 아니라 이 한 줄**이었다.
+  //
+  //  ★ 그래서 **틀되 한 걸음에 `turn` 만큼만** 튼다. 그러면 지나가는 몫과
+  //    쫓아오는 몫이 **겨룬다** — 밀어붙이면 떼어내고, 서 있으면 붙잡힌다.
+  //    「도망이 답일 때가 있다」가 여기서 나온다
+  {
+    const want = e.az0 + Math.sin(e.ph) * ENGAGE.weave * e.way;
+    const d = wrap(want - t.az);
+    t.az = wrap(t.az + Math.max(-ENGAGE.turn * dt, Math.min(ENGAGE.turn * dt, d)));
+  }
   e.held += dt;
   if (e.held >= e.holdFor) { e.phase = 'out'; e.held = 0; }
 }
@@ -344,7 +390,27 @@ export function stepSky(sky, dt, {
     // ★ 적 우주선은 **저 혼자 다가온다** — 배가 서 있어도 온다
     // ★★★ v81 — **급가속이 여기에 먹는다.** v80 까지 이 줄에 배수가
     //   없어서 「R 을 눌러도 안 빨라지는」 상태였다 (`boost-table.js RUSH.close`)
-    if (moving) t.dist -= TARGET.closing * close * dt;
+    // ══ ★★★ v154 — **배가 나아간다** (`frame.js flyBy` · v153 에 지은 뼈대) ══
+    //
+    //  ★ 사장님 「**앞으로 이동 중인데 적은 그대로 뒤에 있는데?**」
+    //
+    //  ★★★ v153 까지 이 줄이 `t.dist -= TARGET.closing * close * dt` 였다 —
+    //    **거리에서 빼기만** 했으므로 방위가 어디든 똑같이 줄었다. 진짜
+    //    브라우저에서 재니 정면도 등 뒤도 **전부 −19m** 였다.
+    //
+    //  ★★ v152 가 **깎는 속도**(스로틀)를 고쳤지만 **방향은 여전히 없었다.**
+    //    부호가 통째로 없는 셈에 배수만 맞춘 것이라, 그것만으로는
+    //    「뒤가 멀어진다」도 「스쳐 지나간다」도 못 나온다.
+    //
+    //  ★★★ **v153 에 한 번 물렸다가 되돌렸다.** 물리니 전투가 거의
+    //    사라졌기 때문이다 (`space-war` 12대 · 목표 20~90). 까닭은 적이
+    //    「다가오기」만 하고 **쫓아오지 않는** 것이었고, v154 가 위
+    //    `stepEngage` 에 **각도 추격**(`ENGAGE.turn`)을 넣어 그것을 고쳤다.
+    //    **순서가 중요했다** — 전투 밀도를 먼저 세우고 나서 물린다
+    if (moving) {
+      const n = flyBy(t, { fwd: TARGET.closing * close * dt });
+      t.az = n.az; t.el = n.el; t.dist = n.dist;
+    }
     // ══ ★★★ v84 — **다가와서 박지 않는다** (`ENGAGE`) ═══════════════
     //  ★ v83 까지 `t.dist -= k.closes * dt` 한 줄이었다 — 즉 **다섯 중
     //    넷이 선체에 닿을 때까지 곧장 들어왔다.** 「지금 붙을까 뺄까」를
@@ -537,6 +603,23 @@ export function stepSky(sky, dt, {
   // ★ 선체 바닥(21)이 「지나갔다」 선(18)보다 **바깥**이라 부딪힌 것은
   //   여기서 안 빠진다 — 비껴 간 것만 `dist = -1` 로 스스로 빠진다
   sky.list = sky.list.filter((t) => t.dist > TARGET.gone);
+  // ══ ★★★ v154 — **뒤로 흘러간 것은 놓아 준다** ═══════════════════════
+  //
+  //  ★ 배가 자리를 갖자(`flyBy`) **뒤의 것이 정말 멀어진다.** 그런데 여태
+  //    걸러내는 줄은 「너무 **가까운** 것」(`gone` 18m)뿐이었다 — 멀어지는
+  //    일이 없었으니 필요가 없었던 것이다.
+  //
+  //  ★★★ 안 놓아 주면 **싸움이 안 끝난다.** v153 에 물려 봤을 때
+  //    `space-war` 가 「싸움 1번 · 하나 **0초**」로 잡았는데, 그건 싸움이
+  //    짧아서가 아니라 **적이 목록에 영영 남아 있어서** 한 판이 회차
+  //    전체가 된 것이었다. 그리고 그 적들은 너무 멀어서 쏘지도 않으므로
+  //    **물결이 새로 안 오고** 회차가 통째로 조용해졌다 (맞은 것 82 → 11).
+  //
+  //  ★★ **부른 것도 같이 놓아 준다.** v70 의 「부른 것은 부른 쪽이
+  //    치운다」는 「저절로 지워지면 안 된다」는 뜻이었고, 그때는 **멀어질
+  //    길이 없었다.** 360m 뒤로 흘러간 적은 지워진 것이 아니라 **정말로
+  //    떠난 것**이다 — 그것까지 붙들면 위의 일이 난다
+  sky.list = sky.list.filter((t) => t.dist < TARGET.far);
   // ★★★ **부른 것은 want 에 안 센다** — 저절로 지워지면 안 된다.
   //
   //   ★ v70 에 여기서 두 종류가 조용히 사라졌다. 판정이 `rams` 였는데,

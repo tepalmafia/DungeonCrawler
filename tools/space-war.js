@@ -291,13 +291,35 @@ function runOnce(seed) {
   const SEEDS = [31, 7, 11, 53, 101, 777, 2024, 4242];
   const runs = SEEDS.map(runOnce);
   const mid = (f) => runs.map(f).reduce((a, b) => a + b, 0) / runs.length;
-  const { hits, misses, fights, avg } = runs[0];
-  console.log(`   회차 ${(RUN / 60).toFixed(0)}분 — 싸움 ${fights}번 · 하나 ${avg.toFixed(0)}초`
-    + ` · 맞은 것 ${hits}대 · 빗나간 것 ${misses}대  (씨앗 ${SEEDS[0]})`);
+  // ══ ★★★ v154 — **씨앗 여덟을 돌려 놓고 판정은 하나로 하고 있었다** ══════
+  //
+  //  ★★★ 바로 위에 「씨앗 여덟. **하나로는 못 정한다**」라고 적혀 있고,
+  //    `runOnce` 머리에는 「한 판은 **판단할 수 없는 수**다」라고까지 적혀
+  //    있는데, 정작 판정 셋이 `runs[0]` — **씨앗 31 하나**를 봤다.
+  //    평균 낼 `mid` 를 만들어 두고도 **전투 비중에만** 썼다.
+  //
+  //  ★★ v154 에 전투 밀도를 다시 잡다가 잡혔다. `TARGET.far` 를 **4m** 만
+  //    움직였는데 「맞은 것」이 88 ↔ 135 로 널뛰었다 — 그 값이 게임을
+  //    말하는 게 아니라 **씨앗 하나의 운**을 말하고 있었던 것이다.
+  //    그 상태로 손잡이를 맞추면 「우연히 통과하는 숫자」를 고르게 되고,
+  //    그건 이 저장소가 제일 하면 안 되는 종류의 조율이다.
+  //
+  //  ★ 그래서 **여덟의 평균으로 판정하고, 널뛰는 폭을 같이 찍는다.**
+  //    폭이 보이면 다음 사람이 「이 값은 원래 흔들린다」를 안다
+  const hits = mid((r) => r.hits);
+  const misses = mid((r) => r.misses);
+  const fights = mid((r) => r.fights);
+  const avg = mid((r) => r.avg);
+  const hitLo = Math.min(...runs.map((r) => r.hits));
+  const hitHi = Math.max(...runs.map((r) => r.hits));
+  console.log(`   회차 ${(RUN / 60).toFixed(0)}분 · 씨앗 ${SEEDS.length}판 평균 —`
+    + ` 싸움 ${fights.toFixed(0)}번 · 하나 ${avg.toFixed(0)}초`
+    + ` · 맞은 것 ${hits.toFixed(0)}대 (${hitLo}~${hitHi}) · 빗나간 것 ${misses.toFixed(0)}대`);
   ok(hits >= 20 && hits <= 90,
-    `★★★ 회차에 **${hits}대** 맞는다 (20~90) — 0 이면 긴박이 없고, 너무 많으면 벌이다`);
+    `★★★ 회차에 **${hits.toFixed(0)}대** 맞는다 (20~90 · 판마다 ${hitLo}~${hitHi}) —`
+    + ' 0 이면 긴박이 없고, 너무 많으면 벌이다');
   ok(fights >= 8,
-    `싸움이 회차에 ${fights}번 — 뜸하면 격추 게임이 아니다`);
+    `싸움이 회차에 ${fights.toFixed(0)}번 — 뜸하면 격추 게임이 아니다`);
   ok(avg >= 15 && avg <= 120,
     `싸움 하나가 ${avg.toFixed(0)}초 (15~120) — 5초면 사고고, 3분이면 지겹다`);
   // ══ ★★★ **전투 비중** — 기획(`WAR.md §7`)이 40~55% 를 목표로 잡았다 ══
