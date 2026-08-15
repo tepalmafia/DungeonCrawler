@@ -17,7 +17,8 @@
 //
 //  ★ 게임을 안 부른다. 표(`aim-table.js`)와 표(`target-table.js`)만 읽는다
 // ══════════════════════════════════════════════════════════════════════════
-import { BANDS, TOL, SEEK, bandAt, multAt } from '../web/space/js/game/aim-table.js';
+import { readFileSync } from 'node:fs';
+import { BANDS, TOL, SEEK, bandAt, multAt, STICKY, stickyPull } from '../web/space/js/game/aim-table.js';
 import { KINDS, TARGET, PARTS } from '../web/space/js/game/target-table.js';
 
 let bad = 0;
@@ -172,5 +173,48 @@ console.log('\n[5] ★ **큰 것이 여전히 맞히기 쉽나** — 띠는 비�
 
 console.log(`\n   ※ 표적이 도는 속도(${TARGET.driftAz[1]}도/초)를 생각하면 정조준(0.8도)은`
   + '\n     붙어서 따라갈 때만 나온다 — 그게 「쫓아서 해낸다」와 물린다');
+console.log('\n[8] ★★★ **물었으면 조준이 따라가나** — 사장님 「크게 벌어지지 않는다면」 (v157)');
+{
+  const dt = 1 / 30;
+  const pull = (a, e, l = true) => stickyPull(a, e, dt, l);
+  console.log(`   기준 — 안쪽 ${STICKY.within}도 · 초당 ${STICKY.rate}도 · ${STICKY.leave}도는 남긴다`);
+  console.log(`   3도 벌어졌을 때 한 걸음 ${pull(3, 0).az}도 (상한 ${(STICKY.rate * dt).toFixed(2)})`);
+  ok(pull(3, 0, false).az === 0 && pull(3, 0, false).el === 0,
+    '★★★ **안 물었으면 아무것도 안 한다** — 안 문 것까지 따라가면 겨누는 일이 통째로 없어진다');
+  ok(pull(3, 0).az > 0,
+    '★★★ **물었고 가까우면 따라간다** — 사장님이 말씀하신 그것이다');
+  ok(pull(STICKY.within + 3, 0).az === 0,
+    `★★★ **${STICKY.within}도 밖이면 손을 놓는다** — 「크게 벌어지지 않는다면」이 이 줄이다.`
+    + ' 그래서 **표적을 바꾸는 것도 자유롭다** — 밀어내면 그 순간 안 따라온다');
+  ok(pull(3, 0).az <= STICKY.rate * dt + 1e-9,
+    `★★★ **초당 ${STICKY.rate}도를 안 넘는다** — 이 상한이 이 기능의 안전장치다.`
+    + ' 없으면 순간이동이 되고, 그건 따라가기가 아니라 **자동 조준**이다'
+    + ' (`space-skill [2]` 이 지키는 선 — 겨누는 것을 대신하지 않는다)');
+  ok(pull(STICKY.leave * 0.5, 0).az === 0,
+    `★★ **${STICKY.leave}도 안쪽은 안 당긴다** — 0 까지 당기면 정중앙에 붙박여`
+    + ' 「내가 겨눈 것」이 아니게 된다. 마지막 한 뼘은 사람이 맞춘다');
+  //  ★ 비스듬한 것도 **방향을 지키며** 당겨야 한다 — 축마다 따로 자르면 꺾인다
+  const d = pull(3, 4);
+  //  ★ 잣대를 1e-6 으로 뒀다가 빨개졌다 — `toFixed(5)` 반올림 몫이라
+  //    **눈에 안 보이는 0.001도**를 잡고 있었다. 검사는 사람이 느낄 수
+  //    있는 크기를 물어야 한다 (「재는 것이 화면과 다르면 그 숫자로
+  //    고치면 안 된다」의 반대쪽 — 여기서는 **잣대**가 틀렸다)
+  ok(Math.abs(d.el / d.az - 4 / 3) < 1e-3,
+    `★★ **비스듬해도 곧게 당긴다** (3:4 → ${(d.el / d.az).toFixed(4)}) —`
+    + ' 축마다 따로 자르면 조준이 꺾여 들어간다');
+  //  ★★★ 게임이 이 뼈대를 **묻나** — 표만 고치고 안 물리면 표는 초록인데 화면은 그대로다
+  const m = readFileSync(new URL('../web/space/js/main.js', import.meta.url), 'utf8');
+  const code = m.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  ok(/stickyPull\(/.test(code),
+    '★★★ **게임이 `stickyPull()` 을 부른다** — 표만 고치고 안 물리면 표는 초록인데'
+    + ' 화면은 그대로다 (v145·v152 가 그 모양이었다)');
+  ok(/fly3\.yaw \+= pull\.az \/ DEG/.test(code),
+    '★★★ **조준이 아니라 `fly3`(배의 자세)를 돌린다** — 이 배는 `aimAz = nose.az` 라'
+    + ' 조준이 곧 기수다. 조준만 몰래 옮기면 **창밖과 조준선이 갈라진다**');
+  ok(/pull\.az \/ DEG/.test(code) && /pull\.el \/ DEG/.test(code),
+    '★★ **도를 라디안으로 바꿔 넣는다** — `fly3` 는 라디안이고 표는 도다.'
+    + ' 안 나누면 **57배로 홱 돈다**');
+}
+
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 넓어졌고, 안쪽이 아프고, 저울이 그대로입니다');
 process.exit(bad ? 1 : 0);
