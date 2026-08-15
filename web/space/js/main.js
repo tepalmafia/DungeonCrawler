@@ -265,7 +265,8 @@ import {
   WAYS as DWAYS, WAY_KEYS, wayWord, BAND_WORD, bandAt as dodgeBandAt, ringAt2, arrowOf, wayFor,
 } from './game/dodge-table.js';
 // ★★★ v114 — **조준 띠** (사장님 「정확히 안쪽을 맞출 수록 데이미지가」)
-import { bandAt, HIT_WORD } from './game/aim-table.js';
+//  ★ v157 — `stickyPull` 을 같이 부른다. **물었으면 조준이 따라간다**
+import { bandAt, HIT_WORD, STICKY, stickyPull } from './game/aim-table.js';
 // ★★★ v114 — **인벤토리와 제조** (사장님 「인벤토리도 만들어야지. 제조하는 것도」)
 import {
   RECIPES, RECIPE_LIST, canMake, costWord, WHY as CRAFT_WHY,
@@ -411,7 +412,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 156;
+export const VERSION = 157;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -8161,6 +8162,30 @@ function frame(now) {
   //  ★ **겨눔은 기수가 한다.** 조종간을 밀어 기수를 돌리면 그게 조준이다 —
   //    실제 전투기의 기총이 기수 고정인 것과 같다. 겨눔을 따로 두면
   //    「배는 저쪽을 보는데 총은 이쪽」이 되고, 그건 계기가 둘인 것이다
+  // ══ ★★★ v157 — **물었으면 배가 표적 쪽으로 조금 튼다** ═══════════════
+  //
+  //  ★ 사장님 「락온되면 마우스 위치가 타겟하고 **크게 벌어지지 않는다면
+  //    자동으로 따라가도록** 해줘. **기준을 세우고**」
+  //
+  //  ★★ 기준은 `aim-table.js STICKY` 에 있다 — **여기서 새로 안 잰다.**
+  //    ① 물었을 때만 ② 6도 안일 때만 ③ 초당 22도까지만 ④ 0.6도는 남긴다.
+  //
+  //  ★★★ **조준을 옮기지 않고 `fly3` 를 돌린다.** 이 배는 `aimAz = nose.az`
+  //    라 조준이 곧 기수다 (v85 에 둘을 갈랐다가 「상하 조정이 안 된다」가
+  //    났고 그때 하나로 합쳤다). 조준만 몰래 옮기면 **창밖과 조준선이
+  //    갈라진다.** 배를 트니 창밖도 같이 돈다.
+  //
+  //  ★ `fly3` 는 **라디안**이다 (`noseAim()` 이 `fly3.yaw * DEG` 로 도를
+  //    만든다 · `DEG = 180/Math.PI`). 표는 도로 말하므로 나눠서 넣는다 —
+  //    이 한 줄을 안 하면 57배로 홱 돈다
+  if (helmSat && combat.radar.on && combat.radar.id != null) {
+    const t = sky.list.find((x) => x.id === combat.radar.id);
+    if (t) {
+      const pull = stickyPull(azDiff(t.az, aimAz), (t.el ?? 0) - aimEl, dt, true);
+      fly3.yaw += pull.az / DEG;
+      fly3.pitch += pull.el / DEG;
+    }
+  }
   const nose = noseAim();
   // ★ v100 — **동체가 초당 몇 도 도나.** 발사관의 흔들림이 이 값에 비례한다.
   //   조종간 편향이 아니라 **실제로 돈 각**으로 잰다 — 자세 제어 고장이나
