@@ -412,7 +412,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 157;
+export const VERSION = 158;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -2475,7 +2475,8 @@ function showPause(on) {
   const left = legsLeft(route);
   const min = Math.round(clock / 60);
   pauseBox.querySelector('.where').textContent =
-    `구간 ${Math.min(route.leg + 1, LEG.count)}/${LEG.count} · ${min}분째 · 남은 거점 ${left}`;
+    `구간 ${Math.min(route.leg + 1, LEG.count)}/${LEG.count} · ${min}분째`
+    + ` · **${(odoM / 1000).toFixed(1)}km 왔다** · 남은 거점 ${left}`;
   // ★ 저장이 **됐는지**를 말한다. 사생활 보호 모드에서는 안 되는데,
   //   조용히 안 되면 사람은 「저장됐겠지」 하고 닫는다
   pauseBox.querySelector('.note').textContent = canSave()
@@ -2978,6 +2979,15 @@ let fovWas = -1, aspectWas = -1;
  *   `mpsWas` 는 지난 프레임의 창밖 속도, `accK` 는 **삭아 가는 느낌** 0~1
  */
 let mpsWas = 0, accK = 0;
+/**
+ * ★★★ v158 — **이번 회차에 간 거리** (m).
+ *
+ *  ★ 사장님 「**진짜로 내가 이동하면서 싸우고 있다는걸 알게 해야해**」.
+ *    규칙만 고치면 화면은 그대로다 — 이 저장소가 제일 자주 밟는 함정이
+ *    「고쳤는데 화면이 안 바뀐다」이므로, **눈에 보이는 숫자**를 하나 둔다.
+ *  ★★ 창밖 속도(`mpsPure`)를 그대로 쌓는다 — **재는 곳을 안 늘린다**
+ */
+let odoM = 0;
 /**
  * ★★ **끌려가는 몫을 뺀 순수한 배 속도** (m/초).
  *   창밖은 「붙으러 가는 것」까지 보여야 하지만, **상태창과 투하 이탈은
@@ -6415,6 +6425,8 @@ window.SPACE = {
     };
   },
   setThrust(on) { setThrustKey(!!on); return power.thrust; },
+  /** ★ v158 — 이번 회차에 간 거리 (m). 검사가 「정말 가나」를 묻는 자리 */
+  odo() { return +odoM.toFixed(1); },
   /**
    * ★★★ v156 — **검사용 빨리감기.** 게임 시간을 k 배로 흘린다.
    *
@@ -7462,8 +7474,19 @@ function frame(now) {
       word: navWord(to, rel ? rel.off : null, rel),
     });
   }
+  //  ★ v158 — **항로도 창밖과 같은 속도를 읽는다** (`pace`). 아래 부름에
+  //    `pace: closeK(mpsPure)` 를 넘긴다 — 순항이 1 이라 회차 길이는 그대로고
+  //    전속이면 2.26배로 빨리 간다
   const rev = stepRoute(route, dt * helmLeg(helm), power,
-    { hold: landBusy(land) || rescueHold(rescue), course: nav.mult });
+    {
+      hold: landBusy(land) || rescueHold(rescue),
+      course: nav.mult,
+      //  ★★★ v158 — **창밖과 같은 값.** `mpsPure` 는 이 프레임 뒤에 다시
+      //    나므로 여기서 읽는 것은 **지난 걸음의 속도**다 — 한 걸음 차이는
+      //    사람이 못 느끼고, 그 대신 **재는 곳이 하나로 남는다.**
+      //    여기서 스로틀을 다시 읽기 시작하면 그날 또 갈라진다
+      pace: closeK(mpsPure),
+    });
   // ★ **벗어난 채로는 거점에 못 닿는다.** 「틀어 놓고 잊기」를 막는 유일한
   //   자리다 — 자국만 주고 잊는 벌이 없으면 늘 틀어 놓는 것이 답이 된다
   // ★★★ v117 — **조용한 거점도 도착이다** (`route-table.js QUIET`).
@@ -7823,6 +7846,9 @@ function frame(now) {
   //    아니라 **속도의 변화**이고, 그건 등속이 되면 사라져야 읽힌다
   accK = fadeAcc(accK, accOf((mpsNow - mpsWas) / Math.max(dt, 1e-4)), dt);
   mpsWas = mpsNow;
+  //  ★ v158 — 간 거리를 쌓는다. 「지금 얼마나 빠른가」가 아니라
+  //    **「여태 얼마나 왔나」**라야 이동하고 있다는 것이 읽힌다
+  odoM += mpsPure * dt;
   const feel = feelOf(accK);
   //  ★★★ v144 — **빠르기 하나를 넘긴다** (`rush-table.js speedOf`).
   //    v143 까지 여기가 `boost.k` 였다 — 즉 창밖은 「급가속인가」만 알았고,
