@@ -72,7 +72,12 @@ export const isLocked = (c, t) => !!(c.radar.on && c.radar.id !== null && t && t
  * @param list  하늘에 떠 있는 것들 — **가림**을 묻는 데만 쓴다 (v142)
  * @returns 'lock' | 'break' | null
  */
-export function stepRadar(c, dt, aimed, list = []) {
+/**
+ * @param q ★★★ v162 — 구역의 계기 성능 (`regions-table.js radar`).
+ *   **묶는 거리**가 여기서 줄어든다 — 자기 폭풍에서는 락온이 거의 안 걸리고,
+ *   그래서 v114 조준 띠(눈으로 겨눈다)가 유일한 길이 된다
+ */
+export function stepRadar(c, dt, aimed, list = [], q = 1) {
   const r = c.radar;
   if (!r.on) {
     r.t = 0; r.id = null; r.grace = 0; r.atAz = 0; r.atEl = 0;
@@ -83,7 +88,7 @@ export function stepRadar(c, dt, aimed, list = []) {
   const t = aimed?.t ?? null;
   const good = !!t
     && aimed.off <= RADAR.lockCone
-    && t.dist <= RADAR.range
+    && t.dist <= RADAR.range * q
     && inCone(aimed.relAz, aimed.relEl);
 
   // 이미 묶었나
@@ -181,7 +186,7 @@ export function stepRadar(c, dt, aimed, list = []) {
  * @param noseAz 기수가 보는 방위 (도)
  * @returns [{ id, relAz, dist, level, foe, locked }]
  */
-export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0) {
+export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0, q = 1) {
   if (!c.radar.on) { c.radar.seen.clear(); return []; }
   const out = [];
   const alive = new Set();
@@ -194,7 +199,7 @@ export function radarBlips(c, list, noseAz, noseEl = 0, dt = 0) {
     const rel = { relAz: r.az, relEl: r.el, dist: r.dist };
     // ★ **엔진을 켠 것만** 원뿔 밖에서 잡힌다 — 파편과 죽은 위성은 열이 없다
     const hot = !!KINDS[t.kind]?.closes;
-    const level = contactLevel(rel, hot);
+    const level = contactLevel(rel, hot, q);
     if (!level) continue;
     alive.add(t.id);
 

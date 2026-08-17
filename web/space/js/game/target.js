@@ -11,6 +11,8 @@ import {
   KINDS, TARGET, HULL, pickKind, ENEMY_FIRE, enemyHitChance, pickHit, FAULT_CHANCE,
   // ★ v135 — `evadeGain` 은 **안 부른다.** 부호를 버리던 그 함수다
   DODGE, evadeDir, ENGAGE, PARTS, partOf, FLEE, comesBack,
+  // ★★★ v162 — 구역이 「무엇이 오나 · 무엇이 나오나」를 정한다
+  foePoolOf, dropsOf,
 } from './target-table.js';
 // ★★★ v98 — **자리를 아는 곳은 `frame.js` 하나다** (블록아웃).
 //   여기는 「무엇이 어디에 떠 있나」를 들고 있을 뿐, **재는 일은 안 한다**
@@ -319,22 +321,39 @@ export function stepSky(sky, dt, {
   //    구역과, 거점에 대고 있을 때. 거점에서 얻어맞으면 사는 일이 벌이 된다
   if (!quiet && want > 0) {
     const foesNow = () => sky.list.filter((t) => KINDS[t.kind]?.shoots || KINDS[t.kind]?.rams).length;
-    /** 통에서 하나 뽑아 띄운다 */
-    const send = () => {
+    /** 통에서 하나 뽑는다 (아직 안 띄운다 — 떼 크기를 먼저 봐야 한다) */
+    const pickFoe = () => {
       // ★★ **종류를 섞는다.** 하나뿐이면 「쏜다」밖에 없고, 여럿이면
       //   매번 「무엇을 먼저 · 무엇으로 · 붙을까 뺄까」가 생긴다
-      const pool = TARGET.foePool;
-      const kind = pool[Math.floor(sky.rnd() * pool.length) % pool.length];
-      spawnFoe(sky, kind);
-      sky.cameRaiders++;
+      // ★★★ v162 — **구역이 정한다** (`regions-table.js foes`). v161 까지
+      //   여기가 `TARGET.foePool` 한 통이라 **열두 구역이 다 같은 것을**
+      //   보냈다 — 창밖만 다르고 날아오는 것은 똑같았다.
+      //   ★ 빈 통이면 **안 보낸다.** 옛 통으로 안 되돌아간다 — 되돌아가면
+      //     「여기서는 안 온다」고 적은 표가 조용히 무시된다
+      const pool = foePoolOf(sky.region);
+      if (!pool.length) return null;
+      return pool[Math.floor(sky.rnd() * pool.length) % pool.length];
     };
+    const send = (kind) => { spawnFoe(sky, kind); sky.cameRaiders++; };
     if (sky.waveLeft > 0) {
       // ── ★★★ **물결이 오는 중** ─────────────────────────
       //  하나를 부수면 끝나는 것이 아니라 **다음이 온다.** 그래야 싸움
       //  하나가 40~90초가 되고, 그 사이에 「붙을까 뺄까」가 생긴다
       sky.waveNext -= dt;
       if (sky.waveNext <= 0) {
-        if (foesNow() < TARGET.raiderMax) { send(); sky.waveLeft -= 1; }
+        // ══ ★★★ v162 — **떼의 크기까지 세고 넣는다** ═══════════════════
+        //
+        //  ★★★ 여기가 `foesNow() < TARGET.raiderMax` 였다. 그런데 요격기는
+        //    **셋이 한 떼**로 온다 (`KINDS.fighter.pack`). 즉 셋이 떠 있을 때
+        //    요격기를 부르면 **여섯**이 된다 — 「한 번에 넷을 안 넘는다」고
+        //    적어 놓고 지키지 않고 있었다.
+        //  ★★ v161 까지는 통에 요격기가 여섯 중 둘이라 잘 안 걸렸고,
+        //    v162 가 구역마다 통을 갈면서 **드러났다.** 없던 병이 생긴 것이
+        //    아니라 **있던 병이 보이게** 된 것이다 (`space-target [2b]`)
+        const kind = pickFoe();
+        if (kind && foesNow() + (KINDS[kind]?.pack ?? 1) <= TARGET.raiderMax) {
+          send(kind); sky.waveLeft -= 1;
+        }
         sky.waveNext = span(TARGET.wave.gap, sky.rnd);
       }
     } else {
@@ -810,7 +829,10 @@ export function shootSky(sky, az, el) {
   if (t.hp > 0) return { hit: true, kind: t.kind, broke: false };
   sky.list = sky.list.filter((x) => x !== t);
   sky.killed++;
-  return { hit: true, kind: t.kind, broke: true, gives: { ...KINDS[t.kind].gives } };
+  // ★★★ v162 — **구역의 배수를 여기서 먹인다** (`regions-table.js drops`).
+  //   회수 꾸러미(`salvage-table.js packOf`)도 같은 함수를 쓴다 — 두 곳이
+  //   제각기 곱하면 「계기에 뜬 것과 실은 것이 다르다」가 난다
+  return { hit: true, kind: t.kind, broke: true, gives: dropsOf(sky.region, KINDS[t.kind].gives) };
 }
 
 /** 검사·화면이 읽는다 */

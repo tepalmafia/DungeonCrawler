@@ -33,7 +33,8 @@ export function makeRoute(seed = 'SPACE1') {
     overrun: false,      // 이번 구간에서 압박이 넘쳤나
     rnd,
   };
-  rt.offer = offerFor(rnd);
+  // ★ v162 — 구간 번호를 넘긴다. 깊이 창이 여기서 정해진다
+  rt.offer = offerFor(rnd, 0);
   return rt;
 }
 
@@ -163,7 +164,7 @@ export function stepRoute(rt, dt, power = {}, opt = {}) {
       return 'void';
     }
     rt.phase = RPHASE.PORT;
-    rt.offer = offerFor(rt.rnd);
+    rt.offer = offerFor(rt.rnd, rt.leg);
     // ★★★ v117 — **조용한 거점.** 가끔 응답이 없다 (`route-table.js QUIET`).
     //   갈래 고르기(`offer`)는 그대로 둔다 — 못 가는 것이 아니라 **거래를
     //   못 하는** 것이다. 그 둘을 같이 막으면 회차가 그 자리에서 멈춘다

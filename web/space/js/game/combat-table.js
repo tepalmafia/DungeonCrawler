@@ -556,8 +556,18 @@ export const PASSIVE = { range: S(340) };
  *          'blip'  원뿔 밖인데 엔진이 있다 — **방위만** 안다
  *          null    모른다
  */
-export function contactLevel(t, hot) {
-  if (inCone(t.relAz, t.relEl) && t.dist <= RADAR.range) return 'full';
+/**
+ * @param q ★★★ v162 — **구역이 계기를 얼마나 살려 주나** (1 멀쩡 · 0 먹통 ·
+ *   `regions-table.js radar`). 자기 폭풍이 0.15 다.
+ *
+ *   ★★ **능동(레이더)만 깎는다.** 수동(`PASSIVE`)은 열을 보는 것이라
+ *     자기 폭풍과 상관이 없고, 무엇보다 **둘 다 깎으면 아무것도 안 보여서**
+ *     「눈으로 보고 쏜다」가 아니라 「가만히 앉아 있는다」가 된다.
+ *     방위만 아는 점 하나가 남아야 광학 창(v79)이 일을 한다.
+ *   ★ 안 주면 1 이다 — 옛 부름과 검사가 안 깨진다
+ */
+export function contactLevel(t, hot, q = 1) {
+  if (inCone(t.relAz, t.relEl) && t.dist <= RADAR.range * q) return 'full';
   if (hot && t.dist <= PASSIVE.range) return 'blip';
   return null;
 }
