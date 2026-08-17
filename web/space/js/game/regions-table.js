@@ -37,6 +37,37 @@
  * @property trackMult  추격 중 상대가 붙는 속도 배수. 잔해밭이 0.75 인 것이
  *                      「끌고 들어간다」의 실체다 (mission-table intoDebris)
  * @property debris     떠다니는 덩어리 개수 — 줍기(§5-3)의 눈에 보이는 근거
+ *
+ * ══ ★★★ v161 — **손잡이 넷을 더한다** (사장님 「우주 맵도 단계를 나눠서」) ══
+ *
+ *  ★ 사장님 (2026-08-17) 「현재 우주가 rpg 처럼 **맵이 앞으로 진행되게**
+ *    되어 있고 **구역이 나눠져 있는지** 점검해봐. … **태양이 나타난다**던지,
+ *    **외계 생명체가 살고 있는 행성 근처를 지나는데 그들이 공격**을 해온다던지」
+ *
+ *  ★★ 재 보니 여섯이 **이미 표에 있었고** 창밖·자국·추적·파편을 바꾸고
+ *    있었다. 빠진 것은 셋이었다:
+ *      ① **순서가 없다** — 어느 구역이 더 깊은 곳인지 표가 모른다
+ *      ② **적이 어디서나 같다** — 구역이 「무엇을 만나나」를 안 바꾼다
+ *      ③ **나오는 것이 같다** — 캐는 구역과 싸우는 구역이 안 갈린다
+ *
+ *  ★★★ 그래서 **새 계통을 안 만들고 이 표에 칸 넷**을 더한다. 구역이
+ *    이미 하는 일(창밖·자국·추적)과 **같은 자리**에 있어야 갈라지지 않는다.
+ *
+ * @property depth      ★ **몇 번째 단계인가** (1~12). 뒤로 갈수록 적진
+ *                      깊숙이다 — 「뚫는다」가 목적 한 줄이므로 순서가
+ *                      있어야 한다. 같은 숫자가 둘이면 검사가 운다
+ * @property foes       ★ **여기서 만나는 것** — `KINDS` 의 열쇠 → 무게.
+ *                      빈 객체면 「저절로 오는 적이 없다」(거점·공백).
+ *                      이름을 틀리면 `space-map.js` 가 그 자리에서 멈춘다
+ * @property drops      ★ **나오는 것의 배수** (`ore`·`parts`·`food`·
+ *                      `coolant`·`arc`). 1 이 기준. 캐는 구역과 싸우는
+ *                      구역이 여기서 갈린다 — 안 갈리면 「어디로 갈까」가
+ *                      창밖 구경이 된다
+ * @property heat       ★ **가만히 있어도 오르는 열** (초당 몫 · 0 이 기본).
+ *                      항성 근접이 이 값을 갖는다 — 라디에이터를 폈다
+ *                      접었다 해야 하고, 그게 v58 열 계통을 되살린다
+ * @property radar      ★ **계기가 얼마나 되나** (1 = 멀쩡 · 0 = 먹통).
+ *                      자기 폭풍에서 광학 창(v79)이 유일한 눈이 된다
  */
 export const REGIONS = [
   {
@@ -44,6 +75,7 @@ export const REGIONS = [
     bg: 0x03050c, fog: 0x05070d, fogNear: 70, fogFar: 340,
     stars: 1.0, tint: [0.86, 0.89, 1.0],
     speed: 1.0, signMult: 1.0, trackMult: 1.0, debris: 0, planet: false,
+    depth: 1, foes: { raider: 1, fighter: 1 }, drops: {}, heat: 0, radar: 1,
     what: '무난하다. 대신 아무것도 없다',
   },
   {
@@ -51,6 +83,7 @@ export const REGIONS = [
     bg: 0x2a1338, fog: 0x5b2c78, fogNear: 34, fogFar: 150,
     stars: 0.42, tint: [1.0, 0.78, 0.94],
     speed: 0.78, signMult: 0.62, trackMult: 1.0, debris: 0, planet: false,
+    depth: 5, foes: { drone: 2, fighter: 1 }, drops: { coolant: 1.4 }, heat: 0, radar: 0.45,
     what: '자국이 묻힌다. 대신 나도 못 본다',
   },
   {
@@ -58,6 +91,7 @@ export const REGIONS = [
     bg: 0x0b0f14, fog: 0x1c2530, fogNear: 42, fogFar: 220,
     stars: 0.75, tint: [0.82, 0.86, 0.96],
     speed: 0.80, signMult: 0.85, trackMult: 0.75, debris: 70, planet: false,
+    depth: 2, foes: { drone: 1 }, drops: { ore: 1.6, parts: 1.3 }, heat: 0, radar: 0.8,
     what: '끌고 들어가면 떼기 쉽다. 대신 느리고 부딪힌다',
   },
   {
@@ -65,6 +99,7 @@ export const REGIONS = [
     bg: 0x061224, fog: 0x14294a, fogNear: 60, fogFar: 320,
     stars: 0.7, tint: [0.9, 0.93, 1.0],
     speed: 1.02, signMult: 1.15, trackMult: 1.05, debris: 14, planet: true,
+    depth: 8, foes: { fighter: 2, gunship: 1 }, drops: { food: 1.5, ore: 1.2 }, heat: 0, radar: 1,
     what: '제일 빨리 지나간다. 대신 눈에 잘 띈다',
   },
   /**
@@ -101,6 +136,7 @@ export const REGIONS = [
     stars: 0.8, tint: [1.0, 0.86, 0.82],
     band: 0.5,
     speed: 1.0, signMult: 1.4, trackMult: 1.3, debris: 20, planet: true,
+    depth: 12, foes: { gunship: 2, turret: 2, fighter: 2 }, drops: { arc: 1.5 }, heat: 0, radar: 1,
     what: '적 본진이다. 여기서 떨군다',
   },
   {
@@ -116,7 +152,83 @@ export const REGIONS = [
     stars: 0.95, tint: [0.70, 0.75, 0.88],
     band: 0,
     speed: 1.0, signMult: 0, trackMult: 0, debris: 0, planet: false,
+    depth: 11, foes: {}, drops: {}, heat: 0, radar: 1.15,
     what: '아무도 못 따라온다. 대신 아무것도 없다',
+  },
+  // ══ ★★★ v161 — **여섯을 더해 열둘로** (사장님 「단계를 나눠서」) ═══════
+  //
+  //  ★ 위 여섯은 **하나도 안 지운다.** 갈래·고장·경고·조종이 이미 그
+  //    이름들을 읽고 있다 (`fault.js` debris · `hazard-table.js` nebula ·
+  //    `helm-table.js` planet). 지우면 그 셋이 조용히 죽는다.
+  //  ★★ 더하는 여섯은 **손잡이가 겹치지 않게** 골랐다 — 이미 있는 여섯이
+  //    안 쓰는 칸(`heat`·`radar`·`foes` 편중)을 하나씩 맡는다. 안 그러면
+  //    「이름만 다른 같은 곳」이 늘어난다
+  {
+    key: 'mine', name: '채굴 지대',
+    bg: 0x0d0b07, fog: 0x2a2318, fogNear: 55, fogFar: 260,
+    stars: 0.8, tint: [1.0, 0.94, 0.82],
+    speed: 0.9, signMult: 0.9, trackMult: 1.0, debris: 55, planet: false,
+    //  ★ **캐는 구역.** 적이 드물고 광석·냉각제가 쏟아진다 — 「채운다」의 자리
+    depth: 3, foes: { drone: 1 }, drops: { ore: 2.2, coolant: 1.8 }, heat: 0, radar: 1,
+    what: '캘 것이 제일 많다. 대신 여기서 쉬면 탄두가 안 찬다',
+  },
+  {
+    key: 'star', name: '★ 항성 근접',
+    bg: 0x180a02, fog: 0x6b3208, fogNear: 80, fogFar: 400,
+    stars: 0.25, tint: [1.0, 0.86, 0.62],
+    speed: 1.1, signMult: 1.3, trackMult: 1.0, debris: 6, planet: false,
+    //  ★★★ 사장님 「**태양이 나타난다**던지」. 이 구역의 알맹이는 `heat` 다 —
+    //    가만히 있어도 열이 오르므로 **라디에이터를 폈다 접었다** 해야 하고,
+    //    그게 v58 열 계통을 전투 한복판으로 끌어온다.
+    //  ★★ 그리고 **역광**이다: 자국이 1.3 이라 눈에 잘 띈다 (숨을 데가 없다)
+    depth: 4, foes: { fighter: 2 }, drops: { arc: 1.3 }, heat: 0.055, radar: 1,
+    what: '해가 뜬다 — 저절로 뜨겁다. 라디에이터를 여닫으며 지난다',
+  },
+  {
+    key: 'storm', name: '자기 폭풍',
+    bg: 0x061014, fog: 0x0e3a44, fogNear: 38, fogFar: 170,
+    stars: 0.5, tint: [0.7, 0.95, 1.0],
+    speed: 0.85, signMult: 0.5, trackMult: 0.9, debris: 10, planet: false,
+    //  ★★★ **계기가 먹통이다** (`radar` 0.15). 광학 창(v79)이 유일한 눈이
+    //    되고, 락온이 안 걸리니 **레이저로 직접 겨눠야** 한다 — v114 조준
+    //    띠가 제일 크게 사는 자리다
+    depth: 6, foes: { drone: 3, fighter: 1 }, drops: { parts: 1.4 }, heat: 0, radar: 0.15,
+    what: '레이더가 죽는다. 눈으로 보고 쏜다 — 대신 저쪽도 나를 못 본다',
+  },
+  {
+    key: 'picket', name: '전초선',
+    bg: 0x0a0d16, fog: 0x1a2340, fogNear: 60, fogFar: 300,
+    stars: 0.9, tint: [0.85, 0.88, 1.0],
+    speed: 0.95, signMult: 1.2, trackMult: 1.1, debris: 18, planet: false,
+    //  ★ **포대가 길을 막는다** — 부수거나 돌아간다. 붙박이라 도망을 안 가고,
+    //    그래서 「지금 시간을 쓸까」가 생긴다
+    depth: 7, foes: { turret: 3, fighter: 1 }, drops: { parts: 1.5 }, heat: 0, radar: 1,
+    what: '포대가 길을 막는다. 부수거나 돌아간다',
+  },
+  {
+    key: 'biome', name: '★ 외계 생명권',
+    bg: 0x04140a, fog: 0x0e4a22, fogNear: 45, fogFar: 210,
+    stars: 0.55, tint: [0.78, 1.0, 0.84],
+    speed: 0.92, signMult: 1.25, trackMult: 1.2, debris: 8, planet: true,
+    //  ★★★ 사장님 「**외계 생명체가 살고 있는 행성 근처를 지나는데 그들이
+    //    공격**을 해온다던지」. 여기가 그 자리다.
+    //  ★★ **떼로 달려들고 안 도망간다** — 자폭정 편중이 그 뜻이다. 그리고
+    //    `drops` 가 비었다: **격추해도 재료가 안 나온다.** 그래서 이 구역은
+    //    「싸워서 얻는 곳」이 아니라 **「빨리 지나가야 하는 곳」**이 된다 —
+    //    지금까지 없던 종류의 구역이고, 그래서 하나 더할 값이 있다
+    depth: 9, foes: { drone: 4, fighter: 2 }, drops: {}, heat: 0, radar: 0.7,
+    what: '살아 있는 것들이 달려든다. 얻을 것이 없다 — 뚫고 지나간다',
+  },
+  {
+    key: 'convoy', name: '호송 항로',
+    bg: 0x080a12, fog: 0x161c2e, fogNear: 65, fogFar: 320,
+    stars: 0.95, tint: [0.88, 0.9, 1.0],
+    speed: 1.05, signMult: 1.1, trackMult: 1.0, debris: 12, planet: false,
+    //  ★★★ **호송선이 지나간다** — 안 쏘고 도망가므로 **놓치면 탄두 재료를
+    //    못 채운다.** v70 이 호송선을 만들며 적어 둔 「놓치면 재료를 못
+    //    얻는다」가 여기서 처음 자리를 갖는다
+    depth: 10, foes: { convoy: 3, gunship: 1 }, drops: { arc: 2.0, parts: 1.4 }, heat: 0, radar: 1,
+    what: '보급선이 지나간다. 놓치면 탄두가 안 찬다 — 쫓아가 잡는다',
   },
 ];
 
