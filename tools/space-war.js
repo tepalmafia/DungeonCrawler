@@ -22,6 +22,11 @@
 import {
   KINDS, TARGET, ENEMY_FIRE, HITS, FAULT_CHANCE, pickHit, enemyHitChance,
 } from '../web/space/js/game/target-table.js';
+//  ★★★ v160 — **절대 거리를 검사에 박지 않는다.** 축척을 3.3배로 올릴 때
+//    여기가 옛 60m 로 남아 빨개졌다 (선체 반지름이 69m 가 되니 **세우자마자
+//    충돌**). **게임이 틀린 게 아니라 검사가 축척을 모르고 있었다**
+/** 적 사거리의 6할 — 안쪽이되 선체에 안 닿는 자리 (옛 60m) */
+const NEAR = ENEMY_FIRE.range * 0.57;
 import {
   makeSky, setRegion, setNose, stepSky, spawnRaider, summary,
 } from '../web/space/js/game/target.js';
@@ -162,14 +167,14 @@ console.log('\n[1] ★★★ **적이 정말 쏘나** — v69 까지 들이받�
   const s = fresh();
   setNose(s, 0);
   const t = spawnRaider(s);
-  t.az = 0; t.el = 0; t.dist = 60;
+  t.az = 0; t.el = 0; t.dist = NEAR;
   let sawShot = false, first = 0, u = 0;
   while (u < 30 && !sawShot) {
     stepSky(s, DT, { moving: false });
     if (s.incoming.length) { sawShot = true; first = u; }
     u += DT;
     // 적이 다가와 부딪히지 않게 붙들어 둔다 — 여기서 묻는 건 사격뿐이다
-    t.dist = 60;
+    t.dist = NEAR;
   }
   ok(sawShot, `★★★ **쏜다** — ${first.toFixed(1)}초 만에 첫 발. v69 까지는 영영 안 쐈다`);
   ok(first <= ENEMY_FIRE.every + 0.5,
@@ -194,12 +199,12 @@ console.log('\n[3] ★★★ **옆으로 빠지면 사격 각이 죽나** — �
     const s = fresh(23);
     setNose(s, noseAz);
     const t = spawnRaider(s);
-    t.az = 0; t.el = 0; t.dist = 60;
+    t.az = 0; t.el = 0; t.dist = NEAR;
     let n = 0, u = 0;
     while (u < 60) {
       const ev = stepSky(s, DT, { moving: false });
       n += (ev.hits ?? []).length;
-      t.dist = 60;
+      t.dist = NEAR;
       u += DT;
     }
     return n;
@@ -362,9 +367,9 @@ console.log('\n[6] ★ **죽은 놈의 탄은 안 온다** — 부순 다음 순
   const s = fresh(41);
   setNose(s, 0);
   const t = spawnRaider(s);
-  t.az = 0; t.el = 0; t.dist = 60;
+  t.az = 0; t.el = 0; t.dist = NEAR;
   let u = 0;
-  while (u < 10 && !s.incoming.length) { stepSky(s, DT, { moving: false }); t.dist = 60; u += DT; }
+  while (u < 10 && !s.incoming.length) { stepSky(s, DT, { moving: false }); t.dist = NEAR; u += DT; }
   //  ★ `landed === 0` 도 「없어야 한다」 꼴이라 **날아오는 탄이 없으면
   //    저절로 참**이다. 그런데 그 자리는 「못 쟀다」로 안 돌린다 —
   //    적이 한 발도 안 쏘는 것은 표가 빈 것이 아니라 **게임이 틀린 것**이고,
