@@ -42,7 +42,7 @@
 //
 //  ★ three.js 를 안 쓴다.
 // ══════════════════════════════════════════════════════════════════════════
-import { KINDS } from './target-table.js';
+import { KINDS, dropsOf, barren } from './target-table.js';
 import { mightOf } from './might-table.js';
 import { WAYS, timeOf, nameOf } from './cargo-table.js';
 
@@ -153,10 +153,19 @@ export function callIn(kind) {
  *   **회수해야** 들어온다. 그래야 「무엇을 줍고 무엇을 버릴지」가
  *   한 물건에 대한 한 번의 결정이 된다
  */
-export function packOf(kind) {
+export function packOf(kind, region = null) {
   const k = KINDS[kind];
   if (!k) return null;
-  const g = k.gives ?? {};
+  // ══ ★★★ v162 — **구역이 「나올 것이 없다」고 하면 꾸러미가 안 생긴다** ══
+  //
+  //  ★ 외계 생명권(v161)이 그 자리다. 여기서 「배수 0」으로 만들어 **빈
+  //    꾸러미**를 떨구면 더 나쁘다 — 줍는 데 3~6초를 쓰고 아무것도 안
+  //    들어온다. 그건 결심이 아니라 **함정**이다. 아예 안 떨어져야
+  //    「여긴 얻을 게 없다 → 지나가자」가 한눈에 읽힌다
+  if (region && barren(region)) return null;
+  // ★ 배수는 **한 함수에서만** 먹인다 (`target-table.js dropsOf`) —
+  //   격추 즉시 뜨는 값(`shootSky`)과 여기가 갈라지면 안 된다
+  const g = dropsOf(region, k.gives ?? {});
   // ══ ★★★ v83 — **덩어리가 아니라 아이템으로 나온다** ═══════════════
   //
   //  v81 은 { weapon, armor, ore, parts, food } 덩어리였다. 덩어리는
@@ -191,7 +200,7 @@ export function packOf(kind) {
   if (k.shoots) add('coolant', 1);
   // ★ v117 — **표가 냉각제를 적었으면 그대로 준다** (얼음 덩어리).
   //   여기서 「누가 주나」를 다시 고르지 않는다 — 표가 이미 정했다
-  add('coolant', k.gives?.coolant ?? 0);
+  add('coolant', g.coolant ?? 0);
   // ══ ★★★ v99 — **아크 전지는 도약 장치에서 뜯는다** ═══════════════════
   //  ★ 여기서 **누가 주나를 안 정한다.** 표(`target-table.js gives.arc`)가
   //    이미 정했고, 이유도 거기 적혀 있다 — 바위에 박힌 포대에는 없다.

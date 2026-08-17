@@ -412,7 +412,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 161;
+export const VERSION = 162;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1301,6 +1301,13 @@ const gun = makeGun();
 const combat = makeCombat();
 /** ★ v75 — 이번 프레임에 레이더가 본 것. 계기와 점검 구멍이 **같은 값**을 읽는다 */
 let radarSeen = [];
+/**
+ * ★★★ v162 — **지금 구역의 계기 성능** (`regions-table.js radar`).
+ *
+ *   ★ 함수로 둔다 — 구역은 매 프레임 바뀔 수 있고, 굳혀 두면 구역이
+ *     바뀌어도 옛 값을 들고 있게 된다 (`route-table.js forkOf` 와 같은 까닭)
+ */
+const radarQ = () => REGION_BY_KEY[ship?.outside?.region ?? 'empty']?.radar ?? 1;
 /**
  * ★★★ **탄두** (v71) — 이 게임의 목적이 여기 있다.
  *   기관실 후미 격벽의 크레이들. 재료 다섯을 손으로 들고 가 꽂는다
@@ -2243,7 +2250,9 @@ function landShots(dt) {
     //    그리고 부순 순간 **지원이 호출된다** (`salvage-table.js CALL`)
     const part = (t.kind === 'convoy' && !warhead.in.includes('core')) ? 'core'
       : (t.kind === 'sat' && !warhead.in.includes('shell')) ? 'shell' : null;
-    const pk = dropPack(salvage, t, part);
+    // ★★★ v162 — **구역을 같이 넘긴다.** 여기가 「나오는 것이 구역마다
+    //   다르다」의 유일한 자리다 (`regions-table.js drops`)
+    const pk = dropPack(salvage, t, part, null, sky.region);
     // ══ ★★★ v121 — **부수면 묻는다** (사장님 「회수하겠습니까? 질문이 나오고」)
     //  ★ 새 결심을 만드는 것이 아니라 **이미 있던 결심을 드러내는 것**이다 —
     //    꾸러미는 v80 부터 떨어졌지만 아는 사람만 F/G/B 를 눌렀다
@@ -4633,8 +4642,14 @@ function systemsStep(dt, valveOpen, regionMult) {
     // ★ 정전이면 **잔열**이 얹힌다 — 냉각 펌프가 멎어서 반응로의 남은
     //   열이 갈 데가 없다 (chase-table.js HEATING.blackout).
     //   이게 없으면 정전이 아프지 않은 것이 된다
+    // ★★★ v162 — **구역이 바깥에서 열을 얹는다** (`regions-table.js heat`).
+    //   ★ 사장님 「태양이 나타난다던지」 — ★ 항성 근접이 초당 0.055 다.
+    //     v58 까지 열은 **내가 켠 것**에서만 났다. 밖에서 오는 열이 생기면
+    //     「가만히 있으면 안전하다」가 깨지고, 라디에이터를 폈다 접었다
+    //     하는 일이 **전투 한복판으로** 들어온다
     extra: bad.heat + (valveOpen && cooled.cool ? bad.coolValve : 0)
-      + (isDark(dark) ? HEATING.blackout : 0),
+      + (isDark(dark) ? HEATING.blackout : 0)
+      + (REGION_BY_KEY[ship?.outside?.region ?? 'empty']?.heat ?? 0),
     noCool: landNoCool(land),
   });
   heat = st.hull;
@@ -4864,7 +4879,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   내려면 지난 거리를 기억해야 하는데(`radar.seen`), 두 번 부르면
     //   두 번째는 dt 가 지난 뒤라 **접근율이 늘 0** 이 된다.
     //   그래서 여기서 한 번 재고 점검 구멍은 **그 값을 읽는다**
-    radar: { on: !!power.sensor, blips: radarSeen = radarBlips(combat, sky.list, aimAz, aimEl, dt), clock },
+    // ★★★ v162 — **구역이 계기를 깎는다** (`regions-table.js radar`).
+    //   자기 폭풍(0.15)에서는 능동 탐지가 거의 안 닿고, 남는 것은
+    //   **엔진 열로 잡히는 방위 하나**뿐이다 — 거기서 광학 창이 눈이 된다
+    radar: { on: !!power.sensor, blips: radarSeen = radarBlips(combat, sky.list, aimAz, aimEl, dt, radarQ()), clock },
     // ★ 자동 항법 등 — 초록이면 자동, 주황이면 수동. 조종석에 들어서는
     //   순간 지금 어느 쪽인지가 보여야 한다
     auto: helm.auto,
@@ -5236,7 +5254,7 @@ window.SPACE = {
   },
   putPack(kind = 'raider', dist = 60) {
     const t = { kind, az: aimAz, el: aimEl, dist };
-    return dropPack(salvage, t, null);
+    return dropPack(salvage, t, null, null, sky.region);
   },
   /** ★ 잔해 — 「격추가 **보이나**」 */
   get wrecks() { return ship.outside.targets?.seen?.wrecks ?? 0; },
@@ -8400,7 +8418,9 @@ function frame(now) {
   // ★★★ v142 — 하늘 목록을 같이 넘긴다. **가려지면 2.5초 버티다 놓는다**
   //   (`cover-table.js COVER.hold`) — 즉시 놓으면 파편 하나가 스칠 때마다
   //   끊겨서 전투가 **운**이 된다
-  const radEv = stepRadar(combat, dt, radarAimed, sky.list);
+  // ★ v162 — 묶는 거리도 구역을 따른다. 자기 폭풍에서 락온이 거의 안
+  //   걸리는 것이 그 구역의 규칙이다 (v114 조준 띠가 유일한 길이 된다)
+  const radEv = stepRadar(combat, dt, radarAimed, sky.list, radarQ());
 
   // ══ ★★★ v100 — **발사관이 표적을 따라간다** ═══════════════════════════
   //

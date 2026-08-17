@@ -59,6 +59,8 @@
 import { SLOTS } from '../core/model-table.js';
 //  ★ v160 — **속도와 거리를 같은 배수로** (`scale-table.js`)
 import { S, SR } from './scale-table.js';
+// ★★★ v162 — **구역이 아는 것을 여기서 다시 안 적는다** (아래 `byRegion`)
+import { REGIONS, REGION_BY_KEY } from './regions-table.js';
 
 export const KINDS = {
   junk: {
@@ -625,7 +627,16 @@ export const TARGET = {
   // ★★★ v93 — **`siege` 를 보탰다.** 마지막 구간이 「성간 공백(0개)」에서
   //   **적 본진**으로 바뀌었으므로(`WAR.md §14-2`) 여기가 제일 두꺼워야 한다.
   //   `void` 는 갈래에서 안 나오지만 표에 남긴다 — 이어하기 저장이 읽는다
-  byRegion: { empty: 3, nebula: 1, debris: 7, planet: 4, void: 0, siege: 8 },
+  // ══ ★★★ v162 — **손으로 적은 목록이었다. 이제 구역 표에서 뽑는다** ═══
+  //
+  //  ★★★ 여기에 구역 이름 여섯이 **손으로** 적혀 있었다. v161 에 구역을
+  //    여섯 더했더니 **이 줄은 안 늘었고**, 새 여섯이 전부 아래
+  //    `?? 3` 으로 떨어졌다 — 채굴 지대나 적 행성 상공이나 **똑같이 셋**.
+  //    빨개진 검사는 하나도 없었다. **조용히** 틀렸다.
+  //
+  //  ★ 이 저장소가 「재는 곳을 둘로 만들지 않는다」고 적어 둔 그 사고다.
+  //    구역이 몇 개인지 아는 곳은 이제 `regions-table.js` **하나**다.
+  get byRegion() { return Object.fromEntries(REGIONS.map((r) => [r.key, r.crowd])); },
 
   /**
    * ★ **얼마나 멀리 있나** (m). 사거리 밖은 조준경에 뜨지만 안 맞는다 —
@@ -704,6 +715,10 @@ export const TARGET = {
    *   ★ 포함(`gunship`)이 통에 **한 번만** 들어 있다 — 맷집 10 짜리가
    *     자주 오면 미사일이 금세 바닥나고, 그러면 「레이저만 남는」 판이
    *     늘 이어진다. 요격기는 둘: 제일 자주 만나는 것이 제일 만만해야 한다
+   *
+   *   ★★★ v162 — **이제 이건 「구역이 말이 없을 때」의 통이다.**
+   *     아래 `foePoolOf()` 가 구역의 `foes` 를 먼저 본다. 이 줄을 안 지운
+   *     까닭은 거점·착륙처럼 **구역이 아닌 자리**가 아직 이걸 쓰기 때문이다
    */
   foePool: ['fighter', 'fighter', 'raider', 'drone', 'gunship', 'turret'],
   /**
@@ -738,6 +753,62 @@ export const TARGET = {
   driftAz: [-3.5, 3.5],
   driftEl: [-1.6, 1.6],
 };
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v162 — **구역이 「무엇을 만나나」를 정한다** (regions-table `foes`)
+//
+//  ★★★ v161 까지 저절로 오는 적은 **어디서나 같은 통**에서 나왔다
+//    (`TARGET.foePool`). 창밖은 구역마다 달랐고 개수도 달랐는데,
+//    **날아오는 것은 열두 곳이 다 똑같았다.** 그래서 「어디로 갈까」가
+//    「어느 배경으로 갈까」였다.
+//
+//  ★★ 무게는 **개수가 아니라 섞는 비율**이다. 몇이 떠 있나는 `crowd` 가
+//    따로 말한다 — 한 숫자에 두 일을 시키면 하나를 고치는 순간 다른
+//    하나가 따라 움직인다 (이 저장소가 `stars`/`band` 에서 배운 것).
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 이 구역에서 저절로 오는 적의 통.
+ *
+ * @returns 열쇠 배열. **빈 배열이면 「여기서는 안 온다」**(성간 공백) —
+ *          부르는 쪽이 그때는 안 띄운다. `foePool` 로 안 되돌아간다:
+ *          되돌아가면 「없다」고 적은 표가 **조용히 무시된다**
+ */
+export function foePoolOf(key) {
+  const f = REGION_BY_KEY[key]?.foes;
+  // ★ 구역이 아닌 자리(거점·착륙 등)는 옛 통을 그대로 쓴다
+  if (!f) return TARGET.foePool;
+  const out = [];
+  for (const [k, w] of Object.entries(f)) {
+    // ★ 이름이 틀리면 **여기서 조용히 빠진다.** 그게 무서워서
+    //   `space-map.js [4]` 가 이름을 `KINDS` 와 대조한다
+    if (!KINDS[k]) continue;
+    for (let i = 0; i < Math.max(1, Math.round(w)); i++) out.push(k);
+  }
+  return out;
+}
+
+/**
+ * ★★★ **구역이 「무엇이 나오나」를 정한다** (regions-table `drops`).
+ *
+ *   @returns 배수를 먹인 새 꾸러미. **빈 `drops` 는 「아무것도 안 나온다」**다 —
+ *     외계 생명권(v161)이 그 자리다: 격추해도 재료가 없으니 **싸워서 얻는
+ *     곳이 아니라 빨리 지나가야 하는 곳**이 된다. 「배수 1」로 읽으면
+ *     그 구역이 통째로 사라진다.
+ */
+export const barren = (key) => {
+  const r = REGION_BY_KEY[key];
+  return !!r && !Object.keys(r.drops ?? {}).length;
+};
+
+export function dropsOf(key, gives) {
+  const m = REGION_BY_KEY[key]?.drops;
+  const out = { ...(gives ?? {}) };
+  if (!m) return out;
+  if (!Object.keys(m).length) { for (const k of Object.keys(out)) out[k] = 0; return out; }
+  for (const k of Object.keys(out)) out[k] = Math.round((out[k] ?? 0) * (m[k] ?? 1));
+  return out;
+}
 
 /**
  * 무게를 보고 하나 고른다.

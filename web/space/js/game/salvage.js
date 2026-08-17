@@ -37,8 +37,10 @@ export function makeSalvage() {
  * @param t 부순 표적 { kind, az, el, dist }
  * @param part 같이 떨어지는 탄두 재료 ('core' | 'shell' | null)
  */
-export function dropPack(s, t, part = null, rolls = null) {
-  const has = packOf(t.kind);
+export function dropPack(s, t, part = null, rolls = null, region = null) {
+  // ★★★ v162 — **구역이 배수를 먹인다** (`regions-table.js drops`).
+  //   `null` 이면 꾸러미가 안 생긴다 — 「여긴 얻을 게 없다」인 구역이 있다
+  const has = packOf(t.kind, region);
   if (!has) return null;
   const p = {
     id: s.next++,

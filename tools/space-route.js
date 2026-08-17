@@ -23,6 +23,8 @@
 //    40~70초가 든다 (tools/space-fault.js). 여기 나오는 회차 길이는 **아래끝**이다.
 // ══════════════════════════════════════════════════════════════════════════
 import { LEG, PRESS, allForks } from '../web/space/js/game/route-table.js';
+// ★ v162 — 구간의 **깊이**를 묻는다 (아래 ok3)
+import { REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 import { makeRoute, stepRoute, chooseFork, contactAt, trackMult, signMult, relieveEscape, RPHASE }
   from '../web/space/js/game/route.js';
 import { makeChase, stepChase, heatRate, PHASE } from '../web/space/js/game/chase.js';
@@ -208,7 +210,28 @@ const avgChase = chasePerLeg.reduce((s, x) => s + x, 0) / chasePerLeg.length;
 //     **구간의 이름**으로 뺀다 (`VOID.region` = 적 행성 상공)
 const butLast = allLegs.filter((l) => l.key !== VOID.region).map((l) => l.chases);
 const siegeLegs = allLegs.filter((l) => l.key === VOID.region).map((l) => l.chases);
-const ok3 = avgChase >= 1 && avgChase <= 2.4 && butLast.every((x) => x <= 3);
+// ══ ★★★ v162 — **「전 구간 3회 이하」는 평평한 맵의 잣대였다** ═════════
+//
+//  ★ v93 이 「마지막 구간은 빼고 센다」로 고쳤을 때의 논리가 그대로 이어진다:
+//    **뜻을 바꾸면 검사도 같이 센다.** v161 이 우주를 12단계로 나눴으므로
+//    이제 「어디나 3회 이하」는 **단계가 없는 맵**을 지키는 줄이다 —
+//    깊이 7의 전초선이 깊이 1의 빈 공간과 같아야 한다는 뜻이 되고,
+//    그러면 사장님이 말씀하신 「단계를 나눠서」가 검사에 막힌다.
+//
+//  ★★ 그래서 셋으로 묻는다 — **느슨해진 것이 아니라 자리가 옮겨진 것**이다:
+//    ① 평균 1~2.4 (그대로)
+//    ② **앞 세 단계는 조용하다** — 처음 온 사람이 배울 자리가 있어야 한다
+//    ③ **적 본진이 제일 두껍다** — 어느 구간도 거기를 안 넘는다
+//    ④ **뒤가 앞보다 두껍다** — 안 그러면 「깊이」가 이름뿐이다
+const depthOf = (l) => REGION_BY_KEY[l.key]?.depth ?? 99;
+const front = allLegs.filter((l) => depthOf(l) <= 3).map((l) => l.chases);
+const back = allLegs.filter((l) => depthOf(l) > 3 && l.key !== VOID.region).map((l) => l.chases);
+const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
+const siegeTop = Math.max(...siegeLegs, 0);
+const ok3 = avgChase >= 1 && avgChase <= 2.4
+  && front.every((x) => x <= 3)
+  && butLast.every((x) => x <= siegeTop)
+  && mean(back) > mean(front);
 const ok4 = laps.every(([, r]) => r.done);
 // ★ 제일 중요한 것 — 정책에 따라 결과가 갈리나
 //
@@ -226,15 +249,21 @@ const ok5 = pressSpread >= 20 && timeSpread >= 6;
 // 늘 숨는 쪽이 압박은 제일 낮고 시간은 제일 길어야 한다 — 거래가 성립하나
 const hide = laps.find(([n]) => n.startsWith('늘 숨는'))[1];
 const fast = laps.find(([n]) => n.startsWith('늘 빠른'))[1];
-const ok6 = hide.press < fast.press && hide.sec > fast.sec;
+// ★★★ v162 — **여기도 「고르기가 끝난 뒤」를 재고 있었다.** ok5 는 v53 에
+//   `beforeVoid` 로 옮겼는데 이 줄만 `r.press`(마지막 구간 끝)를 봤다.
+//   마지막 구간은 적 본진(`signMult` 1.4)이라 어느 정책으로 와도 거기서
+//   같은 평형으로 씻긴다 — 실제로 **65 vs 65** 가 나왔다. 옛 넷일 때는
+//   우연히 갈렸을 뿐이고, 구역이 열둘이 되니 드러났다.
+//   **같은 것을 묻는 두 줄이 다른 자리를 재고 있으면 하나는 거짓말이다.**
+const ok6 = beforeVoid(hide) < beforeVoid(fast) && hide.sec > fast.sec;
 
 console.log('\n  목표 (docs/space/PLAN.md §11 · GAP.md §4)');
 console.log(`  ${ok1 ? '✔' : '✘'} 구간 하나가 8~12분          ${Math.min(...legMins).toFixed(1)} ~ ${Math.max(...legMins).toFixed(1)}분`);
 console.log(`  ${ok2 ? '✔' : '✘'} 회차 하나가 100~140분       ${lapMins.map((m) => m.toFixed(0) + '분').join(' · ')}`);
-console.log(`  ${ok3 ? '✔' : '✘'} 구간당 추격 평균 1~2.4회    ${avgChase.toFixed(2)}회 (적 본진 빼고 최대 ${Math.max(...butLast)} · 적 본진 ${siegeLegs.join('·') || '—'})`);
+console.log(`  ${ok3 ? '✔' : '✘'} 구간당 추격 평균 1~2.4회    ${avgChase.toFixed(2)}회 (앞 세 단계 최대 ${Math.max(...front)} · 앞 ${mean(front).toFixed(1)} → 뒤 ${mean(back).toFixed(1)} · 적 본진 ${siegeLegs.join('·') || '—'})`);
 console.log(`  ${ok4 ? '✔' : '✘'} 어느 길로도 끝까지 간다     ${laps.filter(([, r]) => r.done).length}/${laps.length}`);
 console.log(`  ${ok5 ? '✔' : '✘'} 고르는 것이 결과를 가른다   압박 차 ${pressSpread.toFixed(0)} · 시간 차 ${timeSpread.toFixed(0)}분`);
-console.log(`  ${ok6 ? '✔' : '✘'} 숨으면 안전하고 느리다      압박 ${hide.press.toFixed(0)} vs ${fast.press.toFixed(0)} · ${(hide.sec / 60).toFixed(0)}분 vs ${(fast.sec / 60).toFixed(0)}분`);
+console.log(`  ${ok6 ? '✔' : '✘'} 숨으면 안전하고 느리다      압박 ${beforeVoid(hide).toFixed(0)} vs ${beforeVoid(fast).toFixed(0)} · ${(hide.sec / 60).toFixed(0)}분 vs ${(fast.sec / 60).toFixed(0)}분`);
 
 console.log('\n  ※ 방 사이를 뛰는 시간이 0 이고, **고장을 고치는 시간도 안 센다**');
 console.log('     평온 구간이 비어 있다 — 실제 회차는 이보다 길다 (고장 하나에 40~70초).');

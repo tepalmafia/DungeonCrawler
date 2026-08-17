@@ -32,7 +32,9 @@
 // ══════════════════════════════════════════════════════════════════════════
 import { REGIONS, REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 import { KINDS } from '../web/space/js/game/target-table.js';
-import { LEG } from '../web/space/js/game/route-table.js';
+import { LEG, offerFor, depthAt } from '../web/space/js/game/route-table.js';
+// ★ v162 [8] — **게임 파일을 직접 읽는다** (물렸다고 적기가 아니라 정말 물렸나 보기)
+import { readFileSync } from 'node:fs';
 import { measuring } from './unmeasured.js';
 
 let bad = 0;
@@ -207,16 +209,79 @@ console.log('\n[7] ★★★ **옛 여섯이 안 없어졌나** — 딴 계통�
     `★ 더한 것이 ${REGIONS.length - OLD.length} 개다 — 지우지 않고 늘렸다`);
 }
 
-console.log('\n[8] ★★★ **게임이 이 표대로 도나** — 아직 안 물렸다');
+console.log('\n[8] ★★★ **게임이 이 표대로 도나** — ★ v162 에 물렸다');
 {
   //  ★ 이 저장소 규칙: ①뼈대 → ②뼈대만 시뮬 → ③갈아 끼우기 → ④화면과 대조.
-  //    지금은 ①② 다. **③ 을 안 했다는 것을 검사가 말하게** 해 둔다 —
-  //    안 그러면 「초록이니까 됐다」로 읽히고, 그게 죽은 초록이다
-  console.log('   ※ `foes`·`drops`·`heat`·`radar` 는 아직 게임이 안 읽는다');
-  console.log('     (창밖·자국·추적·파편은 v?부터 이미 읽고 있다)');
-  ok(true, '★★★ **여기까지가 「게임에 붙일 자격」이다** — 새 칸 넷을 물리는 것은'
-    + ' 다음 걸음이고, 그때 `space-map.js` 에 「게임이 정말 읽나」를 묻는 절을'
-    + ' 보탠다 (`space-drive.js [9]` · `space-move.js [7]` 과 같은 자리)');
+  //    v161 은 ①② 까지였고 이 절이 「아직 안 물렸다」고 **스스로 적었다.**
+  //    v162 가 ③ 을 했으므로 이제 이 절이 **파일을 읽어서** 확인한다 —
+  //    「물렸다고 적기」가 아니라 「정말 물렸나 보기」다.
+  const read = (f) => {
+    try { return readFileSync(new URL(f, import.meta.url), 'utf8'); } catch { return ''; }
+  };
+  //  ★★★ **주석을 걷어내고 센다.** 이 저장소는 「낡았다」를 주석에 남기는
+  //    규약이라, 안 걷으면 **기록이 코드로 세어져** 늘 초록이 된다
+  //    (v152·v154 에 두 번 데었다)
+  const code = (f) => read(f)
+    .split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  const G = '../web/space/js/';
+  const tgt = code(G + 'game/target.js');
+  const ttab = code(G + 'game/target-table.js');
+  const salv = code(G + 'game/salvage-table.js');
+  const main = code(G + 'main.js');
+  const rtab = code(G + 'game/route-table.js');
+
+  ok(/foePoolOf\(sky\.region\)/.test(tgt),
+    '★★★ **`foes` — 저절로 오는 적을 구역이 정한다** (`target.js`). v161 까지'
+    + ' `TARGET.foePool` 한 통이라 **열두 곳이 다 같은 것을** 보냈다');
+  ok(/REGIONS\.map\(\(r\) => \[r\.key, r\.crowd\]\)/.test(ttab),
+    '★★★ **`crowd` — 몇이 떠 있나를 구역 표에서 뽑는다** (`target-table.js`).'
+    + ' 손으로 적은 목록이라 v161 에 구역을 여섯 더했을 때 **조용히 안 늘었다**');
+  ok(/dropsOf\(sky\.region/.test(tgt) && /dropsOf\(region/.test(salv),
+    '★★★ **`drops` — 나오는 것에 구역 배수가 먹는다** (격추 즉시와 회수 꾸러미'
+    + ' **양쪽**). 한쪽만 물리면 「계기에 뜬 것과 실은 것이 다르다」가 난다');
+  ok(/barren\(region\)/.test(salv),
+    '★★ **얻을 것 없는 구역에서는 꾸러미가 아예 안 떨어진다** — 빈 꾸러미를'
+    + ' 떨구면 줍는 데 3~6초를 쓰고 아무것도 안 들어온다. 그건 결심이 아니라 함정이다');
+  ok(/\?\.heat \?\? 0\)/.test(main),
+    '★★★ **`heat` — 밖에서 오는 열이 `stepHeat` 의 `extra` 로 들어간다**'
+    + ' (`main.js`). 사장님 「태양이 나타난다던지」가 v58 열 계통에 얹히는 자리');
+  ok(/radarBlips\([^)]*radarQ\(\)\)/.test(main) && /stepRadar\([^)]*radarQ\(\)\)/.test(main),
+    '★★★ **`radar` — 계기 성능이 구역을 따른다** (점 찍기와 락온 **양쪽**).'
+    + ' 한쪽만 깎으면 「안 보이는데 묶인다」가 난다');
+  ok(/offerFor\(rnd, leg = 0\)/.test(rtab) && /depthAt\(leg\)/.test(rtab),
+    '★★★ **`depth` — 구간 번호가 어느 구역을 낼지 정한다** (`route-table.js`).'
+    + ' 이것이 사장님이 말씀하신 「**맵이 앞으로 진행되게**」의 실체다');
+}
+
+console.log('\n[9] ★★★ **깊이 창에 양쪽이 다 있나** — 「숨는 쪽 하나 · 빠른 쪽 하나」');
+{
+  //  ★★★ 이 표의 축은 **매 구간 양쪽에서 하나씩**이다. 깊이 창을 씌우면
+  //    한쪽이 텅 빈 구간이 생길 수 있고, 그러면 그 구간은 **고를 것이 없다.**
+  //    `offerFor` 가 창을 넓혀서 메우는데, **얼마나 넓혀야 하는지**를 본다 —
+  //    다섯 단계를 건너뛰어야 짝이 생기면 그건 「이 깊이의 선택」이 아니다
+  let worst = 0; let where = '';
+  for (let leg = 0; leg < LEG.count - 1; leg++) {
+    const d = depthAt(leg);
+    for (const side of ['hide', 'fast']) {
+      const near = REGIONS.filter((r) => r.depth < 11
+        && (r.signMult < 1 ? 'hide' : 'fast') === side);
+      const gap = Math.min(...near.map((r) => Math.abs(r.depth - d)));
+      if (gap > worst) { worst = gap; where = `${leg + 1}구간(깊이 ${d}) 의 ${side === 'hide' ? '숨는' : '빠른'} 쪽`; }
+    }
+  }
+  console.log(`   제일 멀리서 데려오는 곳 — ${where} · ${worst} 단계 건너`);
+  ok(worst <= 2,
+    `★★★ **어느 구간도 ${worst} 단계 넘게 안 건너뛴다** (둘까지) — 더 멀리서`
+    + ' 데려오면 「이 깊이의 선택」이 아니라 **아무 데서나 끌어온 것**이 된다');
+  //  ★ 그리고 실제로 뽑아 본다 — 규칙이 맞아도 부르면 터지는 일이 있다
+  const rnd = (() => { let h = 7; return { pick: (a) => a[(h = (h * 31 + 17) % 9973) % a.length] }; })();
+  let bothOk = true;
+  for (let leg = 0; leg < LEG.count - 1; leg++) {
+    const off = offerFor(rnd, leg);
+    if (off.length !== 2 || off.some((f) => !f?.name) || off[0].key === off[1].key) bothOk = false;
+  }
+  ok(bothOk, '★★ **11구간 다 둘이 나오고, 둘이 서로 다르다** — 같은 것 둘이 나오면'
+    + ' 그 구간은 고르는 척만 하는 것이다');
 }
 
 console.log(bad ? `\n✘ ${bad} 군데` : '\n✔ 열두 단계가 섰다 — 게임에 붙일 자격이 생겼다');

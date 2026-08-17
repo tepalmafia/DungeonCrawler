@@ -32,6 +32,8 @@ import {
 } from '../web/space/js/game/target.js';
 import { MISSIONS } from '../web/space/js/game/mission-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
+// ★ v162 — 회차는 깊이 순으로 열둘을 지난다 (아래 ORDER)
+import { REGIONS } from '../web/space/js/game/regions-table.js';
 import { WEAPONS } from '../web/space/js/game/combat-table.js';
 // ★★★ v151 — 「잴 것이 없으면 멈춘다」는 **한 곳에** 있다 (`folded.js` 옆)
 import { measuring } from './unmeasured.js';
@@ -250,12 +252,31 @@ console.log('\n[5] ★★ **회차에 몇 번이나 맞나** — 0 이면 긴박
  *   예전에는 31 하나만 돌리고 「전투 47%」라고 적었는데, 한 판은
  *   **판단할 수 없는 수**다. 항로 씨앗이 바뀌면 다른 값이 나온다
  */
+// ══ ★★★ v162 — **회차라고 적어 놓고 「빈 공간」 하나만 돌리고 있었다** ══
+//
+//  ★★★ `fresh(seed)` 의 기본 구역이 `'empty'` 다. v161 까지는 어느
+//    구역이든 **같은 통**에서 적이 나왔으므로(`TARGET.foePool`) 하나만
+//    돌려도 회차를 대신할 수 있었다. v162 가 구역마다 만나는 것을
+//    갈랐으므로 **그 전제가 깨졌다** — 「빈 공간」은 이제 열둘 중
+//    제일 얕은 곳이고, 거기만 재면 회차가 아니라 **제일 조용한 구간**을
+//    재는 것이다.
+//
+//  ★★ 그래서 **깊이 순서대로 구간을 밟는다.** 이건 잣대를 늦춘 것이
+//    아니라 **재는 자리를 옮긴** 것이다 — 원래 이 절이 「회차」라고
+//    말하던 그 자리로.
+const ORDER = [...REGIONS].filter((r) => r.depth < 11).sort((a, b) => a.depth - b.depth)
+  .map((r) => r.key).concat(['siege']);
+
 function runOnce(seed) {
-  const s = fresh(seed);
+  const s = fresh(seed, ORDER[0]);
   setNose(s, 0);
   let u = 0, hits = 0, misses = 0, fights = 0, inFight = 0, fightSec = 0, quiet = 0;
   const lens = [];
+  let legAt = -1;
   while (u < RUN) {
+    // 구간이 넘어가면 구역이 바뀐다 — 회차는 열두 곳을 지난다
+    const leg = Math.min(ORDER.length - 1, Math.floor(u / LEG.seconds));
+    if (leg !== legAt) { legAt = leg; setRegion(s, ORDER[leg]); }
     const ev = stepSky(s, DT, { moving: true });
     for (const h of ev.hits ?? []) { if (h.miss) misses++; else hits++; }
     // ★★ **한 판을 물결 단위로 센다** (v70). 적을 부순 순간과 다음 것이

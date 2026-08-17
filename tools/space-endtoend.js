@@ -2188,6 +2188,64 @@ console.log('\n[6o] ★★★ **파밍** — 부수면 파츠가 나오나 (v110
   await S(() => SPACE.clearSky());
 }
 
+console.log('\n[6m] ★★★ **우주 맵 12구역** — 구역이 손에 걸리나 (v162)');
+{
+  //  ★★★ v161 이 표를 열둘로 늘렸고 v162 가 게임에 물렸다. 뼈대 검사
+  //    (`space-map.js`)는 「규칙이 맞나」까지고, 여기는 **켠 다음 손으로만**
+  //    한다 — 구역을 바꿔 놓고 배가 정말 다르게 구는가.
+  await S(() => { SPACE.putHelmSit(true); });
+  await until(() => SPACE.helm2.k > 0.99, 30, '앉기');
+
+  // ── ① ★ 항성 근접 — **가만히 있어도 뜨겁다** ─────────────────
+  //  ★ v161 까지 열은 **내가 켠 것**에서만 났다. 밖에서 오는 열이
+  //    처음 생기는 자리다 (사장님 「태양이 나타난다던지」)
+  await S(() => { SPACE.clearSky(); SPACE.setRegion('empty'); SPACE.setHeat(20); });
+  await p.waitForTimeout(1500);
+  const coldRise = (await S(() => SPACE.heat)) - 20;
+  await S(() => { SPACE.setRegion('star'); SPACE.setHeat(20); });
+  await p.waitForTimeout(1500);
+  const starRise = (await S(() => SPACE.heat)) - 20;
+  console.log(`   같은 1.5초 — 빈 공간 +${coldRise.toFixed(2)} · ★ 항성 근접 +${starRise.toFixed(2)}`);
+  ok(starRise > coldRise,
+    '① ★★★ **해가 뜨면 저절로 더 뜨거워진다** — 라디에이터를 여닫는 일이 전투 한복판으로 들어온다');
+
+  // ── ② 자기 폭풍 — **계기가 죽는다** ──────────────────────────
+  //  ★ 능동만 깎는다. 수동(열)까지 죽이면 「눈으로 보고 쏜다」가 아니라
+  //    「가만히 앉아 있는다」가 된다 — 그래서 `full` 만 센다
+  await S(() => { SPACE.setRegion('empty'); SPACE.setPower('sensor', true); SPACE.putAim(0, 0); SPACE.clearSky(); SPACE.callFoe('fighter', 0, 400); });
+  await p.waitForTimeout(800);
+  const fullClear = await S(() => (SPACE.combat.blips ?? []).filter((b) => b.level === 'full').length);
+  await S(() => { SPACE.setRegion('storm'); });
+  await p.waitForTimeout(800);
+  const fullStorm = await S(() => (SPACE.combat.blips ?? []).filter((b) => b.level === 'full').length);
+  console.log(`   400m 의 같은 적 — 빈 공간 full ${fullClear} · 자기 폭풍 full ${fullStorm}`);
+  ok(fullClear > 0 && fullStorm < fullClear,
+    '② ★★★ **자기 폭풍에서는 능동 접촉이 죽는다** — 광학 창(v79)과 조준 띠(v114)가 유일한 눈이 된다');
+
+  // ── ③ ★ 외계 생명권 — **부숴도 얻을 것이 없다** ───────────────
+  //  ★★★ **구역을 바꾸고 한 프레임 기다린다.** `SPACE.setRegion` 은 창밖을
+  //    바로 바꾸지만 `sky.region` 은 **다음 프레임**에 따라온다
+  //    (`main.js setSkyRegion`). 같은 `evaluate` 안에서 바꾸고 바로 부수면
+  //    **옛 구역의 배수**로 떨어진다 — 처음에 그렇게 짜서 「생명권에서도
+  //    꾸러미가 나온다」로 빨개졌고, 게임이 아니라 **검사가 틀린** 것이었다
+  await S(() => { SPACE.clearSky(); SPACE.setRegion('mine'); });
+  await p.waitForTimeout(600);
+  const was1 = await S(() => SPACE.salvage.packs.length);
+  await S(() => { SPACE.putAim(0, 0); SPACE.putPack('gunship', 40); });
+  const richPack = (await S(() => SPACE.salvage.packs.length)) - was1;
+  await S(() => { SPACE.setRegion('biome'); });
+  await p.waitForTimeout(600);
+  const was2 = await S(() => SPACE.salvage.packs.length);
+  await S(() => { SPACE.putAim(0, 0); SPACE.putPack('gunship', 40); });
+  const barePack = (await S(() => SPACE.salvage.packs.length)) - was2;
+  console.log(`   같은 포함을 부쉈다 — 채굴 지대 꾸러미 ${richPack} · ★ 외계 생명권 ${barePack}`);
+  ok(richPack > 0 && barePack === 0,
+    '③ ★★★ **외계 생명권에서는 꾸러미가 아예 안 떨어진다** — 「싸워서 얻는 곳」이 아니라'
+    + ' **「빨리 지나가야 하는 곳」**이고, 그런 구역이 지금까지 하나도 없었다');
+
+  await S(() => { SPACE.setRegion(null); SPACE.clearSky(); });
+}
+
 console.log('\n[6k] ★★★ **아크 도약** — 「절망」일 때 빠져나갈 길이 있나 (v99)');
 {
   // ★ 여태 견줌은 「절망 — **아크를 채우고 빠진다**」고 말해 왔는데,
