@@ -28,6 +28,8 @@
 import {
   SPEED, mpsAt, streakAt, accOf, fadeAcc, feelOf, speedWord,
 } from '../web/space/js/game/speed-table.js';
+//  ★ v160 — 포획 속도를 **표에서 뽑는다** (14 를 박으면 축척을 안 따라온다)
+import { CATCH } from '../web/space/js/game/catch-table.js';
 import { streakLen, STREAK } from '../web/space/js/game/sky-table.js';
 import { CRUISE } from '../web/space/js/game/systems-table.js';
 import { LEG } from '../web/space/js/game/route-table.js';
@@ -116,15 +118,18 @@ console.log('\n[4] ★★ **역추진도 흐르나** — 뒤로 가는 것도 �
 console.log('\n[5] ★★★ **가속도가 따로 있나** — 「빠르다」와 「빨라진다」는 다르다');
 {
   console.log('   초당 변화(mps/s)   느낌 0~1   화각 열림   좌석 밀림   먼지');
-  for (const d of [0, 8, 19, 34, 60]) {
+  //  ★ v160 — 축척을 따라오게 `SPEED.accFull` 에서 뽑는다
+  const A = SPEED.accFull;
+  for (const d of [0, A * 0.24, A * 0.56, A, A * 1.76].map((v) => +v.toFixed(1))) {
     const k = accOf(d); const f = feelOf(k);
     console.log(`   ${String(d).padStart(12)} ${k.toFixed(2).padStart(11)}`
       + ` ${f.fov.toFixed(1).padStart(11)}° ${f.seat.toFixed(3).padStart(11)}`
       + ` ${f.dust.toFixed(2).padStart(7)}배`);
   }
   ok(accOf(0) === 0, '★★ 등속이면 가속 신호가 **0** 이다 — 그래야 「지금 빨라지는 중」이 읽힌다');
-  ok(accOf(60) === 1 && accOf(19) > 0.4,
-    `★★ 스로틀을 끝까지 미는 정도(초당 19)면 ${accOf(19).toFixed(2)} 는 나온다`);
+  ok(accOf(SPEED.accFull * 1.76) === 1 && accOf(SPEED.accFull * 0.56) > 0.4,
+    `★★ 스로틀을 끝까지 미는 정도(초당 ${(SPEED.accFull * 0.56).toFixed(0)})면`
+    + ` ${accOf(SPEED.accFull * 0.56).toFixed(2)} 는 나온다`);
   const f1 = feelOf(1);
   ok(f1.fov > 8 && f1.fov < 20,
     `★★★ 최대 화각 열림이 **${f1.fov}도** (8~20) — 가장자리가 빨리 흘러 속도로 읽힌다.`
@@ -164,7 +169,7 @@ console.log('\n[6-b] ★★★ **거점에서도 스로틀이 먹나** — 회�
 console.log('\n[7] ★★★ **붙으러 갈 때도 흐르나** — 「멀리서 그냥 가져오는」의 답');
 {
   // 도킹 팔은 25m 안이라야 닿는다. 포획이 그 거리까지 **끌고 간다**
-  const towed = mpsAt({ leg: 0, tow: 14 });
+  const towed = mpsAt({ leg: 0, tow: CATCH.speed });
   const still = mpsAt({ leg: 0 });
   console.log(`   붙으러 가는 중 ${towed.toFixed(1)} mps · 가만히 ${still.toFixed(1)} mps`
     + ` · 별줄 ${streakAt(towed).toFixed(2)} vs ${streakAt(still).toFixed(2)}`);

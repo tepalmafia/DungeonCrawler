@@ -48,6 +48,8 @@
 //  ★ three.js 를 안 쓴다 — tools/space-combat.js 가 브라우저 없이 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
 import { TARGET } from './target-table.js';
+//  ★ v160 — **속도와 거리를 같은 배수로** (`scale-table.js`)
+import { S, SR } from './scale-table.js';
 import { MISSILES } from './supply-table.js';
 // ★ v119 — 락온의 **각**은 뼈대가 들고 있다 (`frame.js LOCK`). 여기서
 //   다시 안 적는다 — 두 곳에 적으면 반드시 갈라진다
@@ -69,7 +71,7 @@ export const RADAR = {
   az: 66,
   el: 40,
   /** 탐지 거리 (m). 표적이 나는 거리(90~220)보다 멀어야 「먼저 본다」가 된다 */
-  range: 260,
+  range: S(260),
 
   /**
    * ★ **묶는 데 걸리는 초.** 0 이면 락온이 아니라 그냥 조준이다.
@@ -198,7 +200,7 @@ export const RADAR = {
  * @property front 앞쪽을 먼저 고른다 — 같은 거리면 정면 쪽
  */
 export const PICK = {
-  range: 260,
+  range: S(260),
   front: 0.35,
   /** 지정한 것이 이만큼 벗어나면 화면 밖이다 (도) — 화살표가 뜬다 */
   offScreen: 26,
@@ -239,7 +241,7 @@ export const WEAPONS = {
     key: 'laser', name: '레이저', slot: 1,
     needLock: false,
     /** 사거리 (m). 빛이라 즉발이지만 **세기가 거리에 죽는다** */
-    rMin: 0, rMax: 90,
+    rMin: S(0), rMax: S(90),
     /**
      * ★★★ 맞히려면 이 각도 안 (도) — **표를 읽는다.**
      *
@@ -316,7 +318,7 @@ export const WEAPONS = {
      *   실제 미사일의 최소 사거리가 바로 이것이고, 「붙었으면 기총」이라는
      *   갈림이 여기서 생긴다
      */
-    rMin: 25, rMax: 120,
+    rMin: S(25), rMax: S(120),
     tol: 11,
     lead: false,
     speed: 95,
@@ -349,7 +351,7 @@ export const WEAPONS = {
     key: 'arh', name: '유도탄', slot: 3,
     /** ★★ **락온이 있어야 쏜다** */
     needLock: true,
-    rMin: 45, rMax: 240,
+    rMin: S(45), rMax: S(240),
     tol: 14,
     lead: false,
     speed: 140,
@@ -545,7 +547,7 @@ export const blindShare = () => Math.max(0, 1 - RADAR.az / 180);
  * @property range 이 안이면 수동으로 잡힌다 (m). 원뿔보다 **넓다** —
  *                 열은 멀리 간다. 대신 **거리를 모른다**
  */
-export const PASSIVE = { range: 340 };
+export const PASSIVE = { range: S(340) };
 
 /**
  * 한 표적을 레이더가 얼마나 아나.

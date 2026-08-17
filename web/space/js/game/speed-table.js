@@ -27,6 +27,8 @@
 //  ★ three.js 를 안 쓴다 — `tools/space-speed.js` 가 읽는다.
 // ══════════════════════════════════════════════════════════════════════════
 import { CRUISE } from './systems-table.js';
+//  ★ v160 — **속도와 거리를 같은 배수로** (`scale-table.js`)
+import { S } from './scale-table.js';
 import { BOOST } from './boost-table.js';
 //  ★ v152 — 「전진이 기본」의 값(`DRIVE.base`)을 **베끼지 않고 불러 온다.**
 //    `drive-table.js` 는 아무것도 안 불러오므로 고리가 안 생긴다
@@ -61,9 +63,9 @@ export const SPEED = {
    *   나왔다 — 즉 멈춘 것과 전속이 눈으로 거의 같았다.
    *   ★ 눈금을 **실제 범위**에 맞춘다
    */
-  streakFast: 95,
+  streakFast: S(95),
   /** 이보다 느리면 줄을 안 긋는다 (점으로 남는다) */
-  streakMin: 3,
+  streakMin: S(3),
 
   /**
    * ★★★ **거점에서도 스로틀이 먹는다** (v116 · 재 보고 찾았다).
@@ -89,7 +91,7 @@ export const SPEED = {
    *   전속(26)까지 스로틀을 미는 데 `THROTTLE.rate` 로 1.4초쯤 걸리므로
    *   초당 19 쯤이 보통이고, 급가속은 그 서너 배다
    */
-  accFull: 34,
+  accFull: S(34),
   /** 가속 신호가 **삭는 시간** (초) — 등속이 되면 사라져야 한다 */
   accFade: 0.55,
   /** 화각이 이만큼까지 열린다 (도) — 가장자리가 빨리 흘러 속도로 읽힌다 */
@@ -211,8 +213,9 @@ export const feelOf = (k) => ({
 
 /** 사람이 읽는 한 마디 — 계기가 쓴다 */
 export function speedWord(mps) {
-  if (mps < 5) return '정지';
-  if (mps < 18) return '순항';
+  //  ★ v160 — 문턱도 축척에 맞춘다. 안 맞추면 새 순항이 「전속」으로 읽힌다
+  if (mps < S(5)) return '정지';
+  if (mps < S(18)) return '순항';
   if (mps < CRUISE.speed * BOOST.mult * 0.6) return '전속';
   return '★ 급가속';
 }

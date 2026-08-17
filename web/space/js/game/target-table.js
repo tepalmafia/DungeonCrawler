@@ -57,6 +57,8 @@
  *    포함을 먼저 깨는 이유가 생기는 자리다 — 확률로 뿌렸으면 안 생겼다
  */
 import { SLOTS } from '../core/model-table.js';
+//  ★ v160 — **속도와 거리를 같은 배수로** (`scale-table.js`)
+import { S, SR } from './scale-table.js';
 
 export const KINDS = {
   junk: {
@@ -130,7 +132,7 @@ export const KINDS = {
     // ★ v99 — `arc` 는 **도약 장치가 있는 배만** 준다 (아래 KINDS 위 주석)
     gives: { ore: 30, parts: 2, food: 0, arc: 1 },
     /** ★ 저 혼자 다가온다 (초당 m) — 흐르는 것들과 다른 점 */
-    closes: 9.5,
+    closes: S(9.5),
     /**
      * ══ ★★★ v84 — **다가와서 박지 않는다. 사거리를 잡고 싸운다** ═══════
      *
@@ -146,7 +148,7 @@ export const KINDS = {
      *  ★★★ 실제 공중전이 그렇다 — 접근 → **사격 위치 유지**(옆으로 돌며)
      *    → 이탈 → 재접근. 「일정 거리」가 곧 이 배열이다
      */
-    standoff: [55, 85],
+    standoff: SR([55, 85]),
     /**
      * ★★★ **쏜다** (v70). v69 까지 이 배가 다치는 길은 「들이받힌다」
      *   하나였고, 그건 가만히 있으면 저절로 오는 것이라 **사람이 할 일이
@@ -181,7 +183,7 @@ export const KINDS = {
     key: 'fighter', name: '요격기', weight: 0, size: 0.9, hits: 2,
     gives: { ore: 12, parts: 0, food: 0 },
     // ★ v84 — **바짝 붙어 물고 늘어진다.** 빠른 대신 오래 못 버틴다
-    closes: 16, standoff: [32, 58], shoots: true, sign: 7,
+    closes: S(16), standoff: SR([32, 58]), shoots: true, sign: 7,
     /** ★ 떼로 온다 — 한 번 부를 때 이만큼 */
     pack: 3,
     what: '**빠르다.** 약한 대신 떼로 온다 — 레이저로 훑는다',
@@ -194,7 +196,7 @@ export const KINDS = {
     gives: { ore: 44, parts: 3, food: 0, arc: 2 },
     // ★ v84 — **멀리서 때린다.** 제 사거리(105) 끝자락을 잡는다 —
     //   내 레이저(90)가 안 닿는 자리라 미사일을 쓰거나 붙어야 한다
-    closes: 5, standoff: [78, 100], shoots: true, sign: 18,
+    closes: S(5), standoff: SR([78, 100]), shoots: true, sign: 18,
     /** ★ 한 발이 더 아프다 — `HITS` 의 값에 곱한다 */
     punch: 1.8,
     what: '**두껍다.** 느린 대신 세게 쏜다 — 미사일이 필요하다',
@@ -203,7 +205,7 @@ export const KINDS = {
   drone: {
     key: 'drone', name: '자폭정', weight: 0, size: 0.7, hits: 1,
     gives: { ore: 6, parts: 0, food: 0 },
-    closes: 22, rams: true, sign: 4,
+    closes: S(22), rams: true, sign: 4,
     /** ★ 안 쏜다 — **몸이 탄이다** */
     punch: 3.2,
     what: '**빠르게 달려든다.** 안 쏘는 대신 몸이 탄이다 — 먼저 봐야 한다',
@@ -223,7 +225,7 @@ export const KINDS = {
     key: 'convoy', name: '보급 호송선', weight: 0, size: 1.9, hits: 12,
     gives: { ore: 60, parts: 4, food: 40, arc: 3 },
     /** ★ **멀어진다** — 음수다. 안 쫓아가면 사라진다 */
-    closes: -7,
+    closes: S(-7),
     sign: 9,
     what: '**도망간다.** 안 쏘는 대신 놓치면 아무것도 못 얻는다',
   },
@@ -382,7 +384,7 @@ export const ENGAGE = {
   weave: 11,
   weaveRate: 0.45,
   hold: [6, 12],
-  breakTo: 185,
+  breakTo: S(185),
   breakMult: 1.6,
 
   /**
@@ -582,7 +584,7 @@ export const HULL = {
    *   것이 하나도 없었다.** 바닥을 깔았는데 그 위에 뚜껑이 있었던 셈이다.
    *   도구가 아니라 한 번 굴려 보고 잡았다
    */
-  radius: 21,
+  radius: S(21),
   /**
    * ★★ **정면에 있는 것만 부딪힌다** (도).
    *
@@ -604,7 +606,7 @@ export const HULL = {
    *   그건 싸움이 아니라 사고다. 110m 면 6초에 한 번 오므로,
    *   맷집 6짜리를 부술 시간(미사일 두 발 + 기총)이 나온다
    */
-  backoff: 110,
+  backoff: S(110),
   /** 부딪힌 뒤 이 초 동안은 같은 것이 또 안 부딪힌다 (한 번에 한 번) */
   cooldown: 0.6,
 };
@@ -629,12 +631,12 @@ export const TARGET = {
    * ★ **얼마나 멀리 있나** (m). 사거리 밖은 조준경에 뜨지만 안 맞는다 —
    *   「보이는데 안 맞는다」가 있어야 「기다렸다 쏜다」가 생긴다
    */
-  spawn: [90, 220],
-  range: 140,
+  spawn: SR([90, 220]),
+  range: S(140),
   /** 초당 이만큼 가까워진다 (배가 가는 만큼) */
-  closing: 5.5,
+  closing: S(5.5),
   /** 이보다 가까워지면 지나쳐 간다 — 새 것이 난다 */
-  gone: 18,
+  gone: S(18),
   /**
    * ★★★ v154 — **이보다 멀어지면 놓아 준다** (m).
    *
@@ -649,7 +651,7 @@ export const TARGET = {
    *    **눈앞에서 사라지는** 것이 보이고 (창밖에 그려지는 것들이라 바로
    *    보인다), 너무 넓으면 안 쓰는 것을 계속 셈한다
    */
-  far: 260,
+  far: S(260),
 
   /**
    * ★★★ **v69 — 사방이다** (도).
@@ -827,7 +829,7 @@ export function rangeWord(dist, wMax = null) {
  */
 export const ENEMY_FIRE = {
   every: 3.4,
-  range: 105,
+  range: S(105),
   aimCone: 38,
   hit: [0.62, 0.22],
   fly: 0.9,
