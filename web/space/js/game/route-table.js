@@ -215,6 +215,19 @@ const CALL = {
   // ★★★ v93 — **적 행성 상공** (마지막 구간). 같은 이유로 자리 이름이다 —
   //   고르는 곳이 아니라 **닿아야 하는 곳**이고, 거기서 떨군다 (`WAR.md §6`)
   siege: '적 행성 상공',
+  // ══ ★★★ v161 — 구역이 여섯 늘었다 (regions-table.js) ═════════════════
+  //  ★★★ **여기를 안 채우면 `name` 이 조용히 `undefined` 가 된다.**
+  //    실제로 그랬다 — 구역만 늘리고 돌리니 `space-route [1]` 이
+  //    `f.name.padEnd` 에서 터졌다. 도구라서 터진 게 다행이고, 게임 쪽
+  //    (`nav` 마름모 · 항로 문 이름표)이었으면 **빈 글자로 조용히** 떴다.
+  //  ★ 그래서 아래 `forkOf` 에 **되돌아갈 자리**도 뒀다 — 열셋째를 더하는
+  //    사람이 이 파일을 잊어도 이름은 나온다 (구역의 제 이름을 쓴다)
+  mine: '채굴 지대를 훑는다',
+  star: '항성 곁을 스친다',
+  storm: '자기 폭풍을 뚫는다',
+  picket: '전초선을 넘는다',
+  biome: '외계 생명권을 지난다',
+  convoy: '호송 항로를 탄다',
 };
 
 /**
@@ -235,7 +248,8 @@ const FAST = ['empty', 'planet'];
 export function forkOf(key) {
   const r = REGION_BY_KEY[key];
   return {
-    key, region: key, name: CALL[key], what: r.what,
+    //  ★ v161 — `CALL` 을 안 채운 구역이 있어도 이름은 나온다 (위 주석)
+    key, region: key, name: CALL[key] ?? r.name, what: r.what,
     seconds: LEG.seconds / r.speed,
     /** 초당 오르는 몫 = 구간당 몫을 길이로 나눈 것 + 시간 자체의 몫 */
     pressRate: (PRESS.perLeg * r.signMult) / (LEG.seconds / r.speed) + PRESS.drift,
