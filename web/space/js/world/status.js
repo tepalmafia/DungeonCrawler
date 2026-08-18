@@ -87,7 +87,11 @@ function row(ctx, T, x, y, w, bh, name, fill, word, hot) {
  * ★★ **여섯 줄을 그린다.** 조종석 HUD 와 정비실 작업대가 같이 부른다.
  *
  * @param s.heat 0~100 · s.cooling · s.speed 0~1 · s.power {thrust,sensor,cool}
- *        s.sign 0~100 · s.missiles · s.weapon 지금 고른 무기 이름
+ *        s.sign 0~100
+ *        ★ v165 — `s.missiles` 는 **없어졌다** (v133 이전의 한 통이었다).
+ *          지금은 `s.ammo`(무기마다의 통) + `s.slotKey`(지금 고른 무기)다 —
+ *          이 주석이 v164 까지 **옛 이름 둘을 가리키고** 있었다. 죽은 안내는
+ *          없는 안내보다 나쁘다: 다음 사람이 그 이름을 찾다가 시간을 버린다
  * @param theme 'hud' | 'bench'
  */
 export function drawStatus(ctx, x, y, w, h, s, theme = 'hud') {
