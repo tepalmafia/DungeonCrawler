@@ -32,7 +32,7 @@ import {
   FACE_H, SHELF_H, PANEL_GAP, PANEL_DIST, DEP, SIDE, ROOF, STRUCTS,
 } from '../game/view-table.js';
 import { drawFork } from './chart.js';
-import { buildStars, buildBand, buildDust, buildPlanet } from './sky.js';
+import { buildStars, buildBand, buildDust, buildPlanet, buildStar } from './sky.js';
 // ★★★ v69 — **격추 게임으로 바뀌었다.** 떠도는 것들과 쏜 것들을 창밖에
 //   세운다 (docs/space/COMBAT.md). v64 가 숫자만 만들고 **보이는 것을
 //   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
@@ -41,7 +41,7 @@ import { buildTargets } from './targets.js';
 import { buildRoad } from './road.js';
 import { buildShots } from './shots.js';
 import { buildSalvage } from './salvage.js';
-import { DUST } from '../game/sky-table.js';
+import { DUST, STAR } from '../game/sky-table.js';
 import { RADAR } from '../game/combat-table.js';
 // ★ v75 — 데이터 블록이 표적 이름을 부른다 (「요격기」 · 「포함」)
 import { KINDS } from '../game/target-table.js';
@@ -1481,6 +1481,10 @@ export function buildOutside(scene, z) {
   //   빛은 행성 자기 셰이더 안에서만 돈다. 장면에 조명을 안 보태므로
   //   예전처럼 **배 안까지 같이 밝아지는** 일이 없다 (world/sky.js)
   const world = buildPlanet(out, 46);
+  /** ★★★ v163 — **해.** `heat > 0` 인 구역에서만 뜬다 (`sky-table.js STAR`) */
+  const star = buildStar(out);
+  /** 행성 반지름 — `buildPlanet` 에 준 값과 **같은 곳에서** 온다 */
+  const PLANET_R = 46;
   world.setPos(-62, 6, z - 108);
   /** 천구를 눈에 붙일 때 쓰는 그릇. 매 프레임 새로 만들면 쓰레기가 쌓인다 */
   const DOME = new THREE.Vector3();
@@ -1538,6 +1542,16 @@ export function buildOutside(scene, z) {
     if (!r) return;
     want = r;
     regionKey = key;
+    // ★★★ v163 — **구역에 들어서면 행성을 제자리에 놓는다.**
+    //   여태 자리는 **흘러가다 감길 때만** 새로 잡혔다. 그래서 구역을
+    //   바꿔도 행성이 **직전 구역에서 흘러가던 자리 그대로** 떠 있었고,
+    //   운이 나쁘면 화면 밖이었다 — 「켜져 있는데 안 보인다」의 절반이
+    //   이것이었다. 들어설 때 한 번 제자리에 놓는다
+    //  ★ 들어설 때는 **멀고 작다.** 가까워지며 커지고 왼쪽으로 흘러
+    //    지나간다 — 「지나가는 곳」이지 배경 그림이 아니다.
+    //  ★★ x 를 −52 로 뒀다가 화면을 찍고 −140 으로 밀었다: 들어선
+    //    순간의 원반이 **정면 원뿔 한가운데**에 앉아 조준선을 덮었다
+    if (r.planet) world.setPos(-140, -46, z - 250);
     if (instant) {
       bg.set(r.bg);
       cur.fog.set(r.fog); cur.near = r.fogNear; cur.far = r.fogFar;
@@ -1910,14 +1924,33 @@ export function buildOutside(scene, z) {
     // 구역에서 행성이 갈색으로 뜬다 (한 번 바꿔 놓고 안 되돌리는 종류의 사고)
     world.setMood(false);
 
-    // 행성 — 구역에 따라 있고 없다
+    // ══ ★★★ v163 — **행성이 켜져 있는데 안 보였다** ═══════════════════
+    //
+    //  사장님 「태양이랑 행성 창밖에 보이게 해줘」.
+    //
+    //  ★★★ 재 보니 `world.visible` 은 **true 였다.** 그런데 자리가
+    //    `x −62 ~ −102 · z −190` 이라 화면 **왼쪽 밖**이었다. 즉
+    //    「안 그린다」가 아니라 **「그리는데 화면에 없다」**였고,
+    //    그건 코드로는 안 잡히는 종류다 (v103 계기와 같은 병).
+    //  ★★ 그래서 **화각 안**으로 옮긴다 — 왼쪽 아래로 비껴서, 정면
+    //    원뿔(조준하는 자리)은 비워 둔다. 그리고 **흘러가고 다시 온다** —
+    //    가만히 붙어 있으면 배경 그림이지 지나가는 곳이 아니다
     world.visible = want.planet;
     if (want.planet) {
       const p = world.pos;
       p.z += d * 0.045;
-      if (p.z > z - 40) p.set(-62 - Math.random() * 40, 6, z - 190);
+      //  ★ 화면을 찍고 한 번 더 밀었다 — `x −34` 로는 원반의 오른쪽 끝이
+      //    **정면 원뿔 안**으로 들어와 조준선에 걸렸다 (`STAR.clearDeg` 와
+      //    같은 잣대). 커서 좋은 것과 조준을 가리는 것은 다르다
+      if (p.z > z - 90) p.set(-140 - Math.random() * 30, -46 - Math.random() * 14, z - 270);
       world.setPos(p.x, p.y, p.z);
     }
+
+    // ══ ★★★ v163 — **해** — `heat > 0` 인 구역에서만 ═══════════════════
+    //  ★ 「항성 근접」이라는 이름과 `heat 0.055` 만 있고 **데우는 것이
+    //    하늘에 없었다.** 그러면 그 구역은 「왜 뜨겁지」가 된다
+    star.visible = (want.heat ?? 0) > 0;
+    star.face(camRef);
   }
 
   /**
@@ -2003,9 +2036,51 @@ export function buildOutside(scene, z) {
         //   덜 갈아탄 화면을 「안 바뀌었다」로 읽는다 — 색 갈아타기는 6초라
         //   헤드리스에서는 실제로 2분이 걸린다. 숫자로 묻는다
         stars: +cur.stars.toFixed(3), wantStars: want.stars,
+        // ★★★ v163 — **창밖의 큰 것들이 화면에 정말 보이나** (해 · 행성).
+        //   사장님 「태양이랑 행성 창밖에 보이게 해줘」.
+        //   ★ 「메시가 켜져 있다」는 답이 아니다 — v161 에 행성은 **켜져
+        //     있었는데** 화면 왼쪽 밖에 있어서 안 보였다. 그래서 **진짜
+        //     카메라로 화면 좌표와 반지름(화소)**을 낸다
+        orbs: orbPx(),
       };
     },
   };
+
+  /** 큰 것들이 화면 어디에 몇 화소로 있나 — 진짜 카메라로 잰다 */
+  function orbPx() {
+    const w = globalThis.innerWidth || 960;
+    const h = globalThis.innerHeight || 560;
+    const out = {};
+    //  ★★★ **켜짐을 부모까지 물어야 한다.** 처음에 원반 자신의 `.visible`
+    //    만 봤더니 **열두 구역 모두에서 해가 보인다**고 나왔다 — 껐다 켜는
+    //    것은 원반이 아니라 **묶음(group)** 이었기 때문이다.
+    //    「그린다」의 답은 늘 **화면**이고, 화면은 부모까지 따진다
+    const shown = (m) => { let n = m; while (n) { if (!n.visible) return false; n = n.parent; } return true; };
+    const one = (mesh, r) => {
+      if (!mesh || !camRef || !shown(mesh)) return null;
+      mesh.updateMatrixWorld(); camRef.updateMatrixWorld();
+      const c = new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld);
+      const e = new THREE.Vector3().setFromMatrixPosition(camRef.matrixWorld);
+      const d = c.distanceTo(e);
+      const p0 = c.clone().project(camRef);
+      // 반지름은 **중심에서 옆으로 r 만큼 간 점**을 같이 투영해서 잰다
+      const side = new THREE.Vector3().setFromMatrixColumn(camRef.matrixWorld, 0)
+        .multiplyScalar(r * mesh.scale.x).add(c).project(camRef);
+      return {
+        x: +((p0.x * 0.5 + 0.5) * w).toFixed(0),
+        y: +((-p0.y * 0.5 + 0.5) * h).toFixed(0),
+        px: +(Math.abs(side.x - p0.x) * w / 2).toFixed(1),
+        dist: +d.toFixed(0),
+        // ★ 화면 안인가 — 원반이 **반이라도 걸치면** 보이는 것으로 본다
+        on: Math.abs(p0.x) < 1.6 && Math.abs(p0.y) < 1.6 && p0.z > -1 && p0.z < 1,
+      };
+    };
+    out.planet = one(world.planet, PLANET_R);
+    out.star = one(star?.disk ?? null, star?.r ?? 0);
+    //  ★ 코로나까지 포함한 반지름 — 「정면 원뿔을 안 덮나」는 이걸로 묻는다
+    if (out.star) out.star.haloPx = +(out.star.px * STAR.halo).toFixed(1);
+    return out;
+  }
 }
 
 

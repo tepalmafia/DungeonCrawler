@@ -22,7 +22,7 @@
 //    것인데 눈은 아니다), 대기 테두리를 두 번 잘못 잡았다(후광 → 안 보임).
 //    그래서 아래 [7] 은 **화면 없이는 못 여는 자리**다.
 // ══════════════════════════════════════════════════════════════════════════
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN }
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN, STAR }
   from '../web/space/js/game/sky-table.js';
 import { REGIONS, REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
 
@@ -179,6 +179,33 @@ console.log('\n[6b] ★★★ **속도감** — 줄이 「얼마나 빨리 가�
   // ★★★ **줄이 급가속에만 켜지면 안 된다** — v87 이 그랬고, 그러면
   //   R 을 안 누른 99%의 시간이 통째로 v73 이전과 같다
   ok(streakLen(11.7) > 0, '★★★ **미끄러지는 동안에도 줄이 있다** — 없으면 「가고 있다」가 안 보인다');
+}
+
+console.log('\n[6c] ★★★ **해와 행성 — 창밖에 보이나** (사장님 「태양이랑 행성 창밖에 보이게 해줘」)');
+{
+  //  ★★★ 여기는 **표**만 묻는다. 「진짜 화면에서 몇 화소인가」는 아래
+  //    `--see` 의 [9] 가 **진짜 카메라**로 잰다 — 이 저장소가 v98 에
+  //    네 판을 태우고 세운 규약이다 (한쪽만 읽으면 「둘이 같나」를 못 묻는다).
+  const hot = REGIONS.filter((r) => (r.heat ?? 0) > 0);
+  ok(hot.length >= 1,
+    `★★★ **해가 뜨는 구역이 있다** (${hot.map((r) => r.name).join(' · ') || '없다'}) —`
+    + ' `heat` 만 있고 데우는 것이 하늘에 없으면 그 구역은 「왜 뜨겁지」가 된다');
+  ok(hot.every((r) => !r.planet),
+    '★ 해가 뜨는 구역에는 행성이 **없다** — 둘이 같이 뜨면 `PLANET.sun`(왼쪽)과'
+    + ' `STAR.az`(오른쪽)가 어긋나 「해는 저기 있는데 낮면은 반대」가 된다');
+  const face = REGIONS.filter((r) => r.planet);
+  ok(face.length >= 2,
+    `★ 행성이 뜨는 구역이 ${face.length} 곳 — 하나뿐이면 「가끔 보이는 것」이 아니라 그 구역의 표식이 된다`);
+  //  ★ 크기는 **화면 화소**로 못박는다. 세계 좌표 반지름은 「보이나」의
+  //    답이 아니다 (v103·v130 에서 두 번 배운 것)
+  ok(STAR.wantPx[0] >= 20 && STAR.wantPx[1] <= 260,
+    `★★ 화면에서 지름 ${STAR.wantPx[0]}~${STAR.wantPx[1]}화소를 노린다 —`
+    + ' 작으면 밝은 별과 구분이 안 되고, 크면 창을 덮어 전투가 안 된다');
+  ok(STAR.clearDeg >= 10,
+    `★★★ **정면 ${STAR.clearDeg}도를 비운다** — 화면 복판은 조준하는 자리다.`
+    + ' 거기에 해를 두면 이 구역에서만 조준이 벌이 된다');
+  ok(STAR.halo > 1.5 && STAR.haloStrength < 1,
+    `★ 코로나가 원반의 ${STAR.halo}배까지 · 세기 ${STAR.haloStrength} — 한 겹이면 「흰 공」이지 항성이 아니다`);
 }
 
 console.log('');
@@ -340,6 +367,56 @@ if (see >= 0) {
     await p.waitForTimeout(1600);
     const after = await S(() => SPACE.fly);
     ok(after.kick === 0, `★ 그리고 **되돌아온다** (${after.kick}) — 안 되돌아오면 그건 밀림이 아니라 자리 옮김이다`);
+  }
+
+  console.log('\n[9] ★★★ **해와 행성이 진짜 화면에 있나** (진짜 카메라 · v163)');
+  {
+    //  ★★★ **「메시가 켜져 있다」는 답이 아니다.** v162 까지 행성은 켜져
+    //    있었는데 자리가 `x −62 · z −190` 이라 **화면 왼쪽 밖**이었다.
+    //    「안 그린다」가 아니라 **「그리는데 화면에 없다」**였고, 그건
+    //    규칙만 읽는 검사로는 영영 안 잡힌다.
+    //  ★ 그래서 `SPACE.outside.orbs` 가 **진짜 카메라로** 화면 좌표와
+    //    반지름(화소)을 낸다. 여기서 묻는 것은 셋이다 —
+    //    **뜨나 · 화면 안인가 · 조준선을 안 덮나.**
+    await S(() => SPACE.putHelmSit(true));
+    await p.waitForTimeout(1200);
+    const W = 640, H = 380;
+    const look = async (key) => {
+      await S((k) => SPACE.setRegion(k), key);
+      await p.waitForTimeout(900);
+      return S(() => SPACE.outside.orbs ?? {});
+    };
+    //  화면 복판에서 몇 화소가 `clearDeg` 인가 — 화각에서 낸다
+    const fov = await S(() => SPACE.camera?.fov ?? 60);
+    const pxPerDeg = (H / 2) / Math.tan((fov / 2) * Math.PI / 180) * (Math.PI / 180);
+    const clearPx = STAR.clearDeg * pxPerDeg;
+    const off = (o) => Math.hypot(o.x - W / 2, o.y - H / 2);
+
+    const hot = REGIONS.find((r) => (r.heat ?? 0) > 0);
+    const sun = (await look(hot.key)).star;
+    console.log(`   ${hot.name} — 해 ${sun ? `(${sun.x},${sun.y}) 지름 ${(sun.px * 2).toFixed(0)}화소 · 코로나까지 ${sun.haloPx}` : '없다'}`
+      + ` · 복판에서 ${sun ? off(sun).toFixed(0) : '—'}화소 (비워야 할 ${clearPx.toFixed(0)})`);
+    ok(!!sun && sun.on, '① ★★★ **해가 화면 안에 있다** — 「켜져 있다」가 아니라 **보인다**');
+    ok(!!sun && sun.px * 2 >= STAR.wantPx[0] && sun.px * 2 <= STAR.wantPx[1],
+      `② ★★ 지름이 ${sun ? (sun.px * 2).toFixed(0) : 0}화소 (${STAR.wantPx[0]}~${STAR.wantPx[1]}) — 밝은 별과 구분이 되고 창은 안 덮는다`);
+    ok(!!sun && off(sun) - sun.haloPx >= clearPx * 0.85,
+      `③ ★★★ **코로나까지 정면 원뿔 밖이다** — 왼쪽 위에 뒀다가 화면을 찍고 옮겼다:`
+      + ' 거기는 **광학 창**의 자리라 해가 판 뒤에 가려 있었다');
+
+    const face = REGIONS.filter((r) => r.planet);
+    let seen = 0, small = null;
+    for (const r of face) {
+      const o = (await look(r.key)).planet;
+      console.log(`   ${r.name} — 행성 ${o ? `(${o.x},${o.y}) 지름 ${(o.px * 2).toFixed(0)}화소` : '없다'}`);
+      if (o && o.on) { seen++; if (small === null || o.px < small) small = o.px; }
+    }
+    ok(seen === face.length,
+      `④ ★★★ **행성이 뜨는 ${face.length} 곳에서 다 화면 안에 있다** (${seen}/${face.length}) —`
+      + ' v162 까지 **켜져 있는데 화면 밖**이었다');
+    ok((small ?? 0) * 2 >= 40,
+      `⑤ ★★ 제일 작을 때도 지름 ${((small ?? 0) * 2).toFixed(0)}화소 — 작으면 「달 하나 떠 있네」가 되고,`
+      + ' 그러면 「행성 곁을 지난다」가 안 읽힌다');
+    await S(() => SPACE.setRegion(null));
   }
 
   if (errs.length) { console.log('\n  ✘ 콘솔 오류:'); errs.slice(0, 5).forEach((e) => console.log('    ' + e)); fail += errs.length; }

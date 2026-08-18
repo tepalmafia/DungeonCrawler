@@ -21,7 +21,7 @@ import * as THREE from 'three';
 //   13% 자리**에서만 놀았다 — 눈금이 통째로 안 맞았고, 그래서 멈춘 것과
 //   전속이 눈에 거의 같았다 (`space-speed.js` 가 잰다)
 import { streakAt } from '../game/speed-table.js';
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, PLANET, DOME_R, SUN }
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, PLANET, DOME_R, SUN, STAR }
   from '../game/sky-table.js';
 // ★ v73 — 급가속의 속도감. **숫자는 표에만** 있으므로 여기서 읽어 온다
 import { RUSH } from '../game/boost-table.js';
@@ -497,6 +497,95 @@ export function buildDust(parent, z) {
 //  행성 — **터미네이터와 대기 테두리**
 // ══════════════════════════════════════════════════════════════════════════
 const V3 = (a) => new THREE.Vector3(...a);
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v163 — **해** (사장님 「태양이랑 행성 창밖에 보이게 해줘」)
+//
+//  ★ `heat > 0` 인 구역(★ 항성 근접)에서만 뜬다. 다른 열한 곳은 그대로
+//    `SUN`(밝은 점 하나)이다 — `sky-table.js STAR` 의 주석 참고.
+//
+//  ★★ **두 겹이다.** 원반은 거의 흰 판이고, 코로나는 그 둘레에 퍼지는
+//    빛이다. 한 겹으로 그리면 「흰 공」이지 항성이 아니다 — 실제로
+//    눈이 항성이라고 읽는 것은 **둘레의 번짐**이다.
+//
+//  ★ **빌보드다** (`lookAt` 안 쓰고 항상 카메라를 본다). 공으로 만들면
+//    폴리곤이 헛되고, 무엇보다 **가장자리가 어두워져** 원반이 아니라
+//    구슬로 보인다. 항성은 원반 전체가 고르게 밝다 (주연 감광은 미미하다)
+// ══════════════════════════════════════════════════════════════════════════
+export function buildStar(parent) {
+  const g = new THREE.Group();
+  g.visible = false;
+  parent.add(g);
+
+  const core = new THREE.Mesh(
+    new THREE.CircleGeometry(STAR.r, 64),
+    new THREE.MeshBasicMaterial({
+      color: new THREE.Color(...STAR.core), transparent: true,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }),
+  );
+  g.add(core);
+
+  //  코로나 — 원반 둘레에서 지수로 삭는다. `discard` 로 먼 데를 끊어야
+  //  네모난 판의 모서리가 안 보인다
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(STAR.r * STAR.halo, 64),
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uGlow: { value: new THREE.Vector3(...STAR.glow) },
+        uIn: { value: 1 / STAR.halo },
+        uS: { value: STAR.haloStrength },
+        uP: { value: STAR.haloPow },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        uniform vec3 uGlow; uniform float uIn, uS, uP;
+        varying vec2 vUv;
+        void main() {
+          float d = length(vUv - 0.5) * 2.0;
+          if (d > 1.0) discard;
+          // 원반 안쪽은 코어가 맡는다 — 여기서는 그 바깥만 그린다
+          float t = clamp((d - uIn) / (1.0 - uIn), 0.0, 1.0);
+          float a = pow(1.0 - t, uP) * uS;
+          if (a <= 0.004) discard;
+          gl_FragColor = vec4(uGlow, a);
+        }`,
+      transparent: true, depthWrite: false, depthTest: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  halo.renderOrder = -1;
+  g.add(halo);
+
+  //  ★ 표가 말한 방위·고도에 놓는다. **표에서 각을 받아 자리로 바꾸는
+  //    셈은 여기 한 곳**이다 — 두 곳에서 하면 검사와 화면이 갈라진다
+  const D = Math.PI / 180;
+  const az = STAR.az * D, el = STAR.el * D;
+  g.position.set(
+    Math.sin(az) * Math.cos(el) * STAR.dist,
+    Math.sin(el) * STAR.dist,
+    -Math.cos(az) * Math.cos(el) * STAR.dist,
+  );
+
+  return {
+    group: g, disk: core, r: STAR.r,
+    set visible(v) { g.visible = v; },
+    get visible() { return g.visible; },
+    /** 늘 카메라를 본다 — 빌보드 */
+    face(camera) {
+      if (!camera || !g.visible) return;
+      camera.updateMatrixWorld();
+      const e = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+      g.parent.updateMatrixWorld();
+      g.lookAt(g.parent.worldToLocal(e.clone()));
+    },
+  };
+}
 
 export function buildPlanet(parent, r = 46) {
   const sun = V3(PLANET.sun).normalize();
