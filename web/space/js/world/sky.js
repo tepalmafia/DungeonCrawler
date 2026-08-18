@@ -21,7 +21,7 @@ import * as THREE from 'three';
 //   13% 자리**에서만 놀았다 — 눈금이 통째로 안 맞았고, 그래서 멈춘 것과
 //   전속이 눈에 거의 같았다 (`space-speed.js` 가 잰다)
 import { streakAt } from '../game/speed-table.js';
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, PLANET, DOME_R, SUN, STAR }
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, PLANET, DOME_R, SUN, STAR, BOLT }
   from '../game/sky-table.js';
 // ★ v73 — 급가속의 속도감. **숫자는 표에만** 있으므로 여기서 읽어 온다
 import { RUSH } from '../game/boost-table.js';
@@ -583,6 +583,139 @@ export function buildStar(parent) {
       const e = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
       g.parent.updateMatrixWorld();
       g.lookAt(g.parent.worldToLocal(e.clone()));
+    },
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ★★★ v164 — **자기 폭풍의 번개** (사장님 「자기 폭풍 번개도 만들어줘」)
+//
+//  ★ `sky-table.js BOLT` 가 숫자를 다 들고 있다. 여기는 **그리기만** 한다.
+//
+//  ★★ **줄기를 새로 만들지 않는다** — 미리 한 벌 만들어 두고 칠 때마다
+//    꼭짓점만 다시 흔든다. 번쩍일 때마다 지오메트리를 만들면 프레임이
+//    튀고, 튀는 것은 「번개가 쳤다」가 아니라 「끊겼다」로 읽힌다.
+// ══════════════════════════════════════════════════════════════════════════
+export function buildBolts(parent) {
+  const g = new THREE.Group();
+  g.visible = false;
+  parent.add(g);
+
+  const core = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(1, 1, 1), transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const glow = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(...BOLT.rgb), transparent: true, opacity: BOLT.glowAlpha,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+
+  //  갈래마다 **속심 하나 · 둘레 빛 하나**. 미리 만들어 두고 칠 때마다
+  //  기하만 갈아 끼운다 — 메시를 새로 만들면 프레임이 튄다
+  const arms = [];
+  for (let i = 0; i < 1 + BOLT.forks; i++) {
+    const a = new THREE.Mesh(new THREE.BufferGeometry(), core);
+    const b = new THREE.Mesh(new THREE.BufferGeometry(), glow);
+    a.frustumCulled = false; b.frustumCulled = false;
+    g.add(b); g.add(a);
+    arms.push({ core: a, glow: b, mid: new THREE.Vector3() });
+  }
+
+  /** 줄기의 두 끝 — 검사가 「화면에서 몇 화소인가」를 잰다 */
+  const ends = [new THREE.Vector3(), new THREE.Vector3()];
+  let flash = 0;
+  /**
+   * ★ **켜 놓기** — 검사·화면 찍기 전용. 게임은 안 쓴다.
+   *   헤드리스는 1~2fps 라 번쩍임(0.055초)이 **한 프레임도 안 걸리는** 일이
+   *   많다. 실제로 「화면에 380~600화소로 뜬다」를 숫자로 재 놓고도
+   *   **찍은 그림에는 아무것도 없어서** 세 번 헛짚었다 — 게임이 아니라
+   *   **셔터가 늦은** 것이었다
+   */
+  let holdOn = false;
+  let wait = BOLT.every[0];
+  let t = -1;
+
+  const D = Math.PI / 180;
+  function pickAim(rnd) {
+    //  ★ 정면 원뿔 **밖**이면서 창이 보는 쪽 **안**. 한쪽만 지키면
+    //    조준 한복판에서 치거나(안쪽) 등 뒤에서 친다(바깥쪽) —
+    //    바깥쪽으로 안 막아 뒀다가 화면을 찍고 알았다
+    const side = rnd() < 0.5 ? -1 : 1;
+    const az = side * (BOLT.clearDeg + rnd() * (BOLT.farDeg - BOLT.clearDeg));
+    const el = (rnd() * 2 - 1) * BOLT.elDeg;
+    return { az: az * D, el: el * D };
+  }
+
+  function reshape(rnd) {
+    const { az, el } = pickAim(rnd);
+    const cx = Math.sin(az) * Math.cos(el) * BOLT.dist;
+    const cy = Math.sin(el) * BOLT.dist;
+    const cz = -Math.cos(az) * Math.cos(el) * BOLT.dist;
+    for (let i = 0; i < arms.length; i++) {
+      const from = i === 0 ? 0 : 0.28 + rnd() * 0.34;
+      const len = BOLT.length * (i === 0 ? 1 : 0.3 + rnd() * 0.25);
+      const lean = (rnd() * 2 - 1) * 0.6;
+      const pts = [];
+      for (let k = 0; k < BOLT.joints; k++) {
+        const f = from + (k / (BOLT.joints - 1)) * (1 - from);
+        pts.push(new THREE.Vector3(
+          cx + (rnd() * 2 - 1) * BOLT.jitter + lean * f * BOLT.jitter * 2,
+          cy + len * (0.5 - f) + (rnd() * 2 - 1) * BOLT.jitter * 0.4,
+          cz + (rnd() * 2 - 1) * BOLT.jitter,
+        ));
+      }
+      //  ★ 부드러운 곡선이 아니라 **꺾인 길**이라야 번개다.
+      //    장력을 0.9 로 뒀다가 화면을 찍으니 **흐물흐물한 리본**이었다 —
+      //    `catmullrom` 은 값이 클수록 둥글다. 0.04 면 거의 꺾인 선이다
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.04);
+      const r = i === 0 ? BOLT.width : BOLT.width * 0.55;
+      arms[i].core.geometry.dispose();
+      arms[i].glow.geometry.dispose();
+      arms[i].core.geometry = new THREE.TubeGeometry(curve, 26, r, 5, false);
+      arms[i].glow.geometry = new THREE.TubeGeometry(curve, 26, r * BOLT.glow, 6, false);
+      arms[i].mid.copy(pts[Math.floor(BOLT.joints / 2)]);
+      if (i === 0) { ends[0].copy(pts[0]); ends[1].copy(pts[pts.length - 1]); }
+    }
+  }
+
+  return {
+    group: g,
+    get flash() { return flash; },
+    /** 줄기 한가운데의 자리 (부모 좌표) — 검사가 「화면 안인가」를 묻는다 */
+    get at() { return arms[0].mid.clone(); },
+    get ends() { return [ends[0].clone(), ends[1].clone()]; },
+    get lit() { return g.visible; },
+    /**
+     * ★ 검사가 **당장 한 번 치게** 한다. 새 길을 안 만든다 — 시계를 0 으로
+     *   당길 뿐이다.
+     *   ★★ **왜 필요한가**: 헤드리스는 1~2fps 라 `dt` 가 0.05 로 잘린다.
+     *     벽시계로 9초를 기다려도 게임 시간은 1초가 안 되고, 그러면
+     *     「1.6~4.4초마다 친다」는 **영영 안 온다.** 실제로 처음 재 보고
+     *     「한 번도 안 친다」로 나왔는데 게임이 아니라 **재는 쪽**이 틀렸다
+     */
+    strike(hold = false) { wait = 0; t = -1; holdOn = !!hold; },
+    /**
+     * 한 걸음.
+     * @param on  이 구역에서 치나
+     * @param rnd 난수 — **부르는 쪽이 넣는다** (검사가 같은 값을 두 번 넣어
+     *            같은 답을 얻으려면 여기서 만들면 안 된다)
+     */
+    step(dt, on, rnd = Math.random) {
+      if (!on) { g.visible = false; flash = 0; t = -1; return; }
+      if (t < 0) {
+        wait -= dt;
+        if (wait > 0) { g.visible = false; flash = 0; return; }
+        t = 0;
+        reshape(rnd);
+        wait = BOLT.every[0] + rnd() * (BOLT.every[1] - BOLT.every[0]);
+      }
+      t += dt;
+      //  ★ 두 번 번쩍인다 — 켜짐 · 꺼짐 · 켜짐. `gap` 이 8Hz 아래라야 한다
+      const on1 = t < BOLT.lit;
+      const on2 = t >= BOLT.gap && t < BOLT.gap + BOLT.lit;
+      g.visible = holdOn || on1 || on2;
+      flash = g.visible ? BOLT.flash * (on1 || holdOn ? 1 : 0.7) : 0;
+      if (!holdOn && t > BOLT.gap + BOLT.lit) { t = -1; g.visible = false; flash = 0; }
     },
   };
 }

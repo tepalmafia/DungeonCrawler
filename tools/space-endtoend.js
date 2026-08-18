@@ -2243,6 +2243,26 @@ console.log('\n[6m] ★★★ **우주 맵 12구역** — 구역이 손에 걸�
     '③ ★★★ **외계 생명권에서는 꾸러미가 아예 안 떨어진다** — 「싸워서 얻는 곳」이 아니라'
     + ' **「빨리 지나가야 하는 곳」**이고, 그런 구역이 지금까지 하나도 없었다');
 
+  // ── ④ ★ 자기 폭풍 — **번개가 친다** (v164) ────────────────────
+  //  ★ 「계기가 죽는다」는 v162 부터 손에 걸렸는데 **눈에는 아무 일도
+  //    안 났다.** 번개는 그 규칙의 얼굴이다
+  await S(() => { SPACE.setRegion('storm'); });
+  await p.waitForTimeout(700);
+  let boltN = 0;
+  for (let i = 0; i < 6 && !boltN; i++) {
+    await S(() => SPACE.putBolt());
+    for (let j = 0; j < 4; j++) {
+      await p.waitForTimeout(110);
+      const bo = await S(() => SPACE.outside.bolt);
+      if (bo.lit && bo.onScreen) { boltN = bo.px; break; }
+    }
+  }
+  console.log(`   자기 폭풍 — 번개 ${boltN ? `${boltN}화소` : '안 침'}`);
+  ok(boltN >= 120,
+    '④ ★★★ **자기 폭풍에서 번개가 화면에 친다** — 「레이더가 죽는다」가'
+    + ' 손에만 걸리고 눈에는 아무 일도 안 나면, 그게 구역 탓인지 내가'
+    + ' 센서를 껐는지 알 길이 없다');
+
   await S(() => { SPACE.setRegion(null); SPACE.clearSky(); });
 }
 

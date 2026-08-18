@@ -44,7 +44,8 @@
 import * as THREE from 'three';
 import { CIRCUITS } from '../game/chase-table.js';
 import { HEAT, CRUISE } from '../game/systems-table.js';
-import { MISSILES } from '../game/supply-table.js';
+// ★ v164 — 무기 줄은 **무기마다의 통**을 읽는다 (`ammo-table.js`)
+import { AMMO } from '../game/ammo-table.js';
 
 /** 여섯 줄. **표에서 뽑는다** — 여기 손으로 안 적는다 */
 export const ROWS = ['heat', 'cool', 'speed', 'power', 'sign', 'missiles'];
@@ -175,28 +176,36 @@ export function drawStatus(ctx, x, y, w, h, s, theme = 'hud') {
   const sg = clamp01((s.sign ?? 0) / 100);
   row(ctx, T, x, at(), w, bh, '자국', sg, sg > 0.6 ? '훤하다' : sg > 0.3 ? '보인다' : '조용', sg > 0.6);
 
-  // ⑥ 미사일 — **몇 발 남았나** (v69 저장고). 여기만 숫자를 쓴다:
-  //    「세 발」은 셀 수 있는 것이고, 셀 수 있는 것은 띠보다 숫자가 낫다
+  // ══ ★★★ ⑥ 무기 — **지금 고른 것이 몇 발 남았나** (v164) ═════════════
+  //
+  //  사장님 「이거 제 역할을 하고 있는거야」 — 이 줄이 **거짓말**이었다.
+  //
+  //  ★★★ v163 까지 여기는 `s.missiles` 와 `MISSILES.max`(8) 를 그렸다.
+  //    그건 **v133 이전의 한 통**이고, v133 이 무기마다 제 통을 준 뒤로는
+  //    거래·저장 호환으로만 남은 값이다. 그래서 v162 에 기본 탄을
+  //    24/12 로 대폭 늘렸는데 **계기는 여전히 「4/8」**이었다 —
+  //    늘린 것이 화면에 **한 톨도 안 나왔다.**
+  //
+  //  ★★ 네모 스물넷은 못 그린다 (줄이 안 늘어난다). 그래서 다른 줄과
+  //    **같은 문법**으로 간다 — 띠 하나 + 낱말 하나. 띠는 **지금 고른
+  //    무기**의 남은 몫이고, 낱말이 그 무기와 숫자를 말한다.
+  //    ★ 레이저는 통이 없다 (열로 아낀다) — 띠를 꽉 채우고 **∞** 라고 쓴다
   {
     const yy = at();
-    const n = s.missiles ?? 0;
-    ctx.fillStyle = n === 0 ? T.hot : T.dim;
-    ctx.font = `600 ${Math.round(bh * 0.82)}px system-ui, sans-serif`;
-    ctx.fillText('미사일', x, yy + bh * 0.85);
-    // 한 발이 네모 하나 — 세지 않아도 눈에 들어온다
-    const bw2 = w * 0.052, gp = w * 0.012;
-    for (let k = 0; k < MISSILES.max; k++) {
-      const bx = x + w * 0.20 + k * (bw2 + gp);
-      ctx.strokeStyle = T.dim;
-      ctx.lineWidth = 1.4;
-      ctx.strokeRect(bx, yy, bw2, bh);
-      if (k < n) { ctx.fillStyle = T.fg; ctx.fillRect(bx, yy, bw2, bh); }
-    }
-    if (s.weapon) {
-      ctx.fillStyle = T.dim;
-      ctx.font = `700 ${Math.round(bh * 0.7)}px system-ui, sans-serif`;
-      ctx.fillText(s.weapon, x + w * 0.20 + MISSILES.max * (bw2 + gp) + w * 0.02, yy + bh * 0.85);
-    }
+    const key = s.slotKey ?? 'laser';
+    const box = AMMO[key];
+    const have = s.ammo?.[key] ?? 0;
+    const max = box?.max ?? 0;
+    const inf = !!box?.infinite;
+    const fill = inf ? 1 : (max > 0 ? have / max : 0);
+    //  ★ 바닥이 보이면 빨갛게 — 「곧 못 쏜다」는 미리 알아야 손이 바뀐다
+    const low = !inf && have <= Math.max(1, Math.round(max * 0.2));
+    //  ★ 이름을 **왼쪽 칸**에 넣고 숫자만 오른쪽에 둔다. 처음엔 오른쪽에
+    //    「열추적탄 19/24」를 통째로 썼다가 화면을 찍으니 **판 밖으로 잘려**
+    //    「열추적탄 19/2」로 보였다 — 오른쪽 칸은 낱말 두어 자 자리다
+    const SHORT = { laser: '레이저', ir: '열추적', arh: '유도탄' };
+    row(ctx, T, x, yy, w, bh, SHORT[key] ?? '무기', fill,
+      inf ? '∞' : `${have}/${max}`, low);
   }
 
   // ══ ★★★ ⑦ v99 — **아크 도약** ═══════════════════════════════════════
