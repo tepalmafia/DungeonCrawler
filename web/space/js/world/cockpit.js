@@ -32,7 +32,7 @@ import {
   FACE_H, SHELF_H, PANEL_GAP, PANEL_DIST, DEP, SIDE, ROOF, STRUCTS,
 } from '../game/view-table.js';
 import { drawFork } from './chart.js';
-import { buildStars, buildBand, buildDust, buildPlanet, buildStar } from './sky.js';
+import { buildStars, buildBand, buildDust, buildPlanet, buildStar, buildBolts } from './sky.js';
 // ★★★ v69 — **격추 게임으로 바뀌었다.** 떠도는 것들과 쏜 것들을 창밖에
 //   세운다 (docs/space/COMBAT.md). v64 가 숫자만 만들고 **보이는 것을
 //   안 만들어서** 「발사 되는게 안보이잔아? 적 비행선도 안보이고」가 났다
@@ -41,7 +41,7 @@ import { buildTargets } from './targets.js';
 import { buildRoad } from './road.js';
 import { buildShots } from './shots.js';
 import { buildSalvage } from './salvage.js';
-import { DUST, STAR } from '../game/sky-table.js';
+import { DUST, STAR, BOLT } from '../game/sky-table.js';
 import { RADAR } from '../game/combat-table.js';
 // ★ v75 — 데이터 블록이 표적 이름을 부른다 (「요격기」 · 「포함」)
 import { KINDS } from '../game/target-table.js';
@@ -1485,6 +1485,18 @@ export function buildOutside(scene, z) {
   const star = buildStar(out);
   /** 행성 반지름 — `buildPlanet` 에 준 값과 **같은 곳에서** 온다 */
   const PLANET_R = 46;
+  /**
+   * ★★★ v164 — **번개.** `radar` 가 문턱 아래인 구역에서만 친다
+   *   (`sky-table.js BOLT`). 새 칸을 안 만든다 — 구역은 이미
+   *   「계기가 얼마나 죽나」를 말하고 있고, 번개는 **그 말의 얼굴**이다
+   */
+  const bolts = buildBolts(out);
+  /** 번개가 하늘을 밝히는 쪽 — 섞을 흰색 하나 (매 프레임 새로 안 만든다) */
+  const WHITE = new THREE.Color(0xffffff);
+  /** 켜진 횟수 — 검사가 「정말 치나」를 여기서 센다 */
+  let litCount = 0;
+  /** 번개가 덧칠하기 **직전**의 하늘색 — 다음 프레임 맨 앞에서 되돌린다 */
+  let flashSave = null;
   world.setPos(-62, 6, z - 108);
   /** 천구를 눈에 붙일 때 쓰는 그릇. 매 프레임 새로 만들면 쓰레기가 쌓인다 */
   const DOME = new THREE.Vector3();
@@ -1797,6 +1809,9 @@ export function buildOutside(scene, z) {
       bigRock.rotation.y += dt * 0.35;
     } else bigRock.visible = false;
 
+    // ★ v164 — **지난 프레임의 번개 덧칠을 먼저 되돌린다** (아래 주석 참고).
+    //   안 되돌리면 몇 번 치는 사이에 하늘이 통째로 하얘진다
+    if (flashSave) { bg.copy(flashSave); flashSave = null; }
     // 구역 갈아타기 — 색은 천천히, 개수는 바로
     const k = Math.min(1, dt / REGION_BLEND);
     bg.lerp(new THREE.Color(want.bg), k);
@@ -1951,6 +1966,33 @@ export function buildOutside(scene, z) {
     //    하늘에 없었다.** 그러면 그 구역은 「왜 뜨겁지」가 된다
     star.visible = (want.heat ?? 0) > 0;
     star.face(camRef);
+
+    // ══ ★★★ v164 — **번개** (사장님 「자기 폭풍 번개도 만들어줘」) ═══════
+    //
+    //  ★ v163 까지 자기 폭풍은 **손에만** 걸렸다 — 레이더 점이 안 뜨는데
+    //    그게 「구역 탓」인지 「내가 센서를 껐나」인지 알 길이 없었다.
+    //    번개는 새 규칙이 아니라 **이미 있는 규칙의 얼굴**이다.
+    //  ★★ 그리고 **하늘이 같이 밝아진다.** 줄기만 그리면 「선 하나가
+    //    깜빡」이지 번개가 아니다 — 눈이 번개라고 읽는 것은 주변이
+    //    같이 밝아지는 것이다
+    const wasLit = bolts.lit;
+    bolts.step(dt, (want.radar ?? 1) < BOLT.whenRadarUnder);
+    if (bolts.lit && !wasLit) litCount++;
+    //  ══ ★★★ **덧칠은 반드시 되돌린다** ═════════════════════════════════
+    //
+    //  ★★★ 처음엔 `bg.lerp(WHITE, flash)` 만 했다. 화면을 찍으니 하늘이
+    //    **통째로 하얬다.** 세기를 내려도 그대로였는데, 원인은 세기가
+    //    아니라 **쌓임**이었다 — 번쩍이는 동안 매 프레임 흰 쪽으로 밀면서
+    //    되돌리지 않았고, 구역 갈아타기(6초)는 그걸 못 따라온다.
+    //    **값이 아니라 얼개가 틀린 것**이었고, 이건 「계수를 만지지 말고
+    //    값을 찍는다」(POSTMORTEM 4)의 그 자리다.
+    //  ★ 안개는 `fog.color` 만 만진다 — 저건 매 프레임 `cur.fog` 에서
+    //    새로 베껴 오므로 애초에 안 쌓인다
+    if (bolts.flash > 0) {
+      flashSave = flashSave || bg.clone();
+      bg.lerp(WHITE, bolts.flash);
+      fog.color.lerp(WHITE, bolts.flash * 0.6);
+    }
   }
 
   /**
@@ -1985,6 +2027,8 @@ export function buildOutside(scene, z) {
 
   return {
     update, setRegion, roll, setLand, setAttitude,
+    /** ★ v164 — 검사가 번개를 당장 치게 한다 (`SPACE.putBolt`) */
+    strikeBolt: (hold = false) => bolts.strike(hold),
     // ★★★ v69 — 창밖의 표적과 탄. **창밖 그룹에 매달아야** 배를 틀 때
     //   같이 흐른다 — 따로 매달면 조종간을 틀어도 적이 안 움직인다
     targets, shots, salvage,
@@ -2042,6 +2086,24 @@ export function buildOutside(scene, z) {
         //     있었는데** 화면 왼쪽 밖에 있어서 안 보였다. 그래서 **진짜
         //     카메라로 화면 좌표와 반지름(화소)**을 낸다
         orbs: orbPx(),
+        // ★★★ v164 — **번개.** 「몇 번 쳤나」와 「지금 밝은가」를 낸다.
+        //   ★ 「메시가 있다」가 아니라 **켜졌다 꺼진 횟수**를 세야 한다 —
+        //     안 그러면 영영 안 치는 번개도 초록이 된다
+        bolt: (() => {
+          const w = globalThis.innerWidth || 960, h = globalThis.innerHeight || 560;
+          let x = null, y = null, on = false, px = 0;
+          if (camRef) {
+            out.updateMatrixWorld(); camRef.updateMatrixWorld();
+            const v = bolts.at.clone().applyMatrix4(out.matrixWorld).project(camRef);
+            x = Math.round((v.x * 0.5 + 0.5) * w); y = Math.round((-v.y * 0.5 + 0.5) * h);
+            on = Math.abs(v.x) < 1 && Math.abs(v.y) < 1 && v.z > -1 && v.z < 1;
+            const [e0, e1] = bolts.ends;
+            const a0 = e0.applyMatrix4(out.matrixWorld).project(camRef);
+            const a1 = e1.applyMatrix4(out.matrixWorld).project(camRef);
+            px = Math.round(Math.hypot((a0.x - a1.x) * w / 2, (a0.y - a1.y) * h / 2));
+          }
+          return { lit: bolts.lit, flash: +bolts.flash.toFixed(3), n: litCount, x, y, px, onScreen: on };
+        })(),
       };
     },
   };

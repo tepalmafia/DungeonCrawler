@@ -22,9 +22,11 @@
 //    것인데 눈은 아니다), 대기 테두리를 두 번 잘못 잡았다(후광 → 안 보임).
 //    그래서 아래 [7] 은 **화면 없이는 못 여는 자리**다.
 // ══════════════════════════════════════════════════════════════════════════
-import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN, STAR }
+import { MAGS, STAR_COUNT, SPECTRA, MILKYWAY, DUST, STREAK, streakLen, PLANET, DOME_R, SUN, STAR, BOLT }
   from '../web/space/js/game/sky-table.js';
 import { REGIONS, REGION_BY_KEY } from '../web/space/js/game/regions-table.js';
+// ★ v164 — 눈이 아픈 띠는 **한 곳**에만 적는다 (`shake-table.js`)
+import { HURT_HZ } from '../web/space/js/game/shake-table.js';
 
 let fail = 0;
 const ok = (c, m) => { console.log((c ? '  ✔ ' : '  ✘ ') + m); if (!c) fail++; };
@@ -208,6 +210,47 @@ console.log('\n[6c] ★★★ **해와 행성 — 창밖에 보이나** (사장�
     `★ 코로나가 원반의 ${STAR.halo}배까지 · 세기 ${STAR.haloStrength} — 한 겹이면 「흰 공」이지 항성이 아니다`);
 }
 
+console.log('\n[6d] ★★★ **자기 폭풍의 번개** (사장님 「자기 폭풍 번개도 만들어줘」)');
+{
+  //  ★★★ **새 규칙이 아니라 이미 있는 규칙의 얼굴이다.** v162 가 자기
+  //    폭풍에 `radar 0.15` 를 물려 「계기가 죽는다」를 손에 걸리게 만들었는데,
+  //    **눈에는 아무 일도 안 났다** — 점이 안 뜨는 것이 「구역 탓」인지
+  //    「내가 센서를 껐나」인지 알 길이 없었다. 속도감(v144)이 「전진」에
+  //    대고 한 일과 같은 자리다.
+  const hit = REGIONS.filter((r) => (r.radar ?? 1) < BOLT.whenRadarUnder);
+  ok(hit.length >= 1,
+    `★★★ **번개가 치는 구역이 있다** (${hit.map((r) => r.name).join(' · ') || '없다'})`);
+  ok(hit.every((r) => (r.radar ?? 1) <= 0.2),
+    '★★ **계기가 제일 크게 죽는 곳에서만** 친다 — 성운(0.45)은 안 친다.'
+    + ' 성운은 **가려서** 안 보이는 것이고 폭풍은 **때려서** 안 보이는 것이라'
+    + ' 둘의 그림이 같으면 안 된다');
+  ok(hit.length <= 2,
+    `★ 치는 곳이 ${hit.length} 곳 — 여기저기서 치면 그건 「이 구역의 표식」이 아니다`);
+  //  ══ ★★★ **눈이 아프면 안 된다** ═══════════════════════════════════
+  //   v130 에 조준경을 11.3Hz 로 떨어 사장님이 「눈 아프다」고 하셨다.
+  //   숫자를 여기 다시 안 적고 `shake-table.js HURT_HZ` 를 읽는다
+  const twiceHz = 1 / BOLT.gap;
+  const everyHz = 1 / BOLT.every[0];
+  console.log(`   두 번 번쩍임 ${twiceHz.toFixed(1)}Hz · 제일 잦아도 ${everyHz.toFixed(2)}Hz`
+    + ` (아픈 띠 ${HURT_HZ[0]}~${HURT_HZ[1]}Hz)`);
+  ok(twiceHz < HURT_HZ[0] || twiceHz > HURT_HZ[1],
+    `★★★ **한 번 칠 때의 두 번 번쩍임이 ${twiceHz.toFixed(1)}Hz** — 아픈 띠를 안 밟는다.`
+    + ' 0.06초(16Hz)로 뒀다가 되돌렸다: 거기가 v130 이 데인 바로 그 자리다');
+  ok(everyHz < HURT_HZ[0],
+    `★★ **치는 간격도 ${everyHz.toFixed(2)}Hz** 로 한참 아래다 — 잦으면 조명이 되고, 조명은 벌이다`);
+  //  ★ 자리 — 정면은 비우고, 창이 보는 쪽 안에서
+  ok(BOLT.clearDeg >= 10 && BOLT.farDeg > BOLT.clearDeg,
+    `★★★ **정면 ${BOLT.clearDeg}도를 비우고 ${BOLT.farDeg}도 안에서 친다** —`
+    + ' 안쪽만 막으면 등 뒤에서 치고, 바깥쪽만 막으면 조준 한복판에서 친다.'
+    + ' 처음에 바깥쪽을 안 막아 뒀다가 **대개 등 뒤에서** 쳤다');
+  ok(BOLT.strands >= 2 || BOLT.width > 0,
+    `★ 관으로 그린다 (반지름 ${BOLT.width}) — \`THREE.Line\` 은 늘 1화소라`
+    + ' 먼지 줄기에 묻힌다. 화면을 두 번 찍고서야 인정했다');
+  ok(BOLT.flash > 0 && BOLT.flash < 0.3,
+    `★★ 하늘도 ${BOLT.flash} 만큼 같이 밝아진다 — 줄기만 그리면 「선 하나가 깜빡」이지`
+    + ' 번개가 아니다. 대신 0.5 는 조명이었다');
+}
+
 console.log('');
 console.log(fail ? `✘ ${fail} 군데` : '✔ 표는 전부 통과');
 console.log('\n  ※ 여기까지는 **표**다. 「별이 정말 안 흐르나」는 게임이 답한다 — `--see`');
@@ -369,7 +412,10 @@ if (see >= 0) {
     ok(after.kick === 0, `★ 그리고 **되돌아온다** (${after.kick}) — 안 되돌아오면 그건 밀림이 아니라 자리 옮김이다`);
   }
 
-  console.log('\n[9] ★★★ **해와 행성이 진짜 화면에 있나** (진짜 카메라 · v163)');
+  //  ★ v164 — 번호를 [9] 에서 [13] 으로 옮겼다. v163 에 붙이면서 위쪽에
+  //    이미 [9](구역이 별을 지우나)가 있는 것을 못 봤다 — **같은 번호가
+  //    둘이면 「어느 절이 빨간가」를 말로 가리킬 수가 없다**
+  console.log('\n[13] ★★★ **해와 행성이 진짜 화면에 있나** (진짜 카메라 · v163)');
   {
     //  ★★★ **「메시가 켜져 있다」는 답이 아니다.** v162 까지 행성은 켜져
     //    있었는데 자리가 `x −62 · z −190` 이라 **화면 왼쪽 밖**이었다.
@@ -416,6 +462,42 @@ if (see >= 0) {
     ok((small ?? 0) * 2 >= 40,
       `⑤ ★★ 제일 작을 때도 지름 ${((small ?? 0) * 2).toFixed(0)}화소 — 작으면 「달 하나 떠 있네」가 되고,`
       + ' 그러면 「행성 곁을 지난다」가 안 읽힌다');
+    await S(() => SPACE.setRegion(null));
+  }
+
+  console.log('\n[14] ★★★ **번개가 진짜 화면에 치나** (진짜 카메라 · v164)');
+  {
+    //  ★★★ **셔터가 늦으면 게임이 틀린 줄 안다.** 헤드리스는 1~2fps 라
+    //    번쩍임(0.055초)이 한 프레임도 안 걸리는 일이 많다. 처음에 벽시계로
+    //    9초를 기다려 놓고 「한 번도 안 친다」로 읽었는데, 게임 시간으로는
+    //    1초도 안 지났던 것이다 — 그래서 `SPACE.putBolt()` 로 **당장 치게**
+    //    한다. 새 길이 아니라 시계를 당기는 구멍이다.
+    const strikes = async (key, n = 8) => {
+      await S((k) => SPACE.setRegion(k), key);
+      await p.waitForTimeout(700);
+      let lit = 0, on = 0, px = 0;
+      for (let i = 0; i < n; i++) {
+        await S(() => SPACE.putBolt());
+        for (let j = 0; j < 4; j++) {
+          await p.waitForTimeout(110);
+          const bo = await S(() => SPACE.outside.bolt);
+          if (bo.lit) { lit++; if (bo.onScreen) on++; px = Math.max(px, bo.px); break; }
+        }
+      }
+      return { lit, on, px };
+    };
+    const storm = REGIONS.find((r) => (r.radar ?? 1) < 0.3);
+    const a = await strikes(storm.key);
+    console.log(`   ${storm.name} — ${a.lit}번 쳤고 ${a.on}번 화면 안 · 제일 길 때 ${a.px}화소`);
+    ok(a.lit > 0, `① ★★★ **정말 친다** (${a.lit}번) — 「메시가 있다」가 아니라 켜졌다 꺼진 횟수다`);
+    ok(a.on >= Math.ceil(a.lit * 0.7),
+      `② ★★★ **거의 다 화면 안이다** (${a.on}/${a.lit}) — 규칙은 맞고 화면에는 없는 것이`
+      + ' v163 에 행성에서 겪은 그 모양이다');
+    ok(a.px >= 120,
+      `③ ★★ 제일 길 때 ${a.px}화소 — 먼지 줄기(1화소)와 확실히 갈려야 한다`);
+    const b2 = await strikes('empty', 3);
+    console.log(`   빈 공간 — ${b2.lit}번`);
+    ok(b2.lit === 0, '④ ★★★ **다른 구역에서는 안 친다** — 여기저기서 치면 이 구역의 표식이 아니다');
     await S(() => SPACE.setRegion(null));
   }
 

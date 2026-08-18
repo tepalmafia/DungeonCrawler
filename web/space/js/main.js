@@ -412,7 +412,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 163;
+export const VERSION = 164;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -4817,8 +4817,21 @@ function systemsStep(dt, valveOpen, regionMult) {
     //   안에서는 `wear.hull` 이 **깎인 몫**으로 살지만, 계기는 「얼마나
     //   남았나」를 그린다 — 띠가 줄면 나쁜 것이라는 규약을 열·냉각과 맞춘다
     hull: Math.max(0, 1 - faults.wear.hull),
-    missiles: supply.missiles,
+    // ══ ★★★ v164 — **여기가 죽은 숫자를 보내고 있었다** ═══════════════
+    //
+    //  사장님 「이거 제 역할을 하고 있는거야」 — 상태창을 가리키신 물음에
+    //  재 보니 **미사일 줄이 거짓말**을 하고 있었다.
+    //
+    //  ★★★ `supply.missiles` 는 **v133 이전의 한 통**이다. v133 이
+    //    무기마다 제 통(`supply.ammo` · `ammo-table.js AMMO`)을 주면서
+    //    이 값은 **거래·저장 호환으로만** 남았는데, 상태창은 계속 이것을
+    //    그리고 있었다. 그래서 v162 에 기본 탄을 24/12 로 대폭 늘렸는데
+    //    **계기는 여전히 「4/8」**이었다 — 늘린 것이 화면에 한 톨도 안 나왔다.
+    //  ★ 「재는 곳을 둘로 만들지 않는다」의 그 자리다. 이제 **진짜 통**을 보낸다
+    ammo: { ...(supply.ammo ?? {}) },
     weapon: weaponOf(combat).name,
+    /** 지금 고른 무기의 열쇠 — 띠가 **그 무기의** 남은 몫을 그린다 */
+    slotKey: weaponOf(combat).key,
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
     //   획득 아이템이 … 조정석 화면에서 획득 리스트를」)
     cargo: cargoSummary(cargo, grow.hold),
@@ -5333,6 +5346,8 @@ window.SPACE = {
   /** 거리를 밀어 놓고 「뿌리침·잡힘」이 실제로 나는지 보려고 낸 구멍 */
   setDist(v) { chase.dist = v; },
   setRegion(k, instant = true) { regionPin = k; ship.outside.setRegion(k, instant); },
+  /** ★ v164 — 검사가 번개를 당장 한 번 치게 한다 (헤드리스는 시계가 느리다) */
+  putBolt(hold = false) { return ship.outside.strikeBolt(hold); },
   unpinRegion() { regionPin = null; },
   /** 그 자리에 설 수 있나 — 충돌 검사용. tools 가 점을 찍어 본다 */
   canStand(x, z) { return inside(x, z, BODY.radius); },
