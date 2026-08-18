@@ -412,7 +412,7 @@ import { KINDS as CARRY_KINDS, CARRY, canGrab, carryPlan } from './game/carry-ta
 import { makeCarry, carryStep, atSpot, give as giveCarry, take as takeCarry,
   summary as carrySummary } from './game/carry.js';
 
-export const VERSION = 164;
+export const VERSION = 165;
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ★★★ v135 — **UI 배율을 CSS 에 넘긴다** (사장님 「UI를 전체적으로 크기를
@@ -1301,6 +1301,8 @@ const gun = makeGun();
 const combat = makeCombat();
 /** ★ v75 — 이번 프레임에 레이더가 본 것. 계기와 점검 구멍이 **같은 값**을 읽는다 */
 let radarSeen = [];
+/** ★★★ v165 — 상태창이 **이번 프레임에 받은 것 그대로** (`SPACE.status`) */
+let lastStatus = null;
 /**
  * ★★★ v162 — **지금 구역의 계기 성능** (`regions-table.js radar`).
  *
@@ -4829,7 +4831,10 @@ function systemsStep(dt, valveOpen, regionMult) {
     //    **계기는 여전히 「4/8」**이었다 — 늘린 것이 화면에 한 톨도 안 나왔다.
     //  ★ 「재는 곳을 둘로 만들지 않는다」의 그 자리다. 이제 **진짜 통**을 보낸다
     ammo: { ...(supply.ammo ?? {}) },
-    weapon: weaponOf(combat).name,
+    //  ★ v165 — `weapon`(이름)은 **아무도 안 읽는다.** v164 가 무기 줄의
+    //    이름을 왼쪽 칸으로 옮기면서 쓸 데가 없어졌다. 안 지우면 다음 사람이
+    //    「계기가 이름을 쓰는구나」로 읽는다 — 죽은 칸은 조용한 거짓말이다
+    //    (`space-status.js [6]` 이 이제 죽은 칸을 센다)
     /** 지금 고른 무기의 열쇠 — 띠가 **그 무기의** 남은 몫을 그린다 */
     slotKey: weaponOf(combat).key,
     // ★★★ v83 — **들어온 목록**을 상태창이 읽는다 (사장님 「실시간으로
@@ -4854,6 +4859,11 @@ function systemsStep(dt, valveOpen, regionMult) {
   });
   // ★ 조종석 상태창 — **앉아 있을 때만 켜진다**
   ship.statusHud.redraw({ ...shipStatus, on: helmSat });
+  // ★★★ v165 — **계기가 받은 것 그대로**를 검사에 내놓는다.
+  //   여기서 다시 지으면 **재는 곳이 둘**이 되어, v164 의 무기 줄 같은
+  //   거짓말을 또 못 잡는다 (계기는 옛 통을 읽는데 검사는 새 통을 읽었다면
+  //   둘 다 초록이었을 것이다)
+  lastStatus = shipStatus;
   // ★★★ v78 — **레이더도 앉으면 눈앞에 뜬다** (사장님 「hud처럼 나와야지」).
   //   콘솔 판과 **같은 상태**를 준다 — 두 벌로 만들면 언젠가 갈라진다
   // 온실 · 에어록 — 계기는 방마다 하나씩, 전부 다른 것을 말한다
@@ -5272,6 +5282,15 @@ window.SPACE = {
   /** ★ 잔해 — 「격추가 **보이나**」 */
   get wrecks() { return ship.outside.targets?.seen?.wrecks ?? 0; },
   get heat() { return heat; },
+  /**
+   * ★★★ v165 — **상태창이 받은 것 그대로.**
+   *
+   *   사장님 「이거 제 역할을 하고 있는거야」 → v164 에 무기 줄이 **v133
+   *   이전의 죽은 통**을 그리고 있는 것이 나왔다. 그런 줄이 또 있는지
+   *   물으려면 **계기가 받은 값**을 봐야 한다 — 여기서 새로 지으면
+   *   계기와 검사가 갈라져서 둘 다 초록이 된다
+   */
+  get status() { return lastStatus ? { ...lastStatus } : null; },
   /** ★ 열 저장고 (v58) — `space-heat.js` 가 읽는다 */
   get sink() {
     return { v: +sink.toFixed(1), at: +sinkAt({ sink }).toFixed(3),
